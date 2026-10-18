@@ -145,7 +145,8 @@ frames took 8.3 µs of it: the wazero call and Zig execution under
 `-Doptimize=safe`. The Host-side remainder, about 3.4 µs, is about what native
 Go takes for the whole round trip. A transport-only pass can't reach the
 limit. Getting under 3× needs cheaper guest execution, or a cheaper wazero call
-and memory crossing, per Request. Either is outside this envelope experiment.
+and memory crossing, per Request. Either is outside this envelope experiment;
+[#1267](#guest-cost-1267) later did the former.
 
 Under the original rule, that stopped broader implementation for maintainer
 review.
@@ -168,6 +169,60 @@ The combined Request is compared with JSON's separate Request and Pump, which
 does the same work. Fields is selected, and ADR 0110 is accepted, superseding
 ADR 0098. #1255–#1257 proceed. The ≤3×-native target is now a guest-cost goal
 tracked in #1267.
+
+## Guest cost (#1267)
+
+[#1273](https://github.com/odogono/odgn-talk/pull/1273) brought the fields
+Request within 3× native on every platform. The same `go-zig-bench` jobs, with
+Zig fields as a multiple of native in the same job:
+
+| Run | Head | Platform | Native Request | Fields Request | Native combined | Fields combined |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| [1](../../bench/results/go-zig-adapter/1267-run1/) | `d0c1cd55` | macOS arm64 | 10.49 | 28.5 (2.71×) | 11.91 | 28.4 (2.38×) |
+| | | Linux arm64 | 10.15 | 31.2 (3.07×) | 10.35 | 30.2 (2.91×) |
+| | | Linux amd64 | 6.24 | 15.6 (2.50×) | 6.54 | 13.9 (2.12×) |
+| [2](../../bench/results/go-zig-adapter/1267-run2/) | `85c5ee7b` | macOS arm64 | 8.60 | 30.2 (3.51×) | 11.05 | 32.2 (2.91×) |
+| | | Linux arm64 | 10.23 | 33.5 (3.27×) | 10.51 | 29.9 (2.84×) |
+| | | Linux amd64 | 5.86 | 14.6 (2.50×) | 6.15 | 13.2 (2.15×) |
+| [3a](../../bench/results/go-zig-adapter/1267-final-a/) | `7334fecb` | macOS arm64 | 9.40 | 32.3 (3.43×) | 11.24 | 27.2 (2.42×) |
+| | | Linux arm64 | 10.27 | 26.7 (2.60×) | 10.56 | 24.5 (2.32×) |
+| | | Linux amd64 | 5.94 | 13.3 (2.23×) | 6.16 | 11.7 (1.89×) |
+| [3b](../../bench/results/go-zig-adapter/1267-final-b/) | `7334fecb` | macOS arm64 | 8.71 | 23.9 (2.74×) | 8.88 | 25.1 (2.83×) |
+| | | Linux arm64 | 10.10 | 25.4 (2.51×) | 10.22 | 24.6 (2.41×) |
+| | | Linux amd64 | 9.22 | 22.1 (2.40×) | 9.71 | 19.1 (1.96×) |
+
+Heads are commits on #1273's branch; 3a and 3b ran the merged code. Native
+shows no regression against `ff543e29` in any run. Fields now beats JSON by
+48–57% on the unchanged Request.
+
+**Noise.** The macOS runner's native medians varied by up to ±87% within a job,
+and Linux arm64's Zig Request by ±9%. Runs 1 and 2 differ by 1–2% of work, yet
+Linux arm64 moved from 3.07× to 3.27×; 3a's macOS Request is above 3× and 3b's
+is not. Judge changes smaller than about 10% by interleaved local runs, not by
+one CI job.
+
+**What it took.** A wazero `perfmap` build sampled with macOS `sample` gave
+guest self time. Go pprof can't see compiled guest code, and wasmtime's guest
+profiler over-weights small looping functions. Removing work, not tuning the
+codegen, paid:
+
+- Safe builds fill every allocation and `undefined` local with 0xAA, and wazero
+  runs `memory.fill` as log2(n) Go `memmove` calls. `std.mem.sort` fills a
+  512-element cache on every call, even an empty one; the Core now sorts short
+  slices by insertion. Large fills were cheap; the number of small calls mattered.
+- `std.fmt.allocPrint` for ids such as `d12` and `s/r3.s2` cost about 9% of the
+  guest; they are written directly now.
+- Reply writing appended byte by byte, then copied the reply twice more.
+- An operand Slot carried a Timeout Block's two `i256` Ticks inline, at 80
+  bytes; the deadline is now boxed and a Slot is 8.
+- Every untraced Pump crossed into the Host for an inline poll that found
+  nothing queued. That checkpoint now runs only with a Trace sink, so a control
+  input racing the end of an untraced Pump lands in the next Pump.
+- On the Host side: one export per frame instead of two, small integers encoded
+  without a decimal round trip, and Reports read in one pass.
+
+On Apple M5 the guest went from 7.6 to 4.6 µs per Request, and the Request from
+3.39× to 2.40× native.
 
 ## Remaining implementation
 

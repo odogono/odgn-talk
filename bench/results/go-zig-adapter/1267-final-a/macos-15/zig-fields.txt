@@ -1,0 +1,80 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     26346 ns/op	     16334 p50-ns	    131000 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     46859 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     33096 ns/op	     19959 p50-ns	    173250 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     28004 ns/op	     16542 p50-ns	    142083 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     39938 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     23043 ns/op	     17458 p50-ns	     85625 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     24114 ns/op	     17000 p50-ns	     82208 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     36337 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     26209 ns/op	     18834 p50-ns	     81459 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     28064 ns/op	     17375 p50-ns	    110584 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     37830 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     31454 ns/op	     18542 p50-ns	    134541 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     23232 ns/op	     16458 p50-ns	     72333 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     36511 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     22689 ns/op	     17833 p50-ns	     82416 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     29019 ns/op	     18167 p50-ns	    118709 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     52032 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     36750 ns/op	     20708 p50-ns	    129583 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     34239 ns/op	     18625 p50-ns	    170666 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     42637 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     27470 ns/op	     17750 p50-ns	    134167 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     21981 ns/op	     16167 p50-ns	    100959 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     33970 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     34355 ns/op	     19209 p50-ns	    188750 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     41600 ns/op	     25334 p50-ns	    200125 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     49650 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     34865 ns/op	     19208 p50-ns	    230083 p99-ns	    6342 B/op	      79 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M1 (Virtual)
+BenchmarkBackendRequestPump-3   	    2000	     26115 ns/op	     17292 p50-ns	    137958 p99-ns	    5065 B/op	      63 allocs/op
+BenchmarkBackendCallPump-3      	    2000	     46390 ns/op	    6757 B/op	      93 allocs/op
+BenchmarkBackendRequest-3       	    2000	     43175 ns/op	     23667 p50-ns	    286584 p99-ns	    6342 B/op	      79 allocs/op
+PASS
