@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
 import { runInEdit, settle } from '../src/message';
-import { createElement, createPage, createProject } from '../src/model';
+import {
+  createElement,
+  createPage,
+  createProject,
+  ELEMENT_KINDS,
+} from '../src/model';
 import { PlaySession } from '../src/play';
 
 const fixture = () => {
@@ -28,6 +33,73 @@ test('a command changes Play State and an expression prints its value', async ()
   expect(play.page.elements[0]!.visible).toBe(false);
   expect(await run(play, 'the label of button1')).toEqual({ text: 'Button' });
   expect(await run(play, '3 + 4')).toEqual({ text: '7' });
+  expect(project).toEqual(before);
+  expect(play.problems).toEqual([]);
+});
+
+test('Script properties round-trip across Element kinds, Pages and the Project', async () => {
+  const project = createProject('Properties');
+  project.pages[0]!.elements = ELEMENT_KINDS.map(kind =>
+    createElement(kind, `${kind}1`),
+  );
+  const before = structuredClone(project);
+  const play = new PlaySession(project);
+  const writes = [
+    ['text1', 'text', '"Plain"', 'Plain'],
+    ['text1', 'textAlign', '"right"', 'right'],
+    ['text1', 'textColor', '"red"', 'red'],
+    ['text1', 'textSize', '18', '18'],
+    ['text1', 'font', '"serif"', 'serif'],
+    ['text1', 'editable', 'true', 'true'],
+    ['image1', 'image', '"photo"', 'photo'],
+    ['button1', 'label', '"Go"', 'Go'],
+    ['button1', 'fill', '"blue"', 'blue'],
+    ['button1', 'textColor', '"white"', 'white'],
+    ['rectangle1', 'fill', '"green"', 'green'],
+    ['rectangle1', 'stroke', '"black"', 'black'],
+    ['rectangle1', 'thickness', '0', '0'],
+    ['ellipse1', 'thickness', '4', '4'],
+    // Preserve the existing line policy; only rectangle/ellipse reject negatives.
+    ['line1', 'thickness', '-1', '-1'],
+    ['line1', 'stroke', '"yellow"', 'yellow'],
+    ['page1', 'background', '"pink"', 'pink'],
+    ['page1', 'height', '700', '700'],
+  ];
+  for (const kind of ELEMENT_KINDS) {
+    const owner = `${kind}1`;
+    writes.push(
+      [owner, 'left', '100', '100'],
+      [owner, 'top', '200', '200'],
+      [owner, 'visible', 'false', 'false'],
+    );
+    if (kind !== 'group') {
+      writes.push(
+        [owner, 'width', '150', '150'],
+        [owner, 'height', '80', '80'],
+      );
+    }
+    expect(await run(play, `the name of ${owner}`)).toEqual({ text: owner });
+  }
+  for (const [owner, field, value, result] of writes) {
+    expect(await run(play, `set the ${field} of ${owner} to ${value}`)).toEqual(
+      {
+        text: undefined,
+      },
+    );
+    expect(await run(play, `the ${field} of ${owner}`)).toEqual({
+      text: result,
+    });
+  }
+  expect(await run(play, 'the name of page1')).toEqual({ text: 'page1' });
+  expect(await run(play, 'the name of project')).toEqual({
+    text: 'Properties',
+  });
+  for (const field of ['width', 'height']) {
+    expect(
+      (await run(play, `set the ${field} of group1 to 10`)).error,
+    ).toBeDefined();
+    expect(await run(play, `the ${field} of group1`)).toEqual({ text: '0' });
+  }
   expect(project).toEqual(before);
   expect(play.problems).toEqual([]);
 });

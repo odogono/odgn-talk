@@ -94,8 +94,11 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [tree/project-tree.ts](src/tree/project-tree.ts): the persistent mutable
   Project authority shared by Edit and Play, readonly live views, indexes,
   explicit mutations, copy work, batched changes and forward/inverse journals.
-  [tree/rules.ts](src/tree/rules.ts) holds pure hierarchy/geometry rules and the
-  1,024-node/depth-32 limits without runtime model imports.
+  [tree/properties.ts](src/tree/properties.ts) holds property getters, setters,
+  validation and Script metadata shared by the tree, Play and the Script
+  manifest. [tree/rules.ts](src/tree/rules.ts) holds child-membership dispatch,
+  pure hierarchy/geometry rules and the 1,024-node/depth-32 limits without
+  runtime model imports.
   [readonly.ts](src/readonly.ts) defines the `DeepReadonly` view contract and
   `thaw`, the writable deep copy of a view.
 - [model.ts](src/model.ts) and [project-file.ts](src/project-file.ts): recursive

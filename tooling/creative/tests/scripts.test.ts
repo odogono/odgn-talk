@@ -73,6 +73,9 @@ test('each owner gets its scoped names, typed properties and five Grants', () =>
       true,
     );
     expect(manifest.objectKinds.get('text')!.props.has('editable')).toBe(true);
+    expect(manifest.objectKinds.get('project')!.props.has('designWidth')).toBe(
+      false,
+    );
     for (const kind of ['rectangle', 'ellipse']) {
       expect(
         manifest.objectKinds.get(kind)!.props.get('thickness'),
