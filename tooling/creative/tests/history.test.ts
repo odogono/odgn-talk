@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { StackEditor, type LayerOrder } from '../src/editing';
 import { createElement, createProject } from '../src/model';
 
@@ -468,4 +468,62 @@ test('net-zero rich text compares content independently of object property order
   edit.finish();
   expect(editor.contentState).toBe(content);
   expect(editor.canRedo).toBe(true);
+});
+
+test('typing clones one intake per update, detaches only history endpoints and skips Fuel serialization', () => {
+  const editor = makeEditor();
+  const element = editor.element('a')!;
+  if (element.kind !== 'text') {
+    throw new Error('fixture');
+  }
+  const original = editor.snapshot();
+  const clone = spyOn(globalThis, 'structuredClone');
+  const stringify = spyOn(JSON, 'stringify');
+  const steps = 40;
+  try {
+    const edit = editor.startEdit();
+    for (let i = 1; i <= steps; i++) {
+      edit.change(({ tree }) =>
+        tree.replaceRichText(element, [{ runs: [{ text: 'x'.repeat(i) }] }]),
+      );
+    }
+    expect(clone).toHaveBeenCalledTimes(steps);
+    edit.finish();
+    expect(clone).toHaveBeenCalledTimes(steps + 2);
+    expect(stringify).not.toHaveBeenCalled();
+  } finally {
+    clone.mockRestore();
+    stringify.mockRestore();
+  }
+  const result = editor.snapshot();
+  editor.undo();
+  expect(editor.project).toEqual(original);
+  editor.redo();
+  expect(editor.project).toEqual(result);
+});
+
+test('field runs keep their first value across net-zero updates and structural boundaries', () => {
+  const editor = makeEditor();
+  const before = editor.snapshot();
+  const element = editor.element('a')!;
+  if (element.kind !== 'text') {
+    throw new Error('fixture');
+  }
+  const edit = editor.startEdit();
+  for (const text of ['changed', 'Text', 'last before removal']) {
+    edit.change(({ tree }) => tree.replaceText(element, text));
+  }
+  edit.change(({ tree }) => tree.remove(element));
+  edit.change(({ tree }) => {
+    const replacement = tree.create('text', editor.page, 'a');
+    tree.setProperty(replacement, 'text', 'replacement');
+  });
+  edit.finish();
+  const after = editor.snapshot();
+  for (let i = 0; i < 3; i++) {
+    editor.undo();
+    expect(editor.project).toEqual(before);
+    editor.redo();
+    expect(editor.project).toEqual(after);
+  }
 });

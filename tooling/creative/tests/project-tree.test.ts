@@ -1,8 +1,14 @@
 import { thaw } from '../src/readonly';
 import { expect, spyOn, test } from 'bun:test';
-import { createElement, createProject, type Element } from '../src/model';
+import {
+  createElement,
+  createProject,
+  type Element,
+  type Project,
+} from '../src/model';
 import { allElements, groupElement, refreshBounds } from '../src/tree/rules';
 import { ProjectTree, type TreeJournal } from '../src/tree/project-tree';
+import { detachJournal } from '../src/tree/history';
 
 const fixture = () => {
   const project = createProject('Tree');
@@ -171,7 +177,7 @@ test('reorder rejects foreign, duplicate and missing members atomically', () => 
 
 test('rich text input is detached and clone work reflects reader growth', () => {
   const project = fixture();
-  const tree = new ProjectTree(project);
+  const tree = new ProjectTree(project, undefined, { trackWork: true });
   const page = tree.project.pages[0]!;
   const entry = tree.find(page, 'entry')!;
   if (entry.kind !== 'text') {
@@ -216,6 +222,20 @@ test('Edit intake accepts conflicting names so owners can be repaired by id', ()
   expect(tree.find(tree.project.pages[0]!, 'repaired')).toBe(b[1]);
 });
 
+test('renames refuse names taken by a Page or by an Element on any Page', () => {
+  const project = fixture();
+  project.pages.push({ ...createProject('Other').pages[0]!, name: 'other' });
+  const tree = new ProjectTree(project, () => 0);
+  const [first, second] = tree.project.pages;
+  expect(() => tree.rename(second!, 'entry')).toThrow('Name is unavailable');
+  expect(() => tree.rename(tree.find(first!, 'a')!, 'other')).toThrow(
+    'Name is unavailable',
+  );
+  expect(() => tree.rename(tree.find(first!, 'a')!, 'b')).toThrow(
+    'Name is unavailable',
+  );
+});
+
 test('ungrouping an empty nested group refreshes its parent bounds and replays cleanly', () => {
   const project = fixture();
   const empty = groupElement('empty', []);
@@ -254,7 +274,7 @@ test('async installation hooks are rejected before tree publication', () => {
 });
 
 test('Play geometry and scalar writes never serialize unrelated rich text', () => {
-  const tree = new ProjectTree(fixture(), undefined, false);
+  const tree = new ProjectTree(fixture(), undefined, { trackWork: true });
   const page = tree.project.pages[0]!;
   const entry = tree.find(page, 'entry')!;
   if (entry.kind !== 'text') {
@@ -301,7 +321,7 @@ test('snapshots and history freeze detached data while live owners remain mutabl
   expect(Object.isFrozen(snapshot.pages[0]!.elements)).toBe(true);
   let journal: TreeJournal = [];
   const unsubscribe = tree.subscribe(change => {
-    journal = change.changes;
+    journal = detachJournal(change.changes);
   });
   tree.setProperty(entry, 'text', 'changed');
   unsubscribe();
@@ -388,4 +408,176 @@ test('invalid and dedicated property writes leave the tree and indexes unchanged
   }
   expect(events).toBe(0);
   check(tree);
+});
+
+test('rename, subtree edits and Page order changes do not traverse unrelated subtrees', () => {
+  const project = fixture();
+  project.pages[0]!.elements.push(
+    groupElement('unrelated', [createElement('text', 'otherText')]),
+  );
+  const tree = new ProjectTree(project);
+  const page = tree.project.pages[0]!;
+  const unrelated = tree.find(page, 'unrelated')!;
+  if (unrelated.kind !== 'group') {
+    throw new Error('fixture');
+  }
+  const members = unrelated.members;
+  let reads = 0;
+  Object.defineProperty(unrelated, 'members', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      reads++;
+      return members;
+    },
+  });
+  try {
+    tree.rename(tree.find(page, 'b')!, 'renamed');
+    tree.create(
+      'button',
+      tree.find(page, 'inner')! as Extract<Element, { kind: 'group' }>,
+      'newMember',
+    );
+    const added = tree.addPage(0);
+    tree.movePage(0, 1);
+    tree.removePage(added);
+    expect(reads).toBe(0);
+  } finally {
+    Object.defineProperty(unrelated, 'members', {
+      configurable: true,
+      enumerable: true,
+      value: members,
+      writable: true,
+    });
+  }
+  expect(tree.find(page, 'b')).toBeUndefined();
+  expect(
+    tree.find(
+      tree.find(page, 'panel')! as Extract<Element, { kind: 'group' }>,
+      'renamed',
+    ),
+  ).toBe(tree.find(page, 'renamed'));
+  check(tree);
+});
+
+test('geometry preflight does not visit sibling descendants or copy their content', () => {
+  const tree = new ProjectTree(fixture());
+  const page = tree.project.pages[0]!;
+  const inner = tree.find(page, 'inner')!;
+  if (inner.kind !== 'group') {
+    throw new Error('fixture');
+  }
+  const members = inner.members;
+  let reads = 0;
+  Object.defineProperty(inner, 'members', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      reads++;
+      return members;
+    },
+  });
+  const clone = spyOn(globalThis, 'structuredClone');
+  try {
+    tree.setGeometry(tree.find(page, 'b')!, { left: 1000, width: -200 });
+    expect(reads).toBe(0);
+    expect(clone).not.toHaveBeenCalled();
+  } finally {
+    clone.mockRestore();
+    Object.defineProperty(inner, 'members', {
+      configurable: true,
+      enumerable: true,
+      value: members,
+      writable: true,
+    });
+  }
+  check(tree);
+});
+
+test('conflicting imported name indexes survive repair, reorder, rollback and removal', () => {
+  const project = createProject('Conflicts');
+  project.pages[0]!.elements = [
+    groupElement('panel', [
+      createElement('button', 'duplicate'),
+      createElement('button', 'duplicate'),
+    ]),
+  ];
+  const tree = new ProjectTree(project);
+  const page = tree.project.pages[0]!;
+  const panel = tree.find(page, 'panel')!;
+  if (panel.kind !== 'group') {
+    throw new Error('fixture');
+  }
+  const [first, second] = panel.members;
+  tree.rename(second!, 'repaired');
+  expect(tree.find(page, 'duplicate')).toBe(first);
+  expect(tree.find(panel, 'duplicate')).toBe(first);
+  expect(() =>
+    tree.transaction(() => {
+      tree.rename(first!, 'temporary');
+      tree.remove(second!);
+      throw new Error('abort');
+    }),
+  ).toThrow('abort');
+  expect(tree.find(page, 'duplicate')).toBe(first);
+  expect(tree.find(panel, 'repaired')).toBe(second);
+  tree.reorder(panel, [...panel.members].reverse());
+  tree.remove(first!);
+  expect(tree.find(page, 'duplicate')).toBeUndefined();
+  check(tree);
+});
+
+test('incremental indexes and clone Fuel agree with a fresh tree after mixed edits and adoption', () => {
+  let id = 0;
+  const tree = new ProjectTree(fixture(), () => ++id, { trackWork: true });
+  const compare = () => {
+    check(tree);
+    const fresh = new ProjectTree(tree.snapshot(), undefined, {
+      trackWork: true,
+    });
+    for (const page of tree.project.pages) {
+      for (const node of tree.elementsOf(page)) {
+        const copy = fresh.owner(node.id!)! as Element;
+        const cost = (target: ProjectTree, element: typeof node) => {
+          let fuel = 0;
+          expect(() =>
+            target.clone(element, {
+              authorize: amount => {
+                fuel = amount;
+                throw new Error('measure');
+              },
+            }),
+          ).toThrow('measure');
+          return fuel;
+        };
+        expect(cost(tree, node)).toBe(cost(fresh, copy));
+        expect(tree.parentOf(node)?.id).toBe(fresh.parentOf(copy)?.id);
+        expect(tree.outerOf(node)?.id).toBe(fresh.outerOf(copy)?.id);
+      }
+    }
+  };
+  for (let i = 0; i < 8; i++) {
+    const page = tree.project.pages[0]!;
+    tree.create(
+      'text',
+      tree.find(page, 'inner')! as Extract<Element, { kind: 'group' }>,
+    );
+    tree.setProperty(
+      tree.find(page, 'entry')!,
+      'text',
+      'growing '.repeat(i + 1),
+    );
+    const group = tree.group(page, [...page.elements]);
+    compare();
+    tree.ungroup(group);
+    tree.reorder(page, [...page.elements].reverse());
+    const incoming = thaw<Project>(tree.snapshot());
+    incoming.pages[0]!.elements.reverse();
+    tree.adopt(incoming);
+    compare();
+    const extra = tree.addPage(0);
+    tree.movePage(1, 0);
+    compare();
+    tree.removePage(extra);
+  }
 });

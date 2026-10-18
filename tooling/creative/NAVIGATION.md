@@ -99,6 +99,9 @@ List files with `rg --files tooling/creative` before opening one by name.
   manifest. [tree/rules.ts](src/tree/rules.ts) holds child-membership dispatch,
   pure hierarchy/geometry rules and the 1,024-node/depth-32 limits without
   runtime model imports.
+  [tree/history.ts](src/tree/history.ts) folds Edit's incoming field runs and
+  detaches completed journals. [The write benchmark](tools/bench-project-tree.md)
+  measures drag/typing bursts and checks copy and serialization budgets.
   [readonly.ts](src/readonly.ts) defines the `DeepReadonly` view contract and
   `thaw`, the writable deep copy of a view.
 - [model.ts](src/model.ts) and [project-file.ts](src/project-file.ts): recursive
