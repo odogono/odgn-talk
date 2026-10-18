@@ -2,8 +2,9 @@
 
 For [#1220](https://github.com/odogono/odgn-talk/issues/1220), move ordered
 Wait storage, timer order, Call/reply lookup, due selection and Run/Join Member
-back-references into [`waits.zig`](../../impl/zig/src/machine/waits.zig).
-The Group keeps scheduling, Call abandonment and Trace writes. The table
+back-references, and Call abandonment, into
+[`waits.zig`](../../impl/zig/src/machine/waits.zig). The Group keeps
+scheduling and Trace writes. The table
 retains the same ArrayList, ordered removal and deadline/order comparison.
 The save codec retains its layout and restores references through the table.
 
