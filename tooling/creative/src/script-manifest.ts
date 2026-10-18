@@ -1,3 +1,4 @@
+import { allElements, GEOMETRY_FUEL, PROPERTY_FUEL } from './hierarchy';
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
 import { type Immutable } from 'immer';
@@ -20,7 +21,7 @@ export const scriptOwners = <P extends Immutable<Project> | Project>(
   project: P,
 ): (P | P['pages'][number] | P['pages'][number]['elements'][number])[] => [
   project,
-  ...project.pages.flatMap(page => [page, ...page.elements]),
+  ...project.pages.flatMap(page => [page, ...allElements(page.elements)]),
 ];
 
 /** The owner with a session id, absent once it has gone. */
@@ -36,10 +37,17 @@ export const scriptPage = (
 ): Immutable<Page> | undefined =>
   project.pages.find(
     page =>
-      page === owner || page.elements.includes(owner as Immutable<Element>),
+      page === owner ||
+      allElements(page.elements).includes(owner as Immutable<Element>),
   );
 
-const props = (fields: Record<string, string>) =>
+type ManifestProperty = {
+  name: string;
+  readOnly: boolean;
+  setCost?: { fuel: number };
+  shape: string;
+};
+const props = (fields: Record<string, string>): ManifestProperty[] =>
   Object.entries(fields).map(([name, shape]) => ({
     name,
     shape,
@@ -67,6 +75,7 @@ const specific: Record<Element['kind'], Record<string, string>> = {
   rectangle: { fill: 'text', stroke: 'text', thickness: 'number' },
   ellipse: { fill: 'text', stroke: 'text', thickness: 'number' },
   line: { stroke: 'text', thickness: 'number' },
+  group: {},
 };
 /**
  * Folio's Host Commands (ADR 0094): Operations of the `folio` Grant that any
@@ -129,7 +138,31 @@ const objectKinds = [
   },
   ...ELEMENT_KINDS.map(name => ({
     name,
-    props: props({ ...common, ...specific[name] }),
+    props: props({ ...common, ...specific[name] }).map(prop => {
+      // A group's box is derived from its members.
+      const readOnly =
+        prop.readOnly ||
+        (name === 'group' && (prop.name === 'width' || prop.name === 'height'));
+      return {
+        ...prop,
+        setCost: readOnly
+          ? undefined
+          : ['left', 'top', 'width', 'height'].includes(prop.name)
+            ? { fuel: GEOMETRY_FUEL }
+            : { fuel: PROPERTY_FUEL },
+        readOnly,
+      };
+    }),
+    ...(name === 'group'
+      ? {
+          elements: {
+            shape: elementShape,
+            countCost: { fuel: 1, alloc: 0 },
+            atCost: { fuel: 1, alloc: 0 },
+            findCost: { fuel: 1, alloc: 0 },
+          },
+        }
+      : {}),
   })),
 ];
 const grants = [
@@ -260,7 +293,7 @@ export const scriptManifest = (
       ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
       ...(page
         ? [
-            ...page.elements.map(element => ({
+            ...allElements(page.elements).map(element => ({
               name: element.name,
               kind: element.kind,
             })),

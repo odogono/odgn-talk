@@ -1,3 +1,4 @@
+import { allElements } from './hierarchy';
 // Recipes produce ordinary source. Placement is derived from the Core's lossless
 // parse, never from a textual search for a handler or its closing `end`.
 import { type Immutable } from 'immer';
@@ -49,7 +50,7 @@ export const recipeTargets = (
       ? [{ name: 'All sounds this Script started', reference: '' }, ...sounds]
       : sounds;
   }
-  return (scriptPage(project, owner)?.elements ?? [])
+  return allElements(scriptPage(project, owner)?.elements ?? [])
     .filter(
       element =>
         kind !== 'text' || element.kind === 'button' || element.kind === 'text',

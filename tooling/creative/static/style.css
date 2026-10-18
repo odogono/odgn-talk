@@ -906,3 +906,21 @@ button:disabled {
 .play-notice strong {
   display: block;
 }
+
+/* Group geometry is a selection aid, never a painted or clipping container. */
+.el.group {
+  pointer-events: none;
+  overflow: visible;
+}
+#page .el.group {
+  outline: 1px dashed #6d7f9b;
+}
+#page .el.group.empty-group {
+  pointer-events: auto;
+  min-width: 12px;
+  min-height: 12px;
+  outline-style: dotted;
+}
+#page .el.group.selected {
+  outline: 2px solid #2f6fed;
+}

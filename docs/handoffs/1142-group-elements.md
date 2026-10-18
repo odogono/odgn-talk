@@ -1,0 +1,41 @@
+# Group Elements: design handoff for #1142
+
+## Design and required base
+
+- **Origin:** [#1142](https://github.com/odogono/odgn-talk/issues/1142), discovered while building the [Tetris Example Project](https://github.com/odogono/odgn-talk/issues/1109).
+- **Design:** [ADR 0103](../adr/0103-folio-groups-are-nested-elements-with-page-wide-names.md), with the **Group Element** definition in the root [glossary](../../GLOSSARY.md#browser-authoring). Interview decisions Q1–Q24 are agreed; the author confirmed the complete shared understanding in Q25. The design interview is complete.
+- **Required base:** commit `9d22af16` on branch `docs/grill-issue-1142`, based on `51fd9dd4`.
+- **Implemented in:** `9d22af16` implements the agreed model, format-2 persistence, scoped editor actions, rendering/input, Play collections and message parents, recursive clone/delete, limits and operation preflight. Tetris uses groups for its window frame and Game Over alert. The Folio guide describes current behavior.
+- **Remaining work:** review and merge `9d22af16`. No known feature work remains within the agreed first-version scope; the explicitly deferred features below remain deferred.
+- **Approval still needed:** none for this design delivery. No new Conformance Corpus expectations or first-blessing requests are introduced.
+
+## Delivery boundary
+
+This is Folio Host behavior using the existing Host Object, property, Message Path and Object Collection APIs. No language syntax, Core API or normative Cost Model change is selected. Fixed property costs must cover bounded Host work; recursive Capability mutations can obtain size-dependent authorization up front through the existing call API.
+
+Use a nested membership tree as the single ownership structure. Every Element has one immediate parent, either its Page or a Group Element on that Page. Keep direct-member layer order separately from the Page's derived postorder collection. Names remain unique across all Elements on the Page, including group nodes. Keep session-local owner ids stable through grouping, ungrouping and history; assign fresh ids and names recursively on duplication. Derive indexes and geometry from ownership rather than persisting a second ownership graph.
+
+All existing Play integrations must follow the hierarchy: Script owners and containing-Page discovery, loading and unloading on Page navigation, frame and sound lifetimes, Script-window owner lookup, cloning, disposal, name checks, authoring Manifests, Recipes, Page miniatures and Edit Message Box reconciliation. Hidden groups mask display and reader input while Scripts continue normally. Stop still discards Play State; Edit Message Box results still become one authored undoable edit.
+
+Initially, group creation and restructuring are editor actions. Existing runtime cloning and deletion support groups recursively; runtime leaf creation remains Page-level. Group resizing/scaling/clipping, drag reparenting, new runtime membership Operations, automatic Script-reference rewriting and Element clipboard commands are deferred.
+
+## Acceptance
+
+- **Geometry:** grouping preserves member coordinates; group moves translate every descendant exactly once, including nested empty anchors; direct member edits refresh ancestor bounds; hidden members and empty child points contribute to bounds; group width/height cannot be written or resized. Exercise finite-value overflow and verify rejected moves leave every position unchanged.
+- **Visibility and input:** hide/show preserves individual visibility; nested ancestor masks suppress pointer and keyboard interaction; gaps pass through during Play; member input retains its original target along the group Message Path; hiding does not stop Scripts or frames. Verify button and editable-text focus as well as pointer input. Edit outlines and empty markers remain usable.
+- **Editing and history:** Group accepts at least two siblings, selects a fresh-named group, preserves nested groups and uses the frontmost selected layer; interleaved A/B/C has the agreed overlap change. Enter/exit one level, text-first Escape, outside click, scope-local selection/insertion/duplication/layers and Page changes follow the ADR. Undo/redo restores structure, visibility, selection and entered scope; member Script windows keep their owner ids.
+- **Ungroup:** promote one level at the former layer position, preserve member ids/names/positions/order, carry a hidden group's mask into immediate members, remove its Script, and restore all prior state on undo. Cover empty and nested groups.
+- **Duplication and deletion:** fresh names and ids for every copied node, one overall 20 px offset, sibling placement, unchanged Script source and explicit named-reference behavior. Both editor Duplicate and runtime clone handle subtrees. Deletion stops every removed owner, sound and frame source and disposes retained handles, including when a Script deletes its own ancestor. Deleting the last member retains the empty group and its Script.
+- **Collections and names:** Page names resolve every descendant; group names resolve immediate members only; hidden and empty groups remain included. Page numeric order `A, G(B, C), D` is `A, B, C, G, D`, count 5. Exercise signed positions, missing results, reorder, clone and deletion without stale indexes or changed retained identities. Keep existing name-conflict repair policy for older imported Projects.
+- **Persistence:** migrate format 1 without changing existing leaf content/order; round-trip format 2 through portable files, browser storage, earlier versions and Message Box edits. Preserve nested membership, Scripts, visibility, leaf coordinates and empty anchors. Omit derived bounds, ids and caches. Reject invalid structure, duplicate Page-wide names, nonfinite anchors and exceeded hierarchy limits with useful paths; keep existing malformed-name versus Script-binding-conflict behavior. Newer-format refusal must prevent older writers from dropping groups.
+- **Bounds and failure atomicity:** allow exactly 1,024 nodes in an outer group and 32 group levels, and reject the next node/level consistently. Independent Page Elements do not impose a Page-wide count ceiling. Preflight nested clone growth, invalid coordinates and Fuel before effects; subsequent statements see the complete cloned graph. Include copied source/content size when accounting for clone work, rather than charging only the number of nodes. Collection reads must fit their fixed declared costs.
+- **Integration:** exercise Browse, Present, Edit Message Box, Page navigation, Stop, Manifests, Recipes, Script windows and miniatures. Use the reported Tetris alert and frame as concrete authoring and scripted movement/visibility scenarios. Reconcile the guide and existing ADR extension notices when implementation lands.
+
+Run focused model, editing/history, Project-file/storage, Play, Script/Manifest and Message Box tests, followed by relevant browser suites using [Folio's task map](../../tooling/creative/NAVIGATION.md). Verification at `9d22af16`:
+
+- `bun run --cwd tooling/creative typecheck` passed.
+- `bun test tooling/creative/tests tooling/editor/tests` passed: 303 tests, including 16 group integration tests for persistence, limits, Fuel refusal, geometry, identity and runtime behavior.
+- Browser checks passed for `groups`, `edit-menu`, `borders`, `scripts`, `recipes`, `images`, `errors`, `page-strip`, `lighthouse`, `tetris`, the main `play` suite and its Elements, key and Message Box exports. The group suite includes grouped reader-text focus and ancestor hiding in both Browse and Present.
+- Folio and its browser-test bundles built; root lint, formatting, generated Spec, documentation links and whitespace checks passed.
+
+These checks verify Folio Host behavior; no new Core corpus expectations are introduced.

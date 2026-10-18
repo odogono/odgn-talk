@@ -1,3 +1,4 @@
+import { allElements } from './hierarchy';
 // Image intake and the session's content-addressed bytes. Decode before any
 // authored edit; retain bytes for undo and failed-save exports (#753). The
 // bytes store is keyed by hash for every asset, so sound bytes (#822) live
@@ -185,11 +186,15 @@ export const projectForExport = (project: Immutable<Project>): Project => {
   const copy = castDraft(structuredClone(project));
   const scripted =
     project.script ||
-    project.pages.some(p => p.script || p.elements.some(e => e.script));
+    project.pages.some(
+      p => p.script || allElements(p.elements).some(e => e.script),
+    );
   if (!scripted) {
     const used = new Set(
       project.pages.flatMap(p =>
-        p.elements.flatMap(e => (e.kind === 'image' ? [e.image] : [])),
+        allElements(p.elements).flatMap(e =>
+          e.kind === 'image' ? [e.image] : [],
+        ),
       ),
     );
     copy.assets = copy.assets.filter(a => used.has(a.name));

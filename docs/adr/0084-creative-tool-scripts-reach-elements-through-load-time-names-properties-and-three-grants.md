@@ -3,6 +3,9 @@
 Extended by [ADR 0100](0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
 (computed and numbered Element references).
 
+Extended by [ADR 0103](0103-folio-groups-are-nested-elements-with-page-wide-names.md)
+(Group Elements, nested message parents and unchanged Page-wide names).
+
 The planned [browser creative tool](https://github.com/odogono/odgn-talk/issues/154) maps Projects, Pages and Elements to Host Objects within the existing language, with no syntax of its own. Each Element type is its own Object Kind: `text`, `image`, `button`, `rectangle`, `ellipse` and `line`, besides `project` and `page`. Pages have identifier names unique across the Project; Element names are unique within their Page, cannot collide with Page names, and object names avoid reserved bindings, as revised by [#783](https://github.com/odogono/odgn-talk/issues/783). These are the names which the Host binds as well-known names when Play loads each Script. Every Script gets every Page name. A Page or Element Script also gets its own Page's Elements, plus `thisPage` and `project`. Scripts change what the reader sees through properties, such as `set the label of climbButton to "…"`. Everything else goes through three Grants, which every Script receives: `pages` to navigate, `elements` to create, clone, delete and find Elements, and `sound` to play and stop audio. We chose this because the language has no lookup by name, and because names bound at load turn a misspelt Element into a load error that points at the Script and line. The full set of decisions is in [#735](https://github.com/odogono/odgn-talk/issues/735).
 
 ## Considered Options

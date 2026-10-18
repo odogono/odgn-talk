@@ -1,3 +1,9 @@
+import {
+  allElements,
+  elementVisibility,
+  outerElement,
+  updateGeometry,
+} from './hierarchy';
 // The Stack editor shell (#749), in the layout the UI prototype chose for
 // #154: the Page on a desk, floating Tools and Info windows, and a strip of
 // Pages. The edits themselves live in `editing.ts`; this file draws them and
@@ -53,6 +59,7 @@ const KIND_ICONS: Record<ElementKind, string> = {
   rectangle: '■',
   ellipse: '●',
   line: '╱',
+  group: '▱',
 };
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -73,6 +80,12 @@ export const renderElement = (
     height: `${element.height}px`,
   });
   switch (element.kind) {
+    case 'group':
+      node.title = element.name;
+      if (!element.members.length) {
+        node.classList.add('empty-group');
+      }
+      break;
     case 'text':
       Object.assign(node.style, {
         color: element.textColor,
@@ -151,15 +164,18 @@ const renderPage = (
   assets: Immutable<Asset[]>,
   images: ImageAssets,
 ) => {
+  const visibility = elementVisibility(page.elements);
   into.replaceChildren(
-    ...page.elements.map(element =>
-      renderElement(
+    ...allElements(page.elements).map(element => {
+      const node = renderElement(
         element,
         element.kind === 'image'
           ? images.url(assets.find(a => a.name === element.image))
           : undefined,
-      ),
-    ),
+      );
+      node.classList.toggle('hidden', !visibility.get(element.name));
+      return node;
+    }),
   );
   Object.assign(into.style, {
     width: `${designWidth}px`,
@@ -379,7 +395,7 @@ export const mountStack = (
     );
     const selected = editor.selected;
     stage.querySelector('.page-handles')?.remove();
-    if (!selected.length && !editor.readOnly) {
+    if (!selected.length && !editor.scope.length && !editor.readOnly) {
       stage.append(
         h(
           'div',
@@ -408,7 +424,12 @@ export const mountStack = (
         ?.classList.add('selected');
     }
     const [single] = selected;
-    if (single && selected.length === 1 && !editor.readOnly) {
+    if (
+      single &&
+      single.kind !== 'group' &&
+      selected.length === 1 &&
+      !editor.readOnly
+    ) {
       // Handles sit over the Element rather than in it, which may clip them.
       const box = h(
         'div',
@@ -425,7 +446,12 @@ export const mountStack = (
       });
       pageNode.append(box);
     }
-    byId('page-name').textContent = editor.page.name;
+    byId('page-name').textContent = [
+      editor.page.name,
+      ...editor.scope.map(
+        id => allElements(editor.page.elements).find(e => e.id === id)?.name,
+      ),
+    ].join(' › ');
     byId('page-number').textContent =
       `${editor.pageIndex + 1} / ${editor.project.pages.length}`;
     fit();
@@ -490,7 +516,13 @@ export const mountStack = (
   const edit = (change: () => void) => {
     closeText();
     refusal.value = undefined;
-    change();
+    try {
+      change();
+    } catch (error) {
+      byId('notice-text').textContent =
+        error instanceof Error ? error.message : String(error);
+      byId('notice-banner').hidden = false;
+    }
     draw();
   };
 
@@ -524,39 +556,58 @@ export const mountStack = (
           ? Math.round(number)
           : target.value;
     fieldEdit ??= editor.startEdit();
-    fieldEdit.change(draft => {
-      const { project } = draft;
-      const page = pageOf(draft);
-      const [element] = selectedOf(draft);
-      if (element && editor.selection.length === 1) {
-        if (key === 'text' && element.kind === 'text') {
-          if (textOf(element) !== value) {
-            replacePlainText(element, String(value));
+    try {
+      fieldEdit.change(draft => {
+        const { project } = draft;
+        const page = pageOf(draft);
+        const [element] = selectedOf(draft);
+        if (element && editor.selection.length === 1) {
+          if (['left', 'top', 'width', 'height'].includes(key)) {
+            const next =
+              key === 'width' || key === 'height'
+                ? Math.max(element.kind === 'line' ? 0 : 1, Number(value))
+                : Number(value);
+            updateGeometry(
+              outerElement(page.elements, element.name)!,
+              element,
+              {
+                [key]: next,
+              },
+            );
+          } else if (key === 'text' && element.kind === 'text') {
+            if (textOf(element) !== value) {
+              replacePlainText(element, String(value));
+            }
+          } else if (key === 'textAlign' && element.kind === 'text') {
+            if (isTextAlign(value)) {
+              setTextAlign(element, value);
+            }
+          } else {
+            let minimum: number | undefined;
+            if (key === 'thickness' && hasBorder(element)) {
+              minimum = 0;
+            }
+            (element as Record<string, unknown>)[key] =
+              minimum === undefined
+                ? value
+                : Math.max(minimum, value as number);
           }
-        } else if (key === 'textAlign' && element.kind === 'text') {
-          if (isTextAlign(value)) {
-            setTextAlign(element, value);
-          }
-        } else {
-          let minimum: number | undefined;
-          if (key === 'width' || key === 'height') {
-            minimum = element.kind === 'line' ? 0 : 1;
-          } else if (key === 'thickness' && hasBorder(element)) {
-            minimum = 0;
-          }
-          (element as Record<string, unknown>)[key] =
-            minimum === undefined ? value : Math.max(minimum, value as number);
+        } else if (key === 'pageHeight') {
+          page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
+        } else if (key === 'background') {
+          page.background = String(value);
+        } else if (key === 'projectName') {
+          project.name = String(value);
+        } else if (key === 'designWidth') {
+          project.designWidth = Math.max(MIN_PAGE_WIDTH, value as number);
         }
-      } else if (key === 'pageHeight') {
-        page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
-      } else if (key === 'background') {
-        page.background = String(value);
-      } else if (key === 'projectName') {
-        project.name = String(value);
-      } else if (key === 'designWidth') {
-        project.designWidth = Math.max(MIN_PAGE_WIDTH, value as number);
-      }
-    });
+      });
+    } catch (error) {
+      finishFieldEdit();
+      byId('notice-text').textContent =
+        error instanceof Error ? error.message : String(error);
+      byId('notice-banner').hidden = false;
+    }
     if (!live) {
       finishFieldEdit();
     }
@@ -691,7 +742,9 @@ export const mountStack = (
       target.closest<HTMLElement>('[data-element]')?.dataset.element;
     if (down.metaKey && down.altKey && scriptElement) {
       down.preventDefault();
-      openScript(editor.element(scriptElement)!);
+      openScript(
+        editor.selectable(scriptElement) ?? editor.element(scriptElement)!,
+      );
       return;
     }
     if (target.closest('[data-replace-image], [contenteditable="true"]')) {
@@ -700,7 +753,7 @@ export const mountStack = (
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset
       .handle as Handle | undefined;
     const name = target.closest<HTMLElement>('[data-element]')?.dataset.element;
-    pointerElement = name;
+    pointerElement = name ? (editor.selectable(name)?.name ?? name) : undefined;
     let gesture: Gesture | undefined;
     if (editor.readOnly) {
       edit(() => editor.click(name, { shift: down.shiftKey }));
@@ -762,7 +815,6 @@ export const mountStack = (
       return;
     }
     edit(() => {
-      editor.selectPage();
       editor.click(element.name);
     });
     pageNode.querySelector('.handles')?.remove();
@@ -787,11 +839,20 @@ export const mountStack = (
     const name =
       (event.target as HTMLElement).closest<HTMLElement>('[data-element]')
         ?.dataset.element ?? pointerElement;
-    const element = name ? editor.element(name) : undefined;
+    const element = name
+      ? (editor.selectable(name) ?? editor.element(name))
+      : undefined;
     if (!element) {
       return;
     }
     if (
+      element.kind === 'group' &&
+      !event.shiftKey &&
+      !(event.metaKey && event.altKey)
+    ) {
+      event.preventDefault();
+      edit(() => editor.enterGroup(element.name));
+    } else if (
       element.kind !== 'text' ||
       event.shiftKey ||
       (event.metaKey && event.altKey)
@@ -831,7 +892,7 @@ export const mountStack = (
         if (
           editor.readOnly ||
           editor.page !== page ||
-          (target && !page.elements.includes(target))
+          (target && !allElements(page.elements).includes(target))
         ) {
           return;
         }
@@ -957,7 +1018,7 @@ export const mountStack = (
 
   // The Tools window adds Elements.
   byId('tools').replaceChildren(
-    ...ELEMENT_KINDS.map(kind =>
+    ...ELEMENT_KINDS.filter(kind => kind !== 'group').map(kind =>
       h(
         'button',
         {
@@ -1021,6 +1082,8 @@ export const mountStack = (
   });
 
   const commands: Record<EditingCommand, () => void> = {
+    group: () => editor.groupSelection(),
+    ungroup: () => editor.ungroupSelection(),
     undo: () => editor.undo(),
     redo: () => editor.redo(),
     duplicate: () => editor.duplicate(),
@@ -1064,7 +1127,7 @@ export const mountStack = (
     }
     if (event.key === 'Escape') {
       byId('edit-menu').removeAttribute('open');
-      edit(() => editor.selectPage());
+      edit(() => editor.leaveGroup());
       return;
     }
     const step = event.shiftKey ? 10 : 1;

@@ -6,7 +6,7 @@ Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio 
 
 The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box and Errors, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
-The editor holds one deeply frozen `{ project, pageIndex, selection, pageSelected }`
+The editor holds one deeply frozen `{ project, pageIndex, scope, selection, pageSelected }`
 value in a signal. Edits run on Immer drafts, and undo/redo retain earlier
 roots with unchanged Pages and Elements shared between them. The imperative
 shell follows the state through effects. Pages and Elements have session-local
@@ -43,6 +43,8 @@ The authored Project model and its zip file format — pure TypeScript with no U
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
 
+Group Elements compose ordinary Elements and other groups; see [Grouping Elements](#grouping-elements). Their rationale is [ADR 0103](../../docs/adr/0103-folio-groups-are-nested-elements-with-page-wide-names.md).
+
 Rectangle and ellipse borders have a writable `thickness` in pixels, named
 like a line's thickness. Set **Thickness** in Info, or use
 `set the thickness of box to 1` in a Script. Zero removes the border;
@@ -53,6 +55,74 @@ undo/redo; Script changes last only for the Play Session. The
 [`borders` browser suite](tests/borders.browser.ts) checks Info, history and
 Script-driven rendering on `/borders-test.html` (see
 [Browser test suites](#browser-test-suites)).
+
+## Grouping Elements
+
+Select two or more siblings and choose **Edit → Group** (⌘/Ctrl-G).
+The new named Group Element selects, moves, duplicates and deletes as one.
+Double-click to enter it and edit its immediate members; nested groups can be
+entered one level at a time. Escape finishes text editing first, then exits one
+level and selects that group. Clicking outside or changing Pages returns to
+Page scope. The caption shows the entered path. Modified Script-opening clicks
+and Info open the group's own Script. Empty groups retain a small selection
+marker in Edit.
+
+While inside a group, newly drawn or inserted Elements join it; Duplicate and
+layer commands operate among its immediate members. Selection does not cross
+parents. Choose **Edit → Ungroup** (⇧⌘/Ctrl-G) to dissolve selected groups one
+level, keeping member names, identities, coordinates and layer order. Ungroup
+removes the group's own Script; Undo restores it. Ungrouping a hidden group
+makes its immediate members individually hidden to preserve the appearance.
+Group, Ungroup, Duplicate, Delete and each drag are single undo steps, including
+the entered-group context and selection. Membership is reorganized through
+Group and Ungroup; drag reparenting and Element clipboard copy/paste are not
+supported.
+
+Coordinates remain Page-relative even inside groups. Moving a group translates
+every descendant once. Its bounds are derived from its members, including
+hidden members and empty child groups' retained positions. Width and height are
+read-only; group resizing, scaling and clipping are not supported. Grouping
+preserves member order and places the composite at the frontmost selected layer:
+for back-to-front A, B, C, grouping A and C brings A in front of B.
+
+Groups and all descendants share the Page's identifier namespace, so existing
+Script bindings continue to work. A group can own a Script: member messages
+follow member → containing groups → Page → Project, retaining the original
+`the target`. During Play, groups have no background or independent hit area;
+gaps pass input to what lies beneath. Hidden groups suppress their members'
+display and reader input, while their Scripts and frames continue. `hide panel`
+and `show panel` change only the group's own visibility, preserving each
+member's individual `visible` flag.
+
+Duplicate and runtime `elements.clone` copy the whole subtree with fresh names
+and identities, and one overall 20 px offset, as a sibling of the original.
+Script source is copied unchanged: named references to original members still
+address those originals; `me` and positional member references can address the
+copy. Deleting a group removes all descendants, stops their Scripts and sounds,
+and disposes their handles. Deleting the final member leaves the empty group,
+its Script and position intact, with zero width/height. Scripts can clone and
+delete groups but cannot create groups, ungroup or reparent members;
+`elements.create` still adds ordinary Elements directly to a Page.
+
+Each outermost group permits at most 1,024 Elements, including itself and nested
+groups, and at most 32 group levels. Independent Page Elements have no shared
+count ceiling. Import, authoring and cloning enforce these limits before
+publishing changes. Script geometry writes declare 8,192 Fuel to cover bounded
+geometry preflight and ancestor updates; other writable Element properties
+declare 256 Fuel for bounded cache maintenance along group ancestors. Clone/delete obtain additional
+size-dependent Fuel before effects, including copied content. Invalid or
+unaffordable moves, clones and deletes leave the operation unapplied. Collection
+callbacks use maintained indexes, each costing 1 Fuel and 0 allocation.
+
+Projects save as `.folio` format 2, with ordered nested members, Page-relative
+leaf coordinates and retained empty-group positions. Bounds, lookup indexes and
+session ids are derived rather than saved. Existing format-1 Projects migrate
+without changing their content. Browser storage and earlier versions use the
+same representation. Older Folio versions refuse format 2.
+
+The `groups` unit and browser suites cover authoring, history, nested geometry,
+collections, visibility, routing, persistence, limits and failure atomicity.
+Tetris's window frame and Game Over alert use Group Elements.
 
 ## Page size
 
@@ -84,7 +154,7 @@ its Script and plain double-click edits the text. ⌘⌥-click opens any Element
 Script, including text being edited. Info also offers **Edit Script**, or
 **Edit Page Script** and **Edit Project Script** when nothing is selected.
 Opening a Script already on the desk brings its window forward. Each window's
-Message Path links to its Page and Project Scripts.
+Message Path links through its containing groups to its Page and Project Scripts.
 Drag the bottom-right corner to resize a Script window; the editor grows and
 shrinks with it and scrolls long Scripts within the window.
 
@@ -507,7 +577,7 @@ Tools, Script and Errors windows still open (the Edit menu offers only Undo and 
 **Present**, in the header, plays it full-window with the editor hidden. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
-Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
+Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
 then `pointerLeave`. `keyDown key` and `keyUp key` report a pressed and released
 browser key (`event.key`) to focused editable text, otherwise to the Page.
 Each takes one text argument. Editable text keeps normal typing; a Page key
@@ -629,16 +699,19 @@ A missing name or position gives Nothing.
 
 This is Folio's policy for the
 [Object Collection](../../spec/embedding/object-elements.md).
-Folio declares the collection only on `page`. It contains all live Elements
-on that Page, including hidden Elements and Elements with no Script, in
-`Page.elements` order: index 1 is the backmost, the last is frontmost. Names
-are the existing Page-local identifier names, not labels or ids. All six
-Element Object Kinds are in the result Shape. A Project or Element receiver
-has no collection. Any Script holding a Page can read that Page's collection,
-including a Page that is not showing; its Scripts need not be running.
+Folio declares collections on `page` and `group`. A Page contains every live
+Element and group on that Page, including hidden and Script-less members.
+Its numeric order visits siblings back to front, placing each group after its
+members: `A, G(B, C), D` gives `A, B, C, G, D`, count 5. A group's collection
+contains only its immediate members in local layer order. Page name lookup
+finds every descendant; group lookup finds immediate members only. Names are
+Page-local identifiers, not labels or ids. All seven Element Object Kinds are
+in the result Shape. Project and ordinary Element receivers have no collection.
+Any Script holding a Page or group can read its collection, including one on a
+Page that is not showing; its Scripts need not be running.
 
-Create and clone append at the front of the z-order; delete removes the
-member. Later lookups/counts see the change after the existing Pump boundary.
+Create appends at the front of a Page; clone appends among the source
+Element's siblings; delete removes the member or whole group subtree. Later lookups/counts see the change after the existing Pump boundary.
 Reordering changes numeric positions, while a retained member handle keeps
 its identity. Deleting and recreating a name resolves to the new handle;
 retained old handles stay disposed. End of Play restores authored content,
@@ -647,7 +720,7 @@ data. The Message Box and authoring Manifest expose the same collection as
 Play; Edit commands still apply through their disposable session and undo.
 
 Folio declares 1 Fuel and 0 allocation for each callback. Count and signed
-positional access use the existing array; name lookup uses a Page-local name
+positional access use maintained ordered arrays; name lookup uses a Page-local name
 index kept in step with create, clone, delete and session construction. The
 Core's text selector rate pays for the size of a name. Names are already
 read-only, so there is no Script rename path to reconcile. Do not rebuild
@@ -674,7 +747,8 @@ ask elements to find "door", cellar
 Its optional name must be an available Script identifier; omission picks a
 fresh name such as `button1`. Created Elements have no Script, so messages
 follow their Page and Project's Handlers. `clone` copies the current properties
-and Script onto the same Page, with a fresh name and a 20 px position offset.
+and Script as a sibling on the same Page, recursively for groups, with fresh
+names throughout and one overall 20 px position offset.
 Its Script attaches after the creating Pump, or when its Page next opens if
 that Page is not showing. Clone errors link to the authored source Script.
 

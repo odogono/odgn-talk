@@ -1,3 +1,4 @@
+import { findElement } from './hierarchy';
 // The Errors window: Script problems from the last Play Session, kept after
 // it ends, each linking to its authored Script and line.
 import { signal, type Signal } from '@preact/signals';
@@ -169,8 +170,9 @@ export class ErrorsWindow {
     if (isPage(owner)) {
       return project.pages.find(p => p.name === where.name);
     }
-    return project.pages
-      .find(p => p.name === where.page)
-      ?.elements.find(e => e.name === where.name);
+    return findElement(
+      project.pages.find(p => p.name === where.page)?.elements ?? [],
+      where.name,
+    );
   }
 }

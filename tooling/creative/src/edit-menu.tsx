@@ -29,6 +29,12 @@ const enabled = (
   if (playing.value === 'browse') {
     return false;
   }
+  if (command === 'group') {
+    return editor.canGroup;
+  }
+  if (command === 'ungroup') {
+    return editor.canUngroup;
+  }
   if (command === 'delete') {
     return editor.canDelete;
   }
@@ -58,6 +64,9 @@ const EditMenu = (props: EditMenuProps) => {
       <hr />
       {command('duplicate', 'Duplicate', '⌘D')}
       {command('delete', 'Delete', '⌫')}
+      <hr />
+      {command('group', 'Group', '⌘G')}
+      {command('ungroup', 'Ungroup', '⇧⌘G')}
       <hr />
       {command('forward', 'Bring forward')}
       {command('backward', 'Send backward')}

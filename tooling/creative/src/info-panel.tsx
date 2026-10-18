@@ -26,6 +26,7 @@ export const KIND_NAMES: Record<ElementKind, string> = {
   rectangle: 'Rectangle',
   ellipse: 'Ellipse',
   line: 'Line',
+  group: 'Group',
 };
 const ALIGN_LABELS: Record<TextAlign, string> = {
   left: 'Left',
@@ -332,7 +333,14 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
             <Fragment key={key}>
               {field(
                 key[0]!.toUpperCase() + key.slice(1),
-                input(key, element[key], disabled, 'number'),
+                input(
+                  key,
+                  element[key],
+                  disabled ||
+                    (element.kind === 'group' &&
+                      (key === 'width' || key === 'height')),
+                  'number',
+                ),
               )}
             </Fragment>
           ))}

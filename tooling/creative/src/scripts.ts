@@ -1,3 +1,4 @@
+import { containingGroups } from './hierarchy';
 // One floating editor and LSP workspace per authored Script. Each workspace
 // has its owner's Host Manifest, so unrelated Pages never leak names.
 import { Compartment, EditorState } from '@codemirror/state';
@@ -269,8 +270,14 @@ export class ScriptWindows {
             ? [project]
             : owner === page
               ? [page!, project]
-              : [owner, page!, project];
-        const kind = ['Project', 'Page', 'Element'][owners.length - 1];
+              : [
+                  owner,
+                  ...containingGroups(page!.elements, owner.name),
+                  page!,
+                  project,
+                ];
+        const kind =
+          owner === project ? 'Project' : owner === page ? 'Page' : 'Element';
         const label = `Script of ${kind} “${owner.name}”`;
         win.title.textContent = label;
         win.node.setAttribute('aria-label', label);

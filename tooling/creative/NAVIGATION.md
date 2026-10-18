@@ -79,6 +79,22 @@ List files with `rg --files tooling/creative` before opening one by name.
   [zip.test.ts](tests/zip.test.ts).
 - First check: `bun test tooling/creative/tests/model.test.ts tooling/creative/tests/project-file.test.ts`.
 
+## Group Elements
+
+- [hierarchy.ts](src/hierarchy.ts): membership traversal, bounds and geometry
+  preflight, visibility, the 1,024-node and depth-32 limits.
+- [model.ts](src/model.ts) and [project-file.ts](src/project-file.ts): recursive
+  copies and format-2 nested members/empty anchors; [editing.ts](src/editing.ts):
+  entered scope, Group/Ungroup, history and sibling actions.
+- [play.ts](src/play.ts): indexed Page/group collections, message parents,
+  recursive clone/delete, geometry costs and operation preflight.
+- [stack.ts](src/stack.ts), [edit-menu.tsx](src/edit-menu.tsx),
+  [info-panel.tsx](src/info-panel.tsx) and [play-view.ts](src/play-view.ts):
+  outlines, empty markers, entry/exit, menu commands, Info and reader input.
+- First check: `bun test tooling/creative/tests/groups.test.ts`.
+- Browser: `groups` suite on `/groups-test.html`; also run `edit-menu`,
+  `play`, its Elements/key/Message Box exports, and `tetris`.
+
 ## Images, sounds and assets
 
 - [images.ts](src/images.ts): image intake and the session's

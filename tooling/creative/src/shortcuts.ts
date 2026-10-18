@@ -1,7 +1,7 @@
 import type { LayerOrder } from './editing';
 
 export type EditingCommand =
-  LayerOrder | 'undo' | 'redo' | 'duplicate' | 'delete';
+  LayerOrder | 'undo' | 'redo' | 'duplicate' | 'delete' | 'group' | 'ungroup';
 
 type Key = Pick<
   KeyboardEvent,
@@ -20,6 +20,9 @@ export const commandForKey = (
     const key = event.key.toLowerCase();
     if (key === 'z') {
       return event.shiftKey ? 'redo' : 'undo';
+    }
+    if (key === 'g') {
+      return event.shiftKey ? 'ungroup' : 'group';
     }
     if (key === 'd' && !event.shiftKey) {
       return 'duplicate';

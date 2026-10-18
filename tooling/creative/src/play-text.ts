@@ -34,15 +34,15 @@ export class ReaderTextHistory implements TextHistory {
       this.play.stopped ||
       this.play.navigating ||
       !this.element.editable ||
-      !this.element.visible ||
-      !this.play.page.elements.includes(this.element) ||
+      !this.play.isVisible(this.element) ||
+      !this.play.elementsOf().includes(this.element) ||
       JSON.stringify(next) === JSON.stringify(this.element.richText)
     ) {
       return false;
     }
     this.element.richText = next;
     this.#current = next;
-    this.play.changed = true;
+    this.play.contentChanged(this.element);
     this.play.send(this.element, 'textChanged');
     return true;
   }

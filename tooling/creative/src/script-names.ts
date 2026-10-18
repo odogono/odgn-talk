@@ -1,3 +1,4 @@
+import { allElements } from './hierarchy';
 import { type Immutable } from 'immer';
 import { grammar } from '@northtalk/ts';
 import { isIdentifierName, type Page, type Project } from './model';
@@ -20,7 +21,9 @@ export const elementNamesTaken = (
   new Set([
     ...reservedScriptNames,
     ...project.pages.map(p => p.name),
-    ...page.elements.filter(e => e.name !== current).map(e => e.name),
+    ...allElements(page.elements)
+      .filter(e => e.name !== current)
+      .map(e => e.name),
   ]);
 export const pageNamesTaken = (
   project: Immutable<Project>,
@@ -29,7 +32,7 @@ export const pageNamesTaken = (
   new Set([
     ...reservedScriptNames,
     ...project.pages.filter(p => p.name !== current).map(p => p.name),
-    ...project.pages.flatMap(p => p.elements.map(e => e.name)),
+    ...project.pages.flatMap(p => allElements(p.elements).map(e => e.name)),
   ]);
 
 /** Imported Projects remain untouched; identify each owner requiring repair. */
@@ -56,14 +59,16 @@ export const scriptNameProblems = (
       page,
       'Page',
       project.pages.some(other => other !== page && other.name === page.name) ||
-        project.pages.some(p => p.elements.some(e => e.name === page.name)),
+        project.pages.some(p =>
+          allElements(p.elements).some(e => e.name === page.name),
+        ),
     );
-    for (const element of page.elements) {
+    for (const element of allElements(page.elements)) {
       check(
         element,
         `Element on ${page.name}`,
         project.pages.some(p => p.name === element.name) ||
-          page.elements.some(
+          allElements(page.elements).some(
             other => other !== element && other.name === element.name,
           ),
       );
