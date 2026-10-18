@@ -16,7 +16,7 @@
     "syntax:generate": "bun syntax/generate.ts",
     "syntax:check": "bun syntax/generate.ts --check",
     "typecheck": "tsc",
-    "test": "bun test grammar/container-properties.test.ts grammar/function-contract.test.ts spec/commands.test.ts commits/ corpus/ docs/ costs/ go/ zig/ machine/rejected-sources.test.ts",
+    "test": "bun test grammar/container-properties.test.ts grammar/function-contract.test.ts spec/commands.test.ts commits/ corpus/ docs/ issues/ costs/ go/ zig/ machine/rejected-sources.test.ts",
     "go:generate": "bun go/generate.ts",
     "go:check": "bun go/generate.ts --check",
     "zig:generate": "bun zig/generate.ts",
@@ -26,7 +26,8 @@
     "release-notes:ts": "bun commits/release-notes.ts",
     "lints:generate": "bun lints/generate.ts",
     "lints:check": "bun lints/generate.ts --check",
-    "docs:check": "bun docs/check.ts"
+    "docs:check": "bun docs/check.ts",
+    "issues:graph": "bun issues/update.ts"
   },
   "devDependencies": {
     "ajv": "^8"
