@@ -1,7 +1,7 @@
 // The DOM boundary for rich text. Clipboard HTML is parsed in an inert template;
 // only text, four supported marks and paragraph alignment cross into the
 // authored model.
-import { type Immutable } from 'immer';
+import type { DeepReadonly } from './readonly';
 import {
   alignParagraph,
   isTextAlign,
@@ -163,7 +163,7 @@ export const richTextFromHtml = (html: string): RichText => {
 /** Render from text nodes and allowed styles, never from authored HTML. */
 export const renderRichText = (
   root: HTMLElement,
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
 ): void => {
   root.replaceChildren(
     ...text.map(paragraph => {

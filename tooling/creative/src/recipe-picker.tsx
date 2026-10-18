@@ -1,5 +1,5 @@
+import type { DeepReadonly } from './readonly';
 import type { EditorView } from '@codemirror/view';
-import type { Immutable } from 'immer';
 import { render } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Project } from './model';
@@ -59,13 +59,13 @@ type Prepared = {
 type PickerProps = {
   close: () => void;
   owner: ScriptOwner;
-  project: Immutable<Project>;
+  project: DeepReadonly<Project>;
   readOnly: () => boolean;
   view: EditorView;
 };
 
 const signatureOf = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   owner: ScriptOwner,
   action: RecipeKind,
 ) => JSON.stringify(recipeTargets(project, owner, action));
@@ -323,7 +323,7 @@ export const closeRecipePicker = (parent: HTMLElement): void => {
 export const openRecipePicker = (
   parent: HTMLElement,
   view: EditorView,
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   owner: ScriptOwner,
   readOnly: () => boolean,
 ): void => {

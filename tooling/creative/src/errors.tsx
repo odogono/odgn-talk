@@ -1,8 +1,8 @@
+import type { DeepReadonly } from './readonly';
 import { findElement } from './tree/rules';
 // The Errors window: Script problems from the last Play Session, kept after
 // it ends, each linking to its authored Script and line.
 import { signal, type Signal } from '@preact/signals';
-import { type Immutable } from 'immer';
 import { render } from 'preact';
 import { byId } from './dom';
 import { type Page, type Project } from './model';
@@ -28,9 +28,9 @@ type ReportedProblem = ScriptProblem & {
   where: Location;
 };
 
-const isProject = (owner: ScriptOwner): owner is Immutable<Project> =>
+const isProject = (owner: ScriptOwner): owner is DeepReadonly<Project> =>
   'pages' in owner;
-const isPage = (owner: ScriptOwner): owner is Immutable<Page> =>
+const isPage = (owner: ScriptOwner): owner is DeepReadonly<Page> =>
   'elements' in owner;
 
 const ErrorsPanel = ({

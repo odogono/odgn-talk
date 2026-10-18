@@ -1,4 +1,4 @@
-import type { Immutable } from 'immer';
+import type { DeepReadonly } from '../src/readonly';
 import { expect, test } from 'bun:test';
 import {
   textOf,
@@ -26,7 +26,7 @@ const advance = async (play: PlaySession, now = 0n) => {
   throw new Error('Did not become idle');
 };
 
-const element = (play: PlaySession, name: string): Immutable<Element> =>
+const element = (play: PlaySession, name: string): DeepReadonly<Element> =>
   play.page.elements.find(e => e.name === name)!;
 
 const click = async (play: PlaySession, name: string, now = 0n) => {

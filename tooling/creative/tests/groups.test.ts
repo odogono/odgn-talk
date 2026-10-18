@@ -1,4 +1,4 @@
-import { castDraft } from 'immer';
+import { thaw } from '../src/readonly';
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
 import {
@@ -312,7 +312,7 @@ test('incremental Play indexes match a full rebuild after nested create, clone a
   const matchesRebuild = async () => {
     const elements = play.page.elements;
     expect(play.elementsOf()).toEqual(allElements(elements));
-    const rebuilt = castDraft(structuredClone(elements));
+    const rebuilt = thaw<Element[]>(elements);
     refreshBounds(rebuilt);
     expect(elements).toEqual(rebuilt);
     for (const e of allElements(elements)) {

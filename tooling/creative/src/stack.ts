@@ -1,10 +1,10 @@
+import type { DeepReadonly } from './readonly';
 import { allElements, elementVisibility } from './tree/rules';
 // The Stack editor shell (#749), in the layout the UI prototype chose for
 // #154: the Page on a desk, floating Tools and Info windows, and a strip of
 // Pages. The edits themselves live in `editing.ts`; this file draws them and
 // turns pointer and form events into them.
 import { effect, signal, untracked } from '@preact/signals-core';
-import { type Immutable } from 'immer';
 import {
   HANDLES,
   PAGE_HANDLES,
@@ -59,7 +59,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 /** An Element as the reader would see it, positioned in design pixels. */
 export const renderElement = (
-  element: Immutable<Element>,
+  element: DeepReadonly<Element>,
   imageUrl?: string,
 ): HTMLElement => {
   const node = h('div', {
@@ -151,10 +151,10 @@ export const renderElement = (
 
 /** A Page at design size, unscaled. */
 const renderPage = (
-  page: Immutable<Page>,
+  page: DeepReadonly<Page>,
   designWidth: number,
   into: HTMLElement,
-  assets: Immutable<Asset[]>,
+  assets: DeepReadonly<Asset[]>,
   images: ImageAssets,
 ) => {
   const visibility = elementVisibility(page.elements);
@@ -297,7 +297,7 @@ export type StackShell = {
  * earlier version is being previewed.
  */
 export const mountStack = (
-  initialProject: Immutable<Project>,
+  initialProject: DeepReadonly<Project>,
   options: { readOnly?: boolean } = {},
 ): StackShell => {
   const editor = new StackEditor(initialProject);
@@ -345,7 +345,7 @@ export const mountStack = (
   };
   let activeText: InPlaceTextEditor | undefined;
   let textControls: ElementTextControls | undefined;
-  const historyOf = (element: Immutable<TextElement>) =>
+  const historyOf = (element: DeepReadonly<TextElement>) =>
     editor.textHistory(element);
   const closeText = () => {
     activeText?.destroy();

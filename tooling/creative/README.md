@@ -8,7 +8,7 @@ The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/
 
 Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
 instances. The tree owns Project mutations, hierarchy, indexed collections,
-geometry and copy-work accounting. Its views are deeply readonly in TypeScript
+geometry and copy-work accounting. Its views use the local [`DeepReadonly`](src/readonly.ts) TypeScript contract
 and remain live; use explicit operations to change them and `snapshot()` when
 retaining an earlier value or crossing an asynchronous boundary. Live nodes
 keep their identity during ordinary edits; reacquire collections after structural

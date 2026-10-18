@@ -1,7 +1,7 @@
+import type { DeepReadonly } from './readonly';
 import { allElements, GEOMETRY_FUEL, PROPERTY_FUEL } from './tree/rules';
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
-import { type Immutable } from 'immer';
 import {
   coreVersions,
   parseSourceRecovering,
@@ -10,14 +10,14 @@ import {
 } from '@northtalk/ts';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
-export type ScriptOwner = Immutable<Project | Page | Element>;
+export type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
 /** An owner's session id; the Project Script is 0. */
 export const ownerId = (owner: ScriptOwner): number =>
   'pages' in owner ? 0 : owner.id!;
 
 /** Every Script owner: the Project, then each Page followed by its Elements. */
-export const scriptOwners = <P extends Immutable<Project> | Project>(
+export const scriptOwners = <P extends DeepReadonly<Project> | Project>(
   project: P,
 ): (P | P['pages'][number] | P['pages'][number]['elements'][number])[] => [
   project,
@@ -25,20 +25,20 @@ export const scriptOwners = <P extends Immutable<Project> | Project>(
 ];
 
 /** The owner with a session id, absent once it has gone. */
-export const ownerById = <P extends Immutable<Project> | Project>(
+export const ownerById = <P extends DeepReadonly<Project> | Project>(
   project: P,
   id: number,
 ) => scriptOwners(project).find(owner => ownerId(owner) === id);
 
 /** The Page containing an owner, absent for the Project Script. */
 export const scriptPage = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   owner: ScriptOwner,
-): Immutable<Page> | undefined =>
+): DeepReadonly<Page> | undefined =>
   project.pages.find(
     page =>
       page === owner ||
-      allElements(page.elements).includes(owner as Immutable<Element>),
+      allElements(page.elements).includes(owner as DeepReadonly<Element>),
   );
 
 type ManifestProperty = {
@@ -277,7 +277,7 @@ const scriptMessages = (source: string) => {
 
 /** Every Script binds all Pages and only its own Page's Elements. */
 export const scriptManifest = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   owner: ScriptOwner,
 ) => {
   const page = scriptPage(project, owner);

@@ -2,7 +2,7 @@
 // `mimetype` entry first, a deflated `project.json` with an integer
 // `format` version, and one stored `assets/<sha256>.<ext>` per asset.
 // Files hold the authored Project only, never Play State (ADR 0041).
-import { type Immutable } from 'immer';
+import type { DeepReadonly } from './readonly';
 import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './tree/rules';
 
 import {
@@ -425,7 +425,7 @@ export const validateProjectJson = (
 
 /** Checks an in-memory Project the same way reading a file does. */
 export const validateProject = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
 ): ValidationIssue[] => {
   const result = validateProjectJson(project);
   return 'issues' in result ? result.issues : [];
@@ -452,7 +452,7 @@ const savedElement = (element: Element): Obj => {
       : { emptyPosition: { left: element.left, top: element.top } }),
   };
 };
-export const serializeProject = (project: Immutable<Project>): Obj => {
+export const serializeProject = (project: DeepReadonly<Project>): Obj => {
   const copy = projectWithoutIds(project);
   return {
     format: CURRENT_FORMAT,
@@ -539,7 +539,7 @@ const bytesMatch = async (asset: Asset, bytes: Uint8Array): Promise<boolean> =>
  * Bytes the asset table does not name are dropped from the export.
  */
 export const writeProjectFile = async (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   assetBytes: ReadonlyMap<string, Uint8Array>,
   { allowMissing = false }: { allowMissing?: boolean } = {},
 ): Promise<Uint8Array> => {

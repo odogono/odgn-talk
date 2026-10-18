@@ -1,7 +1,7 @@
+import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 // A Play Session owns its Group and a disposable copy of the authored Project.
-import { type Immutable } from 'immer';
 import { scriptNameProblems } from './script-names';
 import {
   bool,
@@ -48,7 +48,7 @@ import {
 import { MESSAGE_FIRST_LINE, messageSource } from './message-script';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
-type ScriptOwner = Immutable<Project | Page | Element>;
+type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
 export type PlayProblem = {
   line: number;
@@ -131,7 +131,7 @@ const releaseSounds: ReleaseHook<SoundBoard> = context =>
 
 export class PlaySession {
   readonly #tree: ProjectTree;
-  get project(): Immutable<Project> {
+  get project(): DeepReadonly<Project> {
     return this.#tree.project;
   }
   get objects(): ReadonlyMap<ScriptOwner, HostObject<ScriptOwner>> {
@@ -151,14 +151,14 @@ export class PlaySession {
   #unhandledSender: string | undefined;
   readonly problems: PlayProblem[] = [];
   readonly #objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
-  readonly #authored = new Map<ScriptOwner, Immutable<ScriptOwner>>();
+  readonly #authored = new Map<ScriptOwner, DeepReadonly<ScriptOwner>>();
   readonly #owners = new Map<string, ScriptOwner>();
   #scripts = new Map<ScriptOwner, string>();
   #kinds = new Map<string, ObjectKind<ScriptOwner>>();
   #nextObject = 0;
   // Each `frame` Script's last delivery time, and whether its Run is pending.
   #frames = new Map<string, { busy: boolean; last: bigint | undefined }>();
-  #pendingClones: Immutable<Element>[] = [];
+  #pendingClones: DeepReadonly<Element>[] = [];
   #pageElements: ObjectElements<ScriptOwner> = {
     shape: elementShape,
     count: ({ native }) =>
@@ -186,24 +186,29 @@ export class PlaySession {
       throw error;
     }
   }
-  isVisible(element: Immutable<Element>): boolean {
+  isVisible(element: DeepReadonly<Element>): boolean {
     return this.#tree.isVisible(element);
   }
-  elementsOf(page: Immutable<Page> = this.page): readonly Immutable<Element>[] {
+  elementsOf(
+    page: DeepReadonly<Page> = this.page,
+  ): readonly DeepReadonly<Element>[] {
     return this.#tree.elementsOf(page);
   }
   replaceRichText(
-    element: Immutable<TextElement>,
-    value: Immutable<RichText>,
+    element: DeepReadonly<TextElement>,
+    value: DeepReadonly<RichText>,
   ): void {
     this.#tree.replaceRichText(element, value);
   }
   /** A reader's edit to editable text: the new text, then `textChanged`. */
-  editText(element: Immutable<TextElement>, next: Immutable<RichText>): void {
+  editText(
+    element: DeepReadonly<TextElement>,
+    next: DeepReadonly<RichText>,
+  ): void {
     this.replaceRichText(element, next);
     this.send(element, 'textChanged');
   }
-  reorder(parent: TreeParent, order: readonly Immutable<Element>[]): void {
+  reorder(parent: TreeParent, order: readonly DeepReadonly<Element>[]): void {
     this.#tree.reorder(parent, order);
   }
 
@@ -289,7 +294,7 @@ export class PlaySession {
     },
   });
 
-  #elementPage(value: Value): Immutable<Page> {
+  #elementPage(value: Value): DeepReadonly<Page> {
     const page = this.project.pages.find(
       p => this.#objects.get(p) === value.asObject(),
     );
@@ -300,11 +305,11 @@ export class PlaySession {
   }
 
   #element(value: Value): {
-    element: Immutable<Element>;
-    page: Immutable<Page>;
+    element: DeepReadonly<Element>;
+    page: DeepReadonly<Page>;
   } {
     const object = value.asObject();
-    const element = object?.native as Immutable<Element> | undefined;
+    const element = object?.native as DeepReadonly<Element> | undefined;
     const page = element && this.#tree.pageOf(element);
     if (element && page && this.#objects.get(element) === object) {
       return { page, element };
@@ -312,9 +317,12 @@ export class PlaySession {
     throw new ScriptError('out of domain', 'Unknown Element');
   }
 
-  #install(root: Immutable<Element>, parent: TreeParent): void {
+  #install(root: DeepReadonly<Element>, parent: TreeParent): void {
     const page = 'kind' in parent ? this.#tree.pageOf(parent)! : parent;
-    const install = (member: Immutable<Element>, owner: TreeParent): void => {
+    const install = (
+      member: DeepReadonly<Element>,
+      owner: TreeParent,
+    ): void => {
       const object = this.group.object(
         this.#kinds.get(member.kind)!,
         `dynamic:${this.#nextObject++}`,
@@ -514,7 +522,7 @@ export class PlaySession {
   changed = false;
 
   constructor(
-    project: Immutable<Project>,
+    project: DeepReadonly<Project>,
     public pageIndex = 0,
     options: {
       events?: boolean;

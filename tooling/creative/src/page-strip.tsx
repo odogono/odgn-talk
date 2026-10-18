@@ -1,4 +1,4 @@
-import type { Immutable } from 'immer';
+import type { DeepReadonly } from './readonly';
 import '@preact/signals';
 import { Component, createRef, render } from 'preact';
 import type { StackEditor } from './editing';
@@ -8,18 +8,18 @@ const THUMBNAIL_WIDTH = 96;
 
 /** The shell shares its direct DOM Page renderer with the miniature. */
 type PageRenderer = (
-  page: Immutable<Page>,
+  page: DeepReadonly<Page>,
   designWidth: number,
-  assets: Immutable<Asset[]>,
+  assets: DeepReadonly<Asset[]>,
   into: HTMLElement,
 ) => void;
 
 type ThumbnailProps = {
-  assets: Immutable<Asset[]>;
+  assets: DeepReadonly<Asset[]>;
   assetsRevision: number;
   designWidth: number;
   drawPage: PageRenderer;
-  page: Immutable<Page>;
+  page: DeepReadonly<Page>;
   pageRevision: number;
 };
 

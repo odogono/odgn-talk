@@ -1,4 +1,4 @@
-import { castDraft } from 'immer';
+import { thaw } from '../src/readonly';
 import { expect, test } from 'bun:test';
 import { parseSource } from '@northtalk/ts';
 import {
@@ -6,6 +6,7 @@ import {
   createPage,
   createProject,
   textOf,
+  type Project,
   type TextElement,
 } from '../src/model';
 import { PlaySession } from '../src/play';
@@ -206,7 +207,7 @@ test('creation and rename avoid reserved bindings and Page/Element collisions', 
     expect(editor.renameElement('door', name).ok).toBe(false);
   }
   expect(editor.renamePage('remote').ok).toBe(false);
-  const imported = castDraft(structuredClone(editor.project));
+  const imported = thaw<Project>(editor.project);
   imported.pages[1]!.name = 'button1';
   editor.replaceProject(imported);
   expect(editor.addElement('button').name).toBe('button2');

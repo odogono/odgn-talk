@@ -1,5 +1,5 @@
+import type { DeepReadonly } from './readonly';
 import type { ReadonlySignal } from '@preact/signals';
-import type { Immutable } from 'immer';
 import { Fragment, render, type ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import {
@@ -181,7 +181,7 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
       </button>
     </>
   );
-  const kindInfo = (element: Immutable<Element>) => {
+  const kindInfo = (element: DeepReadonly<Element>) => {
     switch (element.kind) {
       case 'text':
         return (

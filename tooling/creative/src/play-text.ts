@@ -1,24 +1,27 @@
-import type { Immutable } from 'immer';
 // Reader history belongs to a Play Session, never the authored editor.
+import type { DeepReadonly } from './readonly';
 import { type Element, type RichText, type TextElement } from './model';
 import { renormalizeRichText, type TextHistory } from './rich-text';
 
 /** What reader history needs of Play: the Play Session, or the page's mirror of it. */
 export type ReaderTextPlay = {
-  editText(element: Immutable<TextElement>, next: Immutable<RichText>): void;
-  elementsOf(): readonly Immutable<Element>[];
-  isVisible(element: Immutable<TextElement>): boolean;
+  editText(
+    element: DeepReadonly<TextElement>,
+    next: DeepReadonly<RichText>,
+  ): void;
+  elementsOf(): readonly DeepReadonly<Element>[];
+  isVisible(element: DeepReadonly<TextElement>): boolean;
   readonly navigating: boolean;
   readonly stopped: boolean;
 };
 
 export class ReaderTextHistory implements TextHistory {
-  #undo: Immutable<RichText>[] = [];
-  #redo: Immutable<RichText>[] = [];
-  #current: Immutable<RichText>;
+  #undo: DeepReadonly<RichText>[] = [];
+  #redo: DeepReadonly<RichText>[] = [];
+  #current: DeepReadonly<RichText>;
   constructor(
     readonly play: ReaderTextPlay,
-    readonly element: Immutable<TextElement>,
+    readonly element: DeepReadonly<TextElement>,
   ) {
     this.#current = element.richText;
   }
@@ -38,7 +41,7 @@ export class ReaderTextHistory implements TextHistory {
     this.#sync();
     return this.#redo.length > 0;
   }
-  #change(next: Immutable<RichText>): boolean {
+  #change(next: DeepReadonly<RichText>): boolean {
     if (
       this.play.stopped ||
       this.play.navigating ||

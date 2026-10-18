@@ -1,6 +1,6 @@
 // The authored Project model (#748): pure data, no UI and no Play State
 // (ADR 0041). Element kinds and properties follow #735, decisions 2-5.
-import { castDraft, current, isDraft, type Immutable } from 'immer';
+import { type DeepReadonly, thaw } from './readonly';
 import { allElements } from './tree/rules';
 
 /** One run of uniformly styled text inside a paragraph. */
@@ -184,7 +184,7 @@ export const suggestName = (text: string): string => {
 };
 
 /** The plain text of rich text: paragraphs joined by newlines. */
-export const plainTextOf = (richText: Immutable<RichText>): string =>
+export const plainTextOf = (richText: DeepReadonly<RichText>): string =>
   richText.map(p => p.runs.map(r => r.text).join('')).join('\n');
 
 /** Rich text holding plain text with no mixed formatting. */
@@ -210,7 +210,7 @@ export const alignParagraph = (
  * Script-facing plain text. Replacing it clears every run's formatting but
  * keeps each paragraph's alignment; added paragraphs take the last one's.
  */
-export const textOf = (element: Immutable<TextElement>): string =>
+export const textOf = (element: DeepReadonly<TextElement>): string =>
   plainTextOf(element.richText);
 export const replacePlainText = (element: TextElement, text: string): void => {
   const previous = element.richText;
@@ -221,7 +221,7 @@ export const replacePlainText = (element: TextElement, text: string): void => {
 };
 
 /** Script-facing alignment: the first paragraph's. */
-export const textAlignOf = (element: Immutable<TextElement>): TextAlign =>
+export const textAlignOf = (element: DeepReadonly<TextElement>): TextAlign =>
   element.richText[0]?.align ?? 'left';
 /** Aligns every paragraph of the Element's text. */
 export const setTextAlign = (element: TextElement, align: TextAlign): void => {
@@ -315,11 +315,9 @@ export const createProject = (name: string): Project => ({
   assets: [],
 });
 
-/** A plain copy of a Page or Element, draft or not, without session ids. */
-const withoutIds = <T extends Page | Element>(owner: Immutable<T>): T => {
-  const copy = castDraft(
-    structuredClone(isDraft(owner) ? current(castDraft(owner)) : owner),
-  ) as T;
+/** A detached copy of a Page or Element without session ids. */
+const withoutIds = <T extends Page | Element>(owner: DeepReadonly<T>): T => {
+  const copy = thaw<T>(owner);
   delete copy.id;
   if ('elements' in copy) {
     for (const element of allElements(copy.elements)) {
@@ -335,8 +333,8 @@ const withoutIds = <T extends Page | Element>(owner: Immutable<T>): T => {
 };
 
 /** An independent copy of a Project without the editor's session ids. */
-export const projectWithoutIds = (project: Immutable<Project>): Project => {
-  const copy = castDraft(structuredClone(project));
+export const projectWithoutIds = (project: DeepReadonly<Project>): Project => {
+  const copy = thaw<Project>(project);
   for (const page of copy.pages) {
     delete page.id;
     for (const element of allElements(page.elements)) {
@@ -351,7 +349,7 @@ export const projectWithoutIds = (project: Immutable<Project>): Project => {
  * never affects the original.
  */
 export const duplicateElement = (
-  element: Immutable<Element>,
+  element: DeepReadonly<Element>,
   takenNames: ReadonlySet<string>,
 ): Element => {
   const copy = withoutIds<Element>(element);
@@ -368,7 +366,7 @@ export const duplicateElement = (
  * names, which are unique within the new Page as they were in the old.
  */
 export const duplicatePage = (
-  page: Immutable<Page>,
+  page: DeepReadonly<Page>,
   takenNames: ReadonlySet<string>,
 ): Page => {
   const copy = withoutIds<Page>(page);
