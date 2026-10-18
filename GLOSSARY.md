@@ -456,6 +456,10 @@ _Avoid_: activation, invocation, task, thread, process
 A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, a Function Value called with `and wait`, or the end of a Join. Each is marked by `wait` in the source, with a Join marked by its `wait for all` head. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
 _Avoid_: await, yield point
 
+**Wait**:
+What a Run suspended at a Suspension Point is waiting for: an Operation's answer, a reply to `send … and wait`, a `wait for` event or a deadline. A Wait ends when it is answered, when it times out, or when it is abandoned because the Run no longer needs it. The Host may still answer an abandoned Operation, but that answer resumes nothing.
+_Avoid_: pending, promise, future
+
 **Join**:
 A `wait for all … end` block whose ending may also be written `end wait`. It starts every Join Member it reaches without waiting, then suspends once, at its closing `end`, until all of them answer. `it` then holds their answers as a list, in the order they were started. The first failure to arrive is raised, and the members still pending are abandoned.
 _Avoid_: parallel block, gather, fan-out, Promise.all
