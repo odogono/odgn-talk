@@ -890,7 +890,11 @@ export const runMessageBoxBrowserTests = async () => {
   );
   const view = EditorView.findFromDOM(win.querySelector('.cm-editor')!)!;
   const log = () =>
-    [...win.querySelectorAll('.message-log li')].map(li => li.textContent);
+    [
+      ...win.querySelectorAll(
+        '.message-log .command, .message-log .result, .message-log .error',
+      ),
+    ].map(li => li.textContent);
   const type = (text: string) =>
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: text },

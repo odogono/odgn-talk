@@ -75,6 +75,7 @@ export class PlayHost {
   #sent = new Map<string, string>();
   #sentPage: PlaySession['page'] | undefined;
   #sentState = '';
+  #sentTargets = '';
   #pageHandles = { keyDown: false, keyUp: false };
   #edits = new WeakMap<DeepReadonly<Element>, number>();
   #problems = 0;
@@ -190,7 +191,7 @@ export class PlayHost {
         return;
       }
       case 'message': {
-        const started = session.runMessage(request.text);
+        const started = session.runMessage(request.text, request.target);
         if (!started.ok) {
           reply({ kind: 'message', error: started.error });
           return;
@@ -229,6 +230,7 @@ export class PlayHost {
     this.#sent.clear();
     this.#sentPage = undefined;
     this.#sentState = '';
+    this.#sentTargets = '';
     this.#problems = 0;
     this.#voices.clear();
     this.#session = new PlaySession(request.project, request.pageIndex, {
@@ -344,6 +346,10 @@ export class PlayHost {
       owner: this.#owners.get(problem.owner) ?? 0,
     }));
     this.#problems = session.problems.length;
+    const targets = session.messageTargets;
+    const targetKey = targets.map(target => target.id).join(',');
+    const targetsChanged = full || targetKey !== this.#sentTargets;
+    this.#sentTargets = targetKey;
     const state = JSON.stringify([
       session.navigating,
       session.stopped,
@@ -353,6 +359,7 @@ export class PlayHost {
     const orderChanged = full || session.changed;
     session.changed = false;
     if (
+      !targetsChanged &&
       !orderChanged &&
       state === this.#sentState &&
       !notices.length &&
@@ -364,6 +371,7 @@ export class PlayHost {
     this.post({
       response: {
         kind: 'view',
+        ...(targetsChanged ? { messageTargets: targets } : {}),
         session: this.#id,
         full,
         pageIndex: session.pageIndex,

@@ -186,6 +186,9 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     session.apply(response);
+    if (response.messageTargets) {
+      syncMessage();
+    }
     draw();
     prompts.draw(session.prompt, response.notices);
     errors.add(
@@ -661,13 +664,19 @@ export const mountPlay = (shell: StackShell): void => {
       draw();
     }
   });
-  mountMessageWindow(shell, {
+  const syncMessage = mountMessageWindow(shell, {
     pageName: () => session?.page.name,
-    run: async text => {
+    session: () => (session && !session.stopped ? sessionId : undefined),
+    scripts: () => (session && !session.stopped ? session.messageTargets : []),
+    run: async (text, expectedSession, target) => {
+      if (!session || session.stopped || sessionId !== expectedSession) {
+        return { error: 'Play has stopped.' };
+      }
       const reply = await supervisor.call({
         kind: 'message',
-        session: sessionId,
+        session: expectedSession,
         text,
+        ...(target === undefined ? {} : { target }),
       });
       return reply.kind === 'message'
         ? {

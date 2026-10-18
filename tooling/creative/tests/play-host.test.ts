@@ -335,3 +335,42 @@ test('a key held across navigation is released to the Project', async () => {
   send('keyUp', 0);
   await until(() => mirror.page.index === 0);
 });
+
+test('worker targets carry loaded scope, reject stale instances and session ids', async () => {
+  const project = fixture();
+  project.script = 'script variable score = 3';
+  project.pages.push(createPage('page2'));
+  const { mirror, request, replies } = hosted(project);
+  const target = mirror.messageTargets.find(t => t.label === 'project')!;
+  expect(target.source).toBe(project.script!);
+  expect(target.manifest.objects.map(o => o.name)).toEqual(['page1', 'page2']);
+  const count = () => replies.filter(r => r.response.kind === 'message').length;
+  request({ kind: 'message', session: 1, target: target.id, text: 'score' });
+  await until(() => count() === 1);
+  expect(replies.find(r => r.response.kind === 'message')?.response).toEqual({
+    kind: 'message',
+    text: '3',
+  });
+  request({
+    kind: 'message',
+    session: 1,
+    target: 9999,
+    text: 'put 8 into score',
+  });
+  expect(replies.at(-1)?.response).toMatchObject({
+    kind: 'message',
+    error: expect.stringContaining('unavailable'),
+  });
+  request({
+    kind: 'message',
+    session: 2,
+    target: target.id,
+    text: 'put 8 into score',
+  });
+  expect(replies.at(-1)?.response).toEqual({
+    kind: 'message',
+    error: 'Play has stopped.',
+  });
+  request({ kind: 'stop', session: 1 });
+  expect(mirror.messageTargets).toEqual([]);
+});
