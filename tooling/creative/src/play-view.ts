@@ -1,22 +1,31 @@
-import type { Immutable } from 'immer';
 // Browser driving and reader input stay outside the testable Play Session.
 // Browsing plays the Project in place on the desk, beside the Tools and
 // Script windows; presenting plays it full-window with the editor hidden.
+// The session runs in the Play worker (#1225); the page draws from its
+// mirror of Play State and posts reader input to the worker.
+import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
+import { type Immutable } from 'immer';
 import { scriptNameProblems } from './script-names';
-import { text } from '@northtalk/ts';
 import { byId, h } from './dom';
 import { ErrorsWindow } from './errors';
 import { mountMessageWindow } from './message-window';
-import { type Element, type TextElement } from './model';
-import { PlaySession } from './play';
+import { type Element, type Project, type TextElement } from './model';
+import { firstView } from './play-host';
+import { PlayMirror, type MirrorPage } from './play-mirror';
 import { mountPlayPrompts } from './play-prompts';
+import {
+  type PlayRequest,
+  type PlayResponse,
+  type ReaderMessage,
+} from './play-protocol';
 import { ReaderTextHistory } from './play-text';
+import { scriptOwners } from './script-manifest';
 import { browserSoundBackend } from './sounds';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 
-const now = () =>
-  BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n;
+/** Shown when the worker was ended because Stop got no answer in time. */
+export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 export const mountPlay = (shell: StackShell): void => {
   const toggle = h(
@@ -70,27 +79,121 @@ export const mountPlay = (shell: StackShell): void => {
   const scaler = h('div', { class: 'play-scale' }, pageNode);
   reader.append(scaler);
   // `user` prompts cover the Page, unscaled, and answering resumes Play.
-  const prompts = mountPlayPrompts(scaler, () => schedule());
+  const prompts = mountPlayPrompts(scaler, (prompt, value) =>
+    post({ kind: 'answer', session: sessionId, prompt: prompt.id, value }),
+  );
   const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
   toolbar.id = 'play-text-toolbar';
   toolbar.hidden = true;
   delete toolbar.dataset.scope;
   toolbar.setAttribute('aria-label', 'Reader text formatting');
   document.body.append(toolbar, reader);
-  let session: PlaySession | undefined;
+  let session: PlayMirror | undefined;
+  // Each session's id; the worker's word about an earlier one is dropped.
+  let sessionId = 0;
+  // The Project as it was when Play started, for assets and problem owners.
+  let playing: Immutable<Project> | undefined;
   let mode: PlayMode | undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
   let generation = 0;
-  let problemCount = 0;
-  let drawnPage: PlaySession['page'] | undefined;
+  let drawnPage: MirrorPage | undefined;
   let activeText: InPlaceTextEditor | undefined;
   // Physical key codes keep releases paired if modifiers change event.key.
   const heldKeys = new Map<
     string,
-    { key: string; target: PlaySession['page'] | Immutable<TextElement> }
+    { key: string; target: MirrorPage | TextElement }
   >();
+  // Sounds play here for the worker, each voice under the worker's number.
+  const voices = new Map<number, { stop(): void }>();
+  const silence = () => {
+    for (const voice of voices.values()) {
+      voice.stop();
+    }
+    voices.clear();
+  };
+  const supervisor = new WorkerSupervisor<PlayRequest, PlayResponse>({
+    ended: { kind: 'ended' },
+    spawn: () => new Worker('./play.worker.js', { type: 'module' }),
+    onMessage: response => receive(response),
+    // Only Stop is supervised. The ended worker's session is gone with it,
+    // so a session started since then ends too; the replacement waits idle.
+    onTerminated: () => {
+      silence();
+      leave();
+      errors.add([{ owner: shell.editor.project, message: UNRESPONSIVE }]);
+    },
+  });
+  const post = (request: PlayRequest) => void supervisor.call(request);
+  const sendTo = (
+    target: MirrorPage | Element,
+    message: ReaderMessage,
+    args?: string[],
+  ) => {
+    if (!session || session.stopped || session.navigating) {
+      return;
+    }
+    post({
+      kind: 'send',
+      session: sessionId,
+      pageIndex: session.page.index,
+      message,
+      ...(target === session.page ? {} : { target: target.name }),
+      ...(args ? { args } : {}),
+    });
+  };
+  const receive = (response: PlayResponse) => {
+    if (response.kind === 'play') {
+      const done = (error?: string) => {
+        if (voices.delete(response.voice)) {
+          post({
+            kind: 'soundEnded',
+            voice: response.voice,
+            ...(error === undefined ? {} : { error }),
+          });
+        }
+      };
+      try {
+        voices.set(
+          response.voice,
+          browserSoundBackend(asset => shell.images.url(asset))(
+            response.asset,
+            response.loop,
+            () => done(),
+            done,
+          ),
+        );
+      } catch (error) {
+        voices.set(response.voice, { stop() {} });
+        done(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+    if (response.kind === 'stopSound') {
+      voices.get(response.voice)?.stop();
+      voices.delete(response.voice);
+      return;
+    }
+    if (
+      response.kind !== 'view' ||
+      !session ||
+      response.session !== sessionId
+    ) {
+      return;
+    }
+    session.apply(response);
+    draw();
+    prompts.draw(session.prompt, response.notices);
+    const owners = scriptOwners(playing!);
+    errors.add(
+      response.problems.map(problem => ({
+        line: problem.line,
+        message: problem.message,
+        owner: owners[problem.owner]!,
+      })),
+    );
+    requestFrame();
+  };
   const releaseKeys = () => {
     // send ignores input during closePage; keep releases until navigation
     // finishes so the surviving Project Handler still receives them.
@@ -98,13 +201,12 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     for (const { key, target } of heldKeys.values()) {
-      session?.send(target, 'keyUp', [text(key)]);
+      sendTo(target, 'keyUp', [key]);
     }
     heldKeys.clear();
-    schedule();
   };
-  const renderedElements = new WeakMap<HTMLElement, Immutable<Element>>();
-  const histories = new Map<Immutable<TextElement>, ReaderTextHistory>();
+  const renderedElements = new WeakMap<HTMLElement, Element>();
+  const histories = new Map<TextElement, ReaderTextHistory>();
   const closeText = () => {
     const editor = activeText;
     activeText = undefined;
@@ -121,7 +223,7 @@ export const mountPlay = (shell: StackShell): void => {
     }
     toolbar.hidden = true;
   };
-  const openText = (node: HTMLElement, element: Immutable<TextElement>) => {
+  const openText = (node: HTMLElement, element: TextElement) => {
     if (
       !session ||
       session.stopped ||
@@ -145,12 +247,10 @@ export const mountPlay = (shell: StackShell): void => {
       history,
       () => {
         node.dataset.renderedRichText = JSON.stringify(element.richText);
-        schedule();
       },
       () => {
         closeText();
         node.blur();
-        schedule();
       },
       { escape: () => leave(), selectAll: false },
     );
@@ -174,16 +274,15 @@ export const mountPlay = (shell: StackShell): void => {
       1,
       Math.max(
         0.1,
-        (reader.clientWidth - (mode === 'present' ? 32 : 0)) /
-          play.project.designWidth,
+        (reader.clientWidth - (mode === 'present' ? 32 : 0)) / play.designWidth,
       ),
     );
     Object.assign(scaler.style, {
-      width: `${play.project.designWidth * scale}px`,
+      width: `${play.designWidth * scale}px`,
       height: `${play.page.height * scale}px`,
     });
     Object.assign(pageNode.style, {
-      width: `${play.project.designWidth}px`,
+      width: `${play.designWidth}px`,
       height: `${play.page.height}px`,
       background: play.page.background,
       transform: `scale(${scale})`,
@@ -218,15 +317,13 @@ export const mountPlay = (shell: StackShell): void => {
       ) {
         closeText();
       }
-      const send = (name: 'click' | 'pointerEnter' | 'pointerLeave') => {
-        play.send(element, name);
-        schedule();
-      };
+      const send = (name: 'click' | 'pointerEnter' | 'pointerLeave') =>
+        sendTo(element, name);
       const fresh = renderElement(
         element,
         element.kind === 'image'
           ? shell.images.url(
-              play.project.assets.find(a => a.name === element.image),
+              playing!.assets.find(a => a.name === element.image),
             )
           : undefined,
       );
@@ -288,7 +385,6 @@ export const mountPlay = (shell: StackShell): void => {
         fresh.addEventListener('blur', event => {
           if (!toolbar.contains(event.relatedTarget as Node | null)) {
             closeText();
-            schedule();
           }
         });
       }
@@ -315,53 +411,6 @@ export const mountPlay = (shell: StackShell): void => {
         node.setAttribute('role', 'button');
       }
     }
-    prompts.draw(play);
-    play.changed = false;
-  };
-  const showProblems = () => {
-    if (!session || problemCount === session.problems.length) {
-      return;
-    }
-    errors.add(session.problems.slice(problemCount));
-    problemCount = session.problems.length;
-  };
-  const schedule = (delay = 0) => {
-    if (!session || session.stopped) {
-      return;
-    }
-    if (timer !== undefined) {
-      if (delay !== 0) {
-        return;
-      }
-      clearTimeout(timer);
-    }
-    timer = setTimeout(() => {
-      timer = undefined;
-      if (!session) {
-        return;
-      }
-      if (generation !== shell.editor.generation) {
-        leave();
-        return;
-      }
-      const clock = now();
-      const result = session.pump(clock);
-      if (session.changed || session.navigating) {
-        draw();
-      }
-      showProblems();
-      requestFrame();
-      if (result.state === 'sliced') {
-        schedule();
-      } else if (result.nextDeadline !== undefined) {
-        schedule(
-          Math.min(
-            2_147_483_647,
-            Math.max(0, Number((result.nextDeadline - clock) / 1000n)),
-          ),
-        );
-      }
-    }, delay);
   };
   const requestFrame = () => {
     if (frameRequest !== undefined || !session?.wantsFrames) {
@@ -372,23 +421,27 @@ export const mountPlay = (shell: StackShell): void => {
       if (!session || session.stopped) {
         return;
       }
-      session.frame(now());
-      schedule();
+      post({ kind: 'frame', session: sessionId });
+      requestFrame();
     });
   };
+  /**
+   * Silences Play at once, then asks the worker to stop its session. A
+   * worker that doesn't answer in time is ended (ADR 0086).
+   */
   const stopPlay = () => {
     heldKeys.clear();
     if (!session) {
       return;
     }
     closeText();
-    clearTimeout(timer);
-    timer = undefined;
     if (frameRequest !== undefined) {
       cancelAnimationFrame(frameRequest);
       frameRequest = undefined;
     }
-    session.stop(now());
+    silence();
+    session.stopped = true;
+    void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {
     toggle.textContent = mode === 'present' ? 'Stop' : 'Present';
@@ -407,6 +460,7 @@ export const mountPlay = (shell: StackShell): void => {
     const browsed = mode === 'browse';
     stopPlay();
     session = undefined;
+    playing = undefined;
     mode = undefined;
     histories.clear();
     prompts.clear();
@@ -434,13 +488,31 @@ export const mountPlay = (shell: StackShell): void => {
     mode = next;
     shell.setPlaying(mode);
     generation = shell.editor.generation;
-    session = new PlaySession(shell.editor.project, shell.editor.pageIndex, {
+    playing = shell.editor.project;
+    sessionId++;
+    session = new PlayMirror((element, richText, pageIndex, edit) =>
+      post({
+        kind: 'text',
+        session: sessionId,
+        pageIndex,
+        name: element.name,
+        richText,
+        edit,
+      }),
+    );
+    post({
+      kind: 'open',
+      session: sessionId,
+      project: playing as Project,
+      pageIndex: shell.editor.pageIndex,
       // A different game each time (ADR 0096).
       seed: BigInt(Date.now()),
-      soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
     });
+    // Draw the authored Page at once, as the worker starts its session.
+    session.apply(
+      firstView(playing as Project, shell.editor.pageIndex, sessionId),
+    );
     histories.clear();
-    problemCount = 0;
     if (mode === 'browse') {
       byId('desk').append(toolbar, reader);
     } else {
@@ -449,8 +521,6 @@ export const mountPlay = (shell: StackShell): void => {
     reader.hidden = false;
     drawModes();
     draw();
-    showProblems();
-    schedule();
     reader.focus();
   };
   toggle.addEventListener('click', () => {
@@ -485,7 +555,6 @@ export const mountPlay = (shell: StackShell): void => {
       event.relatedTarget !== activeText?.node
     ) {
       closeText();
-      schedule();
     }
   });
   document.addEventListener('keydown', event => {
@@ -527,8 +596,7 @@ export const mountPlay = (shell: StackShell): void => {
       (event.key === 'Enter' || event.key === ' ')
     ) {
       event.preventDefault();
-      session.send(element, 'click');
-      schedule();
+      sendTo(element, 'click');
       return;
     }
     const target =
@@ -544,11 +612,10 @@ export const mountPlay = (shell: StackShell): void => {
     }
     // A handled key belongs to the Project: arrows and space don't scroll.
     // Editable text keeps typing, so only the Page's keys are claimed.
-    if (target === session.page && session.handles(target, 'keyDown')) {
+    if (target === session.page && session.pageHandles.keyDown) {
       event.preventDefault();
     }
-    session.send(target, 'keyDown', [text(event.key)]);
-    schedule();
+    sendTo(target, 'keyDown', [event.key]);
   });
   document.addEventListener('keyup', event => {
     const code = event.code || event.key;
@@ -557,11 +624,10 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     heldKeys.delete(code);
-    if (held.target === session.page && session.handles(held.target, 'keyUp')) {
+    if (held.target === session.page && session.pageHandles.keyUp) {
       event.preventDefault();
     }
-    session.send(held.target, 'keyUp', [text(held.key)]);
-    schedule();
+    sendTo(held.target, 'keyUp', [held.key]);
   });
   // Release to the original recipient before focus moves to another field,
   // a Script window or a prompt. The later physical keyup is ignored.
@@ -588,8 +654,20 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   mountMessageWindow(shell, {
-    session: () => session,
-    ran: () => schedule(),
+    pageName: () => session?.page.name,
+    run: async text => {
+      const reply = await supervisor.call({
+        kind: 'message',
+        session: sessionId,
+        text,
+      });
+      return reply.kind === 'message'
+        ? {
+            ...(reply.error === undefined ? {} : { error: reply.error }),
+            ...(reply.text === undefined ? {} : { text: reply.text }),
+          }
+        : { error: 'Play has stopped.' };
+    },
   });
   window.addEventListener('resize', draw);
   window.addEventListener('pagehide', stopPlay);

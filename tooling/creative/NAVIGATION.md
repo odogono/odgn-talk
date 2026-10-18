@@ -57,10 +57,16 @@ List files with `rg --files tooling/creative` before opening one by name.
   `send`, Page navigation, `wait`, dynamic Elements, and `frame` delivery
   (`definesHandler`, `wantsFrames`, `frame`; ADR 0095).
 - [play-view.ts](src/play-view.ts): Browse and Present in the browser,
-  pointer and key input turned into `PlayMessage`s, and the
-  `requestAnimationFrame` loop that drives `frame`.
+  pointer and key input turned into `PlayMessage`s, the
+  `requestAnimationFrame` loop that drives `frame`, and the worker
+  supervisor that ends an unresponsive Play worker (ADR 0107).
+- [play-host.ts](src/play-host.ts): the Play worker's side, which owns the
+  session and its Pump clock and publishes views; [play.worker.ts](src/play.worker.ts)
+  is its entry. [play-protocol.ts](src/play-protocol.ts) lists the messages,
+  and [play-mirror.ts](src/play-mirror.ts) is the page's copy of Play State.
 - [play-text.ts](src/play-text.ts): reader-editable text and its history.
 - Tests: [play.test.ts](tests/play.test.ts),
+  [play-host.test.ts](tests/play-host.test.ts),
   [play-text.test.ts](tests/play-text.test.ts),
   [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts`.

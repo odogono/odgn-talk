@@ -15,6 +15,7 @@
     "@codemirror/view": "^6.43.13",
     "@northtalk/ts": "workspace:*",
     "@northtalk/editor": "workspace:*",
+    "@northtalk/tooling": "workspace:*",
     "@preact/signals": "^2.11.3",
     "@preact/signals-core": "^1.14.4",
     "immer": "^11.1.21",

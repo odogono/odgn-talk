@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // Build the creative tool into a static `dist/`: the page script, the LSP
-// worker, the service worker, the page, its styles, the install manifest
+// and Play workers, the service worker, the page, its styles, the install manifest
 // and its icons. Any static host can serve the result. The service
 // worker is stamped with the list of shell files to precache and a
 // version hashed from their contents, so a rebuild with no shell change
@@ -25,6 +25,7 @@ export const precacheFiles = [
   './style.css',
   './main.js',
   './lsp.worker.js',
+  './play.worker.js',
   './folio.webmanifest',
   './icon.svg',
   './icon-192.png',
@@ -41,6 +42,7 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     entrypoints: [
       resolve(root, 'src/main.ts'),
       resolve(root, '../editor/src/lsp.worker.ts'),
+      resolve(root, 'src/play.worker.ts'),
     ],
     outdir: dist,
     target: 'browser',

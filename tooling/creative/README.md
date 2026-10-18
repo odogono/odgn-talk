@@ -623,8 +623,14 @@ becomes **Stop**, and Stop or Escape ends it. Either way every Script and
 sound stops, Play State is discarded and Edit returns with the authored
 Project and history restored. Browsing returns to the Page the session
 reached; presenting restores the selection too. Execution uses the
-Core's default limits with small Pump slices between browser turns.
+Core's default limits with small Pump slices between turns.
 Autosave and export use authored content only.
+
+The session runs in a Play worker ([ADR 0107](../../docs/adr/0107-folio-play-runs-in-a-supervised-worker.md)),
+so a Script that never yields can't freeze the editor. The page draws from
+its mirror of the showing Page and posts reader input to the worker. Stop
+returns to Edit at once. If the worker hasn't acknowledged Stop within 500 ms
+it is ended, and Errors reports that a Script did not respond.
 
 Script windows stay editable while browsing. An edit changes the authored
 Project immediately and applies from the next session; the running session

@@ -2,7 +2,10 @@
 // Session's first unanswered prompt over the Page, and notices appear
 // briefly without waiting for anyone.
 import { h } from './dom';
-import { type PendingPrompt, type PlaySession } from './play';
+import { type UserNotice } from './play';
+import { type PromptView } from './play-protocol';
+
+type Answer = boolean | string | readonly string[] | undefined;
 
 const NOTICE_MS = 4000;
 
@@ -11,17 +14,17 @@ export type PlayPrompts = {
   clear(): void;
   /** Whether `node` belongs to a prompt, whose keys stay with it. */
   contains(node: Node | null): boolean;
-  /** Shows the session's first prompt and takes its new notices. */
-  draw(session: PlaySession): void;
+  /** Shows the session's first prompt, if any, and its new notices. */
+  draw(prompt: PromptView | undefined, notices: readonly UserNotice[]): void;
 };
 
 /**
- * Mounts over `over`, a positioned box around the Page. `answered` runs
- * after each answer so the session can resume the Run that asked.
+ * Mounts over `over`, a positioned box around the Page. `answer` hands the
+ * reader's answer to the session, which resumes the Run that asked.
  */
 export const mountPlayPrompts = (
   over: HTMLElement,
-  answered: () => void,
+  answer: (prompt: PromptView, value: Answer) => void,
 ): PlayPrompts => {
   const backdrop = h('div', { class: 'play-prompt-backdrop', hidden: true });
   const notices = h('div', {
@@ -30,21 +33,13 @@ export const mountPlayPrompts = (
     'aria-live': 'polite',
   });
   over.append(backdrop, notices);
-  let shown: PendingPrompt | undefined;
+  let shown: PromptView | undefined;
   let returnFocus: HTMLElement | undefined;
-
-  const answer = (
-    prompt: PendingPrompt,
-    value: Parameters<PendingPrompt['answer']>[0],
-  ) => {
-    prompt.answer(value);
-    answered();
-  };
   // Confirm has no separate cancel: dismissing it is declining.
-  const dismiss = (prompt: PendingPrompt) =>
+  const dismiss = (prompt: PromptView) =>
     answer(prompt, prompt.kind === 'confirm' ? false : undefined);
 
-  const build = (prompt: PendingPrompt): HTMLElement => {
+  const build = (prompt: PromptView): HTMLElement => {
     const cancel = h('button', { type: 'button' }, 'Cancel');
     cancel.addEventListener('click', () => dismiss(prompt));
     const ok = h('button', { type: 'submit', class: 'default' }, 'OK');
@@ -112,8 +107,8 @@ export const mountPlayPrompts = (
     return form;
   };
 
-  const show = (prompt: PendingPrompt | undefined) => {
-    if (prompt === shown) {
+  const show = (prompt: PromptView | undefined) => {
+    if (prompt?.id === shown?.id) {
       return;
     }
     const hadFocus = backdrop.contains(document.activeElement);
@@ -134,9 +129,9 @@ export const mountPlayPrompts = (
   };
 
   return {
-    draw(session) {
-      show(session.prompts[0]);
-      for (const notice of session.notices.splice(0)) {
+    draw(prompt, news) {
+      show(prompt);
+      for (const notice of news) {
         const node = h(
           'div',
           { class: 'play-notice' },
