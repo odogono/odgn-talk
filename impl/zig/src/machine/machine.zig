@@ -116,6 +116,10 @@ pub const Frame = struct {
 };
 
 pub const Delivery = struct {
+    /// Shared by owned copies along the Message Path. Rewind transfers it
+    /// back to the mailbox; neither forwarding nor releasing ends it.
+    completion: ?*Completion = null,
+
     id: u64,
     /// The Host Delivery whose work this message is (chapter 9, Run
     /// accounting): 0 for a Host Delivery, which is its own root.
@@ -157,6 +161,26 @@ pub const Delivery = struct {
     /// parent, read when the message reaches the head of a mailbox, is
     /// where it goes next.
     passed_by: ?*objects.Object = null,
+
+    pub const Completion = struct {
+        references: usize = 1,
+        ended: bool = false,
+
+        pub fn create(gpa: Allocator) !*Completion {
+            const state = try gpa.create(Completion);
+            state.* = .{};
+            return state;
+        }
+
+        pub fn retain(state: *Completion) void {
+            state.references += 1;
+        }
+
+        pub fn release(state: *Completion, gpa: Allocator) void {
+            state.references -= 1;
+            if (state.references == 0) gpa.destroy(state);
+        }
+    };
 };
 
 /// A Handler's Selector: its name, then `:` and each Argument Label
@@ -3126,7 +3150,6 @@ pub const Group = struct {
 
     /// Reports a Delivery cancelled in its mailbox, with no Run.
     fn cancelQueued(g: *Group, x: *Script, d: Delivery) !void {
-        try g.settleRequest(d);
         if (g.trace) |out| {
             out.print("run outcome=cancelled delivery=d{d}", .{d.id}) catch {};
             if (d.broadcast != 0) out.print(" broadcast=b{d}", .{d.broadcast}) catch {};
@@ -3137,7 +3160,9 @@ pub const Group = struct {
             out.writeAll(" fuel=0 alloc=0\n") catch {};
         }
         g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.print("d{d}", .{d.id}) catch "", .broadcast = if (d.broadcast != 0) g.reports.print("b{d}", .{d.broadcast}) catch "" else "", .outcome = .cancelled } });
-        if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
+        try g.endDelivery(d, .{ .failed = .{ .reason = "cancelled" } }, .{
+            .part = if (d.decision) .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } } else null,
+        });
         g.releaseDelivery(d);
     }
 
@@ -3276,6 +3301,8 @@ pub const Group = struct {
         errdefer g.gpa.free(copy.message);
         copy.args = try g.gpa.dupe(*Value, d.args);
         errdefer g.gpa.free(copy.args);
+        copy.completion = try Delivery.Completion.create(g.gpa);
+        errdefer g.gpa.destroy(copy.completion.?);
         try g.enqueue(.{ .deliver = .{ .script = script_name, .delivery = copy } });
     }
 
@@ -3392,11 +3419,18 @@ pub const Group = struct {
         }
         for (recipients) |r| {
             const message = try g.gpa.dupe(u8, b.message);
-            errdefer g.gpa.free(message);
-            const args = try g.gpa.dupe(*Value, b.args);
+            const args = g.gpa.dupe(*Value, b.args) catch |e| {
+                g.gpa.free(message);
+                return e;
+            };
             for (args) |v| _ = v.retain();
+            const completion = Delivery.Completion.create(g.gpa) catch |e| {
+                g.gpa.free(message);
+                releaseAll(args, g.gpa);
+                return e;
+            };
             const limits = if (b.limits) |o| o.clampTo(r.script.limits) else null;
-            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = limits });
+            try g.post(r.script, .{ .completion = completion, .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = limits });
         }
     }
 
@@ -3470,6 +3504,7 @@ pub const Group = struct {
 
     pub fn releaseDelivery(g: *Group, d: Delivery) void {
         g.markRoot(rootOf(d));
+        if (d.completion) |state| state.release(g.gpa);
         if (d.function) |f| f.release();
         releaseAll(d.args, g.gpa);
         g.gpa.free(d.message);
@@ -3965,7 +4000,7 @@ pub const Group = struct {
                     return;
                 }
                 const s = g.script(d.script) orelse {
-                    try g.settleRequest(d.delivery);
+                    try g.endDelivery(d.delivery, .{ .failed = .{ .reason = "unhandled" } }, .{});
                     g.releaseDelivery(d.delivery);
                     return;
                 };
@@ -3974,7 +4009,7 @@ pub const Group = struct {
                 if (d.delivery.function) |f| if (s.stopped != null or g.codeOf(f) == null or g.functionBody(g.codeOf(f).?) == null) {
                     g.write("note d{d} kind=function-gone\n", .{d.delivery.id});
                     try g.gone_calls.append(g.gpa, d.delivery.id);
-                    try g.settleRequest(d.delivery);
+                    try g.endDelivery(d.delivery, .{ .failed = .{ .reason = "function gone" } }, .{});
                     g.releaseDelivery(d.delivery);
                     return;
                 };
@@ -4485,7 +4520,10 @@ pub const Group = struct {
     fn startRun(g: *Group, s: *Script, d: Delivery) !void {
         // An `error` message with no `on error` is dropped unseen.
         if (d.internal_error) {
-            if (s.handlerUnit("error", .handler) == null) return g.releaseDelivery(d);
+            if (s.handlerUnit("error", .handler) == null) {
+                try g.endDelivery(d, .{ .failed = .{ .reason = "unhandled" } }, .{});
+                return g.releaseDelivery(d);
+            }
         }
         s.runs += 1;
         const run = g.gpa.create(Run) catch |e| {
@@ -6172,6 +6210,7 @@ pub const Group = struct {
         g.endRow(run, .terminal);
         // A Run that ends before sealing its Verdict, or a dropped
         // Decision, leaves it undecided.
+        var part: ?Part = null;
         if (run.verdict or (d.decision and (outcome == .dropped or outcome == .faulted))) {
             const how: []const u8 = switch (outcome) {
                 .errored => "errored",
@@ -6183,50 +6222,32 @@ pub const Group = struct {
             };
             if (how.len > 0) {
                 run.verdict = false;
-                try g.takePart(d, .{ .undecided = .{ .script = s.name, .run = run.id, .outcome = how } });
+                part = .{ .undecided = .{ .script = s.name, .run = run.id, .outcome = how } };
             }
         }
         s.fuel_total += run.fuel;
         s.alloc_total += run.alloc;
         if (outcome == .faulted) s.faults += 1;
         switch (outcome) {
-            .returned => |v| if (d.waits) {
-                try g.reply(d, .{ .reply = v });
-            } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
-            .faulted => {
-                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } });
-                try g.settleRequest(d);
-            },
+            .returned => |v| try g.endDelivery(d, .{ .returned = v }, .{ .part = part }),
+            .faulted => try g.endDelivery(d, .{ .failed = .{ .reason = "limit fault" } }, .{ .part = part }),
             // A message no clause took, or one passed, climbs the path.
             // A Broadcast never climbs: its open Verdict is allowed here.
             .unhandled, .clause_failed, .passed => if (d.broadcast == 0) {
                 try g.climb(s, run.id, d);
-            } else if (d.decision) try g.takePart(d, .allowed),
-            .dropped => {
-                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } });
-                try g.settleRequest(d);
-            },
-            .cancelled => {
-                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } });
-                try g.settleRequest(d);
-            },
-            .effect_failed => {
-                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } });
-                try g.settleRequest(d);
-            },
+            } else try g.endDelivery(d, .{ .failed = .{ .reason = "unhandled" } }, .{}),
+            .dropped => try g.endDelivery(d, .{ .failed = .{ .reason = "dropped" } }, .{ .part = part }),
+            .cancelled => try g.endDelivery(d, .{ .failed = .{ .reason = "cancelled" } }, .{ .part = part }),
+            .effect_failed => try g.endDelivery(d, .{ .failed = .{ .reason = "effect failed" } }, .{ .part = part }),
             // `veto` ends the Run with result Nothing.
             .vetoed => |reason| {
                 reason.release();
-                const v = try nothing(g.gpa);
-                if (d.waits) {
-                    try g.reply(d, .{ .reply = v });
-                } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release();
+                try g.endDelivery(d, .{ .returned = try nothing(g.gpa) }, .{ .part = part });
             },
             .errored => |e| {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
-                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "errored", .err = e.retain() } });
-                try g.settleRequest(d);
+                try g.endDelivery(d, .{ .failed = .{ .reason = "errored", .err = e } }, .{ .part = part });
                 // A Run handling an `error` message, the Core's or a Host's,
                 // sends none: there is no chain.
                 if (!d.internal_error and !std.mem.eql(u8, d.message, "error")) {
@@ -6262,7 +6283,9 @@ pub const Group = struct {
         errdefer releaseAll(args, g.gpa);
         const message = try g.gpa.dupe(u8, name);
         errdefer g.gpa.free(message);
-        return .{ .id = 0, .root = root, .message = message, .args = args, .request = false, .from = try g.gpa.dupe(u8, from) };
+        const sender = try g.gpa.dupe(u8, from);
+        errdefer g.gpa.free(sender);
+        return .{ .completion = try Delivery.Completion.create(g.gpa), .id = 0, .root = root, .message = message, .args = args, .request = false, .from = sender };
     }
 
     /// Stops a Script (chapter 6, Cancellation and Stop): each of its Runs,
@@ -6283,6 +6306,9 @@ pub const Group = struct {
         defer runs.deinit(g.gpa);
         try runs.appendSlice(g.gpa, s.live.items);
         if (running) |r| try runs.append(g.gpa, r);
+        var decisions: DeliveryDecisions = .empty;
+        defer decisions.deinit(g.gpa);
+        try decisions.ensureTotalCapacity(g.gpa, runs.items.len);
         std.mem.sort(*Run, runs.items, {}, struct {
             fn less(_: void, x: *Run, y: *Run) bool {
                 return runNumber(x.id) < runNumber(y.id);
@@ -6335,8 +6361,9 @@ pub const Group = struct {
             try discarded_ids.append(g.gpa, r.id);
             g.discardRun(r, how.discard);
             const d = r.delivery;
-            if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
-            try g.settleRequest(d);
+            const part: ?Part = if (r.verdict or d.decision) .{ .undecided = .{ .script = s.name, .run = r.id, .outcome = "cancelled" } } else null;
+            r.verdict = false;
+            try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{ .part = part, .decisions = &decisions });
             s.fuel_total += r.fuel;
             s.alloc_total += r.alloc;
         }
@@ -6377,10 +6404,7 @@ pub const Group = struct {
         g.reportStop(s.name, why, discarded_ids.items, dropped_ids.items, abandoned.items) catch {};
         // The open Decisions settle undecided, `cancelled`, after the
         // `stopped` record.
-        for (runs.items) |r| if (r.verdict or r.delivery.decision) {
-            r.verdict = false;
-            try g.takePart(r.delivery, .{ .undecided = .{ .script = s.name, .run = r.id, .outcome = "cancelled" } });
-        };
+        for (decisions.items) |x| try g.takePart(x.delivery, x.part);
         if (how.keep_mailbox) {
             // The messages stay, their senders waiting; the Runs go.
             var kept: usize = 0;
@@ -6415,9 +6439,9 @@ pub const Group = struct {
     /// A message a stopped Script won't run: its sender gets `send failed`,
     /// reason `stopped`, and its Decision settles undecided, `cancelled`.
     fn settleDropped(g: *Group, s: *Script, d: Delivery) !void {
-        if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
-        try g.settleRequest(d);
-        if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } });
+        try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{
+            .part = if (d.decision) .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } } else null,
+        });
         g.releaseDelivery(d);
     }
 
@@ -6505,7 +6529,6 @@ pub const Group = struct {
     /// The end of a message's path: the `unhandled` report, and `send
     /// failed` for a sender that waits. Takes it.
     fn unhandled(g: *Group, d: Delivery) !void {
-        try g.settleRequest(d);
         if (g.trace) |out| {
             out.writeAll("unhandled") catch {};
             if (d.from == null and d.id > 0) out.print(" d{d}", .{d.id}) catch {};
@@ -6519,20 +6542,53 @@ pub const Group = struct {
         }
         g.reportUnhandled(d) catch {};
         defer g.releaseDelivery(d);
-        if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
-        // A Decision that reaches the end of its path is allowed.
-        if (d.decision) try g.takePart(d, .allowed);
+        try g.endDelivery(d, .{ .failed = .{ .reason = "unhandled" } }, .{});
     }
 
-    /// Ends a Host Request without a returned Value. Presence in `results`
-    /// means settled even for Nothing; climbing the Message Path and Rewind do not settle.
-    fn settleRequest(g: *Group, d: Delivery) !void {
-        if (!d.request or d.waits) return;
-        const slot = try g.results.getOrPut(g.gpa, d.id);
-        if (slot.found_existing) return;
-        slot.value_ptr.* = nothing(g.gpa) catch |err| {
-            g.results.removeByPtr(slot.key_ptr);
-            return err;
+    const DeliveryResult = union(enum) {
+        /// Takes the returned Value.
+        returned: *Value,
+        /// Borrows the error; a waiting sender retains its own reference.
+        failed: struct { reason: []const u8, err: ?*Value = null },
+    };
+    const DeliveryDecisions = std.ArrayList(struct { delivery: Delivery, part: Part });
+    const DeliveryEnd = struct {
+        /// An open Decision defaults to allowed at the end of its path.
+        /// A Run holding a Verdict supplies its part even when !d.decision.
+        part: ?Part = null,
+        /// Stop settles replies before Grant release but Decisions after
+        /// its stopped record. Entries borrow Runs until that record.
+        decisions: ?*DeliveryDecisions = null,
+    };
+
+    /// The only terminal settlement of a Delivery, shared across copies
+    /// made while climbing. Rewind and forwarding never call this.
+    fn endDelivery(g: *Group, d: Delivery, result: DeliveryResult, how: DeliveryEnd) !void {
+        const state = d.completion.?;
+        if (state.ended) return error.DeliveryAlreadyEnded;
+        state.ended = true;
+        const part = how.part orelse if (d.decision) @as(?Part, .allowed) else null;
+        if (part) |p| {
+            if (how.decisions) |deferred| {
+                try deferred.append(g.gpa, .{ .delivery = d, .part = p });
+            } else try g.takePart(d, p);
+        }
+        const value = switch (result) {
+            .returned => |v| v,
+            .failed => |f| blk_value: {
+                if (d.waits) {
+                    return g.reply(d, .{ .send_failed = .{ .reason = f.reason, .err = if (f.err) |e| e.retain() else null } });
+                }
+                if (!d.request) return;
+                break :blk_value try nothing(g.gpa);
+            },
+        };
+        if (d.waits) return g.reply(d, .{ .reply = value });
+        if (!d.request) return value.release();
+        std.debug.assert(!g.results.contains(d.id));
+        g.results.put(g.gpa, d.id, value) catch |e| {
+            value.release();
+            return e;
         };
     }
 
@@ -6555,7 +6611,7 @@ pub const Group = struct {
         const handled = if (d.at) |at| at.owned() else s.owner;
         // An `error` message no clause matched is dropped: it never climbs
         // and isn't reported as `unhandled`.
-        if (d.internal_error) return;
+        if (d.internal_error) return g.endDelivery(d, .{ .failed = .{ .reason = "unhandled" } }, .{});
         var copy = try g.copyDelivery(d);
         const from = handled orelse return g.unhandled(copy);
         // A message to a Script climbs from its owner, which stays its
@@ -6576,12 +6632,15 @@ pub const Group = struct {
         const gpa = g.gpa;
         const args = try gpa.dupe(*Value, d.args);
         for (args) |v| _ = v.retain();
+        errdefer releaseAll(args, gpa);
         var out = d;
         out.args = args;
         out.message = try gpa.dupe(u8, d.message);
+        errdefer gpa.free(out.message);
         out.from = if (d.from) |x| try gpa.dupe(u8, x) else null;
         out.during = if (d.during) |x| x.retain() else null;
         out.function = if (d.function) |x| x.retain() else null;
+        if (out.completion) |state| state.retain();
         return out;
     }
 
@@ -10869,6 +10928,42 @@ fn blockDeadline(frame: *const Frame) ?Deadline {
         if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline;
     }
     return null;
+}
+
+test "Delivery completion follows path copies and distinguishes Script sends with id zero" {
+    const t = std.testing;
+    var g: Group = .init(t.allocator, null);
+    defer g.deinit();
+    const original = try g.newDelivery("message", &.{}, "sender/r1", 0);
+    defer g.releaseDelivery(original);
+    const copy = try g.copyDelivery(original);
+    defer g.releaseDelivery(copy);
+    const other = try g.newDelivery("message", &.{}, "sender/r1", 0);
+    defer g.releaseDelivery(other);
+    try t.expectEqual(@as(u64, 0), original.id);
+    try t.expectEqual(original.id, other.id);
+    try t.expectEqual(original.completion, copy.completion);
+    try t.expect(!original.completion.?.ended);
+    try g.endDelivery(copy, .{ .failed = .{ .reason = "unhandled" } }, .{});
+    try t.expectError(error.DeliveryAlreadyEnded, g.endDelivery(original, .{ .failed = .{ .reason = "stopped" } }, .{}));
+    try g.endDelivery(other, .{ .failed = .{ .reason = "stopped" } }, .{});
+    try t.expectEqual(@as(u32, 0), g.results.count());
+}
+
+test "Delivery completion rejects duplicate success and failure without replacing Host results" {
+    const t = std.testing;
+    var g: Group = .init(t.allocator, null);
+    defer g.deinit();
+    try g.queueDelivery("receiver", .{ .id = 1, .message = "message", .args = &.{}, .request = true });
+    try g.queueDelivery("receiver", .{ .id = 2, .message = "message", .args = &.{}, .request = true });
+    const success = g.inputs.items[0].deliver.delivery;
+    const failure = g.inputs.items[1].deliver.delivery;
+    try g.endDelivery(success, .{ .returned = try model.text(t.allocator, "answer") }, .{});
+    try t.expectError(error.DeliveryAlreadyEnded, g.endDelivery(success, .{ .failed = .{ .reason = "cancelled" } }, .{}));
+    try t.expectEqualStrings("answer", g.results.get(1).?.data.text);
+    try g.endDelivery(failure, .{ .failed = .{ .reason = "stopped" } }, .{});
+    try t.expectError(error.DeliveryAlreadyEnded, g.endDelivery(failure, .{ .failed = .{ .reason = "unhandled" } }, .{}));
+    try t.expect(g.results.get(2).?.data == .nothing);
 }
 
 test "bound Library definitions reuse containers without allocating on later reads" {
