@@ -86,6 +86,14 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Copy from: [`owner_protocol_test.exs`](test/owner_protocol_test.exs) for a wrapping transport that observes frames and injects faults, [`owner_test.exs`](test/owner_test.exs) for `drive: :manual`, [`transport_test.exs`](test/transport_test.exs), [`clock_test.exs`](test/clock_test.exs)
 - Check: `mix test test/owner_protocol_test.exs test/transport_test.exs`
 
+## Combined request and Pump, and the binary envelope
+
+- Files: `request_pump/5`, `call_pump/4`, `await/2` and `release_pending/1` in [`north_talk.ex`](lib/north_talk.ex), `combined/5` and the `handles` in [`owner.ex`](lib/north_talk/owner.ex), [`binary.ex`](lib/north_talk/binary.ex)
+- Rules: [the binary exchange contract](../../spec/embedding/request-pump-binary.md), [binary Value items](../../spec/embedding/binary-frames.md#items), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)
+- Copy from: [`request_pump_test.exs`](test/request_pump_test.exs), whose wrapping transport observes binary frames and can hide the feature. [`binary_test.exs`](test/binary_test.exs) checks the codec against bytes the TS codec wrote, in [`test/fixtures/request_pump_fields.txt`](test/fixtures/request_pump_fields.txt).
+- Gotcha: a decoded frame is a `Jason.OrderedObject`, so read its fields with `frame["key"]`, not a map pattern.
+- Check: `mix test test/request_pump_test.exs test/binary_test.exs`
+
 ## Host errors, limits and faults
 
 - Files: [`errors.ex`](lib/north_talk/errors.ex), [`owner.ex`](lib/north_talk/owner.ex), [`transport/wasi.ex`](lib/north_talk/transport/wasi.ex)

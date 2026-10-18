@@ -3,7 +3,7 @@
 **Status: accepted, with the fields envelope selected. The Zig Session and the
 experimental Go adapter implement both candidates behind negotiation. Go and C
 publish the combined Host APIs; TS publishes them on both Cores with a
-transferable browser codec. Elixir follows separately.** This is
+transferable browser codec; Elixir publishes them over its WASI reactor.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s contract, under
 [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
@@ -210,7 +210,8 @@ Elixir permits both drive modes: the combined call performs one Pump, and auto
 drive can subsequently resume. Await is repeatable; completed results remain
 until release or Group closure. An await timeout leaves execution running.
 Release discards retained state and fails active/later awaiters without cancelling
-the request. Preserve existing per-Host targets and options, including Elixir's
+the request. Elixir has no request cancellation, so it never sends
+`cancel-correlated`; it still sends a fresh token with each combined input. Preserve existing per-Host targets and options, including Elixir's
 Script-only Request target and existing Function-call options.
 
 Unsupported guests reject combined calls before admission. There is no automatic
@@ -230,7 +231,7 @@ passing evidence.
 10–19% slower than fields, so fields is selected. The gate first asked for at
 most 3× native. That limit measures the Zig guest rather than the transport, and
 is now a separate goal ([ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)).
-Go, C and TS implementations publish the combined APIs; Elixir follows.
+Go, C, TS and Elixir implementations publish the combined APIs.
 
 Verify codec canonicality, deep Values, every Report, malformed recovery, mixed
 continuations, cancellation races, stale tokens, worker exclusion, partial

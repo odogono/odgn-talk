@@ -42,3 +42,25 @@ defmodule NorthTalk.PendingCall do
   """
   defstruct [:call, :script, :grant, :operation, args: []]
 end
+
+defmodule NorthTalk.Pending do
+  @moduledoc """
+  The admitted request of `NorthTalk.request_pump/5` or
+  `NorthTalk.call_pump/4`: its Group, `delivery` id and handle. Await it with
+  `NorthTalk.await/2` as often as you like; its result is kept until
+  `NorthTalk.release_pending/1` or the Group closes.
+  """
+  @type t :: %__MODULE__{owner: pid(), group: String.t(), delivery: String.t(), id: reference()}
+  defstruct [:owner, :group, :delivery, :id]
+end
+
+defmodule NorthTalk.Pumped do
+  @moduledoc """
+  An admitted combined call: its `pending` request, a `NorthTalk.Pending`,
+  and its one Pump's outcome, `{:ok, result}` as `NorthTalk.pump/2` returns
+  it, or `{:error, exception}` when the Pump was refused. A refused Pump
+  leaves the request queued.
+  """
+  @type t :: %__MODULE__{pending: NorthTalk.Pending.t(), pump: {:ok, map()} | {:error, Exception.t()}}
+  defstruct [:pending, :pump]
+end

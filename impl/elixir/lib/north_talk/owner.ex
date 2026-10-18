@@ -7,6 +7,7 @@ defmodule NorthTalk.Owner do
   use GenServer
 
   alias NorthTalk.{
+    Binary,
     Call,
     Capability,
     Clock,
@@ -38,7 +39,14 @@ defmodule NorthTalk.Owner do
     :tasks,
     # The tokens of Function Values held by the Host, by handle id.
     :functions,
+    # Whether the Session negotiated the binary fields envelope (ADR 0110).
+    request_pump: false,
     ref: 0,
+    # The last correlation token sent; tokens are never reused.
+    token: 0,
+    # Pending handles of combined calls, by id: their Group, delivery,
+    # retained result and awaiters, each by its timeout ref.
+    handles: %{},
     groups: %{},
     waiters: %{},
     # Capabilities by name, and each loaded Script's Grants by
@@ -80,7 +88,8 @@ defmodule NorthTalk.Owner do
            limits: limits
          },
          {{:ok, versions}, state} <- exchange(state, "hello", %{"protocol" => @protocol}),
-         :ok <- check_versions(versions) do
+         :ok <- check_versions(versions),
+         {:ok, state} <- negotiate(state, versions) do
       {:ok, %{state | versions: plain(versions)}}
     else
       {{:error, error}, state} ->
@@ -91,6 +100,19 @@ defmodule NorthTalk.Owner do
       {:error, error} ->
         Supervisor.stop(tasks)
         {:stop, error}
+    end
+  end
+
+  # A Core that offers the fields envelope is asked for it by a second hello,
+  # since an older Core refuses a feature it doesn't know.
+  defp negotiate(state, versions) do
+    if Binary.feature() in (versions["features"] || []) do
+      case exchange(state, "hello", %{"protocol" => @protocol, "features" => [Binary.feature()]}) do
+        {{:ok, _}, state} -> {:ok, %{state | request_pump: true}}
+        other -> other
+      end
+    else
+      {:ok, state}
     end
   end
 
@@ -196,8 +218,11 @@ defmodule NorthTalk.Owner do
       {group, groups} ->
         if group.timer, do: Process.cancel_timer(group.timer)
         :ets.match_delete(state.functions, {:_, g, :_})
-        state = fail_group_waiters(state, g, %HostError{code: "group closed", detail: g})
-        {:reply, :ok, %{state | groups: groups}}
+        closed = %HostError{code: "group closed", detail: g}
+        state = fail_group_waiters(state, g, closed)
+        {mine, handles} = Map.split_with(state.handles, fn {_, h} -> h.group == g end)
+        for {_, h} <- mine, {_, from} <- h.awaiters, do: GenServer.reply(from, {:error, closed})
+        {:reply, :ok, %{state | groups: groups, handles: handles}}
     end
   end
 
@@ -212,6 +237,9 @@ defmodule NorthTalk.Owner do
       do: {:reply, {:error, no_group(g)}, state}
 
   def handle_call({:send, _, %Group{name: g}, _, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:pumped, _, %Group{name: g}, _, _}, _from, state) when not is_map_key(state.groups, g),
     do: {:reply, {:error, no_group(g)}, state}
 
   def handle_call({:new_group, name, opts}, _from, state) do
@@ -440,9 +468,55 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:pump, %Group{name: g}, opts}, _from, state) do
-    now = if dt = opts[:now], do: Clock.format(dt), else: Clock.format(Clock.now(state.clock))
-    {reply, state} = pump(state, g, now, Keyword.get(opts, :fuel_slice, state.fuel_slice))
+    {reply, state} = pump(state, g, now(state, opts), Keyword.get(opts, :fuel_slice, state.fuel_slice))
     {:reply, reply, state}
+  end
+
+  # A combined call: admit once, then Pump once, in one exchange. Each kind
+  # is built as its ordinary message would be.
+  def handle_call({:pumped, kind, %Group{name: g}, input, opts}, _from, state) do
+    fields =
+      case input do
+        {to, name, args} ->
+          %{"to" => target(to), "message" => %{"name" => name, "args" => encode(state, g, args)}}
+
+        {fun, args} ->
+          %{"fn" => encode(state, g, fun), "args" => encode(state, g, args)}
+      end
+
+    {reply, state} = combined(state, kind, g, fields, opts)
+    {:reply, reply, state}
+  rescue
+    error in HostError -> {:reply, {:error, error}, state}
+  end
+
+  def handle_call({:await, %NorthTalk.Pending{id: id}, timeout}, from, state) do
+    case state.handles[id] do
+      nil ->
+        {:reply, {:error, released(id)}, state}
+
+      %{result: nil} ->
+        tref = make_ref()
+        if timeout != :infinity, do: Process.send_after(self(), {:await_timeout, id, tref}, timeout)
+        {:noreply, put_in(state.handles[id].awaiters[tref], from)}
+
+      %{result: result} ->
+        {:reply, result, state}
+    end
+  end
+
+  # Releasing discards the retained result and fails the awaiters; the
+  # request itself carries on.
+  def handle_call({:release_pending, %NorthTalk.Pending{id: id}}, _from, state) do
+    case Map.pop(state.handles, id) do
+      {nil, _} ->
+        {:reply, :ok, state}
+
+      {h, handles} ->
+        for {_, from} <- h.awaiters, do: GenServer.reply(from, {:error, released(id)})
+        waiters = Map.reject(state.waiters, &match?({_, {:handle, ^id}}, &1))
+        {:reply, :ok, %{state | handles: handles, waiters: waiters}}
+    end
   end
 
   defp queue(state, kind, g, fields, from) do
@@ -510,6 +584,16 @@ defmodule NorthTalk.Owner do
     {:noreply, settle_call(state, key, {:fail, host_failure(Exception.format_exit(reason))})}
   end
 
+  # The handle may have been released, completed or closed meanwhile.
+  def handle_info({:await_timeout, id, tref}, state) do
+    with %{awaiters: %{^tref => from} = awaiters} = h <- state.handles[id] do
+      GenServer.reply(from, {:error, %HostError{code: "timeout", detail: "the request is still running"}})
+      {:noreply, put_in(state.handles[id], %{h | awaiters: Map.delete(awaiters, tref)})}
+    else
+      _ -> {:noreply, state}
+    end
+  end
+
   def handle_info(_, state), do: {:noreply, state}
 
   defp forget_task(state, monitor) do
@@ -572,29 +656,94 @@ defmodule NorthTalk.Owner do
   # automatically: at once if it was sliced, otherwise at its next deadline.
   defp pump(state, g, now, fuel_slice) do
     case exchange(state, "pump", %{"group" => g, "now" => now, "fuelSlice" => fuel_slice}) do
-      {{:ok, ok}, state} ->
-        state = update_in(state.groups[g], &%{&1 | unsettled: MapSet.new()})
-        {reports, state} = reports(state, g, ok)
+      {{:ok, ok}, state} -> pumped(state, g, ok)
+      other -> other
+    end
+  end
 
-        state =
-          cond do
-            state.drive != :auto -> state
-            ok["state"] == "sliced" -> schedule_pump(state, g)
-            deadline = ok["nextDeadline"] -> schedule_at(state, g, Clock.parse(deadline))
-            true -> state
+  defp pumped(state, g, ok) do
+    state = update_in(state.groups[g], &%{&1 | unsettled: MapSet.new()})
+    {reports, state} = reports(state, g, ok)
+
+    state =
+      cond do
+        state.drive != :auto -> state
+        ok["state"] == "sliced" -> schedule_pump(state, g)
+        deadline = ok["nextDeadline"] -> schedule_at(state, g, Clock.parse(deadline))
+        true -> state
+      end
+
+    result = %{
+      state: ok["state"],
+      next_deadline: ok["nextDeadline"],
+      fuel_used: ok["fuelUsed"],
+      reports: reports
+    }
+
+    {{:ok, result}, state}
+  end
+
+  defp now(state, opts),
+    do: if(dt = opts[:now], do: Clock.format(dt), else: Clock.format(Clock.now(state.clock)))
+
+  # Unsupported guests are refused before admission, with no two-call
+  # fallback. An admission refusal has no handle and no Pump; a Pump refusal
+  # keeps the handle and leaves the input queued.
+  defp combined(%{request_pump: false} = state, _kind, _g, _fields, _opts),
+    do: {{:error, %HostError{code: "invalid value", detail: "talk.wasm lacks #{Binary.feature()}"}}, state}
+
+  defp combined(%{token: token} = state, _kind, _g, _fields, _opts) when token >= 18_446_744_073_709_551_615,
+    do: {{:error, %HostError{code: "invalid value", detail: "correlation tokens are exhausted"}}, state}
+
+  defp combined(state, kind, g, fields, opts) do
+    token = state.token + 1
+    ref = state.ref + 1
+
+    frame =
+      Map.merge(fields, %{
+        "m" => kind,
+        "ref" => ref,
+        "group" => g,
+        "token" => token,
+        "now" => now(state, opts),
+        "fuelSlice" => Keyword.get(opts, :fuel_slice, state.fuel_slice)
+      })
+
+    bin = Binary.encode(frame)
+    state = %{state | ref: ref, token: token}
+
+    case exchange_frame(state, {:binary, bin}, g, false) do
+      {{:binary, reply}, state} -> pumped_reply(state, g, token, reply)
+      {{:ok, ok}, state} -> lost(state, {:invalid_reply, plain(ok)})
+      other -> other
+    end
+  end
+
+  defp pumped_reply(state, g, token, reply) do
+    delivery = reply["delivery"]
+
+    cond do
+      is_binary(delivery) and reply["token"] == token ->
+        id = make_ref()
+        state = put_in(state.handles[id], %{group: g, delivery: delivery, result: nil, awaiters: %{}})
+        state = put_in(state.waiters[{g, delivery}], {:handle, id})
+
+        {pump, state} =
+          if ok = reply["ok"] do
+            pumped(state, g, ok)
+          else
+            state = abandon(state, g, reply["abandoned"] || [])
+            {{:error, error(reply["err"])}, schedule_pump(state, g)}
           end
 
-        result = %{
-          state: ok["state"],
-          next_deadline: ok["nextDeadline"],
-          fuel_used: ok["fuelUsed"],
-          reports: reports
-        }
+        pending = %NorthTalk.Pending{owner: self(), group: g, delivery: delivery, id: id}
+        {{:ok, %NorthTalk.Pumped{pending: pending, pump: pump}}, state}
 
-        {{:ok, result}, state}
+      delivery == nil and reply["err"] != nil ->
+        {{:error, error(reply["err"])}, abandon(state, g, reply["abandoned"] || [])}
 
-      other ->
-        other
+      true ->
+        lost(state, {:invalid_reply, plain(reply)})
     end
   end
 
@@ -678,6 +827,9 @@ defmodule NorthTalk.Owner do
       {nil, _} ->
         state
 
+      {{:handle, id}, waiters} ->
+        complete(%{state | waiters: waiters}, id, reply)
+
       {from, waiters} ->
         GenServer.reply(from, reply)
         %{state | waiters: waiters}
@@ -730,14 +882,24 @@ defmodule NorthTalk.Owner do
   # A refused interim answer leaves the Core mid-exchange, so the instance is
   # lost; a refused opening frame never reached the Core.
   defp exchange_frame(state, message, g, interim?) do
-    case Transport.exchange(state.transport, Jason.encode!(message)) do
+    frame = with {:binary, bin} <- message, do: bin, else: (_ -> Jason.encode!(message))
+
+    case Transport.exchange(state.transport, frame) do
       {:ok, reply} ->
-        reply = Jason.decode!(reply, objects: :ordered_objects, floats: :decimals)
+        {binary?, reply} = read_reply(state, reply)
         ref = state.ref
 
         cond do
+          # A refused binary frame changed nothing, so the instance carries on.
+          match?({:binary, _}, message) and reply["ref"] == 0 and reply["err"]["kind"] == "protocol error" ->
+            {{:error, %HostError{code: "protocol error", detail: reply["err"]["detail"]}}, state}
+
           reply["ref"] != ref ->
             lost(state, {:invalid_reply, plain(reply)})
+
+          # A final reply in the binary envelope, which the caller reads.
+          binary? ->
+            {{:binary, reply}, state}
 
           need = reply["need"] ->
             {answer, state} = answer(state, g, plain(need), need["args"])
@@ -761,6 +923,18 @@ defmodule NorthTalk.Owner do
 
       {:error, reason} ->
         lost(state, reason)
+    end
+  end
+
+  defp read_reply(state, reply) do
+    if Binary.binary?(reply) do
+      try do
+        {true, Binary.decode(reply)}
+      rescue
+        error in HostError -> lost(state, {:invalid_reply, error.detail})
+      end
+    else
+      {false, Jason.decode!(reply, objects: :ordered_objects, floats: :decimals)}
     end
   end
 
@@ -983,13 +1157,31 @@ defmodule NorthTalk.Owner do
   # would otherwise leave the Group's requests waiting for good.
   defp fail_group_waiters(state, g, error) do
     {failed, waiters} = Map.split_with(state.waiters, fn {{wg, _}, _} -> wg == g end)
-    for {_, from} <- failed, do: GenServer.reply(from, {:error, error})
-    %{state | waiters: waiters}
+
+    Enum.reduce(failed, %{state | waiters: waiters}, fn
+      {_, {:handle, id}}, state -> complete(state, id, {:error, error})
+      {_, from}, state -> GenServer.reply(from, {:error, error}) && state
+    end)
   end
 
   defp fail_waiters(state, error) do
-    for {_, from} <- state.waiters, do: GenServer.reply(from, {:error, error})
+    for {_, from} <- state.waiters, not match?({:handle, _}, from), do: GenServer.reply(from, {:error, error})
+    for {_, h} <- state.handles, {_, from} <- h.awaiters, do: GenServer.reply(from, {:error, error})
   end
+
+  # A handle keeps its result for every later await, until it is released.
+  defp complete(state, id, result) do
+    case state.handles[id] do
+      nil ->
+        state
+
+      h ->
+        for {_, from} <- h.awaiters, do: GenServer.reply(from, result)
+        put_in(state.handles[id], %{h | result: result, awaiters: %{}})
+    end
+  end
+
+  defp released(id), do: %HostError{code: "pending released", detail: inspect(id)}
 
   defp error(err) do
     case err["kind"] do
