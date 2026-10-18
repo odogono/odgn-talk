@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 11;
+pub const format_version: u32 = 12;
 
 pub const Error = error{
     InvalidSave,
@@ -75,6 +75,11 @@ const Out = struct {
         var buf: [16]u8 = undefined;
         std.mem.writeInt(i128, &buf, v, .little);
         try o.bytes.appendSlice(o.gpa, &buf);
+    }
+
+    fn instant(o: *Out, t: model.dates.Instant) !void {
+        try o.signed(t.seconds);
+        try o.int(@intCast(t.micros));
     }
 
     fn flag(o: *Out, b: bool) !void {
@@ -147,6 +152,13 @@ const In = struct {
         const v = std.mem.readInt(i128, i.bytes[i.pos..][0..16], .little);
         i.pos += 16;
         return v;
+    }
+
+    fn instant(i: *In) Error!model.dates.Instant {
+        const seconds = std.math.cast(i64, try i.signed()) orelse return error.InvalidSave;
+        const micros = try i.int();
+        if (micros >= std.time.us_per_s) return error.InvalidSave;
+        return .{ .seconds = seconds, .micros = @intCast(micros) };
     }
 
     fn flag(i: *In) Error!bool {
@@ -927,8 +939,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(cost_model.version);
     try o.bytes.appendSlice(gpa, &print);
     try o.int(g.saves);
-    try o.signed(g.clock.seconds);
-    try o.int(@intCast(g.clock.micros));
+    try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
     try o.int(g.timers);
@@ -996,6 +1007,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.str(c.script);
         try o.str(c.grant);
         try o.str(c.run);
+        try o.str(c.segment);
+        try o.instant(c.now);
         try s.values(c.args);
         try o.int(c.charged);
     }
@@ -2191,10 +2204,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const saved_print = i.bytes[i.pos..][0..32].*;
     i.pos += 32;
     g.saves = try i.int();
-    const seconds = try i.signed();
-    const micros = try i.int();
-    if (micros >= std.time.us_per_s) return error.InvalidSave;
-    g.clock = .{ .seconds = std.math.cast(i64, seconds) orelse return error.InvalidSave, .micros = @intCast(micros) };
+    g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
     g.timers = try i.int();
@@ -2339,6 +2349,12 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         x.script = try r.kept();
         x.grant = try r.kept();
         x.run = try r.kept();
+        // The Segment which established the wait, within the Call's Run.
+        x.segment = try r.kept();
+        if (!std.mem.startsWith(u8, x.segment, x.run) or !std.mem.startsWith(u8, x.segment[x.run.len..], ".s")) return error.InvalidSave;
+        x.now = try i.instant();
+        model.dates.validateInstant(x.now) catch return error.InvalidSave;
+        if (machine.micros(x.now) > machine.micros(g.clock)) return error.InvalidSave;
         x.args = try r.values();
         x.charged = try i.int();
         for (calls[0..n]) |y| if (std.mem.eql(u8, y.id, id)) return error.InvalidSave;
@@ -2492,13 +2508,6 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const changed = try i.count();
     for (0..changed) |_| try g.changed_roots.put(a, try i.int(), {});
     if (i.pos != i.bytes.len) return error.InvalidSave;
-    // A pending call belongs to the Segment which established its wait.
-    // Suspended Runs have closed that Segment; a preempted open Join has
-    // not. Reconstruct its id from saved Run accounting, preserving zig/8.
-    for (g.pending.items) |p| if (p.call) |c| {
-        const segment = std.math.add(u32, p.run.segments, if (p.run.continuing) 1 else 0) catch return error.InvalidSave;
-        c.segment = try std.fmt.allocPrint(g.keep.allocator(), "{s}.s{d}", .{ p.run.id, segment });
-    };
     // Each call's Grant binding.
     for (calls) |c| {
         const s = g.script(c.script) orelse return error.InvalidSave;
@@ -2766,16 +2775,99 @@ test "prior snapshot layouts are refused" {
     defer g.deinit();
     const bytes = try save(&g, gpa, try g.groupFingerprint());
     defer gpa.free(bytes);
-    for ([_]u8{ 8, 9, 10 }) |old| {
+    for ([_]u8{ 8, 9, 10, 11 }) |old| {
         // These versions have one-byte LEB128 headers. Give the otherwise
         // valid save a legacy header and a matching integrity digest.
         bytes[magic.len] = old;
         std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
-        var restored: Group = .init(gpa, null);
-        defer restored.deinit();
-        var result: Result = .{};
-        defer result.deinit(gpa);
-        try testing.expectError(error.InvalidSave, restore(&restored, bytes, .{}, &result));
+        for ([_]bool{ false, true }) |variables_only| {
+            var restored: Group = .init(gpa, null);
+            defer restored.deinit();
+            var result: Result = .{};
+            defer result.deinit(gpa);
+            try testing.expectError(error.InvalidSave, restore(&restored, bytes, .{ .variables_only = variables_only }, &result));
+        }
+    }
+}
+
+test "pending Calls retain their crossing Clock and Segment through restore" {
+    const Host = struct {
+        fn start(_: ?*anyopaque, _: *capabilities.Call, _: []const *Value) capabilities.Outcome {
+            return .started;
+        }
+        fn rebind(context: ?*anyopaque, _: []const u8, _: []const u8) ?*capabilities.Grant {
+            return @ptrCast(@alignCast(context.?));
+        }
+    };
+    const gpa = testing.allocator;
+    var shape: capabilities.Shape = .{ .allocator = gpa, .data = .{ .kind = .any } };
+    var ops = [_]capabilities.Operation{.{ .name = "fetch", .args = &.{}, .result = &shape, .mode = .suspending, .cost = .{ .fuel = 7 }, .host = .{ .call = Host.start } }};
+    var cap: capabilities.Capability = .{ .name = "api", .operations = &ops };
+    var kept = [_]bool{true};
+    var grant: capabilities.Grant = .{ .capability = &cap, .operations = &kept };
+    const named = [_]machine.NamedGrant{.{ .name = "api", .grant = &grant }};
+    const original: model.dates.Instant = .{ .seconds = -1, .micros = 123456 };
+    const later: model.dates.Instant = .{ .seconds = 0, .micros = 654321 };
+    const resumed: model.dates.Instant = .{ .seconds = 1, .micros = 999999 };
+    for ([_]bool{ false, true }) |join| {
+        var g: Group = .init(gpa, null);
+        defer g.deinit();
+        // Both calls originate in Segment 2, after an ordinary wait. The
+        // Join is saved with its Segment still open at a Fuel preemption.
+        const source = if (join)
+            "script variable n = 0\non go\n wait 1 s\n add 1 to n\n wait for all\n ask api to fetch and wait\n add 2 to n\n end wait\nend go\n"
+        else
+            "on go\n wait 1 s\n ask api to fetch and wait\n return it\nend go\n";
+        try testing.expect(try g.load("s", source, .{ .grants = &named }) == .loaded);
+        _ = try g.deliver("s", "go", &.{}, false);
+        try g.pump(.{ .seconds = -2, .micros = 123456 });
+        try g.pumpWith(original, if (join) 40 else 0, 0);
+        try testing.expectEqual(@as(usize, 1), g.pending.items.len);
+        try testing.expectEqual(join, g.pending.items[0].run.continuing);
+        const call = g.pending.items[0].call.?;
+        try testing.expectEqualStrings("s/r1.s2", call.segment);
+        // The ordinary wait stays pending across multiple later Pumps.
+        // Keep the Join preempted by spending only one instruction's Fuel.
+        try g.pumpWith(later, if (join) 1 else 0, 0);
+        if (!join) try g.pump(.{ .seconds = 0, .micros = 999999 });
+        try testing.expectEqual(join, g.pending.items[0].run.continuing);
+        try testing.expectEqualStrings("s/r1.s2", call.segment);
+        const bytes = try save(&g, gpa, try g.groupFingerprint());
+        defer gpa.free(bytes);
+        for ([_]machine.How{ .adopt, .reissue }) |how| {
+            var copy: Group = .init(gpa, null);
+            defer copy.deinit();
+            var result: Result = .{};
+            defer result.deinit(gpa);
+            try testing.expectEqual(Outcome.full, try restore(&copy, bytes, .{ .grants = .{ .context = &grant, .call = Host.rebind } }, &result));
+            try testing.expectEqual(@as(usize, 1), copy.restored.?.pending.items.len);
+            const restored = copy.callById(call.id).?;
+            try testing.expectEqualStrings(call.segment, restored.segment);
+            try testing.expectEqual(original, restored.now);
+            const again = try save(&copy, gpa, try copy.groupFingerprint());
+            defer gpa.free(again);
+            try testing.expectEqualSlices(u8, bytes, again);
+            try copy.settleRestored(call.id, how, null);
+            try testing.expectEqual(original, restored.now);
+            try copy.pumpWith(resumed, if (join) 1 else 0, 0);
+            try testing.expectEqual(if (how == .adopt) original else resumed, restored.now);
+            try testing.expectEqualStrings(call.segment, restored.segment);
+        }
+        // Malformed timestamps with valid save digests must be refused.
+        for ([_]model.dates.Instant{
+            .{ .seconds = std.math.maxInt(i64), .micros = 0 },
+            .{ .seconds = -1, .micros = 1000000 },
+            .{ .seconds = 2, .micros = 0 }, // After the saved Group Clock.
+        }) |invalid| {
+            call.now = invalid;
+            const corrupt = try save(&g, gpa, try g.groupFingerprint());
+            defer gpa.free(corrupt);
+            var copy: Group = .init(gpa, null);
+            defer copy.deinit();
+            var result: Result = .{};
+            defer result.deinit(gpa);
+            try testing.expectError(error.InvalidSave, restore(&copy, corrupt, .{ .grants = .{ .context = &grant, .call = Host.rebind } }, &result));
+        }
     }
 }
 

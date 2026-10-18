@@ -52,6 +52,9 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				original = c
 				o.Calls = append(o.Calls, fmt.Sprintf("%s %s %s %s %v", c.ID(), c.RunID(), c.SegmentID(), c.Now().Format(time.RFC3339Nano), args))
 				if starts > 1 {
+					if !c.Now().Equal(bridgeNow.Add(time.Second)) || c.SegmentID() != "s/r1.s1" {
+						t.Fatal("reissued Call lost its Segment or Pump Clock", c.SegmentID(), c.Now())
+					}
 					c.AnswerWithCost(talk.Int(41), 3)
 				}
 				return nil
@@ -106,6 +109,10 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				opts.FuelSlice = 20
 			}
 			pump(g, bridgeNow, opts)
+			if name == "adopt" || name == "reissue" {
+				pump(g, bridgeNow.Add(123456*time.Microsecond), talk.PumpOptions{})
+				pump(g, bridgeNow.Add(654321*time.Microsecond), talk.PumpOptions{})
+			}
 			fingerprint := g.Fingerprint()
 			saved, err := g.Save()
 			if err != nil {
@@ -214,6 +221,9 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				if name == "adopt" {
 					if call == nil || call == original || call.Group() != restored || call.Binding() != "binding" || call.Context().Err() != nil {
 						t.Fatal("invalid adopted Call")
+					}
+					if !call.Now().Equal(bridgeNow) || call.SegmentID() != original.SegmentID() {
+						t.Fatal("adopted Call lost its original Segment or Clock", call.SegmentID(), call.Now())
 					}
 					o.Calls = append(o.Calls, fmt.Sprintf("%s %s %s %s", call.ID(), call.RunID(), call.SegmentID(), call.Now().Format(time.RFC3339Nano)))
 					code(call.Charge(1))
