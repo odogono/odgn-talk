@@ -1,4 +1,4 @@
-import { allElements } from './hierarchy';
+import { allElements } from './tree/rules';
 import { type Immutable } from 'immer';
 import { grammar } from '@northtalk/ts';
 import { isIdentifierName, type Page, type Project } from './model';

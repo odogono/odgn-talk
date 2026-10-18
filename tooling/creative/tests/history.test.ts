@@ -57,12 +57,12 @@ for (const names of [['a'], ['a', 'c']]) {
         top: source.top + 20,
       });
       if (copy.kind === 'text' && source.kind === 'text') {
-        editor.edit(({ project, pageIndex }) => {
+        editor.edit(({ project, pageIndex, tree }) => {
           const copy = project.pages[pageIndex]!.elements.find(
             e => e.name === `${name}2`,
           )!;
           if (copy.kind === 'text') {
-            copy.richText[0]!.runs[0]!.text = 'Changed copy';
+            tree.replaceText(copy, 'Changed copy');
           }
         });
         expect(source.richText[0]!.runs[0]!.text).toBe('Text');
@@ -83,8 +83,8 @@ for (const names of [['a'], ['a', 'c']]) {
 
 test('duplicates reserve names of originals and of every copy', () => {
   const editor = makeEditor();
-  editor.edit(({ project }) => {
-    project.pages[0]!.elements.push(createElement('button', 'a2'));
+  editor.edit(({ project, tree }) => {
+    tree.insert(project.pages[0]!, createElement('button', 'a2'));
   });
   select(editor, 'a2', 'a');
   editor.duplicate();
@@ -93,8 +93,8 @@ test('duplicates reserve names of originals and of every copy', () => {
 
 test('duplicate a Page after itself, preserving layout and independent nested data', () => {
   const editor = makeEditor();
-  editor.edit(({ project }) => {
-    project.pages[0]!.script = 'on openPage\nend openPage';
+  editor.edit(({ project, tree }) => {
+    tree.setScript(project.pages[0]!, 'on openPage\nend openPage');
   });
   checkUndo(editor, () => editor.duplicate());
   expect(editor.pageIndex).toBe(1);
@@ -107,8 +107,8 @@ test('duplicate a Page after itself, preserving layout and independent nested da
   expect(editor.page.elements.map(e => ({ ...e, id: undefined }))).toEqual(
     editor.project.pages[0]!.elements.map(e => ({ ...e, id: undefined })),
   );
-  editor.edit(({ project, pageIndex }) => {
-    project.pages[pageIndex]!.elements[0]!.left = 500;
+  editor.edit(({ project, pageIndex, tree }) => {
+    tree.setGeometry(project.pages[pageIndex]!.elements[0]!, { left: 500 });
   });
   expect(editor.project.pages[0]!.elements[0]!.left).toBe(40);
 });
@@ -206,9 +206,7 @@ test('moves, resizes and live Info changes each undo as one edit', () => {
   checkUndo(editor, () => {
     const edit = editor.startEdit();
     for (const name of ['M', 'My', 'Mystery revised']) {
-      edit.change(({ project }) => {
-        project.name = name;
-      });
+      edit.change(({ tree }) => tree.setProjectName(name));
     }
     edit.finish();
   });
@@ -247,10 +245,10 @@ test('undo finishes a pending gesture and later stale updates cannot mutate hist
 
 test('long mixed history repeats every Project exactly without drift', () => {
   const editor = makeEditor();
-  const states = [editor.project];
+  const states = [editor.snapshot()];
   const record = (change: () => void) => {
     change();
-    states.push(editor.project);
+    states.push(editor.snapshot());
   };
   for (let i = 0; i < 20; i++) {
     select(editor, 'a');
@@ -274,12 +272,12 @@ test('long mixed history repeats every Project exactly without drift', () => {
     editor.selectPage();
     record(() => editor.renamePage(`scene${i}`));
     record(() =>
-      editor.edit(({ project, pageIndex }) => {
+      editor.edit(({ project, pageIndex, tree }) => {
         const page = project.pages[pageIndex]!;
-        project.designWidth++;
-        page.height++;
-        page.background = i % 2 ? '#123456' : '#654321';
-        page.elements[0]!.script = `on click\n  put ${i}\nend click`;
+        tree.setProperty(project, 'designWidth', project.designWidth + 1);
+        tree.setProperty(page, 'height', page.height + 1);
+        tree.setProperty(page, 'background', i % 2 ? '#123456' : '#654321');
+        tree.setScript(page.elements[0]!, `on click\n  put ${i}\nend click`);
       }),
     );
     record(() => editor.addPage());
@@ -290,12 +288,12 @@ test('long mixed history repeats every Project exactly without drift', () => {
   for (let round = 0; round < 3; round++) {
     for (let i = states.length - 2; i >= 0; i--) {
       editor.undo();
-      expect(editor.project).toBe(states[i]!);
+      expect(editor.project).toEqual(states[i]!);
     }
     expect(editor.canUndo).toBe(false);
     for (const state of states.slice(1)) {
       editor.redo();
-      expect(editor.project).toBe(state);
+      expect(editor.project).toEqual(state);
     }
     expect(editor.canRedo).toBe(false);
   }
@@ -379,4 +377,95 @@ test('a read-only editor rolls back every change but still navigates', () => {
 
   editor.readOnly = false;
   expect(editor.canUndo).toBe(true);
+});
+
+test('net-zero typing restores the content token and preserves redo after published updates', () => {
+  const editor = makeEditor();
+  editor.renamePage('renamed');
+  editor.undo();
+  const content = editor.contentState;
+  const revision = editor.revision;
+  const edit = editor.startEdit();
+  edit.change(({ tree }) => tree.setProjectName('Temporary'));
+  expect(editor.canRedo).toBe(false);
+  edit.change(({ tree }) => tree.setProjectName('Mystery'));
+  edit.finish();
+  expect(editor.contentState).toBe(content);
+  expect(editor.revision).toBeGreaterThan(revision);
+  expect(editor.canUndo).toBe(false);
+  expect(editor.canRedo).toBe(true);
+});
+
+test('failed authoring updates restore interaction state and emit no revision or notice', () => {
+  const editor = makeEditor();
+  const before = editor.snapshot();
+  const expected = editor.stamp();
+  const content = editor.contentState;
+  let notices = 0;
+  editor.onChange = () => notices++;
+  expect(() =>
+    editor.edit(edit => {
+      edit.tree.setProjectName('Uncommitted');
+      edit.tree.remove(edit.project.pages[0]!.elements[0]!);
+      edit.pageIndex = 20;
+      edit.selection = ['not committed'];
+      throw new Error('abort');
+    }),
+  ).toThrow('abort');
+  expect(editor.project).toEqual(before);
+  expect(editor.isCurrent(expected)).toBe(true);
+  expect(editor.contentState).toBe(content);
+  expect(editor.pageIndex).toBe(0);
+  expect(editor.selection).toEqual([]);
+  expect(editor.canUndo).toBe(false);
+  expect(notices).toBe(0);
+});
+
+test('captures remain detached and undo recovers exported-state identity without reusing ids', () => {
+  const editor = makeEditor();
+  const exported = editor.capture();
+  const element = editor.addElement('button');
+  const firstId = element.id!;
+  expect(editor.isCurrent(exported)).toBe(false);
+  expect(exported.project.pages[0]!.elements).toHaveLength(5);
+  editor.undo();
+  expect(editor.contentState).toBe(exported.contentState);
+  expect(editor.isCurrent(exported)).toBe(false);
+  const replacement = editor.addElement('button');
+  expect(replacement.id!).toBeGreaterThan(firstId);
+  expect(editor.contentState).not.toBe(exported.contentState);
+});
+
+test('intake reserves supplied ids before allocating new owners', () => {
+  const source = makeEditor();
+  const editor = new StackEditor(source.snapshot());
+  const highest = Math.max(
+    ...editor.page.elements.map(element => element.id!),
+    editor.page.id!,
+  );
+  expect(editor.addElement('button').id!).toBeGreaterThan(highest);
+});
+
+test('net-zero rich text compares content independently of object property order', () => {
+  const editor = makeEditor();
+  const element = editor.element('a')!;
+  if (element.kind !== 'text') {
+    throw new Error('fixture');
+  }
+  editor.edit(({ tree }) =>
+    tree.replaceRichText(element, [{ runs: [{ text: 'Text', bold: true }] }]),
+  );
+  editor.renamePage('changed');
+  editor.undo();
+  const content = editor.contentState;
+  const edit = editor.startEdit();
+  edit.change(({ tree }) =>
+    tree.replaceRichText(element, [{ runs: [{ text: 'Different' }] }]),
+  );
+  edit.change(({ tree }) =>
+    tree.replaceRichText(element, [{ runs: [{ bold: true, text: 'Text' }] }]),
+  );
+  edit.finish();
+  expect(editor.contentState).toBe(content);
+  expect(editor.canRedo).toBe(true);
 });

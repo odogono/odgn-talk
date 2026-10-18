@@ -94,9 +94,9 @@ export const runBrowserTests = async () => {
   });
 
   await test("a vanished owner's problem is disabled", async () => {
-    shell.editor.edit(({ project }) => {
+    shell.editor.edit(({ project, tree }) => {
       const page = project.pages[0]!;
-      page.elements = page.elements.filter(e => e.name !== 'gone');
+      tree.remove(page.elements.find(element => element.name === 'gone')!);
     });
     const gone = buttons()[2]!;
     gone.click();

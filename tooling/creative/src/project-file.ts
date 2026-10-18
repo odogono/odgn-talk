@@ -3,7 +3,7 @@
 // `format` version, and one stored `assets/<sha256>.<ext>` per asset.
 // Files hold the authored Project only, never Play State (ADR 0041).
 import { type Immutable } from 'immer';
-import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './hierarchy';
+import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './tree/rules';
 
 import {
   alignParagraph,

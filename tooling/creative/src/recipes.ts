@@ -1,4 +1,4 @@
-import { allElements } from './hierarchy';
+import { allElements } from './tree/rules';
 // Recipes produce ordinary source. Placement is derived from the Core's lossless
 // parse, never from a textual search for a handler or its closing `end`.
 import { type Immutable } from 'immer';

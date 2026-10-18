@@ -160,7 +160,7 @@ end keyDown`;
   await ask('keep');
   expect(await ask('same')).toBe('true');
   // Reordering moves positions but keeps the retained handle's identity.
-  play.page.elements.reverse();
+  play.reorder(play.page, [...play.page.elements].reverse());
   expect(await value(play, 'the name of element 1 of thisPage')).toBe(clone);
   expect(await ask('same')).toBe('true');
   expect(await ask('name')).toBe('dyn');

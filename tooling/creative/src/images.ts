@@ -1,4 +1,4 @@
-import { allElements } from './hierarchy';
+import { allElements } from './tree/rules';
 // Image intake and the session's content-addressed bytes. Decode before any
 // authored edit; retain bytes for undo and failed-save exports (#753). The
 // bytes store is keyed by hash for every asset, so sound bytes (#822) live

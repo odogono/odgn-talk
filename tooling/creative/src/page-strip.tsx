@@ -16,9 +16,11 @@ type PageRenderer = (
 
 type ThumbnailProps = {
   assets: Immutable<Asset[]>;
+  assetsRevision: number;
   designWidth: number;
   drawPage: PageRenderer;
   page: Immutable<Page>;
+  pageRevision: number;
 };
 
 // Use Preact's native memoisation hook: importing preact/compat's memo also
@@ -28,7 +30,9 @@ class Thumbnail extends Component<ThumbnailProps> {
 
   shouldComponentUpdate(next: ThumbnailProps): boolean {
     return (
-      next.page !== this.props.page ||
+      next.page.id !== this.props.page.id ||
+      next.pageRevision !== this.props.pageRevision ||
+      next.assetsRevision !== this.props.assetsRevision ||
       next.designWidth !== this.props.designWidth ||
       next.assets !== this.props.assets ||
       next.drawPage !== this.props.drawPage
@@ -87,9 +91,11 @@ const PageStrip = ({
           >
             <Thumbnail
               assets={project.assets}
+              assetsRevision={editor.assetsRevision}
               designWidth={project.designWidth}
               drawPage={drawPage}
               page={page}
+              pageRevision={editor.pageRevision(page.id!)}
             />
             <span>{`${index + 1}. ${page.name}`}</span>
           </button>

@@ -49,7 +49,7 @@ test('in Edit a command is one undoable authored edit that keeps session-local i
     text: undefined,
   });
   expect(editor.page.elements[0]!.id).toBe(button.id);
-  expect(editor.page.elements[0]).not.toBe(button);
+  expect(editor.page.elements[0]).toBe(button);
   expect(editor.page.elements[0]).toHaveProperty('label', 'Go');
   editor.undo();
   expect(editor.page.elements[0]).toHaveProperty('label', 'Button');
@@ -69,7 +69,7 @@ test('in Edit, created Elements are kept and navigation moves the editor', async
 test('in Edit, a failing command changes nothing and read-only refuses', async () => {
   const project = fixture();
   const editor = new StackEditor(project);
-  const before = editor.project;
+  const before = editor.snapshot();
   expect(
     (
       await runInEdit(
@@ -78,13 +78,13 @@ test('in Edit, a failing command changes nothing and read-only refuses', async (
       )
     ).error,
   ).toContain('Division by zero');
-  expect(editor.project).toBe(before);
+  expect(editor.project).toEqual(before);
   expect(editor.canUndo).toBe(false);
   editor.readOnly = true;
   expect(
     (await runInEdit(editor, 'set the label of button1 to "X"')).error,
   ).toContain('read-only');
-  expect(editor.project).toBe(before);
+  expect(editor.project).toEqual(before);
 });
 
 test('hide and show are Host Commands, whose errors name the command line', async () => {
@@ -138,4 +138,20 @@ test('Message Box clones get fresh ids while unchanged owners keep theirs', asyn
   editor.undo();
   expect(editor.element('button1')).toBe(button);
   expect(editor.element('button2')).toBeUndefined();
+});
+
+test('a stale Edit command cannot overwrite a newer edit, including edit then undo', async () => {
+  for (const undo of [false, true]) {
+    const editor = new StackEditor(fixture());
+    const command = runInEdit(editor, 'set the label of button1 to "Stale"');
+    editor.edit(({ project, tree }) =>
+      tree.setProperty(project.pages[0]!.elements[0]!, 'label', 'Newer'),
+    );
+    if (undo) {
+      editor.undo();
+    }
+    const before = editor.snapshot();
+    expect((await command).error).toContain('Run it again');
+    expect(editor.project).toEqual(before);
+  }
 });

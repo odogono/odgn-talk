@@ -1,6 +1,6 @@
 // Dedicated page: exercise real menu/input/rendering alongside grouped Play.
 import { createElement, createProject } from '../src/model';
-import { groupElement } from '../src/hierarchy';
+import { groupElement } from '../src/tree/rules';
 import { mountPlay } from '../src/play-view';
 import { mountStack } from '../src/stack';
 
@@ -121,8 +121,8 @@ export const runBrowserTests = async () => {
     const empty = groupElement('empty', []);
     empty.left = 600;
     empty.top = 400;
-    editor.edit(({ project }) => {
-      project.pages[0]!.elements.push(empty);
+    editor.edit(({ project, tree }) => {
+      tree.insert(project.pages[0]!, empty);
     });
     await wait();
     const marker = node('empty');
@@ -136,15 +136,15 @@ export const runBrowserTests = async () => {
     assert(editor.selection[0] === 'empty', 'Empty marker selects group');
   });
   await test('Browse and Present route member clicks through group and hide descendants, with transparent gaps', async () => {
-    editor.edit(({ project }) => {
+    editor.edit(({ project, tree }) => {
       const group = project.pages[0]!.elements[0]!;
       const entry = createElement('text', 'entry');
       if (group.kind === 'group' && entry.kind === 'text') {
         entry.editable = true;
         entry.top = 150;
-        group.members.push(entry);
+        tree.insert(group, entry);
       }
-      project.pages[0]!.elements[0]!.script = 'on click\n hide me\nend';
+      tree.setScript(project.pages[0]!.elements[0]!, 'on click\n hide me\nend');
     });
     for (const playMode of ['Browse', 'Present']) {
       const present = document.querySelector<HTMLButtonElement>(

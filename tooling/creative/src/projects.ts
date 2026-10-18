@@ -165,10 +165,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     { handle: ProjectFileHandle; id: string; stamp: FileStamp } | undefined;
   // Autosave is disabled without storage; still protect in-memory edits when
   // importing or switching Projects. An export makes that exact revision safe.
-  let safeProject = editor.project;
+  let safeContent = editor.contentState;
   const hasUnsafeChanges = () =>
     (autosave.dirty || !storage || orphaned.value) &&
-    editor.project !== safeProject;
+    editor.contentState !== safeContent;
 
   const notice = (text: string): void => {
     byId('notice-text').textContent = text;
@@ -313,18 +313,28 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     if (!storage || orphaned.value || preview.value) {
       return;
     }
+    const captured = editor.capture();
+    const savingId = currentId.value;
     if (!(await lock.stillEditing())) {
       lock.release();
       throw new StorageError('Another tab took over editing.', LOST_EDITORSHIP);
     }
-    record = await storage.saveProject(currentId.value, editor.project, {
-      assets: shell.images.forStorage(editor.project),
+    if (
+      editor.generation !== captured.generation ||
+      currentId.value !== savingId
+    ) {
+      return;
+    }
+    const saved = await storage.saveProject(savingId, captured.project, {
+      assets: shell.images.forStorage(captured.project),
     });
-    channel?.post({
-      type: 'saved',
-      projectId: currentId.value,
-      seq: record.seq,
-    });
+    if (
+      editor.generation === captured.generation &&
+      currentId.value === savingId
+    ) {
+      record = saved;
+    }
+    channel?.post({ type: 'saved', projectId: savingId, seq: saved.seq });
   };
 
   const autosave = new Autosave(save, {
@@ -403,11 +413,15 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     id: string;
     missingNames: string[];
     project: Immutable<Project>;
-    source: Immutable<Project>;
+    source: { contentState: number; generation: number };
   }> => {
     editor.finishPendingEdit();
-    const source = editor.project;
-    const project = projectForExport(editor.project);
+    const captured = editor.capture();
+    const source = {
+      generation: captured.generation,
+      contentState: captured.contentState,
+    };
+    const project = projectForExport(captured.project);
     const id = currentId.value;
     // Session bytes cover most assets; read only the rest from storage.
     const missing = [...new Set(project.assets.map(a => a.hash))].filter(
@@ -438,15 +452,20 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const markFileSaved = async (
     built: Awaited<ReturnType<typeof buildProjectFile>>,
   ): Promise<void> => {
-    if (currentId.value === built.id && editor.project === built.source) {
-      safeProject = built.source;
+    if (
+      currentId.value === built.id &&
+      editor.generation === built.source.generation &&
+      editor.contentState === built.source.contentState
+    ) {
+      safeContent = built.source.contentState;
     }
     if (
       storage &&
       record &&
       !orphaned.value &&
       currentId.value === built.id &&
-      editor.project === built.source
+      editor.generation === built.source.generation &&
+      editor.contentState === built.source.contentState
     ) {
       const now = Date.now();
       await storage.markExported(currentId.value, now).catch(() => {});
@@ -638,7 +657,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         ]),
       );
       const previousId = currentId.value;
-      const previousModel = editor.project;
+      const previousModel = editor.stamp();
       const created = storage
         ? await storage.saveProject(undefined, loaded.project, { assets })
         : undefined;
@@ -646,7 +665,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (handle) {
         await rememberDiskFile(importedId, handle, stampOfFile(file));
       }
-      if (currentId.value !== previousId || editor.project !== previousModel) {
+      if (currentId.value !== previousId || !editor.isCurrent(previousModel)) {
         channel?.post({ type: 'list-changed' });
         await drawList();
         notice(
@@ -775,10 +794,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     switching = true;
-    const before = editor.project;
+    const before = editor.stamp();
     try {
       await loadAssets(loaded.project);
-      if (editor.project !== before) {
+      if (!editor.isCurrent(before)) {
         notice(
           'Your current edits stay on the desk. Open the other Project from Projects when ready.',
         );
@@ -793,7 +812,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       currentId.value = id;
       record = loaded.record;
       editor.replaceProject(loaded.project);
-      safeProject = editor.project;
+      safeContent = editor.contentState;
       shell.setReadOnly(!editingNow);
       autosave.setEnabled(editingNow && !!storage);
       shell.redraw();
@@ -926,9 +945,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     try {
       if (id === currentId.value) {
         const edit = editor.startEdit();
-        edit.change(({ project }) => {
-          project.name = name;
-        });
+        edit.change(({ tree }) => tree.setProjectName(name));
         edit.finish();
         shell.redraw();
         await autosave.flush();
@@ -1003,6 +1020,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     editor.finishPendingEdit();
+    const expected = editor.stamp();
+    const previewId = currentId.value;
     await autosave.flush();
     if (autosave.dirty && !preview.value) {
       notice(
@@ -1012,7 +1031,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     let loaded: LoadedProject;
     try {
-      loaded = await storage.loadVersion(currentId.value, seq);
+      loaded = await storage.loadVersion(previewId, seq);
     } catch (error) {
       notice(
         error instanceof Error ? error.message : "Couldn't open that version.",
@@ -1020,10 +1039,16 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     await loadAssets(loaded.project);
+    if (!editor.isCurrent(expected) || currentId.value !== previewId) {
+      notice(
+        'Your current edits stay on the desk. Open the earlier version again when ready.',
+      );
+      return;
+    }
     preview.value = {
       seq,
       savedAt,
-      latest: preview.value?.latest ?? editor.project,
+      latest: preview.value?.latest ?? editor.snapshot(),
     };
     autosave.setEnabled(false);
     editor.replaceProject(loaded.project);
@@ -1092,13 +1117,19 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         return;
       }
       const carried = diskFile;
-      const created = await storage.saveProject(undefined, editor.project, {
-        assets: shell.images.forStorage(editor.project),
+      const captured = editor.capture();
+      const created = await storage.saveProject(undefined, captured.project, {
+        assets: shell.images.forStorage(captured.project),
       });
       channel?.post({ type: 'list-changed' });
+      if (!editor.isCurrent(captured)) {
+        await drawList();
+        notice('The copy is in Projects. Your current edits stay on the desk.');
+        return;
+      }
       await showLoaded(
         {
-          project: editor.project,
+          project: captured.project,
           migrated: false,
           record: created,
         },

@@ -158,7 +158,7 @@ const NameField = ({
 
 const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
   const { project, pageIndex } = editor.state.value;
-  const page = editor.currentPage.value;
+  const page = editor.currentPage.value.page;
   const selected = editor.selectedElements.value;
   const disabled = editor.readOnly;
   const refused = refusal.value;

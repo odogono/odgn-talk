@@ -1,4 +1,4 @@
-import { containingGroups } from './hierarchy';
+import { containingGroups } from './tree/rules';
 // One floating editor and LSP workspace per authored Script. Each workspace
 // has its owner's Host Manifest, so unrelated Pages never leak names.
 import { Compartment, EditorState } from '@codemirror/state';
@@ -160,10 +160,10 @@ export class ScriptWindows {
           if (!current) {
             return;
           }
-          this.editor.edit(({ project }) => {
+          this.editor.edit(({ project, tree }) => {
             const owner = ownerById(project, id);
             if (owner) {
-              owner.script = text;
+              tree.setScript(owner, text);
             }
           });
           // Redraw first: it sends the Manifest with any new Handlers, so

@@ -1,4 +1,4 @@
-import { findElement } from './hierarchy';
+import { findElement } from './tree/rules';
 // The Errors window: Script problems from the last Play Session, kept after
 // it ends, each linking to its authored Script and line.
 import { signal, type Signal } from '@preact/signals';

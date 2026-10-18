@@ -172,6 +172,53 @@ export const runBrowserTests = async () => {
       );
       assert(bytes.size === 1, 'asset not saved');
     });
+    await test('autosave captures one revision and follows edits made during a pending write', async () => {
+      const save = storage.saveProject.bind(storage);
+      const originalName = shell.editor.project.name;
+      let release!: () => void;
+      let entered!: () => void;
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const started = new Promise<void>(resolve => {
+        entered = resolve;
+      });
+      let first: Parameters<typeof save>[1] | undefined;
+      let writes = 0;
+      storage.saveProject = async (id, model, options) => {
+        writes++;
+        if (writes === 1) {
+          first = model;
+          entered();
+          await gate;
+        }
+        return save(id, model, options);
+      };
+      try {
+        shell.editor.edit(({ tree }) =>
+          tree.setProjectName('Captured revision'),
+        );
+        const flushing = delegate.flush();
+        await started;
+        shell.editor.edit(({ tree }) => tree.setProjectName('Newer revision'));
+        assert(
+          first?.name === 'Captured revision',
+          'Pending write retained a live Project',
+        );
+        release();
+        await flushing;
+        const loaded = await storage.loadProject(record.id);
+        assert(
+          loaded.project.name === 'Newer revision' && writes >= 2,
+          'Newer edit was marked saved by the earlier write',
+        );
+      } finally {
+        release();
+        storage.saveProject = save;
+        shell.editor.edit(({ tree }) => tree.setProjectName(originalName));
+        await delegate.flush();
+      }
+    });
     await test('wrong types and undecodable drops preserve the Project and report the reason', async () => {
       const before = JSON.stringify(shell.editor.project);
       drop(node('page'), new File(['plain text'], 'fake.png'));
@@ -249,8 +296,8 @@ export const runBrowserTests = async () => {
         storage.assetBytes = async () => {
           throw new DOMException('Closed', 'InvalidStateError');
         };
-        shell.editor.edit(({ project }) => {
-          project.name += ' edited';
+        shell.editor.edit(({ tree }) => {
+          tree.setProjectName(shell.editor.project.name + ' edited');
         });
         await delegate.flush();
         assert(!node('save-banner').hidden, 'save failure not shown');
