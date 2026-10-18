@@ -375,9 +375,13 @@ without releasing the clause held by the active Run. Shared public Hosts cover
 with exact Trace, Fuel, typed Reports, futures and inspected-state comparison
 to native Go ([#1063](https://github.com/odogono/odgn-talk/issues/1063)).
 
+Send checks its complete Fuel and allocation charge before delivery, call-id
+allocation or reply-wait registration. The selection includes the native Send
+budget regressions and a shared public Host covering refused and paid Sends,
+with and without waiting, against a separately compiled native Go binary.
+
 Known execution differences remain outside the selection:
-allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061))
-and Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)).
+allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)).
 
 Valid `wait d` and timed message waits suspend and pay their charge even when
 their mathematical deadline lies outside the Clock's years 0001–9999. Such a

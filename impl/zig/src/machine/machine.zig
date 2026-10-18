@@ -4973,6 +4973,11 @@ pub const Group = struct {
         for (args.items) |v| size += costs.size(v);
         m.fuel_extra = (size + 31) / 32;
         m.alloc_extra = size;
+        // Cover the complete instruction before any report, delivery, call id
+        // or Wait becomes observable. The run loop records this charge once.
+        const before = costs.chargeInstruction(ins.op, m);
+        if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.base == 0 and run.alloc + before.alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
         // No Owning Script on its path: `unhandled`, reported as a Host
         // Delivery's is (chapter 5), and nothing is sent.
         const dest = to orelse {

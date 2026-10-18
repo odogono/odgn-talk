@@ -1069,6 +1069,9 @@ with.
 Scripts send to each other: `send`, `send … and wait` and the computed-name
 and spread forms put the message at the back of the receiver's work, with a
 `send` record, and a waiting sender resumes with the reply or `send failed`.
+The complete instruction's Fuel and allocation must fit before it delivers,
+issues a call id or registers a reply wait. A budget fault leaves the receiver
+untouched and spends none of the failed instruction's charge.
 A Script named as a receiver is its name, and `me` with no owner is the
 Script itself. A Join starts its members where they stand and suspends once at
 its `end`: it resumes with every answer in start order, or with the first
