@@ -1348,6 +1348,9 @@ const Restoring = struct {
         d.broadcast = try r.i.int();
         d.limits = try r.override();
         d.passed_by = try r.object();
+        // Saved Deliveries are still open. Completion is process-local
+        // ownership state and does not change the save format.
+        d.completion = try machine.Delivery.Completion.create(a);
         return d;
     }
 
