@@ -70,6 +70,27 @@ undo/redo; Script changes last only for the Play Session. The
 Script-driven rendering on `/borders-test.html` (see
 [Browser test suites](#browser-test-suites)).
 
+Buttons have writable `font`, `textSize` (positive pixels) and `style`
+properties in Info and Scripts. The named styles are `rounded` (the default),
+`rectangle` (square corners and a 1 px border), `shadowed` (rectangle with a
+3 px offset shadow), and `transparent` (an invisible hit area). Borders and
+shadows use `textColor`; visible styles use `fill` for the background.
+For example, `set the style of door to "transparent"` makes a button over a
+picture clickable without drawing its fill, border, shadow or label.
+Transparent buttons show a dashed outline in Edit and keep receiving `click`,
+`pointerEnter` and `pointerLeave` in Browse and Present. Tab focuses them with
+a visible focus ring; Enter and Space activate them. Keep a descriptive
+`label`: it supplies the button's accessible name (or its Element name when
+the label is empty), including when invisible.
+
+Button typography and styles are saved in `.folio` files and browser storage.
+New buttons and older Projects without these properties use the previous
+rounded look, system font and 18 px text. Info changes participate in undo/redo;
+Script changes last only for the Play Session. The
+[`buttons` browser suite](tests/buttons.browser.ts) checks Info, history,
+invisible hit targets, keyboard input and Script-driven rendering in Browse
+and Present on `/buttons-test.html`.
+
 ## Grouping Elements
 
 Select two or more siblings and choose **Edit → Group** (⌘/Ctrl-G).

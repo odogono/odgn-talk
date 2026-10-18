@@ -286,6 +286,7 @@ List files with `rg --files tooling/creative` before opening one by name.
   [tetris.browser.ts](tests/tetris.browser.ts),
   [page-resize.browser.ts](tests/page-resize.browser.ts),
   [borders.browser.ts](tests/borders.browser.ts),
+  [buttons.browser.ts](tests/buttons.browser.ts),
   [rich-text.browser.ts](tests/rich-text.browser.ts),
   [lighthouse.browser.ts](tests/lighthouse.browser.ts).
 - First check: `bun test tooling/creative/tests/rich-text.test.ts`.

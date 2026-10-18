@@ -10,11 +10,13 @@ import {
   type StackEditor,
 } from './editing';
 import {
+  BUTTON_STYLES,
   plainTextOf,
   TEXT_ALIGNS,
   textAlignOf,
   type Element,
   type ElementKind,
+  type ButtonStyle,
   type TextAlign,
 } from './model';
 import { isSoundAsset } from './sounds';
@@ -34,7 +36,19 @@ const ALIGN_LABELS: Record<TextAlign, string> = {
   right: 'Right',
   justify: 'Justified',
 };
-const FONTS = ['sans-serif', 'serif', 'monospace', 'cursive'];
+const FONTS = [
+  'system-ui, sans-serif',
+  'sans-serif',
+  'serif',
+  'monospace',
+  'cursive',
+];
+const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
+  rounded: 'Rounded',
+  rectangle: 'Rectangle',
+  shadowed: 'Shadowed',
+  transparent: 'Transparent (invisible)',
+};
 
 /** A refused name: what the author typed, and why it was refused. */
 export type NameRefusal = {
@@ -54,6 +68,18 @@ const field = (label: string, control: ComponentChildren) => (
     {control}
   </label>
 );
+
+const fontField = (font: string, disabled: boolean) =>
+  field(
+    'Font',
+    <select data-field="font" disabled={disabled} value={font}>
+      {(FONTS.includes(font) ? FONTS : [font, ...FONTS]).map(value => (
+        <option key={value} value={value}>
+          {value}
+        </option>
+      ))}
+    </select>,
+  );
 
 const input = (
   name: string,
@@ -202,23 +228,7 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
                 value={plainTextOf(element.richText)}
               />,
             )}
-            {field(
-              'Font',
-              <select
-                data-field="font"
-                disabled={disabled}
-                value={element.font}
-              >
-                {(FONTS.includes(element.font)
-                  ? FONTS
-                  : [element.font, ...FONTS]
-                ).map(font => (
-                  <option key={font} value={font}>
-                    {font}
-                  </option>
-                ))}
-              </select>,
-            )}
+            {fontField(element.font, disabled)}
             {field(
               'Alignment (all paragraphs)',
               <select
@@ -264,6 +274,27 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
         return (
           <>
             {field('Label', input('label', element.label, disabled))}
+            {field(
+              'Style',
+              <select
+                data-field="style"
+                disabled={disabled}
+                value={element.style}
+              >
+                {BUTTON_STYLES.map(style => (
+                  <option key={style} value={style}>
+                    {BUTTON_STYLE_LABELS[style]}
+                  </option>
+                ))}
+              </select>,
+            )}
+            {fontField(element.font, disabled)}
+            {field(
+              'Size',
+              input('textSize', element.textSize, disabled, 'number', {
+                min: 1,
+              }),
+            )}
             <div className="row">
               {field('Fill', color('fill', element.fill, disabled))}
               {field('Text', color('textColor', element.textColor, disabled))}
