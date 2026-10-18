@@ -1,4 +1,4 @@
-import { operationalReports } from './operational-reports';
+import { operationalReports, operationalResult } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { functionValue } from '../src/values';
 import {
@@ -596,37 +596,29 @@ end error`);
       // Attach rejection handling before pumping the failing call.
       const failure = expectSendFailed(requested.result, 'errored');
       const options = sliced ? { fuelSlice: 1, fuelCap: 1 } : {};
-      let finished = false;
       let queued = false;
-      for (let step = 0; step < 300; step++) {
-        const copy = restore(group.save(), restoreOptions([])).group;
+      let restored = group;
+      let state = '';
+      for (let step = 0; step < 300 && state !== 'idle'; step++) {
+        restored = restore(group.save(), restoreOptions([])).group;
         const a = group.pump(clock, options);
-        const b = copy.pump(clock, options);
-        expect(b.fuelUsed).toBe(a.fuelUsed);
-        expect(b.state).toBe(a.state);
-        const view = group.inspect().scripts[0]!;
-        queued ||= view.mailbox.some(row => row.message.name === 'error');
-        if (
-          group
-            .inspect()
-            .scripts.every(
-              script => script.runs.length === 0 && script.mailbox.length === 0,
-            )
-        ) {
-          for (const g of [group, copy]) {
-            const vars = g.inspect().scripts[0]!.vars;
-            const original = vars[0]![1];
-            const caught = vars[2]![1];
-            for (const i of [1, 2]) {
-              expect(caught.index(i).get('fn').equals(original)).toBe(true);
-              expect(caught.index(i).get('args').toString()).toBe('[7]');
-            }
-          }
-          finished = true;
-          break;
+        const b = restored.pump(clock, options);
+        expect(operationalResult(b)).toEqual(operationalResult(a));
+        queued ||= group
+          .inspect()
+          .scripts[0]!.mailbox.some(row => row.message.name === 'error');
+        state = a.state;
+      }
+      expect(state).toBe('idle');
+      for (const g of [group, restored]) {
+        const vars = g.inspect().scripts[0]!.vars;
+        const original = vars[0]![1];
+        const caught = vars[2]![1];
+        for (const i of [1, 2]) {
+          expect(caught.index(i).get('fn').equals(original)).toBe(true);
+          expect(caught.index(i).get('args').toString()).toBe('[7]');
         }
       }
-      expect(finished).toBe(true);
       if (sliced) {
         expect(queued).toBe(true);
       }

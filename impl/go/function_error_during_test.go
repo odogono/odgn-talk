@@ -43,7 +43,41 @@ end error
 `
 }
 
-func checkFunctionErrorDuring(t *testing.T, g *talk.Group) {
+// startFunctionError creates the captured Function and calls it with 7, either
+// from the Host or from a foreign Script.
+func startFunctionError(t *testing.T, g *talk.Group, named, foreign bool, pump func()) *talk.Pending {
+	t.Helper()
+	s, err := g.Load(talk.LoadOptions{Name: "s", Source: functionErrorDuringSource(named)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, made, err := s.Request(nil, talk.Message{Name: "exported", Args: []talk.Value{talk.Int(11)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pump()
+	fn, failure := made.Result()
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	var pending *talk.Pending
+	if foreign {
+		caller, err := g.Load(talk.LoadOptions{Name: "caller", Source: "on go f\n f(7) and wait\nend go\n"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, pending, err = caller.Request(nil, talk.Message{Name: "go", Args: []talk.Value{fn}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else if _, pending, err = g.Call(nil, fn, []talk.Value{talk.Int(7)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	return pending
+}
+
+// checkFunctionErrorDuring returns the retained Function from the caught metadata.
+func checkFunctionErrorDuring(t *testing.T, g *talk.Group) talk.Value {
 	t.Helper()
 	vars := g.Inspect().Scripts[0].Vars
 	fn, caught := vars[0].Val, vars[2].Val
@@ -53,6 +87,7 @@ func checkFunctionErrorDuring(t *testing.T, g *talk.Group) {
 			t.Fatalf("during = %s; want {fn: %s, args: [7]}", msg, fn)
 		}
 	}
+	return caught.Index(1).Get("fn")
 }
 
 func TestFunctionErrorDuringRetainsFunctionValue(t *testing.T) {
@@ -71,47 +106,20 @@ func runFunctionErrorDuringBridgeCases(t *testing.T) []bridgeObservation {
 					o := bridgeObservation{Name: name}
 					var trace bridgeTrace
 					g := talk.New().NewGroup(talk.GroupOptions{Name: "g", Trace: &trace})
-					s, err := g.Load(talk.LoadOptions{Name: "s", Source: functionErrorDuringSource(named)})
-					if err != nil {
-						t.Fatal(err)
-					}
 					record := func(v any) { o.Pumps = append(o.Pumps, bridgeCanonical(reflect.ValueOf(v))) }
-					pump := func(opts talk.PumpOptions) {
+					pump := func(opts talk.PumpOptions) talk.GroupState {
 						r, err := g.Pump(bridgeNow, opts)
 						if err != nil {
 							t.Fatal(err)
 						}
 						record(r)
 						record(g.Inspect())
+						return r.State
 					}
-					_, made, err := s.Request(nil, talk.Message{Name: "exported", Args: []talk.Value{talk.Int(11)}})
-					if err != nil {
-						t.Fatal(err)
-					}
-					pump(talk.PumpOptions{})
-					fn, failure := made.Result()
-					if failure != nil {
-						t.Fatal(failure)
-					}
-					var pending *talk.Pending
-					if foreign {
-						caller, err := g.Load(talk.LoadOptions{Name: "caller", Source: "on go f\n f(7) and wait\nend go\n"})
-						if err != nil {
-							t.Fatal(err)
-						}
-						_, pending, err = caller.Request(nil, talk.Message{Name: "go", Args: []talk.Value{fn}})
-						if err != nil {
-							t.Fatal(err)
-						}
-					} else {
-						_, pending, err = g.Call(nil, fn, []talk.Value{talk.Int(7)}, nil)
-						if err != nil {
-							t.Fatal(err)
-						}
-					}
+					pending := startFunctionError(t, g, named, foreign, func() { pump(talk.PumpOptions{}) })
 					idle := false
 					for range 300 {
-						pump(talk.PumpOptions{FuelSlice: slice, FuelCap: slice})
+						state := pump(talk.PumpOptions{FuelSlice: slice, FuelCap: slice})
 						select {
 						case <-pending.Done():
 							v, failure := pending.Result()
@@ -119,13 +127,7 @@ func runFunctionErrorDuringBridgeCases(t *testing.T) []bridgeObservation {
 						default:
 							o.Values = append(o.Values, "open")
 						}
-						idle = true
-						for _, view := range g.Inspect().Scripts {
-							if len(view.Runs) != 0 || len(view.Mailbox) != 0 {
-								idle = false
-							}
-						}
-						if idle {
+						if idle = state == talk.Idle; idle {
 							break
 						}
 					}
@@ -137,13 +139,12 @@ func runFunctionErrorDuringBridgeCases(t *testing.T) []bridgeObservation {
 					default:
 						t.Fatal("Function future did not settle")
 					}
-					_, failure = pending.Result()
+					_, failure := pending.Result()
 					if failure == nil || failure.Code != "send failed" || failure.Data.Get("reason").String() != `"errored"` {
 						t.Fatalf("unexpected Function failure: %v", failure)
 					}
-					checkFunctionErrorDuring(t, g)
 					// The retained field must still be callable, with the captured data.
-					retained := g.Inspect().Scripts[0].Vars[2].Val.Index(1).Get("fn")
+					retained := checkFunctionErrorDuring(t, g)
 					_, again, err := g.Call(nil, retained, []talk.Value{talk.Int(7)}, nil)
 					if err != nil {
 						t.Fatal(err)
@@ -175,32 +176,12 @@ func TestFunctionErrorDuringSaveEveryBoundary(t *testing.T) {
 				core := talk.New()
 				var originalTrace, restoredTrace bridgeTrace
 				g := core.NewGroup(talk.GroupOptions{Name: "g", Trace: &originalTrace})
-				s, err := g.Load(talk.LoadOptions{Name: "s", Source: functionErrorDuringSource(named)})
-				if err != nil {
-					t.Fatal(err)
-				}
-				_, made, err := s.Request(nil, talk.Message{Name: "exported", Args: []talk.Value{talk.Int(11)}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err := g.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
-					t.Fatal(err)
-				}
-				fn, failure := made.Result()
-				if failure != nil {
-					t.Fatal(failure)
-				}
-				if foreign {
-					caller, err := g.Load(talk.LoadOptions{Name: "caller", Source: "on go f\n f(7) and wait\nend go\n"})
-					if err != nil {
+				startFunctionError(t, g, named, foreign, func() {
+					if _, err := g.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
 						t.Fatal(err)
 					}
-					if _, _, err := caller.Request(nil, talk.Message{Name: "go", Args: []talk.Value{fn}}); err != nil {
-						t.Fatal(err)
-					}
-				} else if _, _, err := g.Call(nil, fn, []talk.Value{talk.Int(7)}, nil); err != nil {
-					t.Fatal(err)
-				}
+				})
+				canonical := func(v any) any { return bridgeCanonical(reflect.ValueOf(v)) }
 				queued := false
 				for step := range 300 {
 					saved, err := g.Save()
@@ -222,8 +203,7 @@ func TestFunctionErrorDuringSaveEveryBoundary(t *testing.T) {
 						t.Fatal(err)
 					}
 					// Restore detaches Host future accounting, so compare operational Reports.
-					a.Reports, b.Reports = bridgeOperationalReports(a.Reports), bridgeOperationalReports(b.Reports)
-					canonical := func(v any) any { return bridgeCanonical(reflect.ValueOf(v)) }
+					a.Reports, b.Reports = talk.OperationalReports(a.Reports), talk.OperationalReports(b.Reports)
 					if !reflect.DeepEqual(canonical(a), canonical(b)) || !reflect.DeepEqual(canonical(g.Inspect()), canonical(copy.Inspect())) || !reflect.DeepEqual(originalTrace.lines, restoredTrace.lines) {
 						t.Fatalf("restored step %d differs\noriginal=%+v\nrestored=%+v\ntrace=%v / %v", step, a, b, originalTrace.lines, restoredTrace.lines)
 					}
@@ -231,13 +211,7 @@ func TestFunctionErrorDuringSaveEveryBoundary(t *testing.T) {
 					if len(view.Mailbox) > 0 && view.Mailbox[0].Message.Name == "error" {
 						queued = true
 					}
-					idle := true
-					for _, script := range g.Inspect().Scripts {
-						if len(script.Runs) != 0 || len(script.Mailbox) != 0 {
-							idle = false
-						}
-					}
-					if idle {
+					if a.State == talk.Idle {
 						if !queued {
 							t.Fatal("did not cover queued error metadata")
 						}
@@ -250,16 +224,4 @@ func TestFunctionErrorDuringSaveEveryBoundary(t *testing.T) {
 			})
 		}
 	}
-}
-
-func bridgeOperationalReports(reports []talk.Report) []talk.Report {
-	var out []talk.Report
-	for _, r := range reports {
-		switch r.(type) {
-		case *talk.RunStarted, *talk.RunDiscarded, *talk.RunAccounting, *talk.CausalWork:
-		default:
-			out = append(out, r)
-		}
-	}
-	return out
 }
