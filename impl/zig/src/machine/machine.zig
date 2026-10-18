@@ -3179,9 +3179,9 @@ pub const Group = struct {
     /// innermost first, on the Cleanup Budget; nothing is unwound.
     fn startCancel(g: *Group, run: *Run) !Outcome {
         run.cleanup_from = run.fuel;
-        const top = &run.frames.items[run.frames.items.len - 1];
-        // A preempted Run's place is the instruction it would run next.
-        const place = if (run.continuing) top.pc else top.pc -| 1;
+        // Preemption and parking both stop before the next instruction;
+        // other suspensions have already executed their instruction.
+        const place = cancellationPlace(run);
         var cleanups: std.ArrayList(Cleanup) = .empty;
         errdefer cleanups.deinit(g.gpa);
         // A cleanup it was preempted in ends. A catch dispatch it was
@@ -6073,12 +6073,7 @@ pub const Group = struct {
         }
         // The first Run parked behind it in its `, queued` clause becomes
         // ready, behind any `error` message.
-        if (run.clause_body) |body| for (s.live.items) |r| if (r.parked and r.clause_body.? == body and r.clause_unit == run.clause_unit) {
-            r.parked = false;
-            r.resume_with = .unparked;
-            try s.work.append(g.gpa, .{ .run = r });
-            break;
-        };
+        if (run.clause_body) |body| try g.releaseParked(s, run.clause_unit, body);
         g.destroyRun(run);
     }
 
@@ -6464,6 +6459,27 @@ pub const Group = struct {
         return false;
     }
 
+    /// Cancellation makes a parked Run ready for cleanup. The next parked
+    /// Run must wait until every unparked Run of the clause has ended.
+    fn releaseParked(g: *Group, s: *Script, library: ?*Library, body: u32) !void {
+        var first: ?*Run = null;
+        for (s.live.items) |r| if (r.clause_body == body and r.clause_unit == library) {
+            if (!r.parked) return;
+            if (first == null) first = r;
+        };
+        const r = first orelse return;
+        r.parked = false;
+        r.resume_with = .unparked;
+        try s.work.append(g.gpa, .{ .run = r });
+    }
+
+    /// A parked (or just unparked) Run has not executed its first body
+    /// instruction. Preemption likewise stops before the next instruction.
+    fn cancellationPlace(run: *const Run) u32 {
+        const pc = run.frames.items[run.frames.items.len - 1].pc;
+        return if (run.continuing or std.mem.eql(u8, run.suspended_at, "park")) pc else pc -| 1;
+    }
+
     /// `, replacing`: cancels every Run of the clause that hasn't ended.
     /// What each waits on is abandoned now, and its cleanup runs in its
     /// Script's turn (chapter 6, Cancellation and Stop).
@@ -6610,7 +6626,7 @@ pub const Group = struct {
             // The owner's own continuation is under its first dispatch;
             // each activation's under the next, the last's in the frame.
             var own_stack: []const Slot = f.stack.items;
-            var own_place: u32 = f.pc -| 1;
+            var own_place: u32 = if (i == run.frames.items.len - 1 and run.resume_with != null and run.resume_with.? == .cancelled) cancellationPlace(run) else f.pc -| 1;
             var previous: ?*const Dispatch = null;
             for (dispatches) |*c| if (c.* == .dispatch and c.dispatch.owner == i) {
                 const d = &c.dispatch;
