@@ -5047,9 +5047,9 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
         try w.key("state");
     }
     try w.ptext(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle");
-    if (mg.next()) |deadline| {
+    if (mg.nextInstant()) |at| {
         if (!positional) try w.key("nextDeadline");
-        try w.instant(.{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) });
+        try w.instant(at);
     } else if (positional) try w.nothing();
     if (!positional) try w.key("fuelUsed");
     try w.int(mg.pump_fuel);
