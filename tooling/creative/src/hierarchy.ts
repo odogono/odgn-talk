@@ -5,7 +5,8 @@ import type { Element, GroupElement } from './model';
 
 export const MAX_GROUP_ELEMENTS = 1024;
 export const MAX_GROUP_DEPTH = 32;
-// Covers a bounded geometry preflight, descendant updates and ancestor bounds.
+// Covers a bounded geometry preflight, descendant updates and ancestor bounds,
+// at 8 Fuel per node visited.
 export const GEOMETRY_FUEL = MAX_GROUP_ELEMENTS * 8;
 export const PROPERTY_FUEL = MAX_GROUP_DEPTH * 8;
 export type Box = Pick<Element, 'left' | 'top' | 'width' | 'height'>;

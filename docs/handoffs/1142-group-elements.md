@@ -4,12 +4,10 @@
 
 - **Origin:** [#1142](https://github.com/odogono/odgn-talk/issues/1142), discovered while building the [Tetris Example Project](https://github.com/odogono/odgn-talk/issues/1109).
 - **Design:** [ADR 0103](../adr/0103-folio-groups-are-nested-elements-with-page-wide-names.md), with the **Group Element** definition in the root [glossary](../../GLOSSARY.md#browser-authoring). Interview decisions Q1–Q24 are agreed; the author confirmed the complete shared understanding in Q25. The design interview is complete.
-- **Required base:** currently uncommitted design and implementation on branch `docs/grill-issue-1142`, based on `51fd9dd4bdc22d5451d640ba0afbf4a17ba6d4e1`, in `/Users/alex/.t3/worktrees/odgn-talk/t3-c9069a84`. Before handing this work to another agent, commit it or explicitly carry its changed files. The working tree contains the implementation described below.
-- **Implemented in:** this uncommitted working tree implements the agreed model, format-2 persistence, scoped editor actions, rendering/input, Play collections and message parents, recursive clone/delete, limits and operation preflight. Tetris uses groups for its window frame and Game Over alert. The Folio guide describes current behavior.
-- **Remaining work:** review, commit and merge the working-tree change. No known feature work remains within the agreed first-version scope; the explicitly deferred features below remain deferred.
+- **Required base:** commit `9d22af16` on branch `docs/grill-issue-1142`, based on `51fd9dd4`.
+- **Implemented in:** `9d22af16` implements the agreed model, format-2 persistence, scoped editor actions, rendering/input, Play collections and message parents, recursive clone/delete, limits and operation preflight. Tetris uses groups for its window frame and Game Over alert. The Folio guide describes current behavior.
+- **Remaining work:** review and merge `9d22af16`. No known feature work remains within the agreed first-version scope; the explicitly deferred features below remain deferred.
 - **Approval still needed:** none for this design delivery. No new Conformance Corpus expectations or first-blessing requests are introduced.
-
-The uncommitted design files are `GLOSSARY.md`, `spec/appendix-a-glossary.md`, `docs/adr/README.md`, `docs/adr/0084-creative-tool-scripts-reach-elements-through-load-time-names-properties-and-three-grants.md`, `docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md`, `docs/adr/0103-folio-groups-are-nested-elements-with-page-wide-names.md`, `docs/handoffs/1142-group-elements.md`, `tooling/creative/NAVIGATION.md` and `tooling/creative/README.md`. Implementation and test changes are under `tooling/creative/src/`, `tooling/creative/static/style.css` and `tooling/creative/tests/`, with `changelog/unreleased/folio-group-elements.md`. Reconcile this required-base block with the eventual specification commit before handing implementation to another agent.
 
 ## Delivery boundary
 
@@ -33,7 +31,7 @@ Initially, group creation and restructuring are editor actions. Existing runtime
 - **Bounds and failure atomicity:** allow exactly 1,024 nodes in an outer group and 32 group levels, and reject the next node/level consistently. Independent Page Elements do not impose a Page-wide count ceiling. Preflight nested clone growth, invalid coordinates and Fuel before effects; subsequent statements see the complete cloned graph. Include copied source/content size when accounting for clone work, rather than charging only the number of nodes. Collection reads must fit their fixed declared costs.
 - **Integration:** exercise Browse, Present, Edit Message Box, Page navigation, Stop, Manifests, Recipes, Script windows and miniatures. Use the reported Tetris alert and frame as concrete authoring and scripted movement/visibility scenarios. Reconcile the guide and existing ADR extension notices when implementation lands.
 
-Run focused model, editing/history, Project-file/storage, Play, Script/Manifest and Message Box tests, followed by relevant browser suites using [Folio's task map](../../tooling/creative/NAVIGATION.md). Verification in this working tree:
+Run focused model, editing/history, Project-file/storage, Play, Script/Manifest and Message Box tests, followed by relevant browser suites using [Folio's task map](../../tooling/creative/NAVIGATION.md). Verification at `9d22af16`:
 
 - `bun run --cwd tooling/creative typecheck` passed.
 - `bun test tooling/creative/tests tooling/editor/tests` passed: 303 tests, including 16 group integration tests for persistence, limits, Fuel refusal, geometry, identity and runtime behavior.
