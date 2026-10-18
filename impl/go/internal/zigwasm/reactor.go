@@ -107,6 +107,11 @@ type Reactor struct {
 	inline *inlineIO
 	buffer api.Function
 	send   api.Function
+	// The input buffer talk_buffer last reserved, which lasts until the
+	// next talk_buffer, so frames that fit reuse it without that export.
+	input, reserved uint32
+	// Each export takes and returns one value here, without allocating.
+	stack [1]uint64
 }
 
 func (r *Reactor) Close(ctx context.Context) error {
@@ -123,33 +128,38 @@ func (r *Reactor) MemoryBytes() uint32 {
 // maxFrame bounds every transport frame and inline event.
 const maxFrame = 64 << 20
 
+// minReserve is the smallest input buffer reserved, enough for most frames.
+const minReserve = 4 << 10
+
 func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(frame) == 0 || len(frame) > maxFrame {
 		return nil, fmt.Errorf("frame length %d outside 1..64 MiB", len(frame))
 	}
-	allocated, err := r.buffer.Call(ctx, uint64(len(frame)))
-	if err != nil {
-		return nil, err
+	if uint32(len(frame)) > r.reserved {
+		size := max(len(frame), minReserve)
+		r.stack[0] = uint64(size)
+		if err := r.buffer.CallWithStack(ctx, r.stack[:]); err != nil {
+			return nil, err
+		}
+		if r.stack[0] == 0 {
+			return nil, fmt.Errorf("talk_buffer refused frame")
+		}
+		r.input, r.reserved = uint32(r.stack[0]), uint32(size)
 	}
-	if len(allocated) != 1 || allocated[0] == 0 {
-		return nil, fmt.Errorf("talk_buffer refused frame")
-	}
-	if !r.module.Memory().Write(uint32(allocated[0]), frame) {
+	if !r.module.Memory().Write(r.input, frame) {
 		return nil, fmt.Errorf("input buffer outside guest memory")
 	}
-	result, err := r.send.Call(ctx, uint64(len(frame)))
+	r.stack[0] = uint64(len(frame))
+	err := r.send.CallWithStack(ctx, r.stack[:])
 	if r.inline != nil && r.inline.err != nil {
 		return nil, r.inline.err
 	}
 	if err != nil {
 		return nil, err
 	}
-	if len(result) != 1 {
-		return nil, fmt.Errorf("talk_send returned %d values", len(result))
-	}
-	reply, ok := r.module.Memory().Read(uint32(result[0]>>32), uint32(result[0]))
+	reply, ok := r.module.Memory().Read(uint32(r.stack[0]>>32), uint32(r.stack[0]))
 	if !ok {
 		return nil, fmt.Errorf("reply outside guest memory")
 	}

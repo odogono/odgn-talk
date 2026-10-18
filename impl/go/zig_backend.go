@@ -314,6 +314,11 @@ func zigFailure(failure zigReply) error {
 // A rejected worker never starts a second conversation. While paused, ask the
 // transport to record the refusal in the current crossing's Trace order.
 func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
+	return b.beginWorkerWith(m, func() map[string]any { return fields })
+}
+
+// beginWorkerWith builds the refusal's fields only when it is refused.
+func (b *zigGroup) beginWorkerWith(m string, makeFields func() map[string]any) error {
 	err := b.group.beginWorker()
 	if err == nil {
 		return nil
@@ -324,6 +329,7 @@ func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
 	if active {
 		// The export may finish before this queued refusal is serviced.
 		// It must still never turn into a second guest worker.
+		fields := makeFields()
 		fields["refuseWorker"] = true
 		if _, frameErr := b.send(m, fields); frameErr != nil {
 			err = frameErr
@@ -510,8 +516,7 @@ func (b *zigGroup) queued() bool {
 }
 
 func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) {
-	fields := map[string]any{"now": now.Round(0).UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano), "fuelSlice": options.FuelSlice, "fuelCap": options.FuelCap}
-	if err := b.beginWorker("pump", fields); err != nil {
+	if err := b.beginWorkerWith("pump", func() map[string]any { return zigPumpFields(now, options) }); err != nil {
 		return PumpResult{}, err
 	}
 	defer b.group.endWorker()
@@ -536,7 +541,7 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 		return b.pumpBinary(now, options)
 	}
 	var result PumpResult
-	_, err := b.exchange("pump", fields, func(reply zigReply) error {
+	_, err := b.exchange("pump", zigPumpFields(now, options), func(reply zigReply) error {
 		var err error
 		result, err = b.pumpReceipt(reply)
 		clear(b.restoredCalls)

@@ -167,7 +167,16 @@ func (n Number) coefficientInt() *big.Int {
 	return c
 }
 func (n Number) Exponent() int { return n.exponent }
-func (n Number) Sign() int     { return n.coefficientInt().Sign() }
+
+// SmallInteger returns a whole number held as an int64 coefficient, without
+// formatting it; ok is false for any other Number.
+func (n Number) SmallInteger() (i int64, ok bool) {
+	if n.exponent != 0 || !n.hasSmallCoefficient() {
+		return 0, false
+	}
+	return n.smallCoefficient, true
+}
+func (n Number) Sign() int { return n.coefficientInt().Sign() }
 func (n Number) Negate() Number {
 	var negated Number
 	if n.hasSmallCoefficient() && n.smallCoefficient != math.MinInt64 {

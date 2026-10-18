@@ -179,7 +179,7 @@ func (b *zigGroup) pumpCombined(what string, now time.Time, o PumpOptions, admit
 	if !b.reg.binary {
 		return "", nil, PumpResult{}, backendUnsupported(what)
 	}
-	if err := b.beginWorker("pump", zigPumpFields(now, o)); err != nil {
+	if err := b.beginWorkerWith("pump", func() map[string]any { return zigPumpFields(now, o) }); err != nil {
 		return "", nil, PumpResult{}, err
 	}
 	notify := false
