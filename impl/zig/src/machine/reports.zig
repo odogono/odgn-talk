@@ -210,6 +210,9 @@ pub const Reports = struct {
     }
 
     pub fn add(r: *Reports, report: Report) !void {
+        // A one-Run Pump makes four: its Run's start, end and accounting,
+        // and its causal work. Growing to them one by one copies each.
+        if (r.list.capacity == 0) try r.list.ensureTotalCapacityPrecise(r.arena.allocator(), 4);
         try r.list.append(r.arena.allocator(), report);
     }
 };

@@ -594,8 +594,8 @@ const Saving = struct {
             },
             .deadline => |d| {
                 try s.o.byte(4);
-                try s.o.signed(d.at);
-                try s.o.signed(d.us);
+                try s.o.signed(d.deadline.at);
+                try s.o.signed(d.deadline.us);
             },
         };
     }
@@ -1511,7 +1511,12 @@ const Restoring = struct {
                     try r.replacements.append(a, x);
                     break :blk .{ .replacement = x };
                 },
-                4 => .{ .deadline = .{ .at = try deadline(&r.i), .us = try duration(&r.i) } },
+                4 => blk: {
+                    const d: machine.Deadline = .{ .at = try deadline(&r.i), .us = try duration(&r.i) };
+                    const box = try a.create(machine.DeadlineBox);
+                    box.* = .{ .deadline = d };
+                    break :blk .{ .deadline = box };
+                },
                 else => return error.InvalidSave,
             };
             out.appendAssumeCapacity(slot);

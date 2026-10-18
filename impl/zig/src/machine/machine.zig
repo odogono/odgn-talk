@@ -44,6 +44,10 @@ const Value = model.Value;
 /// A Timeout Block's mathematical deadline and duration, in microseconds.
 pub const Deadline = struct { at: DeadlineTicks, us: DeadlineTicks };
 
+/// A Timeout Block's deadline on the operand stack, shared by reference:
+/// unboxed, its wide Ticks would make every Slot ten times the size.
+pub const DeadlineBox = struct { references: usize = 1, deadline: Deadline };
+
 /// Mathematical wait deadlines, wide enough for every 34-digit duration.
 pub const DeadlineTicks = wait_table.Ticks;
 
@@ -53,7 +57,7 @@ pub const Slot = union(enum) {
     reader: *binary.Reader,
     replacement: *Replacement,
     /// A Timeout Block's deadline, below the block's body.
-    deadline: Deadline,
+    deadline: *DeadlineBox,
 
     pub fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
@@ -79,7 +83,10 @@ pub const Slot = union(enum) {
                 r.pieces.deinit(gpa);
                 gpa.destroy(r);
             },
-            .deadline => {},
+            .deadline => |d| {
+                d.references -= 1;
+                if (d.references == 0) gpa.destroy(d);
+            },
         }
     }
 };
@@ -8581,7 +8588,12 @@ pub const Group = struct {
                 const own: Deadline = .{ .at = micros(g.clock) + ns, .us = ns };
                 // An enclosing block's deadline that is no later stays.
                 const deadline = if (blockDeadline(frame)) |outer| (if (outer.at <= own.at) outer else own) else own;
-                try frame.stack.append(gpa, .{ .deadline = deadline });
+                const box = try gpa.create(DeadlineBox);
+                box.* = .{ .deadline = deadline };
+                frame.stack.append(gpa, .{ .deadline = box }) catch |e| {
+                    gpa.destroy(box);
+                    return e;
+                };
             },
             .timeout_end => frame.stack.pop().?.release(gpa),
             .join_start => {
@@ -10503,7 +10515,10 @@ fn retainSlot(slot: Slot) Slot {
             r.references += 1;
             break :blk .{ .replacement = r };
         },
-        .deadline => slot,
+        .deadline => |d| blk: {
+            d.references += 1;
+            break :blk .{ .deadline = d };
+        },
     };
 }
 
@@ -10809,7 +10824,7 @@ fn blockDeadline(frame: *const Frame) ?Deadline {
     var i = frame.stack.items.len;
     while (i > 0) {
         i -= 1;
-        if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline;
+        if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline.deadline;
     }
     return null;
 }

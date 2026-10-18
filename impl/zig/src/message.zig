@@ -5043,9 +5043,9 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
     }
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
-    // A one-Run Pump's reply is about 250 bytes; growing to it costs more
+    // A one-Run Pump's reply is about 170 bytes; growing to it costs more
     // than the bytes.
-    try w.out.ensureTotalCapacity(s.gpa, 512);
+    try w.out.ensureTotalCapacityPrecise(s.gpa, 256);
     if (!positional) {
         try w.begin(&.{}, false);
         try w.key("state");
@@ -5133,7 +5133,7 @@ fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, 
     const positional = b.layout == .fields;
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
-    try w.out.ensureTotalCapacity(s.gpa, 64 + if (fin.ok) |ok| ok.len else 0);
+    try w.out.ensureTotalCapacityPrecise(s.gpa, 64 + if (fin.ok) |ok| ok.len else 0);
     try w.header(b.layout);
     if (positional) try w.byte(@backingInt(rp.Message.completion));
     try w.begin(rp.Message.completion.fields(), positional);
@@ -5526,10 +5526,10 @@ fn sendExport(n: usize) callconv(.c) u64 {
         protocolError(s.gpa, 0, "no frame of that length")
     else
         handle(s, in_buffer[0..n]);
-    const kept = export_allocator.dupe(u8, reply) catch return 0;
-    freeReply(s.gpa, reply);
-    export_allocator.free(reply_buffer);
-    reply_buffer = kept;
+    // The Session allocates with export_allocator, so its reply is kept
+    // as is until the next export, not copied.
+    freeReply(export_allocator, reply_buffer);
+    reply_buffer = reply;
     return (@as(u64, @intCast(@intFromPtr(reply_buffer.ptr))) << 32) | @as(u64, @intCast(reply_buffer.len));
 }
 
@@ -5640,6 +5640,8 @@ fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
     defer freeReply(s.gpa, observed);
     var incoming = io(observed) orelse return;
     while (true) {
+        // Most rounds are idle polls, which the Host answers `null`.
+        if (std.mem.eql(u8, incoming, "null")) return;
         const parsed = std.json.parseFromSlice(Json, s.gpa, incoming, .{ .allocate = .alloc_always, .parse_numbers = false, .max_value_len = max_frame }) catch @trap();
         defer parsed.deinit();
         if (parsed.value == .null) return;
@@ -5663,23 +5665,44 @@ var inline_buffer: std.ArrayList(u8) = .empty;
 fn wasiInline(event: []const u8) ?[]const u8 {
     if (builtin.target.os.tag != .wasi) return null;
     const wasi = std.os.wasi;
+    // Each WASI call crosses into the Host, so the header and event go in
+    // one gathered write, and the reply usually arrives in one read.
     var header: [4]u8 = undefined;
     std.mem.writeInt(u32, &header, @intCast(event.len), .big);
-    for ([_][]const u8{ &header, event }) |part| {
-        var at: usize = 0;
-        while (at < part.len) {
-            const vec = [_]wasi.ciovec_t{.{ .base = part[at..].ptr, .len = part.len - at }};
-            var n: usize = 0;
-            if (wasi.fd_write(1, &vec, 1, &n) != .SUCCESS or n == 0) @trap();
-            at += n;
+    var parts = [_]wasi.ciovec_t{ .{ .base = &header, .len = header.len }, .{ .base = event.ptr, .len = event.len } };
+    var first: usize = 0;
+    var skipped: usize = 0;
+    while (first < parts.len) {
+        var n: usize = 0;
+        if (wasi.fd_write(1, parts[first..].ptr, parts.len - first, &n) != .SUCCESS or n == 0) @trap();
+        skipped += n;
+        while (first < parts.len and skipped >= parts[first].len) {
+            skipped -= parts[first].len;
+            first += 1;
+        }
+        if (first < parts.len) {
+            parts[first].base += skipped;
+            parts[first].len -= skipped;
+            skipped = 0;
         }
     }
-    if (!wasiRead(&header)) @trap();
-    const size = std.mem.readInt(u32, &header, .big);
-    if (size > max_frame) @trap();
-    inline_buffer.resize(export_allocator, size) catch @trap();
-    if (!wasiRead(inline_buffer.items)) @trap();
-    return inline_buffer.items;
+    // The Host writes nothing but this reply until the next event, so a
+    // read never takes bytes past it.
+    inline_buffer.resize(export_allocator, @max(inline_buffer.capacity, 256)) catch @trap();
+    var got: usize = 0;
+    while (got < 4) got += wasiReadSome(inline_buffer.items[got..]) orelse @trap();
+    const size = std.mem.readInt(u32, inline_buffer.items[0..4], .big);
+    if (size > max_frame or got > 4 + size) @trap();
+    inline_buffer.resize(export_allocator, 4 + size) catch @trap();
+    if (!wasiRead(inline_buffer.items[got..])) @trap();
+    return inline_buffer.items[4..];
+}
+fn wasiReadSome(bytes: []u8) ?usize {
+    if (builtin.target.os.tag != .wasi) return null;
+    const vec = [_]std.os.wasi.iovec_t{.{ .base = bytes.ptr, .len = bytes.len }};
+    var n: usize = 0;
+    if (std.os.wasi.fd_read(0, &vec, 1, &n) != .SUCCESS or n == 0) return null;
+    return n;
 }
 fn wasiRead(bytes: []u8) bool {
     if (builtin.target.os.tag != .wasi) return false;
