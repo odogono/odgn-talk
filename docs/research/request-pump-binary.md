@@ -114,8 +114,10 @@ Spec generation, repository checks, formatting and documentation links pass.
 `impl/go/zig-request-pump-bench.sh`, run by the `go-zig-bench` workflow,
 measures five backends in one job. It runs native `BackendRequest` at
 `ff543e29`, the commit before the experiment. It also runs native, Zig JSON,
-Zig map and Zig fields at the head. Each is ten interleaved rounds of 2,000
-iterations. Medians in µs/op, with Zig as a multiple of native in the same job:
+Zig map and Zig fields at the head. The historical runs below used ten
+interleaved rounds of 2,000 iterations; the [current measurement protocol](#measurement-protocol-1278)
+uses longer samples and paired ratios. Medians in µs/op, with Zig as a multiple
+of native in the same job:
 
 | Run | Platform | Native Request | Fields Request | Map Request | Native combined | Fields combined | Map combined |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -223,6 +225,45 @@ codegen, paid:
 
 On Apple M5 the guest went from 7.6 to 4.6 µs per Request, and the Request from
 3.39× to 2.40× native.
+
+## Measurement protocol (#1278)
+
+`impl/go/zig-request-pump-bench.sh` now defaults to ten interleaved rounds of
+20,000 iterations per sample. `COUNT` and `ITERATIONS` override these settings
+for exploration; fixed iteration counts keep the work equal across backends.
+`env.txt` records both settings along with the head, base and guest artifact.
+The longer samples amortize scheduler and GC interruptions over ten times as
+much work as the historical runs. They do not remove runner-machine differences.
+
+Use `paired.txt` to judge ratios: for each benchmark, divide each Zig round's
+`ns/op` by the native round's `ns/op`, then take the median of those ratios.
+These are ratios of each sample's mean operation time, not its `p50-ns`
+latency. The report includes the pair count and min/max ratio, native/base
+Request, and binary/JSON Request comparisons. Combined Request compares with
+JSON's separate Request, which does the same work. Function-call timings are
+recorded without a gate. Pairing follows chronological sample order in the raw
+files; missing samples, unequal round counts or unequal iteration counts fail
+the report. `comparison.txt` and `regression.txt` retain benchstat's independent
+sample comparisons for context.
+
+The archived macOS `1267-final-a` and `1267-final-b` fields Request reports
+reproduce paired medians of 2.684× and 2.707×, versus ratios of medians of 3.43×
+and 2.74×. Recompute any archived run without rerunning benchmarks:
+
+```sh
+go -C impl/go run ./cmd/request-pump-report ../../bench/results/go-zig-adapter/1267-final-a/macos-15
+```
+
+For an acceptance claim near a limit, require two consecutive full workflow
+runs at the same commit, base and artifact with the default settings. Every
+required platform must meet the limit in both jobs, using the paired median;
+do not pool platforms, average jobs, or discard a failing job. A split result
+is inconclusive and calls for more investigation. This applies to the ≤3×
+native goal and the amended ≤0.75× JSON limit; keep the existing benchstat
+native/base no-regression check in both runs. Pairing reduces within-job drift;
+repeating jobs tests variation between runner machines. The report remains
+measurement evidence, with acceptance assessed across jobs rather than an
+automatic pass/fail from one sample set.
 
 ## Remaining implementation
 
