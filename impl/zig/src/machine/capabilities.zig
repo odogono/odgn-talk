@@ -730,6 +730,8 @@ pub const Call = struct {
     abandoned: std.atomic.Value(bool) = .init(false),
     /// The resuming Run has consumed its queued settlement.
     settlement_consumed: bool = false,
+    /// Core-only diagnostic state; never exported to Hosts or saved.
+    abandon_reason: ?@import("waits.zig").AbandonReason = null,
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {

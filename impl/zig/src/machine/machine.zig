@@ -447,11 +447,6 @@ pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Val
 
 /// A suspended Run's wait, with its deadline in microseconds: a suspending
 /// Capability call or a `wait`.
-/// Marks a Capability call whose wait ends without its answer abandoned.
-fn abandonCall(p: *const Pending) void {
-    if (p.call) |c| c.abandoned.store(true, .release);
-}
-
 pub const Pending = struct {
     /// A `send … and wait`'s call id; a Capability call's is its Call's.
     id: []const u8 = "",
@@ -1490,20 +1485,10 @@ pub const Group = struct {
     clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 },
     /// No lower bound until the first Pump; Restore supplies its saved bound.
     observed_clock: ?model.dates.Instant = null,
-    /// The Wait table: the waits with deadlines, and how many have been set.
+    /// The Wait table: pending Waits, suspending Calls and their lifecycle.
     waits: wait_table.Waits = .{},
-    /// Suspending calls that may still be waited on or settled.
-    calls: std.ArrayList(*capabilities.Call) = .empty,
-    /// Suspending calls no Run can resume, moved out of `calls` at the end
-    /// of a Pump so later exchanges don't scan them. The Host may still
-    /// answer them, which is ignored, so they stay until the Group ends.
-    retired_calls: std.ArrayList(*capabilities.Call) = .empty,
-    /// Every suspending call by id, live or retired.
-    call_index: std.StringHashMapUnmanaged(*capabilities.Call) = .empty,
     charge_counter: u64 = 0,
     charge_requests: std.ArrayList(*capabilities.ChargeRequest) = .empty,
-    /// Issued eligibility, compacted into consecutive per-Run call ranges.
-    issued_calls: @import("issued_calls.zig").IssuedCalls = .{},
     /// The call ids of `send … and wait`, which waits and records name.
     ids: std.ArrayList([]u8) = .empty,
     /// The Host Objects the Group has handles for, in the order made.
@@ -1544,8 +1529,6 @@ pub const Group = struct {
     /// Its queued controls must follow that callback's record, not land
     /// at the start of the re-made instruction.
     answering_crossing: bool = false,
-    /// A suspending Start kept alive across the transport pause.
-    starting_call: ?*capabilities.Call = null,
     /// A transport release callback must be acknowledged before more Host
     /// callbacks or Script instructions run. Native hooks leave this false.
     release_pause: bool = false,
@@ -1652,7 +1635,6 @@ pub const Group = struct {
             g.gpa.destroy(q);
         }
         g.charge_requests.deinit(g.gpa);
-        g.issued_calls.deinit(g.gpa);
         for (g.ids.items) |id| g.gpa.free(id);
         g.ids.deinit(g.gpa);
         for (g.scripts.items) |s| g.destroyScript(s);
@@ -1660,14 +1642,6 @@ pub const Group = struct {
         // A live Run removed its own wait; any left belongs to none.
         for (g.waits.all()) |p| g.destroyPending(p);
         g.waits.deinit(g.gpa);
-        g.call_index.deinit(g.gpa);
-        for ([_][]*capabilities.Call{ g.calls.items, g.retired_calls.items }) |list| for (list) |c| {
-            g.gpa.free(c.id);
-            releaseAll(c.args, g.gpa);
-            g.gpa.destroy(c);
-        };
-        g.calls.deinit(g.gpa);
-        g.retired_calls.deinit(g.gpa);
         // An error raised as an allocation was refused, never taken.
         if (g.pending_error) |e| e.release();
         var it = g.results.valueIterator();
@@ -2989,7 +2963,7 @@ pub const Group = struct {
                 return;
             }
             // Its rollback first, which may defer while draining.
-            try g.cleanupLifecycle(r);
+            try g.cleanupLifecycle(r, .rewound);
             // Preempted or parked: it has no Stretch to end.
             _ = s.live.orderedRemove(i);
             var k: usize = 0;
@@ -3033,7 +3007,7 @@ pub const Group = struct {
         // A successful Start is pending before controls land. Cancel it
         // before finally runs, retaining its abandonment record exactly once.
         if (g.waits.takeRun(run)) |p| {
-            abandonCall(p);
+            g.waits.abandonWait(p, .cancelled);
             if (p.call) |c| try run.abandoned.append(g.gpa, c.id);
             g.destroyPending(p);
         }
@@ -3163,12 +3137,12 @@ pub const Group = struct {
     /// Script's turn, where a Run already in the queue keeps its place.
     fn cancel(g: *Group, s: *Script, r: *Run) !void {
         if (r.resume_with) |w| if (w == .cancelled) return;
-        abandonReadyCalls(r);
+        g.waits.abandonReady(r, .cancelled);
         // Its rollback first, which may defer while draining: nothing else
         // changes until it completes.
         if (r.continuing and r.participant != null) {
             if (r.cleanup == null) r.cleanup = .{ .outcome = .stopped, .participating_only = true };
-            try g.cleanupLifecycle(r);
+            try g.cleanupLifecycle(r, .cancelled);
         }
         if (r.resume_with) |w| g.releaseResume(w);
         const queued = r.resume_with != null or r.continuing;
@@ -3179,7 +3153,7 @@ pub const Group = struct {
             r.segments += 1;
         }
         if (g.waits.takeRun(r)) |p| {
-            abandonCall(p);
+            g.waits.abandonWait(p, .cancelled);
             const id = if (p.call) |c| c.id else p.id;
             if (id.len > 0) try r.abandoned.append(g.gpa, id);
             g.destroyPending(p);
@@ -3516,36 +3490,14 @@ pub const Group = struct {
     }
 
     pub fn destroyPending(g: *Group, p: *Pending) void {
-        if (p.event) |e| g.releaseEvent(e);
-        g.gpa.destroy(p);
-    }
-
-    pub fn releaseEvent(g: *Group, e: *EventWait) void {
-        g.releaseBranches(e.branches);
-        g.gpa.destroy(e);
-    }
-
-    fn releaseBranches(g: *Group, branches: []EventBranch) void {
-        g.releaseHeld(branches);
-        g.gpa.free(branches);
-    }
-
-    /// What each branch holds, without the branches themselves.
-    pub fn releaseHeld(g: *Group, branches: []const EventBranch) void {
-        for (branches) |b| switch (b) {
-            .when => |x| {
-                if (x.from) |v| v.release();
-                releaseAll(x.captures, g.gpa);
-            },
-            .after => {},
-        };
+        wait_table.destroy(g.gpa, p);
     }
 
     pub fn destroyRun(g: *Group, run: *Run) void {
         if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
         if (run.returned_prop) |r| g.releasePropResult(r);
         if (g.waits.takeRun(run)) |p| {
-            abandonCall(p);
+            g.waits.abandonWait(p, .run_destroyed);
             g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
@@ -3669,49 +3621,36 @@ pub const Group = struct {
         return g.pumpWith(clock, 0, 0);
     }
 
-    /// Records a new suspending call.
-    pub fn addCall(g: *Group, c: *capabilities.Call) Allocator.Error!void {
-        try g.calls.ensureUnusedCapacity(g.gpa, 1);
-        try g.call_index.put(g.gpa, c.id, c);
-        g.calls.appendAssumeCapacity(c);
-    }
-
-    /// The suspending call with this id, live or retired.
+    /// The suspending Call with this id, live or retired.
     pub fn callById(g: *const Group, id: []const u8) ?*capabilities.Call {
-        return g.call_index.get(id);
+        return g.waits.callById(id);
     }
 
-    /// Moves calls no Run can resume out of `calls`, releasing their
-    /// arguments, which only the answer's check and a save use (#1101).
-    fn retireCalls(g: *Group) void {
-        var kept: usize = 0;
-        for (g.calls.items) |c| {
-            const done = (c.settlement_consumed or c.abandoned.load(.acquire)) and g.starting_call != c and !g.callAwaited(c);
-            // Without room to move it, it stays and is retried next Pump.
-            if (done) if (g.retired_calls.append(g.gpa, c)) |_| {
-                releaseAll(c.args, g.gpa);
-                c.args = &.{};
-                continue;
-            } else |_| {};
-            g.calls.items[kept] = c;
-            kept += 1;
+    /// Traverses live Runs without allocating a second list. The Wait table
+    /// uses this same view for retirement and save selection.
+    pub fn liveRuns(g: *const Group) LiveRuns {
+        return .{ .scripts = g.scripts.items };
+    }
+
+    pub const LiveRuns = struct {
+        scripts: []const *Script,
+        script: usize = 0,
+        run: usize = 0,
+
+        pub fn next(it: *LiveRuns) ?*Run {
+            while (it.script < it.scripts.len) {
+                const runs = it.scripts[it.script].live.items;
+                if (it.run < runs.len) {
+                    const r = runs[it.run];
+                    it.run += 1;
+                    return r;
+                }
+                it.script += 1;
+                it.run = 0;
+            }
+            return null;
         }
-        g.calls.shrinkRetainingCapacity(kept);
-    }
-
-    /// Whether a Run or a deadline still refers to c.
-    fn callAwaited(g: *const Group, c: *const capabilities.Call) bool {
-        for (g.waits.all()) |p| if (p.call == c) return true;
-        for (g.scripts.items) |s| for (s.live.items) |r| {
-            if (r.waiting) |p| if (p.call == c) return true;
-            if (r.waited.call == c) return true;
-            if (r.join) |j| for (j.members.items) |m| {
-                if (m.waited.call == c) return true;
-                if (m.pending) |p| if (p.call == c) return true;
-            };
-        };
-        return false;
-    }
+    };
 
     /// A Pump with a Fuel Slice per Script and a Fuel cap for the Group, 0
     /// for none (chapter 5, Fuel Slices).
@@ -3725,7 +3664,7 @@ pub const Group = struct {
         g.observed_clock = clock;
         g.pumping = true;
         defer g.pumping = false;
-        defer g.retireCalls();
+        defer g.waits.retireCalls(g.gpa, g.liveRuns());
         g.rewound = false;
         g.pump_finishing = false;
         g.flushChargeRefusals();
@@ -3796,23 +3735,11 @@ pub const Group = struct {
         try g.inputs.append(g.gpa, input);
     }
 
-    fn registerCall(g: *Group, id: []const u8, eligible: bool) !void {
-        g.input_lock.lock();
-        defer g.input_lock.unlock();
-        try g.issued_calls.put(g.gpa, id, eligible);
-    }
-
-    fn unissueCall(g: *Group, id: []const u8) void {
-        g.input_lock.lock();
-        defer g.input_lock.unlock();
-        g.issued_calls.removeLast(g.gpa, id);
-    }
-
     pub fn requestCharge(g: *Group, id: []const u8, fuel: i64) !*capabilities.ChargeRequest {
         g.input_lock.lock();
         defer g.input_lock.unlock();
         const valid_amount = fuel >= 0 and fuel <= 9_007_199_254_740_991;
-        const eligible = g.issued_calls.get(id) orelse {
+        const eligible = g.waits.issuedEligibilityLocked(id) orelse {
             g.refuseChargeLocked(id, fuel, valid_amount, "unknown call");
             return error.UnknownCall;
         };
@@ -3893,7 +3820,7 @@ pub const Group = struct {
         }
         if (q.fault_run) |ptr| {
             const run: *Run = @ptrCast(@alignCast(ptr));
-            try g.cleanupLifecycle(run);
+            try g.cleanupLifecycle(run, .charge_refused);
             const s = run.script;
             for (s.live.items, 0..) |r, i| if (r == run) {
                 _ = s.live.orderedRemove(i);
@@ -4073,7 +4000,7 @@ pub const Group = struct {
                 for (r.settled.items) |x| {
                     if (std.mem.eql(u8, x, id)) break;
                 } else if (g.waits.call(id)) |p| {
-                    abandonCall(p);
+                    g.waits.abandonWait(p, .restore_lost);
                     try g.ready(p, .lost);
                 }
             }
@@ -4103,7 +4030,7 @@ pub const Group = struct {
         while (!g.rewound) {
             const p = g.waits.due(now) orelse break;
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
-            abandonCall(p);
+            g.waits.abandonWait(p, .timeout);
             try g.ready(p, with);
         }
         g.turn_at = 0;
@@ -4263,44 +4190,8 @@ pub const Group = struct {
     /// A settled wait: it leaves the Wait table, and its Run becomes ready,
     /// at the back of its Script's work.
     pub fn ready(g: *Group, p: *Pending, with: Resume) !void {
-        g.waits.take(p);
-        const run = p.run;
-        if (p.member) |index| {
-            // A Join Member: the Run is ready when every member has
-            // answered, or when the first fails.
-            defer g.destroyPending(p);
-            const join = run.join.?;
-            const member = &join.members.items[index];
-            member.with = with;
-            const failed = switch (with) {
-                .answer, .reply => false,
-                else => true,
-            };
-            const waiting_at_end = std.mem.eql(u8, run.suspended_at, "join-end") and run.resume_with == null;
-            if (!waiting_at_end) return;
-            if (failed) {
-                run.resume_with = .{ .join_failed = index };
-                // The other members stop waiting now; the Run abandons them
-                // when it resumes.
-                for (join.members.items) |*x| if (x.pending) |w| {
-                    g.waits.take(w);
-                    abandonCall(w);
-                    g.destroyPending(w);
-                    x.cut = true;
-                };
-            } else {
-                for (join.members.items) |x| if (x.with == null) return;
-                run.resume_with = .joined;
-            }
-            // The Join's Timeout Block no longer bounds it.
-            if (g.waits.takeRun(run)) |w| g.destroyPending(w);
-            try run.script.work.append(g.gpa, .{ .run = run });
-            return;
-        }
-        run.resume_with = with;
-        defer g.destroyPending(p);
-        run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms };
-        try run.script.work.append(g.gpa, .{ .run = run });
+        const settled = g.waits.settle(g.gpa, p, with);
+        if (settled.ready) try settled.run.script.work.append(g.gpa, .{ .run = settled.run });
     }
 
     /// A Script's Counters (chapter 9, Script counters): its lifetime work,
@@ -5225,7 +5116,7 @@ pub const Group = struct {
         var made: usize = 0;
         var owned = true;
         errdefer if (owned) {
-            g.releaseHeld(branches[0..made]);
+            wait_table.releaseHeld(g.gpa, branches[0..made]);
             gpa.free(branches);
         };
         at = 0;
@@ -5534,7 +5425,7 @@ pub const Group = struct {
         for (join.members.items) |x| {
             if (x.pending) |p| {
                 g.waits.take(p);
-                abandonCall(p);
+                g.waits.abandonWait(p, .join_ended);
                 g.destroyPending(p);
             }
             if (x.with) |w| g.releaseResume(w);
@@ -5547,7 +5438,7 @@ pub const Group = struct {
     /// Suspends a Run at a Suspension Point, with its wait.
     fn suspendRun(g: *Group, run: *Run, at: []const u8, wait: Pending) !void {
         const p = g.gpa.create(Pending) catch |e| {
-            if (wait.event) |ev| g.releaseEvent(ev);
+            if (wait.event) |ev| wait_table.releaseEvent(g.gpa, ev);
             return e;
         };
         std.debug.assert(wait.run == run);
@@ -5758,10 +5649,10 @@ pub const Group = struct {
             var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true, .deferrable = deferrable };
             // An allocation refusal already makes the C worker refuse;
             // otherwise keep automatic ids as issued/ineligible too.
-            g.registerCall(id, false) catch {};
+            g.waits.registerCall(g.gpa, &g.input_lock, id, false) catch {};
             const outcome: capabilities.Outcome = if (deferrable and g.deferOnce()) .deferred else op.host.call(op.host.context, &call, &.{});
             if (outcome == .deferred and deferrable) {
-                g.unissueCall(id);
+                g.waits.unissueCall(g.gpa, &g.input_lock, id);
                 run.calls -= 1;
                 return error.Deferred;
             }
@@ -5910,33 +5801,10 @@ pub const Group = struct {
         return g.endParticipant(run, e, e.prevented);
     }
 
-    /// A Run's Segment rolled back for a drained Stop, cancellation or
-    /// Rewind: its scopes abandoned and its participant rolled back. While
-    /// draining, each crossing may defer, with progress in `run.cleanup`.
-    fn abandonReadyCalls(run: *Run) void {
-        if (run.resume_with != null) {
-            if (run.waited.call) |c| if (!c.settlement_consumed) {
-                c.abandoned.store(true, .release);
-            };
-        }
-        if (run.join) |j| for (j.members.items) |m| {
-            if (m.with != null) if (m.waited.call) |c| if (!c.settlement_consumed) {
-                c.abandoned.store(true, .release);
-            };
-        };
-    }
-
-    /// Every Call of a discarded Run abandoned, its waits left intact.
-    fn abandonRunCalls(run: *Run) void {
-        abandonReadyCalls(run);
-        if (run.waiting) |p| abandonCall(p);
-        if (run.join) |j| for (j.members.items) |m| {
-            if (m.pending) |p| abandonCall(p);
-        };
-    }
-
-    fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
-        abandonReadyCalls(run);
+    /// Rolls back a drained Stop, cancellation or Rewind, preserving its
+    /// abandonment cause across deferred lifecycle crossings.
+    fn cleanupLifecycle(g: *Group, run: *Run, reason: wait_table.AbandonReason) error{Deferred}!void {
+        g.waits.abandonReady(run, reason);
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
         _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking or g.landing_active);
         run.cleanup = null;
@@ -6242,10 +6110,10 @@ pub const Group = struct {
         // Cancel every discarded Call before cleanup can invoke a Host hook.
         // Keep the waits intact for the stopped Trace/report and destruction;
         // settled answers still follow the unconsumed-Call rule.
-        for (runs.items) |r| abandonRunCalls(r);
+        for (runs.items) |r| g.waits.abandonRun(r, .stopped);
         // Every Run's rollback first, which may defer while draining:
         // nothing else changes until they complete.
-        for (runs.items) |r| try g.cleanupLifecycle(r);
+        for (runs.items) |r| try g.cleanupLifecycle(r, .stopped);
         // Discovering uncertainty during this Stop switches to Group-wide
         // termination before publishing any stopped record, in load order.
         if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
@@ -6266,11 +6134,11 @@ pub const Group = struct {
             // Release hooks observe cancellation, even when the transport
             // invokes them synchronously before this Run is destroyed.
             if (r.waiting) |p| {
-                abandonCall(p);
+                g.waits.abandonWait(p, .stopped);
                 if (p.call) |c| try abandoned.append(g.gpa, c.id);
             }
             if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| {
-                abandonCall(p);
+                g.waits.abandonWait(p, .stopped);
                 if (p.call) |c| try abandoned.append(g.gpa, c.id);
             };
         }
@@ -8140,7 +8008,7 @@ pub const Group = struct {
                 if (call_id.len > 0) g.write("abandon {s}\n", .{call_id});
             }
             g.waits.take(p);
-            abandonCall(p);
+            g.waits.abandonWait(p, .limit);
             g.destroyPending(p);
         }
         g.abandonJoin(run);
@@ -9798,9 +9666,9 @@ pub const Group = struct {
         // later, through the Group.
         const suspending = decl.mode == .suspending;
         const call: *capabilities.Call = if (suspending) blk: {
-            if (g.starting_call) |c| {
+            if (g.waits.starting_call) |c| {
                 std.debug.assert(std.mem.eql(u8, c.id, id));
-                g.starting_call = null;
+                g.waits.starting_call = null;
                 break :blk c;
             }
             const c = try gpa.create(capabilities.Call);
@@ -9811,7 +9679,7 @@ pub const Group = struct {
             };
             c.group = g;
             c.at_unit = try g.keep.allocator().dupe(u8, local.at_unit);
-            g.addCall(c) catch |err| {
+            g.waits.addCall(gpa, c) catch |err| {
                 gpa.free(c.id);
                 gpa.destroy(c);
                 return err;
@@ -9825,7 +9693,7 @@ pub const Group = struct {
             for (c.args) |v| _ = v.retain();
             break :blk c;
         } else &local;
-        try g.registerCall(id, suspending and decl.metering == .read_only);
+        try g.waits.registerCall(g.gpa, &g.input_lock, id, suspending and decl.metering == .read_only);
         const returned = run.returned_op;
         run.returned_op = null;
         var outcome = if (returned) |r| blk: {
@@ -9842,7 +9710,7 @@ pub const Group = struct {
             // The same instruction will be made again, but the Host can
             // already answer or request a charge against its issued id.
             run.calls -= 1;
-            if (suspending) g.starting_call = call;
+            if (suspending) g.waits.starting_call = call;
             for (args) |v| try g.push(frame, v.retain());
             return .crossing;
         }
@@ -9928,7 +9796,7 @@ pub const Group = struct {
             run.returned_op = .{ .outcome = outcome, .charged = call.charged, .valid = valid };
             owned = false;
             run.calls -= 1;
-            if (suspending) g.starting_call = call;
+            if (suspending) g.waits.starting_call = call;
             for (args) |v| try g.push(frame, v.retain());
             return .crossing;
         };
