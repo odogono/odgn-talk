@@ -449,19 +449,24 @@ type Replacement = {
 };
 type Item = Value | Iterator | Replacement | Reader | Receiver | Deadline;
 /**
- * A Timeout Block's deadline, kept on the stack below its body: the Instant
- * in Clock microseconds, and the block's duration in `ms` (ADR 0073).
+ * A Timeout Block's mathematical microsecond deadline and its duration
+ * (ADR 0073). The count may lie outside the Clock's Instant range.
  */
 export type Deadline = { after: Value; at: bigint; k: 'deadline' };
-// A duration in microseconds as a Quantity in `ms`, with no more decimal
-// places than it needs.
+// A duration in microseconds as ms, or s if ms exceeds the number range,
+// with no more decimal places than it needs.
 const msOf = (us: bigint): Value => {
   const sign = us < 0n ? '-' : '';
   const n = us < 0n ? -us : us;
-  const fraction = (n % 1000n).toString().padStart(3, '0').replace(/0+$/, '');
+  const seconds = n / 1000n >= 10n ** 34n;
+  const scale = seconds ? 1_000_000n : 1000n;
+  const fraction = (n % scale)
+    .toString()
+    .padStart(seconds ? 6 : 3, '0')
+    .replace(/0+$/, '');
   return quantity(
-    dec(`${sign}${n / 1000n}${fraction ? `.${fraction}` : ''}`),
-    'ms',
+    dec(`${sign}${n / scale}${fraction ? `.${fraction}` : ''}`),
+    seconds ? 's' : 'ms',
   );
 };
 // A Library Constant's Function Values are templates until used by a Script.

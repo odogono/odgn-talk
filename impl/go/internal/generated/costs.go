@@ -452,7 +452,7 @@ var Costs = CostsTable{
 			Key:   "timeout",
 			Fuel:  "2",
 			Alloc: "40",
-			Input: "a deadline holds an Instant and the block's duration in `ms`",
+			Input: "a deadline holds a mathematical microsecond count and the block's duration",
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.min",

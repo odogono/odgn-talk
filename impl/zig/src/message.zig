@@ -1884,8 +1884,7 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     o.raw("\"state\":") catch {};
     o.text(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle") catch {};
     o.raw(",\"nextDeadline\":") catch {};
-    if (mg.next()) |deadline| {
-        const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) };
+    if (mg.nextInstant()) |at| {
         o.instant(s.gpa, at) catch return oomReply();
     } else o.raw("null") catch {};
     o.raw(",\"fuelUsed\":") catch {};

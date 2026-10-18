@@ -368,7 +368,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `alloc` | `count` | the allocation the stretch made |
 | `seg` | `state` | `count` | the Script's Persistent State at the Segment's end |
 | `seg` | `end` | `word` | why the stretch ended ([End reasons](#end-reasons)) |
-| `seg` | `until` | `instant` | the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's |
+| `seg` | `until` | `instant` | the deadline it waits for, when representable as an Instant: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's |
 | `seg` | `n` | `count` | for `join-end`, the number of members |
 | `seg` | `value` | `value` | for `veto`, the reason |
 | `preempt` | `delivery` | `id` | for a start, its Delivery |
@@ -445,7 +445,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `counters` | `mailbox` | `count` | messages currently in the mailbox, excluding Runs and undrained Host Inputs |
 | `pumped` | `state` | `word` | the Group's state: `idle`, `sliced`, `stopped`, `rewound` |
 | `pumped` | `fuel` | `count` | the Fuel the Pump used |
-| `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending`, `MaxWait` or Timeout Block deadline included, if there is one |
+| `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending`, `MaxWait` or Timeout Block deadline included. An unreachable future deadline is omitted; a deadline before the Clock range gives this Pump's Clock reading, requesting another Pump at that reading |
 | `refused` | `code` | `value` | the Host error's code, or `"mailbox full"`, as text |
 | `scope` | `grant` | `id` | the named Grant |
 | `scope` | `name` | `id` | the declared scope name |

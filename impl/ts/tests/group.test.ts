@@ -30,6 +30,64 @@ const group = () => {
 const withoutIdentity = (lines: string[]) =>
   lines.map(line => line.replace(/ identity=[\da-f]{64}$/, ''));
 
+test('waits outside the Clock range suspend and retain exact deadlines', async () => {
+  for (const negative of [false, true]) {
+    const { g, lines } = group();
+    const s = g.load({
+      name: 's',
+      source: `on nap\n wait ${negative ? '-' : ''}1000000000000000000000000000000000 s\n return 7\nend nap`,
+    });
+    const p = s.request({ name: 'nap' });
+    let settled = false;
+    void p.result.then(() => {
+      settled = true;
+    });
+    const first = g.pump(clock);
+    expect(first.nextDeadline).toBe(negative ? clock : undefined);
+    expect(operationalReports(first.reports)).toEqual([]);
+    expect(g.inspect().scripts[0]!.runs[0]).toMatchObject({
+      status: 'suspended',
+      wait: 'wait',
+    });
+    expect(g.inspect().scripts[0]!.runs[0]!.until).toBeUndefined();
+    expect(lines.find(line => line.startsWith('seg s/r1 '))).not.toContain(
+      'until=',
+    );
+    expect(settled).toBe(false);
+    const next = g.pump(clock);
+    if (negative) {
+      expect((await p.result).toString()).toBe('7');
+      expect(operationalReports(next.reports)).toMatchObject([
+        { kind: 'run end', outcome: 'completed' },
+      ]);
+    } else {
+      expect(first.fuelUsed).toBe(15);
+      expect(next.fuelUsed).toBe(0);
+      expect(g.inspect().scripts[0]!.runs).toHaveLength(1);
+    }
+  }
+});
+
+test('large Timeout Blocks retain their duration and honor earlier deadlines', async () => {
+  for (const negative of [false, true]) {
+    const { g } = group();
+    const s = g.load({
+      name: 's',
+      source: `on nap\n try\n with timeout of ${negative ? '-' : ''}1000000000000000000000000000000000 s\n wait 0 s\n end timeout\n return 7\n catch e\n return e\n end try\nend nap`,
+    });
+    const p = s.request({ name: 'nap' });
+    g.pump(clock);
+    g.pump(clock);
+    const result = (await p.result).toString();
+    if (negative) {
+      expect(result).toContain('after: -1000000000000000000000000000000000 s');
+      expect(result).toContain('deadline: true');
+    } else {
+      expect(result).toBe('7');
+    }
+  }
+});
+
 describe('loading', () => {
   test('extensions retain shared Handler and value names in either order', () => {
     for (const declaration of ['script variable h = 1', 'constant h = 1']) {

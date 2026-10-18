@@ -88,7 +88,18 @@ func clockNanos(t time.Time) *big.Int {
 	ns := new(big.Int).Mul(big.NewInt(t.Unix()), big.NewInt(1e9))
 	return ns.Add(ns, big.NewInt(int64(t.Nanosecond())))
 }
+
+var minimumClockNanos = clockNanos(time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC))
+var maximumClockNanos = clockNanos(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC))
+
+func representableDeadline(ns *big.Int) bool {
+	return ns != nil && ns.Cmp(minimumClockNanos) >= 0 && ns.Cmp(maximumClockNanos) <= 0
+}
+
 func deadlineTime(ns *big.Int) time.Time {
+	if !representableDeadline(ns) {
+		return time.Time{}
+	}
 	sec, nano := new(big.Int), new(big.Int)
 	sec.DivMod(ns, big.NewInt(1e9), nano)
 	return time.Unix(sec.Int64(), nano.Int64()).UTC()
@@ -718,10 +729,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					x.deadline, x.deadlineAfter = new(big.Int).Set(block.At), &block.After
 				}
 				common["state"] = fmt.Sprint(s.persistent())
-				if r.Join != nil && block != nil {
-					common["until"] = deadlineTime(block.At).Format(time.RFC3339Nano)
-				} else if x.deadline != nil && (!r.SendWait && r.Join == nil || block != nil) {
-					common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
+				if r.Join != nil && block != nil || x.deadline != nil && (!r.SendWait && r.Join == nil || block != nil) {
+					if representableDeadline(x.deadline) {
+						common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
+					}
 				}
 				g.record("seg", false, []string{string(x.id), x.how}, common)
 				if r.Join != nil && r.Join.Ready {
@@ -850,7 +861,14 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	}
 	if next != nil {
 		result.NextDeadline = deadlineTime(next)
-		fields["next"] = result.NextDeadline.Format(time.RFC3339Nano)
+		// A deadline below the Clock range is already due, but still needs
+		// a later Pump. Future deadlines outside the range cannot fire.
+		if !representableDeadline(next) && next.Cmp(clockNanos(g.clock)) < 0 {
+			result.NextDeadline = g.clock
+		}
+		if representableDeadline(next) || next.Cmp(clockNanos(g.clock)) < 0 {
+			fields["next"] = result.NextDeadline.Format(time.RFC3339Nano)
+		}
 	}
 	g.record("pumped", false, nil, fields)
 	return result, nil

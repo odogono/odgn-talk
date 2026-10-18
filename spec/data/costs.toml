@@ -387,7 +387,7 @@ alloc = "size(result)"
 key = "timeout"
 fuel = "2"
 alloc = "40"
-input = "a deadline holds an Instant and the block's duration in `ms`"
+input = "a deadline holds a mathematical microsecond count and the block's duration"
 
 # ---------------------------------------------------------------------------
 # Built-ins: one rate each (ADR 0021). A Built-in's arguments are x1, x2, …

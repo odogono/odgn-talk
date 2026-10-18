@@ -196,34 +196,38 @@ end mark
 }
 
 func TestWaitFuelFaultDoesNotChargeOrInstallTimer(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Limits: Limits{FuelPerRun: 14}, Source: "on nap\n wait 1 s\nend nap\n"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, p, err := s.Request(nil, Message{Name: "nap"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(operationalReports(r.Reports)) != 1 || r.FuelUsed != 5 || !r.NextDeadline.IsZero() {
-		t.Fatal(r, err)
-	}
-	end := operationalReports(r.Reports)[0].(*RunEnd)
-	if end.Outcome != LimitFault || end.Limit != "fuel" || end.At.Line != 2 {
-		t.Fatal(end)
-	}
-	select {
-	case <-p.Done():
-	default:
-		t.Fatal("faulted Request unsettled")
-	}
-	if len(g.Inspect().Scripts[0].Runs) != 0 {
-		t.Fatal("faulted wait retained")
+	for _, duration := range []string{"1 s", "1000000000000000000000000000000000 s"} {
+		t.Run(duration, func(t *testing.T) {
+			g := New().NewGroup(GroupOptions{})
+			s, err := g.Load(LoadOptions{Name: "s", Limits: Limits{FuelPerRun: 14}, Source: "on nap\n wait " + duration + "\nend nap\n"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, p, err := s.Request(nil, Message{Name: "nap"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
+			if err != nil || len(operationalReports(r.Reports)) != 1 || r.FuelUsed != 5 || !r.NextDeadline.IsZero() {
+				t.Fatal(r, err)
+			}
+			end := operationalReports(r.Reports)[0].(*RunEnd)
+			if end.Outcome != LimitFault || end.Limit != "fuel" || end.At.Line != 2 {
+				t.Fatal(end)
+			}
+			select {
+			case <-p.Done():
+			default:
+				t.Fatal("faulted Request unsettled")
+			}
+			if len(g.Inspect().Scripts[0].Runs) != 0 {
+				t.Fatal("faulted wait retained")
+			}
+		})
 	}
 }
 
-func TestWaitBeyondNativeDeadlineRangeDefersWithoutOverflow(t *testing.T) {
+func TestWaitBeyondClockRangeSuspendsAndCharges(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on nap\n wait 1000000000000000000000000000000000 s\nend nap\n"})
 	if err != nil {
@@ -234,16 +238,35 @@ func TestWaitBeyondNativeDeadlineRangeDefersWithoutOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || r.FuelUsed != 5 || len(operationalReports(r.Reports)) != 0 || !r.NextDeadline.IsZero() {
+	if err != nil || r.FuelUsed != 15 || len(operationalReports(r.Reports)) != 0 || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
 	}
 	select {
 	case <-p.Done():
-		t.Fatal("deferred wait settled Request")
+		t.Fatal("suspended wait settled Request")
 	default:
 	}
-	if got := g.Inspect().Scripts[0].Runs; len(got) != 1 || got[0].Status != Ready {
+	if got := g.Inspect().Scripts[0].Runs; len(got) != 1 || got[0].Status != Suspended || got[0].Wait != "wait" || !got[0].Until.IsZero() {
 		t.Fatal(got)
+	}
+	r, err = g.Pump(time.Unix(1, 0), PumpOptions{})
+	if err != nil || r.FuelUsed != 0 || !r.NextDeadline.IsZero() || len(operationalReports(r.Reports)) != 0 {
+		t.Fatal(r, err)
+	}
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, _, err := New().Restore(saved, RestoreOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err = restored.Pump(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC), PumpOptions{})
+	if err != nil || r.FuelUsed != 0 || !r.NextDeadline.IsZero() || len(operationalReports(r.Reports)) != 0 {
+		t.Fatal(r, err)
+	}
+	if runs := restored.Inspect().Scripts[0].Runs; len(runs) != 1 || runs[0].Status != Suspended {
+		t.Fatal(runs)
 	}
 }
 
