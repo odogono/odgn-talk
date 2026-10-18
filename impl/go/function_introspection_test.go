@@ -70,7 +70,7 @@ end callOld`
 					t.Fatal(err)
 				}
 				if round == 0 && mode == "variables only" {
-					saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
+					saved = rewriteSaveVersions(t, saved, Versions{CostModel: "999"})
 				}
 				copy, result, err := c.Restore(saved, RestoreOptions{Libraries: libraries, Mismatch: policy})
 				if err != nil || result.VariablesOnly != (round == 0 && policy == VariablesOnly) {

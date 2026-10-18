@@ -3,7 +3,6 @@ package northtalk
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -128,6 +127,7 @@ func TestRestorePreemptedOpenJoin(t *testing.T) {
 }
 
 func TestRestoreRejectsMalformedFrames(t *testing.T) {
+	requireNativeSaveFormat(t)
 	c := New()
 	g := c.NewGroup(GroupOptions{})
 	s, e := g.Load(LoadOptions{Name: "s", Source: "on spin\n repeat forever\n end repeat\nend spin"})
@@ -169,6 +169,13 @@ func TestRestoreRejectsMalformedFrames(t *testing.T) {
 		})
 	}
 }
+func requireNativeSaveFormat(t *testing.T) {
+	t.Helper()
+	if experimentalGroupFactory != nil {
+		t.Skip("mutates the native Go save layout; Zig binary refusal is covered by TestZigBackendRestoreRejectsMalformedSaves")
+	}
+}
+
 func rewriteSave(t *testing.T, save []byte, change func(map[string]any)) []byte {
 	t.Helper()
 	var outer struct{ Hash, Payload string }
@@ -243,32 +250,6 @@ func TestRestorePendingSettlementsAndObjectIdentity(t *testing.T) {
 	}
 }
 
-// Saves are Core-specific (ADR 0008). Change only the Cost Model header and
-// integrity digest so both backends exercise the same mismatch policy.
-func rewriteSaveCostModel(t *testing.T, saved []byte) []byte {
-	t.Helper()
-	if !bytes.HasPrefix(saved, []byte("NTZS")) {
-		return rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
-	}
-	payload := saved[:len(saved)-sha256.Size]
-	at := 4
-	read := func() uint64 {
-		value, n := binary.Uvarint(payload[at:])
-		if n <= 0 {
-			t.Fatal("invalid Zig save header")
-		}
-		at += n
-		return value
-	}
-	read()            // Save format.
-	at += int(read()) // Language version.
-	start := at
-	changed := binary.AppendUvarint(bytes.Clone(payload[:start]), read()+1)
-	changed = append(changed, payload[at:]...)
-	digest := sha256.Sum256(changed)
-	return append(changed, digest[:]...)
-}
-
 func TestVariablesOnlyReportsPendingScriptCalls(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, calls string
@@ -297,7 +278,7 @@ func TestVariablesOnlyReportsPendingScriptCalls(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			restored, result, err := c.Restore(rewriteSaveCostModel(t, saved), RestoreOptions{Mismatch: VariablesOnly})
+			restored, result, err := c.Restore(rewriteSaveVersions(t, saved, Versions{CostModel: "999"}), RestoreOptions{Mismatch: VariablesOnly})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -335,7 +316,7 @@ func TestVariablesOnlyUsesRollbackBaseAndReportsScriptCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSaveCostModel(t, saved)
+	saved = rewriteSaveVersions(t, saved, Versions{CostModel: "999"})
 	restored, result, err := c.Restore(saved, RestoreOptions{Mismatch: VariablesOnly})
 	if err != nil {
 		t.Fatal(err)
@@ -362,7 +343,7 @@ func TestPreviousLanguageSaveRejectsOrRestoresVariablesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["Language"] = "1.0-rc.2" })
+	saved = rewriteSaveVersions(t, saved, Versions{Language: "1.0-rc.2"})
 	_, _, err = c.Restore(saved, RestoreOptions{})
 	if e, ok := err.(*HostError); !ok || e.Code != SaveMismatch {
 		t.Fatalf("RejectMismatch: %v", err)
@@ -526,6 +507,7 @@ func TestSettleDuringSaveBeforeFirstRestoredPump(t *testing.T) {
 }
 
 func TestRestoreRejectsMalformedFunctionAndQuantity(t *testing.T) {
+	requireNativeSaveFormat(t)
 	c := New()
 	g := c.NewGroup(GroupOptions{})
 	_, err := g.Load(LoadOptions{Name: "s", Source: "script variable cb = given x: x\nscript variable distance = 3 m"})
