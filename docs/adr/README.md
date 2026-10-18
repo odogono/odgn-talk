@@ -105,3 +105,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0101: Folio's editor state is an immutable value observed through signals, and its panels are Preact components](0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)
 - [0102: npm packages publish under the @northtalk scope](0102-npm-packages-publish-under-the-northtalk-scope.md)
 - [0103: Folio groups are nested Elements with Page-wide names](0103-folio-groups-are-nested-elements-with-page-wide-names.md)
+- [0104: Folio Play runs on the page thread and Stop is cooperative](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md)
