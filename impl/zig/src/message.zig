@@ -4277,6 +4277,10 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return queuedReply(s, msg, ref, .broadcast);
     } else if (std.mem.eql(u8, m, "pump")) {
         return pumpReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "proto-request-pump")) {
+        // PROTOTYPE, #1103 spike only: a Request and its Pump in one crossing.
+        freeReply(s.gpa, queuedReply(s, msg, ref, .request));
+        return pumpReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "request-charge")) {
         return requestChargeReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "answer")) {
@@ -4483,6 +4487,52 @@ fn sendExport(n: usize) callconv(.c) u64 {
     return (@as(u64, @intCast(@intFromPtr(reply_buffer.ptr))) << 32) | @as(u64, @intCast(reply_buffer.len));
 }
 
+// PROTOTYPE, #1103 spike only. Request `ping n` from Script "s" of Group "g"
+// and Pump once, with no JSON in. Mode 0 returns the result and writes no
+// reports; mode 1 also writes the JSON reports, as the `reports` field would.
+fn protoPingExport(n: i64, mode: i32) callconv(.c) i64 {
+    const s = session() orelse return -1;
+    const entry = s.groupNamed("g") orelse return -2;
+    loadExchange(s, entry);
+    const script = Direct.groupScript(entry.group, "s".ptr, 1) orelse return -3;
+    const arg = model.scalar(s.gpa, .{ .number = model.Decimal.fromInt(n) }) catch return -4;
+    defer arg.release();
+    var args = [_]*Value{arg};
+    const m: talk.Message = .{ .name = "ping".ptr, .name_len = 4, .args = &args, .args_len = 1, .limits = null };
+    var id: talk.Buffer = .{};
+    var pending: ?*talk.Pending = null;
+    if (Direct.scriptRequest(script, &m, &id, &pending) != .ok) return -5;
+    Direct.pendingRelease(pending);
+    Direct.ownedBytesRelease(&id);
+    s.x.in_pump = true;
+    s.x.exchange_pump = true;
+    s.x.exchange_entry = entry;
+    s.x.pumping_entry = entry;
+    defer {
+        s.x.in_pump = false;
+        s.x.pumping_entry = null;
+    }
+    const mg = &entry.group.group;
+    const trace = mg.trace;
+    mg.trace = null;
+    defer mg.trace = trace;
+    mg.pumpWith(.{ .seconds = 1792238400, .micros = 0 }, 0, 0) catch return -6;
+    entry.group.flush();
+    mg.accountingTail();
+    var held = mg.reports.take();
+    defer held.deinit();
+    if (mode == 1) {
+        var o = Out.init(s.gpa);
+        defer o.deinit();
+        writeHeld(&o, &held) catch return -7;
+    }
+    for (held.list.items) |r| switch (r) {
+        .run_end => |e| if (e.result) |v| if (v.data == .number) return v.data.number.integer(i64) catch -8,
+        else => {},
+    };
+    return -9;
+}
+
 fn initializeExport() callconv(.c) void {
     _ = session();
 }
@@ -4492,6 +4542,7 @@ comptime {
         @export(&bufferExport, .{ .name = "talk_buffer" });
         @export(&sendExport, .{ .name = "talk_send" });
         @export(&initializeExport, .{ .name = "_initialize" });
+        @export(&protoPingExport, .{ .name = "talk_proto_ping" });
     }
 }
 

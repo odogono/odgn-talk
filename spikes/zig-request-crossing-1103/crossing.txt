@@ -1,0 +1,96 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	63582336	        19.32 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	58531111	        21.86 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  109428	     10990 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  108926	     10985 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  122960	      9841 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  122858	      9991 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  306032	      4027 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  301710	      4097 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  244506	      5338 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  244185	      5040 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	13.293s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	60986455	        19.33 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	61946274	        19.09 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  110116	     10966 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  107992	     11167 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  114220	     11755 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  119601	     10304 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  285021	      4229 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  291238	      4228 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  238719	      5260 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  234198	      5523 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	13.135s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	61019146	        19.57 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	60086250	        19.00 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  108758	     11099 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  105067	     11474 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  115459	     10352 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  118408	     10266 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  288115	      4064 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  298814	      4151 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  241054	      5058 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  229478	      5077 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	12.753s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	58708534	        19.67 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	59560738	        19.50 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  107983	     11257 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  106308	     11286 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  116377	     10259 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  116330	     10655 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  299416	      4312 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  298527	      4128 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  237357	      5108 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  241236	      5140 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	12.939s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	59902161	        20.41 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	54068566	        20.30 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  101868	     11752 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  104432	     11487 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  115635	     10605 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  115639	     10569 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  292017	      4315 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  276096	      4341 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  232525	      5306 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  226317	      5683 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	12.948s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go/internal/zigwasm
+cpu: Apple M5
+BenchmarkProtoCrossing/empty-export-3          	59819667	        19.62 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/empty-export-10         	61121841	        19.29 ns/op	      16 B/op	       2 allocs/op
+BenchmarkProtoCrossing/json-two-frames-3       	  106803	     11421 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-two-frames-10      	  106941	     11224 ns/op	     824 B/op	      14 allocs/op
+BenchmarkProtoCrossing/json-one-frame-3        	  117619	     10233 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/json-one-frame-10       	  118034	     10152 ns/op	     744 B/op	       9 allocs/op
+BenchmarkProtoCrossing/direct-3                	  296998	      4111 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-10               	  283971	      4864 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-3   	  235228	      5189 ns/op	     104 B/op	       6 allocs/op
+BenchmarkProtoCrossing/direct-json-reports-10  	  238593	      5203 ns/op	     104 B/op	       6 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go/internal/zigwasm	13.038s

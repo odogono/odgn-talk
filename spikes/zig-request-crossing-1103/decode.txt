@@ -1,0 +1,72 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  213957	      5698 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  201760	      5852 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 3105648	       402.9 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 3066236	       390.0 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4380667	       266.3 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4259602	       267.0 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	8.083s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  187036	      5957 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  204488	      5855 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 3311516	       363.3 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 3313370	       365.2 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4783360	       251.4 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4797656	       250.4 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	7.998s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  210190	      5697 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  212618	      5930 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 2963336	       474.2 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 3070768	       402.7 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4403404	       275.4 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4205432	       280.1 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	8.338s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  198301	      6066 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  195420	      5963 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 3002466	       394.5 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 3008314	       394.7 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4402250	       271.0 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4380192	       271.4 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	7.960s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  195296	      5898 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  207502	      6000 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 3098049	       391.2 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 2981786	       392.6 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4530145	       267.3 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4555485	       269.0 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	8.058s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkProtoDecode/json-current-3          	  198327	      5819 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/json-current-10         	  206031	      5789 ns/op	    2104 B/op	      86 allocs/op
+BenchmarkProtoDecode/binary-3                	 3184284	       383.4 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/binary-10               	 3047240	       384.9 ns/op	     952 B/op	      21 allocs/op
+BenchmarkProtoDecode/construct-only-3        	 4486282	       267.0 ns/op	     904 B/op	      10 allocs/op
+BenchmarkProtoDecode/construct-only-10       	 4230745	       279.1 ns/op	     904 B/op	      10 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	7.950s

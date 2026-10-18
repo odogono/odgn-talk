@@ -1,0 +1,48 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      8849 ns/op	      6834 p50-ns	     47084 p99-ns	    7052 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      5926 ns/op	      5041 p50-ns	     30334 p99-ns	    7049 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.265s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      3918 ns/op	      3041 p50-ns	     15833 p99-ns	    7051 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      3601 ns/op	      3000 p50-ns	     27083 p99-ns	    7050 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.116s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      4051 ns/op	      3083 p50-ns	     18375 p99-ns	    7051 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      3716 ns/op	      3000 p50-ns	     24000 p99-ns	    7049 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.116s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      4250 ns/op	      3291 p50-ns	     17625 p99-ns	    7051 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      3827 ns/op	      3167 p50-ns	     15416 p99-ns	    7049 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.121s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      3953 ns/op	      3042 p50-ns	     16375 p99-ns	    7054 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      3741 ns/op	      3000 p50-ns	     18709 p99-ns	    7050 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.121s
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3     	    2000	      4048 ns/op	      3083 p50-ns	     21791 p99-ns	    7052 B/op	      89 allocs/op
+BenchmarkBackendRequest-10    	    2000	      3681 ns/op	      3041 p50-ns	      9375 p99-ns	    7052 B/op	      89 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.119s
