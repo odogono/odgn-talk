@@ -20,6 +20,25 @@ defmodule NorthTalk.LifecycleTest do
     assert {:ok, %Result{value: [7, 6, 7]}} = NorthTalk.request(group, name, "hello")
   end
 
+  test "a one-line wait for takes a Guard after its timeout (ADR 0109)" do
+    owner = start_supervised!({NorthTalk, drive: :auto})
+    group = NorthTalk.new_group!(owner, "g", [])
+
+    source = """
+    on confirm
+      send key with "N" to me
+      send key with "Y" to me
+      wait for key k or 30 s where k = "Y" or k = "Z"
+      return k
+    end confirm
+    on key k
+    end key
+    """
+
+    NorthTalk.load!(group, "s", source, [])
+    assert {:ok, %Result{value: "Y"}} = NorthTalk.request(group, "s", "confirm")
+  end
+
   # A file-like resource: `open` opens a scope that `close` closes, and every
   # crossing is sent to the binding, a pid, in the order it happens.
   defmodule Resource do
