@@ -13,8 +13,16 @@ and remain live; use explicit operations to change them and `snapshot()` when
 retaining an earlier value or crossing an asynchronous boundary. Live nodes
 keep their identity during ordinary edits; reacquire collections after structural
 changes. The editor keeps selection, showing Page and entered scope separately,
-adapts batched tree changes to signals, and records forward/inverse changes for
-undo. A whole drag or Info field edit remains one undo step. Finishing any edit
+adapts batched tree changes to signals, folds incoming field changes incrementally,
+and detaches the completed forward/inverse journal for undo. The tree publishes
+synchronous change payloads; consumers retaining durable history use
+[`detachJournal`](src/tree/history.ts). Field values are replaced atomically,
+so pending history can retain its endpoints until the edit finishes.
+Copy-work accounting is enabled only for Play. Renames update the affected name
+entries, structural edits index the changed subtree, and geometry stages the
+moved subtree and its ancestor bounds. The [write benchmark](tools/bench-project-tree.md)
+measures large-Page drag and typing bursts and checks their copy budget.
+A whole drag or Info field edit remains one undo step. Finishing any edit
 at its starting content preserves redo. Pages and Elements have stable
 session-local IDs across history; IDs never enter `.folio` files or browser
 storage. The ownership and notification choices are recorded in
@@ -648,13 +656,15 @@ by the next session or by opening another Project.
 HyperCard. Press Enter to run a command, such as
 `set the visible of button1 to false`, or an expression, such as
 `the label of button1`, whose value is printed; Up and Down recall earlier
-lines. While
-browsing, commands run in the Play Session with the showing
-Page's names and every Grant, and their effects are Play State. In Edit, the
+lines. While browsing, the default context runs in the Play Session with the
+showing Page's names and every Grant, and its effects are Play State. The
+context selector also offers the currently loaded Scripts: a targeted command
+can read and change that Script's Script Variables using its Grants, object
+bindings and owner. In Edit, the
 command runs in a session copied from the Project that sends no events; when
 it finishes, its changes become one undoable authored edit, Script windows
 stay attached, and a navigation moves the editor to that Page. A failing
-command changes nothing and prints its error and line. If another authored
+Edit command changes nothing and prints its error and line. If another authored
 edit occurs while the command runs, its result is refused with a retry message
 rather than overwriting newer work; waits and `user`
 prompts only run while browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
@@ -662,9 +672,29 @@ DOM.
 
 The Message Box is a code window like a Script's, built from the same parts in
 [`src/code-window.ts`](src/code-window.ts): it resizes from its corner, and its
-editor has the same completion (⌃Space), hover and diagnostics for the Page's
-names. The editor holds the whole Script a command runs as, with the lines
-around the command hidden and protected.
+editor has the same completion (⌃Space), hover and diagnostics. A selected
+Script supplies its loaded source and bindings, even after its authored source
+is edited. The editor keeps that context and the command's wrapper hidden
+and protected.
+
+Targeted commands use Extend ([ADR 0108](../../docs/adr/0108-folio-message-box-commands-can-extend-a-chosen-script.md));
+they accept statements and expressions, not Script-level declarations. Existing
+Script Variables can change, while new local variables disappear after the
+command. Commands run alongside other work and may wait; completed effects
+can survive a later error, and Browse commands are not undoable. Closing the
+Message Box hides it; stopping Play ends its commands. Each result or error
+stays beside its submitted command and original context.
+
+A selection identifies one loaded Script in one Play Session. Navigation,
+deletion or Stop can make it unavailable, and returning to a Page or starting
+Play again never silently selects the replacement. Choose a context explicitly
+to run again, including the default context before making an Edit-mode change.
+History retains up to 50 commands with their original contexts across sessions
+in one Project; switching Projects clears it, and reloading the app discards it.
+Identical targeted commands reuse their generated Handlers. Each loaded Script
+allows at most 1,000 distinct commands; after that, existing commands still
+work, but new commands require restarting Play. There is no automatic reload
+or per-command cancellation.
 
 HyperTalk-style `hide welcomeText` and `show welcomeText` are Host Commands
 ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)):

@@ -2,6 +2,7 @@
 // requests through the worker supervisor; the worker answers each one, and
 // pushes Play State changes and sound commands unasked. Everything here is
 // plain data, so it crosses `postMessage` as it is.
+import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
 
@@ -47,7 +48,7 @@ export type PlayRequest =
       session: number;
       value: PromptAnswer;
     }
-  | { kind: 'message'; session: number; text: string }
+  | { kind: 'message'; session: number; target?: number; text: string }
   | { error?: string; kind: 'soundEnded'; voice: number }
   | { kind: 'inspect'; session: number }
   | { kind: 'stop'; session: number };
@@ -69,6 +70,8 @@ export type PlayView = {
   /** `edit` is the last reader edit the worker applied to that Element. */
   elements: { edit?: number; element: Element; shown: boolean }[];
   full: boolean;
+  /** Loaded Script contexts, sent only when their identities change. */
+  messageTargets?: LoadedMessageTarget[];
   navigating: boolean;
   notices: UserNotice[];
   /** The showing Page's Elements by name, in draw order; absent if unchanged. */

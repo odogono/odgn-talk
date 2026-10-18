@@ -204,7 +204,8 @@ pub const Event = struct {
     from: ?*Expr,
 };
 
-pub const WaitFor = struct { event: Event, timeout: ?*Expr };
+/// A one-line `wait for`. Its Guard comes after any timeout (ADR 0109).
+pub const WaitFor = struct { event: Event, timeout: ?*Expr, guard: ?Guard };
 
 pub const WaitBranch = struct {
     keyword: Tok,

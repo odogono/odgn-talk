@@ -1154,6 +1154,15 @@ describe('Core construct and Guard checks', () => {
     );
   });
 
+  test("a one-line `wait for`'s Guard has a Guard's restrictions and its event's bindings", () => {
+    const source =
+      'function f x\n return x\nend f\non t\n wait for go n or 1 s where n > 0 and f(n)\n wait for go n where m > 0\nend t';
+    expectAt(source, [
+      ['not in a guard', 'f(n)'],
+      ['unknown name', 'm > 0'],
+    ]);
+  });
+
   test('construct diagnostics keep scalar columns, UTF-16 spans and catalogue order', () => {
     const source = `private on t\r\n\tput ["😀", {a: 1, a: 2}, x as list, 1${'0'.repeat(34)}] into y\r\nend t`;
     const result = checkSource(source);

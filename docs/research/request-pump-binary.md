@@ -1,7 +1,7 @@
 # Binary Request and Pump experiment: implementation status
 
 Work for [#1245](https://github.com/odogono/odgn-talk/issues/1245), under
-[proposed ADR 0108](../adr/0108-request-and-pump-have-an-optional-binary-exchange.md).
+[proposed ADR 0110](../adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 This is a partial implementation record, not performance acceptance or evidence
 that the target cannot be met. ADR 0098 remains accepted.
 

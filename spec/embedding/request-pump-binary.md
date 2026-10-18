@@ -2,7 +2,7 @@
 
 **Status: proposed, not implemented or negotiated by released Hosts.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s experiment contract,
-under [proposed ADR 0108](../../docs/adr/0108-request-and-pump-have-an-optional-binary-exchange.md).
+under [proposed ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
 
 ## Negotiation and framing

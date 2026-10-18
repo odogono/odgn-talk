@@ -13,6 +13,7 @@ export type MirrorPage = PlayView['page'] & { index: number };
 export class PlayMirror implements ReaderTextPlay {
   /** Replaced whenever the worker shows another Page. */
   page: MirrorPage = { name: '', height: 0, background: '', index: -1 };
+  messageTargets: NonNullable<PlayView['messageTargets']> = [];
   designWidth = 0;
   navigating = false;
   stopped = false;
@@ -56,6 +57,9 @@ export class PlayMirror implements ReaderTextPlay {
       view.page.background !== this.page.background
     ) {
       Object.assign(this.page, view.page);
+    }
+    if (view.messageTargets) {
+      this.messageTargets = view.messageTargets;
     }
     this.designWidth = view.designWidth;
     this.navigating = view.navigating;

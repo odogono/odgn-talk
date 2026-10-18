@@ -924,3 +924,24 @@ button:disabled {
 #page .el.group.selected {
   outline: 2px solid #2f6fed;
 }
+
+#message-window .message-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+#message-window .message-context select {
+  flex: 1;
+  min-width: 0;
+}
+#message-window .message-context [role="status"],
+#message-window .message-log .context {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+#message-window .message-log .entry + .entry {
+  margin-top: 0.5rem;
+}

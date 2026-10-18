@@ -391,6 +391,7 @@ suspension/send-wait-replacement
 suspension/timeout-block-join
 suspension/timeout-block-waits
 suspension/wait-for
+suspension/wait-for-guard
 suspension/wait-observation
 suspension/wait-precision
 suspension/wait-work-order

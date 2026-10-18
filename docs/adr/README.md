@@ -109,5 +109,6 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0105: Each Core keeps its Waits in one Wait table module](0105-each-core-keeps-its-waits-in-one-wait-table-module.md)
 - [0106: Folio Edit and Play share a mutable Project tree](0106-folio-edit-and-play-share-a-mutable-project-tree.md)
 - [0107: Folio Play runs in a supervised worker](0107-folio-play-runs-in-a-supervised-worker.md)
-
-- [0108: Request and Pump have an optional binary exchange (proposed)](0108-request-and-pump-have-an-optional-binary-exchange.md)
+- [0108: Folio Message Box commands can extend a chosen Script](0108-folio-message-box-commands-can-extend-a-chosen-script.md)
+- [0109: A one-line `wait for` takes a Guard after its timeout](0109-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)
+- [0110: Request and Pump have an optional binary exchange (proposed)](0110-request-and-pump-have-an-optional-binary-exchange.md)

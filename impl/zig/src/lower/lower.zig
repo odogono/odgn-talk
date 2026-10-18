@@ -1355,7 +1355,7 @@ const Frame = struct {
     }
 
     fn waitFor(f: *Frame, first: Tok, w: ast.WaitFor) Allocator.Error!void {
-        const branch = try f.eventBranch(w.event, null, first);
+        const branch = try f.eventBranch(w.event, w.guard, first);
         if (w.timeout) |e| try f.expr(e);
         const index: i64 = @intCast(f.l.events.items.len);
         const branches = try f.l.a.alloc(Branch, 1);
