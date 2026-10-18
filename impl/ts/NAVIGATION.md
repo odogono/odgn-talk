@@ -59,6 +59,13 @@ Files, grammar, or lowering.
 - Tests and cases: [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts)
 - First check: `bun test impl/ts/tests/group.test.ts impl/ts/tests/capabilities.test.ts`
 
+## Waits, suspending Calls and their abandonment
+
+- Implementation: [Group](src/group.ts) (`pending`, `settle`, `settleReply`, `forgetWait`, `ScriptState.waiters`), [Run](src/machine.ts) (`pendingCall`, `discard`, `abandonJoin`). [ADR 0105](../../docs/adr/0105-each-core-keeps-its-waits-in-one-wait-table-module.md) gives these one Wait table module; the TS move is [#1223](https://github.com/odogono/odgn-talk/issues/1223).
+- Rules: [Suspension Points](../../spec/05-handlers-messages-and-scheduling.md#suspension-points)
+- Tests and cases: [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts)
+- First check: `bun test impl/ts/tests/group.test.ts`
+
 ## Capability Scopes, Segment-bound effects and Coordinators
 
 - Implementation: [Segment participants and Coordinators](src/machine.ts), [Scope declarations and Coordinator mapping](src/capabilities.ts)
@@ -145,9 +152,9 @@ Files, grammar, or lowering.
 
 ## Sessions, Transcripts and CLI
 
-- Implementation: [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [CLI](../../tooling/cli/)
+- Implementation: [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [worker supervisor](../../tooling/stack/src/worker-supervisor.ts), [CLI](../../tooling/cli/)
 - Rules: [sessions and tooling](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
-- Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [Session corpus](../../corpus/sessions/)
+- Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [worker supervisor tests](../../tooling/stack/tests/worker-supervisor.test.ts), [Session corpus](../../corpus/sessions/)
 - First check: `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts`
 
 ## Formatting source

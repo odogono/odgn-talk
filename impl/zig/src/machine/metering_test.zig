@@ -319,6 +319,7 @@ test "limit faults at originating call, keeps committed variables, and emits no 
     try g.pump(clock);
     try t.expectEqual(caps.ChargeStatus.limit, q.status);
     try t.expect(h.calls.items[0].abandoned.load(.acquire));
+    try t.expectEqual(@import("waits.zig").AbandonReason.limit, h.calls.items[0].abandon_reason.?);
     const end = try endReport(&g);
     try t.expectEqual(@as(u32, 4), end.at.line);
     try t.expectEqual(machine.report.Outcome.limit_fault, end.outcome);
@@ -347,6 +348,7 @@ test "accepted charge then due timeout is paid and not refunded" {
     try t.expectEqual(caps.ChargeStatus.accepted, q.status);
     try t.expect(q.done.load(.acquire));
     try t.expect(h.calls.items[0].abandoned.load(.acquire));
+    try t.expectEqual(@import("waits.zig").AbandonReason.timeout, h.calls.items[0].abandon_reason.?);
     try t.expect(g.pump_fuel >= 31);
 }
 
@@ -454,6 +456,7 @@ test "cancel order does not refund accepted charges and revocation leaves in-fli
         try g.pump(clock);
         try t.expectEqual(if (cancel_first) caps.ChargeStatus.inactive else .accepted, q.status);
         try t.expect(c.abandoned.load(.acquire));
+        try t.expectEqual(@import("waits.zig").AbandonReason.cancelled, c.abandon_reason.?);
         try t.expect(g.pump_fuel >= if (cancel_first) @as(u64, 0) else 29);
     }
     var h: Host = .{};
@@ -516,7 +519,7 @@ test "exact exhaustion is accepted even with no runnable continuation" {
     _ = try h.load(&g, source);
     _ = try g.deliver("s", "go", &.{}, false);
     try g.pump(clock);
-    const left = 1000 - g.pending.items[0].run.fuel;
+    const left = 1000 - g.waits.all()[0].run.fuel;
     const q = try g.requestCharge(h.calls.items[0].id, @intCast(left));
     try g.pump(clock);
     try t.expectEqual(caps.ChargeStatus.accepted, q.status);
@@ -567,7 +570,7 @@ test "a charge refusal in a preempted Join rolls back the open Segment even acro
             if (h.calls.items.len > 0) break;
         }
         try t.expectEqual(@as(usize, 1), h.calls.items.len);
-        try t.expect(g.pending.items[0].run.continuing);
+        try t.expect(g.waits.all()[0].run.continuing);
         try t.expectEqual(@as(i64, 1), try s.variables[0].data.number.integer(i64));
         const at = trace.written().len;
         const q = try g.requestCharge(h.calls.items[0].id, 1000);
@@ -623,14 +626,14 @@ test "settled suspending calls leave the live list and keep only their id (#1101
         try g.pump(.{ .seconds = @intCast(tick), .micros = 0 });
         // Only the call the Run waits on, and the one it last resumed
         // from, which retires at the next Pump, stay live.
-        try t.expect(g.calls.items.len <= 2);
+        try t.expect(g.waits.calls.items.len <= 2);
     }
-    try t.expect(g.retired_calls.items.len >= 99);
-    for (g.retired_calls.items) |c| try t.expectEqual(@as(usize, 0), c.args.len);
+    try t.expect(g.waits.retired_calls.items.len >= 99);
+    for (g.waits.retired_calls.items) |c| try t.expectEqual(@as(usize, 0), c.args.len);
     // A late answer to a retired call is still known, and ignored.
     const first = g.callById("s/r1.c1").?;
     try t.expect(first.settlement_consumed);
     try g.settle(first.id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
     try g.pump(.{ .seconds = 200, .micros = 0 });
-    try t.expect(g.calls.items.len <= 2);
+    try t.expect(g.waits.calls.items.len <= 2);
 }

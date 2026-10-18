@@ -107,3 +107,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0103: Folio groups are nested Elements with Page-wide names](0103-folio-groups-are-nested-elements-with-page-wide-names.md)
 - [0104: Folio Play runs on the page thread and Stop is cooperative](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md)
 - [0106: Folio Edit and Play share a mutable Project tree](0106-folio-edit-and-play-share-a-mutable-project-tree.md)
+- [0105: Each Core keeps its Waits in one Wait table module](0105-each-core-keeps-its-waits-in-one-wait-table-module.md)
