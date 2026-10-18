@@ -68,6 +68,15 @@ jobs:
         env:
           CGO_ENABLED: '0'
       - run: impl/go/zig-experimental-check.sh -race
+      # The same suites over each binary Request/Pump candidate (#1245).
+      - run: impl/go/zig-experimental-check.sh
+        env:
+          CGO_ENABLED: '0'
+          TALK_ZIG_REQUEST_PUMP: map
+      - run: impl/go/zig-experimental-check.sh
+        env:
+          CGO_ENABLED: '0'
+          TALK_ZIG_REQUEST_PUMP: fields
 
   # Pure-Go builds of every target from one runner; the matrix above runs them.
   cross-build:

@@ -1,6 +1,8 @@
 # Proposed binary Request and Pump exchanges
 
-**Status: proposed, not implemented or negotiated by released Hosts.** This is
+**Status: proposed. The Zig Session and the experimental Go adapter implement
+both candidates behind negotiation; no released Host negotiates them, and
+neither has passed the performance gate.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s experiment contract,
 under [proposed ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
@@ -92,6 +94,43 @@ using Nothing for absent fields and retaining ordinary nested record shapes:
 
 A common-case-only prototype is not an acceptance result.
 
+### Envelope fields
+
+Both candidates give envelope fields these items. A field the table marks
+optional is omitted from a map and Nothing in a list.
+
+| Field | Item |
+| --- | --- |
+| `m` (map inputs only), `group`, `delivery`, Script names, `kind`, `state`, codes | protocol text |
+| `ref` | integer or negative integer |
+| `token` | positive integer |
+| `to` | map: `script` as protocol text, or `object` as an object item |
+| `message` | map: `name` as protocol text, `args` as a list of Values, optional `limits` |
+| `fn`, `args`, Report Values | Value items; a Report Value the Core can't encode is Nothing |
+| `limits` | map of integer items by override name; any other item is the sentinel for an override the Host can't represent, refused with the ordinary record |
+| `now`, `nextDeadline` | instant item |
+| `fuelSlice`, `fuelCap` | optional integers; absent is zero |
+| `err` | map: `kind`, and a host error's `code` and `detail`, as protocol text |
+| `abandoned`, `settled`, `trace`, `gone`, Stop's id lists | lists of protocol text |
+
+The map candidate's replies keep the JSON reply shapes: an admission is
+`{ref, ok: {delivery, trace?}}` or `{ref, err, trace?}`, and a completion is
+`{ref, delivery?, token?, ok: {state, nextDeadline?, fuelUsed, reports, gone?, trace?}, abandoned, settled?}`
+or `{ref, delivery?, token?, err, trace?}`. A combined input's admission
+refusal is an admission reply, so a reply with `delivery` is a Pump outcome.
+In the fields candidate's completion, each `reports` element is a Report tag
+followed by its list. That element is not an item, so a reader uses the Report
+table rather than skipping generically.
+
+A structurally invalid envelope is a protocol error: an unknown message, field
+or tag, a wrong list length, a zero or already-bound token, or bytes after the
+item. So is a binary frame on a Session that has not negotiated its layout. A
+well-formed input refused before execution gets its exchange's binary reply.
+For example, an unknown Group, Script or Object, or an invalid Value, refuses
+an admission. An unusable Clock or Fuel option refuses an ordinary Pump. A
+combined input with an unusable Clock or Fuel option is admitted, and its Pump
+is refused, as an ordinary Pump with those options would be.
+
 ## Combined operations
 
 `request-pump` carries the ordinary Request target and message plus the Pump
@@ -122,7 +161,9 @@ reuse it in the Session and fail locally on exhaustion. The guest binds it to
 the admitted delivery before any execution or observable callback. Refusal
 creates no binding. Reject duplicate active tokens before admission.
 
-`cancel-correlated` is a JSON queued input carrying its own ref, Group and token.
+`cancel-correlated` is a JSON queued input carrying its own ref, Group and token
+(`{"m":"cancel-correlated","ref":…,"group":…,"token":…}`), available only after
+negotiation, with `cancel-delivery`'s reply.
 It has exactly the cancellation semantics of `cancel-delivery` for the binding,
 including crossing landing and Trace identity. It does not execute a Pump.
 An unknown, retired or wrong-Group token is a protocol error with no effect.
@@ -140,7 +181,12 @@ not yet transmitted when that reply arrives become ordinary delivery-id
 cancellations. A token cancellation already transmitted must be answered before
 the owner processes final completion. No retirement acknowledgement or idle
 binding retention is needed. A lost final reply is a transport failure, never
-permission to replay the combined admission.
+permission to replay the combined admission. A cancellation queued for an
+admission that was refused has nothing to cancel; the Host sends no token for it.
+
+Inline admission, where a transport serves queued inputs while an export runs,
+carries JSON. An ordinary binary input queued behind an export may cross as its
+JSON form. A binary worker input waits for the export boundary instead.
 
 ## Host APIs and compatibility
 

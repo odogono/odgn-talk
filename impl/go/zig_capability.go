@@ -340,7 +340,13 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 }
 func (b *zigGroup) abandoned(ids zigReply) {
 	for _, raw := range ids.items() {
-		id := CallID(zigText(raw))
+		b.abandonedIDs([]string{zigText(raw)})
+	}
+}
+
+func (b *zigGroup) abandonedIDs(ids []string) {
+	for _, raw := range ids {
+		id := CallID(raw)
 		b.callsMu.Lock()
 		cancel := b.calls[id]
 		delete(b.calls, id)
@@ -357,10 +363,18 @@ func (b *zigGroup) settled(ids zigReply) {
 	if !ids.present() {
 		return
 	}
+	var texts []string
+	for _, raw := range ids.items() {
+		texts = append(texts, zigText(raw))
+	}
+	b.settledIDs(texts)
+}
+
+func (b *zigGroup) settledIDs(ids []string) {
 	b.callsMu.Lock()
 	defer b.callsMu.Unlock()
-	for _, raw := range ids.items() {
-		delete(b.calls, CallID(zigText(raw)))
+	for _, id := range ids {
+		delete(b.calls, CallID(id))
 	}
 }
 func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fuel int64) {

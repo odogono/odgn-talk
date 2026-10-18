@@ -41,14 +41,21 @@ fn number(out: *std.ArrayList(u8), a: Allocator, n: model.Decimal) !void {
 pub const EncodeOptions = struct { functions: ?FunctionWriter = null, core_errors: bool = false, function_metadata: bool = false };
 
 pub fn encode(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
-    // Decimal/Unit formatting uses an allocating Writer. Its WriteFailed is
-    // allocation refusal here, never external I/O or malformed input.
-    return encodeInner(a, root, options) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
-}
-
-fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(a);
+    try append(a, &out, root, options);
+    return out.toOwnedSlice(a);
+}
+
+/// Appends one Value item to `out`, which a frame writer owns. On failure
+/// `out` may hold a partial item; the caller discards the frame.
+pub fn append(a: Allocator, out: *std.ArrayList(u8), root: *const Value, options: EncodeOptions) !void {
+    // Decimal/Unit formatting uses an allocating Writer. Its WriteFailed is
+    // allocation refusal here, never external I/O or malformed input.
+    return appendInner(a, out, root, options) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
+}
+
+fn appendInner(a: Allocator, out: *std.ArrayList(u8), root: *const Value, options: EncodeOptions) !void {
     const Step = union(enum) { value: *const Value, key: []const u8 };
     var stack: std.ArrayList(Step) = .empty;
     defer stack.deinit(a);
@@ -60,22 +67,22 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
     try stack.append(a, .{ .value = root });
     while (stack.pop()) |step| {
         if (step == .key) {
-            try taggedText(&out, a, step.key);
+            try taggedText(out, a, step.key);
             continue;
         }
         const v = step.value;
         switch (v.data) {
             .nothing => try out.append(a, 0),
             .bool => |b| try out.append(a, if (b) 2 else 1),
-            .number => |n| try number(&out, a, n),
-            .text => |s| try taggedText(&out, a, s),
+            .number => |n| try number(out, a, n),
+            .text => |s| try taggedText(out, a, s),
             .bytes => |b| {
                 try out.append(a, 8);
-                try text(&out, a, b);
+                try text(out, a, b);
             },
             .list => |xs| {
                 try out.append(a, 6);
-                try uint(&out, a, xs.len);
+                try uint(out, a, xs.len);
                 var i = xs.len;
                 while (i > 0) {
                     i -= 1;
@@ -84,7 +91,7 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
             },
             .map => |pairs| {
                 try out.append(a, if (v.core_message and options.core_errors) 17 else 7);
-                try uint(&out, a, pairs.len);
+                try uint(out, a, pairs.len);
                 var i = pairs.len;
                 while (i > 0) {
                     i -= 1;
@@ -95,10 +102,10 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
             },
             .quantity => |q| {
                 try out.append(a, 9);
-                try number(&out, a, q.number);
+                try number(out, a, q.number);
                 const s = try q.unit.string(a, false);
                 defer a.free(s);
-                try taggedText(&out, a, s);
+                try taggedText(out, a, s);
             },
             .range => |r| {
                 try out.append(a, 10);
@@ -109,22 +116,22 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
                 const n: i64 = t.seconds * 1000000 + t.micros;
                 const bits: u64 = @bitCast(n);
                 try out.append(a, 11);
-                try uint(&out, a, (bits << 1) ^ @as(u64, @bitCast(n >> 63)));
+                try uint(out, a, (bits << 1) ^ @as(u64, @bitCast(n >> 63)));
             },
             .civil_date => |d| {
                 const s = try model.dates.string(a, d, false);
                 defer a.free(s);
                 try out.append(a, 12);
-                try text(&out, a, s);
+                try text(out, a, s);
             },
             .pattern => |s| {
                 try out.append(a, 13);
-                try text(&out, a, s);
+                try text(out, a, s);
             },
             .object => |o| {
                 try out.append(a, 14);
-                try taggedText(&out, a, o.kind);
-                try taggedText(&out, a, o.id);
+                try taggedText(out, a, o.kind);
+                try taggedText(out, a, o.id);
             },
             .function => {
                 const f = options.functions orelse return error.InvalidValue;
@@ -138,7 +145,7 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
                 try validateFunction(xs);
                 if (xs.len > 3 and !options.function_metadata) return error.InvalidValue;
                 try out.append(a, if (xs.len == 3) 15 else 19);
-                if (xs.len != 3) try uint(&out, a, xs.len);
+                if (xs.len != 3) try uint(out, a, xs.len);
                 var i = xs.len;
                 while (i > 0) {
                     i -= 1;
@@ -147,7 +154,6 @@ fn encodeInner(a: Allocator, root: *const Value, options: EncodeOptions) ![]u8 {
             },
         }
     }
-    return out.toOwnedSlice(a);
 }
 
 fn validateFunction(xs: []const *Value) !void {

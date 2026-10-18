@@ -36,6 +36,8 @@ func zigParseReply(data []byte) (zigReply, error) {
 type zigPacket struct {
 	root                                          zigReply
 	ref, ok, err, need, abandoned, settled, trace zigReply
+	// bin is a binary reply (#1245), whose envelope is read separately.
+	bin *zbPacket
 }
 
 var zigPacketKeys = []string{"ref", "ok", "err", "need", "abandoned", "settled", "trace"}
@@ -43,7 +45,7 @@ var zigPacketKeys = []string{"ref", "ok", "err", "need", "abandoned", "settled",
 func zigReadPacket(root zigReply) zigPacket {
 	var f [7]zigReply
 	root.lookup(zigPacketKeys, f[:])
-	return zigPacket{root, f[0], f[1], f[2], f[3], f[4], f[5], f[6]}
+	return zigPacket{root: root, ref: f[0], ok: f[1], err: f[2], need: f[3], abandoned: f[4], settled: f[5], trace: f[6]}
 }
 
 func zigSpace(d []byte, i int) int {

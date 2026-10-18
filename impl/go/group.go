@@ -99,6 +99,7 @@ type delivery struct {
 	after      *Object // climb from this previous owner, never from target
 	parent     *Object // SetParent input
 	object     *Object
+	combined   *combinedPump // a backend's combined admission and Pump (#1245)
 }
 type execution struct {
 	raisesWritten int
@@ -431,6 +432,9 @@ func (g *Group) admitWithReady(s *Script, m Message, ctx context.Context, reques
 		var fn *Value
 		if address.function != nil {
 			fn = &Value{*address.function}
+		}
+		if address.combined != nil {
+			return g.backend.(combinedBackend).queueCombined(s, address.target, fn, m, ctx, name, address.combined)
 		}
 		return g.backend.queue(s, address.target, fn, m, ctx, name, decision)
 	}

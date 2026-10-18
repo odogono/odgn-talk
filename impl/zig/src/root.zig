@@ -8,6 +8,7 @@ pub const builtins = @import("machine/builtins.zig");
 pub const display = @import("display.zig");
 pub const encoding = @import("encoding.zig");
 pub const binary_value = @import("binary_value.zig");
+pub const request_pump = @import("request_pump.zig");
 pub const syntax = @import("syntax/syntax.zig");
 pub const check = @import("check/check.zig");
 pub const analysis = @import("analysis.zig");
@@ -55,6 +56,7 @@ test {
     _ = display;
     _ = encoding;
     _ = binary_value;
+    _ = request_pump;
     _ = syntax;
     _ = check;
     _ = analysis;

@@ -1983,7 +1983,13 @@ has private native-Go experiment helpers and a `BackendRequestPump` benchmark.
 The helpers admit one input and perform one ordinary Pump under the worker guard.
 A Pending can remain unsettled; Pump failure retains the admitted input.
 They omit initial OnReady and notify after releasing the worker on Pump refusal.
-The experimental Zig backend refuses combined operations before admission; its
-binary transport is not implemented. These helpers are not public Go APIs.
+With `TALK_ZIG_REQUEST_PUMP` set to `map` or `fields`, the experimental Zig
+backend negotiates that candidate for new guests. Ordinary Requests, Function
+calls and Pumps then use binary frames, and the helpers use the guest's combined
+messages after the ordinary Go-side admission checks. Their Pending is
+registered before sending, and context cancellation uses the exchange's token
+until its final reply, then the delivery id. Unset, the backend keeps JSON
+and refuses combined operations before admission. These helpers are not public
+Go APIs; run the adapter suites in either mode with the variable set.
 The proposed Go, TS, Elixir and C declarations remain unpublished until the
 performance gate, so the public cross-Host API checks retain their existing contract.
