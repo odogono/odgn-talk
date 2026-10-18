@@ -775,7 +775,9 @@ first parked Run becomes ready when the clause's Run ends, behind any `error`
 message. `, dropping` ends the new Run `dropped`. `, replacing` cancels the
 earlier Runs: what each waits on is abandoned at once, and in its own turn it
 runs its `finally` blocks, innermost first, with nothing unwound, and ends
-`cancelled`. A waiting sender gets `send failed` with that reason.
+`cancelled`. Cancelling a parked queued Run also runs its dispatch-local
+`finally` blocks, without rolling back committed Script Variables or releasing
+the active Run's clause slot. A waiting sender gets `send failed` with that reason.
 
 A Decision (`talk_decide`, `talk_script_decide`) is a Delivery that carries
 an open Verdict. A `wait for` that takes it allows it, and so does a selected

@@ -212,7 +212,8 @@ end work
 }
 
 func TestCancellingParkedRunKeepsClauseQueueAndCommittedState(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
+	var trace lines
+	g := New().NewGroup(GroupOptions{Trace: &trace})
 	s, err := g.Load(LoadOptions{Name: "s", Source: `script variable seen = []
 on work n, queued
  try
@@ -227,13 +228,15 @@ end work
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "work", Args: []Value{Int(1)}})
-	_, _, err = s.Request(nil, Message{Name: "work", Args: []Value{Int(2)}})
+	_, pending, err := s.Request(nil, Message{Name: "work", Args: []Value{Int(2)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "work", Args: []Value{Int(3)}})
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	g.Pump(now, PumpOptions{})
+	if _, err := g.Pump(now, PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	s.CancelRun(g.Inspect().Scripts[0].Runs[1].ID)
 	r, err := g.Pump(now, PumpOptions{})
 	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
@@ -243,7 +246,17 @@ end work
 	if v.Vars[0].Val.String() != "[1, 20]" || len(v.Runs) != 2 || v.Runs[1].Status != Parked {
 		t.Fatal(v)
 	}
-	g.Pump(now.Add(time.Second), PumpOptions{})
+	select {
+	case <-pending.Done():
+	default:
+		t.Fatal("cancelled parked Request remains unsettled")
+	}
+	if _, failure := pending.Result(); failure == nil || failure.Code != "send failed" || failure.Data.Get("reason").String() != `"cancelled"` {
+		t.Fatal(failure)
+	}
+	if _, err := g.Pump(now.Add(time.Second), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != "[1, 20, 10, 3]" {
 		t.Fatal(got)
 	}

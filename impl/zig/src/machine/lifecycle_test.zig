@@ -308,3 +308,47 @@ test "stopped Script Reload releases Grants once before publishing, synchronousl
         try testing.expect(s.stopped == null);
     }
 }
+
+// Parking retains the dispatch-local finally scope, but owns no clause slot.
+test "cancelling a parked queued Run cleans up without releasing the active Run (#1063)" {
+    const a = testing.allocator;
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    var g: machine.Group = .init(a, &out.writer);
+    defer g.deinit();
+    const loaded = try g.load("s",
+        \\script variable seen = []
+        \\on work n, queued
+        \\ try
+        \\  put n after seen
+        \\  wait 1 s
+        \\ finally
+        \\  put n * 10 after seen
+        \\ end try
+        \\end work
+    , .{});
+    try testing.expect(loaded == .loaded);
+    for (1..4) |n| {
+        const v = try model.scalar(a, .{ .number = .fromInt(@as(i64, @intCast(n))) });
+        var args = [_]*model.Value{v};
+        _ = try g.deliver("s", "work", &args, true);
+    }
+    try g.pump(.{ .seconds = 0, .micros = 0 });
+    const script = loaded.loaded;
+    try testing.expectEqual(@as(usize, 3), script.live.items.len);
+    try g.cancelRunInput("s/r2");
+    try g.pump(.{ .seconds = 0, .micros = 0 });
+    try testing.expectEqual(@as(usize, 2), script.live.items.len);
+    try testing.expectEqualStrings("s/r1", script.live.items[0].id);
+    try testing.expect(script.live.items[1].parked);
+    try testing.expectEqual(@as(usize, 2), script.variables[0].data.list.len);
+    for ([_]i64{ 1, 20 }, script.variables[0].data.list) |want, got| {
+        try testing.expectEqual(want, try got.data.number.integer(i64));
+    }
+    try g.pump(.{ .seconds = 1, .micros = 0 });
+    try testing.expectEqual(@as(usize, 1), script.live.items.len);
+    try testing.expectEqualStrings("s/r3", script.live.items[0].id);
+    try testing.expect(!script.live.items[0].parked);
+    try g.pump(.{ .seconds = 2, .micros = 0 });
+    try testing.expectEqual(@as(usize, 0), script.live.items.len);
+}

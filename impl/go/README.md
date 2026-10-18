@@ -369,10 +369,15 @@ veto's defining position. The shared public Host compares refusals, unchanged
 state and code identity, pending Run resumption and subsequent Host Decisions
 against native Go with exact Trace, Fuel, typed Reports, futures and Inspection.
 
+Cancelling a parked queued Run executes its dispatch-local `finally` blocks
+without releasing the clause held by the active Run. Shared public Hosts cover
+`CancelRun` and Request context cancellation, including cleanup preemption,
+with exact Trace, Fuel, typed Reports, futures and inspected-state comparison
+to native Go ([#1063](https://github.com/odogono/odgn-talk/issues/1063)).
+
 Known execution differences remain outside the selection:
-allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
-Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
-and parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)).
+allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061))
+and Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)).
 
 Valid `wait d` and timed message waits suspend and pay their charge even when
 their mathematical deadline lies outside the Clock's years 0001–9999. Such a
