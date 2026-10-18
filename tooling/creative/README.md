@@ -15,9 +15,9 @@ enter `.folio` files or browser storage. Intake copies the supplied Project,
 and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
 
 The Project title, [Info panel](src/info-panel.tsx),
-[Page strip](src/page-strip.tsx) and [Edit menu](src/edit-menu.tsx) commands
-are Preact components
-written in TSX, observing the editor signals through `@preact/signals`. Live
+[Page strip](src/page-strip.tsx), [Edit menu](src/edit-menu.tsx) commands
+and the [Projects window's lists](src/projects-window.tsx) are Preact components
+written in TSX, observing signals through `@preact/signals`. Live
 edits, undo/redo and Project loads update them independently of the shell
 redraw. Info reconciles its controls in place, keeping focus, caret, selection
 and composing text while the Page and strip update. Its read-only state disables
@@ -217,7 +217,12 @@ The design is sections 4–6 of
 The stores are [`src/storage.ts`](src/storage.ts), the scheduling
 [`src/autosave.ts`](src/autosave.ts), one-editor-per-Project
 [`src/edit-lock.ts`](src/edit-lock.ts), and the windows and banners
-[`src/projects.ts`](src/projects.ts). Beside each stored version, a
+[`src/projects.ts`](src/projects.ts). The Project, Earlier Versions and Example
+Projects lists are Preact components in
+[`src/projects-window.tsx`](src/projects-window.tsx), following signals for the
+records, versions, current Project, edit lock and the row being renamed or
+deleted, so a reload updates rows in place and a rename field keeps what was
+typed. Beside each stored version, a
 `summaries` record keeps its time, Page count and asset hashes, so listing,
 trimming and freeing unused assets never read whole models. All but the windows are tested
 without a DOM against `tests/fake-indexeddb.ts`, a small in-memory
@@ -488,6 +493,10 @@ read-only state, Browse and Present.
 The [`errors` suite](tests/errors.browser.ts) checks that problems append
 with their labels, open their Script, are disabled once their owner has gone,
 and that Clear and Close behave as before.
+The [`projects-window` suite](tests/projects-window.browser.ts) runs on
+`/projects-window-test.html` and checks that the Project and version lists
+keep their rows, and a rename field its focus, caret and typed text, while the
+records, current Project, edit lock and previewed version change.
 
 ## Play
 

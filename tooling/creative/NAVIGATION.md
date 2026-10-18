@@ -188,12 +188,16 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [storage.ts](src/storage.ts) (IndexedDB), [autosave.ts](src/autosave.ts),
   [edit-lock.ts](src/edit-lock.ts), [projects.ts](src/projects.ts) (the
-  Projects window and banners).
+  Projects window's actions, banners and the signals its lists follow).
+- [projects-window.tsx](src/projects-window.tsx): the Preact Project,
+  Earlier Versions and Example Projects lists, keyed by Project id and version
+  `seq`; a rename field keeps its focus and typed text while the list reloads.
 - Tests: [storage.test.ts](tests/storage.test.ts) over
   [fake-indexeddb.ts](tests/fake-indexeddb.ts),
   [autosave.test.ts](tests/autosave.test.ts),
   [edit-lock.test.ts](tests/edit-lock.test.ts),
-  [storage.browser.ts](tests/storage.browser.ts).
+  [storage.browser.ts](tests/storage.browser.ts),
+  [projects-window.browser.ts](tests/projects-window.browser.ts).
 - First check: `bun test tooling/creative/tests/storage.test.ts`.
 
 ## Offline, service worker and files on disk
