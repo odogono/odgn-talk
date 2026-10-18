@@ -1,3 +1,12 @@
+import {
+  allElements,
+  findElement,
+  checkHierarchy,
+  refreshBounds,
+  groupElement,
+  outerElement,
+  updateGeometry,
+} from './hierarchy';
 // The Stack editor's state and edits (#749): which Page is showing, which
 // Elements are selected, and the moves, resizes, renames and Page edits the
 // shell makes. Pure TS over the Project model, so it is tested without a DOM.
@@ -78,7 +87,10 @@ const elementNamesNear = (
 ) =>
   project
     ? elementNamesTaken(project, page, current)
-    : new Set([...reservedScriptNames, ...namesExcept(page.elements, current)]);
+    : new Set([
+        ...reservedScriptNames,
+        ...namesExcept(allElements(page.elements), current),
+      ]);
 
 /**
  * Checks `name` for an Element on `page`: an identifier, unique within the
@@ -193,16 +205,34 @@ export type EditorState = {
   pageIndex: number;
   pageSelected: boolean;
   project: Project;
+  scope: number[];
   selection: string[];
 };
 type Root = Immutable<EditorState>;
 type HistoryEntry = { after: Root; before: Root };
 export const pageOf = (state: EditorState) =>
   state.project.pages[state.pageIndex]!;
+export function scopeElements(state: EditorState): Element[];
+export function scopeElements(
+  state: Immutable<EditorState>,
+): Immutable<Element[]>;
+export function scopeElements(
+  state: Immutable<EditorState>,
+): Immutable<Element[]> {
+  let elements = state.project.pages[state.pageIndex]!.elements;
+  for (const id of state.scope) {
+    const group = elements.find(e => e.id === id);
+    if (group?.kind !== 'group') {
+      break;
+    }
+    elements = group.members;
+  }
+  return elements;
+}
 export const selectedOf = (state: EditorState) =>
-  pageOf(state).elements.filter(e => state.selection.includes(e.name));
-const elementOf = (state: EditorState, name: string) =>
-  pageOf(state).elements.find(e => e.name === name);
+  scopeElements(state).filter(e => state.selection.includes(e.name));
+export const elementOf = (state: EditorState, name: string) =>
+  findElement(pageOf(state).elements, name);
 
 export type LayerOrder = 'forward' | 'backward' | 'front' | 'back';
 
@@ -234,7 +264,7 @@ export class StackEditor {
       () => this.state.value.project.pages[this.state.value.pageIndex]!,
     );
     this.selectedElements = computed(() =>
-      this.currentPage.value.elements.filter(e =>
+      scopeElements(this.state.value).filter(e =>
         this.state.value.selection.includes(e.name),
       ),
     );
@@ -268,9 +298,19 @@ export class StackEditor {
 
   #initial(project: Immutable<Project>): Root {
     const copy = castDraft(structuredClone(project));
+    checkHierarchy(copy.pages.flatMap(page => page.elements));
+    for (const page of copy.pages) {
+      refreshBounds(page.elements);
+    }
     this.#assignIds(copy);
     return freeze(
-      { project: copy, pageIndex: 0, selection: [], pageSelected: false },
+      {
+        project: copy,
+        pageIndex: 0,
+        selection: [],
+        pageSelected: false,
+        scope: [],
+      },
       true,
     );
   }
@@ -279,7 +319,7 @@ export class StackEditor {
   #assignIds(project: Project): void {
     for (const page of project.pages) {
       page.id ??= this.#id();
-      for (const element of page.elements) {
+      for (const element of allElements(page.elements)) {
         element.id ??= this.#id();
       }
     }
@@ -382,7 +422,23 @@ export class StackEditor {
           const base = fromStart ? pending.before : this.#state.peek();
           this.#state.value = produce(base, draft => {
             update(draft);
+            checkHierarchy(draft.project.pages.flatMap(page => page.elements));
+            for (const page of draft.project.pages) {
+              refreshBounds(page.elements);
+            }
             this.#assignIds(draft.project);
+            let elements = pageOf(draft).elements;
+            const validScope = draft.scope.filter(id => {
+              const group = elements.find(e => e.id === id);
+              if (group?.kind !== 'group') {
+                return false;
+              }
+              elements = group.members;
+              return true;
+            });
+            if (validScope.length !== draft.scope.length) {
+              draft.scope = validScope;
+            }
           });
         }
       },
@@ -431,7 +487,7 @@ export class StackEditor {
     return this.selectedElements.value;
   }
   element(name: string): Immutable<Element> | undefined {
-    return this.page.elements.find(e => e.name === name);
+    return findElement(this.page.elements, name);
   }
 
   /** Text edits for a text Element on the showing Page, one undo step each. */
@@ -447,9 +503,19 @@ export class StackEditor {
   click(name: string | undefined, { shift = false } = {}): void {
     this.#finish();
     this.#update(draft => {
-      if (name === undefined || !this.element(name)) {
+      let resolved = name
+        ? outerElement(scopeElements(draft), name)
+        : undefined;
+      if (name && !resolved) {
+        draft.scope = [];
+        resolved = outerElement(pageOf(draft).elements, name);
+        draft.selection = [];
+      }
+      name = resolved?.name;
+      if (name === undefined) {
         if (!shift) {
           draft.selection = [];
+          draft.scope = [];
           draft.pageSelected = true;
         }
         return;
@@ -465,10 +531,99 @@ export class StackEditor {
     });
   }
 
+  get scope(): readonly number[] {
+    return this.state.value.scope;
+  }
+  get canGroup(): boolean {
+    return !this.readOnly && this.selected.length >= 2;
+  }
+  get canUngroup(): boolean {
+    return !this.readOnly && this.selected.some(e => e.kind === 'group');
+  }
+  selectable(name: string): Immutable<Element> | undefined {
+    return outerElement(scopeElements(this.state.value), name);
+  }
+  enterGroup(name: string): void {
+    this.#finish();
+    this.#update(draft => {
+      const group = scopeElements(draft).find(e => e.name === name);
+      if (group?.kind === 'group') {
+        draft.scope.push(group.id!);
+        draft.selection = [];
+        draft.pageSelected = false;
+      }
+    });
+  }
+  leaveGroup(): void {
+    if (!this.scope.length) {
+      this.selectPage();
+      return;
+    }
+    this.#finish();
+    this.#update(draft => {
+      const id = draft.scope.pop();
+      const group = scopeElements(draft).find(e => e.id === id);
+      draft.selection = group ? [group.name] : [];
+      draft.pageSelected = false;
+    });
+  }
+  groupSelection(): void {
+    if (!this.canGroup) {
+      return;
+    }
+    this.edit(draft => {
+      const elements = scopeElements(draft);
+      const members = selectedOf(draft);
+      const chosen = new Set(members);
+      const last =
+        elements.length -
+        1 -
+        [...elements].reverse().findIndex(e => chosen.has(e));
+      const position = elements
+        .slice(0, last + 1)
+        .filter(e => !chosen.has(e)).length;
+      const group = groupElement(
+        freshName('group1', elementNamesTaken(draft.project, pageOf(draft))),
+        members,
+      );
+      const others = elements.filter(e => !chosen.has(e));
+      others.splice(position, 0, group);
+      elements.splice(0, elements.length, ...others);
+      draft.selection = [group.name];
+    });
+  }
+  ungroupSelection(): void {
+    if (!this.canUngroup) {
+      return;
+    }
+    this.edit(draft => {
+      const elements = scopeElements(draft);
+      const names: string[] = [];
+      const next = elements.flatMap(e => {
+        if (draft.selection.includes(e.name) && e.kind === 'group') {
+          for (const member of e.members) {
+            if (!e.visible) {
+              member.visible = false;
+            }
+            names.push(member.name);
+          }
+          return e.members;
+        }
+        if (draft.selection.includes(e.name)) {
+          names.push(e.name);
+        }
+        return [e];
+      });
+      elements.splice(0, elements.length, ...next);
+      draft.selection = names;
+    });
+  }
+
   selectPage(): void {
     this.#finish();
     this.#update(draft => {
       draft.selection = [];
+      draft.scope = [];
       draft.pageSelected = true;
     });
   }
@@ -484,7 +639,7 @@ export class StackEditor {
       const step = (page.elements.length % 10) * CASCADE;
       element.left += step;
       element.top += step;
-      page.elements.push(element);
+      scopeElements(draft).push(element);
       draft.selection = [element.name];
       draft.pageSelected = false;
       return element;
@@ -530,7 +685,7 @@ export class StackEditor {
         if (position) {
           Object.assign(element, position);
         }
-        pageOf(draft).elements.push(element);
+        scopeElements(draft).push(element);
         draft.selection = [element.name];
         draft.pageSelected = false;
       }
@@ -572,8 +727,10 @@ export class StackEditor {
         edit.change(draft => {
           for (const { name, left, top } of origins) {
             const e = elementOf(draft, name)!;
-            e.left = Math.round(left + dx);
-            e.top = Math.round(top + dy);
+            updateGeometry(outerElement(pageOf(draft).elements, name)!, e, {
+              left: Math.round(left + dx),
+              top: Math.round(top + dy),
+            });
           }
         });
       },
@@ -583,7 +740,7 @@ export class StackEditor {
   /** Starts resizing the one selected Element by a handle, if exactly one is. */
   startResize(handle: Handle): Gesture | undefined {
     const [element] = this.selected;
-    if (!element || this.selection.length !== 1) {
+    if (!element || element.kind === 'group' || this.selection.length !== 1) {
       return undefined;
     }
     const origin: Box = { ...element };
@@ -671,6 +828,7 @@ export class StackEditor {
       }
       draft.pageIndex = index;
       draft.selection = [];
+      draft.scope = [];
       draft.pageSelected = true;
     });
   }
@@ -694,6 +852,7 @@ export class StackEditor {
       );
       draft.project.pages.splice(draft.pageIndex + 1, 0, page);
       draft.pageIndex++;
+      draft.scope = [];
       draft.selection = [];
       draft.pageSelected = false;
       return page;
@@ -723,14 +882,19 @@ export class StackEditor {
         const taken = elementNamesTaken(draft.project, pageOf(draft));
         const copies = selectedOf(draft).map(element => {
           const copy = duplicateElement(element, taken);
-          taken.add(copy.name);
-          copy.left += CASCADE;
-          copy.top += CASCADE;
+          for (const member of allElements([copy])) {
+            taken.add(member.name);
+          }
+          updateGeometry(copy, copy, {
+            left: copy.left + CASCADE,
+            top: copy.top + CASCADE,
+          });
           return copy;
         });
-        pageOf(draft).elements.push(...copies);
+        scopeElements(draft).push(...copies);
         draft.selection = copies.map(e => e.name);
       } else {
+        draft.scope = [];
         const copy = duplicatePage(
           pageOf(draft),
           pageNamesTaken(draft.project),
@@ -756,11 +920,14 @@ export class StackEditor {
     this.edit(draft => {
       draft.pageSelected = false;
       if (draft.selection.length) {
-        pageOf(draft).elements = pageOf(draft).elements.filter(
+        const elements = scopeElements(draft);
+        const remaining = elements.filter(
           e => !draft.selection.includes(e.name),
         );
+        elements.splice(0, elements.length, ...remaining);
         draft.selection = [];
       } else {
+        draft.scope = [];
         draft.project.pages.splice(draft.pageIndex, 1);
         draft.pageIndex = Math.min(
           draft.pageIndex,
@@ -773,15 +940,20 @@ export class StackEditor {
   /** Keeps selected Elements' relative order, including adjacent groups. */
   orderLayers(order: LayerOrder): void {
     this.edit(draft => {
-      const elements = pageOf(draft).elements;
+      const elements = scopeElements(draft);
       const selection = new Set(draft.selection);
       const selected = (element: Immutable<Element>) =>
         selection.has(element.name);
       if (order === 'front' || order === 'back') {
         const chosen = elements.filter(selected);
         const others = elements.filter(e => !selected(e));
-        pageOf(draft).elements =
-          order === 'front' ? [...others, ...chosen] : [...chosen, ...others];
+        elements.splice(
+          0,
+          elements.length,
+          ...(order === 'front'
+            ? [...others, ...chosen]
+            : [...chosen, ...others]),
+        );
       } else if (order === 'forward') {
         for (let i = elements.length - 2; i >= 0; i--) {
           if (selected(elements[i]!) && !selected(elements[i + 1]!)) {
@@ -815,7 +987,9 @@ class EditorTextHistory implements TextHistory {
     return this.editor.canRedo;
   }
   get element(): Immutable<TextElement> {
-    const found = this.editor.page.elements.find(e => e.id === this.#last.id);
+    const found = allElements(this.editor.page.elements).find(
+      e => e.id === this.#last.id,
+    );
     if (found?.kind === 'text') {
       this.#last = found;
     }

@@ -8,6 +8,8 @@ const ALL = [
   'redo',
   'duplicate',
   'delete',
+  'group',
+  'ungroup',
   'forward',
   'backward',
   'front',
@@ -86,6 +88,8 @@ export const runBrowserTests = async () => {
       'Redo ⇧⌘Z',
       'Duplicate ⌘D',
       'Delete ⌫',
+      'Group ⌘G',
+      'Ungroup ⇧⌘G',
       'Bring forward',
       'Send backward',
       'Bring to front',
@@ -101,7 +105,10 @@ export const runBrowserTests = async () => {
     editor.click('box');
     await expectEnabled(SELECTED, 'One Element selected');
     editor.click('go', { shift: true });
-    await expectEnabled(SELECTED, 'Two Elements selected');
+    await expectEnabled(
+      [...SELECTED.slice(0, 2), 'group', ...SELECTED.slice(2)],
+      'Two Elements selected',
+    );
     editor.selectPage();
     await expectEnabled(['duplicate', 'delete'], 'Page selected');
   });

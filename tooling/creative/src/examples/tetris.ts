@@ -1,3 +1,4 @@
+import { groupElement } from '../hierarchy';
 // The Tetris Example Project (#1114): a game loop on Folio's `frame`
 // message (ADR 0095), driven by arrow keys. The board is 200 rectangles
 // drawn here in advance; the Page Script keeps the game in lists and only
@@ -100,10 +101,7 @@ on restart
   put 1 into level
   put 0 into sinceDrop
   put takeFromBag() into nextKind
-  hide alertShadow
-  hide alertBox
-  hide alertInner
-  hide gameOver
+  hide gameOverAlert
   put true into playing
   spawnPiece
   showScore
@@ -243,10 +241,7 @@ end hardDrop
 
 on endGame
   put false into playing
-  show alertShadow
-  show alertBox
-  show alertInner
-  show gameOver
+  show gameOverAlert
 end endGame
 
 -- Milliseconds between drops: a second at level 1, faster each level.
@@ -499,7 +494,7 @@ const tetrisPage = (): Page => {
   };
   const elements: Element[] = [
     ...menuBar(),
-    ...windowFrame('Tetris'),
+    groupElement('windowFrame', windowFrame('Tetris')),
     // The well: a sunken white field with a black edge.
     box(
       'well',
@@ -647,6 +642,13 @@ const tetrisPage = (): Page => {
       { visible: false },
     ),
   );
+  const members = elements.splice(-4);
+  for (const member of members) {
+    member.visible = true;
+  }
+  const alert = groupElement('gameOverAlert', members);
+  alert.visible = false;
+  elements.push(alert);
   page.elements = elements;
   return page;
 };

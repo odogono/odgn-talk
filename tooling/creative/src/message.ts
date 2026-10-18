@@ -1,3 +1,5 @@
+import { allElements } from './hierarchy';
+import type { Element } from './model';
 // Message Box commands (#154's Message Box): run against the Play Session
 // while browsing, or in Edit against the authored Project as one undoable
 // edit, through a session that sends no events.
@@ -69,17 +71,26 @@ export const applySession = (authored: Project, play: PlaySession): void => {
   play.project.pages.forEach((copy, index) => {
     const page = authored.pages[index]!;
     assignChanged(page, copy, ['elements', 'id']);
-    const elements = copy.elements.map(element => {
+    const originals = new Map(allElements(page.elements).map(e => [e.id, e]));
+    const reconcile = (element: Element): Element => {
       const original =
-        element.id === undefined
-          ? undefined
-          : page.elements.find(e => e.id === element.id);
+        element.id === undefined ? undefined : originals.get(element.id);
       if (!original) {
         return structuredClone(element);
       }
-      assignChanged(original, element);
+      assignChanged(original, element, ['id', 'members']);
+      if (original.kind === 'group' && element.kind === 'group') {
+        const members = element.members.map(reconcile);
+        if (
+          members.length !== original.members.length ||
+          members.some((e, i) => e !== original.members[i])
+        ) {
+          original.members = members;
+        }
+      }
       return original;
-    });
+    };
+    const elements = copy.elements.map(reconcile);
     if (
       elements.length !== page.elements.length ||
       elements.some((e, i) => e !== page.elements[i])

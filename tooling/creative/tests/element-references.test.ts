@@ -242,7 +242,10 @@ test('Play and the authoring Manifest declare the same Page collection', () => {
     atCost: { fuel: 1, alloc: 0 },
     findCost: { fuel: 1, alloc: 0 },
   });
-  for (const name of ['project', ...ELEMENT_KINDS]) {
+  for (const name of [
+    'project',
+    ...ELEMENT_KINDS.filter(kind => kind !== 'group'),
+  ]) {
     expect(exported(name)).toBeUndefined();
     expect(
       authored.find(kind => kind.name === name) as { elements?: unknown },

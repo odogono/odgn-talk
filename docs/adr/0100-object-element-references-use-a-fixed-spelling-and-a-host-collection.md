@@ -1,5 +1,9 @@
 # Object element references use a fixed spelling and a Host collection
 
+Folio's collection policy is extended by [ADR 0103](0103-folio-groups-are-nested-elements-with-page-wide-names.md):
+Group Elements expose immediate members, and Page collections include groups
+and descendants in postorder. The Core reference mechanism is unchanged.
+
 For [#1143](https://github.com/odogono/odgn-talk/issues/1143), add the fixed
 Core spelling `element selector of receiver`, ordinal references and
 `the number of elements of receiver`. A Host Object's Object Kind optionally

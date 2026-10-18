@@ -3,6 +3,7 @@
 // `format` version, and one stored `assets/<sha256>.<ext>` per asset.
 // Files hold the authored Project only, never Play State (ADR 0041).
 import { type Immutable } from 'immer';
+import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './hierarchy';
 
 import {
   alignParagraph,
@@ -22,7 +23,7 @@ import {
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 1;
+export const CURRENT_FORMAT = 2;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -93,6 +94,8 @@ const setDefined = <T extends object, K extends keyof T>(
 };
 
 class Checker {
+  readonly elements = new Set<object>();
+  readonly names = new Set<string>();
   readonly issues: ValidationIssue[] = [];
 
   fail(path: string, message: string): void {
@@ -222,10 +225,70 @@ const checkElement = (
   c: Checker,
   value: unknown,
   path: string,
+  depth = 0,
 ): Element | undefined => {
   const e = c.obj(value, path);
   if (!e) {
     return undefined;
+  }
+  if (c.elements.has(e)) {
+    c.fail(path, 'an Element must have exactly one parent');
+    return undefined;
+  }
+  c.elements.add(e);
+  const name = c.name(e.name, `${path}.name`) ?? '';
+  if (c.names.has(name)) {
+    c.fail(`${path}.name`, 'another Element on this Page has this name');
+  }
+  c.names.add(name);
+  if (e.kind === 'group') {
+    if (depth >= MAX_GROUP_DEPTH) {
+      c.fail(path, `groups may nest at most ${MAX_GROUP_DEPTH} levels`);
+      return undefined;
+    }
+    const members = (c.arr(e.members, `${path}.members`) ?? []).flatMap(
+      (raw, i) => {
+        const member = checkElement(c, raw, `${path}.members[${i}]`, depth + 1);
+        return member ? [member] : [];
+      },
+    );
+    const anchor = members.length
+      ? undefined
+      : c.obj(
+          e.emptyPosition ??
+            (typeof e.left === 'number'
+              ? { left: e.left, top: e.top }
+              : undefined),
+          `${path}.emptyPosition`,
+        );
+    if (members.length && e.emptyPosition !== undefined) {
+      c.fail(
+        `${path}.emptyPosition`,
+        'only empty groups have a saved position',
+      );
+    }
+    const group: Element = {
+      kind: 'group',
+      name,
+      members,
+      visible: c.bool(e.visible, `${path}.visible`) ?? true,
+      left: anchor
+        ? (c.num(anchor.left, `${path}.emptyPosition.left`, 'finite') ?? 0)
+        : 0,
+      top: anchor
+        ? (c.num(anchor.top, `${path}.emptyPosition.top`, 'finite') ?? 0)
+        : 0,
+      width: 0,
+      height: 0,
+    };
+    setDefined(group, 'script', c.optStr(e.script, `${path}.script`));
+    try {
+      checkHierarchy([group]);
+      refreshBounds([group]);
+    } catch (error) {
+      c.fail(path, error instanceof Error ? error.message : String(error));
+    }
+    return group;
   }
   const k = e.kind as ElementKind;
   if (!ELEMENT_KINDS.includes(k)) {
@@ -233,7 +296,7 @@ const checkElement = (
     return undefined;
   }
   const base: Omit<Element, 'kind'> = {
-    name: c.name(e.name, `${path}.name`) ?? '',
+    name,
     left: c.num(e.left, `${path}.left`, 'finite') ?? 0,
     top: c.num(e.top, `${path}.top`, 'finite') ?? 0,
     width: c.num(e.width, `${path}.width`, 'nonNegative') ?? 0,
@@ -287,6 +350,7 @@ const checkElement = (
 
 const checkPage = (c: Checker, value: unknown, path: string): Page => {
   const p = c.obj(value, path) ?? {};
+  c.names.clear();
   // Keep each Element's list index so issues name the right path.
   const checked = (c.arr(p.elements, `${path}.elements`) ?? []).flatMap(
     (raw, i) => {
@@ -373,11 +437,33 @@ export const validateProject = (
  * The parsed-JSON form of a Project file's `project.json`. The model is
  * plain JSON data, so this is an independent copy plus the format header.
  */
-export const serializeProject = (project: Immutable<Project>): Obj => ({
-  format: CURRENT_FORMAT,
-  app: APP,
-  ...projectWithoutIds(project),
-});
+const savedElement = (element: Element): Obj => {
+  if (element.kind !== 'group') {
+    return { ...element };
+  }
+  return {
+    kind: 'group',
+    name: element.name,
+    visible: element.visible,
+    ...(element.script === undefined ? {} : { script: element.script }),
+    members: element.members.map(savedElement),
+    ...(element.members.length
+      ? {}
+      : { emptyPosition: { left: element.left, top: element.top } }),
+  };
+};
+export const serializeProject = (project: Immutable<Project>): Obj => {
+  const copy = projectWithoutIds(project);
+  return {
+    format: CURRENT_FORMAT,
+    app: APP,
+    ...copy,
+    pages: copy.pages.map(page => ({
+      ...page,
+      elements: page.elements.map(savedElement),
+    })),
+  };
+};
 
 /** The error for a damaged `project.json`, named by its first issue. */
 const damaged = (issues: ValidationIssue[]): ProjectFileError => {
@@ -393,8 +479,10 @@ const damaged = (issues: ValidationIssue[]): ProjectFileError => {
 /** One format step: parsed JSON at format n in, format n + 1 out. */
 export type Migration = (data: Obj) => Obj;
 
-/** Migrations by the format they upgrade from. Empty while format is 1. */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+/** Format 1 is already a membership tree with only leaf roots. */
+export const MIGRATIONS: Readonly<Record<number, Migration>> = {
+  1: data => ({ ...data }),
+};
 
 /**
  * Brings parsed `project.json` data to the current format, one step at a

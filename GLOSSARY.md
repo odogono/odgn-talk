@@ -329,8 +329,12 @@ A scrolling visual surface within a Project, containing freely positioned Elemen
 _Avoid_: Card, screen, canvas (for the Page)
 
 **Element**:
-A visual item on a Page: rich text, an image, a button or a shape, optionally with its own Owning Script.
+A visual item on a Page: rich text, an image, a button, a shape or a Group Element, optionally with its own Owning Script.
 _Avoid_: widget, component, control (for all Element kinds)
+
+**Group Element**:
+A named composite Element whose members are Elements on the same Page, including other Group Elements. Its members retain their Page-wide names.
+_Avoid_: Script Group (for a visual composite), folder, component
 
 **Script Recipe**:
 A small editable NorthTalk source example for a common authoring task.

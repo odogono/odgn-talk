@@ -136,7 +136,7 @@ test('soft and hard drops score and lock the piece on the floor', async () => {
 test('stacking pieces to the top ends the game, and Restart starts again', async () => {
   const { play, key, shown, filled } = await start();
   const gameOver = () =>
-    play.page.elements.find(e => e.name === 'gameOver')!.visible;
+    play.isVisible(play.elementsOf().find(e => e.name === 'gameOver')!);
   for (let i = 0; i < 40 && !gameOver(); i++) {
     await key(' ');
   }

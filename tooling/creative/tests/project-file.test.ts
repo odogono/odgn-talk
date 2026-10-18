@@ -111,7 +111,7 @@ test('writing a Project and reading it back gives an equal Project', async () =>
   const json = JSON.parse(
     new TextDecoder().decode(entries.get('project.json')!),
   );
-  expect(json.format).toBe(1);
+  expect(json.format).toBe(2);
   expect(json.pages[0].elements.map((e: { kind: string }) => e.kind)).toEqual([
     'text',
     'image',
@@ -199,7 +199,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 1)',
+    'newer version of the app (format 99; this app reads up to 2)',
   );
 });
 

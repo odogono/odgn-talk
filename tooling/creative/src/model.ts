@@ -1,6 +1,7 @@
 // The authored Project model (#748): pure data, no UI and no Play State
 // (ADR 0041). Element kinds and properties follow #735, decisions 2-5.
 import { castDraft, current, isDraft, type Immutable } from 'immer';
+import { allElements } from './hierarchy';
 
 /** One run of uniformly styled text inside a paragraph. */
 export type TextRun = {
@@ -85,13 +86,16 @@ export type LineElement = ElementBase & {
   thickness: number;
 };
 
+export type GroupElement = ElementBase & { kind: 'group'; members: Element[] };
+
 export type Element =
   | TextElement
   | ImageElement
   | ButtonElement
   | RectangleElement
   | EllipseElement
-  | LineElement;
+  | LineElement
+  | GroupElement;
 
 export type ElementKind = Element['kind'];
 
@@ -102,6 +106,7 @@ export const ELEMENT_KINDS: readonly ElementKind[] = [
   'rectangle',
   'ellipse',
   'line',
+  'group',
 ];
 
 export type Page = {
@@ -245,6 +250,8 @@ export const hasBorder = (element: {
 
 export const createElement = (kind: ElementKind, name: string): Element => {
   switch (kind) {
+    case 'group':
+      return { ...base(name), kind, members: [], width: 0, height: 0 };
     case 'text':
       return {
         ...base(name),
@@ -315,8 +322,13 @@ const withoutIds = <T extends Page | Element>(owner: Immutable<T>): T => {
   ) as T;
   delete copy.id;
   if ('elements' in copy) {
-    for (const element of copy.elements) {
+    for (const element of allElements(copy.elements)) {
       delete element.id;
+    }
+  }
+  if ('kind' in copy && copy.kind === 'group') {
+    for (const member of allElements(copy.members)) {
+      delete member.id;
     }
   }
   return copy;
@@ -327,7 +339,7 @@ export const projectWithoutIds = (project: Immutable<Project>): Project => {
   const copy = castDraft(structuredClone(project));
   for (const page of copy.pages) {
     delete page.id;
-    for (const element of page.elements) {
+    for (const element of allElements(page.elements)) {
       delete element.id;
     }
   }
@@ -343,7 +355,11 @@ export const duplicateElement = (
   takenNames: ReadonlySet<string>,
 ): Element => {
   const copy = withoutIds<Element>(element);
-  copy.name = freshName(element.name, takenNames);
+  const taken = new Set(takenNames);
+  for (const member of allElements([copy])) {
+    member.name = freshName(member.name, taken);
+    taken.add(member.name);
+  }
   return copy;
 };
 

@@ -1,3 +1,11 @@
+import {
+  allElements,
+  checkHierarchy,
+  findElement,
+  refreshBounds,
+  updateGeometry,
+  MAX_GROUP_ELEMENTS,
+} from './hierarchy';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { castDraft, type Immutable } from 'immer';
 import { elementNamesTaken, scriptNameProblems } from './script-names';
@@ -39,12 +47,14 @@ import {
   textOf,
   type Element,
   type ElementKind,
+  type GroupElement,
   type Page,
   type Project,
 } from './model';
 import {
   FOLIO_COMMANDS,
   scriptManifest,
+  scriptOwners,
   scriptPage,
   type ScriptOwner as AuthoredOwner,
 } from './script-manifest';
@@ -144,6 +154,7 @@ export class PlaySession {
   readonly objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
   readonly authored = new Map<ScriptOwner, Immutable<ScriptOwner>>();
   readonly owners = new Map<string, ScriptOwner>();
+  #scripts = new Map<ScriptOwner, string>();
   #kinds = new Map<string, ObjectKind<ScriptOwner>>();
   #nextObject = 0;
   // Each `frame` Script's last delivery time, and whether its Run is pending.
@@ -152,23 +163,125 @@ export class PlaySession {
   // Each Page's Elements by name, for `element "x" of aPage` and the
   // `elements` Grant's `find`; kept in step with create, clone and delete.
   #names = new Map<Page, Map<string, Element>>();
-  // The Page Object Collection (#1143): every live Element in z-order.
+  #ordered = new Map<Page, Element[]>();
+  #parents = new Map<Immutable<Element>, Page | GroupElement>();
+  #outer = new Map<Element, Element>();
+  #pagesOf = new Map<Immutable<Element>, Page>();
+  #memberNames = new Map<GroupElement, Map<string, Element>>();
+  #copyWork = new Map<Element, number>();
+  #ownWork = new Map<Element, number>();
+  #fieldWork = new Map<Element, Map<string, number>>();
+  // Both collection shapes use maintained views, never a per-read traversal.
   #pageElements: ObjectElements<ScriptOwner> = {
     shape: elementShape,
-    count: ({ native }) => num((native as Page).elements.length),
+    count: ({ native }) => num(this.#members(native).length),
     at: ({ native }, index) => {
-      const { elements } = native as Page;
-      const element = elements[index > 0 ? index - 1 : elements.length + index];
-      return element ? this.objects.get(element)!.value : nothing;
+      const members = this.#members(native);
+      const member = members[index > 0 ? index - 1 : members.length + index];
+      return member ? this.objects.get(member)!.value : nothing;
     },
     find: ({ native }, name) => {
-      const element = this.#names.get(native as Page)!.get(name);
-      return element ? this.objects.get(element)!.value : nothing;
+      const member =
+        'kind' in native && native.kind === 'group'
+          ? this.#memberNames.get(native)?.get(name)
+          : this.#names.get(native as Page)?.get(name);
+      return member ? this.objects.get(member)!.value : nothing;
     },
     countCost: { fuel: 1, alloc: 0 },
     atCost: { fuel: 1, alloc: 0 },
     findCost: { fuel: 1, alloc: 0 },
   };
+  #members(owner: ScriptOwner): Element[] {
+    return 'kind' in owner && owner.kind === 'group'
+      ? owner.members
+      : this.#ordered.get(owner as Page)!;
+  }
+  #indexPage(page: Page): void {
+    const ordered = page.elements.some(
+      e => e.kind === 'group' && e.members.length > 0,
+    )
+      ? allElements(page.elements)
+      : page.elements;
+    this.#ordered.set(page, ordered);
+    this.#names.set(page, new Map(ordered.map(e => [e.name, e])));
+    const visit = (e: Element, parent: Page | GroupElement, outer: Element) => {
+      this.#parents.set(e, parent);
+      this.#outer.set(e, outer);
+      this.#pagesOf.set(e, page);
+      if (!this.#ownWork.has(e)) {
+        const fields = new Map(
+          Object.entries(e)
+            .filter(([key]) => key !== 'members')
+            .map(([key, value]) => [key, this.#fieldSize(value)]),
+        );
+        this.#fieldWork.set(e, fields);
+        this.#ownWork.set(
+          e,
+          128 + [...fields.values()].reduce((n, size) => n + size, 0),
+        );
+      }
+      if (e.kind === 'group') {
+        this.#memberNames.set(e, new Map(e.members.map(m => [m.name, m])));
+        for (const member of e.members) {
+          visit(member, e, outer);
+        }
+      }
+      this.#copyWork.set(
+        e,
+        this.#ownWork.get(e)! +
+          (e.kind === 'group'
+            ? e.members.reduce((n, m) => n + this.#copyWork.get(m)!, 0)
+            : 0),
+      );
+    };
+    for (const e of page.elements) {
+      visit(e, page, e);
+    }
+  }
+  #fieldSize(value: unknown): number {
+    // Numeric coordinates and booleans have fixed copy work, independent of
+    // their display spelling. Content sizes include JSON escaping overhead.
+    return typeof value === 'number' || typeof value === 'boolean'
+      ? 64
+      : (JSON.stringify(value)?.length ?? 0);
+  }
+  /** Reader editing and Script content writes keep clone authorization current. */
+  contentChanged(element: Element, key = 'richText'): void {
+    const fields = this.#fieldWork.get(element)!;
+    const size = this.#fieldSize((element as Record<string, unknown>)[key]);
+    const delta = size - (fields.get(key) ?? 0);
+    fields.set(key, size);
+    this.#ownWork.set(element, this.#ownWork.get(element)! + delta);
+    let member = element;
+    // No sibling scans or serialization of unchanged content on scalar writes.
+    while (true) {
+      this.#copyWork.set(member, this.#copyWork.get(member)! + delta);
+      const parent = this.#parents.get(member);
+      if (!parent || !('kind' in parent)) {
+        break;
+      }
+      member = parent;
+    }
+    this.changed = true;
+  }
+  /** Effective reader visibility; each Element's own visible stays separate. */
+  isVisible(element: Immutable<Element>): boolean {
+    if (!this.#pagesOf.has(element)) {
+      return false;
+    }
+    let owner: Immutable<Element | Page> = element;
+    while ('kind' in owner) {
+      if (!owner.visible) {
+        return false;
+      }
+      owner = this.#parents.get(owner)!;
+    }
+    return true;
+  }
+  elementsOf(page: Page = this.page): readonly Element[] {
+    return this.#ordered.get(page)!;
+  }
+
   #elements = defineCapability('elements', {
     create: {
       mode: 'immediate',
@@ -179,9 +292,9 @@ export class PlaySession {
       ],
       result: elementShape,
       cost: { fuel: PUMP_FUEL },
-      do: (_call, kindValue, pageValue, nameValue) => {
+      do: (call, kindValue, pageValue, nameValue) => {
         const kind = kindValue!.asText()! as ElementKind;
-        if (!ELEMENT_KINDS.includes(kind)) {
+        if (!ELEMENT_KINDS.includes(kind) || kind === 'group') {
           throw new ScriptError('out of domain', 'Unknown Element kind');
         }
         const page = this.#elementPage(pageValue!);
@@ -190,6 +303,7 @@ export class PlaySession {
         if (!isIdentifierName(name) || taken.has(name)) {
           throw new ScriptError('out of domain', 'Element name is unavailable');
         }
+        call.charge(this.#ordered.get(page)!.length * 8);
         return this.#addElement(page, createElement(kind, name)).value;
       },
     },
@@ -198,17 +312,57 @@ export class PlaySession {
       args: [elementShape],
       result: elementShape,
       cost: { fuel: PUMP_FUEL },
-      do: (_call, value) => {
+      do: (call, value) => {
         const { page, element } = this.#element(value!);
+        const parent = this.#parents.get(element)!;
+        const outer = this.#outer.get(element)!;
+        const count = allElements([element]).length;
+        if (
+          'kind' in parent &&
+          allElements([outer]).length + count > MAX_GROUP_ELEMENTS
+        ) {
+          throw new ScriptError(
+            'out of domain',
+            'Cloning would exceed the group Element limit',
+          );
+        }
+        call.charge(
+          this.#copyWork.get(element)! +
+            this.#copyWork.get(outer)! +
+            this.#ordered.get(page)!.length * 8,
+        );
         const copy = duplicateElement(
           element,
           elementNamesTaken(this.project, page),
         );
-        copy.left += 20;
-        copy.top += 20;
-        const object = this.#addElement(page, copy);
-        this.authored.set(copy, this.authored.get(element)!);
-        this.#pendingClones.push(copy);
+        try {
+          updateGeometry(copy, copy, {
+            left: copy.left + 20,
+            top: copy.top + 20,
+          });
+        } catch (error) {
+          throw new ScriptError('out of domain', String(error));
+        }
+        // Check ancestor bounds before publishing any new member or handle.
+        const staged = structuredClone(outer);
+        if ('kind' in parent) {
+          const stagedParent = findElement([staged], parent.name)!;
+          if (stagedParent.kind === 'group') {
+            stagedParent.members.push(copy);
+          }
+          try {
+            refreshBounds([staged]);
+          } catch (error) {
+            throw new ScriptError('out of domain', String(error));
+          }
+        }
+        const object = this.#addElement(page, copy, parent);
+        const originals = allElements([element]);
+        const copies = allElements([copy]);
+        copies.forEach((member, i) =>
+          this.authored.set(member, this.authored.get(originals[i]!)!),
+        );
+        this.#pendingClones.push(...copies);
         return object.value;
       },
     },
@@ -216,18 +370,30 @@ export class PlaySession {
       mode: 'fire-and-forget',
       args: [elementShape],
       cost: { fuel: PUMP_FUEL },
-      fire: (_call, value) => {
+      fire: (call, value) => {
         const { page, element } = this.#element(value!);
-        page.elements.splice(page.elements.indexOf(element), 1);
-        this.#names.get(page)!.delete(element.name);
-        for (const [name, owner] of this.owners) {
-          if (owner === element) {
+        const removed = allElements([element]);
+        call.charge(this.#ordered.get(page)!.length * 8 + removed.length * 8);
+        const parent = this.#parents.get(element)!;
+        const siblings = 'kind' in parent ? parent.members : parent.elements;
+        siblings.splice(siblings.indexOf(element), 1);
+        for (const member of removed) {
+          const name = this.#scripts.get(member);
+          if (name) {
             this.sounds.stopOwner(name);
             this.#frames.delete(name);
             this.group.script(name)?.stop('Element deleted');
+            this.#scripts.delete(member);
           }
+          this.group.dispose(this.objects.get(member)!);
+          this.#parents.delete(member);
+          this.#pagesOf.delete(member);
+          this.#outer.delete(member);
         }
-        this.group.dispose(this.objects.get(element)!);
+        // Removing members can only shrink finite bounds. Empty groups keep
+        // their previous left/top and their own Script and identity.
+        refreshBounds(page.elements);
+        this.#indexPage(page);
         this.changed = true;
       },
     },
@@ -258,30 +424,41 @@ export class PlaySession {
   }
 
   #element(value: Value): { element: Element; page: Page } {
-    for (const page of this.project.pages) {
-      const element = page.elements.find(
-        e => this.objects.get(e) === value.asObject(),
-      );
-      if (element) {
-        return { page, element };
-      }
+    const object = value.asObject();
+    const element = object?.native as Element | undefined;
+    const page = element && this.#pagesOf.get(element);
+    if (element && page && this.objects.get(element) === object) {
+      return { page, element };
     }
     throw new ScriptError('out of domain', 'Unknown Element');
   }
 
-  #addElement(page: Page, element: Element): HostObject<ScriptOwner> {
-    const object = this.group.object(
-      this.#kinds.get(element.kind)!,
-      `dynamic:${this.#nextObject++}`,
-      element,
-    );
-    this.objects.set(element, object);
-    this.authored.set(element, this.authored.get(page)!);
-    page.elements.push(element);
-    this.#names.get(page)!.set(element.name, element);
-    this.group.setParent(object, this.objects.get(page)!);
+  #addElement(
+    page: Page,
+    element: Element,
+    parent: Page | GroupElement = page,
+  ): HostObject<ScriptOwner> {
+    const install = (member: Element, owner: Page | GroupElement): void => {
+      const object = this.group.object(
+        this.#kinds.get(member.kind)!,
+        `dynamic:${this.#nextObject++}`,
+        member,
+      );
+      this.objects.set(member, object);
+      this.authored.set(member, this.authored.get(page)!);
+      this.group.setParent(object, this.objects.get(owner)!);
+      if (member.kind === 'group') {
+        for (const child of member.members) {
+          install(child, member);
+        }
+      }
+    };
+    install(element, parent);
+    ('kind' in parent ? parent.members : parent.elements).push(element);
+    refreshBounds(page.elements);
+    this.#indexPage(page);
     this.changed = true;
-    return object;
+    return this.objects.get(element)!;
   }
 
   // Folio's Host Commands (ADR 0094): `hide x` is an Operation call in the
@@ -496,25 +673,24 @@ export class PlaySession {
         });
       }
     });
+    checkHierarchy(project.pages.flatMap(page => page.elements));
     const names = scriptNameProblems(project);
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
     }
     this.project = castDraft(structuredClone(project));
-    const originals = [
-      project,
-      ...project.pages.flatMap(p => [p, ...p.elements]),
-    ];
-    const copies = [
-      this.project,
-      ...this.project.pages.flatMap(p => [p, ...p.elements]),
-    ];
+    for (const page of this.project.pages) {
+      refreshBounds(page.elements);
+    }
+    const originals = scriptOwners(project);
+    const copies = scriptOwners(this.project);
     this.#kinds = new Map(
       scriptManifest(project, project).objectKinds.map(def => {
         const props: Record<string, PropDef<ScriptOwner>> = {};
         for (const prop of def.props) {
           const key = prop.name;
           props[key] = {
+            ...(prop.setCost ? { setCost: prop.setCost } : {}),
             shape:
               prop.shape === 'number'
                 ? shape.number
@@ -564,6 +740,17 @@ export class PlaySession {
                       );
                     }
                     if (
+                      'kind' in native &&
+                      ['left', 'top', 'width', 'height'].includes(key)
+                    ) {
+                      try {
+                        updateGeometry(this.#outer.get(native)!, native, {
+                          [key]: Number(next),
+                        });
+                      } catch (error) {
+                        throw new ScriptError('out of domain', String(error));
+                      }
+                    } else if (
                       key === 'text' &&
                       'kind' in native &&
                       native.kind === 'text'
@@ -584,6 +771,19 @@ export class PlaySession {
                     } else {
                       (native as Record<string, unknown>)[key] = next;
                     }
+                    if (
+                      'kind' in native &&
+                      !['left', 'top', 'width', 'height', 'visible'].includes(
+                        key,
+                      )
+                    ) {
+                      this.contentChanged(
+                        native,
+                        key === 'text' || key === 'textAlign'
+                          ? 'richText'
+                          : key,
+                      );
+                    }
                     this.changed = true;
                   },
                 }
@@ -595,7 +795,9 @@ export class PlaySession {
           defineObjectKind<ScriptOwner>({
             name: def.name,
             props,
-            ...(def.name === 'page' ? { elements: this.#pageElements } : {}),
+            ...(['page', 'group'].includes(def.name)
+              ? { elements: this.#pageElements }
+              : {}),
           }),
         ];
       }),
@@ -614,19 +816,19 @@ export class PlaySession {
       );
     }
     for (const page of this.project.pages) {
-      this.#names.set(page, new Map(page.elements.map(e => [e.name, e])));
+      this.#indexPage(page);
       this.group.setParent(
         this.objects.get(page)!,
         this.objects.get(this.project)!,
       );
-      for (const element of page.elements) {
+      for (const element of allElements(page.elements)) {
         this.group.setParent(
           this.objects.get(element)!,
-          this.objects.get(page)!,
+          this.objects.get(this.#parents.get(element)!)!,
         );
       }
     }
-    this.#load([this.project, this.page, ...this.page.elements]);
+    this.#load([this.project, this.page, ...allElements(this.page.elements)]);
     // A session that only runs Message Box commands sends no events.
     if (options.events !== false) {
       this.send(this.project, 'startPlay');
@@ -680,7 +882,10 @@ export class PlaySession {
         this.project.pages.map(p => [p.name, this.objects.get(p)!]),
       ),
       ...Object.fromEntries(
-        this.page.elements.map(e => [e.name, this.objects.get(e)!]),
+        allElements(this.page.elements).map(e => [
+          e.name,
+          this.objects.get(e)!,
+        ]),
       ),
       thisPage: this.objects.get(this.page)!,
       project: this.objects.get(this.project)!,
@@ -704,7 +909,10 @@ export class PlaySession {
     const pageObjects = {
       ...pages,
       ...Object.fromEntries(
-        this.page.elements.map(e => [e.name, this.objects.get(e)!]),
+        allElements(this.page.elements).map(e => [
+          e.name,
+          this.objects.get(e)!,
+        ]),
       ),
       thisPage: this.objects.get(this.page)!,
       project: this.objects.get(this.project)!,
@@ -722,6 +930,7 @@ export class PlaySession {
             ? `page:${this.page.name}`
             : `element:${this.page.name}/${owner.name}${suffix}`;
       this.owners.set(name, owner);
+      this.#scripts.set(owner, name);
       const objects = owner === this.project ? pages : pageObjects;
       try {
         this.#frames.delete(name);
@@ -771,7 +980,7 @@ export class PlaySession {
     }
     this.pageIndex = closing.target;
     this.#closing = undefined;
-    this.#load([this.page, ...this.page.elements]);
+    this.#load([this.page, ...allElements(this.page.elements)]);
     this.changed = true;
     this.send(this.page, 'openPage');
   }
@@ -832,12 +1041,15 @@ export class PlaySession {
 
   /** Whether a message sent to `owner` meets a Handler on its Message Path. */
   handles(owner: ScriptOwner, message: PlayMessage): boolean {
-    const path: ScriptOwner[] =
-      owner === this.project
-        ? [owner]
-        : owner === this.page
-          ? [owner, this.project]
-          : [owner, this.page, this.project];
+    const path: ScriptOwner[] = [owner];
+    let current = owner;
+    while ('kind' in current) {
+      current = this.#parents.get(current)!;
+      path.push(current);
+    }
+    if (current !== this.project) {
+      path.push(this.project);
+    }
     return path.some(o => !!o.script && definesHandler(o.script, message));
   }
 
@@ -911,7 +1123,7 @@ export class PlaySession {
     this.#pendingClones = [];
     if (!this.stopped) {
       this.#load(
-        clones.filter(element => this.page.elements.includes(element)),
+        clones.filter(element => this.#pagesOf.get(element) === this.page),
       );
     }
     for (const report of result.reports) {

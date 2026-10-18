@@ -114,7 +114,7 @@ export const mountPlay = (shell: StackShell): void => {
         !session.stopped &&
         !session.navigating &&
         editor.history.element.editable &&
-        editor.history.element.visible
+        session.isVisible(editor.history.element)
           ? 'true'
           : 'false';
     }
@@ -190,25 +190,29 @@ export const mountPlay = (shell: StackShell): void => {
     });
     if (
       activeText &&
-      !play.page.elements.some(
-        element => element === activeText!.history.element,
-      )
+      !play
+        .elementsOf()
+        .some(element => element === activeText!.history.element)
     ) {
       closeText();
     }
     for (const node of pageNode.querySelectorAll<HTMLElement>(
       '[data-element]',
     )) {
-      if (!play.page.elements.includes(renderedElements.get(node)!)) {
+      if (!play.elementsOf().includes(renderedElements.get(node)!)) {
         node.remove();
       }
     }
-    for (const element of play.page.elements) {
+    let renderIndex = 0;
+    for (const element of play.elementsOf()) {
+      if (element.kind === 'group') {
+        continue;
+      }
       if (
         activeText?.history.element === element &&
         (play.stopped ||
           play.navigating ||
-          !element.visible ||
+          !play.isVisible(element) ||
           !element.editable)
       ) {
         closeText();
@@ -225,7 +229,7 @@ export const mountPlay = (shell: StackShell): void => {
             )
           : undefined,
       );
-      fresh.hidden = !element.visible;
+      fresh.hidden = !play.isVisible(element);
       fresh.querySelector('[data-replace-image]')?.remove();
       const existing = pageNode.querySelector<HTMLElement>(
         `[data-element="${CSS.escape(element.name)}"]`,
@@ -288,9 +292,17 @@ export const mountPlay = (shell: StackShell): void => {
         });
       }
       const node = existing ?? fresh;
+      // Append existing nodes too: structural changes must update DOM layer order.
+      if (pageNode.children[renderIndex] !== node) {
+        pageNode.insertBefore(node, pageNode.children[renderIndex] ?? null);
+      }
+      renderIndex++;
       if (element.kind === 'text') {
         node.contentEditable =
-          element.editable && !play.stopped && !play.navigating
+          element.editable &&
+          play.isVisible(element) &&
+          !play.stopped &&
+          !play.navigating
             ? 'true'
             : 'false';
         if (activeText?.node !== node) {
@@ -298,7 +310,7 @@ export const mountPlay = (shell: StackShell): void => {
         }
       }
       if (element.kind === 'button') {
-        node.tabIndex = 0;
+        node.tabIndex = play.isVisible(element) ? 0 : -1;
         node.setAttribute('role', 'button');
       }
     }
@@ -500,9 +512,13 @@ export const mountPlay = (shell: StackShell): void => {
     const node = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-element]',
     );
-    const element = session.page.elements.find(
-      e => e.name === node?.dataset.element,
-    );
+    const element = session
+      .elementsOf()
+      .find(e => e.name === node?.dataset.element);
+    if (element && !session.isVisible(element)) {
+      event.preventDefault();
+      return;
+    }
     // Enter or Space activates a focused button, as in a browser, and is
     // not also a key for the Page.
     if (
