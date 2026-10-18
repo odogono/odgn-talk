@@ -4,6 +4,7 @@ import {
   allElements,
   checkHierarchy,
   groupElement,
+  refreshBounds,
   updateGeometry,
 } from '../src/hierarchy';
 import { createElement, createProject, type Element } from '../src/model';
@@ -303,6 +304,33 @@ test('runtime clone installs all descendants and Scripts, uses fresh names, and 
   expect(
     (await run(play, 'ask elements to create "group", thisPage')).error,
   ).toBeDefined();
+});
+
+test('incremental Play indexes match a full rebuild after nested create, clone and delete', async () => {
+  const play = new PlaySession(fixture());
+  const matchesRebuild = async () => {
+    const elements = play.page.elements;
+    expect(play.elementsOf()).toEqual(allElements(elements));
+    const rebuilt = structuredClone(elements);
+    refreshBounds(rebuilt);
+    expect(elements).toEqual(rebuilt);
+    for (const e of allElements(elements)) {
+      expect(
+        await value(play, `the name of element "${e.name}" of thisPage`),
+      ).toBe(e.name);
+    }
+  };
+  await run(play, 'ask elements to clone c');
+  await matchesRebuild();
+  expect(await value(play, 'the number of elements of inner')).toBe('2');
+  await run(play, 'ask elements to clone b');
+  await matchesRebuild();
+  await run(play, 'tell elements to delete inner');
+  await matchesRebuild();
+  expect(await value(play, 'element "c" of thisPage is nothing')).toBe('true');
+  await run(play, 'ask elements to create "rectangle", thisPage, "e"');
+  await matchesRebuild();
+  expect(await value(play, 'the number of elements of thisPage')).toBe('6');
 });
 
 test('deleting the last member keeps an empty group and its anchor and Script', async () => {

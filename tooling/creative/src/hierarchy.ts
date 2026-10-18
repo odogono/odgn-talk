@@ -111,15 +111,20 @@ const finiteBox = (box: Box): void => {
   }
 };
 
+/** Recompute one group's box from its direct members' current boxes. */
+export const refreshBox = (group: GroupElement): void => {
+  const box = group.members.length
+    ? union(group.members)
+    : { left: group.left, top: group.top, width: 0, height: 0 };
+  finiteBox(box);
+  Object.assign(group, box);
+};
+
 export const refreshBounds = (elements: Element[]): void => {
   for (const e of elements) {
     if (e.kind === 'group') {
       refreshBounds(e.members);
-      const box = e.members.length
-        ? union(e.members)
-        : { left: e.left, top: e.top, width: 0, height: 0 };
-      finiteBox(box);
-      Object.assign(e, box);
+      refreshBox(e);
     }
   }
 };

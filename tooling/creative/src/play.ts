@@ -3,6 +3,7 @@ import {
   checkHierarchy,
   findElement,
   refreshBounds,
+  refreshBox,
   updateGeometry,
   MAX_GROUP_ELEMENTS,
 } from './hierarchy';
@@ -197,6 +198,8 @@ export class PlaySession {
       : this.#ordered.get(owner as Page)!;
   }
   #indexPage(page: Page): void {
+    // A flat Page's collection is its element list itself, so direct layer
+    // changes stay visible; nested content needs a postorder view.
     const ordered = page.elements.some(
       e => e.kind === 'group' && e.members.length > 0,
     )
@@ -204,7 +207,18 @@ export class PlaySession {
       : page.elements;
     this.#ordered.set(page, ordered);
     this.#names.set(page, new Map(ordered.map(e => [e.name, e])));
-    const visit = (e: Element, parent: Page | GroupElement, outer: Element) => {
+    for (const e of page.elements) {
+      this.#indexSubtree(e, page, e, page);
+    }
+  }
+  /** Index one subtree's own maps; the Page-wide views are the caller's. */
+  #indexSubtree(
+    root: Element,
+    rootParent: Page | GroupElement,
+    outer: Element,
+    page: Page,
+  ): void {
+    const visit = (e: Element, parent: Page | GroupElement) => {
       this.#parents.set(e, parent);
       this.#outer.set(e, outer);
       this.#pagesOf.set(e, page);
@@ -223,7 +237,7 @@ export class PlaySession {
       if (e.kind === 'group') {
         this.#memberNames.set(e, new Map(e.members.map(m => [m.name, m])));
         for (const member of e.members) {
-          visit(member, e, outer);
+          visit(member, e);
         }
       }
       this.#copyWork.set(
@@ -234,9 +248,17 @@ export class PlaySession {
             : 0),
       );
     };
-    for (const e of page.elements) {
-      visit(e, page, e);
+    visit(root, rootParent);
+  }
+  /** Containing groups, innermost first. */
+  #groupsAbove(element: Element): GroupElement[] {
+    const groups: GroupElement[] = [];
+    let parent = this.#parents.get(element);
+    while (parent && 'kind' in parent) {
+      groups.push(parent);
+      parent = this.#parents.get(parent);
     }
+    return groups;
   }
   #fieldSize(value: unknown): number {
     // Numeric coordinates and booleans have fixed copy work, independent of
@@ -375,8 +397,26 @@ export class PlaySession {
         const removed = allElements([element]);
         call.charge(this.#ordered.get(page)!.length * 8 + removed.length * 8);
         const parent = this.#parents.get(element)!;
+        const groups = this.#groupsAbove(element);
         const siblings = 'kind' in parent ? parent.members : parent.elements;
         siblings.splice(siblings.indexOf(element), 1);
+        // A subtree is contiguous in postorder, ending at its root. A flat
+        // Page's collection is `siblings` itself, already updated.
+        const ordered = this.#ordered.get(page)!;
+        if (ordered !== siblings) {
+          ordered.splice(
+            ordered.indexOf(element) - removed.length + 1,
+            removed.length,
+          );
+        }
+        const names = this.#names.get(page)!;
+        if ('kind' in parent) {
+          this.#memberNames.get(parent)!.delete(element.name);
+        }
+        const work = this.#copyWork.get(element)!;
+        for (const group of groups) {
+          this.#copyWork.set(group, this.#copyWork.get(group)! - work);
+        }
         for (const member of removed) {
           const name = this.#scripts.get(member);
           if (name) {
@@ -386,14 +426,18 @@ export class PlaySession {
             this.#scripts.delete(member);
           }
           this.group.dispose(this.objects.get(member)!);
+          names.delete(member.name);
           this.#parents.delete(member);
           this.#pagesOf.delete(member);
           this.#outer.delete(member);
+          this.#memberNames.delete(member as GroupElement);
+          this.#copyWork.delete(member);
+          this.#ownWork.delete(member);
+          this.#fieldWork.delete(member);
         }
         // Removing members can only shrink finite bounds. Empty groups keep
         // their previous left/top and their own Script and identity.
-        refreshBounds(page.elements);
-        this.#indexPage(page);
+        groups.forEach(refreshBox);
         this.changed = true;
       },
     },
@@ -454,9 +498,38 @@ export class PlaySession {
       }
     };
     install(element, parent);
-    ('kind' in parent ? parent.members : parent.elements).push(element);
-    refreshBounds(page.elements);
-    this.#indexPage(page);
+    const added = allElements([element]);
+    const ordered = this.#ordered.get(page)!;
+    const flat = ordered === page.elements;
+    const names = this.#names.get(page)!;
+    if ('kind' in parent) {
+      parent.members.push(element);
+      if (flat) {
+        // The Page's first nested member: its collection becomes a view.
+        this.#ordered.set(page, allElements(page.elements));
+      } else {
+        // The new last member sits just before its group in postorder.
+        ordered.splice(ordered.indexOf(parent), 0, ...added);
+      }
+      this.#memberNames.get(parent)!.set(element.name, element);
+      this.#indexSubtree(element, parent, this.#outer.get(parent)!, page);
+    } else {
+      page.elements.push(element);
+      if (!flat) {
+        ordered.push(...added);
+      } else if (added.length > 1) {
+        this.#ordered.set(page, allElements(page.elements));
+      }
+      this.#indexSubtree(element, page, element, page);
+    }
+    for (const member of added) {
+      names.set(member.name, member);
+    }
+    const work = this.#copyWork.get(element)!;
+    for (const group of this.#groupsAbove(element)) {
+      this.#copyWork.set(group, this.#copyWork.get(group)! + work);
+      refreshBox(group);
+    }
     this.changed = true;
     return this.objects.get(element)!;
   }
