@@ -1,4 +1,3 @@
-# Unblessed: one-line `wait for` Guards (#1247); first blessing awaits human review.
 # wait-for-guard: r1 waits for a "Y" or "N" key, and r2 for a "Y" key or
 # 5 s. "A" matches neither Guard. "N" ends r1's wait but not r2's, which
 # times out at 5 s with Nothing. A later confirm waits again, and "Y" ends
