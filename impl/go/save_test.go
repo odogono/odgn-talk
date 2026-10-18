@@ -260,13 +260,10 @@ func rewriteSaveCostModel(t *testing.T, saved []byte) []byte {
 		at += n
 		return value
 	}
-	read() // Save format.
-	length := read()
-	at += int(length) // Language version.
+	read()            // Save format.
+	at += int(read()) // Language version.
 	start := at
-	cost := read()
-	changed := append([]byte(nil), payload[:start]...)
-	changed = binary.AppendUvarint(changed, cost+1)
+	changed := binary.AppendUvarint(bytes.Clone(payload[:start]), read()+1)
 	changed = append(changed, payload[at:]...)
 	digest := sha256.Sum256(changed)
 	return append(changed, digest[:]...)
