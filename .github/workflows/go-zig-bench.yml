@@ -10,6 +10,8 @@ on:
       - 'impl/go/backend_bench_test.go'
       - 'impl/go/group_bench_test.go'
       - 'impl/go/zig-adapter-bench.sh'
+      - 'impl/go/zig-request-pump-bench.sh'
+      - 'impl/go/group_combined_bench_test.go'
       - '.github/workflows/go-zig-bench.yml'
 
 jobs:
@@ -33,4 +35,28 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: go-zig-adapter-${{ matrix.os }}
+          path: ${{ runner.temp }}/results
+
+  # The binary Request/Pump envelope gates (#1254): both Request ratios
+  # against native in one job, and native against the pre-experiment base.
+  request-pump:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - run: impl/go/zig-request-pump-bench.sh "$RUNNER_TEMP/results"
+      - run: cat "$RUNNER_TEMP/results/env.txt" "$RUNNER_TEMP/results/comparison.txt" "$RUNNER_TEMP/results/regression.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: request-pump-${{ matrix.os }}
           path: ${{ runner.temp }}/results
