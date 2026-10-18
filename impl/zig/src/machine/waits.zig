@@ -46,8 +46,11 @@ pub const Waits = struct {
         const join = p.run.join.?;
         p.order = w.order();
         p.member = join.members.items.len;
-        try w.pending.append(a, p);
-        try join.members.append(a, .{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms } });
+        // Both or neither, so a failure leaves no Wait without its member.
+        try w.pending.ensureUnusedCapacity(a, 1);
+        try join.members.ensureUnusedCapacity(a, 1);
+        w.pending.appendAssumeCapacity(p);
+        join.members.appendAssumeCapacity(.{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms } });
     }
 
     /// Takes a Wait out of the table, keeping the others in order, and
