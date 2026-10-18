@@ -373,6 +373,10 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 	return g.admit(s, m, ctx, request, decision, address)
 }
 func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, address delivery) (DeliveryID, *Pending, error) {
+	return g.admitWithReady(s, m, ctx, request, decision, address, true)
+}
+
+func (g *Group) admitWithReady(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, address delivery, notify bool) (DeliveryID, *Pending, error) {
 	fields := map[string]string{"to": "unknown", "message": m.Name}
 	if s != nil {
 		fields["to"] = s.name
@@ -515,7 +519,7 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 	}
 	ready := g.options.OnReady
 	g.mu.Unlock()
-	if ready != nil {
+	if notify && ready != nil {
 		ready()
 	}
 	if broadcast {
@@ -552,6 +556,11 @@ func validGroup(root corevalue.Value, g *Group) bool {
 	return true
 }
 func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
+	return g.pumpOwned(now, o, false)
+}
+
+// pumpOwned reuses a guard already claimed by a combined admission and Pump.
+func (g *Group) pumpOwned(now time.Time, o PumpOptions, owned bool) (PumpResult, error) {
 	if g.backend != nil {
 		return g.backend.pump(now, o)
 	}
@@ -566,7 +575,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		fields["fuel-cap"] = strconv.FormatInt(o.FuelCap, 10)
 	}
 	g.mu.Lock()
-	if g.pumping {
+	if g.pumping && !owned {
 		g.mu.Unlock()
 		g.recordRefusal("pump", nil, fields, ReentrantCall)
 		return PumpResult{}, &HostError{ReentrantCall, "Pump inside Pump"}
@@ -594,7 +603,14 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.inputs = nil
 	g.controlsQueued = false
 	g.mu.Unlock()
-	defer func() { g.mu.Lock(); g.pumping = false; g.runningPump = false; g.mu.Unlock() }()
+	defer func() {
+		g.mu.Lock()
+		if !owned {
+			g.pumping = false
+		}
+		g.runningPump = false
+		g.mu.Unlock()
+	}()
 	inputs = g.prepareBroadcasts(inputs)
 
 	accepted := inputs[:0]

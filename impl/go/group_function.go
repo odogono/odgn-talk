@@ -8,6 +8,10 @@ import (
 // Call admits a Function Value into its Home Script's mailbox. Staleness is
 // checked at drain, after earlier Host Inputs; arity belongs to the new Run.
 func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitOverride) (DeliveryID, *Pending, error) {
+	return g.callWithReady(ctx, fn, args, limits, true)
+}
+
+func (g *Group) callWithReady(ctx context.Context, fn Value, args []Value, limits *LimitOverride, notify bool) (DeliveryID, *Pending, error) {
 	fields := map[string]string{"fn": fn.String()}
 	if len(args) > 0 {
 		fields["args"] = argsDisplay(args)
@@ -25,5 +29,5 @@ func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitO
 		g.recordRefusal("call-value", nil, fields, code)
 		return "", nil, &HostError{code, "invalid Function Value"}
 	}
-	return g.admit(nil, Message{Name: fn.String(), Args: args, Limits: limits}, ctx, true, nil, delivery{function: &fn.inner})
+	return g.admitWithReady(nil, Message{Name: fn.String(), Args: args, Limits: limits}, ctx, true, nil, delivery{function: &fn.inner}, notify)
 }
