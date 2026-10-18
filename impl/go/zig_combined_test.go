@@ -43,6 +43,13 @@ func zigCombinedLayouts(t *testing.T, f func(t *testing.T)) {
 	}
 }
 
+func TestZigCombinedPublicTargets(t *testing.T) {
+	zigCombinedLayouts(t, func(t *testing.T) {
+		t.Run("object", testCombinedObjectRequest)
+		t.Run("arity", testCombinedCallArityAtExecution)
+	})
+}
+
 func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 	zigCombinedLayouts(t, func(t *testing.T) {
 		ready := 0

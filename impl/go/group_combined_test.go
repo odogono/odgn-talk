@@ -192,6 +192,13 @@ func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
 // These acceptance cases run unchanged on native Go and the negotiated Zig
 // backend, through the same public calls a Host uses.
 func TestCombinedObjectRequest(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
+	}
+	testCombinedObjectRequest(t)
+}
+
+func testCombinedObjectRequest(t *testing.T) {
 	core := New()
 	g := core.NewGroup(GroupOptions{})
 	kind := objectKindForTest(t, core, "combined-item")
@@ -220,6 +227,13 @@ func TestCombinedObjectRequest(t *testing.T) {
 }
 
 func TestCombinedCallArityAtExecution(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
+	}
+	testCombinedCallArityAtExecution(t)
+}
+
+func testCombinedCallArityAtExecution(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	_, fn := exportFunction(t, g, "function sum a, b = 5\n return a + b\nend sum\non exported\n return sum\nend exported", Limits{})
 	_, p, _, err := g.CallPump(nil, fn, []Value{Int(2)}, nil, time.Unix(1, 0), PumpOptions{})

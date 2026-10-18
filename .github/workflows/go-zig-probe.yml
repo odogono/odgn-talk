@@ -64,9 +64,11 @@ jobs:
       - run: go -C impl/go vet -tags talk_zig_experimental . ./internal/zigwasm
         env:
           CGO_ENABLED: '0'
+      # Keep ordinary JSON coverage when the adapter defaults to fields.
       - run: impl/go/zig-experimental-check.sh -v
         env:
           CGO_ENABLED: '0'
+          TALK_ZIG_REQUEST_PUMP: ''
       - run: impl/go/zig-experimental-check.sh -race
       # The same suites over each binary Request/Pump candidate (#1245).
       - run: impl/go/zig-experimental-check.sh
