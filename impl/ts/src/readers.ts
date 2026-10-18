@@ -345,6 +345,17 @@ export class JsonObject {
   readonly kind = 'object';
   constructor(readonly pairs: [string, Json][]) {}
 }
+// The reader's nodes say what they are.
+export const isJsonObject = (j: Json | undefined): j is JsonObject =>
+  typeof j === 'object' &&
+  j !== null &&
+  !Array.isArray(j) &&
+  j.kind === 'object';
+export const isJsonNumber = (j: Json | undefined): j is JsonNumber =>
+  typeof j === 'object' &&
+  j !== null &&
+  !Array.isArray(j) &&
+  j.kind === 'number';
 const plainRun = /[^\u0000-\u001f"\\]+/y;
 class JsonReader extends Reader {
   whitespace(): void {

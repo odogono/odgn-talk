@@ -148,6 +148,15 @@ Each Group has a guest instance of its own, with its own Instance Owner. Grant b
 - `standard-refinements-v1`, so the Standard Capability factories are this package's, with the guest's own checks.
 - `restore-bindings-v1`, which rebinds Grants during a restore.
 
+The optional `request-pump-fields-v1` feature selects ADR 0110's binary Request,
+Function-call and Pump envelopes. Needs and their answers remain JSON, and each
+exchange retains its own final-reply format across nested callbacks. Guests
+without the feature keep ordinary JSON operations and refuse combined calls
+before admission. A combined Request registers cancellation before transmission,
+uses a Session-unique token during callbacks, then installs the delivery id
+before publishing final observations. An already-aborted signal is ordered as
+admission, cancellation and one Pump on the negotiated guest.
+
 It differs from the TS Core in these ways:
 
 - **Making the Core:** `createCore` is asynchronous and takes `{ wasm, diagnostics }`. `core.versions` replaces `coreVersions`: the language, Cost Model and Unicode versions match the TS Core's, and the Core and save format are Zig's. Use the Core's methods: the package exports no free `newGroup`, `restore`, `compileLibrary` or `defineCapability`.
@@ -165,9 +174,35 @@ It differs from the TS Core in these ways:
 bun test tests/wasm.test.ts examples/core-switch # the same Host code on both Cores
 bun tools/wasm-corpus.ts                         # every Trace Case, through the facade
 bun tools/wasm-browser.ts                        # both Cores in headless Chromium, with figures
+bun tools/request-pump-browser.ts                # TS worker, transferred buffers in real Chromium
 ```
 
 `wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
+
+## Transferable Message Layer codecs
+
+`@northtalk/ts/message-layer` exports `encodeBinaryValue`/`decodeBinaryValue`
+and `encodeBinaryFrame`/`decodeBinaryFrame` for the selected fields envelope.
+Encoders return dedicated `ArrayBuffer`s suitable for `postMessage(buffer,
+[buffer])`; neither codec imports WASM or Node. Value options supply owner-specific
+Object and Function resolution, Function payload encoding, and negotiation of
+Core error markers and six/seven-item Function metadata. Metadata is validated
+before resolution. Value containers use heap traversal, including 20,000-level
+Values; decoding rejects noncanonical numbers/text, duplicate keys and trailing
+bytes. Decimal scale and Map insertion order survive.
+
+Frame codecs take and return ordered Message Layer JSON nodes (`JsonObject`,
+`JsonNumber`, `readOrderedJSON`, also exported by the subpath). They preserve
+exact integer/decimal text and adapter Value tags; they do not execute messages
+or negotiate for a transport. A Host negotiates `request-pump-fields-v1` through
+JSON hello before sending binary frames, and keeps needs/answers in JSON.
+
+The shared [vectors](../testdata/request-pump-binary.json) run against Go, Zig
+and TS. `bun impl/ts/tools/request-pump-browser.ts` from the repository root
+verifies those vectors in Chromium, transfers buffers both ways to a worker
+running the TS Core and executes a combined Request. Use `$CHROME` for a custom
+Chromium executable. Folio's application messages retain structured clone;
+these correctness checks establish no browser performance benefit.
 
 ## Grant release hooks
 
@@ -558,6 +593,7 @@ The Group follows `talk.ts` for the subset implemented so far:
 
 - **`newGroup`** takes a name and an optional `trace` sink. `group.load` checks, lowers and loads a Script, writing `load` with its code identity, or `diag` records and a `LoadError`. A Script's well-known objects are its `objects`; an otherwise unbound `send` receiver names a Script.
 - **`Script.deliver` and `Script.request`** are queued. Each gets its delivery id at the call. A limit override that loosens a limit, or a full mailbox, is refused there: its line is written with no id, then `refused`, then `HostError` or `MailboxFull` is thrown. Inside a Pump the refusal is still immediate, but its input and `refused` records follow the Host crossing's `call` or `prop` record, before result conversion. A Request's `result` settles with the Run's result, or rejects with `ScriptError` `send failed`.
+- **Combined worker calls:** `script.requestPump(message, now, options)`, `group.requestPump(object, message, now, options)` and `group.callPump(fn, args, now, options)` admit once and run one ordinary Pump, preserving earlier inputs. Options combine `signal`, `fuelSlice`, `fuelCap` and Call's `limits`. A `PumpedRequest` with `admitted: false` carries `error` and no handle. With `admitted: true`, `requested` holds the delivery id and result Promise; `pump` is either `{ok: true, result}` or `{ok: false, error}`. A refused Pump leaves that Request queued and notifies readiness. A successful Pump can leave it pending. The initial admission omits readiness; callbacks can queue inputs, but worker calls refuse before admission. Ordinary Request/Call and Pump Trace records remain unchanged.
 - **`group.pump(now, { fuelSlice, fuelCap })`** follows chapter 5. It checks the Clock, then writes the queued inputs and its `pump` line. It drains the queue into each Script's mailbox, and runs turns in load order until no work is left. A Fuel Slice preempts a Script's Run before its next instruction once the Script has spent its slice, and an overrun is carried to its next Pump as debt. Pending `wait for` test bodies, including failed tests, spend Pump Fuel, the receiving Script's slice and debt, and the Group cap. Observation finishes for every pending wait before a spent slice or cap preempts the incoming Run's first instruction. Test costs remain uncapped against the waiting Run, which faults only at its next resumed instruction. The Fuel cap ends the Pump. It returns `run end`, `unhandled` and `decided` reports.
 - **The records:** each Stretch is written as `seg` or `preempt`, after the `raise`, `guard-skip` and `fault` records it made, then `run` once the Run ends. A Core-raised error map is written without its `message`. Persistent State is the Script Variables and the messages in the mailbox, and a Run's end faults on the cap there.
 - **`group.inspect()`** writes `vars` for each Script, in load order.

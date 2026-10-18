@@ -69,6 +69,7 @@ export {
   type Report,
   type EffectFailure,
   type Requested,
+  type PumpedRequest,
   type Decided,
   type Deciding,
   type Verdict,

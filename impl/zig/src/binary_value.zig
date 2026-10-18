@@ -430,3 +430,26 @@ test "binary allocation failure cleans every partially constructed value" {
     };
     try std.testing.checkAllAllocationFailures(std.testing.allocator, Check.run, .{});
 }
+
+// Shared with Go and TS: canonical encodings, not snapshot bytes.
+test "shared binary Value vectors" {
+    const a = std.testing.allocator;
+    const Vector = struct { json: []const u8, hex: []const u8 };
+    const parsed = try std.json.parseFromSlice([]Vector, a, @embedFile("request-pump-vectors"), .{});
+    defer parsed.deinit();
+    for (parsed.value) |vector| {
+        const want = try a.alloc(u8, vector.hex.len / 2);
+        defer a.free(want);
+        _ = try std.fmt.hexToBytes(want, vector.hex);
+        const v = try @import("encoding.zig").decode(a, vector.json, .{});
+        defer v.release();
+        const wire = try encode(a, v, .{});
+        defer a.free(wire);
+        try std.testing.expectEqualSlices(u8, want, wire);
+        const back = try decode(a, want, .{});
+        defer back.release();
+        const again = try encode(a, back, .{});
+        defer a.free(again);
+        try std.testing.expectEqualSlices(u8, want, again);
+    }
+}

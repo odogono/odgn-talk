@@ -85,6 +85,7 @@ Files, grammar, or lowering.
 - Implementation: [declarations](../../spec/embedding/talk.ts), exported from [index.ts](src/index.ts)
 - Rules: [Embedding](../../spec/09-embedding.md), [Public values](README.md#public-values)
 - Tests and cases: No automated check compares the TS exports with `talk.ts`; keep them in step by hand, as the Go [API comparison](../go/internal/apicheck/api_test.go) does for `talk.go`
+- Combined admission/Pump: [native/WASM parity tests](tests/combined.test.ts); transferable codecs in [message-layer.ts](src/message-layer.ts), [Value tests](tests/binary-value.test.ts) and [frame tests](tests/request-pump-binary.test.ts). Browser interoperability: `bun impl/ts/tools/request-pump-browser.ts`.
 - First check: `bun run typecheck`
 
 ## The Zig reactor behind the embedding API

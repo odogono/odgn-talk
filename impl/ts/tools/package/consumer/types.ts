@@ -7,6 +7,10 @@ import {
   type Group,
   type Value,
 } from '@northtalk/ts';
+import {
+  encodeBinaryValue,
+  decodeBinaryValue,
+} from '@northtalk/ts/message-layer';
 import type { DebugController } from '@northtalk/ts/debug';
 import type { autoDrive } from '@northtalk/ts/driver';
 import type { createRouter } from '@northtalk/ts/notify';
@@ -34,3 +38,14 @@ export const reply: Promise<Value> = group
 export const lines: string[] = new SessionHost({ now: () => clock }).input(
   '1 + 1',
 );
+
+const combined = group
+  .script('main')!
+  .requestPump({ name: 'total', args: [num(2), num(3)] }, clock, {
+    fuelCap: 100,
+  });
+export const combinedResult: Promise<Value> | undefined = combined.admitted
+  ? combined.requested.result
+  : undefined;
+export const buffer: ArrayBuffer = encodeBinaryValue(num(1));
+export const decoded: Value = decodeBinaryValue(buffer);

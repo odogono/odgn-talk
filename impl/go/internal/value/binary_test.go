@@ -3,6 +3,8 @@ package value
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
@@ -177,4 +179,41 @@ func FuzzBinaryCanonicalRoundTrip(f *testing.F) {
 			t.Fatalf("noncanonical round trip %x -> %x: %v", wire, back, err)
 		}
 	})
+}
+
+// The same vectors run through the independent TS and Zig codecs.
+func TestSharedBinaryVectors(t *testing.T) {
+	data, err := os.ReadFile("../../../testdata/request-pump-binary.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors []struct {
+		JSON string
+		Hex  string
+	}
+	if err = json.Unmarshal(data, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range vectors {
+		want, e := hex.DecodeString(tc.Hex)
+		if e != nil {
+			t.Fatal(e)
+		}
+		v, e := Decode([]byte(tc.JSON), true, nil)
+		if e != nil {
+			t.Fatalf("%s: %v", tc.JSON, e)
+		}
+		got, e := AppendBinary(nil, v, BinaryOptions{})
+		if e != nil || !bytes.Equal(got, want) {
+			t.Fatalf("%s: %x want %x: %v", tc.JSON, got, want, e)
+		}
+		back, e := DecodeBinary(want, nil, BinaryOptions{})
+		if e != nil {
+			t.Fatal(e)
+		}
+		gotJSON, e := Encode(back, false)
+		if e != nil || string(gotJSON) != tc.JSON {
+			t.Fatalf("%s: %s: %v", tc.JSON, gotJSON, e)
+		}
+	}
 }

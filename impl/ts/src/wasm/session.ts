@@ -12,11 +12,20 @@ import {
 } from '../errors';
 import { operationData, shapeData } from '../manifest';
 import type { ObjectKind } from '../objects';
+import {
+  decodeBinaryFrame,
+  encodeBinaryFrame,
+  isRequestPumpBinary,
+  requestPumpFeature,
+} from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
+import { guestPayload } from './codec';
 import { InstanceLostError, Reactor, type Diagnostics } from './reactor';
 import {
+  Raw,
   field,
   frameJSON,
+  frameTree,
   intOf,
   plain,
   readReply,
@@ -38,7 +47,10 @@ export const features = [
 ] as const;
 
 /** Features this Host uses when the guest offers them (#1143). */
-export const optionalFeatures = ['object-elements-v1'] as const;
+export const optionalFeatures = [
+  'object-elements-v1',
+  requestPumpFeature,
+] as const;
 
 export type Versions = {
   core: string;
@@ -59,6 +71,16 @@ export type Registry = {
   readonly kinds: readonly ObjectKind[];
 };
 
+// Methods whose first frame goes binary once Request/Pump binary is negotiated.
+const binaryMethods = new Set([
+  'request',
+  'call',
+  'pump',
+  'request-pump',
+  'call-pump',
+]);
+const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true });
 const failure = (err: Json): Error => {
   const kind = textOf(field(err, 'kind'));
   if (kind === 'host error') {
@@ -101,6 +123,15 @@ export class Session {
   readonly #libraries = new Set<string>();
   /** Whether the guest accepts Object Collection declarations. */
   readonly elements: boolean;
+  readonly requestPump: boolean;
+  #token = 0n;
+
+  nextToken(): Raw {
+    if (this.#token === 2n ** 64n - 1n) {
+      throw new HostError('invalid value', 'Correlation tokens exhausted');
+    }
+    return new Raw((++this.#token).toString());
+  }
 
   constructor(
     module: WebAssembly.Module,
@@ -114,6 +145,7 @@ export class Session {
     });
     const offered = new Set(textsOf(field(hello, 'features')));
     this.elements = offered.has('object-elements-v1');
+    this.requestPump = offered.has(requestPumpFeature);
     const missing = features.filter(f => !offered.has(f));
     if (missing.length) {
       throw new InstanceLostError(`talk.wasm lacks ${missing.join(', ')}`);
@@ -140,8 +172,26 @@ export class Session {
   ): Json {
     const ref = ++this.#ref;
     let frame: Record<string, Frame | undefined> = { m, ref, ...fields };
+    const binaryExchange = this.requestPump && binaryMethods.has(m);
+    let initial = true;
     for (;;) {
-      const packet = readReply(this.reactor.frame(frameJSON(frame)));
+      const binary = binaryExchange && initial;
+      const input = binary
+        ? new Uint8Array(
+            encodeBinaryFrame(frameTree(frame), {
+              encodeFunction: guestPayload,
+            }),
+          )
+        : encoder.encode(frameJSON(frame));
+      const output = this.reactor.frameBytes(input);
+      const binaryReply = isRequestPumpBinary(new Uint8Array(output));
+      if (binaryReply && !binaryExchange) {
+        throw new InstanceLostError('Unnegotiated binary reply');
+      }
+      const packet = binaryReply
+        ? decodeBinaryFrame(output)
+        : readReply(decoder.decode(output));
+      initial = false;
       if (intOf(field(packet, 'ref')) !== ref) {
         throw new InstanceLostError(`The reply to ${m} has another ref`);
       }
@@ -151,6 +201,11 @@ export class Session {
         throw failure(err);
       }
       const need = field(packet, 'need');
+      if (binaryExchange && !binaryReply && need === undefined) {
+        throw new InstanceLostError(
+          'The binary exchange ended with a JSON success',
+        );
+      }
       if (need === undefined) {
         return field(packet, 'ok') ?? null;
       }
