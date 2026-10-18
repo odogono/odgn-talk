@@ -25,6 +25,7 @@ const units = @import("../units.zig");
 pub const capabilities = @import("capabilities.zig");
 pub const fingerprint = @import("fingerprint.zig");
 pub const snapshot = @import("snapshot.zig");
+pub const wait_table = @import("waits.zig");
 pub const verify = @import("verify.zig");
 pub const objects = @import("objects.zig");
 pub const report = @import("reports.zig");
@@ -493,7 +494,7 @@ pub const EventBranch = union(enum) {
 };
 
 /// No deadline: a `wait for` that can wait for ever.
-const never: i128 = std.math.maxInt(i128);
+const never = wait_table.never;
 
 /// A Script's work: a message for dispatch, or a Run ready to resume.
 pub const Work = union(enum) { message: Delivery, run: *Run };
@@ -1489,9 +1490,8 @@ pub const Group = struct {
     clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 },
     /// No lower bound until the first Pump; Restore supplies its saved bound.
     observed_clock: ?model.dates.Instant = null,
-    /// The waits with deadlines, and how many have been set.
-    pending: std.ArrayList(*Pending) = .empty,
-    timers: u64 = 0,
+    /// The Wait table: the waits with deadlines, and how many have been set.
+    waits: wait_table.Waits = .{},
     /// Suspending calls that may still be waited on or settled.
     calls: std.ArrayList(*capabilities.Call) = .empty,
     /// Suspending calls no Run can resume, moved out of `calls` at the end
@@ -1658,8 +1658,8 @@ pub const Group = struct {
         for (g.scripts.items) |s| g.destroyScript(s);
         g.scripts.deinit(g.gpa);
         // A live Run removed its own wait; any left belongs to none.
-        for (g.pending.items) |p| g.destroyPending(p);
-        g.pending.deinit(g.gpa);
+        for (g.waits.all()) |p| g.destroyPending(p);
+        g.waits.deinit(g.gpa);
         g.call_index.deinit(g.gpa);
         for ([_][]*capabilities.Call{ g.calls.items, g.retired_calls.items }) |list| for (list) |c| {
             g.gpa.free(c.id);
@@ -3032,15 +3032,10 @@ pub const Group = struct {
         run.crossing_cancel = false;
         // A successful Start is pending before controls land. Cancel it
         // before finally runs, retaining its abandonment record exactly once.
-        if (run.waiting) |p| {
-            for (g.pending.items, 0..) |item, i| if (item == p) {
-                _ = g.pending.orderedRemove(i);
-                break;
-            };
+        if (g.waits.takeRun(run)) |p| {
             abandonCall(p);
             if (p.call) |c| try run.abandoned.append(g.gpa, c.id);
             g.destroyPending(p);
-            run.waiting = null;
         }
         if (run.join) |join| for (join.members.items) |x| if (x.pending != null) {
             try run.abandoned.append(g.gpa, x.waited.id);
@@ -3183,16 +3178,11 @@ pub const Group = struct {
             // Its cleanup is a Segment of its own.
             r.segments += 1;
         }
-        if (r.waiting) |p| {
-            for (g.pending.items, 0..) |y, i| if (y == p) {
-                _ = g.pending.orderedRemove(i);
-                break;
-            };
+        if (g.waits.takeRun(r)) |p| {
             abandonCall(p);
             const id = if (p.call) |c| c.id else p.id;
             if (id.len > 0) try r.abandoned.append(g.gpa, id);
             g.destroyPending(p);
-            r.waiting = null;
         }
         // A Join's members still pending, in start order.
         if (r.join) |join| for (join.members.items) |x| if (x.pending != null) {
@@ -3373,7 +3363,7 @@ pub const Group = struct {
     /// it, or a `wait for` pending on it. A Fallback doesn't count.
     fn wants(g: *Group, s: *const Script, message: []const u8, cancelled: []const *const Run) bool {
         if (s.handlerUnit(message, .handler) != null) return true;
-        for (g.pending.items) |p| {
+        for (g.waits.all()) |p| {
             const event = p.event orelse continue;
             if (p.run.script != s or std.mem.indexOfScalar(*const Run, cancelled, p.run) != null) continue;
             for (s.unitIn(event.library).events[event.entry].branches) |b| switch (b) {
@@ -3554,11 +3544,7 @@ pub const Group = struct {
     pub fn destroyRun(g: *Group, run: *Run) void {
         if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
         if (run.returned_prop) |r| g.releasePropResult(r);
-        if (run.waiting) |p| {
-            for (g.pending.items, 0..) |x, i| if (x == p) {
-                _ = g.pending.orderedRemove(i);
-                break;
-            };
+        if (g.waits.takeRun(run)) |p| {
             abandonCall(p);
             g.destroyPending(p);
         }
@@ -3715,7 +3701,7 @@ pub const Group = struct {
 
     /// Whether a Run or a deadline still refers to c.
     fn callAwaited(g: *const Group, c: *const capabilities.Call) bool {
-        for (g.pending.items) |p| if (p.call == c) return true;
+        for (g.waits.all()) |p| if (p.call == c) return true;
         for (g.scripts.items) |s| for (s.live.items) |r| {
             if (r.waiting) |p| if (p.call == c) return true;
             if (r.waited.call == c) return true;
@@ -3881,9 +3867,7 @@ pub const Group = struct {
 
     fn drainCharge(g: *Group, q: *capabilities.ChargeRequest) !void {
         if (!q.processed) {
-            const pending = for (g.pending.items) |p| {
-                if (p.call) |c| if (std.mem.eql(u8, c.id, q.call)) break p;
-            } else null;
+            const pending = g.waits.call(q.call);
             q.status = if (pending) |p| (if (q.fuel <= fuelLeft(p.run)) .accepted else .limit) else .inactive;
             q.processed = true;
             g.write("charge-result {s} {s} fuel={d} status={s}\n", .{ q.call, q.id, q.fuel, @tagName(q.status) });
@@ -4049,16 +4033,12 @@ pub const Group = struct {
             },
             .settle => |x| {
                 defer g.gpa.free(x.id);
-                const index = for (g.pending.items, 0..) |p, i| {
-                    if (p.call) |c| if (std.mem.eql(u8, c.id, x.id)) break i;
-                } else null;
-                const i = index orelse {
+                const p = g.waits.call(x.id) orelse {
                     // Its Run no longer waits on it: recorded and ignored.
                     g.write("note {s} kind=late-answer\n", .{x.id});
                     g.releaseResume(x.with);
                     return;
                 };
-                const p = g.pending.orderedRemove(i);
                 try g.ready(p, x.with);
             },
             .broadcast => |b| try g.drainBroadcast(b),
@@ -4066,14 +4046,11 @@ pub const Group = struct {
                 defer if (x.how != .reissue) g.gpa.free(x.id);
                 switch (x.how) {
                     .answer, .fail => {
-                        const index = for (g.pending.items, 0..) |p, i| {
-                            if (p.call) |c| if (std.mem.eql(u8, c.id, x.id)) break i;
-                        } else null;
-                        const i = index orelse {
+                        const p = g.waits.call(x.id) orelse {
                             g.releaseResume(x.with.?);
                             return;
                         };
-                        try g.ready(g.pending.orderedRemove(i), x.with.?);
+                        try g.ready(p, x.with.?);
                     },
                     .reissue => try g.reissue(x.id),
                     .adopt => {},
@@ -4095,12 +4072,9 @@ pub const Group = struct {
             for (r.pending.items) |id| {
                 for (r.settled.items) |x| {
                     if (std.mem.eql(u8, x, id)) break;
-                } else for (g.pending.items, 0..) |p, i| {
-                    const c = p.call orelse continue;
-                    if (!std.mem.eql(u8, c.id, id)) continue;
+                } else if (g.waits.call(id)) |p| {
                     abandonCall(p);
-                    try g.ready(g.pending.orderedRemove(i), .lost);
-                    break;
+                    try g.ready(p, .lost);
                 }
             }
         }
@@ -4127,13 +4101,7 @@ pub const Group = struct {
         // Rewind drained returns at once.
         const now = micros(g.clock);
         while (!g.rewound) {
-            var first: ?usize = null;
-            for (g.pending.items, 0..) |p, i| {
-                if (p.deadline > now) continue;
-                if (first == null or p.deadline < g.pending.items[first.?].deadline or (p.deadline == g.pending.items[first.?].deadline and p.order < g.pending.items[first.?].order)) first = i;
-            }
-            const i = first orelse break;
-            const p = g.pending.orderedRemove(i);
+            const p = g.waits.due(now) orelse break;
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
             abandonCall(p);
             try g.ready(p, with);
@@ -4289,19 +4257,13 @@ pub const Group = struct {
 
     /// The earliest deadline still pending.
     pub fn next(g: *Group) ?i128 {
-        var best: ?i128 = null;
-        for (g.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
-            // A preempted Run's Join hasn't reached its end, so its members'
-            // waits aren't timers yet.
-            if (p.member != null and p.run.continuing) continue;
-            best = p.deadline;
-        };
-        return best;
+        return g.waits.next();
     }
 
-    /// A settled wait: its Run becomes ready, at the back of its Script's
-    /// work.
+    /// A settled wait: it leaves the Wait table, and its Run becomes ready,
+    /// at the back of its Script's work.
     pub fn ready(g: *Group, p: *Pending, with: Resume) !void {
+        g.waits.take(p);
         const run = p.run;
         if (p.member) |index| {
             // A Join Member: the Run is ready when every member has
@@ -4309,7 +4271,6 @@ pub const Group = struct {
             defer g.destroyPending(p);
             const join = run.join.?;
             const member = &join.members.items[index];
-            member.pending = null;
             member.with = with;
             const failed = switch (with) {
                 .answer, .reply => false,
@@ -4322,13 +4283,9 @@ pub const Group = struct {
                 // The other members stop waiting now; the Run abandons them
                 // when it resumes.
                 for (join.members.items) |*x| if (x.pending) |w| {
-                    for (g.pending.items, 0..) |y, i| if (y == w) {
-                        _ = g.pending.orderedRemove(i);
-                        break;
-                    };
+                    g.waits.take(w);
                     abandonCall(w);
                     g.destroyPending(w);
-                    x.pending = null;
                     x.cut = true;
                 };
             } else {
@@ -4336,19 +4293,11 @@ pub const Group = struct {
                 run.resume_with = .joined;
             }
             // The Join's Timeout Block no longer bounds it.
-            if (run.waiting) |w| {
-                for (g.pending.items, 0..) |y, i| if (y == w) {
-                    _ = g.pending.orderedRemove(i);
-                    break;
-                };
-                g.destroyPending(w);
-            }
-            run.waiting = null;
+            if (g.waits.takeRun(run)) |w| g.destroyPending(w);
             try run.script.work.append(g.gpa, .{ .run = run });
             return;
         }
         run.resume_with = with;
-        run.waiting = null;
         defer g.destroyPending(p);
         run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms };
         try run.script.work.append(g.gpa, .{ .run = run });
@@ -4432,16 +4381,13 @@ pub const Group = struct {
     /// id and this Pump's Clock. Its declared cost isn't charged again; a
     /// `Charge` draws Fuel from the Run as it would at the call.
     fn reissue(g: *Group, id: []const u8) !void {
-        const index = for (g.pending.items, 0..) |p, i| {
-            if (p.call) |c| if (std.mem.eql(u8, c.id, id)) break i;
-        } else return;
-        const p = g.pending.items[index];
+        const p = g.waits.call(id) orelse return;
         const run = p.run;
         const c = p.call.?;
         // A Grant the restore couldn't re-bind fails it, never reaching a
         // Host; a revocation since doesn't, since the call was in flight.
-        const sg = run.script.grant(p.grant) orelse return g.ready(g.pending.orderedRemove(index), .revoked);
-        if (sg.declarations != null) return g.ready(g.pending.orderedRemove(index), .revoked);
+        const sg = run.script.grant(p.grant) orelse return g.ready(p, .revoked);
+        if (sg.declarations != null) return g.ready(p, .revoked);
         const decl = p.decl.?;
         c.starting = true;
         c.charged = 0;
@@ -4471,10 +4417,10 @@ pub const Group = struct {
         g.flushHeld();
         switch (outcome) {
             .started => {},
-            .value => |v| try g.ready(g.pending.orderedRemove(index), .{ .answer = .{ .value = v, .fuel = 0 } }),
-            .failed => |f| try g.ready(g.pending.orderedRemove(index), .{ .failed = .{ .code = f.code, .message = f.message, .data = f.data } }),
-            .limited => try g.ready(g.pending.orderedRemove(index), .limited),
-            else => try g.ready(g.pending.orderedRemove(index), .broken),
+            .value => |v| try g.ready(p, .{ .answer = .{ .value = v, .fuel = 0 } }),
+            .failed => |f| try g.ready(p, .{ .failed = .{ .code = f.code, .message = f.message, .data = f.data } }),
+            .limited => try g.ready(p, .limited),
+            else => try g.ready(p, .broken),
         }
     }
 
@@ -5191,11 +5137,8 @@ pub const Group = struct {
     /// the reply is dropped.
     fn reply(g: *Group, d: Delivery, with: Resume) !void {
         const id = d.from orelse return g.releaseResume(with);
-        for (g.pending.items, 0..) |p, i| if (p.call == null and std.mem.eql(u8, p.id, id)) {
-            _ = g.pending.orderedRemove(i);
-            return g.ready(p, with);
-        };
-        g.releaseResume(with);
+        const p = g.waits.reply(id) orelse return g.releaseResume(with);
+        return g.ready(p, with);
     }
 
     /// `timeout` for a Timeout Block's deadline, with `capability` and
@@ -5317,17 +5260,13 @@ pub const Group = struct {
     fn observe(g: *Group, s: *Script, d: Delivery) !bool {
         var waits: std.ArrayList(*Pending) = .empty;
         defer waits.deinit(g.gpa);
-        for (g.pending.items) |p| if (p.event != null and p.run.script == s) try waits.append(g.gpa, p);
+        for (g.waits.all()) |p| if (p.event != null and p.run.script == s) try waits.append(g.gpa, p);
         if (waits.items.len == 0) return false;
         var taken = false;
         const message = try g.messageMap(d);
         defer message.release();
         for (waits.items) |p| {
             const branch = try g.eventMatch(p, d) orelse continue;
-            for (g.pending.items, 0..) |y, i| if (y == p) {
-                _ = g.pending.orderedRemove(i);
-                break;
-            };
             const binds: u32 = switch (g.eventEntry(p).branches[branch - 1]) {
                 .when => |w| @intCast(w.binds.len),
                 .after => 0,
@@ -5558,17 +5497,13 @@ pub const Group = struct {
 
     /// Starts a Join Member: its wait is pending, but the Run goes on.
     fn startMember(g: *Group, run: *Run, wait: Pending) !void {
-        const join = run.join.?;
+        std.debug.assert(wait.run == run and run.join != null);
         const p = try g.gpa.create(Pending);
-        g.timers += 1;
         p.* = wait;
-        p.order = g.timers;
-        p.member = join.members.items.len;
-        g.pending.append(g.gpa, p) catch |e| {
+        g.waits.addMember(g.gpa, p) catch |e| {
             g.destroyPending(p);
             return e;
         };
-        try join.members.append(g.gpa, .{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms } });
     }
 
     /// Abandons a Join's members still pending, or timed out, in start
@@ -5598,10 +5533,7 @@ pub const Group = struct {
         const join = run.join orelse return;
         for (join.members.items) |x| {
             if (x.pending) |p| {
-                for (g.pending.items, 0..) |y, i| if (y == p) {
-                    _ = g.pending.orderedRemove(i);
-                    break;
-                };
+                g.waits.take(p);
                 abandonCall(p);
                 g.destroyPending(p);
             }
@@ -5618,7 +5550,7 @@ pub const Group = struct {
             if (wait.event) |ev| g.releaseEvent(ev);
             return e;
         };
-        g.timers += 1;
+        std.debug.assert(wait.run == run);
         p.* = wait;
         // The innermost Timeout Block's deadline bounds it, and wins a tie.
         if (blockDeadline(&run.frames.items[run.frames.items.len - 1])) |d| if (d.at <= p.deadline) {
@@ -5626,12 +5558,10 @@ pub const Group = struct {
             p.block = true;
             p.after_ms = d.ms;
         };
-        p.order = g.timers;
-        g.pending.append(g.gpa, p) catch |e| {
+        g.waits.add(g.gpa, p) catch |e| {
             g.destroyPending(p);
             return e;
         };
-        run.waiting = p;
         run.suspended_at = at;
     }
 
@@ -8209,13 +8139,9 @@ pub const Group = struct {
                 const call_id = if (p.call) |c| c.id else p.id;
                 if (call_id.len > 0) g.write("abandon {s}\n", .{call_id});
             }
-            for (g.pending.items, 0..) |x, i| if (x == p) {
-                _ = g.pending.orderedRemove(i);
-                break;
-            };
+            g.waits.take(p);
             abandonCall(p);
             g.destroyPending(p);
-            run.waiting = null;
         }
         g.abandonJoin(run);
         g.abandonUnwinding(run);
