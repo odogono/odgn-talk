@@ -1364,8 +1364,19 @@ export fn talk_deciding_decided(d: *Deciding) ?*const Decided {
 }
 
 export fn talk_pending_release(p: ?*Pending) void {
-    _ = p;
-    // A Request's handle lives with its Group, which frees it.
+    const pending = p orelse return;
+    const g = pending.group;
+    // Handles usually end in the order they were made, newest last.
+    var i = g.pending.items.len;
+    while (i > 0) {
+        i -= 1;
+        if (g.pending.items[i] == pending) {
+            _ = g.pending.orderedRemove(i);
+            break;
+        }
+    }
+    g.group.forgetResult(pending.id);
+    g.core.gpa.destroy(pending);
 }
 
 export fn talk_pending_done(p: *const Pending) bool {
@@ -2045,6 +2056,7 @@ pub const direct = struct {
     pub const groupScript = talk_group_script;
     pub const scriptDeliver = talk_script_deliver;
     pub const scriptRequest = talk_script_request;
+    pub const pendingRelease = talk_pending_release;
     pub const save = talk_save;
     pub const fingerprint = talk_fingerprint;
     pub const callAnswer = talk_call_answer;

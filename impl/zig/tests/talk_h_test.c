@@ -198,6 +198,52 @@ static int pending_failure_test(void) {
     return 0;
 }
 
+/* A released handle takes its result with it, settled or not, so a
+ * long-lived Group's memory doesn't grow with each Request (#1103). */
+static int pending_release_test(void) {
+    talk_core *core = talk_new();
+    talk_group *group = NULL;
+    talk_group_options options = {"released", 8, NULL, NULL, NULL, 0, 0};
+    expect(talk_new_group(core, &options, &group) == TALK_OK, "make a Group for released Requests");
+    const char *source = "on ping n\n return n + 1\nend ping\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    expect(talk_load(group, &load, &script) == TALK_OK, "load the ping Script");
+    talk_value *n = NULL;
+    expect(talk_int(41, &n) == TALK_OK, "make the argument");
+    talk_value *args[1] = {n};
+    talk_message ping = {"ping", 4, args, 1, NULL};
+    size_t before = 0;
+    for (int i = 0; i < 400; i++) {
+        talk_pending *pending = NULL;
+        expect(talk_script_request(script, &ping, NULL, &pending) == TALK_OK, "request ping");
+        /* Odd Requests end their handle before they settle. */
+        if (i % 2) talk_pending_release(pending);
+        talk_pump_result pumped = {0};
+        expect(talk_pump(group, 1790000000, 0, NULL, &pumped) == TALK_OK, "pump the ping");
+        talk_reports_release(pumped.reports);
+        if (i % 2 == 0) {
+            talk_value *result = NULL;
+            expect(talk_pending_result(pending, &result) == TALK_OK && result != NULL, "read the ping result");
+            talk_value_release(result);
+            talk_pending_release(pending);
+        }
+        /* Halfway, the Group's tables have reached their size. */
+        if (i == 199) {
+            talk_memory memory;
+            talk_group_memory(group, &memory);
+            before = memory.used;
+        }
+    }
+    talk_memory after;
+    talk_group_memory(group, &after);
+    expect(after.used <= before, "released Requests leave no results behind");
+    talk_value_release(n);
+    talk_group_release(group);
+    talk_core_release(core);
+    return 0;
+}
+
 /* Settlement follows the Delivery's final outcome, including lifecycle
  * discards without run end. Kept mailboxes and Rewind retain the Request. */
 static int pending_terminal_test(void) {
@@ -2889,6 +2935,7 @@ int main(void) {
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(pending_failure_test() == 0, "failed C Requests and Function calls settle");
     expect(pending_terminal_test() == 0, "C Pending handles settle for terminal outcomes");
+    expect(pending_release_test() == 0, "C Pending handles take their results when released");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(release_cancellation_test() == 0, "Stop cancels pending Calls before releasing Grants");
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");

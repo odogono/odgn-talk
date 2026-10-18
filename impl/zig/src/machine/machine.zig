@@ -1462,6 +1462,9 @@ pub const Group = struct {
     /// Settled Request results by delivery id, for the Host. Unsuccessful
     /// Requests retain Nothing; Run failure details stay in the Reports.
     results: std.AutoHashMapUnmanaged(u64, *Value) = .empty,
+    /// Requests whose Host handle ended before they settled: their results
+    /// are dropped at settlement, not kept for no reader.
+    unclaimed: std.AutoHashMapUnmanaged(u64, void) = .empty,
     /// Sealed Decisions by delivery id, and Broadcast Decisions by broadcast
     /// id, for the Host.
     decided: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
@@ -1647,6 +1650,7 @@ pub const Group = struct {
         var it = g.results.valueIterator();
         while (it.next()) |v| v.*.release();
         g.results.deinit(g.gpa);
+        g.unclaimed.deinit(g.gpa);
         inline for (.{ &g.decided, &g.decided_broadcasts }) |map| {
             var decided = map.valueIterator();
             while (decided.next()) |x| g.releaseDecided(x.*);
@@ -6378,11 +6382,20 @@ pub const Group = struct {
         };
         if (d.waits) return g.reply(d, .{ .reply = value });
         if (!d.request) return value.release();
+        if (g.unclaimed.remove(d.id)) return value.release();
         std.debug.assert(!g.results.contains(d.id));
         g.results.put(g.gpa, d.id, value) catch |e| {
             value.release();
             return e;
         };
+    }
+
+    /// Ends the Host's interest in Request `id`: drops its settled result,
+    /// or the result it settles with later. If the Group can't record that,
+    /// the result is kept until the Group ends, as before.
+    pub fn forgetResult(g: *Group, id: u64) void {
+        if (g.results.fetchRemove(id)) |kv| return kv.value.release();
+        g.unclaimed.put(g.gpa, id, {}) catch {};
     }
 
     fn reportUnhandled(g: *Group, d: Delivery) !void {

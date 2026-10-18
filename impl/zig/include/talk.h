@@ -1368,7 +1368,8 @@ void talk_script_counters(talk_script *s, talk_counters *out);
 /* The Request's result, an owned reference: Nothing until it settles, or
  * when it ends without a successful return. Run failure details are in Reports. */
 talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
-/* C only: ends the caller's handle on a Request. */
+/* C only: ends the caller's handle on a Request, and with it the Group's
+ * copy of the result, now or when the Request settles. */
 void talk_pending_release(talk_pending *p);
 /* Whether the Request has settled, including unsuccessful Run outcomes,
  * lifecycle discards and rejection before a Run starts. Climbing the Message

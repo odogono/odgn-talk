@@ -2748,6 +2748,8 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
         .broadcast => Direct.broadcast(entry.group, &m, &id),
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
+    // Nothing reads a Request's result through its handle here.
+    Direct.pendingRelease(pending);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -3809,6 +3811,7 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
     var pending: ?*talk.Pending = null;
     const code = Direct.call(entry.group, f, args.items.ptr, args.items.len, override, &id, &pending);
     if (code != .ok) return hostError(s.gpa, ref, code);
+    Direct.pendingRelease(pending);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
     defer o.deinit();
