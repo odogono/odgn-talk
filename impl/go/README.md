@@ -2009,5 +2009,6 @@ registered before sending, and context cancellation uses the exchange's token
 until its final reply, then the delivery id. Unset, the backend keeps JSON
 and refuses combined operations before admission. These helpers are not public
 Go APIs; run the adapter suites in either mode with the variable set.
-The proposed Go, TS, Elixir and C declarations remain unpublished until the
-performance gate, so the public cross-Host API checks retain their existing contract.
+ADR 0110 is accepted, with the fields envelope selected. The Go, TS, Elixir and C
+declarations land together in #1255–#1257; until then the public cross-Host API
+checks retain their existing contract.

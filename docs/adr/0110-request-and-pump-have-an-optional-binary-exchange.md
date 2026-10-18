@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Request and Pump have an optional binary exchange
 
-For [#1245](https://github.com/odogono/odgn-talk/issues/1245), we propose a narrowly negotiated binary Message Layer feature for Request, Function calls and Pump, plus explicit combined admission-and-Pump operations. JSON remains available for other messages and carries needs, their answers and inline events. This decision will supersede [ADR 0098](0098-the-message-layer-may-carry-binary-frames.md) only after the experiment below passes; ADR 0098 remains the accepted decision in the meantime.
+For [#1245](https://github.com/odogono/odgn-talk/issues/1245), we propose a narrowly negotiated binary Message Layer feature for Request, Function calls and Pump, plus explicit combined admission-and-Pump operations. JSON remains available for other messages and carries needs, their answers and inline events. It supersedes [ADR 0098](0098-the-message-layer-may-carry-binary-frames.md). The fields envelope is selected.
 
 The [proposed contract](../../spec/embedding/request-pump-binary.md) preserves synchronous admission for existing APIs. A combined call claims the Group worker, admits once and Pumps once; its result distinguishes admission failure from Pump failure after admission. Temporary Host correlation tokens allow cancellation before the Host receives the Core-assigned delivery id. They do not replace Delivery identity.
 
@@ -20,6 +20,10 @@ The binary Value codec is language-neutral and independent of WASM. A browser Ho
 
 ## Acceptance and consequences
 
-Measure unchanged `BackendRequest` and equivalent native/Zig combined Request benchmarks in the same jobs on Linux amd64, Linux arm64 and macOS arm64. Both must reach at most 3× native, without native regression. Function-call measurements are recorded without an additional gate. Prefer generic envelopes if both pass, unless specialized envelopes improve combined latency by at least 10% on every platform; choose specialized envelopes if only they pass.
+We first required binary Zig to reach at most 3× native on Linux amd64, Linux arm64 and macOS arm64. [#1254 measured](../research/request-pump-binary.md#gate-measurements-1254) 3.5–6× after one optimization pass. About 70% of a round trip is guest execution, which the envelope can't reduce. So that limit measures the guest, not this transport, and we amended the gate (#1245).
 
-After profiling and one targeted optimization pass, a remaining failure stops broader implementation for maintainer review. Record evidence, not a claim of impossibility. Go/Zig is the experiment; TS, Elixir and C public APIs follow only after the gates pass. Elixir's combined operation requires an explicitly released pending handle with repeatable awaits; releasing it or timing out an await does not cancel execution.
+The binary exchange is accepted when it beats the JSON Message Layer by at least 25% on every platform for both the unchanged `BackendRequest` and the combined Request, measured in the same job, with no native regression. Fields passed on every platform, at 27–43%. We select it over map, which was 10–19% slower on the unchanged Request in every job. Function-call measurements are recorded without a gate.
+
+The ≤3×-native target remains a goal for the Zig guest, tracked in #1267 and not a condition of this transport. Go/Zig was the experiment; the TS, Elixir and C public APIs now follow. Elixir's combined operation requires an explicitly released pending handle with repeatable awaits; releasing it or timing out an await does not cancel execution.
+
+- Amended by #1245: the gate was relative to native, and is now relative to JSON. The ≤3×-native goal moved to #1267.

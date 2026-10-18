@@ -1607,7 +1607,7 @@ error reply itself. Early Load refusals record the attempted input and refusal.
 ### Binary Value codec experiment
 
 `src/binary_value.zig` implements the Value items for the
-[proposed Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
+[Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
 It preserves decimal scale, uses iterative traversal, and resolves Objects and
 Functions through the owning Group's hooks. `src/request_pump.zig` holds both
 candidates' envelope reader and writer. The Session offers both features at

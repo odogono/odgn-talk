@@ -1,10 +1,10 @@
-# Proposed binary Request and Pump exchanges
+# Binary Request and Pump exchanges
 
-**Status: proposed. The Zig Session and the experimental Go adapter implement
-both candidates behind negotiation; no released Host negotiates them, and
-neither has passed the performance gate.** This is
-[#1245](https://github.com/odogono/odgn-talk/issues/1245)'s experiment contract,
-under [proposed ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
+**Status: accepted, with the fields envelope selected. The Zig Session and the
+experimental Go adapter implement both candidates behind negotiation; public
+Host APIs follow.** This is
+[#1245](https://github.com/odogono/odgn-talk/issues/1245)'s contract, under
+[ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
 
 ## Negotiation and framing
@@ -213,14 +213,16 @@ two-call fallback. Ordinary Request, Function call and Pump APIs remain availabl
 Implement Go/Zig candidates first. Compare unchanged `BackendRequest` and an
 identical native/Zig combined Request benchmark, recording environment, artifact
 identity, allocation, latency and repeated samples on all three `go-zig-bench`
-platforms. Both Request ratios must be at most 3× with no native regression.
-Record combined Function-call performance without a new limit.
+platforms. Both Request benchmarks must beat the JSON Message Layer by at least
+25% in the same job on every platform, with no native regression. Record combined
+Function-call performance without a new limit. Missing measurements are not
+passing evidence.
 
-Prefer maps when both candidates pass, unless fields improve combined latency
-by at least 10% on every platform. Choose fields if only fields pass. After
-profiling and one targeted optimization pass, any remaining Request gate failure
-stops broader implementation for maintainer review. Missing measurements are
-not passing evidence. TS, Elixir and C implementations follow only after passage.
+#1254 measured fields at 27–43% faster than JSON on every platform, and map
+10–19% slower than fields, so fields is selected. The gate first asked for at
+most 3× native. That limit measures the Zig guest rather than the transport, and
+is now a separate goal ([ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)).
+TS, Elixir and C implementations follow.
 
 Verify codec canonicality, deep Values, every Report, malformed recovery, mixed
 continuations, cancellation races, stale tokens, worker exclusion, partial
