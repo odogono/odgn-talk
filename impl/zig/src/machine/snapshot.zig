@@ -18,7 +18,6 @@ const display = @import("../display.zig");
 const lower = @import("../lower/lower.zig");
 const binary = @import("binary.zig");
 const capabilities = @import("capabilities.zig");
-const issued_calls = @import("issued_calls.zig");
 const objects = @import("objects.zig");
 const fingerprint = @import("fingerprint.zig");
 const verify = @import("verify.zig");
@@ -61,7 +60,7 @@ const Out = struct {
     }
 
     /// An unsigned LEB128 integer.
-    fn int(o: *Out, v: u64) !void {
+    pub fn int(o: *Out, v: u64) !void {
         var x = v;
         while (true) {
             const low: u8 = @intCast(x & 0x7f);
@@ -82,11 +81,11 @@ const Out = struct {
         try o.int(@intCast(t.micros));
     }
 
-    fn flag(o: *Out, b: bool) !void {
+    pub fn flag(o: *Out, b: bool) !void {
         try o.byte(@intFromBool(b));
     }
 
-    fn str(o: *Out, s: []const u8) !void {
+    pub fn str(o: *Out, s: []const u8) !void {
         try o.int(s.len);
         try o.bytes.appendSlice(o.gpa, s);
     }
@@ -97,7 +96,7 @@ const Out = struct {
     }
 
     /// An optional index, as 0 for none and the index plus 1 otherwise.
-    fn ref(o: *Out, i: ?usize) !void {
+    pub fn ref(o: *Out, i: ?usize) !void {
         try o.int(if (i) |x| x + 1 else 0);
     }
 };
@@ -116,7 +115,7 @@ const In = struct {
 
     /// An integer no counter, id or charge of a real save comes near, so
     /// the machine's arithmetic on it never overflows.
-    fn int(i: *In) Error!u64 {
+    pub fn int(i: *In) Error!u64 {
         const v = try i.wide();
         if (v > 1 << 56) return error.InvalidSave;
         return v;
@@ -141,7 +140,7 @@ const In = struct {
 
     /// A count of things each at least one byte long, so it can't promise
     /// more than the save holds.
-    fn count(i: *In) Error!usize {
+    pub fn count(i: *In) Error!usize {
         const n = try i.int();
         if (n > i.bytes.len - i.pos) return error.InvalidSave;
         return @intCast(n);
@@ -161,7 +160,7 @@ const In = struct {
         return .{ .seconds = seconds, .micros = @intCast(micros) };
     }
 
-    fn flag(i: *In) Error!bool {
+    pub fn flag(i: *In) Error!bool {
         return switch (try i.byte()) {
             0 => false,
             1 => true,
@@ -170,7 +169,7 @@ const In = struct {
     }
 
     /// Text borrowed from the save, which must be UTF-8.
-    fn str(i: *In) Error![]const u8 {
+    pub fn str(i: *In) Error![]const u8 {
         const n = try i.count();
         const s = i.bytes[i.pos .. i.pos + n];
         i.pos += n;
@@ -183,7 +182,7 @@ const In = struct {
     }
 
     /// An optional index below `n`.
-    fn ref(i: *In, n: usize) Error!?usize {
+    pub fn ref(i: *In, n: usize) Error!?usize {
         const v = try i.int();
         if (v == 0) return null;
         if (v - 1 >= n) return error.InvalidSave;
@@ -191,7 +190,7 @@ const In = struct {
     }
 
     /// An index below `n`.
-    fn index(i: *In, n: usize) Error!usize {
+    pub fn index(i: *In, n: usize) Error!usize {
         const v = try i.int();
         if (v >= n) return error.InvalidSave;
         return @intCast(v);
@@ -491,7 +490,7 @@ const Saving = struct {
     g: *Group,
     tables: Tables,
     runs: std.ArrayList(*Run) = .empty,
-    calls: std.ArrayList(*capabilities.Call) = .empty,
+    waits: machine.wait_table.Waits.Export,
     /// The internal values a dispatch activation shares, saved once.
     iterators: std.ArrayList(*machine.Iterator) = .empty,
     readers: std.ArrayList(*binary.Reader) = .empty,
@@ -500,7 +499,7 @@ const Saving = struct {
     fn deinit(s: *Saving) void {
         const gpa = s.o.gpa;
         s.runs.deinit(gpa);
-        s.calls.deinit(gpa);
+        s.waits.deinit(gpa);
         s.iterators.deinit(gpa);
         s.readers.deinit(gpa);
         s.replacements.deinit(gpa);
@@ -533,7 +532,7 @@ const Saving = struct {
     }
 
     fn call(s: *Saving, c: ?*capabilities.Call) !void {
-        try s.o.ref(if (c) |x| std.mem.indexOfScalar(*capabilities.Call, s.calls.items, x) else null);
+        try s.o.ref(if (c) |x| std.mem.indexOfScalar(*capabilities.Call, s.waits.calls.items, x) else null);
     }
 
     fn slots(s: *Saving, stack: []const Slot) !void {
@@ -915,7 +914,7 @@ pub fn effectsPending(g: *const Group) bool {
     @constCast(g).input_lock.lock();
     defer @constCast(g).input_lock.unlock();
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return true;
-    for (g.waits.pending.items) |p| if (p.decl) |op| if (op.metering != null) return true;
+    if (g.waits.hasMeteredWait()) return true;
     for (g.scripts.items) |s| for (s.live.items) |r| {
         if (r.scopes.items.len > 0 or r.participant != null) return true;
     };
@@ -929,7 +928,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     g.input_lock.lock();
     defer g.input_lock.unlock();
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return error.EffectsPending;
-    var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items } };
+    var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
     defer s.deinit();
     errdefer s.o.bytes.deinit(gpa);
     const o = &s.o;
@@ -942,30 +941,11 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
-    try o.int(g.waits.timers);
+    try o.int(s.waits.table.timers);
     try o.int(g.run_order);
     try o.int(g.charge_counter);
     try o.int(g.random_state);
-    try o.int(g.waits.issued_calls.runs.count());
-    var issued: std.ArrayList([]const u8) = .empty;
-    defer issued.deinit(gpa);
-    var ids = g.waits.issued_calls.runs.keyIterator();
-    while (ids.next()) |id| try issued.append(gpa, id.*);
-    std.mem.sort([]const u8, issued.items, {}, struct {
-        fn less(_: void, x: []const u8, y: []const u8) bool {
-            return std.mem.lessThan(u8, x, y);
-        }
-    }.less);
-    for (issued.items) |id| {
-        try o.str(id);
-        const ranges = g.waits.issued_calls.runs.get(id).?.items;
-        try o.int(ranges.len);
-        for (ranges) |range| {
-            try o.int(range.first);
-            try o.int(range.last);
-            try o.flag(range.eligible);
-        }
-    }
+    try s.waits.writeIssued(gpa, o);
     // Libraries, by identity.
     try o.int(g.libraries.items.len);
     for (g.libraries.items) |l| {
@@ -1000,9 +980,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         }
     }
     // The calls a Run still waits on, with their arguments.
-    for (g.waits.calls.items) |c| if (machine.wait_table.Waits.awaitedByRun(c, g.liveRuns())) try s.calls.append(gpa, c);
-    try o.int(s.calls.items.len);
-    for (s.calls.items) |c| {
+    try o.int(s.waits.calls.items.len);
+    for (s.waits.calls.items) |c| {
         try o.str(c.id);
         try o.str(c.script);
         try o.str(c.grant);
@@ -1082,11 +1061,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     // The waits with deadlines, in the order they were set: each by its Run
     // and, for a Join Member, its member.
-    try o.int(g.waits.pending.items.len);
-    for (g.waits.pending.items) |p| {
-        try o.int(std.mem.indexOfScalar(*Run, s.runs.items, p.run).?);
-        try o.ref(p.member);
-    }
+    try s.waits.writeOrder(o, s.runs.items);
     try o.int(g.ids.items.len);
     for (g.ids.items) |id| try o.str(id);
     try o.int(g.inputs.items.len);
@@ -1684,9 +1659,7 @@ const Restoring = struct {
         x.segment_fuel = try r.i.int();
         x.segment_alloc = try r.i.int();
         x.started = try r.i.flag();
-        x.waiting = try r.pending(x);
-        // A Run's own wait is no Join Member's.
-        if (x.waiting) |p| if (p.member != null) return error.InvalidSave;
+        try r.g.waits.importWait(x, null, try r.pending(x));
         x.resume_with = try r.resumeWith();
         x.suspended_at = try r.kept();
         x.waited = try r.waited(s);
@@ -1699,8 +1672,7 @@ const Restoring = struct {
             for (0..n) |m| {
                 try j.members.append(a, .{ .pending = null, .waited = .{} });
                 const member = &j.members.items[m];
-                member.pending = try r.pending(x);
-                if (member.pending) |p| if (p.member == null or p.member.? != m) return error.InvalidSave;
+                try r.g.waits.importWait(x, m, try r.pending(x));
                 member.waited = try r.waited(s);
                 member.with = try r.resumeWith();
                 member.cut = try r.i.flag();
@@ -2197,28 +2169,11 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
-    g.waits.timers = try i.int();
+    g.waits.importTimers(try i.int());
     g.run_order = try i.int();
     g.charge_counter = try i.int();
     g.random_state = try i.wide();
-    const issued_count = try i.count();
-    for (0..issued_count) |_| {
-        const run = try a.dupe(u8, try i.str());
-        errdefer a.free(run);
-        if (run.len == 0 or g.waits.issued_calls.runs.contains(run)) return error.InvalidSave;
-        var ranges: std.ArrayList(issued_calls.Range) = .empty;
-        errdefer ranges.deinit(a);
-        const count = try i.count();
-        if (count == 0) return error.InvalidSave;
-        for (0..count) |_| {
-            const range: issued_calls.Range = .{ .first = try i.int(), .last = try i.int(), .eligible = try i.flag() };
-            issued_calls.IssuedCalls.append(&ranges, a, range) catch |err| return switch (err) {
-                error.InvalidCallId => error.InvalidSave,
-                error.OutOfMemory => error.OutOfMemory,
-            };
-        }
-        try g.waits.issued_calls.runs.put(a, run, ranges);
-    }
+    try g.waits.importIssued(a, i);
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
     // Libraries, matched by identity to those the Host passes.
     r.libraries = try a.alloc(?*Library, try i.count());
@@ -2324,18 +2279,8 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     // The calls Runs wait on.
     const calls = try a.alloc(*capabilities.Call, try i.count());
     defer a.free(calls);
-    for (calls, 0..) |*c, n| {
-        const id = try a.dupe(u8, try i.str());
-        const x = a.create(capabilities.Call) catch |e| {
-            a.free(id);
-            return e;
-        };
-        x.* = .{ .id = id, .script = "", .grant = "", .binding = null, .now = g.clock, .left = null, .starting = false, .group = g, .owner = g, .gpa = a };
-        g.waits.addCall(a, x) catch |e| {
-            a.free(id);
-            a.destroy(x);
-            return e;
-        };
+    for (calls) |*c| {
+        const x = try g.waits.importCall(a, try i.str(), .{ .clock = g.clock, .group = g, .owner = g });
         x.script = try r.kept();
         x.grant = try r.kept();
         x.run = try r.kept();
@@ -2347,7 +2292,6 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         if (machine.micros(x.now) > machine.micros(g.clock)) return error.InvalidSave;
         x.args = try r.values();
         x.charged = try i.int();
-        for (calls[0..n]) |y| if (std.mem.eql(u8, y.id, id)) return error.InvalidSave;
         c.* = x;
     }
     r.calls = calls;
@@ -2427,18 +2371,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         };
     }
     // The waits, in the order they were set, each once.
-    const pending_count = try i.count();
-    try g.waits.pending.ensureTotalCapacity(a, pending_count);
-    for (0..pending_count) |_| {
-        const x = r.runs.items[try i.index(r.runs.items.len)];
-        const p = if (try i.ref(std.math.maxInt(u32))) |m| blk: {
-            const j = x.join orelse return error.InvalidSave;
-            if (m >= j.members.items.len) return error.InvalidSave;
-            break :blk j.members.items[m].pending orelse return error.InvalidSave;
-        } else x.waiting orelse return error.InvalidSave;
-        if (std.mem.indexOfScalar(*Pending, g.waits.pending.items, p) != null) return error.InvalidSave;
-        g.waits.pending.appendAssumeCapacity(p);
-    }
+    try g.waits.importOrder(a, i, r.runs.items);
     const ids = try i.count();
     for (0..ids) |_| {
         const id = try a.dupe(u8, try i.str());
@@ -2507,17 +2440,8 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     defer discarded.deinit(a);
     if (variables_only) try discard(&r, saved, &discarded) else baseline(g);
     // The calls that still pend.
-    var pending_ids: std.ArrayList([]const u8) = .empty;
+    var pending_ids = try g.waits.importedPending(a, calls);
     errdefer pending_ids.deinit(a);
-    for (calls) |c| for (g.waits.pending.items) |p| if (p.call == c) {
-        try pending_ids.append(a, c.id);
-        break;
-    };
-    std.mem.sort([]const u8, pending_ids.items, {}, struct {
-        fn less(_: void, x: []const u8, y: []const u8) bool {
-            return machine.callOrder(x, y);
-        }
-    }.less);
     g.restored = .{ .pending = pending_ids, .clock = g.clock };
     // Host Objects: each the Host can't resolve restores disposed.
     var disposed: std.ArrayList(*objects.Object) = .empty;
