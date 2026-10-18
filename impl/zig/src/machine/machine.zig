@@ -9836,6 +9836,9 @@ pub const Group = struct {
                 gpa.destroy(c);
                 return err;
             };
+            // Segment ids are normally instruction scratch. A retained
+            // Call exposes its originating Segment after later Pumps too.
+            c.segment = try g.keep.allocator().dupe(u8, local.segment);
             // Its arguments, for the answer's check and for a save, which
             // a restore may reissue it with.
             c.args = try gpa.dupe(*Value, args);
@@ -10706,7 +10709,7 @@ pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, l
 /// MaxWait's default, for a suspending call whose Operation sets no
 /// `maxPending`, until step 4 brings per-Script limits.
 /// An Instant in microseconds since the epoch.
-fn micros(t: model.dates.Instant) i128 {
+pub fn micros(t: model.dates.Instant) i128 {
     return @as(i128, t.seconds) * std.time.us_per_s + t.micros;
 }
 

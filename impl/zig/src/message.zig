@@ -5484,6 +5484,8 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{7}));
     _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8})).object.get("need").?;
     _ = try okOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{8}));
+    // Later Pumps must not replace the pending Call's original Clock.
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00.5Z\"}}", .{80}));
     const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{9}))).object.get("save").?.object.get("$bytes").?.string;
 
     // The Core asks for the Script's Grant and its owner.
