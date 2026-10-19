@@ -1,0 +1,15 @@
+Paired ns/op ratios (numerator / denominator, chronological round in each file).
+Median of round ratios; min/max show spread, not a confidence interval.
+Numerator   Benchmark    Denominator  Benchmark    Rounds  Median  Min     Max
+native      Request      base         Request      10      0.992x  0.978x  1.013x
+zig-json    Request      native       Request      10      5.240x  5.051x  5.565x
+zig-map     Request      native       Request      10      3.277x  2.968x  3.488x
+zig-map     RequestPump  native       RequestPump  10      2.761x  2.628x  3.204x
+zig-map     CallPump     native       CallPump     10      5.939x  5.513x  6.427x
+zig-map     Request      zig-json     Request      10      0.621x  0.534x  0.689x
+zig-map     RequestPump  zig-json     Request      10      0.524x  0.479x  0.616x
+zig-fields  Request      native       Request      10      2.707x  2.377x  2.859x
+zig-fields  RequestPump  native       RequestPump  10      2.239x  2.102x  2.447x
+zig-fields  CallPump     native       CallPump     10      4.990x  4.464x  5.409x
+zig-fields  Request      zig-json     Request      10      0.511x  0.435x  0.566x
+zig-fields  RequestPump  zig-json     Request      10      0.433x  0.383x  0.477x
