@@ -2,18 +2,9 @@ name: Go Zig adapter measurements
 
 # Native Go against the Zig adapter on each required platform (#1054). It
 # times shared runners, so read results as ratios within one job. It runs on
-# demand and when the measurement code changes, not on every Core change.
+# demand; timing matrices are kept off pull requests.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'impl/go/backend_bench_test.go'
-      - 'impl/go/group_bench_test.go'
-      - 'impl/go/zig-adapter-bench.sh'
-      - 'impl/go/zig-request-pump-bench.sh'
-      - 'impl/go/cmd/request-pump-report/**'
-      - 'impl/go/group_combined_bench_test.go'
-      - '.github/workflows/go-zig-bench.yml'
 
 jobs:
   measure:
