@@ -194,6 +194,8 @@ libraries/errors
 libraries/needs-suspending
 libraries/needs-transitive
 libraries/registration
+libraries/wait-for
+libraries/wait-for-lifecycle
 limits/alloc-exhaustion-point
 limits/ask-wait-retention
 limits/call-depth-minimum

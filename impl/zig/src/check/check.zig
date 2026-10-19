@@ -1205,7 +1205,6 @@ const Checker = struct {
                 if (w.join != null) try c.report(.not_in_a_join, first);
             },
             .wait_for => |wf| {
-                if (c.context.library) try c.report(.not_in_a_library, first);
                 try c.event(s, wf.event);
                 if (wf.timeout) |e| try c.expr(s, e, .normal);
                 if (wf.guard) |g| try c.expr(s, g.condition, .guard);
@@ -1213,7 +1212,6 @@ const Checker = struct {
                 if (w.join != null) try c.report(.not_in_a_join, first);
             },
             .wait_block => |wb| {
-                if (c.context.library) try c.report(.not_in_a_library, first);
                 if (w.join != null) try c.report(.not_in_a_join, first);
                 try c.intrinsic(s, first, w);
                 for (wb.branches) |br| {
@@ -1228,7 +1226,6 @@ const Checker = struct {
                 }
             },
             .join => |j| {
-                if (c.context.library) try c.report(.not_in_a_library, first);
                 if (w.join != null) try c.report(.not_in_a_join, first);
                 try c.intrinsic(s, first, w);
                 var inner = w;
@@ -1556,7 +1553,13 @@ const Checker = struct {
 
     fn event(c: *Checker, s: *Scope, ev: ast.Event) Allocator.Error!void {
         for (ev.patterns) |p| try c.pattern(s, p);
-        if (ev.from) |e| try c.receiver(s, e);
+        if (ev.from) |e| {
+            try c.receiver(s, e);
+            // A Library may not name the importer's Scripts (ADR 0113).
+            if (c.context.library and e.data == .name) {
+                if (c.refs.get(e.data.name)) |r| if (r == .script) try c.report(.not_in_a_library, e.data.name);
+            }
+        }
     }
 
     /// A pattern in a collecting `repeat`'s body may not bind its target.

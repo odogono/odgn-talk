@@ -1846,16 +1846,16 @@ static int function_call_test(void) {
     return bad;
 }
 
-/* Library checks talk.go and talk.ts share (#1033): a Join is not in a
- * Library, NULL declarations declare no Grants, and an unknown import binds
- * nothing, so its uses are unknown names. */
+/* Library checks talk.go and talk.ts share (#1033): a `wait for` can't name
+ * a Script in its `from` (ADR 0113), NULL declarations declare no Grants,
+ * and an unknown import binds nothing, so its uses are unknown names. */
 static int library_check_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
-    const char *join_source = "on hold\n  wait for all\n    ask io to pause and wait\n  end wait\nend hold\n";
+    const char *from_source = "on watch\n  wait for go from board\nend watch\n";
     const char *ask_source = "function read\n  ask db to read\n  return it\nend read\n";
     const char *missing_source = "use bump from maths\nfunction f\n  return bump(1)\nend f\n";
-    const char *sources[] = {join_source, ask_source, missing_source};
+    const char *sources[] = {from_source, ask_source, missing_source};
     const char *codes[][2] = {{"not in a library", NULL}, {"unknown operation", NULL}, {"unknown import", "unknown name"}};
     int bad = 0;
     for (size_t i = 0; i < 3; i++) {

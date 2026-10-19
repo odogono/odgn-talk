@@ -1,0 +1,31 @@
+use confirm, confirmWith, promptBoth from dialogue
+use confirmTwice from menu
+script variable answers = []
+
+on buy item
+  confirm "BUY " & item & "?", 5 s and wait
+  put [item, it] after answers
+end buy
+
+on bargain
+  confirmTwice "SURE?" and wait
+  put ["bargain", it] after answers
+end bargain
+
+on haggle
+  put given
+    wait for pressed key or 1 s where key = "N"
+    return it
+  end into waiter
+  confirmWith "HAGGLE?", waiter and wait
+  put ["haggle", it] after answers
+end haggle
+
+on both
+  promptBoth "A", "B" and wait
+  put ["both", it] after answers
+end both
+
+on pressed key
+  put ["pressed", key] after answers
+end pressed

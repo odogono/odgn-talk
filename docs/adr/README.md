@@ -114,3 +114,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0110: Request and Pump have an optional binary exchange](0110-request-and-pump-have-an-optional-binary-exchange.md)
 - [0111: Snapshot sources may come from the Host](0111-snapshot-sources-may-come-from-the-host.md)
 - [0112: An `ask` may name a Result Target](0112-an-ask-may-name-a-result-target.md)
+- [0113: Library code may wait for messages to the calling Run's Script](0113-library-code-may-wait-for-messages-to-the-calling-runs-script.md)

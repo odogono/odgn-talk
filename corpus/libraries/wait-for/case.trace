@@ -1,0 +1,104 @@
+# Unblessed: Library `wait for` observes the calling Run's Script (#1342); first blessing awaits human review.
+# wait-for: two Runs of shop and one of other wait in dialogue's `confirm`.
+# One "Y" to shop resumes both of shop's waits in the order they began and
+# still reaches shop's own Handler; other's wait never sees it and times out.
+# Then a wait in a Library that menu calls, a Script's waiting Lambda called
+# from Library code, and a Library Join of two `ask` calls.
+
+> add-library dialogue identity=1132aac00e53bbd6793c5884102b3131090f466ab1ef0fb727614652dfa28927
+> add-library menu identity=cfa2f3b1832924727100540725fa5391eef718926389eac466b4dfff0eba683e
+> load shop identity=91d1d047021360c81de1f1b96796e99c20eee8a6848360e20fc2bfaa2cc0c95d
+> load other identity=8165ad58f13ede431d030180804e9f285f2d206d6af5f6595335c246d088f1b7
+> deliver d1 to=shop message=buy args=["DART"]
+> deliver d2 to=shop message=buy args=["SHIELD"]
+> deliver d3 to=other message=buy args=["DART"]
+> pump clock=2026-10-19T09:00:00Z
+call shop/r1.c1 op=display.prompt args=["BUY DART?"]
+seg shop/r1 start delivery=d1 handler=buy clause=1 fuel=39 alloc=49 state=515 end=ask-wait
+call other/r1.c1 op=display.prompt args=["BUY DART?"]
+seg other/r1 start delivery=d3 handler=buy clause=1 fuel=39 alloc=49 state=461 end=ask-wait
+call shop/r2.c1 op=display.prompt args=["BUY SHIELD?"]
+seg shop/r2 start delivery=d2 handler=buy clause=1 fuel=39 alloc=53 state=910 end=ask-wait
+pumped state=idle fuel=117 next=2026-10-19T09:00:30Z
+> answer shop/r1.c1 value=nothing
+> answer shop/r2.c1 value=nothing
+> answer other/r1.c1 value=nothing
+> pump clock=2026-10-19T09:00:01Z
+seg shop/r1 resume fuel=13 alloc=8 state=822 end=wait-for-any until=2026-10-19T09:00:06Z
+seg other/r1 resume fuel=13 alloc=8 state=413 end=wait-for-any until=2026-10-19T09:00:06Z
+seg shop/r2 resume fuel=13 alloc=8 state=814 end=wait-for-any until=2026-10-19T09:00:06Z
+pumped state=idle fuel=39 next=2026-10-19T09:00:06Z
+
+# A key the Guard refuses, then the one it takes.
+> deliver d4 to=shop message=pressed args=["N"]
+> deliver d5 to=shop message=pressed args=["Y"]
+> pump clock=2026-10-19T09:00:02Z
+seg shop/r3 start delivery=d4 handler=pressed clause=1 fuel=22 alloc=152 state=943 end=return
+run shop/r3 outcome=completed delivery=d4 handler=pressed fuel=22 alloc=152
+seg shop/r4 start delivery=d5 handler=pressed clause=1 fuel=22 alloc=152 state=1280 end=return
+run shop/r4 outcome=completed delivery=d5 handler=pressed fuel=22 alloc=152
+seg shop/r1 resume fuel=29 alloc=128 state=798 end=return
+run shop/r1 outcome=completed delivery=d1 handler=buy fuel=102 alloc=226
+seg shop/r2 resume fuel=29 alloc=132 state=314 end=return
+run shop/r2 outcome=completed delivery=d2 handler=buy fuel=102 alloc=234
+pumped state=idle fuel=144 next=2026-10-19T09:00:06Z
+
+# other's wait runs out.
+> pump clock=2026-10-19T09:00:06Z
+seg other/r1 resume fuel=34 alloc=128 state=84 end=return
+run other/r1 outcome=completed delivery=d3 handler=buy fuel=86 alloc=185
+pumped state=idle fuel=34
+
+# A wait in dialogue, reached through menu.
+> deliver d6 to=shop message=bargain
+> pump clock=2026-10-19T09:00:07Z
+call shop/r5.c1 op=display.prompt args=["SURE?"]
+seg shop/r5 start delivery=d6 handler=bargain clause=1 fuel=42 alloc=0 state=836 end=ask-wait
+pumped state=idle fuel=42 next=2026-10-19T09:00:37Z
+> answer shop/r5.c1 value=nothing
+> pump clock=2026-10-19T09:00:08Z
+seg shop/r5 resume fuel=13 alloc=8 state=788 end=wait-for-any until=2026-10-19T09:00:10Z
+pumped state=idle fuel=13 next=2026-10-19T09:00:10Z
+> deliver d7 to=shop message=pressed args=["Y"]
+> pump clock=2026-10-19T09:00:09Z
+seg shop/r6 start delivery=d7 handler=pressed clause=1 fuel=22 alloc=152 state=1021 end=return
+run shop/r6 outcome=completed delivery=d7 handler=pressed fuel=22 alloc=152
+seg shop/r5 resume fuel=35 alloc=158 state=477 end=return
+run shop/r5 outcome=completed delivery=d6 handler=bargain fuel=103 alloc=207
+pumped state=idle fuel=70
+
+# shop's own Lambda waits, called by dialogue.
+> deliver d8 to=shop message=haggle
+> pump clock=2026-10-19T09:00:10Z
+call shop/r7.c1 op=display.prompt args=["HAGGLE?"]
+seg shop/r7 start delivery=d8 handler=haggle clause=1 fuel=34 alloc=32 state=908 end=ask-wait
+pumped state=idle fuel=34 next=2026-10-19T09:00:40Z
+> answer shop/r7.c1 value=nothing
+> pump clock=2026-10-19T09:00:11Z
+seg shop/r7 resume fuel=22 alloc=8 state=956 end=wait-for until=2026-10-19T09:00:12Z
+pumped state=idle fuel=22 next=2026-10-19T09:00:12Z
+> deliver d9 to=shop message=pressed args=["N"]
+> pump clock=2026-10-19T09:00:11Z
+seg shop/r8 start delivery=d9 handler=pressed clause=1 fuel=22 alloc=152 state=1189 end=return
+run shop/r8 outcome=completed delivery=d9 handler=pressed fuel=22 alloc=152
+seg shop/r7 resume fuel=27 alloc=388 state=755 end=return
+run shop/r7 outcome=completed delivery=d8 handler=haggle fuel=96 alloc=469
+pumped state=idle fuel=62
+
+# A Join in Library code.
+> deliver d10 to=shop message=both
+> pump clock=2026-10-19T09:00:12Z
+call shop/r9.c1 op=display.prompt args=["A"]
+call shop/r9.c2 op=display.prompt args=["B"]
+seg shop/r9 start delivery=d10 handler=both clause=1 fuel=60 alloc=0 state=1173 end=join-end
+pumped state=idle fuel=60 next=2026-10-19T09:00:42Z
+> answer shop/r9.c1 value=nothing
+> answer shop/r9.c2 value=nothing
+> pump clock=2026-10-19T09:00:13Z
+seg shop/r9 resume fuel=25 alloc=272 state=863 end=return
+run shop/r9 outcome=completed delivery=d10 handler=both fuel=85 alloc=272
+pumped state=idle fuel=25
+
+> vars
+vars shop answers=[["pressed", "N"], ["pressed", "Y"], ["DART", true], ["SHIELD", true], ["pressed", "Y"], ["bargain", "sure"], ["pressed", "N"], ["haggle", {name: "pressed", args: ["N"]}], ["both", [nothing, nothing]]]
+vars other answers=[["DART", false]]

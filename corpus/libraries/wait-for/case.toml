@@ -1,0 +1,36 @@
+# wait-for: a Library Handler's `wait for` observes the Script whose Run
+# executes it, through a nested Library and beside a Script's own waiting
+# Lambda, and a Library may hold a Join of `ask` calls (ADR 0113).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "display"
+name = "prompt"
+mode = "suspending"
+args = ["text"]
+result = "nothing"
+
+[[libraries]]
+name = "dialogue"
+version = "1"
+source = "dialogue.talk"
+
+[[libraries]]
+name = "menu"
+version = "1"
+source = "menu.talk"
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { display = { ops = ["prompt"] } }
+
+[[scripts]]
+name = "other"
+source = "shop.talk"
+grants = { display = { ops = ["prompt"] } }

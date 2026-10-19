@@ -340,6 +340,8 @@ export const checkSyntax = (
     }
   }
   const sites = new Map<Token, Site>();
+  // A `wait for`'s bare `from` Names, which a Library may not use (ADR 0113).
+  const eventScripts = new Set<Token>();
   const mark = (
     token: Token,
     role: NameRole,
@@ -696,6 +698,9 @@ export const checkSyntax = (
           !nodes(base).length
         ) {
           mark(name, 'receiver');
+          if (element.rule === 'Event') {
+            eventScripts.add(name);
+          }
         }
         break;
       }
@@ -1029,8 +1034,16 @@ export const checkSyntax = (
     }
     if (site.name.role === 'receiver') {
       // Otherwise unbound, it names a Script, looked up when sent (chapter 5).
+      const bound = lookup(site);
+      if (
+        !bound &&
+        options.unit === 'library' &&
+        eventScripts.has(site.token)
+      ) {
+        report('not in a library', site.token);
+      }
       site.name.binding =
-        lookup(site) ??
+        bound ??
         receivers.get(site.name.text) ??
         receivers
           .set(

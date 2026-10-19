@@ -2033,7 +2033,7 @@ export class Run {
     } else if (
       !this.dispatch({
         clauses,
-        code: script,
+        code,
         next: 0,
         args,
         ...(fallback !== undefined && script.fallback.length
@@ -2843,12 +2843,15 @@ export class Run {
         if (body.params.length !== args.length) {
           continue;
         }
-        // As a one-clause dispatch, so a failed test ends `unhandled`.
-        const test = new Run(this.script, [body], args, {
-          ...this.limits,
-          fuelPerRun: Infinity,
-          allocPerRun: Infinity,
-        });
+        // As a one-clause dispatch, so a failed test ends `unhandled`. The
+        // body is in the waiting frame's code unit, maybe a Library's.
+        const test = new Run(
+          this.script,
+          [body],
+          args,
+          { ...this.limits, fuelPerRun: Infinity, allocPerRun: Infinity },
+          s.code,
+        );
         when.captures.forEach((v, i) => {
           test.frames[0]!.locals[body.captureStart + i] = v;
         });

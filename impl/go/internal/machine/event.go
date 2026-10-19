@@ -105,6 +105,9 @@ func (r *Run) Observe(name string, args []value.Value, target value.Value, sende
 	if w == nil {
 		return
 	}
+	// The wait's test bodies belong to the waiting frame's code unit, which
+	// may be a Library (ADR 0113).
+	code := r.CurrentCode()
 	for j, branch := range w.Branches {
 		b := branch.Entry
 		if b.After || b.Message != name {
@@ -119,11 +122,11 @@ func (r *Run) Observe(name string, args []value.Value, target value.Value, sende
 				continue
 			}
 		} else {
-			body := r.State.Unit.Bodies[b.Body].Checked
+			body := code.Unit.Bodies[b.Body].Checked
 			if len(args) != len(body.Node.Params) {
 				continue
 			}
-			test := Start(r.State, b.Body, args, Limits{Depth: r.Limits.Depth, Pattern: r.Limits.Pattern})
+			test := Start(code, b.Body, args, Limits{Depth: r.Limits.Depth, Pattern: r.Limits.Pattern})
 			for index, capture := range body.Captures {
 				test.Frames[0].Locals[body.Slot(capture.Name)] = branch.Captures[index]
 			}

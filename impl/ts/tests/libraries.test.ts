@@ -179,9 +179,19 @@ describe('compiling and adding Libraries', () => {
       "can't suspend here",
       'not in a library',
       'not in a library',
-      'not in a library',
     ]);
     expect(codes('use one from nowhere')).toEqual(['unknown import']);
+  });
+
+  test('a Library Handler may wait for a message, but not from a named Script', () => {
+    expect(
+      codes(
+        'on watch who\n  wait for go from who\n  wait for\n    when go then return 1\n  end wait\nend watch',
+      ),
+    ).toEqual([]);
+    expect(codes('on watch\n  wait for go from board\nend watch')).toEqual([
+      'not in a library',
+    ]);
   });
 
   test('the Group refuses a reused name, a stdlib name and missing imports', () => {

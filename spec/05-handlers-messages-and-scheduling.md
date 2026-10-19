@@ -169,7 +169,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **A Guard:** `wait for m where g` matches only a message for which `g` holds, as a `when` branch's Guard does. It goes after any timeout: `wait for m or d where g` ([ADR 0109](../docs/adr/0109-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)).
 - **Guards** on a one-line `wait for` and on `when` branches follow the rules for Handler Guards. An error in one means the wait, or the branch, doesn't match.
 - **Decisions:** a `wait for` that takes a Decision allows it at once ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
-- **Not in Libraries:** `wait for` is a load error in Library code.
+- **In Libraries:** a `wait for` in Library code observes the Script whose Run executes it, through any number of Library calls. A `from` there may not name a Script, since a Library is compiled apart from any Group (`not in a library`), but may take a Host Object as a value ([ADR 0113](../docs/adr/0113-library-code-may-wait-for-messages-to-the-calling-runs-script.md)).
 
 > **Example.**
 >
@@ -232,7 +232,7 @@ A Timeout Block, `with timeout of d … end` (optionally `end timeout`), sets on
 - **When it runs out:** the deadline fires at the first Pump whose Clock reading is at or past it, in deadline order with the other timers ([A Pump](#a-pump)). What the Run waits on is abandoned as a call that times out is: a Capability call gets the cancellation signal on its `Call`, a `send … and wait`'s receiver keeps running and its reply is dropped, a `wait` or `wait for` stops waiting, and a Join abandons every member still pending, in start order. The Run then raises `timeout` with `deadline: true` at that Suspension Point ([chapter 6](06-errors-and-limits.md#errors-across-scripts)). A `wait for m or d` whose block runs out first raises, and doesn't leave Nothing in `it`.
 - **Already past:** a Suspension Point reached after the deadline has passed raises `timeout` at once. It starts nothing and doesn't suspend, so no Segment ends. A `catch` inside the block that keeps going meets the deadline again at its next wait.
 - **After the block:** its deadline no longer applies.
-- **Also in Libraries and Lambdas:** a Timeout Block may sit in a function's or Lambda's block, and in Library code, where only `wait d` can suspend. A Lambda's own waits are bounded only by blocks written inside the Lambda.
+- **Also in Libraries and Lambdas:** a Timeout Block may sit in a function's or Lambda's block, and in Library code. A Lambda's own waits are bounded only by blocks written inside the Lambda.
 - **Load errors:**
   - A Command Call written `name … and wait`, or `f(x) and wait`, in the block's source outside a Lambda. Its waits are written elsewhere, so the block couldn't bound them. The fix is `send name … to me and wait`.
   - A block with no Suspension Point in its source. A Join Member isn't one, so a Timeout Block can't sit in a Join's body.

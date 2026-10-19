@@ -54,9 +54,26 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 
 ### What Library code may use
 
-- **Allowed:** its own definitions, the Libraries it imports, Built-ins, Capabilities through `ask` and `tell`, and `wait d`.
-- **Load errors:** `me`, `the target`, `pass`, `veto`, `wait for`, `send`, a well-known object name ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md)), and a Handler that an importer defines.
-- **So a Library is a function of its arguments** and of the Capability answers it gets. Anything that depends on its caller is passed in.
+- **Allowed:** its own definitions, the Libraries it imports, Built-ins, Capabilities through `ask` and `tell`, `wait d`, `wait for` and Joins.
+- **Load errors:** `me`, `the target`, `pass`, `veto`, `send`, a well-known object name ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md)), a Handler that an importer defines, and a bare Name in a `wait for`'s `from` that would name a Script.
+- **So a Library is a function of its arguments,** of the Capability answers it gets, and of the messages its caller's Script receives while it waits. Anything else that depends on its caller is passed in.
+- **Waiting for a message:** a `wait for` in Library code observes the messages dispatched to the Script whose Run is executing it, however many Library calls deep, as the same wait written in that Script would ([chapter 5](05-handlers-messages-and-scheduling.md#wait-for-a-message), [ADR 0113](../docs/adr/0113-library-code-may-wait-for-messages-to-the-calling-runs-script.md)). Its `from` may filter by a Host Object the caller passes in.
+
+> **Example.** A shared confirmation, which a Script calls as `confirm "DO YOU WANT TO BUY?", 5 s and wait`:
+>
+> ```talk
+> on confirm question, duration
+>   ask display to prompt question and wait
+>   wait for
+>     when pressed key where key = "Y" then
+>       return true
+>     after duration then
+>       return false
+>   end wait
+> end confirm
+> ```
+>
+> The `pressed` message still reaches the Script's own Handlers, and two Runs waiting in `confirm` both resume on one key.
 
 ### Imports
 
