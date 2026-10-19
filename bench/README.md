@@ -280,6 +280,22 @@ Decimal workload array. `bench/ts/decimal-profiles.py` collects separate CPU
 captures from the saved measurements. The report also includes heap/GC
 observations and the requested four-runner comparison.
 
+The [TS List-write measurements](results/2026-10-19-ts-list-writes.md)
+record historical iteration rechecks, paired List-update timings, retained-List
+size sweeps and separate CPU/heap probes for
+[#1293](https://github.com/odogono/odgn-talk/issues/1293). To reproduce:
+
+```sh
+bun bench/ts/src/compare-collections.ts <before-ref> .cache/ts-collections
+bun bench/ts/src/compare-collections.ts <before-ref> .cache/ts-collections-recheck collections/list-update after
+```
+
+The helper substitutes only `list-storage.ts` and `operations.ts` from the
+baseline, and reuses the chunk-read worker. Three fresh process pairs alternate
+order for each workload; every Run checks output, Fuel and logical allocation.
+The optional third argument filters workload names; the fourth chooses which
+variant runs first. CPU profiles and heap observations stay outside timings.
+
 ## Native Zig comparison
 
 The default run includes the native Zig Core through `talk.h`, built with the

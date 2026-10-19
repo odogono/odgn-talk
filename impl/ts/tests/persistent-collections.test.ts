@@ -11,7 +11,16 @@ import {
   deleteKey,
   setKey,
 } from '../src/operations';
-import { listValues, map, nothing, num, text, type Value } from '../src/values';
+import {
+  dec,
+  listValues,
+  map,
+  nothing,
+  num,
+  range,
+  text,
+  type Value,
+} from '../src/values';
 
 const checkList = (value: Value, items: readonly Value[]) => {
   expect(value.length).toBe(items.length);
@@ -21,6 +30,93 @@ const checkList = (value: Value, items: readonly Value[]) => {
   expect(value.index(items.length + 1)).toBe(nothing);
   expect(sizeOf(value)).toBe(sizeOf(listValues(items)));
 };
+
+test('List replacements preserve chunk boundaries and growth after endpoint deletion', () => {
+  for (const length of [1, 31, 32, 33, 1024, 1100]) {
+    const items = Array.from({ length }, (_, i) => num(i));
+    const original = listValues(items);
+    let value = original;
+    // Empty endpoint chunks without renumbering the remaining keys.
+    if (length > 64) {
+      for (let i = 0; i < 32; i++) {
+        value = chunkDelete('item', num(1), value, null);
+        items.shift();
+      }
+      const tail = items.length % 32 || 32;
+      for (let i = 0; i < tail; i++) {
+        value = chunkDelete('item', num(-1), value, null);
+        items.pop();
+      }
+    }
+    const retained = value;
+    const before = [...items];
+    const part = listValues([text('replacement'), nothing]);
+    for (const i of new Set([
+      0,
+      31,
+      32,
+      Math.floor(items.length / 2),
+      items.length - 1,
+    ])) {
+      if (i < items.length) {
+        value = chunkSet('item', num(i + 1), value, part, null);
+        items[i] = part;
+      }
+    }
+    checkList(value, items);
+    checkList(retained, before);
+    checkList(
+      original,
+      Array.from({ length }, (_, i) => num(i)),
+    );
+    checkList(appendTo(value, part, 'append'), [...items, part]);
+    checkList(appendTo(value, part, 'prepend'), [part, ...items]);
+  }
+});
+
+test('List point writes agree for positive, negative and general numeric indexes', () => {
+  const items = [num(1), num(2), num(3)];
+  const original = listValues(items);
+  for (const index of [num(2), num(-2), dec('2.0'), dec('-2.0')]) {
+    const part = listValues([text('nested'), nothing]);
+    checkList(chunkSet('item', index, original, part, null), [
+      items[0]!,
+      part,
+      items[2]!,
+    ]);
+    checkList(chunkSet('item', index, original, nothing, null), [
+      items[0]!,
+      nothing,
+      items[2]!,
+    ]);
+    checkList(original, items);
+  }
+  checkList(chunkSet('item', num(5), original, num(9), null), [
+    ...items,
+    nothing,
+    num(9),
+  ]);
+  checkList(
+    chunkSet(
+      'item',
+      range(num(2), num(2)),
+      original,
+      listValues([nothing, nothing]),
+      null,
+    ),
+    [items[0]!, nothing, nothing, items[2]!],
+  );
+  for (const index of [
+    num(0),
+    num(-4),
+    num(-(10n ** 30n)),
+    num(1.5),
+    text('2'),
+  ]) {
+    expect(() => chunkSet('item', index, original, nothing, null)).toThrow();
+    checkList(original, items);
+  }
+});
 
 test('persistent List edits, deletion and branched growth match a flat sequence', () => {
   const nested = map([['é', listValues([text('nested'), nothing])]]);
