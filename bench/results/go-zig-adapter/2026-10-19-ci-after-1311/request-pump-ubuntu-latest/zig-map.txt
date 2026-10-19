@@ -1,0 +1,80 @@
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24859 ns/op	     23323 p50-ns	     49058 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36470 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27980 ns/op	     26372 p50-ns	     52877 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24010 ns/op	     22455 p50-ns	     44209 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36203 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     26947 ns/op	     25379 p50-ns	     50683 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24492 ns/op	     22578 p50-ns	     52199 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36508 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27053 ns/op	     25225 p50-ns	     53899 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     23504 ns/op	     22237 p50-ns	     40068 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     35270 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     26873 ns/op	     25084 p50-ns	     57693 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24761 ns/op	     23384 p50-ns	     44281 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     37410 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     28172 ns/op	     26547 p50-ns	     53668 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24586 ns/op	     23159 p50-ns	     48175 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36874 ns/op	    7408 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27860 ns/op	     26248 p50-ns	     51678 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24028 ns/op	     22784 p50-ns	     44146 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36679 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27882 ns/op	     26125 p50-ns	     55667 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24865 ns/op	     23047 p50-ns	     50918 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     37184 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27612 ns/op	     26025 p50-ns	     52883 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24077 ns/op	     22737 p50-ns	     44056 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     36335 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27403 ns/op	     25737 p50-ns	     52937 p99-ns	    7144 B/op	     135 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBackendRequestPump-4   	   20000	     24674 ns/op	     23256 p50-ns	     44018 p99-ns	    5824 B/op	     113 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     37349 ns/op	    7407 B/op	     132 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27620 ns/op	     26045 p50-ns	     53650 p99-ns	    7144 B/op	     135 allocs/op
+PASS

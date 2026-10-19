@@ -6,6 +6,85 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Remeasurement after the binary callback envelope, 2026-10-19
+
+After #1313 (#1311, the `callbacks-fields-v1` host callback envelope)
+merged, one `go-zig-bench` dispatch measured `main` at
+`f8644cafc280b91509a438bdf9dfe9a9d275fb9d`:
+[run 39245400361](https://github.com/odogono/odgn-talk/actions/runs/39245400361).
+It also includes #1312's callback integer and clock decoding. The artifact
+source is `aba5110c3642082e3ea0236bfdc050130d03d71d`, Zig 0.17.0,
+wasm32-wasi, safe, sha256
+`fb70d30dad2b98414d56ad7f11fd6fd1c9b84568c966328d6fed3caf76066c3f`. The run
+uses Go 1.27.2, wazero v1.12.0 and `CGO_ENABLED=0`; the Request/Pump base is
+`ff543e29af2164f477c1d013fb2df19a0079d14b`. Raw results and environment
+records are archived under
+[`2026-10-19-ci-after-1311`](../../bench/results/go-zig-adapter/2026-10-19-ci-after-1311/).
+
+This is a single run. The
+[Request/Pump protocol](request-pump-binary.md#measurement-protocol-1278)
+needs two runs at the same head, base and artifact before a result near a
+limit counts as accepted, so the passes below are evidence, not acceptance.
+
+### Paired Request results
+
+Medians of ten paired round ratios, each against native from the same job:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Fields Request / native Request | ≤ 3× | 2.310× | 2.614× | 2.727× | Pass in this run |
+| Fields combined / native combined | ≤ 3× | 1.992× | 2.256× | 2.402× | Pass in this run |
+| Fields Request / JSON Request | ≤ 0.75× | 0.481× | 0.484× | 0.487× | Pass |
+| Native Request / base Request | no slowdown | 0.976× | 0.990× | 0.996× | Pass |
+
+Linux amd64 Request/Pump ran on an Intel Xeon Platinum 8573C; the
+full-suite amd64 job ran on an AMD EPYC 7763. The earlier runs showed a 28%
+amd64 swing across runner CPUs, so a second run is needed before the amd64
+Request pass is accepted.
+
+### Full-suite limits
+
+Ratios of the five-sample medians within each full-suite job, except the
+absolute cold-start time.
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 3.77–7.06× | 2.86–4.79× | 3.33–3.81× | Miss |
+| `host/conversion` | ≤ 3× | 3.13× | 2.02× | 2.02× | Miss on amd64 |
+| `BackendDeferredCall/history=0` | ≤ 3× | 4.85× | 8.04× | 3.82× | Miss |
+| `messaging/*` | ≤ 2× | 0.75–1.73× | 0.62–1.15× | 0.68–1.60× | Pass |
+| `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.62× | 0.68× | 1.40× | Pass |
+| `BackendRequest` p99 | ≤ 3× | 1.25× | 1.43× | 4.00× | Miss on macOS |
+| `Load/core/loop` | ≤ 3× | 3.79× | 4.51× | 2.37× | Miss on Linux |
+| `GroupInstantiation` | ≤ 10× | 9.35× | 9.28× | 9.79× | Pass, close to the limit |
+| `BackendRetainedMemory` heap/Group | ≤ 4× | 1.70× | 1.70× | 1.70× | Pass |
+| `BackendColdStart/cache=warm` first Group | ≤ 250 ms | 52.6 ms | 47.0 ms | 78.2 ms | Pass |
+
+`BackendRequest` mean time is 4.08×, 2.62× and 4.62× native. The whole
+cold-start process with a warm cache takes 57.1, 52.6 and 100.1 ms.
+
+**#1103 remains incomplete.** Compared with the two earlier 2026-10-19 runs,
+messaging and 16-Group throughput now pass in every job, and the paired
+Request goal passes on amd64 for the first time. Host callbacks, deferred
+calls, Load and amd64 conversion still miss. macOS `BackendRequest` p99
+misses for the first time (186.0 µs against native's 46.5 µs); the earlier
+runs measured 0.87–1.68×, so this needs a repeat before it is treated as a
+regression. Linux arm64 deferred calls stay the largest gap at 8.04×.
+
+The other original #1054 limits:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2× | 1.52× | 1.16× | 1.17× | Pass |
+| `lifecycle/restore` | ≤ 1.5× | 0.17× | 0.18× | 0.15× | Pass |
+| `lifecycle/load-large` | ≤ 2.5× | 1.15× | 0.94× | 0.94× | Pass |
+| Zig deferred `history=5000` / `history=0` | ≤ 1.2× | 1.08× | 0.90× | 0.91× | Pass |
+| `lifecycle/rollback` | ≤ 2× | 4.84× | 4.75× | 4.05× | Miss |
+
+Fuel and logical bytes match native on every Run in all three full-suite
+jobs. The first Group without a compilation cache takes 1.61–2.14 s; this is
+recorded, not limited.
+
 ## Remeasurement after the merged performance work, 2026-10-19
 
 For [#1103](https://github.com/odogono/odgn-talk/issues/1103), two
