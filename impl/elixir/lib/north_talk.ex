@@ -51,7 +51,7 @@ defmodule NorthTalk do
       `cleanup_budget:` (spec/data/limits.toml). The Core's defaults apply
       to any not given.
     * `:binary_callbacks` - request `callbacks-fields-v1` when offered, false
-      by default until it is faster than JSON (#1316). Set true to exchange
+      by default, as it measures slightly slower than JSON (#1316). Set true to exchange
       callback needs and results in binary frames.
       Defaults to the `:north_talk, :binary_callbacks` application setting.
     * `:memory_cap` - the most bytes guest linear memory may grow to.

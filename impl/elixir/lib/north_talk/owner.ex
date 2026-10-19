@@ -913,8 +913,7 @@ defmodule NorthTalk.Owner do
 
           need = reply["need"] ->
             {answer, state} = answer(state, g, plain(need), need["args"])
-            answer = Map.put(answer, "ref", ref)
-            answer = if binary?, do: {:binary, Binary.encode(Map.put(answer, "group", g))}, else: answer
+            answer = if binary?, do: {:binary, Binary.encode_answer(answer, ref, g)}, else: Map.put(answer, "ref", ref)
             exchange_frame(state, answer, g, true)
 
           # A final reply in the binary envelope, which the caller reads.
