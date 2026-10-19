@@ -739,9 +739,9 @@ ordinary `CGO_ENABLED=0 impl/go/zig-experimental-check.sh` gate, alongside
 `TestZigBackendDeferredAnswerRidesThePump`'s four-binary-frame assertion.
 The extended regression also reproduces the original bug against the pre-fix
 `f8644caf` artifact in an isolated Go-module copy: the first 20,000-call batch
-grows guest memory from 3,211,264 to 14,417,920 bytes.
-The full gate passes on the current artifact. Both tests also pass under `-race`: guest memory stays
-at 2,228,224 bytes throughout the 200,000 calls. Rebuilding the current Core
+grows guest memory from 3,211,264 to 14,417,920 bytes. The full gate passes
+on the current artifact. Both tests also pass under `-race`: guest memory
+stays at 2,228,224 bytes throughout the 200,000 calls. Rebuilding the current Core
 with `build-artifact.py` reproduces the same embedded bytes.
 
 Elixir pins [reactor-v0.9.0](https://github.com/odogono/odgn-talk/releases/tag/reactor-v0.9.0)
