@@ -75,8 +75,9 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
   allocating. Rounding and wider arithmetic intermediates use managed big
   integers.
   Quantity arithmetic shares these paths and uses compile-time catalogue
-  factors, preserving separate conversion steps and their rounding; immutable
-  result Values still allocate.
+  factors, preserving separate conversion steps and their rounding. The Value
+  arithmetic API allocates an immutable result; the run loop can reuse a
+  uniquely held numeric local when storing that result.
 - `src/value.zig`, `src/units.zig`, `src/dates.zig`: immutable values,
   copy-on-write containers, catalogue Units and Gregorian dates.
 - `src/display.zig`, `src/encoding.zig`, `src/pattern.zig`: the display reader
@@ -836,14 +837,19 @@ the differential-test oracle. Extra Host Fuel and allocation are still added
 at each charge; the machine owns refusal ordering and instruction boundaries.
 
 `fastSteps` runs `const`, `load`, `store`, `move`, `jump`, the two branches,
-Number comparisons and Number `add`, `subtract` and `multiply` without the
-general loop's per-instruction checks, while those checks would find nothing:
+Number comparisons, Number/Quantity arithmetic (including Number `div` and
+`mod`), and static Unit conversions of Numbers/Quantities without the general
+loop's per-instruction checks, while those checks would find nothing:
 no Host poll due, no crossing, landing, selection or preemption pending, and
 no `finally` scope in the unit. Each instruction is charged and ticked
 separately, and the fast path leaves any instruction that would raise, fault
 or be refused to the general loop untouched. A comparison followed by a branch
 skips building the Boolean, and an arithmetic result stored into a local
-reuses that local's Number node when nothing else holds it. Physical
+reuses that local's Number or Quantity node when nothing else holds it. Unit
+conversions and rounding follow the same arithmetic implementation as the
+general loop; a static Unit conversion can also reuse its uniquely held
+numeric operand. Identity Unit conversions skip the factor phases for nonzero
+numbers, while zero and positive exponents retain Decimal clamping. Physical
 allocations therefore differ from the general loop's; Fuel, logical
 allocation and the Trace do not. `fast_steps_test.zig` runs Scripts with the
 path on and off across every Fuel and allocation limit and Fuel Slice.
@@ -1513,10 +1519,11 @@ allocator. C values use the
 process allocator; a Group's own values use its Group allocator. Handles require
 Host synchronization when shared across threads.
 
-Number, Boolean and Nothing construction specializes the active tag before
+Number, Boolean, Nothing and Quantity construction specializes the active tag before
 allocating a node. Each node initializes every header and its active payload
 through its owning allocator, without `Allocator.create`'s whole-node poison
-fill. Number and Boolean construction also avoid copying the full Data union;
+fill. Number, Boolean and Quantity construction also avoid copying the full
+Data union;
 Zig still zero-fills Nothing's inactive union storage. The Value layout,
 inline Quantity and Group cache are unchanged. The
 [constructor measurements](../../bench/results/2026-10-14-zig-scalar-constructors.md)
