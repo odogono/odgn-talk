@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"maps"
 )
 
 func init() { experimentalCompileLibrary = zigCompileLibrary }
@@ -52,6 +53,17 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 		return nil, fmt.Errorf("Zig compile-library returned an invalid identity")
 	}
 	copy(l.id[:], raw)
+	// Offered Libraries are compilation inputs; only source imports are
+	// dependencies that must be rebuilt after a replacement.
+	l.imports = nil
+	if len(seen) > 0 {
+		for _, name := range usedNamesIn(src.Source) {
+			if imported := seen[name]; imported != nil {
+				l.imports = append(l.imports, imported)
+				delete(seen, name)
+			}
+		}
+	}
 	for _, need := range reply.get("needs").items() {
 		l.needs = append(l.needs, OperationRef{Capability: zigText(need.get("capability")), Operation: zigText(need.get("operation"))})
 	}
@@ -138,6 +150,9 @@ func (b *zigGroup) addLibrary(l *Library) error {
 		return err
 	}
 	_, err = b.send("add-library", map[string]any{"identity": zigIdentity(l.id)})
+	if err == nil {
+		b.group.libraries[l.Name()] = l
+	}
 	return err
 }
 
@@ -160,8 +175,53 @@ func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error)
 		reports = result.Reports
 		return err
 	})
+	if err == nil {
+		err = b.commitReplacement(l)
+	}
 	if reports == nil {
 		reports = []Report{}
 	}
 	return reports, err
+}
+
+// Mirror the guest's committed Library set for replay.Libraries. Restore must
+// receive the current identities, including rebuilt transitive dependants.
+// Refused replacements leave the Host's Library handles untouched.
+func (b *zigGroup) commitReplacement(l *Library) error {
+	current := b.group.libraries
+	next := maps.Clone(current)
+	next[l.Name()] = l
+	rebuilt := map[string]bool{l.Name(): true}
+	var rebuild func(string) error
+	rebuild = func(name string) error {
+		if rebuilt[name] {
+			return nil
+		}
+		original := current[name]
+		imports := make([]*Library, len(original.imports))
+		changed := false
+		for i, imported := range original.imports {
+			if err := rebuild(imported.Name()); err != nil {
+				return err
+			}
+			imports[i] = next[imported.Name()]
+			changed = changed || imports[i].id != imported.id
+		}
+		if changed {
+			compiled, err := b.group.core.CompileLibrary(original.source, imports, original.decls)
+			if err != nil {
+				return err
+			}
+			next[name] = compiled
+		}
+		rebuilt[name] = true
+		return nil
+	}
+	for _, name := range sortedKeys(current) {
+		if err := rebuild(name); err != nil {
+			return err
+		}
+	}
+	b.group.libraries = next
+	return nil
 }

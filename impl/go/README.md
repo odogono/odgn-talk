@@ -139,6 +139,11 @@ Adopt retain their queued semantics; adopted Calls own fresh Go contexts.
 Object and Function Values in arguments, pending Calls and Script state belong
 to the restored Group. Set `RestoreOptions.Name` for the new Group's name;
 the Zig save does not retain the old Host name.
+The replay bridge retains current Library handles after registration and
+successful replacement, including recompiled dependants. A restore offered
+replacement identities therefore rejects a mismatch or carries only Script
+Variables, according to the Host's policy; refused replacements retain the old
+handles.
 
 `restore-bindings-v1` lets resolution register new Grants before its answer,
 and returns the Script, Object and Call metadata the adapter needs. Private
@@ -239,9 +244,6 @@ state. The shared public Go regression checks default and explicit seeds,
 integer-encoding boundaries and restored continuation
 ([#1285](https://github.com/odogono/odgn-talk/issues/1285)).
 Full Corpus acceptance remains separate work.
-After Library replacement, Restore may also perform a full restore when the
-supplied Library identities require variables-only restore
-([#1304](https://github.com/odogono/odgn-talk/issues/1304)).
 Large inspection Trace records, replies and Save/Restore inputs use negotiated
 [`chunked-wasi-v1`](../../spec/embedding/chunked-wasi.md): each transfer is at
 most 64 MiB, and each logical message is at most 2 GiB minus one byte. Both
