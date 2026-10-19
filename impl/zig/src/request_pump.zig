@@ -4,12 +4,13 @@
 const std = @import("std");
 const binary_value = @import("binary_value.zig");
 const model = @import("value.zig");
+const envelope = @import("generated/envelope.zig");
 const Allocator = std.mem.Allocator;
 
 pub const prefix = "NTB\x01";
-pub const feature_load = "load-fields-v1";
+pub const feature_load = envelope.features[3];
 
-pub const feature_fields = "request-pump-fields-v1";
+pub const feature_fields = envelope.features[0];
 
 /// The layout byte after the prefix: the fields layout, the only one.
 pub const layout_fields: u8 = 0x01;
@@ -27,32 +28,27 @@ pub const tag = struct {
     pub const protocol_text: u8 = 0x12;
 };
 
+fn messageTag(comptime name: []const u8) u8 {
+    for (envelope.messages) |entry| if (std.mem.eql(u8, entry.name, name)) return entry.tag;
+    @compileError("unknown envelope message: " ++ name);
+}
+fn reportTag(comptime name: []const u8) u8 {
+    for (envelope.reports) |entry| if (std.mem.eql(u8, entry.name, name)) return entry.tag;
+    @compileError("unknown envelope Report: " ++ name);
+}
+
 /// Request/Pump inputs and replies, by message tag.
 pub const Message = enum(u8) {
-    request = 0x01,
-    call = 0x02,
-    pump = 0x03,
-    request_pump = 0x04,
-    call_pump = 0x05,
+    request = messageTag("request"),
+    call = messageTag("call"),
+    pump = messageTag("pump"),
+    request_pump = messageTag("request-pump"),
+    call_pump = messageTag("call-pump"),
     /// `settlements-fields-v1` (#1320): a Pump preceded by queued settlements.
-    settle_pump = 0x0a,
-    load = 0x0b,
-    admission = 0x81,
-    completion = 0x82,
-
-    pub fn fields(m: Message) []const []const u8 {
-        return switch (m) {
-            .request => &.{ "ref", "group", "to", "message" },
-            .call => &.{ "ref", "group", "fn", "args", "limits" },
-            .pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap" },
-            .request_pump => &.{ "ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap" },
-            .call_pump => &.{ "ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap" },
-            .load => &.{ "ref", "group", "name", "source", "grants", "grantsAsUsed", "owner", "objects", "limits", "newGroup", "refuseWorker" },
-            .settle_pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap", "settlements" },
-            .admission => &.{ "ref", "delivery", "err", "abandoned", "settled", "trace" },
-            .completion => &.{ "ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace" },
-        };
-    }
+    settle_pump = messageTag("settle-pump"),
+    load = messageTag("load"),
+    admission = messageTag("admission"),
+    completion = messageTag("completion"),
 
     /// Whether the input runs a Pump.
     pub fn pumps(m: Message) bool {
@@ -62,90 +58,48 @@ pub const Message = enum(u8) {
 
 /// `settlements-fields-v1` (#1320): a Host's queued `answer` and `fail`
 /// inputs cross inside the `settle-pump` that would drain them.
-pub const feature_settlements = "settlements-fields-v1";
+pub const feature_settlements = envelope.features[2];
 /// One settlement, positionally. `outcome` is `answer` or `fail`; `value`
 /// is the answer or the failure's Data; `fuel` an answer's late cost; `code`
 /// and `message` a failure's, with no `code` failing the call as broken.
-pub const settlement_fields: []const []const u8 = &.{ "call", "outcome", "value", "fuel", "code", "message" };
+pub const settlement_fields = fieldNames(envelope.settlement);
 
 /// A specialized Report's tag and positional fields.
 pub const Report = enum(u8) {
-    run_end = 0x01,
-    run_started = 0x02,
-    run_discarded = 0x03,
-    run_accounting = 0x04,
-    causal_work = 0x05,
-    stop = 0x06,
-    unhandled = 0x07,
-    call_failed = 0x08,
-    effect_failure = 0x09,
-    decided = 0x0a,
-    host_error = 0x0b,
-    charge_result = 0x0c,
+    run_end = reportTag("run end"),
+    run_started = reportTag("run started"),
+    run_discarded = reportTag("run discarded"),
+    run_accounting = reportTag("run accounting"),
+    causal_work = reportTag("causal work"),
+    stop = reportTag("stop"),
+    unhandled = reportTag("unhandled"),
+    call_failed = reportTag("call failed"),
+    effect_failure = reportTag("effect failure"),
+    decided = reportTag("decided"),
+    host_error = reportTag("host error"),
+    charge_result = reportTag("charge result"),
 
-    pub fn fields(r: Report) []const []const u8 {
-        return switch (r) {
-            .run_end => &.{ "script", "run", "delivery", "broadcast", "handler", "fallback", "climbed", "outcome", "result", "error", "limit", "effect", "cleanupFailed", "at", "fuel", "alloc" },
-            .run_started => &.{ "script", "run", "args", "rootDelivery", "parentRun", "parentCall", "delivery", "selector", "fn" },
-            .run_discarded => &.{ "script", "run", "reason", "rootDelivery", "parentRun", "parentCall" },
-            .run_accounting => &.{ "script", "run", "fuel", "state", "rootDelivery", "parentRun", "parentCall" },
-            .causal_work => &.{ "rootDelivery", "liveRuns", "queuedMessages", "discardedMessages" },
-            .stop => &.{ "script", "reason", "discardedRuns", "droppedMessages", "pendingCalls" },
-            .unhandled => &.{ "delivery", "message", "target" },
-            .call_failed => &.{ "script", "call", "operation", "detail" },
-            .effect_failure => &.{ "script", "run", "grant", "segment", "phase", "status", "scope" },
-            .decided => &.{ "delivery", "broadcast", "verdict", "vetoes", "undecided" },
-            .host_error => &.{ "code", "detail" },
-            .charge_result => &.{ "request", "call", "fuel", "status" },
-        };
-    }
-
-    /// The JSON Report's `kind`, which the generated tables name it by.
+    /// The JSON Report's `kind`, from the generated catalogue.
     pub fn kind(r: Report) []const u8 {
-        return switch (r) {
-            .run_end => "run end",
-            .run_started => "run started",
-            .run_discarded => "run discarded",
-            .run_accounting => "run accounting",
-            .causal_work => "causal work",
-            .stop => "stop",
-            .unhandled => "unhandled",
-            .call_failed => "call failed",
-            .effect_failure => "effect failure",
-            .decided => "decided",
-            .host_error => "host error",
-            .charge_result => "charge result",
-        };
+        return report_entries[@backingInt(r)].?.name;
     }
 };
 
 /// `callbacks-fields-v1` (#1311): Host callback needs and their results
 /// cross as fields-layout frames.
-pub const feature_callbacks = "callbacks-fields-v1";
+pub const feature_callbacks = envelope.features[1];
 
 /// A callback need's or result's message tag and positional fields. A need
 /// ends with its notices, so they can be filled in after it is written.
 pub const Callback = enum(u8) {
-    op_result = 0x06,
-    prop_result = 0x07,
-    effect_result = 0x08,
-    release_result = 0x09,
-    op = 0x83,
-    prop = 0x84,
-    effect = 0x85,
-    release = 0x86,
-
-    pub fn fields(c: Callback) []const []const u8 {
-        return switch (c) {
-            .op_result, .prop_result => &.{ "ref", "group", "outcome", "value", "code", "message", "charged" },
-            .effect_result => &.{ "ref", "group", "status" },
-            .release_result => &.{ "ref", "group" },
-            .op => &.{ "ref", "call", "script", "run", "segment", "grant", "capability", "operation", "mode", "now", "args", "scope", "automatic", "fuelLeft", "abandoned", "settled", "trace" },
-            .prop => &.{ "ref", "object", "prop", "set", "value", "op", "selector", "abandoned", "settled", "trace" },
-            .effect => &.{ "ref", "script", "run", "segment", "grant", "grants", "coordinator", "phase", "now", "abandoned", "settled", "trace" },
-            .release => &.{ "ref", "script", "grant", "reason", "now", "abandoned", "settled", "trace" },
-        };
-    }
+    op_result = messageTag("op-result"),
+    prop_result = messageTag("prop-result"),
+    effect_result = messageTag("effect-result"),
+    release_result = messageTag("release-result"),
+    op = messageTag("op"),
+    prop = messageTag("prop"),
+    effect = messageTag("effect"),
+    release = messageTag("release"),
 
     /// A result's tag, or null for a need's.
     pub fn result(t: u8) ?Callback {
@@ -153,6 +107,37 @@ pub const Callback = enum(u8) {
         return if (t < 0x80) c else null;
     }
 };
+
+// Field-name projections are evaluated at compile time. The framing writer
+// retains its name slices without allocating or copying a catalogue per frame.
+fn fieldNames(comptime schema: []const envelope.Field) []const []const u8 {
+    return &struct {
+        const names = blk: {
+            var out: [schema.len][]const u8 = undefined;
+            for (schema, 0..) |field, i| out[i] = field.name;
+            break :blk out;
+        };
+    }.names;
+}
+const message_names = blk: {
+    var out: [256][]const []const u8 = @splat(&.{});
+    for (envelope.messages) |entry| out[entry.tag] = fieldNames(entry.fields);
+    break :blk out;
+};
+const report_names = blk: {
+    var out: [256][]const []const u8 = @splat(&.{});
+    for (envelope.reports) |entry| out[entry.tag] = fieldNames(entry.fields);
+    break :blk out;
+};
+const report_entries = blk: {
+    var out: [256]?*const envelope.Entry = @splat(null);
+    for (envelope.reports) |*entry| out[entry.tag] = entry;
+    break :blk out;
+};
+
+pub fn fields(message: anytype) []const []const u8 {
+    return if (@TypeOf(message) == Report) report_names[@backingInt(message)] else message_names[@backingInt(message)];
+}
 
 pub const Error = error{ Malformed, OutOfMemory };
 
@@ -474,7 +459,7 @@ test "positional records fill skipped fields with Nothing" {
     const a = std.testing.allocator;
     var w = Writer.init(a);
     defer w.deinit();
-    try w.begin(Report.host_error.fields(), true);
+    try w.begin(fields(Report.host_error), true);
     try w.key("detail");
     try w.ptext("x");
     try w.end();
@@ -486,7 +471,7 @@ test "positional records fill skipped fields with Nothing" {
 
     var r: Reader = .{ .data = w.out.items };
     var out: [2]?[]const u8 = undefined;
-    try r.record(Report.host_error.fields(), true, &out);
+    try r.record(fields(Report.host_error), true, &out);
     try std.testing.expect(out[0] == null);
     try std.testing.expectEqualStrings("x", try ptextOf(out[1].?));
     try r.record(&.{ "a", "b" }, false, &out);
@@ -551,81 +536,8 @@ test "shared binary Value vectors cross the envelope" {
     }
 }
 
-test "shared fields frame vectors match the existing guest tables and reader writer" {
-    const generated = @import("generated/envelope.zig");
-    const a = std.testing.allocator;
-    const Vector = struct { name: []const u8, tag: u8, direction: []const u8, hex: []const u8, tree: []const u8 };
-    const vectors = try std.json.parseFromSlice([]Vector, a, @embedFile("envelope-frames"), .{});
-    defer vectors.deinit();
-    const Codec = struct {
-        fn record(w: *Writer, r: *Reader, names: []const []const u8) !void {
-            try std.testing.expectEqual(tag.list, try r.byte());
-            try std.testing.expectEqual(names.len, try r.uint());
-            try w.begin(names, true);
-            for (names) |name| {
-                try w.key(name);
-                if (std.mem.eql(u8, name, "reports") and r.data[r.at] != tag.nothing) {
-                    try std.testing.expectEqual(tag.list, try r.byte());
-                    const count = try r.uint();
-                    try w.list(count);
-                    for (0..@intCast(count)) |_| {
-                        const report_tag = try r.byte();
-                        const report = std.enums.fromInt(Report, report_tag) orelse return error.TestUnexpectedResult;
-                        try w.byte(report_tag);
-                        try record(w, r, report.fields());
-                    }
-                } else if (std.mem.eql(u8, name, "settlements") and r.data[r.at] != tag.nothing) {
-                    try std.testing.expectEqual(tag.list, try r.byte());
-                    const count = try r.uint();
-                    try w.list(count);
-                    for (0..@intCast(count)) |_| try record(w, r, settlement_fields);
-                } else {
-                    const span = try r.skip();
-                    try w.raw(span);
-                }
-            }
-            try w.end();
-        }
-    };
-    // The generated catalogue is not used by the guest yet. Hold it to the
-    // existing hand-written tables so the Spec stage cannot silently drift.
-    for (generated.messages) |entry| {
-        const names = if (std.enums.fromInt(Message, entry.tag)) |message|
-            message.fields()
-        else
-            (std.enums.fromInt(Callback, entry.tag) orelse return error.TestUnexpectedResult).fields();
-        try std.testing.expectEqual(names.len, entry.fields.len);
-        for (names, entry.fields) |name, field| try std.testing.expectEqualStrings(name, field.name);
-    }
-    for (generated.reports) |entry| {
-        const report = std.enums.fromInt(Report, entry.tag) orelse return error.TestUnexpectedResult;
-        try std.testing.expectEqualStrings(report.kind(), entry.name);
-        try std.testing.expectEqual(report.fields().len, entry.fields.len);
-        for (report.fields(), entry.fields) |name, field| try std.testing.expectEqualStrings(name, field.name);
-    }
-    try std.testing.expectEqual(settlement_fields.len, generated.settlement.len);
-    for (settlement_fields, generated.settlement) |name, field| try std.testing.expectEqualStrings(name, field.name);
-    for (vectors.value) |vector| {
-        const bytes = try a.alloc(u8, vector.hex.len / 2);
-        defer a.free(bytes);
-        _ = try std.fmt.hexToBytes(bytes, vector.hex);
-        try std.testing.expectEqualStrings(prefix, bytes[0..4]);
-        try std.testing.expectEqual(@as(u8, 1), bytes[4]);
-        try std.testing.expectEqual(vector.tag, bytes[5]);
-        try std.testing.expectEqualStrings(if (vector.tag < 128) "host-to-guest" else "guest-to-host", vector.direction);
-        const names = if (std.enums.fromInt(Message, vector.tag)) |message|
-            message.fields()
-        else
-            (std.enums.fromInt(Callback, vector.tag) orelse return error.TestUnexpectedResult).fields();
-        var r: Reader = .{ .data = bytes, .at = 6 };
-        var w = Writer.init(a);
-        defer w.deinit();
-        try w.header();
-        try w.byte(vector.tag);
-        try Codec.record(&w, &r, names);
-        try std.testing.expect(r.done());
-        try std.testing.expectEqualSlices(u8, bytes, w.out.items);
-    }
+test "shared fields frame vectors decode and re-encode every field" {
+    try @import("envelope_vectors_test.zig").check();
 }
 
 test "envelope integer bounds and canonical magnitudes" {
