@@ -752,7 +752,7 @@ const Parser = struct {
             const target = try p.expr();
             _ = try p.expectWord("to", .operator);
             const ask = std.mem.eql(u8, w, "ask");
-            var op = try p.operation(ask);
+            var op = try p.operation(ask, ask);
             op.target = target;
             return p.stmt(first, if (ask) .{ .ask = op } else .{ .tell = op });
         }
@@ -919,14 +919,20 @@ const Parser = struct {
         return p.stmt(first, .{ .send = .{ .name = n, .computed = computed, .labels = &.{}, .args = try p.list(ast.ListItem, &args), .target = target, .target_first = false, .wait = try p.andWait() } });
     }
 
-    /// An Operation name, any word, then its arguments and, where allowed,
-    /// `and wait`.
-    fn operation(p: *Parser, waits: bool) Error!ast.Operation {
+    /// An Operation name, any word, then its arguments, an `ask`'s Result
+    /// Target where `targets` allows it (ADR 0112), and `and wait` where
+    /// `waits` allows it.
+    fn operation(p: *Parser, waits: bool, targets: bool) Error!ast.Operation {
         const t = try p.peek(.operand);
         if (t.kind != .word or p.isWord(t, "_")) return p.failAt(t);
         const op = try p.next(.operand);
         const args: []const *Expr = if (p.startsExpr(try p.peek(.operand))) try p.exprList() else &.{};
-        return .{ .target = null, .operation = op, .args = args, .wait = if (waits) try p.andWait() else null };
+        var into: ?Tok = null;
+        if (targets and try p.atWord("into", .operator)) {
+            _ = try p.next(.operator);
+            into = try p.name(.operand);
+        }
+        return .{ .target = null, .operation = op, .args = args, .into = into, .wait = if (waits) try p.andWait() else null };
     }
 
     fn tell(p: *Parser) Error!*Stmt {
@@ -934,7 +940,7 @@ const Parser = struct {
         const target = try p.expr();
         if (!try p.atEnd(.operator)) {
             _ = try p.expectWord("to", .operator);
-            var op = try p.operation(false);
+            var op = try p.operation(false, false);
             op.target = target;
             return p.stmt(first, .{ .tell = op });
         }
@@ -945,7 +951,7 @@ const Parser = struct {
             const t = try p.peek(.operand);
             if (t.kind == .eof) return p.failAt(t);
             if (p.isWord(t, "end")) break;
-            try lines.append(p.a, try p.operation(true));
+            try lines.append(p.a, try p.operation(true, false));
             try p.endOfStatement();
         }
         const end = try p.next(.operand);
@@ -2484,6 +2490,24 @@ test "first syntax errors" {
     try expectOutcome("constant x = `${1 2}`\n", "unexpected token at 1:19");
     try expectOutcome("put 1 into x\n", "unexpected token at 1:1");
     try expectOutcome("on t\n  put 5 s^-1 into x\nend t\n", "bad unit at 2:9");
+}
+
+test "an ask may name a Result Target, before and wait (ADR 0112)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const parsed = try parse(a, "on t key\n  ask storage to load key into saved and wait\n  ask clock to now into last\nend t\n");
+    const body = parsed.tree.declarations[0].data.handler.body;
+    for (body, [_][]const u8{ "saved", "last" }, [_]bool{ true, false }) |st, name, waits| {
+        const op = st.data.ask;
+        try testing.expectEqualStrings(name, parsed.tree.text(op.into.?));
+        try testing.expectEqual(waits, op.wait != null);
+    }
+    try expectOutcome("on t x\n  ask g to op x into item 1 of xs\nend t\n", "unexpected token at 2:27");
+    try expectOutcome("on t x\n  ask g to op x and wait into y\nend t\n", "unexpected token at 2:26");
+    try expectOutcome("on t x\n  ask g to op into it\nend t\n", "unexpected token at 2:20");
+    try expectOutcome("on t x\n  tell g to op x into y\nend t\n", "unexpected token at 2:18");
+    try expectOutcome("on t x\n  tell g\n    op x into y\n  end tell\nend t\n", "unexpected token at 3:10");
 }
 
 test "a Container never passes through a Built-in property" {

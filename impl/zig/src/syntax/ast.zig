@@ -166,6 +166,8 @@ pub const Operation = struct {
     target: ?*Expr,
     operation: Tok,
     args: []const *Expr,
+    /// An `ask`'s Result Target, `into name` (ADR 0112).
+    into: ?Tok = null,
     wait: ?Tok,
 };
 
