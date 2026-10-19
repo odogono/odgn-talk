@@ -44,7 +44,7 @@ import {
   type ObjectState,
 } from '../objects';
 import { map, nothing, text, Value } from '../values';
-import { decode, encode, encodeAll, type Codec } from './codec';
+import { binaryValues, decode, encode, encodeAll, type Codec } from './codec';
 import { InstanceLostError } from './reactor';
 import { Session } from './session';
 import {
@@ -249,6 +249,7 @@ export class WasmGroup {
       identity: this,
       object: (kind, id) => objects.get(key(kind, id))?.handle,
     };
+    this.#session.bind(binaryValues(this.#codec));
     if (!restoring) {
       this.#session.exchange('new-group', {
         group: this.name,

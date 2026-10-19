@@ -12,19 +12,24 @@ import {
 } from '../errors';
 import { operationData, shapeData } from '../manifest';
 import type { ObjectKind } from '../objects';
+import type { BinaryValueOptions } from '../binary-value';
 import {
   decodeBinaryFrame,
+  decodeNeed,
   encodeBinaryFrame,
+  encodeResult,
+  isBinaryNeed,
   isRequestPumpBinary,
+  placeholderValues,
   requestPumpFeature,
   callbacksFeature,
-  isCallbackResult,
 } from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
 import { guestPayload } from './codec';
 import { InstanceLostError, Reactor, type Diagnostics } from './reactor';
 import {
   Raw,
+  answerFields,
   field,
   frameJSON,
   frameTree,
@@ -129,6 +134,10 @@ export class Session {
   readonly requestPump: boolean;
   readonly callbacks: boolean;
   #token = 0n;
+  /** How Values in binary frames resolve, once a Group binds its own. */
+  #values: BinaryValueOptions = placeholderValues({
+    encodeFunction: guestPayload,
+  });
 
   nextToken(): Raw {
     if (this.#token === 2n ** 64n - 1n) {
@@ -182,33 +191,19 @@ export class Session {
     observe?: Observer,
   ): Json {
     const ref = ++this.#ref;
-    let frame: Record<string, Frame | undefined> = { m, ref, ...fields };
     const binaryExchange = this.requestPump && binaryMethods.has(m);
-    let initial = true;
+    const first = { m, ref, ...fields };
+    let input = binaryExchange
+      ? new Uint8Array(encodeBinaryFrame(frameTree(first), this.#values))
+      : encoder.encode(frameJSON(first));
     for (;;) {
-      const binary =
-        (binaryExchange && initial) ||
-        (this.callbacks && isCallbackResult(frame.m as string));
-      const input = binary
-        ? new Uint8Array(
-            encodeBinaryFrame(frameTree(frame), {
-              encodeFunction: guestPayload,
-            }),
-          )
-        : encoder.encode(frameJSON(frame));
       const output = this.reactor.frameBytes(input);
-      const binaryReply = isRequestPumpBinary(new Uint8Array(output));
+      const bytes = new Uint8Array(output);
+      const binaryReply = isRequestPumpBinary(bytes);
       const packet = binaryReply
-        ? decodeBinaryFrame(output)
+        ? this.#readBinary(output, binaryExchange)
         : readReply(decoder.decode(output));
-      initial = false;
       const need = field(packet, 'need');
-      if (
-        binaryReply &&
-        (need === undefined ? !binaryExchange : !this.callbacks)
-      ) {
-        throw new InstanceLostError('Unnegotiated binary reply');
-      }
       if (intOf(field(packet, 'ref')) !== ref) {
         throw new InstanceLostError(`The reply to ${m} has another ref`);
       }
@@ -228,13 +223,42 @@ export class Session {
       if (!answer) {
         throw new InstanceLostError(`${m} asked for an unexpected need`);
       }
-      frame = {
-        ...answer(need, packet),
-        m: `${textOf(field(need, 'm'))}-result`,
-        ref,
-        group: fields.group,
-      };
+      const name = textOf(field(need, 'm'))!;
+      const result = answer(need, packet);
+      const binary = this.callbacks
+        ? encodeResult(
+            name,
+            ref,
+            fields.group as string | undefined,
+            answerFields(result),
+            this.#values,
+          )
+        : undefined;
+      input = binary
+        ? new Uint8Array(binary)
+        : encoder.encode(
+            frameJSON({
+              ...result,
+              m: `${name}-result`,
+              ref,
+              group: fields.group,
+            }),
+          );
     }
+  }
+
+  // A binary reply is checked against what was negotiated by its tag alone.
+  #readBinary(output: ArrayBuffer, binaryExchange: boolean): Json {
+    const need = isBinaryNeed(new Uint8Array(output));
+    if (need ? !this.callbacks : !binaryExchange) {
+      throw new InstanceLostError('Unnegotiated binary reply');
+    }
+    return need ? decodeNeed(output, this.#values) : decodeBinaryFrame(output);
+  }
+
+  /** Resolves binary callback Values as the Group that owns this guest does. */
+  bind(values: BinaryValueOptions): void {
+    this.#values = values;
   }
 
   /** The guest's handle for a Capability, declared on first use. */

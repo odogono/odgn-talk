@@ -28,137 +28,12 @@ import {
   objectValue,
   patternValue,
   functionValue,
-  type Value,
+  Value,
 } from './values';
 
 export const requestPumpFeature = 'request-pump-fields-v1';
 export const callbacksFeature = 'callbacks-fields-v1';
 const prefix = [0x4e, 0x54, 0x42, 1, 1];
-const messages = [
-  ['request', ['ref', 'group', 'to', 'message']],
-  ['call', ['ref', 'group', 'fn', 'args', 'limits']],
-  ['pump', ['ref', 'group', 'now', 'fuelSlice', 'fuelCap']],
-  [
-    'request-pump',
-    ['ref', 'group', 'token', 'to', 'message', 'now', 'fuelSlice', 'fuelCap'],
-  ],
-  [
-    'call-pump',
-    [
-      'ref',
-      'group',
-      'token',
-      'fn',
-      'args',
-      'limits',
-      'now',
-      'fuelSlice',
-      'fuelCap',
-    ],
-  ],
-] as const;
-const resultFields = [
-  'ref',
-  'group',
-  'outcome',
-  'value',
-  'code',
-  'message',
-  'charged',
-] as const;
-const callbackResults = [
-  ['op-result', resultFields],
-  ['prop-result', resultFields],
-  ['effect-result', ['ref', 'group', 'status']],
-  ['release-result', ['ref', 'group']],
-] as const;
-const notices = ['abandoned', 'settled', 'trace'];
-const callbackNeeds: readonly (readonly [string, readonly string[]])[] = [
-  [
-    'op',
-    [
-      'ref',
-      'call',
-      'script',
-      'run',
-      'segment',
-      'grant',
-      'capability',
-      'operation',
-      'mode',
-      'now',
-      'args',
-      'scope',
-      'automatic',
-      'fuelLeft',
-      ...notices,
-    ],
-  ],
-  [
-    'prop',
-    ['ref', 'object', 'prop', 'set', 'value', 'op', 'selector', ...notices],
-  ],
-  [
-    'effect',
-    [
-      'ref',
-      'script',
-      'run',
-      'segment',
-      'grant',
-      'grants',
-      'coordinator',
-      'phase',
-      'now',
-      ...notices,
-    ],
-  ],
-  ['release', ['ref', 'script', 'grant', 'reason', 'now', ...notices]],
-];
-/** Callback result methods whose wire form is selected independently of Pump. */
-const callbackResultNames = new Set<string>(callbackResults.map(([m]) => m));
-export const isCallbackResult = (m: string): boolean =>
-  callbackResultNames.has(m);
-const opOutcomes = ['result', 'started', 'done', 'fail', 'limit', 'hostError'];
-const propOutcomes = ['value', 'ok', 'fail', 'hostError'];
-const outcomes = (m: string): readonly string[] =>
-  m === 'op-result' ? opOutcomes : propOutcomes;
-const uintFields = new Set(['ref', 'charged', 'fuelLeft']);
-const boolFields = new Set(['automatic', 'set']);
-const textListFields = new Set(['object', 'grants', ...notices]);
-const resultHinted = new Set(['value', 'selector']);
-const requiredNeedFields: readonly (readonly string[])[] = [
-  [
-    'call',
-    'script',
-    'run',
-    'segment',
-    'grant',
-    'capability',
-    'operation',
-    'mode',
-    'now',
-    'args',
-  ],
-  ['object', 'prop'],
-  ['script', 'run', 'segment', 'grant', 'grants', 'phase', 'now'],
-  ['script', 'grant', 'reason', 'now'],
-];
-const admission = ['ref', 'delivery', 'err', 'abandoned', 'settled', 'trace'];
-const completion = [
-  'ref',
-  'delivery',
-  'token',
-  'state',
-  'nextDeadline',
-  'fuelUsed',
-  'reports',
-  'gone',
-  'err',
-  'abandoned',
-  'settled',
-  'trace',
-];
 export const binaryReports: readonly (readonly [string, readonly string[]])[] =
   [
     [
@@ -246,11 +121,18 @@ export const valueNode = (v: Value): Json => {
   valueNodes.set(node, v);
   return node;
 };
-const metadata = (o: BinaryValueOptions): BinaryValueOptions => ({
+/** The Value a `valueNode` holds. */
+export const heldValue = (j: Json | undefined): Value | undefined =>
+  isObject(j) ? valueNodes.get(j) : undefined;
+/** Checks Values' metadata without resolving Objects or Functions. */
+export const placeholderValues = (
+  o: BinaryValueOptions,
+): BinaryValueOptions => ({
   ...o,
   object: (kind, id) => objectValue({ kind, id, handle: {} }),
   decodeFunction: () => nothing,
 });
+const metadata = placeholderValues;
 
 // A Value Encoding node becomes an item without ever interpreting a Function
 // token as code. Validate metadata before an owner can resolve its identity.
@@ -359,10 +241,6 @@ const jsonItem = (
     return { tag: j ? 2 : 1 };
   }
   if (typeof j === 'string') {
-    if (key === 'now' || key === 'nextDeadline') {
-      const n = parseInstant(j);
-      return { tag: 11, data: (n << 1n) ^ (n >> 63n) };
-    }
     return { tag: 18, data: j };
   }
   if (isNumber(j)) {
@@ -517,54 +395,543 @@ const itemJson = (
   return result;
 };
 
-// Callback fields have no nested protocol records. Keep their Value positions
-// explicit: a property Object is two protocol texts, not an Object Value item.
-const callbackItem = (
+// Nested protocol data, where a key says which members are Values.
+const convert = (
   item: BinaryItem,
-  name: string,
   o: BinaryValueOptions,
+  key: string,
+  parent = '',
 ): Json => {
-  if (item.tag === 0) {
-    return null;
-  }
-  if (name === 'value' || name === 'selector') {
+  const kind = role(key, parent);
+  if (kind === 'value') {
     itemValue(item, metadata(o));
     return itemJson(item, o, true);
   }
-  if (name === 'args') {
+  if (kind === 'values') {
     if (item.tag !== 6) {
       return binaryFailure();
     }
-    const meta = metadata(o);
     return children(item).map(v => {
-      itemValue(v, meta);
+      itemValue(v, metadata(o));
       return itemJson(v, o, true);
     });
   }
-  if (uintFields.has(name)) {
-    if (itemInteger(item) < 0n && name !== 'ref') {
-      return binaryFailure();
+  if (item.tag === 7) {
+    const xs = children(item);
+    const ps: [string, Json][] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < xs.length; i += 2) {
+      if (xs[i]!.tag !== 5) {
+        return binaryFailure();
+      }
+      const k = itemText(xs[i]!);
+      if (seen.has(k)) {
+        return binaryFailure();
+      }
+      seen.add(k);
+      ps.push([k, convert(xs[i + 1]!, o, k, parent)]);
     }
-  } else if (boolFields.has(name)) {
-    if (item.tag !== 1 && item.tag !== 2) {
-      return binaryFailure();
-    }
-  } else if (name === 'now') {
-    if (item.tag !== 11) {
-      return binaryFailure();
-    }
-  } else if (textListFields.has(name)) {
-    const texts = item.tag === 6 ? children(item) : undefined;
-    if (!texts || texts.some(v => v.tag !== 18)) {
-      return binaryFailure();
-    }
-    if (name === 'object' && texts.length !== 2) {
-      return binaryFailure();
-    }
-  } else if (item.tag !== 18) {
-    return binaryFailure();
+    return new JsonObject(ps);
+  }
+  if (item.tag === 6) {
+    return children(item).map(v => convert(v, o, '', key));
   }
   return itemJson(item, o);
+};
+
+// How each field crosses. Protocol kinds are checked as they decode; `value`
+// positions are Values; `record` is nested protocol data, typed by its keys.
+type Kind =
+  | 'int'
+  | 'uint'
+  | 'token'
+  | 'bool'
+  | 'instant'
+  | 'text'
+  | 'texts'
+  | 'value'
+  | 'values'
+  | 'record'
+  | 'reports';
+/** A frame member by name: Json, or a Value on the direct callback paths. */
+type Get = (key: string) => unknown;
+type Schema = {
+  readonly family: 'message' | 'result' | 'need' | 'reply';
+  /** Wire order. */
+  readonly fields: readonly (readonly [string, Kind])[];
+  /** The decoded flat record as the frame. */
+  readonly fromWire: (get: Get, pairs: [string, Json][]) => Json;
+  /** Members a frame may have, the wire's flattened ones included. */
+  readonly keys: ReadonlySet<string>;
+  /** The method, need or reply this tag carries. */
+  readonly name: string;
+  readonly required: readonly string[];
+  readonly tag: number;
+  /** The frame's members as the flat wire record, when the two differ. */
+  readonly toWire?: (get: Get) => Get;
+};
+type Fields = Readonly<Record<string, Kind>>;
+
+const notices = ['abandoned', 'settled', 'trace'];
+const noticeFields: Fields = {
+  abandoned: 'texts',
+  settled: 'texts',
+  trace: 'texts',
+};
+// A member of a frame's nested record, decoded (Json) or direct (a plain record).
+const member = (x: unknown, k: string): unknown =>
+  isObject(x as Json)
+    ? field(x as Json, k)
+    : x !== null && typeof x === 'object' && !Value.isValue(x)
+      ? (x as Record<string, unknown>)[k]
+      : undefined;
+const schema = (
+  tag: number,
+  name: string,
+  family: Schema['family'],
+  fields: Fields,
+  required: readonly string[],
+  fromWire: Schema['fromWire'],
+  extra: { keys?: readonly string[]; toWire?: Schema['toWire'] } = {},
+): Schema => ({
+  tag,
+  name,
+  family,
+  fields: Object.entries(fields),
+  keys: new Set(extra.keys ?? Object.keys(fields)),
+  required: ['ref', ...required],
+  fromWire,
+  toWire: extra.toWire,
+});
+
+const message = (tag: number, name: string, fields: Fields): Schema =>
+  schema(
+    tag,
+    name,
+    tag < 6 ? 'message' : 'result',
+    fields,
+    ['group'],
+    (_, pairs) => new JsonObject([['m', name], ...pairs]),
+  );
+
+// An op or prop result names its outcome as a member; the wire carries the
+// outcome's name, with its Value or failure in shared fields.
+const resultFields: Fields = {
+  ref: 'int',
+  group: 'text',
+  outcome: 'text',
+  value: 'value',
+  code: 'text',
+  message: 'text',
+  charged: 'uint',
+};
+const outcomeResult = (
+  tag: number,
+  name: string,
+  outcomes: readonly string[],
+): Schema =>
+  schema(
+    tag,
+    name,
+    'result',
+    resultFields,
+    ['group', 'outcome'],
+    (get, pairs) => {
+      const outcome = get('outcome') as string;
+      if (
+        !outcomes.includes(outcome) ||
+        (outcome === 'fail' && get('code') === undefined)
+      ) {
+        return binaryFailure();
+      }
+      const value = (get('value') as Json | undefined) ?? null;
+      return new JsonObject([
+        ['m', name],
+        ...pairs.filter(
+          ([k]) => k === 'ref' || k === 'group' || k === 'charged',
+        ),
+        [
+          outcome,
+          outcome === 'fail'
+            ? record([
+                ['code', get('code') as Json],
+                ['message', get('message') as Json | undefined],
+                ['data', value],
+              ])
+            : outcome === 'result' || outcome === 'value'
+              ? value
+              : outcome === 'hostError'
+                ? ''
+                : true,
+        ],
+      ]);
+    },
+    {
+      keys: ['ref', 'group', 'charged', ...outcomes],
+      toWire: get => {
+        let outcome: string | undefined;
+        for (const k of outcomes) {
+          if (get(k) !== undefined) {
+            if (outcome !== undefined) {
+              return binaryFailure();
+            }
+            outcome = k;
+          }
+        }
+        if (outcome === undefined) {
+          return binaryFailure();
+        }
+        const fail = outcome === 'fail' ? get('fail') : undefined;
+        const value =
+          fail !== undefined
+            ? member(fail, 'data')
+            : outcome === 'result' || outcome === 'value'
+              ? get(outcome)
+              : undefined;
+        return k =>
+          k === 'outcome'
+            ? outcome
+            : k === 'value'
+              ? value
+              : k === 'code' || k === 'message'
+                ? member(fail, k)
+                : get(k);
+      },
+    },
+  );
+
+// A need travels inside its packet, beside the notices; on the wire the two are one record.
+const need = (
+  tag: number,
+  name: string,
+  fields: Fields,
+  required: readonly string[],
+  reshape?: {
+    fromWire: (get: Get, pairs: [string, Json][]) => [string, Json][];
+    toWire: Schema['toWire'];
+  },
+): Schema =>
+  schema(
+    tag,
+    name,
+    'need',
+    { ref: 'int', ...fields, ...noticeFields },
+    required,
+    (get, pairs) => {
+      const inner = pairs.filter(([k]) => k !== 'ref' && !notices.includes(k));
+      return new JsonObject([
+        ...pairs.filter(([k]) => k === 'ref' || notices.includes(k)),
+        [
+          'need',
+          new JsonObject([
+            ['m', name],
+            ...(reshape ? reshape.fromWire(get, inner) : inner),
+          ]),
+        ],
+      ]);
+    },
+    { toWire: reshape?.toWire },
+  );
+
+// A property Object is its kind and id as protocol texts, and `set` says
+// whether a setter's Value, absent for Nothing, is there.
+const property = {
+  toWire:
+    (get: Get): Get =>
+    k =>
+      k === 'object'
+        ? member(get('object'), '$object')
+        : k === 'set'
+          ? get('value') !== undefined
+          : get(k),
+  fromWire: (get: Get, pairs: [string, Json][]): [string, Json][] => {
+    const set = get('set') === true;
+    const ref = get('object') as Json[];
+    if ((!set && get('value') !== undefined) || ref.length !== 2) {
+      return binaryFailure();
+    }
+    const ps = pairs.flatMap(([k, v]): [string, Json][] =>
+      k === 'set'
+        ? []
+        : [[k, k === 'object' ? new JsonObject([['$object', v]]) : v]],
+    );
+    if (set && get('value') === undefined) {
+      ps.push(['value', null]);
+    }
+    return ps;
+  },
+};
+
+// A reply's notices and correlation sit beside its `ok` or `err`; the wire
+// carries every member flat.
+const reply = (
+  tag: number,
+  name: string,
+  fields: Fields,
+  outer: readonly string[],
+  check: (get: Get, failed: boolean) => boolean,
+): Schema =>
+  schema(tag, name, 'reply', fields, [], (get, pairs) => {
+    const err = get('err') as Json | undefined;
+    if (!check(get, err !== undefined)) {
+      return binaryFailure();
+    }
+    return record([
+      ...pairs.filter(([k]) => outer.includes(k)),
+      err !== undefined
+        ? ['err', err]
+        : ['ok', record(pairs.filter(([k]) => !outer.includes(k)))],
+    ]);
+  });
+
+const opNeed: Fields = {
+  call: 'text',
+  script: 'text',
+  run: 'text',
+  segment: 'text',
+  grant: 'text',
+  capability: 'text',
+  operation: 'text',
+  mode: 'text',
+  now: 'instant',
+  args: 'values',
+  scope: 'text',
+  automatic: 'bool',
+  fuelLeft: 'uint',
+};
+const effectNeed: Fields = {
+  script: 'text',
+  run: 'text',
+  segment: 'text',
+  grant: 'text',
+  grants: 'texts',
+  coordinator: 'text',
+  phase: 'text',
+  now: 'instant',
+};
+const pumpFields: Fields = {
+  now: 'instant',
+  fuelSlice: 'record',
+  fuelCap: 'record',
+};
+const schemas: readonly Schema[] = [
+  message(1, 'request', {
+    ref: 'int',
+    group: 'text',
+    to: 'record',
+    message: 'record',
+  }),
+  message(2, 'call', {
+    ref: 'int',
+    group: 'text',
+    fn: 'value',
+    args: 'values',
+    limits: 'record',
+  }),
+  message(3, 'pump', { ref: 'int', group: 'text', ...pumpFields }),
+  message(4, 'request-pump', {
+    ref: 'int',
+    group: 'text',
+    token: 'token',
+    to: 'record',
+    message: 'record',
+    ...pumpFields,
+  }),
+  message(5, 'call-pump', {
+    ref: 'int',
+    group: 'text',
+    token: 'token',
+    fn: 'value',
+    args: 'values',
+    limits: 'record',
+    ...pumpFields,
+  }),
+  outcomeResult(6, 'op-result', [
+    'result',
+    'started',
+    'done',
+    'fail',
+    'limit',
+    'hostError',
+  ]),
+  outcomeResult(7, 'prop-result', ['value', 'ok', 'fail', 'hostError']),
+  message(8, 'effect-result', { ref: 'int', group: 'text', status: 'text' }),
+  message(9, 'release-result', { ref: 'int', group: 'text' }),
+  reply(
+    0x81,
+    'admission',
+    { ref: 'int', delivery: 'text', err: 'record', ...noticeFields },
+    ['ref', ...notices],
+    (get, failed) => failed || get('delivery') !== undefined,
+  ),
+  reply(
+    0x82,
+    'completion',
+    {
+      ref: 'int',
+      delivery: 'text',
+      token: 'token',
+      state: 'text',
+      nextDeadline: 'instant',
+      fuelUsed: 'record',
+      reports: 'reports',
+      gone: 'record',
+      err: 'record',
+      ...noticeFields,
+    },
+    ['ref', ...notices, 'delivery', 'token'],
+    (get, failed) =>
+      (get('delivery') === undefined) === (get('token') === undefined) &&
+      (failed ||
+        (get('state') !== undefined &&
+          isNumber(get('fuelUsed') as Json) &&
+          get('reports') !== undefined)),
+  ),
+  need(
+    0x83,
+    'op',
+    opNeed,
+    Object.keys(opNeed).filter(
+      k => !['scope', 'automatic', 'fuelLeft'].includes(k),
+    ),
+  ),
+  need(
+    0x84,
+    'prop',
+    {
+      object: 'texts',
+      prop: 'text',
+      set: 'bool',
+      value: 'value',
+      op: 'text',
+      selector: 'value',
+    },
+    ['object', 'prop'],
+    property,
+  ),
+  need(
+    0x85,
+    'effect',
+    effectNeed,
+    Object.keys(effectNeed).filter(k => k !== 'coordinator'),
+  ),
+  need(
+    0x86,
+    'release',
+    { script: 'text', grant: 'text', reason: 'text', now: 'instant' },
+    ['script', 'grant', 'reason', 'now'],
+  ),
+];
+const byTag = new Map(schemas.map(s => [s.tag, s]));
+const byMethod = new Map(
+  schemas
+    .filter(s => s.family === 'message' || s.family === 'result')
+    .map(s => [s.name, s]),
+);
+const byNeed = new Map(
+  schemas.filter(s => s.family === 'need').map(s => [s.name, s]),
+);
+const results = new Map(
+  schemas
+    .filter(s => s.family === 'result')
+    .map(s => [s.name.replace(/-result$/, ''), s]),
+);
+
+const integer = (x: unknown): bigint =>
+  typeof x === 'number' && Number.isSafeInteger(x)
+    ? BigInt(x)
+    : isNumber(x as Json) && /^-?\d+$/.test((x as JsonNumber).source)
+      ? BigInt((x as JsonNumber).source)
+      : binaryFailure();
+const textItem = (x: unknown): BinaryItem =>
+  typeof x === 'string' ? { tag: 18, data: x } : binaryFailure();
+const valueOf = (x: unknown, o: BinaryValueOptions): BinaryItem =>
+  Value.isValue(x) ? valueItem(x, o) : jsonValueItem(x as Json, o);
+
+const writeReports = (w: BinaryWriter, j: Json, o: BinaryValueOptions) => {
+  if (!Array.isArray(j)) {
+    return binaryFailure();
+  }
+  w.output.push(6);
+  w.uint(BigInt(j.length));
+  for (const report of j) {
+    const i = binaryReports.findIndex(
+      ([kind]) => kind === field(report, 'kind'),
+    );
+    if (i < 0) {
+      return binaryFailure();
+    }
+    const keys = binaryReports[i]![1];
+    if (object(report).pairs.some(([k]) => k !== 'kind' && !keys.includes(k))) {
+      return binaryFailure();
+    }
+    w.output.push(i + 1, 6);
+    w.uint(BigInt(keys.length));
+    for (const key of keys) {
+      w.item(jsonItem(field(report, key) ?? null, o, key));
+    }
+  }
+};
+
+const writeField = (
+  w: BinaryWriter,
+  name: string,
+  kind: Kind,
+  x: unknown,
+  o: BinaryValueOptions,
+) => {
+  if (x === undefined || x === null) {
+    w.output.push(0);
+    return;
+  }
+  switch (kind) {
+    case 'int':
+    case 'uint':
+    case 'token': {
+      const n = integer(x);
+      if ((kind === 'uint' && n < 0n) || (kind === 'token' && n <= 0n)) {
+        return binaryFailure();
+      }
+      return w.item(integerItem(n));
+    }
+    case 'bool':
+      return typeof x === 'boolean'
+        ? w.output.push(x ? 2 : 1)
+        : binaryFailure();
+    case 'instant': {
+      const n = parseInstant(typeof x === 'string' ? x : binaryFailure());
+      return w.item({ tag: 11, data: (n << 1n) ^ (n >> 63n) });
+    }
+    case 'text':
+      return w.item(textItem(x));
+    case 'texts':
+      return w.item({
+        tag: 6,
+        data: (Array.isArray(x) ? x : binaryFailure()).map(textItem),
+      });
+    case 'value':
+      return w.item(valueOf(x, o));
+    case 'values':
+      return w.item({
+        tag: 6,
+        data: (Array.isArray(x) ? x : binaryFailure()).map(v => valueOf(v, o)),
+      });
+    case 'record':
+      return w.item(jsonItem(x as Json, o, name));
+    case 'reports':
+      return writeReports(w, x as Json, o);
+  }
+};
+
+const write = (s: Schema, get: Get, o: BinaryValueOptions): ArrayBuffer => {
+  const w = new BinaryWriter();
+  w.output.push(...prefix, s.tag, 6);
+  w.uint(BigInt(s.fields.length));
+  const wire = s.toWire ? s.toWire(get) : get;
+  for (const [name, kind] of s.fields) {
+    writeField(w, name, kind, wire(name), o);
+  }
+  return w.buffer();
 };
 
 /** True before any attempt to interpret a frame as UTF-8 or JSON. */
@@ -574,145 +941,143 @@ export const isRequestPumpBinary = (bytes: Uint8Array): boolean =>
   bytes[1] === 0x54 &&
   bytes[2] === 0x42;
 
+/** True when a binary frame's tag is a callback need. */
+export const isBinaryNeed = (bytes: Uint8Array): boolean =>
+  bytes.length > 5 && byTag.get(bytes[5]!)?.family === 'need';
+
 export const encodeBinaryFrame = (
   frame: Json,
   o: BinaryValueOptions = {},
 ): ArrayBuffer => {
   const m = field(frame, 'm');
   const need = field(frame, 'need');
-  const callback = callbackResults.findIndex(([name]) => name === m);
-  const needIndex =
-    need === undefined
-      ? -1
-      : callbackNeeds.findIndex(([name]) => name === field(need, 'm'));
-  const input = messages.findIndex(([name]) => name === m);
-  const isCompletion =
-    input < 0 &&
-    callback < 0 &&
-    needIndex < 0 &&
-    (field(frame, 'token') !== undefined ||
-      field(field(frame, 'ok') ?? new JsonObject([]), 'state') !== undefined);
-  const tag =
-    callback >= 0
-      ? callback + 6
-      : needIndex >= 0
-        ? needIndex + 0x83
-        : input >= 0
-          ? input + 1
-          : isCompletion
-            ? 0x82
-            : 0x81;
+  const ok = field(frame, 'ok');
+  const s =
+    need !== undefined
+      ? byNeed.get(field(need, 'm') as string)
+      : m !== undefined
+        ? byMethod.get(m as string)
+        : field(frame, 'token') !== undefined ||
+            (isObject(ok) && field(ok, 'state') !== undefined)
+          ? byTag.get(0x82)
+          : byTag.get(0x81);
+  const inner = need ?? ok;
   if (
-    (m !== undefined && input < 0 && callback < 0) ||
-    (need !== undefined && needIndex < 0)
+    !s ||
+    [...object(frame).pairs, ...(isObject(inner) ? inner.pairs : [])].some(
+      ([k]) => k !== 'm' && k !== 'need' && k !== 'ok' && !s.keys.has(k),
+    )
   ) {
     return binaryFailure();
   }
-  const names: readonly string[] =
-    callback >= 0
-      ? callbackResults[callback]![1]
-      : needIndex >= 0
-        ? callbackNeeds[needIndex]![1]
-        : input >= 0
-          ? messages[input]![1]
-          : isCompletion
-            ? completion
-            : admission;
-  let data = frame;
-  if (needIndex >= 0) {
-    data = record([
-      ...object(need!).pairs,
-      ...object(frame).pairs.filter(([k]) => k !== 'need'),
-    ]);
-    if (field(need!, 'm') === 'prop') {
-      data = record([
-        ...object(data).pairs.filter(([k]) => k !== 'object' && k !== 'set'),
-        ['object', field(field(need!, 'object') ?? null, '$object')],
-        ['set', field(need!, 'value') !== undefined],
-      ]);
-    }
-  } else if (callback >= 0 && callback <= 1) {
-    const present = outcomes(m as string).filter(
-      k => field(frame, k) !== undefined,
-    );
-    if (present.length !== 1) {
-      return binaryFailure();
-    }
-    const outcome = present[0]!;
-    const fail = field(frame, 'fail');
-    data = record([
-      ...object(frame).pairs.filter(([k]) => !present.includes(k)),
-      ['outcome', outcome],
-      [
-        'value',
-        fail === undefined
-          ? outcome === 'result' || outcome === 'value'
-            ? field(frame, outcome)
-            : undefined
-          : field(fail, 'data'),
-      ],
-      ['code', fail === undefined ? undefined : field(fail, 'code')],
-      ['message', fail === undefined ? undefined : field(fail, 'message')],
-    ]);
-  } else if (input < 0 && callback < 0) {
-    const ok = field(frame, 'ok');
-    data = record([
-      ...object(frame).pairs.filter(([k]) => k !== 'ok'),
-      ...(isObject(ok) ? ok.pairs : []),
-    ]);
-  }
-  if (object(data).pairs.some(([k]) => k !== 'm' && !names.includes(k))) {
-    return binaryFailure();
-  }
-  const w = new BinaryWriter();
-  w.output.push(...prefix, tag, 6);
-  w.uint(BigInt(names.length));
-  for (const name of names) {
-    const j = field(data, name);
-    if (name === 'reports' && j !== undefined && j !== null) {
-      if (!Array.isArray(j)) {
-        return binaryFailure();
-      }
-      w.output.push(6);
-      w.uint(BigInt(j.length));
-      for (const report of j) {
-        const i = binaryReports.findIndex(
-          ([kind]) => kind === field(report, 'kind'),
-        );
-        if (i < 0) {
-          return binaryFailure();
-        }
-        const keys = binaryReports[i]![1];
-        if (
-          object(report).pairs.some(([k]) => k !== 'kind' && !keys.includes(k))
-        ) {
-          return binaryFailure();
-        }
-        w.output.push(i + 1, 6);
-        w.uint(BigInt(keys.length));
-        for (const key of keys) {
-          w.item(jsonItem(field(report, key) ?? null, o, key));
-        }
-      }
-    } else {
-      const item = jsonItem(
-        j ?? null,
-        o,
-        (callback >= 0 || needIndex >= 0) && resultHinted.has(name)
-          ? 'result'
-          : needIndex >= 0 && name === 'object'
-            ? ''
-            : name,
-      );
-      w.item(item);
-    }
-  }
-  return w.buffer();
+  return write(
+    s,
+    k => {
+      const j = isObject(inner) ? field(inner, k) : undefined;
+      return j === undefined ? field(frame, k) : j;
+    },
+    o,
+  );
 };
 
-export const decodeBinaryFrame = (
-  buffer: ArrayBuffer,
+/**
+ * The binary result answering a callback need, straight from its members:
+ * `answer` holds them as Values and plain data, without `m`, `ref` and
+ * `group`. Undefined when the need has no binary result.
+ */
+export const encodeResult = (
+  need: string,
+  ref: number,
+  group: string | undefined,
+  answer: Readonly<Record<string, unknown>>,
   o: BinaryValueOptions = {},
+): ArrayBuffer | undefined => {
+  const s = results.get(need);
+  return (
+    s &&
+    write(s, k => (k === 'ref' ? ref : k === 'group' ? group : answer[k]), o)
+  );
+};
+
+const readReports = (r: BinaryReader, o: BinaryValueOptions): Json[] => {
+  if (r.byte() !== 6) {
+    return binaryFailure();
+  }
+  const count = r.count();
+  const reports: Json[] = [];
+  for (let i = 0; i < count; i++) {
+    const report = binaryReports[r.byte() - 1] ?? binaryFailure();
+    if (r.byte() !== 6 || r.uint() !== BigInt(report[1].length)) {
+      return binaryFailure();
+    }
+    const ps: [string, Json][] = [['kind', report[0]]];
+    for (const key of report[1]) {
+      const item = r.item();
+      if (item.tag !== 0) {
+        ps.push([key, convert(item, o, key)]);
+      }
+    }
+    if (
+      report[0] === 'run end' &&
+      ps.some(([k, v]) => k === 'outcome' && v === 'completed') &&
+      !ps.some(([k]) => k === 'result')
+    ) {
+      ps.push(['result', null]);
+    }
+    reports.push(new JsonObject(ps));
+  }
+  return reports;
+};
+
+const readField = (
+  item: BinaryItem,
+  name: string,
+  kind: Kind,
+  o: BinaryValueOptions,
+  value: (item: BinaryItem) => Json,
+): Json => {
+  switch (kind) {
+    case 'int':
+    case 'uint':
+    case 'token': {
+      const n = itemInteger(item);
+      if ((kind === 'uint' && n < 0n) || (kind === 'token' && n <= 0n)) {
+        return binaryFailure();
+      }
+      return new JsonNumber(n.toString());
+    }
+    case 'bool':
+      return item.tag === 1 || item.tag === 2
+        ? item.tag === 2
+        : binaryFailure();
+    case 'instant': {
+      if (item.tag !== 11) {
+        return binaryFailure();
+      }
+      const n = item.data as bigint;
+      return formatInstant((n >> 1n) ^ -(n & 1n));
+    }
+    case 'text':
+      return item.tag === 18 ? itemText(item) : binaryFailure();
+    case 'texts':
+      return item.tag === 6
+        ? children(item).map(t =>
+            t.tag === 18 ? itemText(t) : binaryFailure(),
+          )
+        : binaryFailure();
+    case 'value':
+      return value(item);
+    case 'values':
+      return item.tag === 6 ? children(item).map(value) : binaryFailure();
+    default:
+      return convert(item, o, name);
+  }
+};
+
+const decode = (
+  buffer: ArrayBuffer,
+  o: BinaryValueOptions,
+  value: (item: BinaryItem) => Json,
 ): Json => {
   const r = new BinaryReader(new Uint8Array(buffer));
   for (const b of prefix) {
@@ -720,231 +1085,52 @@ export const decodeBinaryFrame = (
       binaryFailure();
     }
   }
-  const tag = r.byte();
-  const callback = tag >= 6 && tag <= 9 ? callbackResults[tag - 6] : undefined;
-  const need =
-    tag >= 0x83 && tag <= 0x86 ? callbackNeeds[tag - 0x83] : undefined;
-  const names = callback
-    ? callback[1]
-    : need
-      ? need[1]
-      : tag >= 1 && tag <= 5
-        ? messages[tag - 1]![1]
-        : tag === 0x81
-          ? admission
-          : tag === 0x82
-            ? completion
-            : binaryFailure();
-  if (r.byte() !== 6 || r.uint() !== BigInt(names.length)) {
+  const s = byTag.get(r.byte()) ?? binaryFailure();
+  if (r.byte() !== 6 || r.uint() !== BigInt(s.fields.length)) {
     binaryFailure();
   }
   const pairs: [string, Json][] = [];
-  const convert = (item: BinaryItem, key: string, parent = ''): Json => {
-    const kind = role(key, parent);
-    if (kind === 'value') {
-      itemValue(item, metadata(o));
-      return itemJson(item, o, true);
+  for (const [name, kind] of s.fields) {
+    if (kind === 'reports' && r.data[r.at] !== 0) {
+      pairs.push([name, readReports(r, o)]);
+      continue;
     }
-    if (kind === 'values') {
-      if (item.tag !== 6) {
-        return binaryFailure();
-      }
-      return children(item).map(v => {
-        itemValue(v, metadata(o));
-        return itemJson(v, o, true);
-      });
-    }
-    if (item.tag === 7) {
-      const xs = children(item);
-      const ps: [string, Json][] = [];
-      const seen = new Set<string>();
-      for (let i = 0; i < xs.length; i += 2) {
-        if (xs[i]!.tag !== 5) {
-          return binaryFailure();
-        }
-        const k = itemText(xs[i]!);
-        if (seen.has(k)) {
-          return binaryFailure();
-        }
-        seen.add(k);
-        ps.push([k, convert(xs[i + 1]!, k, parent)]);
-      }
-      return new JsonObject(ps);
-    }
-    if (item.tag === 6) {
-      return children(item).map(v => convert(v, '', key));
-    }
-    return itemJson(item, o);
-  };
-  for (const name of names) {
-    if (name === 'reports' && r.data[r.at] !== 0) {
-      if (r.byte() !== 6) {
-        return binaryFailure();
-      }
-      const count = r.count();
-      const reports: Json[] = [];
-      for (let i = 0; i < count; i++) {
-        const report = binaryReports[r.byte() - 1] ?? binaryFailure();
-        if (r.byte() !== 6 || r.uint() !== BigInt(report[1].length)) {
-          return binaryFailure();
-        }
-        const ps: [string, Json][] = [['kind', report[0]]];
-        for (const key of report[1]) {
-          const item = r.item();
-          if (item.tag !== 0) {
-            ps.push([key, convert(item, key)]);
-          }
-        }
-        if (
-          report[0] === 'run end' &&
-          ps.some(([k, v]) => k === 'outcome' && v === 'completed') &&
-          !ps.some(([k]) => k === 'result')
-        ) {
-          ps.push(['result', null]);
-        }
-        reports.push(new JsonObject(ps));
-      }
-      pairs.push([name, reports]);
-    } else {
-      const item = r.item();
-      if (name === 'ref') {
-        itemInteger(item);
-      }
-      if (
-        name === 'token' &&
-        item.tag !== 0 &&
-        (item.tag !== 3 || itemInteger(item) <= 0n)
-      ) {
-        binaryFailure();
-      }
-      if (
-        ['group', 'delivery'].includes(name) &&
-        item.tag !== 0 &&
-        item.tag !== 18
-      ) {
-        binaryFailure();
-      }
-      if (item.tag !== 0) {
-        pairs.push([
-          name,
-          callback || need ? callbackItem(item, name, o) : convert(item, name),
-        ]);
-      }
+    const item = r.item();
+    if (item.tag !== 0) {
+      pairs.push([name, readField(item, name, kind, o, value)]);
     }
   }
   r.done();
-  const top = new JsonObject(pairs);
-  if (!isNumber(field(top, 'ref'))) {
+  const get: Get = k => pairs.find(([key]) => key === k)?.[1];
+  if (s.required.some(k => get(k) === undefined)) {
     return binaryFailure();
   }
-  if (need) {
-    if (
-      requiredNeedFields[tag - 0x83]!.some(k => field(top, k) === undefined)
-    ) {
-      return binaryFailure();
-    }
-    const ps = pairs.filter(
-      ([k]) => k !== 'ref' && !notices.includes(k) && k !== 'set',
-    );
-    if (need[0] === 'prop') {
-      const set = field(top, 'set') === true;
-      const hasValue = field(top, 'value') !== undefined;
-      if (!set && hasValue) {
-        return binaryFailure();
-      }
-      const at = ps.findIndex(([k]) => k === 'object');
-      if (at < 0) {
-        return binaryFailure();
-      }
-      ps[at] = ['object', new JsonObject([['$object', ps[at]![1]]])];
-      if (set && !hasValue) {
-        ps.push(['value', null]);
-      }
-    }
-    return record([
-      ...pairs.filter(([k]) => k === 'ref' || notices.includes(k)),
-      ['need', record([['m', need[0]], ...ps])],
-    ]);
-  }
-  if (callback) {
-    if (typeof field(top, 'group') !== 'string') {
-      return binaryFailure();
-    }
-    let ps = pairs;
-    if (tag <= 7) {
-      const outcome = field(top, 'outcome');
-      if (
-        typeof outcome !== 'string' ||
-        !outcomes(callback[0]).includes(outcome)
-      ) {
-        return binaryFailure();
-      }
-      ps = pairs.filter(
-        ([k]) => k === 'ref' || k === 'group' || k === 'charged',
-      );
-      ps.push([
-        outcome,
-        outcome === 'fail'
-          ? record([
-              ['code', field(top, 'code')],
-              ['message', field(top, 'message')],
-              ['data', field(top, 'value') ?? null],
-            ])
-          : outcome === 'result' || outcome === 'value'
-            ? (field(top, 'value') ?? null)
-            : outcome === 'hostError'
-              ? ''
-              : true,
-      ]);
-      if (outcome === 'fail' && typeof field(top, 'code') !== 'string') {
-        return binaryFailure();
-      }
-    }
-    return record([['m', callback[0]], ...ps]);
-  }
-  if (tag <= 5) {
-    if (typeof field(top, 'group') !== 'string') {
-      return binaryFailure();
-    }
-    return record([['m', messages[tag - 1]![0]], ...pairs]);
-  }
-  const err = field(top, 'err');
-  if (err === undefined) {
-    if (tag === 0x81 && typeof field(top, 'delivery') !== 'string') {
-      return binaryFailure();
-    }
-    if (
-      tag === 0x82 &&
-      (typeof field(top, 'state') !== 'string' ||
-        !isNumber(field(top, 'fuelUsed')) ||
-        !Array.isArray(field(top, 'reports')))
-    ) {
-      return binaryFailure();
-    }
-  }
+  return s.fromWire(get, pairs);
+};
+
+export const decodeBinaryFrame = (
+  buffer: ArrayBuffer,
+  o: BinaryValueOptions = {},
+): Json => {
+  const meta = metadata(o);
+  return decode(buffer, o, item => {
+    itemValue(item, meta);
+    return itemJson(item, o, true);
+  });
+};
+
+/**
+ * A callback need's packet, each Value decoded once under `o`'s Object and
+ * Function hooks and held in a `valueNode`.
+ */
+export const decodeNeed = (
+  buffer: ArrayBuffer,
+  o: BinaryValueOptions,
+): Json => {
   if (
-    tag === 0x82 &&
-    (field(top, 'delivery') === undefined) !==
-      (field(top, 'token') === undefined)
+    !isBinaryNeed(new Uint8Array(buffer, 0, Math.min(6, buffer.byteLength)))
   ) {
     return binaryFailure();
   }
-  const outer = [
-    'ref',
-    'abandoned',
-    'settled',
-    'trace',
-    ...(tag === 0x82 ? ['delivery', 'token'] : []),
-  ];
-  return record([
-    ...pairs.filter(([k]) => outer.includes(k)),
-    ...(err !== undefined
-      ? [['err', err] as [string, Json]]
-      : [
-          ['ok', record(pairs.filter(([k]) => !outer.includes(k)))] as [
-            string,
-            Json,
-          ],
-        ]),
-  ]);
+  return decode(buffer, o, item => valueNode(itemValue(item, o)));
 };

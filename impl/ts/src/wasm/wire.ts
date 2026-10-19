@@ -122,6 +122,23 @@ export const frameTree = (frame: Frame): Json => {
   return root;
 };
 
+/** A callback answer's members for a binary result: its Values as Values. */
+export const answerFields = (
+  answer: Readonly<Record<string, Frame | undefined>>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const k in answer) {
+    const v = answer[k];
+    out[k] =
+      v !== null && typeof v === 'object' && raw in v
+        ? (v.value ?? readReply(v.json))
+        : v !== null && typeof v === 'object' && !Array.isArray(v)
+          ? answerFields(v as Record<string, Frame | undefined>)
+          : v;
+  }
+  return out;
+};
+
 export type { Json };
 export const readReply = (s: string): Json => readOrderedJSON(s);
 
