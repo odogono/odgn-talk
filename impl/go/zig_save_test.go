@@ -95,12 +95,16 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 		if packet.err.present() {
 			t.Fatal(string(packet.root))
 		}
-		need := packet.need
-		if !need.present() {
+		// A binary need (#1311) still takes its JSON result.
+		kind := zigText(packet.need.get("m"))
+		if p := packet.bin; p != nil && p.need != nil {
+			kind = zbCallbacks[p.need.tag].kind
+		}
+		if kind == "" {
 			completed = true
 			break
 		}
-		switch zigText(need.get("m")) {
+		switch kind {
 		case "trace":
 			fields = map[string]any{"m": "trace-result", "ref": int64(100), "group": b.groupHandle()}
 		case "effect":
@@ -108,7 +112,7 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 		case "op":
 			fields = map[string]any{"m": "op-result", "ref": int64(100), "group": b.groupHandle(), "result": nil}
 		default:
-			t.Fatal(need)
+			t.Fatal(kind)
 		}
 	}
 	if !completed {

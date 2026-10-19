@@ -648,6 +648,8 @@ type zbPacket struct {
 	rows                                 []zbRow // and those Reports, already read
 	err                                  []byte
 	abandoned, settled, trace            []byte
+	// need is a binary callback need (#1311), which ends no exchange.
+	need *zbNeed
 }
 
 func zbParse(data []byte) (*zbPacket, error) {
@@ -661,6 +663,9 @@ func zbParse(data []byte) (*zbPacket, error) {
 	switch zbLayout(data[len(zbPrefix)]) {
 	case zbFields:
 		p.fields = true
+		if len(data) > len(zbPrefix)+1 && data[len(zbPrefix)+1] >= zbOpNeed {
+			return zbParseNeed(&r)
+		}
 		tag, err := r.byte()
 		if err != nil || tag != zbAdmission && tag != zbCompletion {
 			return nil, errZigBinary
@@ -723,6 +728,30 @@ func zbParse(data []byte) (*zbPacket, error) {
 		return nil, errZigBinary
 	}
 	return p, err
+}
+
+// zbParseNeed reads a callback need and its notices.
+func zbParseNeed(r *zbReader) (*zbPacket, error) {
+	tag, err := r.byte()
+	if err != nil {
+		return nil, err
+	}
+	c, ok := zbCallbacks[tag]
+	if !ok || c.kind == "" {
+		return nil, errZigBinary
+	}
+	view, err := r.positional(c.fields)
+	if err != nil {
+		return nil, err
+	}
+	if r.at != len(r.d) {
+		return nil, errZigBinary
+	}
+	ref, ok := zbInt(view.get("ref"))
+	if !ok {
+		return nil, fmt.Errorf("Zig reply omitted ref")
+	}
+	return &zbPacket{ref: ref, ok: true, fields: true, need: &zbNeed{tag: tag, view: view}, abandoned: view.get("abandoned"), settled: view.get("settled"), trace: view.get("trace")}, nil
 }
 
 // failure is the reply's ordinary error object as an error.

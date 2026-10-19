@@ -5,13 +5,11 @@ package northtalk
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"sort"
 	"unicode/utf8"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -142,136 +140,6 @@ func (b *zigGroup) dispose(o *Object) error {
 // resolve gives the registered handle for a decoded Value Encoding.
 func (b *zigGroup) resolve(kind, id string) (*Object, bool) {
 	return b.group.ObjectByID(kind, id)
-}
-
-var zigPropertyNeedKeys = []string{"object", "prop", "value", "op"}
-
-// A property crossing runs the public Get or Set with the Host's own handle.
-// The guest has already charged, checked read-only and Set's Shape; it
-// checks Get's result Shape after the reply.
-func (b *zigGroup) property(need zigReply) (map[string]any, error) {
-	var fields [4]zigReply
-	need.lookup(zigPropertyNeedKeys, fields[:])
-	ref := fields[0].get("$object").items()
-	o, ok := (*Object)(nil), false
-	if len(ref) == 2 {
-		o, ok = b.resolve(zigText(ref[0]), zigText(ref[1]))
-	}
-	if !ok {
-		return nil, fmt.Errorf("Zig property names an unknown Object")
-	}
-	// Presence, including an explicit null, distinguishes a setter from a getter.
-	set, collection := fields[2] != nil, fields[3] != nil
-	if collection {
-		return b.collection(need, o)
-	}
-	prop, ok := o.kind.props[zigText(fields[1])]
-	if !ok {
-		return nil, fmt.Errorf("Zig property names an undeclared property")
-	}
-	var input Value
-	if set {
-		if err := b.decode(fields[2], reflect.ValueOf(&input).Elem()); err != nil {
-			return nil, err
-		}
-	}
-	result, failure := invokeProperty(prop, o, set, input)
-	// Host-only detail for the `call failed` report the guest may make; a
-	// property crossing has no Call id, so details are matched in order.
-	hostError := func(detail string) (map[string]any, error) {
-		b.propertyDetails = append(b.propertyDetails, detail)
-		return map[string]any{"hostError": detail}, nil
-	}
-	switch {
-	case failure != nil:
-		if e, ok := failure.(*ScriptError); ok && e != nil {
-			encoded, err := b.zigScriptFailure(e)
-			if err != nil {
-				return hostError(err.Error())
-			}
-			if detail := propertyFailureDetail(e); detail != "" {
-				b.propertyDetails = append(b.propertyDetails, detail)
-			}
-			return map[string]any{"fail": encoded}, nil
-		}
-		return hostError(fmt.Sprint(failure))
-	case set:
-		return map[string]any{"ok": true}, nil
-	default:
-		encoded, err := b.zigEncoded(result)
-		if err != nil {
-			return hostError(err.Error())
-		}
-		if shape.Check(result.inner, prop.Shape.inner, nil) != nil {
-			b.propertyDetails = append(b.propertyDetails, "result violates its Shape or Group ownership")
-		}
-		return map[string]any{"value": encoded}, nil
-	}
-}
-
-// collection answers an Object Collection callback (#1143): the `prop` need
-// named `elements`, with its `op` and, for `at` and `find`, its `selector`.
-// The guest has already charged and checked the selector; it checks the
-// result after the reply.
-func (b *zigGroup) collection(need zigReply, o *Object) (map[string]any, error) {
-	hostError := func(detail string) (map[string]any, error) {
-		b.propertyDetails = append(b.propertyDetails, detail)
-		return map[string]any{"hostError": detail}, nil
-	}
-	e := o.kind.elements
-	if e == nil || zigText(need.get("prop")) != "elements" {
-		return nil, fmt.Errorf("Zig collection callback names an Object Kind without a collection")
-	}
-	var selector Value
-	for _, entry := range need.entries() {
-		if entry.Key == "selector" {
-			if err := b.decode(need.get("selector"), reflect.ValueOf(&selector).Elem()); err != nil {
-				return nil, err
-			}
-		}
-	}
-	var invoke func() (Value, error)
-	switch op := zigText(need.get("op")); {
-	case op == "count":
-		invoke = func() (Value, error) { return e.Count(o) }
-	case op == "at" && selector.inner.Kind == corevalue.Number:
-		index, err := selector.inner.Number().Int64()
-		if err != nil || index == 0 {
-			return nil, fmt.Errorf("Zig collection callback has an invalid position")
-		}
-		invoke = func() (Value, error) { return e.At(o, index) }
-	case op == "find" && selector.inner.Kind == corevalue.Text:
-		name := selector.inner.Text()
-		invoke = func() (Value, error) { return e.Find(o, name) }
-	default:
-		return nil, fmt.Errorf("Zig collection callback is malformed")
-	}
-	result, failure := func() (v Value, err error) {
-		defer func() {
-			if caught := recover(); caught != nil {
-				err = fmt.Errorf("Host panic: %v", caught)
-			}
-		}()
-		return invoke()
-	}()
-	if failure != nil {
-		if e, ok := failure.(*ScriptError); ok && e != nil {
-			encoded, err := b.zigScriptFailure(e)
-			if err != nil {
-				return hostError(err.Error())
-			}
-			if detail := propertyFailureDetail(e); detail != "" {
-				b.propertyDetails = append(b.propertyDetails, detail)
-			}
-			return map[string]any{"fail": encoded}, nil
-		}
-		return hostError(fmt.Sprint(failure))
-	}
-	encoded, err := b.zigEncoded(result)
-	if err != nil {
-		return hostError(err.Error())
-	}
-	return map[string]any{"value": encoded}, nil
 }
 
 // propertyFailureDetail is native Go's reason, if any, that a property's

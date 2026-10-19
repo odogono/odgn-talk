@@ -27,7 +27,9 @@ import WASM or browser transport code.
 
 Only `request`, `call`, `pump`, `request-pump` and `call-pump`, their ordinary
 admission replies, and final Pump replies use binary frames. Every interim need,
-its result answer, inline observation/admission and acknowledgement stays JSON.
+its result answer, inline observation/admission and acknowledgement stays JSON,
+except the callback needs and results that
+[`callbacks-fields-v1`](#callback-needs-and-results) moves to binary.
 A final Pump reply after a JSON continuation still uses the layout selected for
 its original exchange. Store this choice per Group exchange, not globally per
 last frame. Other messages retain JSON, including `cancel-correlated` below.
@@ -131,6 +133,50 @@ For example, an unknown Group, Script or Object, or an invalid Value, refuses
 an admission. An unusable Clock or Fuel option refuses an ordinary Pump. A
 combined input with an unusable Clock or Fuel option is admitted, and its Pump
 is refused, as an ordinary Pump with those options would be.
+
+## Callback needs and results
+
+`callbacks-fields-v1` ([#1311](https://github.com/odogono/odgn-talk/issues/1311))
+moves the `op`, `prop`, `effect` and `release` needs, and their results, to
+the fields envelope. It is negotiated at `hello` independently of the
+Request/Pump candidates: it needs neither, and either may accompany it. The
+`trace` and `resolve` needs, `trace-result`, `resolve-result` and inline events
+stay JSON. Once negotiated, every one of these four needs is a binary frame,
+whatever the exchange's first frame was. The Host may answer in binary or with
+the ordinary JSON result, which keeps compatibility checks possible. A binary
+need's final reply keeps the layout of its exchange.
+
+Frames use the `NTB` prefix and the fields layout byte `01`, then a message
+tag and a positional list, as above:
+
+| Tag | Message | Fields in order |
+| --- | --- | --- |
+| `06` | op-result | ref, group, outcome, value, code, message, charged |
+| `07` | prop-result | ref, group, outcome, value, code, message, charged |
+| `08` | effect-result | ref, group, status |
+| `09` | release-result | ref, group |
+| `83` | op need | ref, call, script, run, segment, grant, capability, operation, mode, now, args, scope, automatic, fuelLeft, abandoned, settled, trace |
+| `84` | prop need | ref, object, prop, set, value, op, selector, abandoned, settled, trace |
+| `85` | effect need | ref, script, run, segment, grant, grants, coordinator, phase, now, abandoned, settled, trace |
+| `86` | release need | ref, script, grant, reason, now, abandoned, settled, trace |
+
+The fields keep their JSON meanings and the envelope item types above. Names,
+ids, `mode`, `phase`, `reason`, `outcome`, `status` and `code` are protocol text;
+`now` is an instant item; `args`, `value` and `selector` are Value items, and a
+Value the Core can't encode is Nothing. `automatic` and `set` are booleans.
+`object` is a list of the Object's kind and id as protocol text. `grants`,
+`abandoned`, `settled` and `trace` are lists of protocol text. A need's three
+notices come last and are Nothing when the JSON need would omit them.
+
+Since Nothing is an absent field, two fields carry what presence carries in
+JSON. A prop need's `set` is true for a setter, whose `value` may be Nothing.
+A result's `outcome` names the JSON result key: `result`, `started`, `done`,
+`fail`, `limit` or `hostError` for an op, and `value`, `ok`, `fail` or
+`hostError` for a prop. `value` is the result, or a failure's Data; `code` and
+the optional `message` are a failure's. The Host's `hostError` detail stays in
+the Host. `charged` is an optional integer. An unknown outcome, a result that
+doesn't match the open need, or another ref is a protocol error. As in JSON, a
+Value that doesn't decode is a host error.
 
 ## Combined operations
 
