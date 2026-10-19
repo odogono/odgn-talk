@@ -1639,7 +1639,7 @@ const Restoring = struct {
             return e;
         };
         s.live.append(a, x) catch |e| {
-            r.g.destroyRun(x);
+            r.g.endRun(x, .dropped) catch unreachable;
             return e;
         };
         try r.runs.append(a, x);
@@ -2580,6 +2580,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
             s.alloc_total += run.alloc;
             if (run.verdict or run.delivery.decision) try defer_(g, run.delivery, s.name, run.id);
         }
+        for (runs.items) |run| g.endRun(run, .discarded) catch unreachable;
         for (s.work.items) |w| switch (w) {
             .message => |d| {
                 if (d.from == null and d.id > 0) try dropped.append(a, d.id);
@@ -2590,8 +2591,6 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
             .run => {},
         };
         s.work.clearRetainingCapacity();
-        s.live.clearRetainingCapacity();
-        for (runs.items) |run| g.destroyRun(run);
     }
     // The input queue: each queued call's line is written before the
     // restore's, since it is never drained.

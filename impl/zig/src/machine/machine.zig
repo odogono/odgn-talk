@@ -2991,7 +2991,7 @@ pub const Group = struct {
             } else g.write("note {s} kind=not-rewindable\n", .{id});
             return;
         };
-        for (g.scripts.items) |s| for (s.live.items, 0..) |r, i| if (std.mem.eql(u8, r.id, id)) {
+        for (g.scripts.items) |s| for (s.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
             // A Run parked at dispatch hasn't begun its clause.
             const first = r.segments == 0 or r.parked or (r.resume_with != null and r.resume_with.? == .unparked);
             if (!first or r.cleanup_from != null or (r.resume_with != null and r.resume_with.? != .unparked)) {
@@ -3001,16 +3001,9 @@ pub const Group = struct {
             // Its rollback first, which may defer while draining.
             try g.cleanupLifecycle(r, .rewound);
             // Preempted or parked: it has no Stretch to end.
-            _ = s.live.orderedRemove(i);
-            var k: usize = 0;
-            while (k < s.work.items.len) {
-                if (s.work.items[k] == .run and s.work.items[k].run == r) {
-                    _ = s.work.orderedRemove(k);
-                } else k += 1;
-            }
             if (!r.parked) g.restoreBase(r);
             try g.putBack(s, r);
-            g.dropRewound(r);
+            try g.endRun(r, .rewound);
             return;
         };
         g.write("note {s} kind=not-rewindable\n", .{id});
@@ -3059,7 +3052,6 @@ pub const Group = struct {
     fn dropRewound(g: *Group, r: *Run) void {
         g.discardRun(r, "rewind");
         r.delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false };
-        g.destroyRun(r);
     }
 
     /// A Stop, CancelRun or RewindRun: made during a Pump, it lands at the
@@ -3508,6 +3500,7 @@ pub const Group = struct {
     }
 
     pub fn destroyScript(g: *Group, s: *Script) void {
+        while (s.live.items.len > 0) g.endRun(s.live.items[0], .discarded) catch unreachable;
         for (s.variables) |v| v.release();
         g.gpa.free(s.variables);
         for (s.definitions) |v| v.release();
@@ -3517,7 +3510,6 @@ pub const Group = struct {
             .run => {},
         };
         s.work.deinit(g.gpa);
-        for (s.live.items) |r| g.destroyRun(r);
         s.live.deinit(g.gpa);
         if (s.stopped) |reason| g.gpa.free(reason);
         g.dropCode(s);
@@ -3529,7 +3521,7 @@ pub const Group = struct {
         wait_table.destroy(g.gpa, p);
     }
 
-    pub fn destroyRun(g: *Group, run: *Run) void {
+    fn destroyRun(g: *Group, run: *Run) void {
         if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
         if (run.returned_prop) |r| g.releasePropResult(r);
         if (g.waits.takeRun(run)) |p| {
@@ -3873,24 +3865,12 @@ pub const Group = struct {
         if (q.fault_run) |ptr| {
             const run: *Run = @ptrCast(@alignCast(ptr));
             try g.cleanupLifecycle(run, .charge_refused);
-            const s = run.script;
-            for (s.live.items, 0..) |r, i| if (r == run) {
-                _ = s.live.orderedRemove(i);
-                break;
-            };
-            var i: usize = 0;
-            while (i < s.work.items.len) {
-                if (s.work.items[i] == .run and s.work.items[i].run == run) {
-                    _ = s.work.orderedRemove(i);
-                } else i += 1;
-            }
             q.fault_run = null;
             if (g.fatal) {
                 try g.stopGroup(run);
-                g.destroyRun(run);
                 return;
             }
-            try g.finishRun(s, run, .{ .faulted = .fuel }, g.segmentId(run));
+            try g.endRun(run, .{ .finished = .{ .outcome = .{ .faulted = .fuel }, .segment = g.segmentId(run) } });
         }
     }
 
@@ -4432,13 +4412,13 @@ pub const Group = struct {
         run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message, .limits = Override.apply(if (d.limits) |o| o.clampTo(s.limits) else null, s.limits) };
         g.reportRunStarted(s, run);
         g.takeBase(run) catch |e| {
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         };
         // A Run that can't go on, as when the Group's allocator refuses,
         // is dropped whole.
         const outcome = g.dispatchRun(s, run, d) catch |e| {
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         };
         if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
@@ -4654,12 +4634,11 @@ pub const Group = struct {
     /// Puts a Run at the head of its Script's work, live.
     fn park(g: *Group, s: *Script, run: *Run) !void {
         s.live.append(g.gpa, run) catch |e| {
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         };
         s.work.insert(g.gpa, 0, .{ .run = run }) catch |e| {
-            _ = s.live.pop();
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         };
     }
@@ -4700,7 +4679,7 @@ pub const Group = struct {
             run.started = was.started;
             run.continuing = was.continuing;
             const outcome = (if (run.crossing_cancel) g.landedCancel(run) else g.continueRun(s, run)) catch |e| {
-                g.destroyRun(run);
+                g.endRun(run, .dropped) catch unreachable;
                 return e;
             };
             if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
@@ -4710,15 +4689,15 @@ pub const Group = struct {
         run.segment_alloc = run.alloc;
         // A preempted Run goes on in the same Segment.
         const outcome = if (run.continuing) g.continueRun(s, run) catch |e| {
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         } else blk: {
             g.takeBase(run) catch |e| {
-                g.destroyRun(run);
+                g.endRun(run, .dropped) catch unreachable;
                 return e;
             };
             break :blk g.resumed(run) catch |e| {
-                g.destroyRun(run);
+                g.endRun(run, .dropped) catch unreachable;
                 return e;
             };
         };
@@ -5934,12 +5913,12 @@ pub const Group = struct {
         if (outcome == .rewound) {
             g.restoreBase(run);
             g.putBack(s, run) catch |e| {
-                g.destroyRun(run);
+                g.endRun(run, .dropped) catch unreachable;
                 return e;
             };
         }
         if (outcome == .suspended) s.live.append(g.gpa, run) catch |e| {
-            g.destroyRun(run);
+            g.endRun(run, .dropped) catch unreachable;
             return e;
         };
         const state = g.persistentState(s);
@@ -5980,19 +5959,12 @@ pub const Group = struct {
             if (run.landed) |l| if (l == .stop) {
                 defer g.gpa.free(l.stop);
                 run.landed = null;
-                g.stopScript(s, l.stop, run, .{}) catch |e| {
-                    g.destroyRun(run);
-                    return e;
-                };
-                g.destroyRun(run);
-                return;
+                return g.stopScript(s, l.stop, run, .{});
             };
-            try g.stopGroup(run);
-            g.destroyRun(run);
-            return;
+            return g.stopGroup(run);
         }
         if (outcome == .rewound) {
-            g.dropRewound(run);
+            try g.endRun(run, .rewound);
             return;
         }
         // The end of the first Segment seals a held Verdict: `veto` vetoes
@@ -6016,13 +5988,10 @@ pub const Group = struct {
             run.segment_alloc = run.alloc;
             return;
         }
-        try g.finishRun(s, run, outcome, segment);
+        try g.endRun(run, .{ .finished = .{ .outcome = outcome, .segment = segment } });
     }
 
     fn finishRun(g: *Group, s: *Script, run: *Run, outcome: Outcome, segment: []const u8) !void {
-        // Completion can allocate, too. This terminal Run is no longer
-        // live, so release it even when settling its Delivery is refused.
-        defer g.destroyRun(run);
         const d = run.delivery;
         if (g.trace) |out| {
             const word: []const u8 = switch (outcome) {
@@ -6125,9 +6094,6 @@ pub const Group = struct {
             },
             else => {},
         }
-        // The first Run parked behind it in its `, queued` clause becomes
-        // ready, behind any `error` message.
-        if (run.clause_body) |body| try g.releaseParked(s, run.clause_unit, body);
     }
 
     /// A message from a Run, which takes `args`: all or nothing.
@@ -6153,11 +6119,15 @@ pub const Group = struct {
     const StopHow = struct { keep_mailbox: bool = false, release: capabilities.ReleaseReason = .stop, discard: []const u8 = "stop" };
 
     fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run, how: StopHow) !void {
+        var owned_running = running;
+        defer if (owned_running) |r| g.endRun(r, .dropped) catch unreachable;
         if (s.stopped != null) return;
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(g.gpa);
         try runs.appendSlice(g.gpa, s.live.items);
-        if (running) |r| try runs.append(g.gpa, r);
+        if (running) |r| {
+            if (std.mem.indexOfScalar(*Run, runs.items, r) == null) try runs.append(g.gpa, r);
+        }
         var decisions: DeliveryDecisions = .empty;
         defer decisions.deinit(g.gpa);
         try decisions.ensureTotalCapacity(g.gpa, runs.items.len);
@@ -6176,9 +6146,18 @@ pub const Group = struct {
         // Discovering uncertainty during this Stop switches to Group-wide
         // termination before publishing any stopped record, in load order.
         if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
-            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == s) running else null, .{});
+            owned_running = null;
+            if (running) |r| return g.stopGroup(r);
+            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
             return;
         }
+        // Once rollback is complete, Stop owns all its Runs, including on
+        // allocation refusal. End each once; the tail guard owns the rest.
+        owned_running = null;
+        var ended: usize = 0;
+        defer for (runs.items[ended..]) |r| g.endRun(r, .dropped) catch unreachable;
+        var names: std.heap.ArenaAllocator = .init(g.gpa);
+        defer names.deinit();
         s.stopped = try g.gpa.dupe(u8, reason);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);
@@ -6208,16 +6187,14 @@ pub const Group = struct {
         }.less);
         for (runs.items) |r| {
             if (r == running or r.continuing) g.restoreBase(r);
+            // Reports and deferred Decisions outlive the Run. Own its name
+            // until the batch has written its stopped record and Decisions.
+            const id = try names.allocator().dupe(u8, r.id);
             if (discarded.items.len > 0) try discarded.appendSlice(g.gpa, ", ");
-            try discarded.appendSlice(g.gpa, r.id);
-            try discarded_ids.append(g.gpa, r.id);
-            g.discardRun(r, how.discard);
-            const d = r.delivery;
-            const part: ?Part = if (r.verdict or d.decision) .{ .undecided = .{ .script = s.name, .run = r.id, .outcome = "cancelled" } } else null;
-            r.verdict = false;
-            try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{ .part = part, .decisions = &decisions });
-            s.fuel_total += r.fuel;
-            s.alloc_total += r.alloc;
+            try discarded.appendSlice(g.gpa, id);
+            try discarded_ids.append(g.gpa, id);
+            ended += 1;
+            try g.endRun(r, .{ .stopped = .{ .decisions = &decisions, .discard = how.discard, .run_id = id } });
         }
         var dropped: std.ArrayList(u8) = .empty;
         defer dropped.deinit(g.gpa);
@@ -6232,16 +6209,14 @@ pub const Group = struct {
             },
             .run => {},
         };
-        // The running Run's caller ends it; the rest go once their Decisions
-        // settle.
-        s.live.clearRetainingCapacity();
         try g.releaseScriptGrants(s, how.release);
         // A rollback that failed leaves an effect's state unknown, which
         // stops the Group: this Script with that reason.
         const fatal = g.fatal and !std.mem.eql(u8, reason, "effect state unknown");
         if (fatal) {
+            const unknown = try g.gpa.dupe(u8, "effect state unknown");
             g.gpa.free(s.stopped.?);
-            s.stopped = try g.gpa.dupe(u8, "effect state unknown");
+            s.stopped = unknown;
         }
         const why = s.stopped.?;
         if (g.trace) |out| {
@@ -6256,23 +6231,16 @@ pub const Group = struct {
         g.reportStop(s.name, why, discarded_ids.items, dropped_ids.items, abandoned.items) catch {};
         // The open Decisions settle undecided, `cancelled`, after the
         // `stopped` record.
-        for (decisions.items) |x| try g.takePart(x.delivery, x.part);
-        if (how.keep_mailbox) {
-            // The messages stay, their senders waiting; the Runs go.
-            var kept: usize = 0;
-            for (s.work.items) |w| if (w == .message) {
-                s.work.items[kept] = w;
-                kept += 1;
-            };
-            s.work.shrinkRetainingCapacity(kept);
-        } else {
-            for (s.work.items) |w| switch (w) {
-                .message => |d| try g.settleDropped(s, d),
-                .run => {},
-            };
-            s.work.clearRetainingCapacity();
+        for (decisions.items) |x| try g.takePart(.{ .id = x.id, .broadcast = x.broadcast, .message = "", .args = &.{}, .request = false }, x.part);
+        if (!how.keep_mailbox) {
+            var i: usize = 0;
+            while (i < s.work.items.len) {
+                if (s.work.items[i] == .message) {
+                    const d = s.work.orderedRemove(i).message;
+                    try g.settleDropped(s, d);
+                } else i += 1;
+            }
         }
-        for (runs.items) |r| if (r != running) g.destroyRun(r);
         if (fatal) for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
     }
 
@@ -6291,10 +6259,10 @@ pub const Group = struct {
     /// A message a stopped Script won't run: its sender gets `send failed`,
     /// reason `stopped`, and its Decision settles undecided, `cancelled`.
     fn settleDropped(g: *Group, s: *Script, d: Delivery) !void {
+        defer g.releaseDelivery(d);
         try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{
             .part = if (d.decision) .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } } else null,
         });
-        g.releaseDelivery(d);
     }
 
     /// Drops the Segment's sends to stopped Scripts, in load order: one
@@ -6338,8 +6306,15 @@ pub const Group = struct {
 
     /// Stops the Group, for an effect whose state is unknown: every Script,
     /// with the running Run discarded in its own.
-    fn stopGroup(g: *Group, running: *Run) !void {
-        for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == running.script) running else null, .{});
+    fn stopGroup(g: *Group, running: *Run) anyerror!void {
+        const owner = running.script;
+        var owned_running: ?*Run = running;
+        defer if (owned_running) |r| g.endRun(r, .dropped) catch unreachable;
+        for (g.scripts.items) |x| {
+            const r = if (x == owner) owned_running else null;
+            if (r != null) owned_running = null;
+            try g.stopScript(x, "effect state unknown", r, .{});
+        }
     }
 
     /// Whether the Group is stopped: by an effect whose state is unknown, or
@@ -6403,15 +6378,60 @@ pub const Group = struct {
         /// Borrows the error; a waiting sender retains its own reference.
         failed: struct { reason: []const u8, err: ?*Value = null },
     };
-    const DeliveryDecisions = std.ArrayList(struct { delivery: Delivery, part: Part });
+    const DeliveryDecisions = std.ArrayList(struct { id: u64, broadcast: u64, part: Part });
     const DeliveryEnd = struct {
         /// An open Decision defaults to allowed at the end of its path.
         /// A Run holding a Verdict supplies its part even when !d.decision.
         part: ?Part = null,
         /// Stop settles replies before Grant release but Decisions after
-        /// its stopped record. Entries borrow Runs until that record.
+        /// its stopped record. Marks borrow the batch's copied Run names.
         decisions: ?*DeliveryDecisions = null,
     };
+
+    pub const RunEnd = union(enum) {
+        finished: struct { outcome: Outcome, segment: []const u8 },
+        rewound,
+        /// Stop owns the copied name through its stopped record and settles
+        /// Decisions after it, while replies settle before Grant release.
+        stopped: struct { decisions: *DeliveryDecisions, discard: []const u8, run_id: []const u8 },
+        dropped,
+        discarded,
+    };
+
+    /// The only disposal of a Run. Detach before records and settlement;
+    /// destruction cannot fail, even when completion or waking is refused.
+    pub fn endRun(g: *Group, run: *Run, how: RunEnd) !void {
+        const s = run.script;
+        for (s.live.items, 0..) |r, i| if (r == run) {
+            _ = s.live.orderedRemove(i);
+            break;
+        };
+        var i: usize = 0;
+        while (i < s.work.items.len) {
+            if (s.work.items[i] == .run and s.work.items[i].run == run) {
+                _ = s.work.orderedRemove(i);
+            } else i += 1;
+        }
+        defer g.destroyRun(run);
+        switch (how) {
+            .finished => |end| {
+                try g.finishRun(s, run, end.outcome, end.segment);
+                // Ready behind any error message emitted by completion.
+                if (run.clause_body) |body| try g.releaseParked(s, run.clause_unit, body);
+            },
+            .rewound => g.dropRewound(run),
+            .stopped => |stop| {
+                g.discardRun(run, stop.discard);
+                const d = run.delivery;
+                const part: ?Part = if (run.verdict or d.decision) .{ .undecided = .{ .script = s.name, .run = stop.run_id, .outcome = "cancelled" } } else null;
+                run.verdict = false;
+                s.fuel_total += run.fuel;
+                s.alloc_total += run.alloc;
+                try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{ .part = part, .decisions = stop.decisions });
+            },
+            .dropped, .discarded => {},
+        }
+    }
 
     /// The only terminal settlement of a Delivery, shared across copies
     /// made while climbing. Rewind and forwarding never call this.
@@ -6422,7 +6442,7 @@ pub const Group = struct {
         const part = how.part orelse if (d.decision) @as(?Part, .allowed) else null;
         if (part) |p| {
             if (how.decisions) |deferred| {
-                try deferred.append(g.gpa, .{ .delivery = d, .part = p });
+                try deferred.append(g.gpa, .{ .id = d.id, .broadcast = d.broadcast, .part = p });
             } else try g.takePart(d, p);
         }
         const value = switch (result) {
@@ -9922,11 +9942,14 @@ pub const Group = struct {
         const granted = run.script.grant(grant_name) orelse return g.raise("not implemented", &.{});
         const index = granted.grant.capability.find(op_name) orelse return g.raise("not implemented", &.{});
         const decl = granted.grant.capability.operations[index];
+        const capability_text = try model.text(gpa, grant_name);
+        defer capability_text.release();
+        const operation_text = try model.text(gpa, op_name);
+        defer operation_text.release();
         const where = [_]model.Pair{
-            .{ .key = "capability", .value = try model.text(gpa, grant_name) },
-            .{ .key = "operation", .value = try model.text(gpa, op_name) },
+            .{ .key = "capability", .value = capability_text },
+            .{ .key = "operation", .value = operation_text },
         };
-        defer for (where) |p| p.value.release();
         if (granted.disabled) {
             m.uncharged = true;
             return g.raise("capability disabled", &where);
@@ -10110,6 +10133,8 @@ pub const Group = struct {
                 w.writeAll("\n") catch {};
             }
         }.write;
+        var owned = true;
+        defer if (owned) g.releaseHostOutcome(outcome);
         const empty = try model.map(gpa, &.{});
         defer empty.release();
         if (call.charge_refused or outcome == .limited) {
@@ -10118,8 +10143,6 @@ pub const Group = struct {
             g.releaseHostOutcome(outcome);
             outcome = .limited;
         }
-        var owned = true;
-        defer if (owned) g.releaseHostOutcome(outcome);
         var valid = if (returned) |r| r.valid else true;
         const pending = suspending and (outcome == .value or outcome == .started);
         if (returned == null) {
@@ -11182,44 +11205,148 @@ test "Delivery completion rejects duplicate success and failure without replacin
     try t.expect(g.results.get(2).?.data == .nothing);
 }
 
-test "startRun frees every allocation when memory is refused (#1299)" {
-    const t = std.testing;
-    for ([_]bool{ false, true }) |request| for ([_][]const u8{
-        "on go\nend go\n",
-        "script variable n = 1\non go\nreturn n\nend go\n",
-    }) |source| {
+/// Host inputs for a Run-lifetime allocation sweep. Loading and initial
+/// admission succeed; every allocation from the first Pump onward is refused
+/// in turn, including later admission, settlement and terminal cleanup.
+const RunSweep = struct {
+    const Step = union(enum) {
+        deliver: bool,
+        pump: struct { seconds: i64 = 0, cap: u64 = 0 },
+        cancel: []const u8,
+        stop,
+        rewind: []const u8,
+        answer: []const u8,
+        charge: []const u8,
+    };
+    const Host = struct {
+        stop_during_call: bool = false,
+        fn call(context: ?*anyopaque, c: *capabilities.Call, _: []const *Value) capabilities.Outcome {
+            const h: *@This() = @ptrCast(@alignCast(context.?));
+            if (h.stop_during_call) {
+                const g: *Group = @ptrCast(@alignCast(c.owner.?));
+                g.stopInput("s", "requested") catch return .broken;
+                return .{ .value = nothing(c.gpa) catch return .broken };
+            }
+            return .started;
+        }
+    };
+
+    fn inputs(g: *Group, steps: []const Step, failing: *std.testing.FailingAllocator, fail_at: usize) !void {
+        var pumping = false;
+        for (steps) |step| switch (step) {
+            .deliver => |request| _ = try g.deliver("s", "go", &.{}, request),
+            .pump => |p| {
+                if (!pumping) {
+                    failing.fail_index = failing.alloc_index + fail_at;
+                    failing.resize_fail_index = failing.resize_index;
+                    pumping = true;
+                }
+                try g.pumpWith(.{ .seconds = p.seconds, .micros = 0 }, 0, p.cap);
+            },
+            .cancel => |id| try g.cancelRunInput(id),
+            .stop => try g.stopInput("s", "requested"),
+            .rewind => |id| try g.rewindRunInput(id),
+            .answer => |id| {
+                const v = try nothing(g.gpa);
+                g.settle(id, .{ .answer = .{ .value = v, .fuel = 0 } }) catch |e| {
+                    v.release();
+                    return e;
+                };
+            },
+            .charge => |id| _ = try g.requestCharge(id, 1001),
+        };
+        try std.testing.expect(pumping);
+    }
+
+    fn check(source: []const u8, steps: []const Step, stop_during_call: bool) !void {
+        const t = std.testing;
         var fail_at: usize = 0;
         while (true) : (fail_at += 1) {
+            // Bound an accidentally nonterminating sweep without restricting
+            // the allocation counts exercised by any of these small Scripts.
+            try t.expect(fail_at < 10_000);
             var failing: t.FailingAllocator = .init(t.allocator, .{});
             {
+                var host: Host = .{ .stop_during_call = stop_during_call };
+                var shape: capabilities.Shape = .{ .allocator = t.allocator, .data = .{ .kind = .any } };
+                var ops = [_]capabilities.Operation{.{ .name = "fetch", .args = &.{}, .result = &shape, .mode = if (stop_during_call) .immediate else .suspending, .metering = if (stop_during_call) null else .read_only, .host = .{ .call = Host.call, .context = &host } }};
+                var capability: capabilities.Capability = .{ .name = "resource", .operations = &ops };
+                var allowed = [_]bool{true};
+                var grant: capabilities.Grant = .{ .capability = &capability, .operations = &allowed };
                 var g: Group = .init(failing.allocator(), null);
                 defer g.deinit();
-                const s = (try g.load("s", source, .{})).loaded;
-                const id = try g.deliver("s", "go", &.{}, request);
-                const queued = g.inputs.pop().?.deliver;
-                defer g.gpa.free(queued.script);
-                // Loading and Delivery construction are outside this sweep.
-                // Refuse each allocation from Run startup through completion.
-                failing.fail_index = failing.alloc_index + fail_at;
-                failing.resize_fail_index = failing.resize_index;
-                if (g.startRun(s, queued.delivery)) |_| {
-                    if (!failing.has_induced_failure and request) {
-                        try t.expect(g.results.contains(id));
+                const loaded = try g.load("s", source, .{ .grants = &.{.{ .name = "api", .grant = &grant }}, .limits = .{ .fuel_per_run = 1000 } });
+                try t.expect(loaded == .loaded);
+                if (inputs(&g, steps, &failing, fail_at)) |_| {
+                    if (!failing.has_induced_failure) {
+                        try t.expectEqual(@as(usize, 0), loaded.loaded.live.items.len);
+                        try t.expectEqual(@as(usize, 0), loaded.loaded.work.items.len);
+                        // Every Request in these sequences must settle.
+                        var id: u64 = 0;
+                        for (steps) |step| if (step == .deliver) {
+                            id += 1;
+                            if (step.deliver) try t.expect(g.results.contains(id));
+                        };
                     }
                 } else |err| {
+                    if (!failing.has_induced_failure) return err;
                     try t.expectEqual(error.OutOfMemory, err);
-                    try t.expect(failing.has_induced_failure);
                 }
             }
+            if (failing.allocated_bytes != failing.freed_bytes) {
+                std.debug.print("Run sweep failed at allocation {d}: {s}\n", .{ fail_at, source });
+            }
             try t.expectEqual(failing.allocated_bytes, failing.freed_bytes);
-            // Execution can turn a refusal into a Run outcome. Continue
-            // until startup completes without refusing any allocation.
             if (!failing.has_induced_failure) {
                 try t.expect(fail_at > 0);
                 break;
             }
         }
-    };
+    }
+};
+
+test "Run end sweep: finish as a Request and plain message, including refused completion (#1299, #1331)" {
+    for ([_]bool{ false, true }) |request| for ([_][]const u8{
+        "on go\nend go\n",
+        "script variable n = 1\non go\nreturn n\nend go\n",
+    }) |source| try RunSweep.check(source, &.{ .{ .deliver = request }, .{ .pump = .{} } }, false);
+}
+
+test "Run end sweep: cancelling a parked Run preserves the clause queue (#1063, #1331)" {
+    try RunSweep.check("on go, queued\nwait 1 s\nend go\n", &.{
+        .{ .deliver = true },           .{ .deliver = true },           .{ .deliver = true },
+        .{ .pump = .{} },               .{ .cancel = "s/r2" },          .{ .pump = .{} },
+        .{ .pump = .{ .seconds = 1 } }, .{ .pump = .{ .seconds = 2 } },
+    }, false);
+}
+
+test "Run end sweep: Stop discards suspended Calls (#1331)" {
+    try RunSweep.check("on go\nask api to fetch and wait\nend go\n", &.{
+        .{ .deliver = true }, .{ .deliver = true }, .{ .pump = .{} }, .stop, .{ .pump = .{} },
+    }, false);
+}
+
+test "Run end sweep: Stop lands during a Pump (#1331)" {
+    try RunSweep.check("on go\nask api to fetch\nend go\n", &.{ .{ .deliver = true }, .{ .pump = .{} } }, true);
+}
+
+test "Run end sweep: rewind returns the message and releases the preempted Run (#1331)" {
+    try RunSweep.check("on go\nreturn 42\nend go\n", &.{
+        .{ .deliver = true }, .{ .pump = .{ .cap = 1 } }, .{ .rewind = "s/r1" }, .{ .pump = .{} }, .{ .pump = .{} },
+    }, false);
+}
+
+test "Run end sweep: refused charge ends a suspended Run (#1331)" {
+    try RunSweep.check("on go\nask api to fetch and wait\nend go\n", &.{
+        .{ .deliver = true }, .{ .pump = .{} }, .{ .charge = "s/r1.c1" }, .{ .pump = .{} },
+    }, false);
+}
+
+test "Run end sweep: deferred Call release (#1322, #1331)" {
+    try RunSweep.check("on go\nask api to fetch and wait\nend go\n", &.{
+        .{ .deliver = true }, .{ .pump = .{} }, .{ .answer = "s/r1.c1" }, .{ .pump = .{} },
+        .{ .deliver = true }, .{ .pump = .{} }, .{ .answer = "s/r2.c1" }, .{ .pump = .{} },
+    }, false);
 }
 
 test "bound Library definitions reuse containers without allocating on later reads" {
