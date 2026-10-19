@@ -223,12 +223,13 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a library",
-			RaisedWhen: "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler",
-			At:         "its first token",
+			RaisedWhen: "Library code uses `me`, `the target`, `pass`, `veto`, `send` or a well-known object name, names a Script in a `wait for`'s `from`, or has a top-level `script variable` or a Fallback Handler",
+			At:         "its first token, or the Script's name",
 			Sources: []string{
 				"ADR 0016",
 				"ADR 0020",
 				"ADR 0064",
+				"ADR 0113",
 				"#115",
 			},
 		},

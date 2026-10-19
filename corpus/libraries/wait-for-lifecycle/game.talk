@@ -1,0 +1,19 @@
+use nextKey, keyWithin from keys
+script variable seen = []
+
+on read
+  nextKey and wait
+  put ["read", it] after seen
+end read
+
+on readWithin duration
+  try
+    keyWithin duration and wait
+    put ["within", it] after seen
+  catch e
+    put ["within", the code of e] after seen
+  end try
+end readWithin
+
+on pressed key
+end pressed

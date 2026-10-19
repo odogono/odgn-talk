@@ -258,18 +258,10 @@ func TestLibraryDeclaredCostFaultDoesNotEnterHostAndRollsBackCaller(t *testing.T
 	}
 }
 
-func TestLibraryRejectsJoinAsWaitFor(t *testing.T) {
-	_, err := New().CompileLibrary(LibrarySource{Name: "helper", Source: "on hold\n wait for all\n  ask io to pause and wait\n end wait\nend hold\n"}, nil, GrantDecls{"io": {"pause": {Mode: Suspending}}})
-	rejected, ok := err.(*LoadError)
-	if !ok {
-		t.Fatalf("Library Join accepted: %v", err)
+func TestLibraryAcceptsJoin(t *testing.T) {
+	if _, err := New().CompileLibrary(LibrarySource{Name: "helper", Source: "on hold\n wait for all\n  ask io to pause and wait\n end wait\nend hold\n"}, nil, GrantDecls{"io": {"pause": {Mode: Suspending}}}); err != nil {
+		t.Fatalf("Library Join rejected: %v", err)
 	}
-	for _, d := range rejected.Diagnostics {
-		if d.Code == "not in a library" && d.Line == 2 && d.Col == 2 {
-			return
-		}
-	}
-	t.Fatal(rejected.Diagnostics)
 }
 
 func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {

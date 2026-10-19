@@ -15,7 +15,7 @@ A unit of source code, written by an end user, that a Host loads and runs.
 _Avoid_: program, plugin
 
 **Library**:
-A unit of source code, supplied by the Host, that holds Handlers, functions and Constants for Scripts to use. It has no state, no Grants and no mailbox of its own: its code runs inside the calling Script's Run.
+A unit of source code, supplied by the Host, that holds Handlers, functions and Constants for Scripts to use. It has no state, no Grants and no mailbox of its own: its code runs inside the calling Script's Run, and a `wait for` in it observes that Script's messages.
 _Avoid_: module, package, include
 
 **Standard Library**:

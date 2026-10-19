@@ -1,0 +1,25 @@
+constant yes = "Y"
+
+on confirm question, duration
+  ask display to prompt question and wait
+  wait for
+    when pressed key where key = yes then
+      return true
+    after duration then
+      return false
+  end wait
+end confirm
+
+on confirmWith question, waiter
+  ask display to prompt question and wait
+  waiter() and wait
+  return it
+end confirmWith
+
+on promptBoth first, second
+  wait for all
+    ask display to prompt first and wait
+    ask display to prompt second and wait
+  end wait
+  return it
+end promptBoth

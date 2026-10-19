@@ -222,12 +222,13 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not in a library",
-            .raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler",
-            .at = "its first token",
+            .raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `send` or a well-known object name, names a Script in a `wait for`'s `from`, or has a top-level `script variable` or a Fallback Handler",
+            .at = "its first token, or the Script's name",
             .sources = &.{
                 "ADR 0016",
                 "ADR 0020",
                 "ADR 0064",
+                "ADR 0113",
                 "#115",
             },
         },

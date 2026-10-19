@@ -1,0 +1,11 @@
+on nextKey
+  wait for pressed key
+  return the args of it
+end nextKey
+
+on keyWithin duration
+  with timeout of duration
+    wait for pressed key
+  end timeout
+  return the args of it
+end keyWithin

@@ -1,0 +1,47 @@
+# Unblessed: Library `wait for` lifecycle (#1342); first blessing awaits human review.
+# wait-for-lifecycle: game's Runs wait in keys. One is cancelled as a
+# Request, one runs out a Timeout Block in keys, and one is discarded when
+# keys is replaced, so a later key reaches only game's own Handler.
+
+> add-library keys identity=6a2da0925669dbd0737b1152ab946b266e0ab72027a788323fd456fd779a8d42
+> load game identity=05adb654f502fc900b098b124190df301c086385261adc4dc70cffa6de7d40aa
+> request d1 to=game message=read
+> pump clock=2026-10-19T09:00:00Z
+seg game/r1 start delivery=d1 handler=read clause=1 fuel=26 alloc=0 state=304 end=wait-for
+pumped state=idle fuel=26
+> cancel-delivery d1
+> pump clock=2026-10-19T09:00:00Z
+seg game/r1 resume fuel=0 alloc=0 state=16 end=cancel
+run game/r1 outcome=cancelled delivery=d1 handler=read fuel=26 alloc=0
+pumped state=idle fuel=0
+> deliver d2 to=game message=readWithin args=[1 s]
+> pump clock=2026-10-19T09:00:01Z
+seg game/r2 start delivery=d2 handler=readWithin clause=1 fuel=30 alloc=40 state=456 end=wait-for until=2026-10-19T09:00:02Z
+pumped state=idle fuel=30 next=2026-10-19T09:00:02Z
+> deliver d3 to=game message=readWithin args=[5 s]
+> pump clock=2026-10-19T09:00:02Z
+seg game/r3 start delivery=d3 handler=readWithin clause=1 fuel=30 alloc=40 state=896 end=wait-for until=2026-10-19T09:00:07Z
+raise game/r2 code="timeout" at=keys:12 pos=8:5
+seg game/r2 resume fuel=31 alloc=162 state=541 end=return
+run game/r2 outcome=completed delivery=d2 handler=readWithin fuel=61 alloc=202
+pumped state=idle fuel=61 next=2026-10-19T09:00:07Z
+> deliver d4 to=game message=pressed args=["K"]
+> pump clock=2026-10-19T09:00:03Z
+seg game/r4 start delivery=d4 handler=pressed clause=1 fuel=7 alloc=0 state=694 end=return
+run game/r4 outcome=completed delivery=d4 handler=pressed fuel=7 alloc=0
+seg game/r3 resume fuel=28 alloc=198 state=204 end=return
+run game/r3 outcome=completed delivery=d3 handler=readWithin fuel=65 alloc=279
+pumped state=idle fuel=42
+> deliver d5 to=game message=read
+> pump clock=2026-10-19T09:00:04Z
+seg game/r5 start delivery=d5 handler=read clause=1 fuel=26 alloc=0 state=492 end=wait-for
+pumped state=idle fuel=26
+> replace-library keys carry=yes source="on nextKey" & newline & "  wait 1 s" & newline & "end nextKey" & newline & "on keyWithin duration" & newline & "  wait duration" & newline & "end keyWithin" identity=5702268b5087d57c6f2706e41901b093d4106c17451dcf26b75b0e64ddbcb9b0
+stopped game reason="reload" discarded=[game/r5]
+> deliver d6 to=game message=pressed args=["X"]
+> pump clock=2026-10-19T09:00:05Z
+seg game/r6 start delivery=d6 handler=pressed clause=1 fuel=7 alloc=0 state=204 end=return
+run game/r6 outcome=completed delivery=d6 handler=pressed fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars game seen=[["within", "timeout"], ["within", ["K"]]]

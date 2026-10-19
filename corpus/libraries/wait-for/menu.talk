@@ -1,0 +1,9 @@
+use confirm from dialogue
+
+on confirmTwice question
+  confirm question, 2 s and wait
+  if it then
+    return "sure"
+  end if
+  return "unsure"
+end confirmTwice

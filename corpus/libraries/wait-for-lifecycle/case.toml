@@ -1,0 +1,18 @@
+# wait-for-lifecycle: a Run waiting in Library code is cancelled, runs out a
+# Library Timeout Block, and is discarded when its Library is replaced
+# (ADR 0113).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "keys"
+version = "1"
+source = "keys.talk"
+
+[[scripts]]
+name = "game"
+source = "game.talk"

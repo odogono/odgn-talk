@@ -881,7 +881,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.joinTry && (n.Kind == "ask" || n.Kind == "send") && syntax.HasFlag(n, "and") {
 		u.add("not in a join", n.Pos())
 	}
-	if u.Options.Library && (slices.Contains([]string{"wait-for", "wait-any", "join", "send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
+	if u.Options.Library && (slices.Contains([]string{"send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
 		u.add("not in a library", n.Pos())
 	}
 	switch n.Kind {
@@ -1143,6 +1143,10 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			// and captures resolve in the enclosing Handler, not the test body.
 			if filter.Kind == "name" {
 				if _, ok := u.Resolve(b, filter.Text); !ok {
+					// A Library may not name the importer's Scripts (ADR 0113).
+					if u.Options.Library {
+						u.add("not in a library", filter.Pos())
+					}
 					continue
 				}
 			}
