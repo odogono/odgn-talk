@@ -45,7 +45,61 @@ The Spec and tooling workflows each report a separate status, and can run
 alongside the core workflow as agent capacity permits. Tooling steps run
 sequentially in their shared workspace to keep their generated builds ordered.
 
-The workflow selects an agent with `platform=linux/amd64` and `backend=docker`.
+Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
+Conventions additionally requires `role=conventions`.
+
+### Dedicated Conventions worker
+
+Reserve one agent for Conventions so the required merge check does not queue
+behind core, Spec or tooling workflows. Add this service to the server's existing
+Compose file, reusing its `agent_secret` secret and server network:
+
+```yaml
+services:
+  conventions-agent:
+    image: woodpeckerci/woodpecker-agent:v3.19.0
+    command: agent
+    restart: unless-stopped
+    depends_on:
+      - server
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    volumes:
+      - conventions-agent-config:/etc/woodpecker
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - agent_secret
+    environment:
+      WOODPECKER_SERVER: server:9000
+      WOODPECKER_AGENT_SECRET_FILE: /run/secrets/agent_secret
+      WOODPECKER_HOSTNAME: taito-conventions
+      WOODPECKER_BACKEND: docker
+      WOODPECKER_MAX_WORKFLOWS: "1"
+      WOODPECKER_AGENT_LABELS: platform=linux/amd64,backend=docker,!role=conventions,repo=*
+
+volumes:
+  conventions-agent-config:
+```
+
+The mandatory `!role=conventions` agent label accepts only workflows explicitly
+requesting `role: conventions`. General agents omit that role, so they cannot
+take Conventions jobs. Keep the dedicated agent's config volume separate from
+other agents so it receives its own agent ID. It serves Conventions workflows
+from all activated repositories that request this role.
+
+Build the Linux worker image on that host, then start the agent **before**
+deploying the workflow label:
+
+```sh
+docker compose config --quiet
+docker compose up -d --no-deps conventions-agent
+```
+
+The general Linux agent can keep its existing two-workflow capacity. This
+reserves queue capacity, while CPU, memory and disk remain shared on the host.
+Verify Conventions runs on `taito-conventions` while general workflows are
+busy. To roll back, remove the workflow's `role` label first; stop the dedicated
+agent only after those labelled workflows have finished or been cancelled.
 
 ### Persistent Go caches
 

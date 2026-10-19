@@ -4,6 +4,7 @@ when:
 labels:
   platform: linux/amd64
   backend: docker
+  role: conventions
 
 clone:
   - name: git
