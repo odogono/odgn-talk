@@ -12,12 +12,14 @@ The initial Woodpecker workflows supplement GitHub Actions:
 - `.woodpecker/tooling.yaml` runs the TS workflow's stack and tooling jobs:
   workspace typechecking, generated Lints, CLI/editor/Folio/extension tests,
   builds and Node runtime checks.
+- `.woodpecker/conventions.yaml` runs the existing PR title and changelog
+  checker on PR code updates and metadata edits, with full Git history.
 
 These workflows do not yet cover the complete Actions matrix, including the
-Conventions, package/browser checks, Go SQLite module, fuzz campaigns,
+package/browser checks, Go SQLite module, fuzz campaigns,
 Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
-broader Zig and platform matrix. Keep the Actions requirements until equivalent
-coverage is available.
+broader Zig and platform matrix. Keep any additional Actions requirements until
+equivalent coverage is available.
 
 ## Linux worker image
 
@@ -30,8 +32,8 @@ docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 too
 
 Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
 compiler needed for Go race tests. The default image uses Node 22 for parity with
-the Actions stack and CLI
-jobs. The `node24` image is used only for the required SQLite and notification
+the Actions stack and CLI jobs. The `node24` image is used only for the required
+SQLite and notification
 runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
 both the build command and workflows whenever its image changes. Woodpecker
 uses existing local images by default.
@@ -103,3 +105,32 @@ a new event or start a manual pipeline after the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
 reported the expected statuses. Existing Actions requirements remain separate.
+
+### Required Conventions check
+
+The Conventions adapter reads the current PR title, body, base branch and head
+from GitHub's public API, then invokes `tools/commits/check.ts pr` with metadata
+in environment variables. It rejects stale revisions and API failures. It
+requires a public GitHub repository and uses one unauthenticated API request
+per run, subject to GitHub's public API rate limit.
+
+Woodpecker normally gives `pull_request` and `pull_request_metadata` events
+different status names. Configure this on the **server** to keep Conventions
+edits on the same required status while preserving other workflow names and
+matrix suffixes:
+
+```yaml
+WOODPECKER_STATUS_CONTEXT_FORMAT: '{{ .context }}/{{ if and (eq .event "pull_request_metadata") (eq .workflow "conventions") }}pr{{ else }}{{ .event }}{{ end }}/{{ .workflow }}{{if not (eq .axis_id 0)}}/{{.axis_id}}{{end}}'
+```
+
+Recreate the server after changing its environment. Verify an invalid title and
+a body requiring a missing changelog fragment both fail the existing
+`ci/woodpecker/pr/conventions` status, and restoring valid metadata makes that
+same status pass. Only then replace the Actions-bound `conventions` requirement
+with `ci/woodpecker/pr/conventions`. Select **Any source**, since Woodpecker
+posts OAuth commit statuses rather than GitHub Actions checks. Keep any other
+required checks and branch protection settings intact.
+
+PR branches must contain the Conventions workflow and adapter. Update existing
+branches from `main` before requiring the check for them. GitHub's Conventions
+workflow can continue reporting its result as an additional check.
