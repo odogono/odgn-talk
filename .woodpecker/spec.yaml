@@ -1,0 +1,27 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+  - event: manual
+
+labels:
+  platform: linux/amd64
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: spec
+    image: odgn-talk-ci:2026-10-19
+    commands:
+      - bun run lint
+      - bun run format:check
+      - bun run check

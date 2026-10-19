@@ -1,0 +1,55 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+  - event: manual
+
+labels:
+  platform: linux/amd64
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: stack
+    image: odgn-talk-ci:2026-10-19
+    directory: tooling/stack
+    commands:
+      - bun test --timeout 30000 tests
+      - bun run build
+      - bun run test:node
+
+  - name: tooling
+    image: odgn-talk-ci:2026-10-19
+    commands:
+      - bun run typecheck
+      - bun run lints:check
+      - cd tooling/cli
+      - bun test --timeout 30000 tests
+      - bun run build
+      - bun run test:node
+      - cd ../editor
+      - bun test --timeout 30000 tests
+      - cd ../creative
+      - bun test --timeout 30000 tests
+      - cd ../vscode
+      - bun test --timeout 30000 tests
+      - bun run build
+
+  - name: node-runtimes
+    image: odgn-talk-ci:2026-10-19-node24
+    directory: impl/ts
+    environment:
+      NORTHTALK_SQLITE_RUNTIMES: node
+      NORTHTALK_NOTIFY_RUNTIMES: node
+    commands:
+      - node --version
+      - bun test --timeout 30000 tests/sqlite-runtimes.test.ts tests/notify-runtimes.test.ts
