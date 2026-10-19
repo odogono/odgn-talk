@@ -197,6 +197,23 @@ argument filters workload names; the fourth selects which Core initializes
 first. It validates output, Fuel and logical allocation on every Run. Run the
 commands sequentially; CPU and heap observations stay outside timing.
 
+The [TS Text Pattern measurements](results/2026-10-19-ts-text-patterns.md)
+record fresh-process comparisons and CPU profiles for
+[#1294](https://github.com/odogono/odgn-talk/issues/1294). To reproduce:
+
+```sh
+bun bench/ts/src/compare-text-patterns.ts <before-ref> .cache/ts-patterns
+bun bench/ts/src/compare-text-patterns.ts <before-ref> .cache/ts-patterns-reversed '' after
+```
+
+The helper substitutes `patterns.ts` and `values.ts` from the baseline, reuses
+the chunk-read worker, and alternates three pairs of fresh Bun processes per
+workload. Every Run validates output, Fuel and logical allocation. An optional
+third argument selects an exact workload; the fourth selects which variant
+runs first. Timings, fresh-name Load samples and heap probes are separate.
+The emitted bundles accept `<workloads.json> profile text/patterns` for CPU
+profiling outside timing.
+
 The [TS range construction measurements](results/2026-10-15-ts-range-construction.md)
 record alternating before/after timings, separate CPU profiles and heap/forced-GC
 probes for [#943](https://github.com/odogono/odgn-talk/issues/943). To reproduce,

@@ -854,7 +854,8 @@ export const map = (
       invalidValue(`Duplicate map key: ${displayText(nfc)}`);
     }
     seen.add(nfc);
-    pairs.push(Object.freeze([nfc, value] as const));
+    // MapStorage owns and freezes its pairs; this validation buffer stays local.
+    pairs.push([nfc, value]);
   }
   return makeValue('map', MapStorage.copy(pairs));
 };
