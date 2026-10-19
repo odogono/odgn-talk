@@ -1353,6 +1353,18 @@ const Frame = struct {
             try f.emit(.ask_wait, operands, at, "");
         } else try f.emit(.ask, operands, at, "");
         try f.store(0, at);
+        // A Result Target is `put it into name`, with nothing between that
+        // can suspend or raise (ADR 0112).
+        if (op.into) |t| switch (l.checked.refs.get(t) orelse check.Ref.local) {
+            .variable => |v| {
+                try f.load(0, t);
+                try f.emit(.store_var, &.{.{ .int = v }}, t, l.text(t));
+            },
+            else => {
+                const s = f.names.get(l.text(t)).?;
+                try f.emit(.move, &.{ .{ .int = 0 }, .{ .int = s } }, t, try l.print("{s}, {s}", .{ f.slotName(0), f.slotName(s) }));
+            },
+        };
     }
 
     fn waitFor(f: *Frame, first: Tok, w: ast.WaitFor) Allocator.Error!void {
@@ -3058,6 +3070,42 @@ test "a Host Command lowers to the same instructions as its tell or ask" {
         if (x.op == .ask or x.op == .tell or x.op == .ask_wait) calls += 1;
     }
     try testing.expectEqual(@as(usize, 3), calls);
+}
+
+test "a Result Target is moved or stored from it, mapped to its name (ADR 0112)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const store = [_]check.Operation{.{ .name = "load", .mode = .suspending, .required = 1, .total = 1 }};
+    const clock = [_]check.Operation{.{ .name = "now", .mode = .immediate, .required = 0, .total = 0 }};
+    const context: check.Context = .{ .grants = &.{ .{ .name = "storage", .operations = &store }, .{ .name = "clock", .operations = &clock } } };
+    const source =
+        \\script variable last
+        \\on t key
+        \\  ask storage to load key into saved and wait
+        \\  ask clock to now into last
+        \\  return saved
+        \\end t
+    ;
+    const parsed = try parser.parse(a, source);
+    const checked = try check.check(a, &parsed.tree, context);
+    try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+    const unit = try lower(a, &parsed.tree, &checked, .{ .name = "t", .context = context });
+    var out: std.Io.Writer.Allocating = .init(a);
+    try disassemble(&unit, &out.writer);
+    const code =
+        \\  0003 3:3 ask-wait storage load 1
+        \\  0004 3:3 store 0 ; it
+        \\  0005 3:32 move 0 2 ; it, saved
+        \\  0006 4:3 ask clock now 0
+        \\  0007 4:3 store 0 ; it
+        \\  0008 4:25 load 0 ; it
+        \\  0009 4:25 store-var 0 ; last
+    ;
+    if (std.mem.indexOf(u8, out.written(), code) == null) {
+        std.debug.print("{s}\n", .{out.written()});
+        return error.TestUnexpectedDisassembly;
+    }
 }
 
 test "parenthesized Containers and calls through a Constant lower" {

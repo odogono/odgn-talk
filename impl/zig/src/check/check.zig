@@ -884,7 +884,12 @@ const Checker = struct {
                 for (snd.args) |arg| try c.collectExpr(s, arg.value);
                 try c.collectExpr(s, snd.target);
             },
-            .ask, .tell => |op| try c.collectExprs(s, op.args),
+            .ask => |op| {
+                try c.collectExprs(s, op.args);
+                // A Result Target binds like `put it into name` (ADR 0112).
+                if (op.into) |t| if (c.rootBinds(s, c.text(t))) try c.bind(s, t, false);
+            },
+            .tell => |op| try c.collectExprs(s, op.args),
             .tell_block => |tb| for (tb.lines) |line| try c.collectExprs(s, line.args),
             .@"return", .veto => |v| if (v) |e| try c.collectExpr(s, e),
             .throw, .wait => |e| try c.collectExpr(s, e),
@@ -1139,6 +1144,11 @@ const Checker = struct {
                 for (op.args) |arg| try c.expr(s, arg, .normal);
                 try c.capability(first, op, true, false);
                 if (op.wait != null) try c.member(s, first, w);
+                if (op.into) |t| {
+                    // A Join Member's answer is in the Join's list.
+                    if (op.wait != null and w.join != null) try c.report(.not_in_a_join, t);
+                    try c.writeName(s, t, w);
+                }
             },
             .tell => |op| {
                 if (op.target) |t| try c.grantTarget(s, t);
@@ -1631,21 +1641,21 @@ const Checker = struct {
                     e = k.base;
                 },
                 .group => |g| e = g,
-                .name => |t| {
-                    const name = c.text(t);
-                    const r = try c.resolve(s, t) orelse Ref.local;
-                    try c.refs.put(c.a, t, r);
-                    switch (r) {
-                        .constant, .imported => try c.report(.cant_write, t),
-                        .captured => try c.report(.cant_write, t),
-                        else => {},
-                    }
-                    if (among(name, w.collecting)) try c.report(.cant_write, t);
-                    return;
-                },
+                .name => |t| return c.writeName(s, t, w),
                 else => return c.expr(s, e, .normal),
             }
         }
+    }
+
+    /// A Container's root name, or an `ask`'s Result Target, written.
+    fn writeName(c: *Checker, s: *Scope, t: Tok, w: Where) Allocator.Error!void {
+        const r = try c.resolve(s, t) orelse Ref.local;
+        try c.refs.put(c.a, t, r);
+        switch (r) {
+            .constant, .imported, .captured => try c.report(.cant_write, t),
+            else => {},
+        }
+        if (among(c.text(t), w.collecting)) try c.report(.cant_write, t);
     }
 
     /// `set` writes a key of a Host Object: never a bare variable, and never
@@ -2604,6 +2614,23 @@ test "Capability calls against the Script's Grants" {
         \\  say 1
         \\end t
     , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
+}
+
+test "a Result Target writes like put, and a Join Member has none (ADR 0112)" {
+    try expectDiagnostics(
+        \\script variable last
+        \\constant limit = 3
+        \\on t
+        \\  ask g to op into last
+        \\  ask g to op into fresh
+        \\  ask g to op into limit
+        \\  wait for all
+        \\    ask g to op into early
+        \\    ask g to op into y and wait
+        \\  end wait
+        \\  return fresh
+        \\end t
+    , .{}, "can't write at 6:20\nnot in a join at 9:22\n");
 }
 
 test "Host Commands resolve after the unit's Handlers and are checked as Operation calls" {

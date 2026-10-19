@@ -6718,6 +6718,41 @@ test "a suspending op starts, is answered, and completes on the next Pump" {
     try std.testing.expectEqual(@as(i64, 37), end.object.get("result").?.integer);
 }
 
+test "a Result Target holds a resumed answer and is untouched when the ask raises (ADR 0112)" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"suspending\",\"result\":\"number\",\"maxPending\":5000}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    const source = "script variable last = 5\non got\n  put 1 into got\n  try\n    ask api to fetch into got and wait\n  catch e\n    return got\n  end try\n  return got\nend got\non keep\n  ask api to fetch into last and wait\nend keep\non peek\n  return last\nend peek\n";
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":{f}}}", .{ 4, grant.object.get("grant").?.integer, std.json.fmt(source, .{}) }));
+    var ref: i64 = 5;
+    // Each case: the Handler, the call's settlement, and the target's value
+    // after: `got` returns its local, `peek` reads `keep`'s Script Variable.
+    for ([_]struct { []const u8, []const u8, i64 }{
+        .{ "got", "\"m\":\"answer\",\"value\":37", 37 },
+        .{ "got", "\"m\":\"fail\",\"error\":{\"code\":\"nope\"}", 1 },
+        .{ "keep", "\"m\":\"answer\",\"value\":9", 9 },
+        .{ "keep", "\"m\":\"fail\",\"error\":{\"code\":\"nope\"}", 9 },
+    }) |case| {
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"{s}\"}}}}", .{ ref, case[0] }));
+        const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ref + 1});
+        const call = pumped.object.get("need").?.object.get("call").?.string;
+        _ = try okOf(try c.sendRef(ref + 1, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{ref + 1}));
+        _ = try okOf(try c.sendRef(ref + 2, "{{{s},\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\"}}", .{ case[1], ref + 2, call }));
+        var end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ref + 3}));
+        if (std.mem.eql(u8, case[0], "keep")) {
+            _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"peek\"}}}}", .{ref + 4}));
+            end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ref + 5}));
+        }
+        try std.testing.expectEqual(case[2], end.object.get("result").?.integer);
+        ref += 6;
+    }
+}
+
 test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     const gpa = std.testing.allocator;
     const s = Session.init(gpa).?;
