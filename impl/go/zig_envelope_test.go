@@ -52,6 +52,13 @@ func TestZigBackendSharedEnvelopeVectors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if method := tree.get("m"); len(method) != 0 {
+				if zigText(method) != schema.name {
+					t.Fatal("message name", zigText(method), schema.name)
+				}
+			} else if need := tree.get("need"); len(need) != 0 && zigText(need.get("m")) != schema.name {
+				t.Fatal("need name", zigText(need.get("m")), schema.name)
+			}
 			flat := envelopeFlat(tree)
 			var get func(string) zigReply = flat.get
 			if vector.Tag == zbOpResult || vector.Tag == zbPropResult {
