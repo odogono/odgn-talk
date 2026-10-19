@@ -225,6 +225,8 @@ export type Stmt =
   | {
       args: Expr[];
       grant: string;
+      /** An `ask`'s Result Target (ADR 0112). */
+      into?: SemanticName;
       k: 'ask' | 'tell';
       operation: string;
       pos: Pos;
@@ -499,6 +501,9 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       } satisfies Parameter;
     case 'Label':
       return (first as Leaf).text;
+    // `into x`: the Name after `into` (ADR 0112).
+    case 'ResultTarget':
+      return of(children[1]);
     case 'Name':
     case 'MessageName':
       return first?.kind === 'node'
@@ -568,12 +573,14 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         return shape(node);
       }
       const list = nodeAt(4, 'ExpressionList');
+      const into = nodeAt(4, 'ResultTarget');
       return {
         k: isToken(first, 'ask') ? 'ask' : 'tell',
         pos: at,
         grant: target.name.text,
         operation: (children[3] as Leaf).text,
         args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        ...(into >= 0 && { into: of<SemanticName>(children[into]) }),
         wait: nodeAt(4, 'AndWait') >= 0,
       } satisfies Stmt;
     }

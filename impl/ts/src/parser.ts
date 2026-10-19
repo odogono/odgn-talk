@@ -1394,13 +1394,14 @@ class Parser {
   *askTellRest(verb: string, target: Node): ParseTask<Node> {
     this.expectWord('to', 'operator');
     // The word after `to` is always an Operation name, reserved or not.
-    const call = (yield this.operation(verb === 'ask')) as Node;
+    const call = (yield this.operation(verb === 'ask', verb === 'ask')) as Node;
     return { ...call, k: verb, target };
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, and `and wait` where `waits` allows it.
-  *operation(waits: boolean): ParseTask<Node> {
+  // arguments, an `ask`'s Result Target where `targets` allows it (ADR 0112),
+  // and `and wait` where `waits` allows it.
+  *operation(waits: boolean, targets = false): ParseTask<Node> {
     const t = this.peek(0);
     if (t.t !== 'word' || t.v === '_') {
       this.fail(t, 'an Operation name');
@@ -1409,12 +1410,28 @@ class Parser {
     const args = this.startsExpr(this.peek(0))
       ? ((yield this.exprList()) as Node[])
       : [];
+    const into =
+      targets && this.atOperatorWord('into')
+        ? ((yield this.resultTarget()) as string)
+        : undefined;
     return {
       k: 'Operation',
       op,
       args,
+      into,
       wait: waits ? ((yield this.andWait()) as boolean) : false,
     };
+  }
+
+  // `into x`: the Name an `ask`'s answer is put into (ADR 0112).
+  *resultTarget(): ParseTask<string> {
+    const frame = this.enter('ResultTarget');
+    try {
+      this.next('operator');
+      return (yield this.name('a name')) as string;
+    } finally {
+      this.leave(frame);
+    }
   }
 
   // `tell g to op args`, or, where a block may go, a `tell g` block of

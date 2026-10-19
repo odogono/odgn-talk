@@ -440,12 +440,18 @@ func (p *parser) andWait(n *Node) {
 }
 
 // operation reads an Operation name, which may be any word, then its
-// arguments, and `and wait` where waits allows it.
-func (p *parser) operation(n *Node, waits bool) {
+// arguments, an `ask`'s Result Target where targets allows it (ADR 0112),
+// and `and wait` where waits allows it.
+func (p *parser) operation(n *Node, waits, targets bool) {
 	n.NameToken = tokenRef(p.word())
 	n.Text = n.NameToken.Raw
-	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
+	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") && !(targets && p.at("into")) {
 		n.Children = p.expressionList()
+	}
+	if targets && p.at("into") {
+		into := p.take(Operator)
+		n.Target = node("name", p.name())
+		n.Target.Flags = []Token{into}
 	}
 	if waits {
 		p.andWait(n)
@@ -469,7 +475,7 @@ func (p *parser) operationLines(receiver *Node) []*Node {
 		line := node("ask", t)
 		line.Params = []*Node{receiver}
 		line.Flags = append(line.Flags, Token{Raw: "line"})
-		p.operation(line, true)
+		p.operation(line, true, false)
 		lines = append(lines, line)
 		p.nl()
 	}
@@ -616,7 +622,7 @@ func (p *parser) statement(inline bool) *Node {
 			break
 		}
 		p.expect("to")
-		p.operation(n, t.Raw == "ask")
+		p.operation(n, t.Raw == "ask", t.Raw == "ask")
 	case "return", "veto":
 		if !p.atOperand("\n") && !p.at("else") {
 			n.Children = []*Node{p.expression()}

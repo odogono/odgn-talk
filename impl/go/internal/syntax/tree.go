@@ -13,10 +13,14 @@ type Node struct {
 	Token, End                       Token
 	Children, Params, Body, Branches []*Node
 	Guard, Collect                   *Node
-	Flags                            []Token
-	HasElse                          bool
-	Private                          bool
-	first                            Position
+	// Target is an `ask`'s Result Target Name (ADR 0112). Walk skips it: it
+	// is a write, which binding passes read explicitly. Its one Flag is the
+	// `into` token.
+	Target  *Node
+	Flags   []Token
+	HasElse bool
+	Private bool
+	first   Position
 }
 
 func (n *Node) Pos() Position { return n.Token.Pos }

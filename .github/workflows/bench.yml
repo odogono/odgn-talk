@@ -2,23 +2,10 @@ name: Benchmark Suite
 
 # The smoke pass (#319): each Benchmark once at its smoke size, on every Core
 # and Peer Language that runs on Linux, checking output and Fuel parity. It
-# times nothing and saves nothing. AppleScript runs only on macOS.
+# times nothing and saves nothing. Runs on main or manually; AppleScript runs
+# only on macOS.
 on:
-  pull_request:
-    paths:
-      - 'impl/ts/**'
-      - 'impl/go/**'
-      - 'impl/zig/**'
-      - 'bench/scripts/**'
-      - 'bench/ts/**'
-      - 'bench/go/**'
-      - 'bench/zig/host.c'
-      - 'bench/peers/**'
-      - 'spec/data/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/bench.yml'
-      - '.github/actions/setup-ts/**'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
