@@ -95,6 +95,29 @@ defmodule NorthTalk.BinaryTest do
     assert Enum.map(reports, & &1["kind"]) == kinds
   end
 
+  test "a field's message, not its key name, decides where nested Values sit" do
+    reports = [
+      %{"kind" => "run end", "result" => "r", "error" => %{"code" => "e"}},
+      %{"kind" => "unhandled", "message" => %{"name" => "n", "args" => ["a"]}, "target" => "t"},
+      %{"kind" => "decided", "vetoes" => [%{"reason" => "v", "script" => "s"}]},
+      # Keys that hold Values elsewhere stay protocol data here.
+      %{"kind" => "call failed", "operation" => %{"result" => "p", "fn" => "q"}}
+    ]
+
+    frame = %{
+      "ref" => 1,
+      "delivery" => "d1",
+      "token" => 1,
+      "ok" => %{"state" => "idle", "fuelUsed" => 0, "reports" => reports}
+    }
+
+    bytes = Binary.encode(frame)
+    assert plain(Binary.decode(bytes)) == frame
+
+    for value <- ~w(r e a t v), do: assert(bytes =~ <<5, 1, value::binary>>)
+    for text <- ~w(n s p q), do: assert(bytes =~ <<0x12, 1, text::binary>>)
+  end
+
   test "deep Values have no fixed nesting limit" do
     deep = Enum.reduce(1..20_000, 0, fn _, v -> [v] end)
     frame = %{"m" => "call-pump", "ref" => 1, "group" => "g", "token" => 1, "fn" => nil, "args" => [deep]}
