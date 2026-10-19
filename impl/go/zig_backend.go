@@ -110,6 +110,11 @@ type zigGroup struct {
 	// Group's handle on it.
 	shared *zigShared
 	handle string
+	// Settlements queued for the next settle-pump (#1320), and how many
+	// inputs are sending the queue ahead of themselves.
+	settlementsMu sync.Mutex
+	settlements   []zigSettlement
+	flushing      int
 	// Whether the Group has had nothing but its name, so it may move guest.
 	untouched bool
 	dropping  runtime.Cleanup
@@ -174,6 +179,13 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(zigRep
 // exchange's. Continuations after needs are JSON.
 func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame, receipt zigReceipt) (zigPacket, error) {
 	defer runtime.KeepAlive(b)
+	// Queued settlements go first, unless this frame carries them or is
+	// one of them.
+	if b.reg.settlements && m != "answer" && m != "fail" && (first == nil || first.trailer == nil) {
+		if err := b.flushSettlements(); err != nil {
+			return zigPacket{}, err
+		}
+	}
 	var ref int64
 	for {
 		b.frameMu.Lock()
@@ -252,6 +264,9 @@ func (b *zigGroup) observe(packet zigPacket, m string) {
 
 var zigObservedKeys = []string{"abandoned", "settled", "trace"}
 
+// zigFrameSeen, set by tests, sees each frame an export sends.
+var zigFrameSeen func([]byte)
+
 // frame is called only by the export owner; replies own Go memory.
 func (b *zigGroup) frame(out zigOut) (zigPacket, error) {
 	fields := out.fields
@@ -261,6 +276,9 @@ func (b *zigGroup) frame(out zigOut) (zigPacket, error) {
 		data = out.bin.bytes(fields["ref"].(int64))
 	} else if data, err = zigJSON(nil, fields); err != nil {
 		return zigPacket{}, err
+	}
+	if zigFrameSeen != nil {
+		zigFrameSeen(data)
 	}
 	if b.shared != nil {
 		data, err = b.shareFrame(data)
@@ -1114,6 +1132,9 @@ func (b *zigGroup) checkHello() error {
 	if callbacks {
 		features = append(features, zigCallbacksFeature)
 	}
+	if wanted && layout == zbFields {
+		features = append(features, zigSettlementsFeature)
+	}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": features})
 	if err != nil {
 		// A guest refuses a feature it does not know, leaving its session
@@ -1130,6 +1151,8 @@ func (b *zigGroup) checkHello() error {
 			case binary:
 				// Binary frames only after the reply shows the feature.
 				b.reg.binary, b.reg.layout = wanted, layout
+			case zigSettlementsFeature:
+				b.reg.settlements = wanted && layout == zbFields
 			}
 		}
 		for _, required := range zigFeatures {

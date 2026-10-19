@@ -249,7 +249,11 @@ func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fue
 			fields["error"] = encoded
 		}
 	}
-	if _, err := b.send(kind, fields); err != nil {
+	if b.reg.settlements {
+		if err := b.queueSettlement(c, kind, v, e, fuel, fields); err != nil {
+			panic(err)
+		}
+	} else if _, err := b.send(kind, fields); err != nil {
 		panic(err)
 	}
 	b.ready()
