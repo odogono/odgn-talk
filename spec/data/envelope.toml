@@ -1,0 +1,423 @@
+# Fields envelope tables (ADR 0110). Tags are hexadecimal in generated views.
+# Required means structurally present; conditional checks remain in codecs.
+
+features = ["request-pump-map-v1", "request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1"]
+
+[[intentional_kinds]]
+name = "message"
+kinds = ["message", "text"]
+reason = "Request and unhandled Report messages are structured; failure messages are protocol text."
+
+[[intentional_kinds]]
+name = "operation"
+kinds = ["record", "text"]
+reason = "Callback operation names are text; call-failed Reports carry a capability/operation record."
+
+[[intentional_kinds]]
+name = "selector"
+kinds = ["text", "value"]
+reason = "Callback selectors are Values; run-started Report selectors are protocol text."
+
+[[intentional_kinds]]
+name = "fuel"
+kinds = ["int", "uint"]
+reason = "Reports carry nonnegative consumption; settlement late costs cross as signed integers before admission checks."
+
+[[messages]]
+tag = 0x01
+name = "request"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "to", kind = "target", required = false },
+  { name = "message", kind = "message", required = false },
+]
+
+[[messages]]
+tag = 0x02
+name = "call"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "fn", kind = "value", required = false },
+  { name = "args", kind = "values", required = false },
+  { name = "limits", kind = "limits", required = false },
+]
+
+[[messages]]
+tag = 0x03
+name = "pump"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "now", kind = "instant", required = false },
+  { name = "fuelSlice", kind = "int", required = false },
+  { name = "fuelCap", kind = "int", required = false },
+]
+
+[[messages]]
+tag = 0x04
+name = "request-pump"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "token", kind = "uint", required = false },
+  { name = "to", kind = "target", required = false },
+  { name = "message", kind = "message", required = false },
+  { name = "now", kind = "instant", required = false },
+  { name = "fuelSlice", kind = "int", required = false },
+  { name = "fuelCap", kind = "int", required = false },
+]
+
+[[messages]]
+tag = 0x05
+name = "call-pump"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "token", kind = "uint", required = false },
+  { name = "fn", kind = "value", required = false },
+  { name = "args", kind = "values", required = false },
+  { name = "limits", kind = "limits", required = false },
+  { name = "now", kind = "instant", required = false },
+  { name = "fuelSlice", kind = "int", required = false },
+  { name = "fuelCap", kind = "int", required = false },
+]
+
+[[messages]]
+tag = 0x06
+name = "op-result"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "outcome", kind = "text", required = true },
+  { name = "value", kind = "value", required = false },
+  { name = "code", kind = "text", required = false },
+  { name = "message", kind = "text", required = false },
+  { name = "charged", kind = "uint", required = false },
+]
+
+[[messages]]
+tag = 0x07
+name = "prop-result"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "outcome", kind = "text", required = true },
+  { name = "value", kind = "value", required = false },
+  { name = "code", kind = "text", required = false },
+  { name = "message", kind = "text", required = false },
+  { name = "charged", kind = "uint", required = false },
+]
+
+[[messages]]
+tag = 0x08
+name = "effect-result"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "status", kind = "text", required = false },
+]
+
+[[messages]]
+tag = 0x09
+name = "release-result"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+]
+
+[[messages]]
+tag = 0x0a
+name = "settle-pump"
+direction = "host-to-guest"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "group", kind = "text", required = true },
+  { name = "now", kind = "instant", required = false },
+  { name = "fuelSlice", kind = "int", required = false },
+  { name = "fuelCap", kind = "int", required = false },
+  { name = "settlements", kind = "settlements", required = false },
+]
+
+[[messages]]
+tag = 0x81
+name = "admission"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "delivery", kind = "text", required = false },
+  { name = "err", kind = "err", required = false },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[messages]]
+tag = 0x82
+name = "completion"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "delivery", kind = "text", required = false },
+  { name = "token", kind = "uint", required = false },
+  { name = "state", kind = "text", required = false },
+  { name = "nextDeadline", kind = "instant", required = false },
+  { name = "fuelUsed", kind = "uint", required = false },
+  { name = "reports", kind = "reports", required = false },
+  { name = "gone", kind = "texts", required = false },
+  { name = "err", kind = "err", required = false },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[messages]]
+tag = 0x83
+name = "op"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "call", kind = "text", required = true },
+  { name = "script", kind = "text", required = true },
+  { name = "run", kind = "text", required = true },
+  { name = "segment", kind = "text", required = true },
+  { name = "grant", kind = "text", required = true },
+  { name = "capability", kind = "text", required = true },
+  { name = "operation", kind = "text", required = true },
+  { name = "mode", kind = "text", required = true },
+  { name = "now", kind = "instant", required = true },
+  { name = "args", kind = "values", required = true },
+  { name = "scope", kind = "text", required = false },
+  { name = "automatic", kind = "bool", required = false },
+  { name = "fuelLeft", kind = "uint", required = false },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[messages]]
+tag = 0x84
+name = "prop"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "object", kind = "texts", required = true },
+  { name = "prop", kind = "text", required = true },
+  { name = "set", kind = "bool", required = false },
+  { name = "value", kind = "value", required = false },
+  { name = "op", kind = "text", required = false },
+  { name = "selector", kind = "value", required = false },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[messages]]
+tag = 0x85
+name = "effect"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "script", kind = "text", required = true },
+  { name = "run", kind = "text", required = true },
+  { name = "segment", kind = "text", required = true },
+  { name = "grant", kind = "text", required = true },
+  { name = "grants", kind = "texts", required = true },
+  { name = "coordinator", kind = "text", required = false },
+  { name = "phase", kind = "text", required = true },
+  { name = "now", kind = "instant", required = true },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[messages]]
+tag = 0x86
+name = "release"
+direction = "guest-to-host"
+fields = [
+  { name = "ref", kind = "int", required = true },
+  { name = "script", kind = "text", required = true },
+  { name = "grant", kind = "text", required = true },
+  { name = "reason", kind = "text", required = true },
+  { name = "now", kind = "instant", required = true },
+  { name = "abandoned", kind = "texts", required = false },
+  { name = "settled", kind = "texts", required = false },
+  { name = "trace", kind = "texts", required = false },
+]
+
+[[reports]]
+tag = 0x01
+name = "run end"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "run", kind = "text", required = false },
+  { name = "delivery", kind = "text", required = false },
+  { name = "broadcast", kind = "text", required = false },
+  { name = "handler", kind = "text", required = false },
+  { name = "fallback", kind = "bool", required = false },
+  { name = "climbed", kind = "bool", required = false },
+  { name = "outcome", kind = "text", required = false },
+  { name = "result", kind = "value", required = false },
+  { name = "error", kind = "value", required = false },
+  { name = "limit", kind = "text", required = false },
+  { name = "effect", kind = "record", required = false },
+  { name = "cleanupFailed", kind = "record", required = false },
+  { name = "at", kind = "record", required = false },
+  { name = "fuel", kind = "uint", required = false },
+  { name = "alloc", kind = "uint", required = false },
+]
+
+[[reports]]
+tag = 0x02
+name = "run started"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "run", kind = "text", required = false },
+  { name = "args", kind = "values", required = false },
+  { name = "rootDelivery", kind = "text", required = false },
+  { name = "parentRun", kind = "text", required = false },
+  { name = "parentCall", kind = "text", required = false },
+  { name = "delivery", kind = "text", required = false },
+  { name = "selector", kind = "text", required = false },
+  { name = "fn", kind = "value", required = false },
+]
+
+[[reports]]
+tag = 0x03
+name = "run discarded"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "run", kind = "text", required = false },
+  { name = "reason", kind = "text", required = false },
+  { name = "rootDelivery", kind = "text", required = false },
+  { name = "parentRun", kind = "text", required = false },
+  { name = "parentCall", kind = "text", required = false },
+]
+
+[[reports]]
+tag = 0x04
+name = "run accounting"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "run", kind = "text", required = false },
+  { name = "fuel", kind = "uint", required = false },
+  { name = "state", kind = "text", required = false },
+  { name = "rootDelivery", kind = "text", required = false },
+  { name = "parentRun", kind = "text", required = false },
+  { name = "parentCall", kind = "text", required = false },
+]
+
+[[reports]]
+tag = 0x05
+name = "causal work"
+direction = "guest-to-host"
+fields = [
+  { name = "rootDelivery", kind = "text", required = false },
+  { name = "liveRuns", kind = "uint", required = false },
+  { name = "queuedMessages", kind = "uint", required = false },
+  { name = "discardedMessages", kind = "uint", required = false },
+]
+
+[[reports]]
+tag = 0x06
+name = "stop"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "reason", kind = "text", required = false },
+  { name = "discardedRuns", kind = "texts", required = false },
+  { name = "droppedMessages", kind = "texts", required = false },
+  { name = "pendingCalls", kind = "texts", required = false },
+]
+
+[[reports]]
+tag = 0x07
+name = "unhandled"
+direction = "guest-to-host"
+fields = [
+  { name = "delivery", kind = "text", required = false },
+  { name = "message", kind = "message", required = false },
+  { name = "target", kind = "value", required = false },
+]
+
+[[reports]]
+tag = 0x08
+name = "call failed"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "call", kind = "text", required = false },
+  { name = "operation", kind = "record", required = false },
+  { name = "detail", kind = "text", required = false },
+]
+
+[[reports]]
+tag = 0x09
+name = "effect failure"
+direction = "guest-to-host"
+fields = [
+  { name = "script", kind = "text", required = false },
+  { name = "run", kind = "text", required = false },
+  { name = "grant", kind = "text", required = false },
+  { name = "segment", kind = "text", required = false },
+  { name = "phase", kind = "text", required = false },
+  { name = "status", kind = "text", required = false },
+  { name = "scope", kind = "text", required = false },
+]
+
+[[reports]]
+tag = 0x0a
+name = "decided"
+direction = "guest-to-host"
+fields = [
+  { name = "delivery", kind = "text", required = false },
+  { name = "broadcast", kind = "text", required = false },
+  { name = "verdict", kind = "text", required = false },
+  { name = "vetoes", kind = "record", required = false },
+  { name = "undecided", kind = "record", required = false },
+]
+
+[[reports]]
+tag = 0x0b
+name = "host error"
+direction = "guest-to-host"
+fields = [
+  { name = "code", kind = "text", required = false },
+  { name = "detail", kind = "text", required = false },
+]
+
+[[reports]]
+tag = 0x0c
+name = "charge result"
+direction = "guest-to-host"
+fields = [
+  { name = "request", kind = "text", required = false },
+  { name = "call", kind = "text", required = false },
+  { name = "fuel", kind = "uint", required = false },
+  { name = "status", kind = "text", required = false },
+]
+
+[settlement]
+fields = [
+  { name = "call", kind = "text", required = true },
+  { name = "outcome", kind = "text", required = true },
+  { name = "value", kind = "value", required = false },
+  { name = "fuel", kind = "int", required = false },
+  { name = "code", kind = "text", required = false },
+  { name = "message", kind = "text", required = false },
+]

@@ -59,6 +59,7 @@ Before editing grammar, instructions or catalogues, use the [change-impact guide
 | [`grammar.ebnf`](data/grammar.ebnf) | The grammar's productions | [1](01-lexical-structure.md), [2](02-grammar.md) |
 | [`grammar.toml`](data/grammar.toml) | Reserved Words, contextual keywords, the FOLLOW set, precedence, modifiers, two-token decisions and syntax error codes | [2](02-grammar.md) |
 | [`diagnostics.toml`](data/diagnostics.toml) | The load-time diagnostic codes | [2](02-grammar.md) |
+| [`envelope.toml`](data/envelope.toml) | Fields envelope messages, Report tags, ordered fields, item kinds and negotiated features | [Binary Request and Pump](embedding/request-pump-binary.md) |
 | [`unicode.toml`](data/unicode.toml) | The Unicode version and the hash of each UCD file used | [1](01-lexical-structure.md) |
 | [`units.toml`](data/units.toml) | The Unit Catalogue | [3](03-values.md) |
 | [`errors.toml`](data/errors.toml) | The error-code catalogue, with template messages | [6](06-errors-and-limits.md) |

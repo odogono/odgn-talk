@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/envelope.schema.json",
+  "title": "envelope",
+  "type": "object",
+  "properties": {
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+(-[a-z]+)*-v[0-9]+$"
+      }
+    },
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "reports": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "settlement": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      },
+      "required": [
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "intentional_kinds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "minItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "uint",
+                "int",
+                "bool",
+                "instant",
+                "text",
+                "texts",
+                "value",
+                "values",
+                "target",
+                "message",
+                "limits",
+                "err",
+                "settlements",
+                "reports",
+                "record"
+              ]
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "kinds",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "features",
+    "messages",
+    "reports",
+    "settlement",
+    "intentional_kinds"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "field": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+        },
+        "kind": {
+          "enum": [
+            "uint",
+            "int",
+            "bool",
+            "instant",
+            "text",
+            "texts",
+            "value",
+            "values",
+            "target",
+            "message",
+            "limits",
+            "err",
+            "settlements",
+            "reports",
+            "record"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "required"
+      ],
+      "additionalProperties": false
+    },
+    "entry": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "host-to-guest",
+            "guest-to-host"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      },
+      "required": [
+        "tag",
+        "name",
+        "direction",
+        "fields"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

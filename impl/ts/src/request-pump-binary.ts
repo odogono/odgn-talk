@@ -452,6 +452,7 @@ type Kind =
   | 'value'
   | 'values'
   | 'record'
+  | 'settlements'
   | 'reports';
 /** A frame member by name: Json, or a Value on the direct callback paths. */
 type Get = (key: string) => unknown;
@@ -508,7 +509,7 @@ const message = (tag: number, name: string, fields: Fields): Schema =>
   schema(
     tag,
     name,
-    tag < 6 ? 'message' : 'result',
+    tag < 6 || tag === 10 ? 'message' : 'result',
     fields,
     ['group'],
     (_, pairs) => new JsonObject([['m', name], ...pairs]),
@@ -757,6 +758,12 @@ const schemas: readonly Schema[] = [
   outcomeResult(7, 'prop-result', ['value', 'ok', 'fail', 'hostError']),
   message(8, 'effect-result', { ref: 'int', group: 'text', status: 'text' }),
   message(9, 'release-result', { ref: 'int', group: 'text' }),
+  message(10, 'settle-pump', {
+    ref: 'int',
+    group: 'text',
+    ...pumpFields,
+    settlements: 'settlements',
+  }),
   reply(
     0x81,
     'admission',
@@ -848,6 +855,18 @@ const textItem = (x: unknown): BinaryItem =>
 const valueOf = (x: unknown, o: BinaryValueOptions): BinaryItem =>
   Value.isValue(x) ? valueItem(x, o) : jsonValueItem(x as Json, o);
 
+// The settlement record is positional even inside a fields-layout input.
+// Outcome reshaping is deliberately kept here, beside the codec's other
+// nested protocol records, rather than in generated tables.
+const settlementFields = [
+  ['call', 'text'],
+  ['outcome', 'text'],
+  ['value', 'value'],
+  ['fuel', 'int'],
+  ['code', 'text'],
+  ['message', 'text'],
+] as const;
+
 const writeReports = (w: BinaryWriter, j: Json, o: BinaryValueOptions) => {
   if (!Array.isArray(j)) {
     return binaryFailure();
@@ -918,6 +937,28 @@ const writeField = (
       });
     case 'record':
       return w.item(jsonItem(x as Json, o, name));
+    case 'settlements': {
+      if (!Array.isArray(x)) {
+        return binaryFailure();
+      }
+      w.output.push(6);
+      w.uint(BigInt(x.length));
+      for (const settlement of x as Json[]) {
+        if (
+          object(settlement).pairs.some(
+            ([key]) => !settlementFields.some(([name]) => name === key),
+          )
+        ) {
+          return binaryFailure();
+        }
+        w.output.push(6);
+        w.uint(BigInt(settlementFields.length));
+        for (const [key, kind] of settlementFields) {
+          writeField(w, key, kind, field(settlement, key), o);
+        }
+      }
+      return;
+    }
     case 'reports':
       return writeReports(w, x as Json, o);
   }
@@ -1069,6 +1110,34 @@ const readField = (
       return value(item);
     case 'values':
       return item.tag === 6 ? children(item).map(value) : binaryFailure();
+    case 'settlements':
+      if (item.tag !== 6) {
+        return binaryFailure();
+      }
+      return children(item).map(settlement => {
+        const xs = children(settlement);
+        if (settlement.tag !== 6 || xs.length !== settlementFields.length) {
+          return binaryFailure();
+        }
+        const pairs: [string, Json][] = [];
+        for (const [i, [key, kind]] of settlementFields.entries()) {
+          if (xs[i]!.tag !== 0) {
+            pairs.push([key, readField(xs[i]!, key, kind, o, value)]);
+          }
+        }
+        const get = (key: string) => pairs.find(([k]) => k === key)?.[1];
+        if (
+          get('call') === undefined ||
+          !['answer', 'fail'].includes(get('outcome') as string)
+        ) {
+          return binaryFailure();
+        }
+        // An absent Value is a Nothing answer or failure Data.
+        if (get('value') === undefined) {
+          pairs.push(['value', null]);
+        }
+        return new JsonObject(pairs);
+      });
     default:
       return convert(item, o, name);
   }

@@ -44,7 +44,9 @@
     "corpus:check": "bun run --cwd tools corpus:check",
     "corpus:bless": "bun tools/corpus/bless.ts",
     "lints:generate": "bun run --cwd tools lints:generate",
-    "lints:check": "bun run --cwd tools lints:check"
+    "lints:check": "bun run --cwd tools lints:check",
+    "envelope:generate": "bun run --cwd tools envelope:generate",
+    "envelope:check": "bun run --cwd tools envelope:check"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",

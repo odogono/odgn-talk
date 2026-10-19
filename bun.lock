@@ -110,6 +110,7 @@
       "name": "@northtalk/spec-tools",
       "devDependencies": {
         "ajv": "^8",
+        "prettier": "^3.9.9",
       },
     },
   },

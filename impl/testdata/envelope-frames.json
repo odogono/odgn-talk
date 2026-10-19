@@ -1,0 +1,233 @@
+[
+  {
+    "name": "legacy-request-pump-values",
+    "tag": 4,
+    "direction": "host-to-guest",
+    "hex": "4e54420101040608030312016703ffffffffffffffffff0107010506736372697074120173070205046e616d651205c3a963686f05046172677306080404302e303010808080808080808080020702050224780301050162080200ff090404322e353005034742500a030103030bbf843d0c0a323032342d30312d30320e05057468696e6705036f6e650b80c0b5b08487af06030a00",
+    "tree": "{\"m\":\"request-pump\",\"ref\":3,\"group\":\"g\",\"token\":18446744073709551615,\"to\":{\"script\":\"s\"},\"message\":{\"name\":\"écho\",\"args\":[{\"$dec\":\"0.00\"},{\"$dec\":\"-18446744073709551616\"},{\"$map\":[[\"$x\",1],[\"b\",{\"$bytes\":\"AP8=\"}]]},{\"$quantity\":[\"2.50\",\"GBP\"]},{\"$range\":[1,3]},{\"$instant\":\"1969-12-31T23:59:59.5Z\"},{\"$date\":\"2024-01-02\"},{\"$object\":[\"thing\",\"one\"]}]},\"now\":\"2026-10-18T12:00:00Z\",\"fuelSlice\":10}"
+  },
+  {
+    "name": "legacy-completion-all-reports",
+    "tag": 130,
+    "direction": "guest-to-host",
+    "hex": "4e5442010182060c0301120264310301120469646c650ba082d4b08487af060302060c01061012017312027231000000000012076572726f7265640404302e303007020504636f646505046f6f7073050464617461080200ff000702050673746174757312066661696c6564050570686173651206636f6d6d697402070205046c696e6503010503636f6c03020000020609000006010702050224780404312e30300501320200000000000f050173050f3c66756e6374696f6e20733a676f3e05026631030606000000000000040607000000000000000506040000000006060500000601120161000007060300070205046e616d651205c3a963686f05046172677306010a030103030e05057468696e6705036f6e6508060400000702050a6361706162696c697479120361706905096f7065726174696f6e120472656164120365cc81090607000000000000000a0605000000060107030506736372697074120173050372756e120272310506726561736f6e080301020306010702050673637269707412017305076f7574636f6d651209756e68616e646c65640b0602120163000c06040000030300060112026432000601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":1,\"delivery\":\"d1\",\"token\":1,\"ok\":{\"state\":\"idle\",\"nextDeadline\":\"2026-10-18T12:00:00.25Z\",\"fuelUsed\":2,\"reports\":[{\"kind\":\"run end\",\"script\":\"s\",\"run\":\"r1\",\"outcome\":\"errored\",\"result\":{\"$dec\":\"0.00\"},\"error\":{\"code\":\"oops\",\"data\":{\"$bytes\":\"AP8=\"}},\"effect\":{\"status\":\"failed\",\"phase\":\"commit\"},\"cleanupFailed\":true,\"at\":{\"line\":1,\"col\":2}},{\"kind\":\"run started\",\"args\":[{\"$map\":[[\"$x\",{\"$dec\":\"1.00\"}],[\"2\",true]]}],\"fn\":{\"$function\":[\"s\",\"<function s:go>\",\"f1\"]}},{\"kind\":\"run discarded\"},{\"kind\":\"run accounting\"},{\"kind\":\"causal work\"},{\"kind\":\"stop\",\"discardedRuns\":[\"a\"]},{\"kind\":\"unhandled\",\"message\":{\"name\":\"écho\",\"args\":[{\"$range\":[1,3]}]},\"target\":{\"$object\":[\"thing\",\"one\"]}},{\"kind\":\"call failed\",\"operation\":{\"capability\":\"api\",\"operation\":\"read\"},\"detail\":\"é\"},{\"kind\":\"effect failure\"},{\"kind\":\"decided\",\"vetoes\":[{\"script\":\"s\",\"run\":\"r1\",\"reason\":{\"$bytes\":\"AQID\"}}],\"undecided\":[{\"script\":\"s\",\"outcome\":\"unhandled\"}]},{\"kind\":\"host error\",\"code\":\"c\"},{\"kind\":\"charge result\",\"fuel\":3}],\"gone\":[\"d2\"]},\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"]}"
+  },
+  {
+    "name": "legacy-admission-error",
+    "tag": 129,
+    "direction": "guest-to-host",
+    "hex": "4e54420101810606100200070305046b696e64120a686f7374206572726f720504636f6465120d696e76616c69642076616c7565050664657461696c12017806000000",
+    "tree": "{\"ref\":-2,\"err\":{\"kind\":\"host error\",\"code\":\"invalid value\",\"detail\":\"x\"},\"abandoned\":[]}"
+  },
+  {
+    "name": "request",
+    "tag": 1,
+    "direction": "host-to-guest",
+    "hex": "4e544201010106040301120167070105066f626a6563740e05057468696e6705036f6e65070305046e616d6512046563686f0504617267730602000404302e303005066c696d697473070105076d61784a6f696e0304",
+    "tree": "{\"m\":\"request\",\"ref\":1,\"group\":\"g\",\"to\":{\"object\":{\"$object\":[\"thing\",\"one\"]}},\"message\":{\"name\":\"echo\",\"args\":[null,{\"$dec\":\"0.00\"}],\"limits\":{\"maxJoin\":4}}}"
+  },
+  {
+    "name": "call",
+    "tag": 2,
+    "direction": "host-to-guest",
+    "hex": "4e5442010102060503011201670f0501730507646973706c617905026631060200080200ff070105076d61784a6f696e0302",
+    "tree": "{\"m\":\"call\",\"ref\":1,\"group\":\"g\",\"fn\":{\"$function\":[\"s\",\"display\",\"f1\"]},\"args\":[null,{\"$bytes\":\"AP8=\"}],\"limits\":{\"maxJoin\":2}}"
+  },
+  {
+    "name": "pump",
+    "tag": 3,
+    "direction": "host-to-guest",
+    "hex": "4e5442010103060503011201670b80c0f08d888caf06030a0314",
+    "tree": "{\"m\":\"pump\",\"ref\":1,\"group\":\"g\",\"now\":\"2026-10-19T12:00:00Z\",\"fuelSlice\":10,\"fuelCap\":20}"
+  },
+  {
+    "name": "call-pump",
+    "tag": 5,
+    "direction": "host-to-guest",
+    "hex": "4e54420101050609030112016703020f0501730507646973706c617905026631060102000b80c0f08d888caf060000",
+    "tree": "{\"m\":\"call-pump\",\"ref\":1,\"group\":\"g\",\"token\":2,\"fn\":{\"$function\":[\"s\",\"display\",\"f1\"]},\"args\":[true],\"now\":\"2026-10-19T12:00:00Z\"}"
+  },
+  {
+    "name": "op-result-result",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e5442010106060710011201671206726573756c740404302e303000000305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"result\":{\"$dec\":\"0.00\"}}"
+  },
+  {
+    "name": "op-result-started",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e5442010106060710011201671207737461727465640000000305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"started\":true}"
+  },
+  {
+    "name": "op-result-done",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e5442010106060710011201671204646f6e650000000305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"done\":true}"
+  },
+  {
+    "name": "op-result-fail",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e54420101060607100112016712046661696c070105022478080200ff12046f6f7073120365cc810305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"fail\":{\"code\":\"oops\",\"message\":\"é\",\"data\":{\"$map\":[[\"$x\",{\"$bytes\":\"AP8=\"}]]}}}"
+  },
+  {
+    "name": "op-result-limit",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e54420101060607100112016712056c696d69740000000305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"limit\":true}"
+  },
+  {
+    "name": "op-result-hostError",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e5442010106060710011201671209686f73744572726f720000000305",
+    "tree": "{\"m\":\"op-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"hostError\":\"\"}"
+  },
+  {
+    "name": "op-result-nothing",
+    "tag": 6,
+    "direction": "host-to-guest",
+    "hex": "4e5442010106060703011201671206726573756c7400000000",
+    "tree": "{\"m\":\"op-result\",\"ref\":1,\"group\":\"g\",\"result\":null}"
+  },
+  {
+    "name": "prop-result-value",
+    "tag": 7,
+    "direction": "host-to-guest",
+    "hex": "4e544201010706071001120167120576616c75650404302e303000000305",
+    "tree": "{\"m\":\"prop-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"value\":{\"$dec\":\"0.00\"}}"
+  },
+  {
+    "name": "prop-result-ok",
+    "tag": 7,
+    "direction": "host-to-guest",
+    "hex": "4e54420101070607100112016712026f6b0000000305",
+    "tree": "{\"m\":\"prop-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"ok\":true}"
+  },
+  {
+    "name": "prop-result-fail",
+    "tag": 7,
+    "direction": "host-to-guest",
+    "hex": "4e54420101070607100112016712046661696c070105022478080200ff12046f6f7073120365cc810305",
+    "tree": "{\"m\":\"prop-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"fail\":{\"code\":\"oops\",\"message\":\"é\",\"data\":{\"$map\":[[\"$x\",{\"$bytes\":\"AP8=\"}]]}}}"
+  },
+  {
+    "name": "prop-result-hostError",
+    "tag": 7,
+    "direction": "host-to-guest",
+    "hex": "4e5442010107060710011201671209686f73744572726f720000000305",
+    "tree": "{\"m\":\"prop-result\",\"ref\":-1,\"group\":\"g\",\"charged\":5,\"hostError\":\"\"}"
+  },
+  {
+    "name": "prop-result-nothing",
+    "tag": 7,
+    "direction": "host-to-guest",
+    "hex": "4e544201010706070301120167120576616c756500000000",
+    "tree": "{\"m\":\"prop-result\",\"ref\":1,\"group\":\"g\",\"value\":null}"
+  },
+  {
+    "name": "effect-result",
+    "tag": 8,
+    "direction": "host-to-guest",
+    "hex": "4e5442010108060303011201671207756e6b6e6f776e",
+    "tree": "{\"m\":\"effect-result\",\"ref\":1,\"group\":\"g\",\"status\":\"unknown\"}"
+  },
+  {
+    "name": "release-result",
+    "tag": 9,
+    "direction": "host-to-guest",
+    "hex": "4e544201010906020301120167",
+    "tree": "{\"m\":\"release-result\",\"ref\":1,\"group\":\"g\"}"
+  },
+  {
+    "name": "admission-success",
+    "tag": 129,
+    "direction": "guest-to-host",
+    "hex": "4e544201018106060301120264310000000601120365cc81",
+    "tree": "{\"ref\":1,\"trace\":[\"é\"],\"ok\":{\"delivery\":\"d1\"}}"
+  },
+  {
+    "name": "op-need",
+    "tag": 131,
+    "direction": "guest-to-host",
+    "hex": "4e544201018306110307120163120173120172120373656712056772616e74120361706912046563686f1209696d6d6564696174650b80c0f08d888caf060603000404302e303007010502247802120b7472616e73616374696f6e02030a0601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"op\",\"call\":\"c\",\"script\":\"s\",\"run\":\"r\",\"segment\":\"seg\",\"grant\":\"grant\",\"capability\":\"api\",\"operation\":\"echo\",\"mode\":\"immediate\",\"now\":\"2026-10-19T12:00:00Z\",\"args\":[null,{\"$dec\":\"0.00\"},{\"$map\":[[\"$x\",true]]}],\"scope\":\"transaction\",\"automatic\":true,\"fuelLeft\":10}}"
+  },
+  {
+    "name": "prop-need",
+    "tag": 132,
+    "direction": "guest-to-host",
+    "hex": "4e5442010184060a0307060212057468696e67120365cc81120576616c7565020000000601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"prop\",\"object\":{\"$object\":[\"thing\",\"é\"]},\"prop\":\"value\",\"value\":null}}"
+  },
+  {
+    "name": "prop-need-selector",
+    "tag": 132,
+    "direction": "guest-to-host",
+    "hex": "4e5442010184060a0308060212057468696e6712036f6e651208656c656d656e7473010012026174090404312e303005016d000000",
+    "tree": "{\"ref\":8,\"need\":{\"m\":\"prop\",\"object\":{\"$object\":[\"thing\",\"one\"]},\"prop\":\"elements\",\"op\":\"at\",\"selector\":{\"$quantity\":[\"1.00\",\"m\"]}}}"
+  },
+  {
+    "name": "effect-need",
+    "tag": 133,
+    "direction": "guest-to-host",
+    "hex": "4e5442010185060c0307120173120172120373656712056772616e74060212056772616e7412066772616e74321202636f1208726f6c6c6261636b0b80c0f08d888caf060601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"effect\",\"script\":\"s\",\"run\":\"r\",\"segment\":\"seg\",\"grant\":\"grant\",\"grants\":[\"grant\",\"grant2\"],\"coordinator\":\"co\",\"phase\":\"rollback\",\"now\":\"2026-10-19T12:00:00Z\"}}"
+  },
+  {
+    "name": "release-need",
+    "tag": 134,
+    "direction": "guest-to-host",
+    "hex": "4e54420101860608030712017312056772616e74120473746f700b80c0f08d888caf060601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"release\",\"script\":\"s\",\"grant\":\"grant\",\"reason\":\"stop\",\"now\":\"2026-10-19T12:00:00Z\"}}"
+  },
+  {
+    "name": "settle-pump",
+    "tag": 10,
+    "direction": "host-to-guest",
+    "hex": "4e544201010a060603011201670b80c0f08d888caf06030a0006040606120263311206616e737765720701050224780404312e3030030300000606120263321206616e73776572001001000006061202633312046661696c080200ff0012046f6f7073120365cc8106061202633412046661696c00000000",
+    "tree": "{\"m\":\"settle-pump\",\"ref\":1,\"group\":\"g\",\"now\":\"2026-10-19T12:00:00Z\",\"fuelSlice\":10,\"settlements\":[{\"call\":\"c1\",\"outcome\":\"answer\",\"value\":{\"$map\":[[\"$x\",{\"$dec\":\"1.00\"}]]},\"fuel\":3},{\"call\":\"c2\",\"outcome\":\"answer\",\"value\":null,\"fuel\":-1},{\"call\":\"c3\",\"outcome\":\"fail\",\"value\":{\"$bytes\":\"AP8=\"},\"code\":\"oops\",\"message\":\"é\"},{\"call\":\"c4\",\"outcome\":\"fail\",\"value\":null}]}"
+  },
+  {
+    "name": "settle-pump-no-settlements",
+    "tag": 10,
+    "direction": "host-to-guest",
+    "hex": "4e544201010a060603011201670b80c0f08d888caf06000000",
+    "tree": "{\"m\":\"settle-pump\",\"ref\":1,\"group\":\"g\",\"now\":\"2026-10-19T12:00:00Z\"}"
+  },
+  {
+    "name": "settle-pump-empty-settlements",
+    "tag": 10,
+    "direction": "host-to-guest",
+    "hex": "4e544201010a060603011201670b80c0f08d888caf0600000600",
+    "tree": "{\"m\":\"settle-pump\",\"ref\":1,\"group\":\"g\",\"now\":\"2026-10-19T12:00:00Z\",\"settlements\":[]}"
+  },
+  {
+    "name": "completion-empty",
+    "tag": 130,
+    "direction": "guest-to-host",
+    "hex": "4e5442010182060c03010000120469646c6500030006000000000000",
+    "tree": "{\"ref\":1,\"ok\":{\"state\":\"idle\",\"fuelUsed\":0,\"reports\":[]}}"
+  },
+  {
+    "name": "completion-error",
+    "tag": 130,
+    "direction": "guest-to-host",
+    "hex": "4e5442010182060c03011202643103020000000000070305046b696e64120a686f7374206572726f720504636f6465120d696e76616c69642076616c7565050664657461696c1203626164000000",
+    "tree": "{\"ref\":1,\"delivery\":\"d1\",\"token\":2,\"err\":{\"kind\":\"host error\",\"code\":\"invalid value\",\"detail\":\"bad\"}}"
+  },
+  {
+    "name": "completion-populated-reports",
+    "tag": 130,
+    "direction": "guest-to-host",
+    "hex": "4e5442010182060c03010000120469646c6500030a060c0106101201731201721201641201621202676f02021209636f6d706c65746564000012076d61784675656c0702050673746174757312066661696c6564050570686173651206636f6d6d697407010504636f64651207636c65616e757007050504756e697412017305046c696e6503010503636f6c0302050768616e646c65721202676f050270630303030403050206091201731201720601001201641201701201631201641202676f0f0501730507646973706c617905026631030606120173120172120963616e63656c6c6564120164120170120163040607120173120172030a120777616974696e67120164120170120163050604120164030103020303060605120173120773746f70706564060112017206011201640601120163070603120164070205046e616d651202676f0504617267730601000e05057468696e6705036f6e650806041201731201630702050a6361706162696c697479120361706905096f7065726174696f6e120472656164120365cc8109060712017312017212016712037365671206636f6d6d697412066661696c6564120b7472616e73616374696f6e0a060512016412016212086163636570746564060107030506736372697074120173050372756e1201720506726561736f6e080200ff060107030506736372697074120173050372756e12017205076f7574636f6d651209756e68616e646c65640b0602120d696e76616c69642076616c756512036261640c0604120171120163030312076772616e7465640000000000",
+    "tree": "{\"ref\":1,\"ok\":{\"state\":\"idle\",\"fuelUsed\":10,\"reports\":[{\"kind\":\"run end\",\"script\":\"s\",\"run\":\"r\",\"delivery\":\"d\",\"broadcast\":\"b\",\"handler\":\"go\",\"fallback\":true,\"climbed\":true,\"outcome\":\"completed\",\"result\":null,\"limit\":\"maxFuel\",\"effect\":{\"status\":\"failed\",\"phase\":\"commit\"},\"cleanupFailed\":{\"code\":\"cleanup\"},\"at\":{\"unit\":\"s\",\"line\":1,\"col\":2,\"handler\":\"go\",\"pc\":3},\"fuel\":4,\"alloc\":5},{\"kind\":\"run started\",\"script\":\"s\",\"run\":\"r\",\"args\":[null],\"rootDelivery\":\"d\",\"parentRun\":\"p\",\"parentCall\":\"c\",\"delivery\":\"d\",\"selector\":\"go\",\"fn\":{\"$function\":[\"s\",\"display\",\"f1\"]}},{\"kind\":\"run discarded\",\"script\":\"s\",\"run\":\"r\",\"reason\":\"cancelled\",\"rootDelivery\":\"d\",\"parentRun\":\"p\",\"parentCall\":\"c\"},{\"kind\":\"run accounting\",\"script\":\"s\",\"run\":\"r\",\"fuel\":10,\"state\":\"waiting\",\"rootDelivery\":\"d\",\"parentRun\":\"p\",\"parentCall\":\"c\"},{\"kind\":\"causal work\",\"rootDelivery\":\"d\",\"liveRuns\":1,\"queuedMessages\":2,\"discardedMessages\":3},{\"kind\":\"stop\",\"script\":\"s\",\"reason\":\"stopped\",\"discardedRuns\":[\"r\"],\"droppedMessages\":[\"d\"],\"pendingCalls\":[\"c\"]},{\"kind\":\"unhandled\",\"delivery\":\"d\",\"message\":{\"name\":\"go\",\"args\":[null]},\"target\":{\"$object\":[\"thing\",\"one\"]}},{\"kind\":\"call failed\",\"script\":\"s\",\"call\":\"c\",\"operation\":{\"capability\":\"api\",\"operation\":\"read\"},\"detail\":\"é\"},{\"kind\":\"effect failure\",\"script\":\"s\",\"run\":\"r\",\"grant\":\"g\",\"segment\":\"seg\",\"phase\":\"commit\",\"status\":\"failed\",\"scope\":\"transaction\"},{\"kind\":\"decided\",\"delivery\":\"d\",\"broadcast\":\"b\",\"verdict\":\"accepted\",\"vetoes\":[{\"script\":\"s\",\"run\":\"r\",\"reason\":{\"$bytes\":\"AP8=\"}}],\"undecided\":[{\"script\":\"s\",\"run\":\"r\",\"outcome\":\"unhandled\"}]},{\"kind\":\"host error\",\"code\":\"invalid value\",\"detail\":\"bad\"},{\"kind\":\"charge result\",\"request\":\"q\",\"call\":\"c\",\"fuel\":3,\"status\":\"granted\"}]}}"
+  }
+]

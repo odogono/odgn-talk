@@ -11,6 +11,7 @@
 // and check relative links and script references in the repo's Markdown files.
 
 import Ajv2020 from 'ajv/dist/2020';
+import { envelopeViews, type Catalogue } from '../envelope/catalogue';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
@@ -34,6 +35,7 @@ const DATA_FILES = [
   'version',
   'grammar',
   'unicode',
+  'envelope',
   'units',
   'errors',
   'diagnostics',
@@ -739,6 +741,20 @@ const sources = (list: string[], file: string): string =>
     .join(', ');
 
 const VIEWS: Record<string, View> = {
+  ...Object.fromEntries(
+    [
+      'messages',
+      'reports',
+      'fields',
+      'callbacks',
+      'settle-pump',
+      'settlement',
+      'features',
+    ].map(name => [
+      `envelope.${name}`,
+      (d: Data) => envelopeViews(d.envelope as Catalogue)[`envelope.${name}`]!,
+    ]),
+  ),
   version: d =>
     `This is language **${d.version.language}**, with Cost Model **${d.costs.version}**.`,
 
