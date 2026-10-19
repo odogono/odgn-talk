@@ -5,13 +5,18 @@ import nested from '../../../tools/machine/recovery-nested-cases.json';
 import { newGroup, restore, type Group, type PumpOptions } from '../src';
 import { restoreGraph, type References } from '../src/snapshot';
 import { Run } from '../src/machine';
+import {
+  packGraph,
+  unpackGraph,
+  type PackedGraph,
+} from '../src/snapshot-codec';
 
 const state = (bytes: Uint8Array, g: Group) => {
-  const saved = JSON.parse(JSON.parse(new TextDecoder().decode(bytes)).payload);
+  const saved = JSON.parse(new TextDecoder().decode(bytes)).payload;
   const refs = (
     g as unknown as { snapshotReferences(): References }
   ).snapshotReferences();
-  const decoded = restoreGraph(saved.graph, refs);
+  const decoded = restoreGraph(unpackGraph(saved.graph), refs);
   const seen = new Set<object>();
   const work = [decoded];
   while (work.length) {
@@ -169,9 +174,8 @@ const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
   for (let step = 0; step < 300; step++) {
     g.pump(BigInt(step), { fuelCap: 1 });
     const bytes = g.save();
-    const saved = JSON.parse(
-      JSON.parse(new TextDecoder().decode(bytes)).payload,
-    ) as { graph: Graph };
+    const payload = JSON.parse(new TextDecoder().decode(bytes)).payload;
+    const saved = { graph: unpackGraph(payload.graph) };
     const e = new SnapshotEditor(saved.graph);
     const contexts = e.items(e.get(e.run(), 'recoveries'));
     if (!contexts.length) {
@@ -341,11 +345,11 @@ for (const { name, phase, mutate } of malformed) {
   test(`refuse checksummed malformed dispatch: ${name}`, () => {
     const envelope = JSON.parse(
       new TextDecoder().decode(snapshotIn(phase)),
-    ) as { hash: string; payload: string };
-    const saved = JSON.parse(envelope.payload) as { graph: Graph };
-    mutate(new SnapshotEditor(saved.graph));
-    envelope.payload = JSON.stringify(saved);
-    envelope.hash = sha256(envelope.payload);
+    ) as { hash: string; payload: { graph: PackedGraph } };
+    const graph = unpackGraph(envelope.payload.graph);
+    mutate(new SnapshotEditor(graph));
+    envelope.payload.graph = packGraph(graph);
+    envelope.hash = sha256(JSON.stringify(envelope.payload));
     const bytes = new TextEncoder().encode(JSON.stringify(envelope));
     try {
       restore(bytes, options([]));

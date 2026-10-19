@@ -200,6 +200,37 @@ test('a checkpoint restores through Core.restore with its watches, and a changed
   expect(seen(restored.group, 'a')).toBe('[true, false]');
 });
 
+test('external-source checkpoints restore their watches and queued Notifications', () => {
+  const { router, def } = setup();
+  const core = createCore();
+  const group = core.newGroup({ name: 'g' });
+  const source = watcher('"w", "", "changed"');
+  group.load({
+    name: 'a',
+    source,
+    grants: { scores: def.grant('all', 'default') },
+  });
+  group.script('a')!.deliver({ name: 'start' });
+  group.pump(now);
+  router.commit('default', () => ['before']);
+  const bytes = router.save(group, { sources: 'external' });
+  router.detach(group);
+  const { group: copy, routing } = router.restore(core, bytes, {
+    name: 'g',
+    libraries: [],
+    onMismatch: 'reject',
+    grants: () => def.grant('all', 'default'),
+    resolve: () => undefined,
+    scriptSources: () => ({ source }),
+  });
+  expect(routing.restored).toEqual(['a.scores.w']);
+  copy.pump(now);
+  expect(seen(copy, 'a')).toBe('[["before"]]');
+  router.commit('default', () => ['after']);
+  copy.pump(now);
+  expect(seen(copy, 'a')).toBe('[["before"], ["after"]]');
+});
+
 test('a Grant re-bound to another Store is dropped', () => {
   const { router, def } = setup();
   const core = createCore();

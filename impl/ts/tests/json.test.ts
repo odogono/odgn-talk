@@ -313,6 +313,6 @@ test('coreVersions reports the generated pins and the actual save format', () =>
   expect(versions.core).toBe('ts/0.1.0');
   const save = newGroup({ name: 'versions' }).save();
   const outer = JSON.parse(new TextDecoder().decode(save));
-  const saved = JSON.parse(outer.payload);
+  const saved = outer.payload;
   expect(versions.saveFormat).toBe(String(saved.format));
 });

@@ -502,6 +502,14 @@ _Avoid_: idle, paused, stable
 The complete state of one or more Quiescent Scripts, taken at one instant: their Script Variables, mailboxes, suspended and preempted Runs, pending Capability calls, resource counters and the last Clock reading, as plain data plus Host Object ids.
 _Avoid_: checkpoint, image, dump
 
+**Embedded-source Snapshot**:
+A Script Snapshot that contains its Scripts' original and extension sources. Its Libraries and Host bindings still come from the Host on Restore.
+_Avoid_: self-contained snapshot
+
+**External-source Snapshot**:
+A Script Snapshot that identifies its Scripts' original and extension code, whose sources the Host supplies on Restore. Full Restore requires the exact identified code.
+_Avoid_: partial snapshot, delta save
+
 **Restore**:
 Rebuilding a Script Group from a Script Snapshot, on the same Core family. Its Host Objects come back as new handles, keeping their Object Kind, id, parent and disposal.
 _Avoid_: load, deserialize, rehydrate

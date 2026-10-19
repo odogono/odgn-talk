@@ -532,3 +532,34 @@ of 10% and 4 KiB; timing remains advisory, never a CI gate.
 
 The [ordered Map storage results](results/2026-10-15-zig-map-storage.md) record
 the shared-block implementation, acceptance limits and native regression sweep.
+
+
+## TS snapshot sizes
+
+`bun bench/ts/src/snapshots.ts --samples=30` writes JSON measurements for native
+TS embedded-source and external-source snapshots. Each row reports raw bytes,
+base64 characters, serialized graph bytes, and separate median Save/Restore
+milliseconds after five warmups. Restore includes checksum checks, source
+loading and state validation; it does not Pump or settle pending calls.
+
+The controlled synthetic workload has six Scripts with 19,002 source characters
+and repeated UI declarations. It measures no active Runs, suspended Capability
+messages, timed waits, and concurrent Runs. Separate fixtures vary Script count,
+source length (padding the same declarations), Operation count and retained rows.
+These are not Mercenary production measurements. Source-size independence is
+also tested using comments alone in the Core regression suite.
+
+For a baseline, run the same benchmark file in a checkout of the baseline
+revision with `--baseline`, which measures its default save mode. Archive the
+entire TS source tree: copying only `group.ts` does not capture codec changes.
+Run baseline and candidate sequentially without concurrent tests or builds.
+
+To exercise the same native embedding under Node:
+
+```sh
+bun build bench/ts/src/snapshots.ts --target=node --outfile=.cache/snapshots.mjs
+node .cache/snapshots.mjs --samples=3
+```
+
+The [#1337 results](results/ts-snapshots-1337/README.md) include raw baseline and
+candidate measurements, graph reductions and runtime details.
