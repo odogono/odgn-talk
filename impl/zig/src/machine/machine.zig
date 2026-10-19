@@ -6012,6 +6012,9 @@ pub const Group = struct {
     }
 
     fn finishRun(g: *Group, s: *Script, run: *Run, outcome: Outcome, segment: []const u8) !void {
+        // Completion can allocate, too. This terminal Run is no longer
+        // live, so release it even when settling its Delivery is refused.
+        defer g.destroyRun(run);
         const d = run.delivery;
         if (g.trace) |out| {
             const word: []const u8 = switch (outcome) {
@@ -6117,7 +6120,6 @@ pub const Group = struct {
         // The first Run parked behind it in its `, queued` clause becomes
         // ready, behind any `error` message.
         if (run.clause_body) |body| try g.releaseParked(s, run.clause_unit, body);
-        g.destroyRun(run);
     }
 
     /// A message from a Run, which takes `args`: all or nothing.
@@ -11105,6 +11107,46 @@ test "Delivery completion rejects duplicate success and failure without replacin
     try g.endDelivery(failure, .{ .failed = .{ .reason = "stopped" } }, .{});
     try t.expectError(error.DeliveryAlreadyEnded, g.endDelivery(failure, .{ .failed = .{ .reason = "unhandled" } }, .{}));
     try t.expect(g.results.get(2).?.data == .nothing);
+}
+
+test "startRun frees every allocation when memory is refused (#1299)" {
+    const t = std.testing;
+    for ([_]bool{ false, true }) |request| for ([_][]const u8{
+        "on go\nend go\n",
+        "script variable n = 1\non go\nreturn n\nend go\n",
+    }) |source| {
+        var fail_at: usize = 0;
+        while (true) : (fail_at += 1) {
+            var failing: t.FailingAllocator = .init(t.allocator, .{});
+            {
+                var g: Group = .init(failing.allocator(), null);
+                defer g.deinit();
+                const s = (try g.load("s", source, .{})).loaded;
+                const id = try g.deliver("s", "go", &.{}, request);
+                const queued = g.inputs.pop().?.deliver;
+                defer g.gpa.free(queued.script);
+                // Loading and Delivery construction are outside this sweep.
+                // Refuse each allocation from Run startup through completion.
+                failing.fail_index = failing.alloc_index + fail_at;
+                failing.resize_fail_index = failing.resize_index;
+                if (g.startRun(s, queued.delivery)) |_| {
+                    if (!failing.has_induced_failure and request) {
+                        try t.expect(g.results.contains(id));
+                    }
+                } else |err| {
+                    try t.expectEqual(error.OutOfMemory, err);
+                    try t.expect(failing.has_induced_failure);
+                }
+            }
+            try t.expectEqual(failing.allocated_bytes, failing.freed_bytes);
+            // Execution can turn a refusal into a Run outcome. Continue
+            // until startup completes without refusing any allocation.
+            if (!failing.has_induced_failure) {
+                try t.expect(fail_at > 0);
+                break;
+            }
+        }
+    };
 }
 
 test "bound Library definitions reuse containers without allocating on later reads" {
