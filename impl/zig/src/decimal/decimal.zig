@@ -283,8 +283,9 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
     switch (op) {
         .add, .subtract => {
             exponent = @min(x.exponent, y.exponent);
-            const n = scaleExact(x.coefficient, x.exponent - exponent) orelse return null;
-            const m = scaleExact(y.coefficient, y.exponent - exponent) orelse return null;
+            // Operands of one exponent, such as two integers, need no scaling.
+            const n = if (x.exponent == exponent) x.coefficient else scaleExact(x.coefficient, x.exponent - exponent) orelse return null;
+            const m = if (y.exponent == exponent) y.coefficient else scaleExact(y.coefficient, y.exponent - exponent) orelse return null;
             const rhs_negative = y.negative != (op == .subtract);
             if (x.negative == rhs_negative) {
                 const sum = @addWithOverflow(n, m);

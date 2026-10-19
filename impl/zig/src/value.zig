@@ -162,7 +162,16 @@ pub const Value = struct {
         return self;
     }
     /// Ends one reference, freeing the node and its children with the last.
-    pub fn release(self: *Value) void {
+    pub inline fn release(self: *Value) void {
+        // A shared node only loses a reference.
+        if (self.references > 1) {
+            self.references -= 1;
+            return;
+        }
+        self.releaseLast();
+    }
+
+    fn releaseLast(self: *Value) void {
         // Hidden List tails can make physical ownership deeper than a
         // Script's logical nesting. Teardown is iterative and allocates
         // nothing, including when the Group allocator has refused memory.

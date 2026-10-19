@@ -1025,6 +1025,21 @@ fn fuelLeft(run: *const Run) u64 {
     return run.limits.fuel_per_run -| run.fuel;
 }
 
+/// Charges a fast-path instruction its `cost` as `execute` charges one,
+/// with any dispatch `clause` rate pending. False, charging nothing, when
+/// the Run can't cover it: the general loop then runs it and faults.
+inline fn fastCharge(run: *Run, charged: bool, cost: costs.Charge) bool {
+    run.clause_fuel += run.called_clause;
+    run.called_clause = 0;
+    if (!charged) return true;
+    const fuel = cost.fuel + run.clause_fuel;
+    if (run.base == 0 and (fuel > fuelLeft(run) or run.alloc + cost.alloc > run.limits.alloc_per_run)) return false;
+    run.clause_fuel = 0;
+    run.fuel += fuel;
+    run.alloc += cost.alloc;
+    return true;
+}
+
 /// The operands an instruction is about to pop, retained until it ends,
 /// so that an Error-mode cleanup can count them on the failed
 /// continuation's stack. Only an instruction in a `finally` block's scope
@@ -1539,6 +1554,9 @@ pub const Group = struct {
     host_poll: ?*const fn (?*anyopaque) void = null,
     host_poll_context: ?*anyopaque = null,
     host_poll_ticks: u12 = 0,
+    /// Whether `execute` runs simple instructions through `fastSteps`.
+    /// Tests turn it off to compare with the general loop.
+    fast_steps: bool = true,
     inline_admitting: bool = false,
     pump_finishing: bool = false,
     trace_pause: bool = false,
@@ -7041,6 +7059,218 @@ pub const Group = struct {
         rewound,
     };
 
+    /// Runs the simple instructions at the top frame's pc without the
+    /// general loop's per-instruction work, for as long as that work would
+    /// do nothing: no Host poll is due, nothing has landed or is pending at
+    /// a crossing, no selection or preemption is due, and no `finally` scope
+    /// protects operands. None of these instructions crosses to the Host,
+    /// writes the Trace or uses scratch memory. Each is charged as `execute`
+    /// charges it. It stops before any instruction it can't finish the same
+    /// way, including one that would raise or fault, leaving it unchanged
+    /// for the general loop.
+    fn fastSteps(g: *Group, run: *Run, charged: bool) void {
+        if (!g.fast_steps or g.release_pause or g.answering_crossing or run.select_at != null) return;
+        if (g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) return;
+        if (run.returned_op == null and run.returned_prop == null and run.landed != null) return;
+        const frame = &run.frames.items[run.frames.items.len - 1];
+        if (frame.restricted) return;
+        const unit = unitOf(run, frame);
+        switch (unit.code[frame.pc].op) {
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply => {},
+            else => return,
+        }
+        for (unit.unwind) |e| if (e.kind == .finally) return;
+        // What the general loop does first, once.
+        scratch_arena.reset(&g.scratch);
+        g.flushHeld();
+        const code = unit.code;
+        const stack = &frame.stack;
+        while (true) {
+            if (g.host_poll != null and g.host_poll_ticks +% 1 == 0) return;
+            if (run.base == 0) if (g.preemption(run) != null) return;
+            const ins = code[frame.pc];
+            const ops = ins.operands;
+            const len = stack.items.len;
+            switch (ins.op) {
+                .@"const" => {
+                    const v = switch (unit.values[@intCast(ops[0].int)]) {
+                        .value => |v| v,
+                        else => return,
+                    };
+                    if (len == stack.capacity or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    stack.appendAssumeCapacity(.{ .value = v.retain() });
+                },
+                .load => {
+                    if (len == stack.capacity or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
+                },
+                .store => {
+                    if (len == 0 or stack.items[len - 1] != .value or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    const s: usize = @intCast(ops[0].int);
+                    frame.locals[s].release();
+                    frame.locals[s] = pop(frame);
+                },
+                .move => {
+                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    const from: usize = @intCast(ops[0].int);
+                    const to: usize = @intCast(ops[1].int);
+                    frame.locals[to].release();
+                    frame.locals[to] = frame.locals[from].retain();
+                },
+                .jump => {
+                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    frame.pc = @intCast(ops[0].int);
+                    g.fastTick();
+                    continue;
+                },
+                .branch_false, .branch_true => {
+                    if (len == 0 or stack.items[len - 1] != .value) return;
+                    const v = stack.items[len - 1].value;
+                    if (v.data != .bool or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    _ = stack.pop();
+                    const taken = v.data.bool == (ins.op == .branch_true);
+                    v.release();
+                    g.fastTick();
+                    if (taken) {
+                        frame.pc = @intCast(ops[0].int);
+                        continue;
+                    }
+                },
+                .less, .greater, .less_or_equal, .greater_or_equal => {
+                    const pair = numberOperands(stack.items) orelse return;
+                    const order = model.Decimal.order(pair[0].data.number, pair[1].data.number);
+                    const b = switch (ins.op) {
+                        .less => order == .lt,
+                        .greater => order == .gt,
+                        .less_or_equal => order != .gt,
+                        else => order != .lt,
+                    };
+                    // Two Numbers compare no pairs: `scanned` is 0.
+                    const before: ChargeState = .of(g, run);
+                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    g.fastTick();
+                    // A branch on the result, if nothing comes between them,
+                    // takes it without building the boolean.
+                    const branch = code[frame.pc + 1];
+                    if ((branch.op == .branch_false or branch.op == .branch_true) and
+                        !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
+                        !(run.base == 0 and g.preemption(run) != null) and
+                        fastCharge(run, charged, costs.chargeUnmeasured(branch.op)))
+                    {
+                        replaceOperands(stack, null);
+                        g.fastTick();
+                        frame.pc = if (b == (branch.op == .branch_true)) @intCast(branch.operands[0].int) else frame.pc + 2;
+                        continue;
+                    }
+                    const r = boolean(g.gpa, b) catch {
+                        // Refused: the comparison has not happened.
+                        before.restore(g, run);
+                        return;
+                    };
+                    replaceOperands(stack, r);
+                    frame.pc += 1;
+                    continue;
+                },
+                .add, .subtract, .multiply => {
+                    const pair = numberOperands(stack.items) orelse return;
+                    const op: model.decimal.Operator = switch (ins.op) {
+                        .add => .add,
+                        .subtract => .subtract,
+                        else => .multiply,
+                    };
+                    const d = model.decimal.calculate(g.gpa, op, pair[0].data.number, pair[1].data.number) catch return;
+                    // The result's measures, before it has a node.
+                    var probe: Value = .{ .allocator = g.gpa, .data = .{ .number = d } };
+                    const before: ChargeState = .of(g, run);
+                    if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .result = &probe }))) return;
+                    g.fastTick();
+                    // A `store` of the result, if nothing comes between them,
+                    // reuses the local's Number node when nothing else holds
+                    // it once the operands are gone.
+                    const store = code[frame.pc + 1];
+                    if (store.op == .store) {
+                        const old = frame.locals[@intCast(store.operands[0].int)];
+                        const held_by_operands = @as(usize, @intFromBool(old == pair[0])) + @intFromBool(old == pair[1]);
+                        if (old.data == .number and old.references == held_by_operands + 1 and
+                            !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
+                            !(run.base == 0 and g.preemption(run) != null) and
+                            fastCharge(run, charged, costs.chargeUnmeasured(.store)))
+                        {
+                            replaceOperands(stack, null);
+                            old.data.number = d;
+                            g.fastTick();
+                            frame.pc += 2;
+                            continue;
+                        }
+                    }
+                    const r = model.scalar(g.gpa, .{ .number = d }) catch {
+                        // Refused: the instruction has not happened.
+                        before.restore(g, run);
+                        return;
+                    };
+                    replaceOperands(stack, r);
+                    frame.pc += 1;
+                    continue;
+                },
+                else => return,
+            }
+            frame.pc += 1;
+            g.fastTick();
+        }
+    }
+
+    fn fastTick(g: *Group) void {
+        if (g.host_poll != null) g.host_poll_ticks +%= 1;
+    }
+
+    /// The two Numbers on top of a stack, the first pushed first.
+    fn numberOperands(items: []const Slot) ?[2]*Value {
+        if (items.len < 2) return null;
+        const x = switch (items[items.len - 2]) {
+            .value => |v| v,
+            else => return null,
+        };
+        const y = switch (items[items.len - 1]) {
+            .value => |v| v,
+            else => return null,
+        };
+        if (x.data != .number or y.data != .number) return null;
+        return .{ x, y };
+    }
+
+    /// Replaces a binary instruction's two operands with its result, or
+    /// drops them.
+    fn replaceOperands(stack: *std.ArrayList(Slot), r: ?*Value) void {
+        const len = stack.items.len;
+        stack.items[len - 1].value.release();
+        stack.items[len - 2].value.release();
+        if (r) |v| {
+            stack.items[len - 2] = .{ .value = v };
+            stack.items.len = len - 1;
+        } else stack.items.len = len - 2;
+    }
+
+    /// What fast-path charging and ticking change, to undo a refused step.
+    const ChargeState = struct {
+        fuel: u64,
+        alloc: u64,
+        clause_fuel: u64,
+        called_clause: u64,
+        ticks: u12,
+
+        fn of(g: *const Group, run: *const Run) ChargeState {
+            return .{ .fuel = run.fuel, .alloc = run.alloc, .clause_fuel = run.clause_fuel, .called_clause = run.called_clause, .ticks = g.host_poll_ticks };
+        }
+
+        fn restore(c: ChargeState, g: *Group, run: *Run) void {
+            run.fuel = c.fuel;
+            run.alloc = c.alloc;
+            run.clause_fuel = c.clause_fuel;
+            run.called_clause = c.called_clause;
+            g.host_poll_ticks = c.ticks;
+        }
+    };
+
     /// Runs until the bottom frame returns. `charged` is false for the
     /// initialiser, which costs nothing.
     fn execute(g: *Group, run: *Run, charged: bool) !Outcome {
@@ -7048,6 +7278,7 @@ pub const Group = struct {
         // defer releases its owners and clears its metadata on every path.
         var held: Operands = .{};
         while (true) {
+            g.fastSteps(run, charged);
             if (g.host_poll) |poll| {
                 g.host_poll_ticks +%= 1;
                 if (g.host_poll_ticks == 0) poll(g.host_poll_context);

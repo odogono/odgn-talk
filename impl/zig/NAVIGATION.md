@@ -125,7 +125,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 - Implementation: [machine](src/machine/machine.zig), [chunks and properties](src/machine/chunks.zig), [Bytes builds and Binary Patterns](src/machine/binary.zig), [conversions](src/machine/convert.zig), [Text Patterns and the matcher](src/machine/matcher.zig), [Capabilities, Shapes and Grants](src/machine/capabilities.zig), [Standard Capabilities](src/machine/standard.zig), [Host Objects](src/machine/objects.zig), [Group allocator](src/machine/group_allocator.zig), [stdlib sources](src/generated/stdlib_sources.zig), [Cost Model](src/machine/costs.zig), [Built-ins](src/machine/builtins.zig), [correctly rounded functions](src/decimal/transcendental.zig), [exports](src/talk.zig)
 - Rules: [the machine](../../spec/08-the-abstract-machine-and-the-cost-model.md#the-machines-state), [the Cost Model](../../spec/08-the-abstract-machine-and-the-cost-model.md#the-cost-model), [chunks](../../spec/04-expressions-and-statements.md#chunk-expressions), [the Trace](../../spec/11-the-trace-and-conformance.md#the-trace), [Libraries](../../spec/07-libraries-and-the-standard-library.md#libraries)
-- Tests and cases: [replay](src/corpus/replay.zig), [talk.h replay](src/corpus/talk_replay.zig), [C Host tests](tests/talk_h_test.c)
+- Tests and cases: [replay](src/corpus/replay.zig), [talk.h replay](src/corpus/talk_replay.zig), [C Host tests](tests/talk_h_test.c), [fast path against the general loop](src/machine/fast_steps_test.zig)
 - First check: `cd impl/zig && zig build corpus -- text-model`
 
 ## Waits, suspending Calls and their abandonment

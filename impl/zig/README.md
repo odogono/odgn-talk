@@ -830,6 +830,19 @@ with unsupported measures or subjects use the term interpreter, which remains
 the differential-test oracle. Extra Host Fuel and allocation are still added
 at each charge; the machine owns refusal ordering and instruction boundaries.
 
+`fastSteps` runs `const`, `load`, `store`, `move`, `jump`, the two branches,
+Number comparisons and Number `add`, `subtract` and `multiply` without the
+general loop's per-instruction checks, while those checks would find nothing:
+no Host poll due, no crossing, landing, selection or preemption pending, and
+no `finally` scope in the unit. Each instruction is charged and ticked
+separately, and the fast path leaves any instruction that would raise, fault
+or be refused to the general loop untouched. A comparison followed by a branch
+skips building the Boolean, and an arithmetic result stored into a local
+reuses that local's Number node when nothing else holds it. Physical
+allocations therefore differ from the general loop's; Fuel, logical
+allocation and the Trace do not. `fast_steps_test.zig` runs Scripts with the
+path on and off across every Fuel and allocation limit and Fuel Slice.
+
 `talk_script_counters` reads a Script's lifetime Fuel, allocation, Runs and
 Limit Faults, live Runs included, with its current Persistent State and
 mailbox, and writes the `counters` record without draining Host Inputs.
