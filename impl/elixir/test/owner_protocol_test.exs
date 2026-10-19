@@ -1,6 +1,6 @@
 defmodule NorthTalk.OwnerProtocolTest do
   use ExUnit.Case, async: true
-  alias NorthTalk.{HostError, ScriptError, Transport}
+  alias NorthTalk.{Binary, HostError, ScriptError, Transport}
 
   # A real reactor with observable frames and injected faults.
   defmodule Reactor do
@@ -18,7 +18,7 @@ defmodule NorthTalk.OwnerProtocolTest do
 
     @impl true
     def exchange(t, bytes) do
-      frame = Jason.decode!(bytes)
+      frame = NorthTalk.TestWire.decode(bytes)
       send(t.observer, {:frame, frame["m"], frame["ref"]})
 
       case {t.scenario, frame["m"]} do
@@ -29,16 +29,25 @@ defmodule NorthTalk.OwnerProtocolTest do
           {:refused, :injected_refusal}
 
         _ ->
-          reply = raw(t.wasm, frame)
-          reply = if t.scenario == :bad_ref and frame["m"] == "pump", do: Map.put(reply, "ref", -1), else: reply
-          send(t.observer, {:reply, frame["m"], if(reply["need"], do: :need, else: :final)})
-          {:ok, Jason.encode!(reply)}
-      end
-    end
+          {:ok, bytes} = Transport.exchange(t.wasm, bytes)
+          binary? = Binary.binary?(bytes)
+          reply = NorthTalk.TestWire.decode(bytes)
 
-    defp raw(wasm, frame) do
-      {:ok, reply} = Transport.exchange(wasm, Jason.encode!(frame))
-      Jason.decode!(reply)
+          reply =
+            if t.scenario == :bad_ref and frame["m"] == "pump",
+              do: %{reply | values: List.keystore(reply.values, "ref", 0, {"ref", -1})},
+              else: reply
+
+          send(t.observer, {:reply, frame["m"], if(reply["need"], do: :need, else: :final)})
+          bytes = if(binary?, do: Binary.encode(reply), else: Jason.encode!(reply))
+
+          bytes =
+            if t.scenario == :malformed_need and binary? and reply["need"],
+              do: binary_part(bytes, 0, byte_size(bytes) - 1),
+              else: bytes
+
+          {:ok, bytes}
+      end
     end
 
     @impl true
@@ -50,6 +59,7 @@ defmodule NorthTalk.OwnerProtocolTest do
   @source "on go\n  ask api to ping\nend go\n"
 
   defp setup_group(scenario, opts \\ []) do
+    opts = if scenario == :malformed_need, do: Keyword.put(opts, :binary_callbacks, true), else: opts
     {:ok, owner} = NorthTalk.start_link([transport: Reactor, observer: self(), scenario: scenario] ++ opts)
     ping = fn [], _ -> :not_a_result end
 
@@ -71,7 +81,12 @@ defmodule NorthTalk.OwnerProtocolTest do
     assert_receive {:reply, "op-result", :final}
   end
 
-  for {scenario, reason} <- [trap: :injected_trap, bad_ref: :invalid_reply, refuse_need: :interim_answer_refused] do
+  for {scenario, reason} <- [
+        trap: :injected_trap,
+        bad_ref: :invalid_reply,
+        malformed_need: :invalid_reply,
+        refuse_need: :interim_answer_refused
+      ] do
     test "#{scenario} loses the instance and fails the waiting request" do
       Process.flag(:trap_exit, true)
       {owner, group} = setup_group(unquote(scenario))

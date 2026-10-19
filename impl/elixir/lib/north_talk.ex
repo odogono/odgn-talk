@@ -50,6 +50,10 @@ defmodule NorthTalk do
       `pattern_size:`, `mailbox_depth:`, `max_wait_ms:`, `max_join:` and
       `cleanup_budget:` (spec/data/limits.toml). The Core's defaults apply
       to any not given.
+    * `:binary_callbacks` - request `callbacks-fields-v1` when offered, false
+      by default until it is faster than JSON (#1316). Set true to exchange
+      callback needs and results in binary frames.
+      Defaults to the `:north_talk, :binary_callbacks` application setting.
     * `:memory_cap` - the most bytes guest linear memory may grow to.
       Unlimited by default.
     * `:timeout` - milliseconds one reactor call may run, 60 s by default.

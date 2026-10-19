@@ -98,6 +98,8 @@ jobs:
         working-directory: impl/elixir
       - run: mix test
         working-directory: impl/elixir
+      - run: NORTH_TALK_CALLBACKS=fields mix test
+        working-directory: impl/elixir
 
   # The OTP example as a consumer builds it: no Zig, Go or sidecar, and the
   # pinned reactor release fetched at compile time.

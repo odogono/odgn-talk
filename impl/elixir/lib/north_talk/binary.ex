@@ -9,17 +9,34 @@ defmodule NorthTalk.Binary do
   alias Jason.OrderedObject
 
   @feature "request-pump-fields-v1"
+  @callbacks_feature "callbacks-fields-v1"
   @prefix <<0x4E, 0x54, 0x42, 1, 1>>
   @max 18_446_744_073_709_551_616
   @max_plain 9_007_199_254_740_992
+
+  @prop_need 0x84
+  @result_base ~w(ref group charged)
 
   @messages %{
     0x01 => {"request", ~w(ref group to message)},
     0x02 => {"call", ~w(ref group fn args limits)},
     0x03 => {"pump", ~w(ref group now fuelSlice fuelCap)},
     0x04 => {"request-pump", ~w(ref group token to message now fuelSlice fuelCap)},
-    0x05 => {"call-pump", ~w(ref group token fn args limits now fuelSlice fuelCap)}
+    0x05 => {"call-pump", ~w(ref group token fn args limits now fuelSlice fuelCap)},
+    0x06 => {"op-result", ~w(ref group outcome value code message charged)},
+    0x07 => {"prop-result", ~w(ref group outcome value code message charged)},
+    0x08 => {"effect-result", ~w(ref group status)},
+    0x09 => {"release-result", ~w(ref group)}
   }
+  @needs %{
+    0x83 =>
+      {"op",
+       ~w(ref call script run segment grant capability operation mode now args scope automatic fuelLeft abandoned settled trace)},
+    @prop_need => {"prop", ~w(ref object prop set value op selector abandoned settled trace)},
+    0x85 => {"effect", ~w(ref script run segment grant grants coordinator phase now abandoned settled trace)},
+    0x86 => {"release", ~w(ref script grant reason now abandoned settled trace)}
+  }
+  @need_tags Map.new(@needs, fn {tag, {m, _}} -> {m, tag} end)
   @tags Map.new(@messages, fn {tag, {m, _}} -> {m, tag} end)
   @admission ~w(ref delivery err abandoned settled trace)
   @completion ~w(ref delivery token state nextDeadline fuelUsed reports gone err abandoned settled trace)
@@ -44,13 +61,14 @@ defmodule NorthTalk.Binary do
   @report_kinds @reports |> Enum.with_index(1) |> Map.new(fn {report, tag} -> {tag, report} end)
 
   def feature, do: @feature
+  def callbacks_feature, do: @callbacks_feature
 
   @doc "True for a binary frame, before any UTF-8 or JSON reading."
   def binary?(<<0x4E, 0x54, 0x42, _::binary>>), do: true
   def binary?(_), do: false
 
   @doc """
-  Encodes a frame: an input with `m`, or an admission or completion reply.
+  Encodes an input/result with `m`, or an admission, completion or need reply.
   Values must already be in the Value Encoding. Raises `NorthTalk.HostError`.
   """
   def encode(frame) do
@@ -60,10 +78,22 @@ defmodule NorthTalk.Binary do
     {tag, names, data} =
       cond do
         tag = @tags[m] ->
-          {tag, elem(@messages[tag], 1), List.keydelete(frame, "m", 0)}
+          {tag, elem(@messages[tag], 1), result_fields(tag, List.keydelete(frame, "m", 0))}
 
         m != nil ->
           invalid("#{inspect(m)} has no binary form")
+
+        need = get(frame, "need") ->
+          need = pairs(need)
+          tag = @need_tags[get(need, "m")] || invalid("need has no binary form")
+          data = List.keydelete(frame, "need", 0) ++ List.keydelete(need, "m", 0)
+
+          data =
+            if tag == @prop_need,
+              do: List.keystore(data, "set", 0, {"set", List.keymember?(need, "value", 0)}),
+              else: data
+
+          {tag, elem(@needs[tag], 1), data}
 
         true ->
           ok = get(frame, "ok")
@@ -77,7 +107,7 @@ defmodule NorthTalk.Binary do
     fields =
       Enum.map(names, fn
         "reports" -> reports_item(get(data, "reports"))
-        name -> item(get(data, name), name, "")
+        name -> frame_item(tag, get(data, name), name)
       end)
 
     IO.iodata_to_binary([@prefix, tag, 6, uint(length(names)), fields])
@@ -91,6 +121,7 @@ defmodule NorthTalk.Binary do
     names =
       case tag do
         t when is_map_key(@messages, t) -> elem(@messages[t], 1)
+        t when is_map_key(@needs, t) -> elem(@needs[t], 1)
         0x81 -> @admission
         0x82 -> @completion
         _ -> malformed()
@@ -101,7 +132,7 @@ defmodule NorthTalk.Binary do
 
     {pairs, rest} =
       Enum.reduce(names, {[], rest}, fn name, {acc, rest} ->
-        {value, rest} = if name == "reports", do: read_reports(rest), else: read_field(rest, name)
+        {value, rest} = if name == "reports", do: read_reports(rest), else: read_frame_field(tag, rest, name)
         {if(value == :absent, do: acc, else: [{name, value} | acc]), rest}
       end)
 
@@ -113,7 +144,39 @@ defmodule NorthTalk.Binary do
 
   def decode(_), do: malformed()
 
-  defp shape(tag, pairs) when tag <= 5 do
+  defp shape(tag, pairs) when is_map_key(@needs, tag) do
+    {outer, need} = Enum.split_with(pairs, fn {k, _} -> k in @outer end)
+    need = if tag == @prop_need, do: prop_fields(need), else: need
+    OrderedObject.new(outer ++ [{"need", OrderedObject.new([{"m", elem(@needs[tag], 0)} | need])}])
+  end
+
+  defp shape(tag, pairs) when tag in [6, 7] do
+    if not is_binary(get(pairs, "group")), do: malformed()
+    outcome = get(pairs, "outcome")
+    if outcome not in outcomes(tag), do: malformed()
+
+    result =
+      case outcome do
+        k when k in ~w(result value) ->
+          get(pairs, "value")
+
+        "fail" ->
+          OrderedObject.new(
+            Enum.reject(
+              [{"code", get(pairs, "code")}, {"message", get(pairs, "message")}, {"data", get(pairs, "value")}],
+              &is_nil(elem(&1, 1))
+            )
+          )
+
+        _ ->
+          true
+      end
+
+    fields = Enum.filter(pairs, fn {k, _} -> k in @result_base end)
+    OrderedObject.new([{"m", elem(@messages[tag], 0)} | fields ++ [{outcome, result}]])
+  end
+
+  defp shape(tag, pairs) when is_map_key(@messages, tag) do
     if not is_binary(get(pairs, "group")), do: malformed()
     OrderedObject.new([{"m", elem(@messages[tag], 0)} | pairs])
   end
@@ -137,6 +200,49 @@ defmodule NorthTalk.Binary do
       do: OrderedObject.new(top ++ [{"err", err}]),
       else: OrderedObject.new(top ++ [{"ok", OrderedObject.new(inner)}])
   end
+
+  defp outcomes(6), do: ~w(result started done fail limit hostError)
+  defp outcomes(7), do: ~w(value ok fail hostError)
+
+  # Presence in JSON becomes an explicit outcome (including a Nothing result).
+  defp result_fields(tag, fields) when tag in [6, 7] do
+    {outcome, value} = Enum.find(fields, fn {k, _} -> k in outcomes(tag) end) || invalid("missing callback outcome")
+    base = Enum.filter(fields, fn {k, _} -> k in @result_base end)
+
+    data =
+      case outcome do
+        "fail" ->
+          failure = pairs(value)
+          [{"value", get(failure, "data")}, {"code", get(failure, "code")}, {"message", get(failure, "message")}]
+
+        k when k in ~w(result value) ->
+          [{"value", value}]
+
+        _ ->
+          []
+      end
+
+    base ++ [{"outcome", outcome} | data]
+  end
+
+  # Hook details stay on the Host side of the binary protocol.
+  defp result_fields(8, fields), do: List.keydelete(fields, "detail", 0)
+  defp result_fields(_, fields), do: fields
+
+  defp prop_fields(fields) do
+    set? = get(fields, "set") == true
+    value = get(fields, "value")
+    fields = fields |> List.keydelete("set", 0) |> List.keydelete("value", 0)
+    if set?, do: fields ++ [{"value", value}], else: fields
+  end
+
+  # A property's Object identity is protocol text, rather than a Value.
+  defp frame_item(@prop_need, value, "object"), do: item(value, "", "")
+  defp frame_item(@prop_need, value, "selector"), do: value_item(value)
+  defp frame_item(_, value, name), do: item(value, name, "")
+  defp read_frame_field(@prop_need, bin, "object"), do: read_field(bin, "")
+  defp read_frame_field(@prop_need, bin, "selector"), do: read_field(bin, "value")
+  defp read_frame_field(_, bin, name), do: read_field(bin, name)
 
   # ── Encoding ──
 
@@ -162,7 +268,7 @@ defmodule NorthTalk.Binary do
 
   defp item(v, key, parent) do
     cond do
-      key in ~w(fn result error object target) or (key == "reason" and parent == "vetoes") ->
+      key in ~w(fn result error object target value) or (key == "reason" and parent == "vetoes") ->
         value_item(v)
 
       key == "args" ->
@@ -357,7 +463,7 @@ defmodule NorthTalk.Binary do
 
   defp read_protocol(bin, key, parent) do
     cond do
-      key in ~w(fn result error object target) or (key == "reason" and parent == "vetoes") ->
+      key in ~w(fn result error object target value) or (key == "reason" and parent == "vetoes") ->
         read_value(bin)
 
       key == "args" ->

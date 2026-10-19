@@ -41,6 +41,7 @@ defmodule NorthTalk.Owner do
     :functions,
     # Whether the Session negotiated the binary fields envelope (ADR 0110).
     request_pump: false,
+    callbacks: false,
     ref: 0,
     # The last correlation token sent; tokens are never reused.
     token: 0,
@@ -70,7 +71,7 @@ defmodule NorthTalk.Owner do
   @impl true
   def init(opts) do
     module = Keyword.get(opts, :transport, Transport.Wasi)
-    transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to, :limits])
+    transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to, :limits, :binary_callbacks])
 
     {:ok, tasks} = Task.Supervisor.start_link()
 
@@ -89,7 +90,7 @@ defmodule NorthTalk.Owner do
          },
          {{:ok, versions}, state} <- exchange(state, "hello", %{"protocol" => @protocol}),
          :ok <- check_versions(versions),
-         {:ok, state} <- negotiate(state, versions) do
+         {:ok, state} <- negotiate(state, versions, opts) do
       {:ok, %{state | versions: plain(versions)}}
     else
       {{:error, error}, state} ->
@@ -105,14 +106,23 @@ defmodule NorthTalk.Owner do
 
   # A Core that offers the fields envelope is asked for it by a second hello,
   # since an older Core refuses a feature it doesn't know.
-  defp negotiate(state, versions) do
-    if Binary.feature() in (versions["features"] || []) do
-      case exchange(state, "hello", %{"protocol" => @protocol, "features" => [Binary.feature()]}) do
-        {{:ok, _}, state} -> {:ok, %{state | request_pump: true}}
-        other -> other
-      end
-    else
+  defp negotiate(state, versions, opts) do
+    offered = versions["features"] || []
+    want_callbacks? = Keyword.get(opts, :binary_callbacks, Application.get_env(:north_talk, :binary_callbacks, false))
+    pump? = Binary.feature() in offered
+    callbacks? = want_callbacks? and Binary.callbacks_feature() in offered
+    features = if(pump?, do: [Binary.feature()], else: []) ++ if(callbacks?, do: [Binary.callbacks_feature()], else: [])
+
+    if features == [] do
       {:ok, state}
+    else
+      case exchange(state, "hello", %{"protocol" => @protocol, "features" => features}) do
+        {{:ok, _}, state} ->
+          {:ok, %{state | request_pump: pump?, callbacks: callbacks?}}
+
+        other ->
+          other
+      end
     end
   end
 
@@ -891,19 +901,25 @@ defmodule NorthTalk.Owner do
 
         cond do
           # A refused binary frame changed nothing, so the instance carries on.
-          match?({:binary, _}, message) and reply["ref"] == 0 and reply["err"]["kind"] == "protocol error" ->
+          not interim? and match?({:binary, _}, message) and reply["ref"] == 0 and
+              reply["err"]["kind"] == "protocol error" ->
             {{:error, %HostError{code: "protocol error", detail: reply["err"]["detail"]}}, state}
 
           reply["ref"] != ref ->
             lost(state, {:invalid_reply, plain(reply)})
 
-          # A final reply in the binary envelope, which the caller reads.
-          binary? ->
-            {{:binary, reply}, state}
+          binary? and not state.callbacks and reply["need"] != nil ->
+            lost(state, {:invalid_reply, "unnegotiated binary callback"})
 
           need = reply["need"] ->
             {answer, state} = answer(state, g, plain(need), need["args"])
-            exchange_frame(state, Map.put(answer, "ref", ref), g, true)
+            answer = Map.put(answer, "ref", ref)
+            answer = if binary?, do: {:binary, Binary.encode(Map.put(answer, "group", g))}, else: answer
+            exchange_frame(state, answer, g, true)
+
+          # A final reply in the binary envelope, which the caller reads.
+          binary? ->
+            {{:binary, reply}, state}
 
           ok = reply["ok"] ->
             {{:ok, ok}, state}

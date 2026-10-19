@@ -17,7 +17,7 @@ defmodule NorthTalk.RequestPumpTest do
     @impl true
     def exchange(t, bytes) do
       binary? = Binary.binary?(bytes)
-      frame = if binary?, do: Binary.decode(bytes), else: Jason.decode!(bytes, objects: :ordered_objects)
+      frame = NorthTalk.TestWire.decode(bytes)
       {:ok, reply} = Transport.exchange(t.wasm, bytes)
       send(t.observer, {:frame, frame["m"], binary?, Binary.binary?(reply)})
 
@@ -104,10 +104,18 @@ defmodule NorthTalk.RequestPumpTest do
     assert {:ok, %Result{value: ^value}} = NorthTalk.await(pending, 0)
   end
 
-  test "a callback's need and answer stay JSON inside the combined exchange" do
-    {_, group} = start(drive: :manual)
+  test "a callback's binary need continues the combined exchange" do
+    {_, group} = start(drive: :manual, binary_callbacks: true)
     assert {:ok, %Pumped{pending: pending}} = NorthTalk.request_pump(group, "s", "twice", [21], now: @t0)
     assert_receive {:double, 21}
+    assert_receive {:frame, "request-pump", true, true}
+    assert_receive {:frame, "op-result", true, true}
+    assert {:ok, %Result{value: 42}} = NorthTalk.await(pending)
+  end
+
+  test "callbacks stay JSON when disabled while combined calls remain binary" do
+    {_, group} = start(drive: :manual, binary_callbacks: false)
+    assert {:ok, %Pumped{pending: pending}} = NorthTalk.request_pump(group, "s", "twice", [21], now: @t0)
     assert_receive {:frame, "request-pump", true, false}
     assert_receive {:frame, "op-result", false, true}
     assert {:ok, %Result{value: 42}} = NorthTalk.await(pending)
