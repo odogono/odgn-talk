@@ -2,11 +2,11 @@ import { expect, spyOn, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  binaryReports,
   decodeBinaryFrame,
   encodeBinaryFrame,
   requestPumpFeature,
 } from '../src/request-pump-binary';
+import { envelopeReports } from '../src/generated/envelope';
 import { JsonNumber, readOrderedJSON } from '../src/readers';
 import { encodeAll } from '../src/wasm/codec';
 import { frameJSON, frameTree, plain, type Frame } from '../src/wasm/wire';
@@ -39,7 +39,7 @@ test('a frame holding Values encodes as its Value Encoding would', () => {
   );
 });
 test('every specialized Report and nested Value survives the fields envelope', () => {
-  const reports = binaryReports.map(([kind]) => ({ kind }));
+  const reports = envelopeReports.map(({ name }) => ({ kind: name }));
   const full = [
     {
       kind: 'run end',
