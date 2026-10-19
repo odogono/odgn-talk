@@ -230,7 +230,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 - Implementation: [envelope](src/request_pump.zig), [binary Values](src/binary_value.zig), [binary frames](src/message.zig) (`fn handleBinary`), [exports](src/talk.zig)
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
-- Tests and cases: tests in the modules; the Go adapter's [combined tests](../go/zig_combined_test.go) run each candidate with `TALK_ZIG_REQUEST_PUMP=map` or `fields`, as the [probe workflow](../../.github/workflows/go-zig-probe.yml) does
+- Tests and cases: tests in the modules; the Go adapter's [combined tests](../go/zig_combined_test.go) run the binary exchange with `TALK_ZIG_REQUEST_PUMP=fields`, as the [probe workflow](../../.github/workflows/go-zig-probe.yml) does
 - First check: `cd impl/zig && zig build test`; envelope gates: `impl/go/zig-request-pump-bench.sh`
 
 ## After changing the Zig Core

@@ -296,50 +296,13 @@ func (b zigReplyReader) decodeCompletion(body zigReply, p *zbPacket) (completion
 		result.Reports = append(result.Reports, report)
 		return nil
 	}
-	if p.fields {
-		// zbParse read the positional Reports as it found the list's end.
-		if len(p.rows) > 0 {
-			result.Reports = make([]Report, 0, len(p.rows))
-		}
-		for _, row := range p.rows {
-			if err := add(zbReports[row.kind].kind, row.view); err != nil {
-				completion.err = err
-				return
-			}
-		}
-	} else {
-		r := zbReader{d: p.reports}
-		if t, err := r.byte(); err != nil || t != 0x06 {
-			completion.err = errZigBinary
-			return
-		}
-		n, err := r.uvarint()
-		if err != nil || n > uint64(len(p.reports)) {
-			completion.err = errZigBinary
-			return
-		}
-		if n > 0 {
-			result.Reports = make([]Report, 0, n)
-		}
-		for range n {
-			span, err := r.skip()
-			if err != nil {
-				completion.err = err
-				return
-			}
-			row, err := zbMapView(span)
-			if err != nil {
-				completion.err = err
-				return
-			}
-			kind, _ := zbText(row.get("kind"))
-			if err := add(kind, row); err != nil {
-				completion.err = err
-				return
-			}
-		}
-		if r.at != len(p.reports) {
-			completion.err = errZigBinary
+	// zbParse read the positional Reports as it found the list's end.
+	if len(p.rows) > 0 {
+		result.Reports = make([]Report, 0, len(p.rows))
+	}
+	for _, row := range p.rows {
+		if err := add(zbReports[row.kind].kind, row.view); err != nil {
+			completion.err = err
 			return
 		}
 	}

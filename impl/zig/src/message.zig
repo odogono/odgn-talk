@@ -309,8 +309,8 @@ const Exchange = struct {
     held: ?HeldReply = null,
     held_ref: i64 = 0,
     release_continuation: bool = false,
-    /// A binary exchange (#1245): its layout, kept across JSON needs so its
-    /// final reply uses it, and a combined one's delivery and token.
+    /// A binary exchange (#1245), kept across JSON needs so its final reply
+    /// is binary, and a combined one's delivery and token.
     bin: ?BinExchange = null,
 
     /// Whether the exchange waits for a result from the Host.
@@ -380,9 +380,9 @@ pub const Session = struct {
     /// `queued-inputs-v1`: Trace-silent pending Host Input queries.
     queued_inputs: bool = false,
     reply_error: bool = false,
-    /// The binary Request/Pump candidate chosen at hello (#1245), fixed
-    /// for the Session once chosen.
-    request_pump: ?rp.Layout = null,
+    /// `request-pump-fields-v1` (#1245): Request/Pump inputs may cross as
+    /// binary fields-layout frames.
+    request_pump: bool = false,
     /// `callbacks-fields-v1` (#1311): callback needs and results are binary.
     callbacks: bool = false,
     /// `settlements-fields-v1` (#1320): `settle-pump` carries queued settlements.
@@ -2260,7 +2260,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
-    o.raw(",\"" ++ rp.feature_map ++ "\",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\"]") catch return oomReply();
+    o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -4375,16 +4375,14 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var group_exchanges = s.group_exchanges;
             var object_elements = s.object_elements;
             var queued_inputs = s.queued_inputs;
-            var request_pump: ?rp.Layout = null;
+            var request_pump = s.request_pump;
             var callbacks = s.callbacks;
             var settlements = s.settlements;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
-                if (std.mem.eql(u8, name, rp.feature_map) or std.mem.eql(u8, name, rp.feature_fields)) {
-                    // The candidates are mutually exclusive, and neither
-                    // implies `binary-frames-v1`, which this Core lacks.
-                    if (request_pump != null) return protocolError(s.gpa, ref, "request-pump candidates are mutually exclusive");
-                    request_pump = if (std.mem.eql(u8, name, rp.feature_map)) .map else .fields;
+                if (std.mem.eql(u8, name, rp.feature_fields)) {
+                    // It does not imply `binary-frames-v1`, which this Core lacks.
+                    request_pump = true;
                 } else if (std.mem.eql(u8, name, rp.feature_callbacks)) {
                     callbacks = true;
                 } else if (std.mem.eql(u8, name, rp.feature_settlements)) {
@@ -4417,9 +4415,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     // This feature adds declaration and binding fields, with no per-Group state.
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
-            if (request_pump) |chosen| if (s.request_pump) |held| if (held != chosen) return protocolError(s.gpa, ref, "the request-pump candidate is fixed for the Session");
-            if (settlements and (request_pump orelse s.request_pump) != .fields) return protocolError(s.gpa, ref, "settlements-fields-v1 needs request-pump-fields-v1");
-            if (request_pump != null) s.request_pump = request_pump;
+            if (settlements and !request_pump) return protocolError(s.gpa, ref, "settlements-fields-v1 needs request-pump-fields-v1");
+            s.request_pump = request_pump;
             s.callbacks = callbacks;
             s.settlements = settlements;
             s.early_abandoned = early;
@@ -4524,7 +4521,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return scriptControlReply(s, msg, ref, .revoke);
     } else if (std.mem.eql(u8, m, "cancel-delivery")) {
         return cancelDeliveryReply(s, msg, ref);
-    } else if (s.request_pump != null and std.mem.eql(u8, m, "cancel-correlated")) {
+    } else if (s.request_pump and std.mem.eql(u8, m, "cancel-correlated")) {
         return cancelCorrelatedReply(s, msg, ref);
     }
     return protocolError(s.gpa, ref, "unknown or unsupported message");
@@ -4647,17 +4644,16 @@ fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8
 
 // ------------------------------------- binary Request/Pump exchanges (#1245)
 
-/// A binary exchange's layout; a combined one's delivery and token, which
-/// its final reply carries and then retires.
+/// A binary exchange; a combined one's delivery and token, which its
+/// final reply carries and then retires.
 const BinExchange = struct {
-    layout: rp.Layout,
     delivery: ?[]u8 = null,
     token: u64 = 0,
 };
 
 /// A binary final Pump reply's parts, assembled with its abandonment
-/// notices only when it is sent. `ok` is the fields candidate's state …
-/// gone items, or the map candidate's whole `ok` map with its Trace.
+/// notices only when it is sent. `ok` is the completion's state … gone
+/// items.
 const BinFinal = struct {
     ok: ?[]u8 = null,
     err: ?[]u8 = null,
@@ -4766,10 +4762,9 @@ fn binAncestry(w: *rp.Writer, a: machine.report.Ancestry) Allocator.Error!void {
     try binOptional(w, "parentCall", a.parent_call);
 }
 
-/// One Report: the fields candidate's report tag and positional list, or
-/// the map candidate's map of the JSON Report's fields. Nested records
-/// keep their ordinary map shapes in both.
-fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed: bool, positional: bool) Allocator.Error!void {
+/// One Report: its report tag and positional list. Nested records keep
+/// their ordinary map shapes.
+fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed: bool) Allocator.Error!void {
     const kind: rp.Report = switch (report) {
         .run_end => .run_end,
         .run_started => .run_started,
@@ -4784,12 +4779,8 @@ fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed:
         .host_error => .host_error,
         .charge_result => .charge_result,
     };
-    if (positional) try w.byte(@backingInt(kind));
-    try w.begin(kind.fields(), positional);
-    if (!positional) {
-        try w.key("kind");
-        try w.ptext(kind.kind());
-    }
+    try w.byte(@backingInt(kind));
+    try w.begin(kind.fields(), true);
     switch (report) {
         .charge_result => |r| {
             try w.key("request");
@@ -5043,14 +5034,12 @@ fn okTrace(s: *Session, entry: *GroupEntry) Allocator.Error!?[]u8 {
     return try w.finish();
 }
 
-/// An admission reply: the fields candidate's `81`, or the map candidate's
-/// `{ref, ok: {delivery, trace?}}` / `{ref, err, trace?}`.
-fn binAdmission(s: *Session, layout: rp.Layout, ref: i64, entry: ?*GroupEntry, admitted: Admitted) []u8 {
-    return binAdmissionOrError(s, layout, ref, entry, admitted) catch oomReply();
+/// An admission reply, `81`.
+fn binAdmission(s: *Session, ref: i64, entry: ?*GroupEntry, admitted: Admitted) []u8 {
+    return binAdmissionOrError(s, ref, entry, admitted) catch oomReply();
 }
 
-fn binAdmissionOrError(s: *Session, layout: rp.Layout, ref: i64, entry: ?*GroupEntry, admitted: Admitted) Allocator.Error![]u8 {
-    const positional = layout == .fields;
+fn binAdmissionOrError(s: *Session, ref: i64, entry: ?*GroupEntry, admitted: Admitted) Allocator.Error![]u8 {
     const trace = switch (admitted) {
         .id => try okTrace(s, entry.?),
         .code => try errorTrace(s, entry),
@@ -5058,45 +5047,32 @@ fn binAdmissionOrError(s: *Session, layout: rp.Layout, ref: i64, entry: ?*GroupE
     defer if (trace) |t| s.gpa.free(t);
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
-    try w.header(layout);
-    if (positional) try w.byte(@backingInt(rp.Message.admission));
-    try w.begin(rp.Message.admission.fields(), positional);
+    try w.header();
+    try w.byte(@backingInt(rp.Message.admission));
+    try w.begin(rp.Message.admission.fields(), true);
     try w.key("ref");
     try w.int(ref);
     switch (admitted) {
         .id => |id| {
             const text = if (id.data) |d| d[0..id.len] else "";
-            if (positional) {
-                try w.key("delivery");
-                try w.ptext(text);
-            } else {
-                try w.key("ok");
-                try w.begin(&.{}, false);
-                try w.key("delivery");
-                try w.ptext(text);
-                if (trace) |t| {
-                    try w.key("trace");
-                    try w.raw(t);
-                }
-                try w.end();
-            }
+            try w.key("delivery");
+            try w.ptext(text);
         },
         .code => |code| {
             try w.key("err");
             try binError(&w, code);
         },
     }
-    if (trace) |t| if (positional or admitted == .code) {
+    if (trace) |t| {
         try w.key("trace");
         try w.raw(t);
-    };
+    }
     try w.end();
     return w.finish();
 }
 
 /// The Pump outcome a final reply carries, as pumpOk and finishOk write it.
 fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
-    const positional = s.x.bin.?.layout == .fields;
     const mg = &entry.group.group;
     // Stale Function Value calls rejected `function gone` with no report.
     var gone = rp.Writer.init(s.gpa);
@@ -5115,39 +5091,23 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
     // A one-Run Pump's reply is about 170 bytes; growing to it costs more
     // than the bytes.
     try w.out.ensureTotalCapacityPrecise(s.gpa, 256);
-    if (!positional) {
-        try w.begin(&.{}, false);
-        try w.key("state");
-    }
     try w.ptext(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle");
     if (mg.nextInstant()) |at| {
-        if (!positional) try w.key("nextDeadline");
         try w.instant(at);
-    } else if (positional) try w.nothing();
-    if (!positional) try w.key("fuelUsed");
+    } else try w.nothing();
     try w.int(mg.pump_fuel);
     // The accounting tail first, as the JSON reply writes it.
     mg.accountingTail();
     var held = mg.reports.take();
     defer held.deinit();
-    if (!positional) try w.key("reports");
     try w.list(held.list.items.len);
-    for (held.list.items) |r| try binReport(&w, s, r, entry.climb, positional);
+    for (held.list.items) |r| try binReport(&w, s, r, entry.climb);
     if (entry.gone) {
-        if (!positional) try w.key("gone");
         try w.raw(gone.out.items);
-    } else if (positional) try w.nothing();
+    } else try w.nothing();
     var fin: BinFinal = .{};
     errdefer fin.deinit(s.gpa);
-    const trace = try okTrace(s, entry);
-    if (positional) {
-        fin.trace = trace;
-    } else if (trace) |t| {
-        defer s.gpa.free(t);
-        try w.key("trace");
-        try w.raw(t);
-    }
-    if (!positional) try w.end();
+    fin.trace = try okTrace(s, entry);
     fin.ok = try w.finish();
     return fin;
 }
@@ -5185,9 +5145,8 @@ fn holdBinary(s: *Session, ref: i64, entry: *GroupEntry, fin: BinFinal) []u8 {
     return releaseNeed(s, ref);
 }
 
-/// Sends a binary exchange's final reply: the fields candidate's `82`, or
-/// the map candidate's `{ref, delivery?, token?, ok | err, abandoned,
-/// settled?, trace?}`. It ends the exchange and retires its token.
+/// Sends a binary exchange's final reply, `82`. It ends the exchange and
+/// retires its token.
 fn emitFinal(s: *Session, entry: *GroupEntry, ref: i64, fin_in: BinFinal, abandoned: bool) []u8 {
     var fin = fin_in;
     defer fin.deinit(s.gpa);
@@ -5199,13 +5158,12 @@ fn emitFinal(s: *Session, entry: *GroupEntry, ref: i64, fin_in: BinFinal, abando
 
 fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, abandoned: bool) Allocator.Error![]u8 {
     const b = s.x.bin.?;
-    const positional = b.layout == .fields;
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
     try w.out.ensureTotalCapacityPrecise(s.gpa, 64 + if (fin.ok) |ok| ok.len else 0);
-    try w.header(b.layout);
-    if (positional) try w.byte(@backingInt(rp.Message.completion));
-    try w.begin(rp.Message.completion.fields(), positional);
+    try w.header();
+    try w.byte(@backingInt(rp.Message.completion));
+    try w.begin(rp.Message.completion.fields(), true);
     try w.key("ref");
     try w.int(ref);
     if (b.delivery) |d| {
@@ -5216,14 +5174,7 @@ fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, 
         try w.key("token");
         try w.int(b.token);
     }
-    if (fin.ok) |ok| {
-        if (positional) {
-            try w.fieldsRaw("state", 5, ok);
-        } else {
-            try w.key("ok");
-            try w.raw(ok);
-        }
-    }
+    if (fin.ok) |ok| try w.fieldsRaw("state", 5, ok);
     if (fin.err) |e| {
         try w.key("err");
         try w.raw(e);
@@ -5298,10 +5249,10 @@ fn releaseSettlements(gpa: Allocator, settlements: []Settlement) void {
 const BinRead = union(enum) { input: BinInput, reply: []u8 };
 
 /// A refusal before execution, in the reply format of the input's exchange.
-fn binRefusal(s: *Session, layout: rp.Layout, m: rp.Message, ref: i64, entry: ?*GroupEntry, code: talk.HostErrorCode) []u8 {
-    if (m != .pump and m != .settle_pump) return binAdmission(s, layout, ref, entry, .{ .code = code });
+fn binRefusal(s: *Session, m: rp.Message, ref: i64, entry: ?*GroupEntry, code: talk.HostErrorCode) []u8 {
+    if (m != .pump and m != .settle_pump) return binAdmission(s, ref, entry, .{ .code = code });
     const saved = s.x.bin;
-    s.x.bin = .{ .layout = layout };
+    s.x.bin = .{};
     defer s.x.bin = saved;
     var fin: BinFinal = .{};
     var w = rp.Writer.init(s.gpa);
@@ -5320,12 +5271,12 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     handling = s;
     defer handling = null;
     if (!std.mem.startsWith(u8, frame, rp.prefix)) return protocolError(s.gpa, 0, "unknown binary frame version");
-    if (s.callbacks and frame.len > rp.prefix.len + 1 and frame[rp.prefix.len] == @backingInt(rp.Layout.fields)) {
+    if (s.callbacks and frame.len > rp.prefix.len + 1 and frame[rp.prefix.len] == rp.layout_fields) {
         if (rp.Callback.result(frame[rp.prefix.len + 1])) |c| return handleCallbackResult(s, c, frame[rp.prefix.len + 2 ..]);
     }
-    const layout = s.request_pump orelse return protocolError(s.gpa, 0, "binary frames were not negotiated");
-    if (frame.len < rp.prefix.len + 1 or frame[rp.prefix.len] != @backingInt(layout)) return protocolError(s.gpa, 0, "the binary layout was not negotiated");
-    var in = switch (readBinary(s, layout, frame[rp.prefix.len + 1 ..])) {
+    if (!s.request_pump) return protocolError(s.gpa, 0, "binary frames were not negotiated");
+    if (frame.len < rp.prefix.len + 1 or frame[rp.prefix.len] != rp.layout_fields) return protocolError(s.gpa, 0, "the binary layout was not negotiated");
+    var in = switch (readBinary(s, frame[rp.prefix.len + 1 ..])) {
         .input => |in| in,
         .reply => |reply| return reply,
     };
@@ -5334,14 +5285,14 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     const ref = in.ref;
     if (s.group_exchanges and s.restoring == null) loadExchange(s, in.entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
-    if (s.x.held != null) return binaryPaused(s, layout, &in, s.x.held_ref);
-    if (s.x.paused_ref) |paused| return binaryPaused(s, layout, &in, paused);
-    return binaryDispatch(s, layout, &in);
+    if (s.x.held != null) return binaryPaused(s, &in, s.x.held_ref);
+    if (s.x.paused_ref) |paused| return binaryPaused(s, &in, paused);
+    return binaryDispatch(s, &in);
 }
 
 /// As pausedAdmission: inputs join the paused worker's queue; another
 /// worker, combined ones included, is refused before admission.
-fn binaryPaused(s: *Session, layout: rp.Layout, in: *BinInput, worker_ref: i64) []u8 {
+fn binaryPaused(s: *Session, in: *BinInput, worker_ref: i64) []u8 {
     if (in.ref == worker_ref) return protocolError(s.gpa, in.ref, "the worker ref is reserved for its result");
     const entry = s.x.exchange_entry orelse return protocolError(s.gpa, in.ref, "no paused worker");
     if (in.entry != entry) return protocolError(s.gpa, in.ref, "a paused input must address the worker's Group");
@@ -5349,21 +5300,21 @@ fn binaryPaused(s: *Session, layout: rp.Layout, in: *BinInput, worker_ref: i64) 
     defer leavePaused(s, held);
     if (in.m.pumps()) {
         entry.group.group.refuseWorker(.{ .pump = .{ .now = in.now, .slice = @intCast(@min(in.slice, std.math.maxInt(i64))), .cap = @intCast(@min(in.cap, std.math.maxInt(i64))) } });
-        return binRefusal(s, layout, in.m, in.ref, entry, .reentrant_call);
+        return binRefusal(s, in.m, in.ref, entry, .reentrant_call);
     }
-    return binaryDispatch(s, layout, in);
+    return binaryDispatch(s, in);
 }
 
-fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
+fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
     const entry = in.entry;
     switch (in.m) {
-        .request => return binAdmissionOwned(s, layout, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
-        .call => return binAdmissionOwned(s, layout, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
+        .request => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
+        .call => return binAdmissionOwned(s, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
         .pump, .settle_pump => {
             const code = applySettlements(in.settlements);
-            if (code != .ok) return binRefusal(s, layout, in.m, in.ref, entry, code);
+            if (code != .ok) return binRefusal(s, in.m, in.ref, entry, code);
             endBinary(s);
-            s.x.bin = .{ .layout = layout };
+            s.x.bin = .{};
             return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
         },
         .request_pump, .call_pump => {
@@ -5371,7 +5322,7 @@ fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
             const admitted = if (in.m == .request_pump) admitQueued(entry, .request, in.target, in.name, in.args, in.limits) else admitCall(entry, in.function.?, in.args, in.limits);
             var id = switch (admitted) {
                 .id => |id| id,
-                .code => return binAdmission(s, layout, in.ref, entry, admitted),
+                .code => return binAdmission(s, in.ref, entry, admitted),
             };
             defer Direct.ownedBytesRelease(&id);
             const text = if (id.data) |d| d[0..id.len] else "";
@@ -5387,7 +5338,7 @@ fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
                 return oomReply();
             };
             endBinary(s);
-            s.x.bin = .{ .layout = layout, .delivery = delivery, .token = in.token };
+            s.x.bin = .{ .delivery = delivery, .token = in.token };
             if (in.pump_refusal) |code| return pumpFailure(s, in.ref, entry, code);
             return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
         },
@@ -5395,41 +5346,22 @@ fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
     }
 }
 
-fn binAdmissionOwned(s: *Session, layout: rp.Layout, ref: i64, entry: *GroupEntry, admitted: Admitted) []u8 {
+fn binAdmissionOwned(s: *Session, ref: i64, entry: *GroupEntry, admitted: Admitted) []u8 {
     var a = admitted;
     defer if (a == .id) Direct.ownedBytesRelease(&a.id);
-    return binAdmission(s, layout, ref, entry, a);
+    return binAdmission(s, ref, entry, a);
 }
 
 /// Reads and validates a whole binary input. A malformed envelope is a
 /// JSON protocol error; a well-formed input refused before execution gets
 /// its exchange's binary reply.
-fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
+fn readBinary(s: *Session, payload: []const u8) BinRead {
     var spans: [12]?[]const u8 = undefined;
     var r: rp.Reader = .{ .data = payload };
-    const m: rp.Message = blk: {
-        if (layout == .fields) {
-            const t = r.byte() catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
-            const m = std.enums.fromInt(rp.Message, t) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-            if (m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-            r.record(m.fields(), true, spans[0..m.fields().len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
-            break :blk m;
-        }
-        var all: [rp.Message.input_fields.len]?[]const u8 = undefined;
-        r.record(rp.Message.input_fields, false, &all) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
-        const name = rp.ptextOf(all[0] orelse return .{ .reply = protocolError(s.gpa, 0, "no message name") }) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
-        const m = rp.Message.ofName(name) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-        for (rp.Message.input_fields[1..], all[1..]) |k, span| {
-            const i = for (m.fields(), 0..) |f, i| {
-                if (std.mem.eql(u8, f, k)) break i;
-            } else {
-                if (span != null) return .{ .reply = protocolError(s.gpa, 0, "a field the message does not have") };
-                continue;
-            };
-            spans[i] = span;
-        }
-        break :blk m;
-    };
+    const message_tag = r.byte() catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+    const m = std.enums.fromInt(rp.Message, message_tag) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+    if (m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+    r.record(m.fields(), true, spans[0..m.fields().len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     if (m == .settle_pump and !s.settlements) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     const names = m.fields();
     const Get = struct {
@@ -5443,14 +5375,14 @@ fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
     const g: Get = .{ .names = names, .spans = spans[0..names.len] };
     if (!r.done()) return .{ .reply = protocolError(s.gpa, 0, "bytes after the frame's item") };
     const ref = (rp.intOf(g.get("ref") orelse return .{ .reply = protocolError(s.gpa, 0, "no ref") }) catch null) orelse return .{ .reply = protocolError(s.gpa, 0, "no ref") };
-    const group = rp.ptextOf(g.get("group") orelse return .{ .reply = binRefusal(s, layout, m, ref, null, .invalid_value) }) catch return malformedFrame(s, ref);
-    const entry = s.groupNamed(group) orelse return .{ .reply = binRefusal(s, layout, m, ref, null, .invalid_value) };
+    const group = rp.ptextOf(g.get("group") orelse return .{ .reply = binRefusal(s, m, ref, null, .invalid_value) }) catch return malformedFrame(s, ref);
+    const entry = s.groupNamed(group) orelse return .{ .reply = binRefusal(s, m, ref, null, .invalid_value) };
     var in: BinInput = .{ .m = m, .ref = ref, .entry = entry };
     var ok = false;
     defer if (!ok) in.deinit(s.gpa);
     const refuse = struct {
-        fn code(s_: *Session, l: rp.Layout, in_: *const BinInput, c: talk.HostErrorCode) BinRead {
-            return .{ .reply = binRefusal(s_, l, in_.m, in_.ref, in_.entry, c) };
+        fn code(s_: *Session, in_: *const BinInput, c: talk.HostErrorCode) BinRead {
+            return .{ .reply = binRefusal(s_, in_.m, in_.ref, in_.entry, c) };
         }
     };
     if (m == .request_pump or m == .call_pump) {
@@ -5458,44 +5390,44 @@ fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
         if (in.token == 0) return malformedFrame(s, ref);
     }
     if (m == .request or m == .request_pump) {
-        const to = g.get("to") orelse return refuse.code(s, layout, &in, .invalid_value);
+        const to = g.get("to") orelse return refuse.code(s, &in, .invalid_value);
         var t: [2]?[]const u8 = undefined;
         var tr: rp.Reader = .{ .data = to };
         tr.record(&.{ "script", "object" }, false, &t) catch return malformedFrame(s, ref);
-        if ((t[0] == null) == (t[1] == null)) return refuse.code(s, layout, &in, .invalid_value);
+        if ((t[0] == null) == (t[1] == null)) return refuse.code(s, &in, .invalid_value);
         if (t[0]) |span| {
             const name = rp.ptextOf(span) catch return malformedFrame(s, ref);
-            in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, layout, &in, .invalid_value) };
+            in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, &in, .invalid_value) };
         } else {
             entry.wrong_group = false;
-            const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, layout, &in, binDecodeError(e, entry));
+            const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
             defer v.release();
-            if (v.data != .object) return refuse.code(s, layout, &in, .invalid_value);
-            in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, layout, &in, .invalid_value) };
+            if (v.data != .object) return refuse.code(s, &in, .invalid_value);
+            in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, &in, .invalid_value) };
         }
-        const message = g.get("message") orelse return refuse.code(s, layout, &in, .invalid_value);
+        const message = g.get("message") orelse return refuse.code(s, &in, .invalid_value);
         var mf: [3]?[]const u8 = undefined;
         var mr: rp.Reader = .{ .data = message };
         mr.record(&.{ "name", "args", "limits" }, false, &mf) catch return malformedFrame(s, ref);
-        in.name = rp.ptextOf(mf[0] orelse return refuse.code(s, layout, &in, .invalid_value)) catch return malformedFrame(s, ref);
-        if (readArgs(s, entry, mf[1], &in.args)) |code| return refuse.code(s, layout, &in, code);
+        in.name = rp.ptextOf(mf[0] orelse return refuse.code(s, &in, .invalid_value)) catch return malformedFrame(s, ref);
+        if (readArgs(s, entry, mf[1], &in.args)) |code| return refuse.code(s, &in, code);
         in.limits = (overrideOfBinary(mf[2]) catch return malformedFrame(s, ref));
     } else if (m == .call or m == .call_pump) {
-        const span = g.get("fn") orelse return refuse.code(s, layout, &in, .invalid_value);
+        const span = g.get("fn") orelse return refuse.code(s, &in, .invalid_value);
         entry.wrong_group = false;
-        in.function = binary_value.decode(s.gpa, span, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, layout, &in, binDecodeError(e, entry));
-        if (readArgs(s, entry, g.get("args"), &in.args)) |code| return refuse.code(s, layout, &in, code);
+        in.function = binary_value.decode(s.gpa, span, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
+        if (readArgs(s, entry, g.get("args"), &in.args)) |code| return refuse.code(s, &in, code);
         in.limits = (overrideOfBinary(g.get("limits")) catch return malformedFrame(s, ref));
     }
     if (m.pumps()) {
         if (pumpInputs(&in, g.get("now"), g.get("fuelSlice"), g.get("fuelCap"))) |code| {
-            if (m == .pump or m == .settle_pump) return refuse.code(s, layout, &in, code);
+            if (m == .pump or m == .settle_pump) return refuse.code(s, &in, code);
             in.pump_refusal = code;
         }
     }
     if (m == .settle_pump) {
         const code = readSettlements(s, entry, g.get("settlements"), &in.settlements) catch return malformedFrame(s, ref);
-        if (code) |c| return refuse.code(s, layout, &in, c);
+        if (code) |c| return refuse.code(s, &in, c);
     }
     ok = true;
     return .{ .input = in };
@@ -5706,7 +5638,7 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
     try w.out.ensureTotalCapacity(s.gpa, 160);
-    try w.header(.fields);
+    try w.header();
     try w.byte(@backingInt(c));
     try w.begin(c.fields(), true);
     try w.key("ref");
@@ -5798,7 +5730,7 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
 fn binRelease(s: *Session, ref: i64, r: Release) Allocator.Error![]u8 {
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
-    try w.header(.fields);
+    try w.header();
     try w.byte(@backingInt(rp.Callback.release));
     try w.begin(rp.Callback.release.fields(), true);
     try w.key("ref");
@@ -8425,8 +8357,8 @@ test "without group-exchanges-v1 one paused Pump holds every Group and drop-grou
 
 // ------------------------------------- binary Request/Pump exchange tests
 
-/// Views a binary reply as JSON: positional records by their field names,
-/// Reports with their `kind`, and Value items other than scalars as
+/// Views a binary reply as JSON: records by their field names, Reports
+/// with their JSON `kind`, and Value items other than scalars as
 /// `{"$raw": bytes}`. A JSON reply is parsed as it is.
 fn binReply(c: *Client, frame: []const u8) !Json {
     const a = c.arena.allocator();
@@ -8434,10 +8366,10 @@ fn binReply(c: *Client, frame: []const u8) !Json {
     defer freeReply(c.s.gpa, sent);
     const reply = try a.dupe(u8, sent);
     if (!std.mem.startsWith(u8, reply, rp.prefix)) return (try std.json.parseFromSlice(Json, a, reply, .{})).value;
-    const fields = reply[rp.prefix.len] == @backingInt(rp.Layout.fields);
+    try std.testing.expectEqual(rp.layout_fields, reply[rp.prefix.len]);
     var r: rp.Reader = .{ .data = reply[rp.prefix.len + 1 ..] };
     var v: Json = undefined;
-    if (fields and reply[rp.prefix.len + 1] >= @backingInt(rp.Callback.op)) {
+    if (reply[rp.prefix.len + 1] >= @backingInt(rp.Callback.op)) {
         // A callback need, viewed as its JSON envelope.
         const c_ = std.enums.fromInt(rp.Callback, try r.byte()) orelse return error.TestUnexpectedResult;
         var need = try viewRecord(a, &r, c_.fields());
@@ -8449,11 +8381,9 @@ fn binReply(c: *Client, frame: []const u8) !Json {
         try v.object.put(a, "binary", .{ .string = "need" });
         return v;
     }
-    if (fields) {
-        const m = std.enums.fromInt(rp.Message, try r.byte()) orelse return error.TestUnexpectedResult;
-        v = try viewRecord(a, &r, m.fields());
-        try v.object.put(a, "binary", .{ .string = if (m == .admission) "admission" else "completion" });
-    } else v = try viewItem(a, &r, false);
+    const m = std.enums.fromInt(rp.Message, try r.byte()) orelse return error.TestUnexpectedResult;
+    v = try viewRecord(a, &r, m.fields());
+    try v.object.put(a, "binary", .{ .string = if (m == .admission) "admission" else "completion" });
     try std.testing.expect(r.done());
     return v;
 }
@@ -8511,15 +8441,11 @@ fn viewItem(a: Allocator, r: *rp.Reader, positional_reports: bool) anyerror!Json
     }
 }
 
-/// Starts a binary input frame of either candidate.
-fn binInput(w: *rp.Writer, layout: rp.Layout, m: rp.Message, ref: i64, group: []const u8) !void {
-    try w.header(layout);
-    if (layout == .fields) try w.byte(@backingInt(m));
-    try w.begin(m.fields(), layout == .fields);
-    if (layout == .map) {
-        try w.key("m");
-        try w.ptext(m.name());
-    }
+/// Starts a binary input frame.
+fn binInput(w: *rp.Writer, m: rp.Message, ref: i64, group: []const u8) !void {
+    try w.header();
+    try w.byte(@backingInt(m));
+    try w.begin(m.fields(), true);
     try w.key("ref");
     try w.int(ref);
     try w.key("group");
@@ -8527,14 +8453,14 @@ fn binInput(w: *rp.Writer, layout: rp.Layout, m: rp.Message, ref: i64, group: []
 }
 
 /// A Request or request-pump input, with the Script, message and arguments.
-fn binRequest(a: Allocator, layout: rp.Layout, m: rp.Message, ref: i64, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
-    return binRequestTo(a, layout, m, ref, "g", token, script, name, args, now_s);
+fn binRequest(a: Allocator, m: rp.Message, ref: i64, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
+    return binRequestTo(a, m, ref, "g", token, script, name, args, now_s);
 }
 
-fn binRequestTo(a: Allocator, layout: rp.Layout, m: rp.Message, ref: i64, group: []const u8, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
+fn binRequestTo(a: Allocator, m: rp.Message, ref: i64, group: []const u8, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
     var w = rp.Writer.init(a);
     defer w.deinit();
-    try binInput(&w, layout, m, ref, group);
+    try binInput(&w, m, ref, group);
     if (token != 0) {
         try w.key("token");
         try w.int(token);
@@ -8560,10 +8486,10 @@ fn binRequestTo(a: Allocator, layout: rp.Layout, m: rp.Message, ref: i64, group:
     return w.finish();
 }
 
-fn binPump(a: Allocator, layout: rp.Layout, ref: i64, now_s: i64) ![]u8 {
+fn binPump(a: Allocator, ref: i64, now_s: i64) ![]u8 {
     var w = rp.Writer.init(a);
     defer w.deinit();
-    try binInput(&w, layout, .pump, ref, "g");
+    try binInput(&w, .pump, ref, "g");
     try w.key("now");
     try w.instant(.{ .seconds = now_s, .micros = 0 });
     try w.end();
@@ -8585,7 +8511,7 @@ const now_2026: i64 = 1791633600;
 /// A binary callback result, with an integer `value` if any.
 fn binResult(a: Allocator, c: rp.Callback, ref: i64, outcome: ?[]const u8, value: ?i64) ![]u8 {
     var w = rp.Writer.init(a);
-    try w.header(.fields);
+    try w.header();
     try w.byte(@backingInt(c));
     try w.begin(c.fields(), true);
     try w.key("ref");
@@ -8615,7 +8541,7 @@ test "callbacks-fields-v1: op and release needs and their results cross in binar
     const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"callbacks-fields-v1\",\"crossing-trace-v1\",\"abandoned-before-needs-v1\"]}}", .{1}));
     var offered = false;
     for (hello.object.get("features").?.array.items) |f| offered = offered or std.mem.eql(u8, f.string, rp.feature_callbacks);
-    try std.testing.expect(offered and s.callbacks and s.request_pump == null);
+    try std.testing.expect(offered and s.callbacks and !s.request_pump);
     _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"args\":[\"number\",\"text\"],\"result\":\"number\"}}],\"release\":true}}", .{2}));
     const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{3}));
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{4}));
@@ -8666,7 +8592,7 @@ test "callbacks-fields-v1: op and release needs and their results cross in binar
 fn binSettlePump(a: Allocator, ref: i64, call: []const u8, outcome: []const u8, value: i64) ![]u8 {
     var w = rp.Writer.init(a);
     defer w.deinit();
-    try binInput(&w, .fields, .settle_pump, ref, "g");
+    try binInput(&w, .settle_pump, ref, "g");
     try w.key("now");
     try w.instant(.{ .seconds = now_2026, .micros = 0 });
     try w.key("settlements");
@@ -8721,95 +8647,100 @@ test "settlements-fields-v1: a settle-pump applies its settlements, then Pumps (
     try std.testing.expectEqualStrings("idle", late.object.get("state").?.string);
 }
 
-test "request-pump negotiation is exclusive, fixed for the Session and required" {
+test "request-pump negotiation is required, and the map layout is unknown" {
     const s = Session.init(std.testing.allocator).?;
     defer s.deinit();
     var c = Client.init(s);
     defer c.deinit();
     const a = c.arena.allocator();
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
-    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binPump(a, .map, 2, now_2026))));
-    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"request-pump-map-v1\",\"request-pump-fields-v1\"]}}", .{3})));
-    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"request-pump-map-v1\",\"binary-frames-v1\"]}}", .{4})));
-    try std.testing.expect(s.request_pump == null);
-    const hello = try okOf(try binHello(&c, 5, "request-pump-map-v1"));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binPump(a, 2, now_2026))));
+    // The retired map layout is refused as any unknown feature is.
+    const unknown = try binHello(&c, 3, "request-pump-nonsense-v1");
+    const map = try binHello(&c, 3, "request-pump-map-v1");
+    try std.testing.expectEqualStrings("protocol error", try errKind(map));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(unknown, .{})}), try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(map, .{})}));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"request-pump-fields-v1\",\"binary-frames-v1\"]}}", .{4})));
+    try std.testing.expect(!s.request_pump);
+    const hello = try okOf(try binHello(&c, 5, "request-pump-fields-v1"));
     var offered: usize = 0;
     for (hello.object.get("features").?.array.items) |f| {
-        if (std.mem.eql(u8, f.string, rp.feature_map) or std.mem.eql(u8, f.string, rp.feature_fields)) offered += 1;
+        if (std.mem.eql(u8, f.string, rp.feature_fields)) offered += 1;
+        try std.testing.expect(!std.mem.eql(u8, f.string, "request-pump-map-v1"));
     }
-    try std.testing.expectEqual(@as(usize, 2), offered);
-    try std.testing.expectEqualStrings("protocol error", try errKind(try binHello(&c, 6, "request-pump-fields-v1")));
-    _ = try okOf(try binHello(&c, 7, "request-pump-map-v1"));
+    try std.testing.expectEqual(@as(usize, 1), offered);
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[]}}", .{8}));
-    try std.testing.expectEqual(rp.Layout.map, s.request_pump.?);
-    // The other layout, another version and a lone prefix are refused.
-    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binPump(a, .fields, 9, now_2026))));
+    try std.testing.expect(s.request_pump);
+    // Layout byte 00, another version and a lone prefix are refused.
+    const map_frame = try binPump(a, 9, now_2026);
+    map_frame[rp.prefix.len] = 0x00;
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, map_frame)));
     try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, "NTB\x02\x00\x00")));
     try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, "NTB\x01")));
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":1}}", .{10})));
+    // The fields layout still works.
+    try std.testing.expectEqualStrings("completion", (try binReply(&c, try binPump(a, 11, now_2026))).object.get("binary").?.string);
 }
 
-test "binary Requests, Pumps and combined Requests in both candidates" {
-    for ([_]rp.Layout{ .map, .fields }) |layout| {
-        const s = Session.init(std.testing.allocator).?;
-        defer s.deinit();
-        var c = Client.init(s);
-        defer c.deinit();
-        const a = c.arena.allocator();
-        _ = try okOf(try binHello(&c, 1, if (layout == .map) rp.feature_map else rp.feature_fields));
-        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{2}));
-        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on inc n\\n  return n + 1\\nend inc\\n\"}}", .{3}));
-        // An ordinary Request is admitted.
-        const admitted = try binReply(&c, try binRequest(a, layout, .request, 4, 0, "s", "inc", &.{-3}, 0));
-        const adm = if (layout == .map) try okOf(admitted) else admitted;
-        try std.testing.expectEqualStrings("d1", adm.object.get("delivery").?.string);
-        // Its Pump ends in a binary completion carrying typed Reports.
-        const pumped = try binReply(&c, try binPump(a, layout, 5, now_2026));
-        try std.testing.expectEqual(@as(i64, 5), pumped.object.get("ref").?.integer);
-        const ok = if (layout == .map) try okOf(pumped) else pumped;
-        try std.testing.expectEqualStrings("idle", ok.object.get("state").?.string);
-        try std.testing.expect(pumped.object.get("delivery") == null and pumped.object.get("token") == null);
-        try std.testing.expectEqual(@as(usize, 0), pumped.object.get("abandoned").?.array.items.len);
-        const end = try reportOf(pumped, "run end");
-        try std.testing.expectEqualStrings("d1", end.object.get("delivery").?.string);
-        try std.testing.expectEqual(@as(i64, -2), end.object.get("result").?.integer);
-        // A combined Request admits once, Pumps once, and carries its token.
-        const both = try binReply(&c, try binRequest(a, layout, .request_pump, 6, 41, "s", "inc", &.{1}, now_2026 + 1));
-        errdefer std.debug.print("combined reply: {f}\n", .{std.json.fmt(both, .{})});
-        try std.testing.expectEqualStrings("d2", both.object.get("delivery").?.string);
-        try std.testing.expectEqual(@as(i64, 41), both.object.get("token").?.integer);
-        try std.testing.expectEqual(@as(i64, 2), (try reportOf(both, "run end")).object.get("result").?.integer);
-        var traced_request = false;
-        const trace = (if (layout == .map) try okOf(both) else both).object.get("trace").?.array.items;
-        for (trace) |line| {
-            if (std.mem.startsWith(u8, line.string, "> request d2 to=s")) traced_request = true;
-            try std.testing.expect(!std.mem.containsAtLeast(u8, line.string, 1, "request-pump"));
-        }
-        try std.testing.expect(traced_request);
-        // Its token is retired with its final reply.
-        try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":41}}", .{7})));
-        try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
-        // A Function Value crosses back into call-pump as its own item.
-        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"m\",\"source\":\"on make n\\n  return given x: x + n\\nend make\\n\"}}", .{8}));
-        const made = try binReply(&c, try binRequest(a, layout, .request_pump, 9, 42, "m", "make", &.{5}, now_2026 + 2));
-        const raw = (try reportOf(made, "run end")).object.get("result").?.object.get("$raw").?.string;
-        try std.testing.expectEqual(@as(u8, 0x13), raw[0]);
-        var w = rp.Writer.init(a);
-        try binInput(&w, layout, .call_pump, 10, "g");
-        try w.key("token");
-        try w.int(43);
-        try w.key("fn");
-        try w.raw(raw);
-        try w.key("args");
-        try w.list(1);
-        try w.int(3);
-        try w.key("now");
-        try w.instant(.{ .seconds = now_2026 + 3, .micros = 0 });
-        try w.end();
-        const called = try binReply(&c, try w.finish());
-        try std.testing.expectEqualStrings("d4", called.object.get("delivery").?.string);
-        try std.testing.expectEqual(@as(i64, 8), (try reportOf(called, "run end")).object.get("result").?.integer);
+test "binary Requests, Pumps and combined Requests" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    _ = try okOf(try binHello(&c, 1, rp.feature_fields));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on inc n\\n  return n + 1\\nend inc\\n\"}}", .{3}));
+    // An ordinary Request is admitted.
+    const admitted = try binReply(&c, try binRequest(a, .request, 4, 0, "s", "inc", &.{-3}, 0));
+    const adm = admitted;
+    try std.testing.expectEqualStrings("d1", adm.object.get("delivery").?.string);
+    // Its Pump ends in a binary completion carrying typed Reports.
+    const pumped = try binReply(&c, try binPump(a, 5, now_2026));
+    try std.testing.expectEqual(@as(i64, 5), pumped.object.get("ref").?.integer);
+    const ok = pumped;
+    try std.testing.expectEqualStrings("idle", ok.object.get("state").?.string);
+    try std.testing.expect(pumped.object.get("delivery") == null and pumped.object.get("token") == null);
+    try std.testing.expectEqual(@as(usize, 0), pumped.object.get("abandoned").?.array.items.len);
+    const end = try reportOf(pumped, "run end");
+    try std.testing.expectEqualStrings("d1", end.object.get("delivery").?.string);
+    try std.testing.expectEqual(@as(i64, -2), end.object.get("result").?.integer);
+    // A combined Request admits once, Pumps once, and carries its token.
+    const both = try binReply(&c, try binRequest(a, .request_pump, 6, 41, "s", "inc", &.{1}, now_2026 + 1));
+    errdefer std.debug.print("combined reply: {f}\n", .{std.json.fmt(both, .{})});
+    try std.testing.expectEqualStrings("d2", both.object.get("delivery").?.string);
+    try std.testing.expectEqual(@as(i64, 41), both.object.get("token").?.integer);
+    try std.testing.expectEqual(@as(i64, 2), (try reportOf(both, "run end")).object.get("result").?.integer);
+    var traced_request = false;
+    const trace = both.object.get("trace").?.array.items;
+    for (trace) |line| {
+        if (std.mem.startsWith(u8, line.string, "> request d2 to=s")) traced_request = true;
+        try std.testing.expect(!std.mem.containsAtLeast(u8, line.string, 1, "request-pump"));
     }
+    try std.testing.expect(traced_request);
+    // Its token is retired with its final reply.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":41}}", .{7})));
+    try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
+    // A Function Value crosses back into call-pump as its own item.
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"m\",\"source\":\"on make n\\n  return given x: x + n\\nend make\\n\"}}", .{8}));
+    const made = try binReply(&c, try binRequest(a, .request_pump, 9, 42, "m", "make", &.{5}, now_2026 + 2));
+    const raw = (try reportOf(made, "run end")).object.get("result").?.object.get("$raw").?.string;
+    try std.testing.expectEqual(@as(u8, 0x13), raw[0]);
+    var w = rp.Writer.init(a);
+    try binInput(&w, .call_pump, 10, "g");
+    try w.key("token");
+    try w.int(43);
+    try w.key("fn");
+    try w.raw(raw);
+    try w.key("args");
+    try w.list(1);
+    try w.int(3);
+    try w.key("now");
+    try w.instant(.{ .seconds = now_2026 + 3, .micros = 0 });
+    try w.end();
+    const called = try binReply(&c, try w.finish());
+    try std.testing.expectEqualStrings("d4", called.object.get("delivery").?.string);
+    try std.testing.expectEqual(@as(i64, 8), (try reportOf(called, "run end")).object.get("result").?.integer);
 }
 
 test "malformed binary frames are JSON protocol errors and change nothing" {
@@ -8821,7 +8752,7 @@ test "malformed binary frames are JSON protocol errors and change nothing" {
     _ = try okOf(try binHello(&c, 1, rp.feature_fields));
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on inc n\\n  return n + 1\\nend inc\\n\"}}", .{3}));
-    const good = try binRequest(a, .fields, .request_pump, 4, 9, "s", "inc", &.{1}, now_2026);
+    const good = try binRequest(a, .request_pump, 4, 9, "s", "inc", &.{1}, now_2026);
     const extra = try std.mem.concat(a, u8, &.{ good, &.{0} });
     const wrong_tag = try a.dupe(u8, good);
     wrong_tag[rp.prefix.len + 1] = 0x81;
@@ -8833,9 +8764,9 @@ test "malformed binary frames are JSON protocol errors and change nothing" {
         try std.testing.expectEqualStrings("protocol error", try errKind(reply));
     }
     // A duplicate or zero token, before admission.
-    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequest(a, .fields, .request_pump, 5, 0, "s", "inc", &.{1}, now_2026))));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequest(a, .request_pump, 5, 0, "s", "inc", &.{1}, now_2026))));
     // A refused admission neither Pumps nor binds its token.
-    const refused = try binReply(&c, try binRequest(a, .fields, .request_pump, 6, 9, "nobody", "inc", &.{1}, now_2026));
+    const refused = try binReply(&c, try binRequest(a, .request_pump, 6, 9, "nobody", "inc", &.{1}, now_2026));
     try std.testing.expectEqualStrings("admission", refused.object.get("binary").?.string);
     try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
     try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
@@ -8850,7 +8781,7 @@ test "a combined exchange pauses at JSON needs, takes token cancellation and end
     var c = Client.init(s);
     defer c.deinit();
     const a = c.arena.allocator();
-    _ = try okOf(try binHello(&c, 0, rp.feature_map));
+    _ = try okOf(try binHello(&c, 0, rp.feature_fields));
     _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\"}}]}}", .{1}));
     const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
     for ([_][]const u8{ "g", "h" }) |group| {
@@ -8859,17 +8790,17 @@ test "a combined exchange pauses at JSON needs, takes token cancellation and end
     }
     // Earlier work stays ahead: the combined input waits behind it.
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
-    const need = try binReply(&c, try binRequest(a, .map, .request_pump, 6, 77, "s", "inc", &.{1}, now_2026));
+    const need = try binReply(&c, try binRequest(a, .request_pump, 6, 77, "s", "inc", &.{1}, now_2026));
     try std.testing.expectEqualStrings("op", need.object.get("need").?.object.get("m").?.string);
     try std.testing.expectEqual(@as(usize, 1), s.bindings.items.len);
     // The token is active: a duplicate is refused, another Group can't use it.
-    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequestTo(a, .map, .request_pump, 7, "h", 77, "s", "inc", &.{}, now_2026))));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequestTo(a, .request_pump, 7, "h", 77, "s", "inc", &.{}, now_2026))));
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"h\",\"token\":77}}", .{8})));
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":78}}", .{9})));
     // A competing Pump, ordinary or combined, is refused before admission.
-    const competing = try binReply(&c, try binPump(a, .map, 10, now_2026));
+    const competing = try binReply(&c, try binPump(a, 10, now_2026));
     try std.testing.expectEqualStrings("reentrant call", competing.object.get("err").?.object.get("code").?.string);
-    const competing_both = try binReply(&c, try binRequest(a, .map, .request_pump, 11, 79, "s", "inc", &.{}, now_2026));
+    const competing_both = try binReply(&c, try binRequest(a, .request_pump, 11, 79, "s", "inc", &.{}, now_2026));
     try std.testing.expectEqualStrings("reentrant call", competing_both.object.get("err").?.object.get("code").?.string);
     try std.testing.expectEqual(@as(usize, 1), s.bindings.items.len);
     // Cancellation by token is admitted while the worker waits at its need.

@@ -62,7 +62,7 @@ func median(values []float64) float64 {
 }
 
 func report(w io.Writer, dir string, rounds int) error {
-	files := []string{"base", "native", "zig-json", "zig-map", "zig-fields"}
+	files := []string{"base", "native", "zig-json", "zig-fields"}
 	samples := make(map[string]map[string][]sample)
 	for _, file := range files {
 		f, err := os.Open(filepath.Join(dir, file+".txt"))
@@ -121,14 +121,12 @@ func report(w io.Writer, dir string, rounds int) error {
 	}
 	row("native", benchmarks[0], "base", benchmarks[0])
 	row("zig-json", benchmarks[0], "native", benchmarks[0])
-	for _, file := range []string{"zig-map", "zig-fields"} {
-		for _, name := range benchmarks {
-			row(file, name, "native", name)
-		}
-		// The combined Request performs the same work as JSON's separate calls.
-		for _, name := range benchmarks[:2] {
-			row(file, name, "zig-json", benchmarks[0])
-		}
+	for _, name := range benchmarks {
+		row("zig-fields", name, "native", name)
+	}
+	// The combined Request performs the same work as JSON's separate calls.
+	for _, name := range benchmarks[:2] {
+		row("zig-fields", name, "zig-json", benchmarks[0])
 	}
 	return table.Flush()
 }

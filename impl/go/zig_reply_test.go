@@ -119,7 +119,7 @@ func TestZigBackendReplyToleratesDeepPayloads(t *testing.T) {
 // fixture holds independently written frames rather than the adapter's writer
 // output. #1332 will supply shared fields vectors once its Go step lands.
 type zigReplyFixture struct {
-	Name, Sent, JSON, Fields, Map string
+	Name, Sent, JSON, Fields string
 }
 
 func zigReplyFixtures(t *testing.T) []zigReplyFixture {
@@ -206,7 +206,7 @@ func TestZigBackendReplyReaderLayouts(t *testing.T) {
 					t.Fatalf("Values and ancestry: %+v", started)
 				}
 			}
-			for _, layout := range []struct{ name, wire string }{{"fields", c.Fields}, {"map", c.Map}} {
+			for _, layout := range []struct{ name, wire string }{{"fields", c.Fields}} {
 				t.Run(layout.name, func(t *testing.T) {
 					data, err := hex.DecodeString(layout.wire)
 					if err != nil {
@@ -244,7 +244,7 @@ func TestZigBackendReplyReaderPauseTransitions(t *testing.T) {
 		for _, layout := range []struct {
 			name string
 			data []byte
-		}{{"json", []byte(c.JSON)}, {"fields", mustZigReplyHex(t, c.Fields)}, {"map", mustZigReplyHex(t, c.Map)}} {
+		}{{"json", []byte(c.JSON)}, {"fields", mustZigReplyHex(t, c.Fields)}} {
 			for _, paused := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/paused=%v", c.Name, layout.name, paused), func(t *testing.T) {
 					reply, err := (zigReplyReader{}).read(layout.data, 7, c.Sent)
@@ -293,7 +293,7 @@ func mustZigReplyHex(t *testing.T, wire string) []byte {
 
 func TestZigBackendReplyReaderChecksRefsInEveryLayout(t *testing.T) {
 	for _, c := range zigReplyFixtures(t) {
-		for _, data := range [][]byte{[]byte(c.JSON), mustZigReplyHex(t, c.Fields), mustZigReplyHex(t, c.Map)} {
+		for _, data := range [][]byte{[]byte(c.JSON), mustZigReplyHex(t, c.Fields)} {
 			if _, err := (zigReplyReader{}).read(data, 8, c.Sent); err == nil || err.Error() != "Zig reply ref mismatch" {
 				t.Fatalf("%s: %v", c.Name, err)
 			}
@@ -301,6 +301,17 @@ func TestZigBackendReplyReaderChecksRefsInEveryLayout(t *testing.T) {
 	}
 	if _, err := (zigReplyReader{}).read([]byte(`{"ok":{}}`), 7, "load"); err == nil || err.Error() != "Zig reply omitted ref" {
 		t.Fatal(err)
+	}
+}
+
+// The retired map layout's byte is an unknown layout (#1334).
+func TestZigBackendReplyReaderRefusesMapLayout(t *testing.T) {
+	for _, c := range zigReplyFixtures(t) {
+		data := mustZigReplyHex(t, c.Fields)
+		data[len(zbPrefix)] = 0
+		if _, err := (zigReplyReader{}).read(data, 7, c.Sent); err == nil {
+			t.Fatalf("%s: map layout accepted", c.Name)
+		}
 	}
 }
 
@@ -339,10 +350,10 @@ func TestZigBackendReplyReaderAppliesDecodeFailureAtReceipt(t *testing.T) {
 	for _, layout := range []struct {
 		name string
 		data []byte
-	}{{"json", []byte(fixture.JSON)}, {"fields", mustZigReplyHex(t, fixture.Fields)}, {"map", mustZigReplyHex(t, fixture.Map)}} {
+	}{{"json", []byte(fixture.JSON)}, {"fields", mustZigReplyHex(t, fixture.Fields)}} {
 		t.Run(layout.name, func(t *testing.T) {
 			// Replacing a same-length state preserves every binary length and field
-			// boundary; all three decoders must retain a payload error, not a refusal.
+			// boundary; both decoders must retain a payload error, not a refusal.
 			data := bytes.ReplaceAll(layout.data, []byte("sliced"), []byte("broken"))
 			reply, err := (zigReplyReader{}).read(data, 7, "pump")
 			if err != nil || reply.failure != nil || reply.completion.err == nil {

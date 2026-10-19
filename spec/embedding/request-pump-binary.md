@@ -1,7 +1,7 @@
 # Binary Request and Pump exchanges
 
 **Status: accepted, with the fields envelope selected. The Zig Session and the
-experimental Go adapter implement both candidates behind negotiation. Go and C
+experimental Go adapter implement it behind negotiation. Go and C
 publish the combined Host APIs; TS publishes them on both Cores with a
 transferable browser codec; Elixir publishes them over its WASI reactor.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s contract, under
@@ -19,22 +19,24 @@ no wire bytes or negotiated versions.
 
 | Negotiated feature |
 | --- |
-| `request-pump-map-v1` |
 | `request-pump-fields-v1` |
 | `callbacks-fields-v1` |
 | `settlements-fields-v1` |
 
 <!-- end -->
 
-The experiment has two mutually exclusive feature names:
-`request-pump-map-v1` and `request-pump-fields-v1`. Initial `hello` and its reply
-are JSON. A Host must see its requested feature in the reply before sending
-binary frames. Neither feature implies `binary-frames-v1`; requesting both
-candidate features, or either alongside `binary-frames-v1`, is a protocol error.
-A later hello cannot change the selected candidate during the Session.
+The exchange is negotiated as `request-pump-fields-v1`. Initial `hello` and its
+reply are JSON. A Host must see its requested feature in the reply before
+sending binary frames. The feature does not imply `binary-frames-v1`;
+requesting it alongside `binary-frames-v1` is a protocol error. A later hello
+cannot change the negotiated layout during the Session. The map layout,
+`request-pump-map-v1`, was measured and retired
+([#1334](https://github.com/odogono/odgn-talk/issues/1334)); a `hello` naming
+it is refused like any unknown feature.
 
 Binary frames begin with the bytes `4e 54 42 01` (ASCII `NTB`, version 1), then
-a layout byte (`00` for map, `01` for fields), then exactly one payload.
+the layout byte `01` (fields), then exactly one payload. Layout `00`, the
+retired map layout, is refused like any other unknown layout.
 JSON frames retain their ordinary JSON syntax. The binary prefix is not valid
 JSON; dispatch must identify it before UTF-8 or JSON validation. Existing
 transport lengths and the frame-size limit remain unchanged. Browser transports
@@ -56,9 +58,9 @@ executing it. Do not retry an admitted operation automatically after a transport
 failure. Unknown tags, versions, layouts, extra bytes and unsupported messages
 are refused. Existing open exchanges remain available for corrected frames.
 
-## Candidate payloads
+## Payloads
 
-Both candidates use the [binary Value items](binary-frames.md#items), including
+Frames use the [binary Value items](binary-frames.md#items), including
 shortest LEB128, ordered Maps, canonical numbers and NFC text. This experiment
 corrects the older document's "Zero is always an integer item" rule: only zero
 with no fractional digits uses the integer tag. `0.0`, `0.00` and `1.00` retain
@@ -73,12 +75,7 @@ Base64 text. Every Map key is a tagged text item; a quantity's Unit is a tagged
 text item. Protocol text is allowed only in protocol fields, never in a Value.
 Validate Function payload types and negotiated metadata before resolving it.
 
-The map candidate is a map item with the existing field names and types. It
-adds the combined operations and correlation fields described below. Envelope
-field order is not semantic; Value Map order is semantic. Benchmark encoders
-use a fixed order so field-order variation cannot decide the comparison.
-
-The fields candidate is a message tag followed by a list item. Its elements
+An envelope is a message tag followed by a list item. Its elements
 are positional; absence is Nothing, and list length must match exactly:
 
 <!-- generated: envelope.messages -->
@@ -127,7 +124,7 @@ The Data File records each positional field's item kind and structural
 `required` flag. A required field must be present; conditional rules (such as a
 successful admission's delivery, a completion's state, and a failure's code)
 remain in the codec and the ordinary admission checks. Optional fields are
-omitted from a map and Nothing in a list. A Value position can carry Nothing.
+Nothing. A Value position can carry Nothing.
 
 `text` means protocol text (item `12`), `texts` a list of protocol texts,
 `int` either integer sign, `uint` a nonnegative integer, `bool` a boolean item,
@@ -228,12 +225,8 @@ A Report Value the Core cannot encode is Nothing.
 
 <!-- end -->
 
-The map candidate's replies keep the JSON reply shapes: an admission is
-`{ref, ok: {delivery, trace?}}` or `{ref, err, trace?}`, and a completion is
-`{ref, delivery?, token?, ok: {state, nextDeadline?, fuelUsed, reports, gone?, trace?}, abandoned, settled?}`
-or `{ref, delivery?, token?, err, trace?}`. A combined input's admission
-refusal is an admission reply, so a reply with `delivery` is a Pump outcome.
-In the fields candidate's completion, each `reports` element is a Report tag
+A combined input's admission refusal is an admission reply, so a completion
+with `delivery` is a Pump outcome. In a completion, each `reports` element is a Report tag
 followed by its list. That element is not an item, so a reader uses the Report
 table rather than skipping generically.
 
@@ -250,8 +243,8 @@ is refused, as an ordinary Pump with those options would be.
 
 `callbacks-fields-v1` ([#1311](https://github.com/odogono/odgn-talk/issues/1311))
 moves the `op`, `prop`, `effect` and `release` needs, and their results, to
-the fields envelope. It is negotiated at `hello` independently of the
-Request/Pump candidates: it needs neither, and either may accompany it. The
+the fields envelope. It is negotiated at `hello` independently of
+`request-pump-fields-v1`: it doesn't need it, and it may accompany it. The
 `trace` and `resolve` needs, `trace-result`, `resolve-result` and inline events
 stay JSON. Once negotiated, every one of these four needs is a binary frame,
 whatever the exchange's first frame was. The Host may answer in binary or with
@@ -440,7 +433,7 @@ Function-call performance without a new limit. Missing measurements are not
 passing evidence.
 
 #1254 measured fields at 27–43% faster than JSON on every platform, and map
-10–19% slower than fields, so fields is selected. The gate first asked for at
+10–19% slower than fields, so fields is selected and map retired (#1334). The gate first asked for at
 most 3× native. That limit measures the Zig guest rather than the transport, and
 is now a separate goal ([ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)).
 Go, C, TS and Elixir implementations publish the combined APIs.

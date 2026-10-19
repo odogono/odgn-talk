@@ -20,8 +20,7 @@ type zbPacket struct {
 	ok          bool
 	// A completion's outcome, as items.
 	state, deadline, fuel, reports, gone []byte
-	fields                               bool    // the fields candidate's Reports
-	rows                                 []zbRow // and those Reports, already read
+	rows                                 []zbRow // its Reports, already read
 	err                                  []byte
 	abandoned, settled, trace            []byte
 	// need is a binary callback need (#1311), which ends no exchange.
@@ -33,49 +32,24 @@ func zbParse(data []byte, p *zbPacket) error {
 		return errZigBinary
 	}
 	r := zbReader{d: data, at: len(zbPrefix) + 1}
-	var top zbView
-	var err error
-	switch zbLayout(data[len(zbPrefix)]) {
-	case zbFields:
-		p.fields = true
-		if len(data) > len(zbPrefix)+1 && data[len(zbPrefix)+1] >= zbOpNeed {
-			return zbParseNeed(&r, p)
-		}
-		tag, err := r.byte()
-		if err != nil || tag != zbAdmission && tag != zbCompletion {
-			return errZigBinary
-		}
-		p.completion = tag == zbCompletion
-		if top, err = zbPositional(&r, zbMessages[tag].fields); err != nil {
-			return err
-		}
-		p.state, p.deadline, p.fuel = top.get("state"), top.get("nextDeadline"), top.get("fuelUsed")
-		p.reports, p.gone, p.trace = top.get("reports"), top.get("gone"), top.get("trace")
-		p.rows = r.rows
-	case zbMap:
-		span, err := r.skip()
-		if err != nil {
-			return err
-		}
-		if top, err = zbMapView(span); err != nil {
-			return err
-		}
-		p.trace = top.get("trace")
-		if ok := top.get("ok"); ok != nil {
-			inner, err := zbMapView(ok)
-			if err != nil {
-				return err
-			}
-			p.state, p.deadline, p.fuel = inner.get("state"), inner.get("nextDeadline"), inner.get("fuelUsed")
-			p.reports, p.gone, p.trace = inner.get("reports"), inner.get("gone"), inner.get("trace")
-			if d := inner.get("delivery"); d != nil {
-				top.keys, top.vals = append(top.keys, "delivery"), append(top.vals, d)
-			}
-		}
-		p.completion = p.state != nil || top.get("token") != nil
-	default:
+	if data[len(zbPrefix)] != zbFields {
 		return errZigBinary
 	}
+	if len(data) > len(zbPrefix)+1 && data[len(zbPrefix)+1] >= zbOpNeed {
+		return zbParseNeed(&r, p)
+	}
+	tag, err := r.byte()
+	if err != nil || tag != zbAdmission && tag != zbCompletion {
+		return errZigBinary
+	}
+	p.completion = tag == zbCompletion
+	top, err := zbPositional(&r, zbMessages[tag].fields)
+	if err != nil {
+		return err
+	}
+	p.state, p.deadline, p.fuel = top.get("state"), top.get("nextDeadline"), top.get("fuelUsed")
+	p.reports, p.gone, p.trace = top.get("reports"), top.get("gone"), top.get("trace")
+	p.rows = r.rows
 	if r.at != len(data) {
 		return errZigBinary
 	}
@@ -126,7 +100,7 @@ func zbParseNeed(r *zbReader, p *zbPacket) error {
 	if !ok {
 		return fmt.Errorf("Zig reply omitted ref")
 	}
-	*p = zbPacket{ref: ref, ok: true, fields: true, need: zbNeed{tag: tag, view: view}, abandoned: view.get("abandoned"), settled: view.get("settled"), trace: view.get("trace")}
+	*p = zbPacket{ref: ref, ok: true, need: zbNeed{tag: tag, view: view}, abandoned: view.get("abandoned"), settled: view.get("settled"), trace: view.get("trace")}
 	return nil
 }
 
