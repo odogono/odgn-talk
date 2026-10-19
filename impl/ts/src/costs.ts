@@ -341,6 +341,14 @@ export const partSize = (
 export type Charge = { alloc: number; fuel: number };
 const compiledRates = makeCostRates(measureOf);
 
+/** Each rate's charge if its formulas measure nothing, else undefined. */
+export const fixedRates = (): (Charge | undefined)[] =>
+  rates.map(({ alloc, fuel }, i) =>
+    [...alloc, ...fuel].every(term => term[0] === CONSTANT)
+      ? compiledRates[i]!(noCounts)
+      : undefined,
+  );
+
 /** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */
 export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;
 

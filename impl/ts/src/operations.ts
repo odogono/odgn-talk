@@ -108,6 +108,8 @@ import {
   canonicalNumber,
   decimalParts,
   mapWithEntry,
+  smallInteger,
+  smallNumber,
 } from './values';
 import {
   combine,
@@ -579,9 +581,17 @@ export const comparison = (
     const { equal, scanned } = equals(a, b, fold);
     return { result: bool(op === 'equal' ? equal : !equal), scanned };
   }
-  const comparer = new Comparer(fold);
-  const scanned = comparer.scanned(a, b);
-  const o = orderBy(comparer, a, b);
+  const x = smallOf(a);
+  const y = smallOf(b);
+  let scanned = 0;
+  let o: number;
+  if (!Number.isNaN(x) && !Number.isNaN(y)) {
+    o = x < y ? -1 : x > y ? 1 : 0;
+  } else {
+    const comparer = new Comparer(fold);
+    scanned = comparer.scanned(a, b);
+    o = orderBy(comparer, a, b);
+  }
   const result =
     op === 'less'
       ? o < 0
@@ -862,7 +872,35 @@ const dateArithmetic = (op: string, a: Value, b: Value): Value => {
   );
 };
 
+/**
+ * Add, subtract or multiply two small integers (see `smallInteger`), or
+ * undefined when either isn't one or the result isn't a safe integer. The
+ * exact result needs no rounding, so it equals the Decimal path's.
+ */
+export const smallArithmetic = (
+  op: string,
+  x: number,
+  y: number,
+): Value | undefined => {
+  const r =
+    op === 'add'
+      ? x + y
+      : op === 'subtract'
+        ? x - y
+        : op === 'multiply'
+          ? x * y
+          : Number.NaN;
+  return Number.isSafeInteger(r) ? smallNumber(r) : undefined;
+};
+/** A number Value's small integer, or NaN. */
+export const smallOf = (v: Value): number =>
+  v.kind === 'number' ? smallInteger(v.asDecimal()!) : Number.NaN;
+
 export const arithmetic = (op: string, a: Value, b: Value): Value => {
+  const small = smallArithmetic(op, smallOf(a), smallOf(b));
+  if (small) {
+    return small;
+  }
   if (isDate(a) || isDate(b)) {
     try {
       return dateArithmetic(op, a, b);

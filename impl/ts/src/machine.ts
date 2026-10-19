@@ -15,7 +15,15 @@ import {
   readRest,
   type Reader,
 } from './binary';
-import { charge, partSize, rateOf, sizeOf, type Measured } from './costs';
+import {
+  charge,
+  fixedRates,
+  partSize,
+  rateOf,
+  sizeOf,
+  type Charge,
+  type Measured,
+} from './costs';
 import { integerOf, isInteger } from './decimal';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf } from './code-unit';
@@ -67,6 +75,8 @@ import {
   waitUs,
   wrongKind,
   randomBound,
+  smallArithmetic,
+  smallOf,
 } from './operations';
 import { readDisplay } from './readers';
 import { validComputedMessageName } from './selectors';
@@ -952,9 +962,48 @@ const iteratorItem = (source: Value | null, at: number): Value => {
 };
 
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
+const isBoolean = (item: Item | undefined): boolean =>
+  isValue(item) && item.kind === 'boolean';
+// A stack item's small integer (see `smallInteger`), or NaN.
+const smallAt = (item: Item | undefined): number =>
+  isValue(item) ? smallOf(item) : Number.NaN;
 
 // Scheduler callbacks last only for one step and are never saved with a Run.
 const clauseChargeCallbacks = new WeakMap<Run, () => void>();
+
+/** Internal: tests turn `Run.fastSteps` off to compare it with `step`. */
+export const fastPath = { enabled: true };
+
+// Each rate's charge when its formula measures nothing, else undefined.
+const fixedCharges: readonly (Charge | undefined)[] = fixedRates();
+// Compare rates' charges for two numbers, which scan nothing.
+const compareCharges: Charge[] = [];
+// Arithmetic rates' charges by the result's digits, which with its constant
+// size are all a number result's measures.
+const numberCharges: Charge[][] = [];
+const numberCharge = (rate: number, result: Value): Charge => {
+  const n = Math.abs(smallOf(result));
+  let digits = 1;
+  for (let ten = 10; n >= ten; ten *= 10) {
+    digits++;
+  }
+  return ((numberCharges[rate] ??= [])[digits] ??= charge(rate, { result }));
+};
+const ordered = (opcode: number, x: number, y: number): boolean => {
+  switch (opcode) {
+    case Op.Less:
+      return x < y;
+    case Op.Greater:
+      return x > y;
+    case Op.LessOrEqual:
+      return x <= y;
+    case Op.GreaterOrEqual:
+      return x >= y;
+    case Op.Equal:
+      return x === y;
+  }
+  return x !== y;
+};
 
 export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
@@ -2349,6 +2398,167 @@ export class Run {
       clauseChargeCallbacks.delete(this);
     }
     this.finishInstruction();
+  }
+
+  /**
+   * Execute the simple instructions ahead, while they spend less than `room`
+   * Fuel, without the general step's machinery. These instructions cannot
+   * raise, fault, suspend or write a record; anything else, or a charge the
+   * Run can't pay, is left for `step`, as is every Run with something due.
+   * The Group calls this only when no tooling observes the steps.
+   */
+  fastSteps(room: number) {
+    if (
+      !fastPath.enabled ||
+      !this.charging ||
+      this.cancellation ||
+      this.resumption ||
+      this.entryError ||
+      this.suspended ||
+      this.outcome ||
+      !this.frames.length
+    ) {
+      return;
+    }
+    const frame = this.frame;
+    if (frame.restricted || frame.clauseCharge) {
+      return;
+    }
+    const { locals, stack } = frame;
+    const code = frame.code;
+    const instructions = code.unit.code;
+    const fuelLimit = this.limits.fuelPerRun;
+    const allocLimit = this.limits.allocPerRun;
+    const end = this.fuel + room;
+    let fuel = this.fuel;
+    let alloc = this.alloc;
+    let pc = frame.pc;
+    for (;;) {
+      if (fuel >= end) {
+        break;
+      }
+      const ins = instructions[pc]!;
+      const opcode = ins.opcode;
+      let cost: Charge | undefined;
+      let result: Value | undefined;
+      switch (opcode) {
+        case Op.Const:
+        case Op.Pop:
+        case Op.Load:
+        case Op.Move:
+        case Op.Jump:
+          cost = fixedCharges[ins.rate];
+          break;
+        case Op.Store:
+          if (isValue(stack.at(-1))) {
+            cost = fixedCharges[ins.rate];
+          }
+          break;
+        case Op.BranchFalse:
+        case Op.BranchTrue:
+          if (!isBoolean(stack.at(-1))) {
+            break;
+          }
+          cost = fixedCharges[ins.rate];
+          break;
+        case Op.Less:
+        case Op.Greater:
+        case Op.LessOrEqual:
+        case Op.GreaterOrEqual:
+        case Op.Equal:
+        case Op.NotEqual: {
+          const x = smallAt(stack.at(-2));
+          const y = smallAt(stack.at(-1));
+          if (Number.isNaN(x) || Number.isNaN(y)) {
+            break;
+          }
+          cost = compareCharges[ins.rate] ??= charge(ins.rate, {
+            result: bool(true),
+            scanned: 0,
+          });
+          const holds = ordered(opcode, x, y);
+          // A branch that follows takes the outcome without a Boolean,
+          // when it too has room and can be paid.
+          const next = instructions[pc + 1]!;
+          const branch = fixedCharges[next.rate];
+          if (
+            (next.opcode === Op.BranchFalse || next.opcode === Op.BranchTrue) &&
+            branch &&
+            fuel + cost.fuel < end &&
+            fuel + cost.fuel + branch.fuel <= fuelLimit &&
+            alloc + cost.alloc + branch.alloc <= allocLimit
+          ) {
+            fuel += cost.fuel + branch.fuel;
+            alloc += cost.alloc + branch.alloc;
+            stack.length -= 2;
+            pc =
+              holds === (next.opcode === Op.BranchTrue)
+                ? (next.operands[0] as number)
+                : pc + 2;
+            continue;
+          }
+          result = bool(holds);
+          break;
+        }
+        case Op.Add:
+        case Op.Subtract:
+        case Op.Multiply: {
+          result = smallArithmetic(
+            ins.op,
+            smallAt(stack.at(-2)),
+            smallAt(stack.at(-1)),
+          );
+          if (result) {
+            cost = numberCharge(ins.rate, result);
+          }
+          break;
+        }
+      }
+      if (
+        !cost ||
+        fuel + cost.fuel > fuelLimit ||
+        alloc + cost.alloc > allocLimit
+      ) {
+        break;
+      }
+      fuel += cost.fuel;
+      alloc += cost.alloc;
+      const [a, b] = ins.operands;
+      switch (opcode) {
+        case Op.Const:
+          stack.push(code.constant(a as number));
+          break;
+        case Op.Pop:
+          stack.pop();
+          break;
+        case Op.Load:
+          stack.push(locals[a as number]!);
+          break;
+        case Op.Store:
+          locals[a as number] = stack.pop() as Value;
+          break;
+        case Op.Move:
+          locals[b as number] = locals[a as number]!;
+          break;
+        case Op.Jump:
+          pc = a as number;
+          continue;
+        case Op.BranchFalse:
+        case Op.BranchTrue:
+          if ((stack.pop() as Value).asBool() === (opcode === Op.BranchTrue)) {
+            pc = a as number;
+            continue;
+          }
+          break;
+        default:
+          stack.length -= 2;
+          stack.push(result!);
+      }
+      pc++;
+    }
+    frame.pc = pc;
+    this.fuel = fuel;
+    this.alloc = alloc;
   }
 
   /** Internal: also called after a debug-deferred unwind. */
