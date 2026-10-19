@@ -1080,3 +1080,62 @@ With this follow-up rebased on the #1285 fix, the full native and adapter
 Corpus runs each pass 446/446 on Go 1.27.2, `CGO_ENABLED=0`, darwin/arm64. No
 expectations changed. This is Corpus evidence for #1055, not retirement or
 performance acceptance.
+
+## Binary Load and deferred Group creation (#1329), 2026-10-19
+
+Group handle indexing landed in #1330. This follow-up removes a separate
+`new-group` export from a first Load and sends Load's source as protocol text
+in a negotiated `load-fields-v1` envelope. Replies retain their JSON shape and
+use the existing Load validation, worker guard and Trace path. An unused Group
+reserves only a Host-side handle and needs no `drop-group`.
+
+[The local raw results](../../bench/results/go-zig-adapter/1329-local-load/)
+compare the pinned adapter at `576853a1` with `0a50e77c`, including its rebuilt
+safe reactor from `a43dd2bd` (SHA-256
+`297fa0c1ceff2ca5b91e0f481e803c6d68a80962d2501013dd89427ccc2f68b2`).
+The machine was an Apple M5, Go 1.27, `CGO_ENABLED=0`, `-cpu=4`.
+Three A/B rounds alternate before/after, after/before, before/after. Each
+sample uses a fresh test process; its first count is excluded because it
+includes Engine compilation. `env.json` records both artifacts, and
+`paired.json` retains the steady counts used here:
+
+- `BenchmarkLoad/core/loop`, 20k iterations, three counts per process:
+  median 38.662 µs before, 32.345 µs after (16% lower).
+- The same Load, 200k iterations, two counts per process:
+  median 39.821 µs before, 32.942 µs after (17% lower).
+- `BenchmarkGroupInstantiation`, 20k iterations, three counts per process:
+  median 23.992 µs before, 17.904 µs after (25% lower).
+- The new adapter's steady Load cost changes by less than 2% between 20k
+  and 200k iterations. This addresses b.N-dependent growth locally; these
+  timings are not evidence for Linux's ≤3×-native gate.
+
+The binaries were built with `go test -tags talk_zig_experimental -c` in
+`bench/go` and `impl/go`. The baseline build used a Go overlay of the original
+adapter files and embedded artifact; the changed build used the committed
+adapter and rebuilt artifact. Load runs use
+`-test.run='^$' -test.bench='^BenchmarkLoad/core/loop$' -test.cpu=4` with
+`-test.benchtime=20000x -test.count=3` or
+`-test.benchtime=200000x -test.count=2`. Group runs use
+`-test.bench='^BenchmarkGroupInstantiation$' -test.benchtime=20000x -test.count=3`.
+
+`BenchmarkZigBackendLoadLiveGroups` also compares zero with 20,000 retained
+Groups on one guest. It drops each sampled Group synchronously to keep the
+resident population fixed, reporting the Load-only time as `load-ns/op` and
+the complete Load/drop cycle as `ns/op`. Median Load-only cost is 15.305 µs
+with zero retained Groups and 15.125 µs with 20,000: within 2%. `live.txt`
+records `-benchtime=5000x -count=3 -cpu=1`.
+
+Verification passes Zig unit/C Host tests, the pure-Go adapter gate, native Go
+tests, targeted race tests, TypeScript type checks and shared-envelope tests,
+22 Elixir codec/combined tests, generated tables and repository checks.
+The compatibility check also runs against the previous embedded reactor:
+refusing the new feature keeps earlier binary Request/Pump and Object
+Collection negotiations rather than discarding them with Load's fallback.
+
+The [three-platform workflow](https://github.com/odogono/odgn-talk/actions/runs/39321128221)
+runs the final reactor on Linux amd64, Linux arm64 and macOS arm64. Its results
+and the Linux ≤3× target remain pending. The two new vectors, `load-new-group`
+and `load-existing-group` in `impl/testdata/envelope-frames.json`, need human
+first review; agreement among codecs is execution evidence only. Elixir's
+published reactor release and digest re-pin also remain pending. Save format
+is unchanged at `zig/13`; #1329 stays open for these gates.

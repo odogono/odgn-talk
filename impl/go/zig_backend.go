@@ -849,10 +849,19 @@ func (b *zigGroup) checkHello() error {
 	}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": features})
 	if err != nil {
+		// Older guests may support every earlier optional feature but not
+		// Load fields. Keep those negotiations when falling back to JSON Load.
+		wantedLoad = false
+		features = slices.DeleteFunc(features, func(feature any) bool { return feature == "load-fields-v1" })
+		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": features})
+	}
+	wantedElements := true
+	if err != nil {
 		// A guest refuses a feature it does not know, leaving its session
 		// unchanged, so ask again without the optional ones.
 		wanted = false
 		wantedLoad = false
+		wantedElements = false
 		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
 	}
 	if err == nil {
@@ -862,7 +871,7 @@ func (b *zigGroup) checkHello() error {
 			case "load-fields-v1":
 				b.reg.load = wantedLoad
 			case "object-elements-v1":
-				b.reg.elements = true
+				b.reg.elements = wantedElements
 			case binary:
 				// Binary frames only after the reply shows the feature.
 				b.reg.binary = wanted

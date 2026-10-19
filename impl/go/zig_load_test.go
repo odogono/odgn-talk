@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestZigBackendLoadStartsGroupInBinaryFrame(t *testing.T) {
@@ -45,10 +46,10 @@ func TestZigBackendLoadStartsGroupInBinaryFrame(t *testing.T) {
 // BenchmarkZigBackendLoadLiveGroups pins the live population so GC pacing
 // cannot hide an O(Groups) lookup. Compare the steady counts after warm-up.
 func BenchmarkZigBackendLoadLiveGroups(b *testing.B) {
-	old := runtime.GOMAXPROCS(1)
-	defer runtime.GOMAXPROCS(old)
 	for _, live := range []int{0, 20000} {
 		b.Run(fmt.Sprintf("live=%d", live), func(b *testing.B) {
+			old := runtime.GOMAXPROCS(1)
+			defer runtime.GOMAXPROCS(old)
 			core := New()
 			kept := make([]*Group, 0, live)
 			for range live {
@@ -62,13 +63,21 @@ func BenchmarkZigBackendLoadLiveGroups(b *testing.B) {
 			if _, err := warm.Load(LoadOptions{Name: "warm", Source: "on ping\n return 1\nend ping\n"}); err != nil {
 				b.Fatal(err)
 			}
+			var loading time.Duration
 			b.ResetTimer()
 			for b.Loop() {
+				started := time.Now()
 				g := core.NewGroup(GroupOptions{})
 				if _, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 1\nend ping\n"}); err != nil {
 					b.Fatal(err)
 				}
+				loading += time.Since(started)
+				// Keep the live population fixed instead of waiting for GC.
+				backend := g.backend.(*zigGroup)
+				backend.dropping.Stop()
+				dropZigGroup(zigDrop{backend.shared, backend.handle})
 			}
+			b.ReportMetric(float64(loading.Nanoseconds())/float64(b.N), "load-ns/op")
 			runtime.KeepAlive(kept)
 		})
 	}

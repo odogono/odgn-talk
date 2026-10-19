@@ -1,0 +1,176 @@
+[
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 0,
+    "version": "before",
+    "ns": [
+      39015.0,
+      38580.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 0,
+    "version": "after",
+    "ns": [
+      32380.0,
+      32538.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 1,
+    "version": "after",
+    "ns": [
+      32279.0,
+      32309.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 1,
+    "version": "before",
+    "ns": [
+      38320.0,
+      38602.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 2,
+    "version": "before",
+    "ns": [
+      39158.0,
+      38722.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 20000,
+    "round": 2,
+    "version": "after",
+    "ns": [
+      32533.0,
+      32078.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 0,
+    "version": "before",
+    "ns": [
+      39821.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 0,
+    "version": "after",
+    "ns": [
+      32880.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 1,
+    "version": "after",
+    "ns": [
+      32942.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 1,
+    "version": "before",
+    "ns": [
+      39828.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 2,
+    "version": "before",
+    "ns": [
+      39116.0
+    ]
+  },
+  {
+    "workload": "load",
+    "iterations": 200000,
+    "round": 2,
+    "version": "after",
+    "ns": [
+      34732.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 0,
+    "version": "before",
+    "ns": [
+      25390.0,
+      24706.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 0,
+    "version": "after",
+    "ns": [
+      18332.0,
+      18630.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 1,
+    "version": "after",
+    "ns": [
+      17801.0,
+      18006.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 1,
+    "version": "before",
+    "ns": [
+      24167.0,
+      23816.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 2,
+    "version": "before",
+    "ns": [
+      22405.0,
+      22260.0
+    ]
+  },
+  {
+    "workload": "group",
+    "iterations": 20000,
+    "round": 2,
+    "version": "after",
+    "ns": [
+      17518.0,
+      17734.0
+    ]
+  }
+]
