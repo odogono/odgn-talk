@@ -100,6 +100,13 @@ type Payload =
   | FunctionRef
   | ObjectRef;
 const valueToken = Symbol('Value');
+const SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+const frozenParts = (parts: Dec): Dec =>
+  Object.freeze({
+    coefficient: parts.coefficient,
+    exponent: parts.exponent,
+    negative: parts.negative && parts.coefficient !== 0n,
+  });
 const decimalToken = Symbol('Decimal');
 let makeValue: (kind: Kind, payload: Payload) => Value;
 let extendListValue: (
@@ -119,40 +126,66 @@ let editMapValue: (
   value: Value | undefined,
 ) => Value;
 let makeDecimal: (canonical: string, parts: Dec) => Decimal;
+let makeSmallDecimal: (n: number) => Decimal;
 /** Internal: a Decimal's cached, immutable arithmetic representation. */
 export let decimalParts: (decimal: Decimal) => Dec;
+/**
+ * Internal: a Decimal's value as a JS number when it is a safe integer
+ * written with exponent 0, or NaN. The fast paths compute on it directly.
+ */
+export let smallInteger: (decimal: Decimal) => number;
 
 export class Decimal {
-  readonly #canonical: string;
-  readonly #parts: Dec;
-  private constructor(token: symbol, canonical: string, parts: Dec) {
+  // A small integer keeps its JS number and makes its text and parts on
+  // first use; every other Decimal has both from the start.
+  #canonical: string | undefined;
+  #parts: Dec | undefined;
+  readonly #small: number;
+  private constructor(
+    token: symbol,
+    canonical: string | undefined,
+    parts: Dec | undefined,
+    small: number,
+  ) {
     if (token !== decimalToken) {
       invalidValue('Use a numeric constructor');
     }
     this.#canonical = canonical;
-    this.#parts = Object.freeze({
-      coefficient: parts.coefficient,
-      exponent: parts.exponent,
-      negative: parts.negative && parts.coefficient !== 0n,
-    });
+    this.#parts = parts && frozenParts(parts);
+    this.#small = small;
     Object.freeze(this);
   }
   static {
     makeDecimal = (canonical, parts) =>
-      new Decimal(decimalToken, canonical, parts);
-    decimalParts = decimal => decimal.#parts;
+      new Decimal(
+        decimalToken,
+        canonical,
+        parts,
+        parts.exponent === 0 && parts.coefficient <= SAFE
+          ? Number(parts.coefficient) * (parts.negative ? -1 : 1) + 0
+          : Number.NaN,
+      );
+    makeSmallDecimal = n => new Decimal(decimalToken, undefined, undefined, n);
+    decimalParts = decimal =>
+      (decimal.#parts ??= frozenParts({
+        coefficient: BigInt(Math.abs(decimal.#small)),
+        exponent: 0,
+        negative: decimal.#small < 0,
+      }));
+    smallInteger = decimal => decimal.#small;
   }
   toString(): string {
-    return this.#canonical;
+    return (this.#canonical ??= String(this.#small));
   }
   toBigInt(): bigint {
-    if (!isInteger(this.#parts)) {
+    const parts = decimalParts(this);
+    if (!isInteger(parts)) {
       invalidValue('Decimal is not an integer');
     }
-    return integerOf(this.#parts);
+    return integerOf(parts);
   }
   toNumberLossy(): number {
-    return Number(this.#canonical);
+    return Number(this.toString());
   }
 }
 
@@ -604,6 +637,10 @@ export const dec = (s: string): Value => {
 };
 
 /** Internal: a checked arithmetic result, retaining its coefficient directly. */
+/** A safe integer as a number Value, without BigInt or text work. */
+export const smallNumber = (n: number): Value =>
+  makeValue('number', makeSmallDecimal(n + 0));
+
 export const canonicalNumber = (parts: Dec): Value =>
   makeValue('number', makeDecimal(formatDec(parts), parts));
 

@@ -3957,6 +3957,12 @@ export class Group {
       slice > 0 && spent.get(s)! >= allowance.get(s)!;
     const preempt = (s: ScriptState) =>
       sliced(s) ? 'slice' : capped() ? 'cap' : null;
+    // The Fuel a Script may spend before `preempt` would stop it.
+    const room = (s: ScriptState) =>
+      Math.min(
+        slice > 0 ? allowance.get(s)! - spent.get(s)! : Infinity,
+        cap > 0 ? cap - fuel : Infinity,
+      );
     let progress = true;
     while (progress && !capped() && !this.rewound) {
       progress = false;
@@ -3969,6 +3975,7 @@ export class Group {
           s,
           reports,
           () => preempt(s),
+          () => room(s),
           cost => {
             spent.set(s, spent.get(s)! + cost);
             fuel += cost;
@@ -4052,6 +4059,7 @@ export class Group {
     s: ScriptState,
     reports: Report[],
     preempt: () => 'slice' | 'cap' | null,
+    room: () => number,
     charge: (fuel: number) => void,
   ): Generator<DebugPause, void> {
     if (s.stopped) {
@@ -4196,6 +4204,18 @@ export class Group {
       !s.stopped &&
       !running.rewound
     ) {
+      // Simple instructions need none of this loop's per-step work once the
+      // clause is selected (a function Run has none), while no debugger
+      // watches them.
+      if (
+        (running.selected || running.delivery.fn) &&
+        !this.debugController &&
+        !machineDebug.get(run)
+      ) {
+        run.fastSteps(room());
+        charge(run.fuel - last);
+        last = run.fuel;
+      }
       // Selection/parking can fault without stepping an instruction. Finish
       // that deferred fault before a cap or slice may end this stretch.
       by = machineDebug.get(run)?.pending ? null : preempt();
