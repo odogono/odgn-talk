@@ -7078,7 +7078,7 @@ pub const Group = struct {
         if (frame.restricted) return;
         const unit = unitOf(run, frame);
         switch (unit.code[frame.pc].op) {
-            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply => {},
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert => {},
             else => return,
         }
         for (unit.unwind) |e| if (e.kind == .finally) return;
@@ -7173,46 +7173,44 @@ pub const Group = struct {
                     frame.pc += 1;
                     continue;
                 },
-                .add, .subtract, .multiply => {
-                    const pair = numberOperands(stack.items) orelse return;
+                .add, .subtract, .multiply, .divide, .div, .mod => {
+                    const pair = valueOperands(stack.items) orelse return;
+                    if ((pair[0].data != .number and pair[0].data != .quantity) or
+                        (pair[1].data != .number and pair[1].data != .quantity)) return;
                     const op: model.decimal.Operator = switch (ins.op) {
                         .add => .add,
                         .subtract => .subtract,
-                        else => .multiply,
+                        .multiply => .multiply,
+                        .divide => .divide,
+                        .div => .div,
+                        else => .mod,
                     };
-                    const d = model.decimal.calculate(g.gpa, op, pair[0].data.number, pair[1].data.number) catch return;
-                    // The result's measures, before it has a node.
-                    var probe: Value = .{ .allocator = g.gpa, .data = .{ .number = d } };
-                    const before: ChargeState = .of(g, run);
-                    if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .result = &probe }))) return;
-                    g.fastTick();
-                    // A `store` of the result, if nothing comes between them,
-                    // reuses the local's Number node when nothing else holds
-                    // it once the operands are gone.
-                    const store = code[frame.pc + 1];
-                    if (store.op == .store) {
-                        const old = frame.locals[@intCast(store.operands[0].int)];
-                        const held_by_operands = @as(usize, @intFromBool(old == pair[0])) + @intFromBool(old == pair[1]);
-                        if (old.data == .number and old.references == held_by_operands + 1 and
-                            !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
-                            !(run.base == 0 and g.preemption(run) != null) and
-                            fastCharge(run, charged, costs.chargeUnmeasured(.store)))
-                        {
-                            replaceOperands(stack, null);
-                            old.data.number = d;
-                            g.fastTick();
-                            frame.pc += 2;
-                            continue;
-                        }
-                    }
-                    const r = model.scalar(g.gpa, .{ .number = d }) catch {
-                        // Refused: the instruction has not happened.
-                        before.restore(g, run);
-                        return;
-                    };
-                    replaceOperands(stack, r);
-                    frame.pc += 1;
+                    const numbers = pair[0].data == .number and pair[1].data == .number;
+                    const completed = if (numbers)
+                        g.fastArithmetic(run, charged, frame, code, ins, op, pair, false)
+                    else
+                        g.fastArithmetic(run, charged, frame, code, ins, op, pair, true);
+                    if (!completed) return;
                     continue;
+                },
+                .convert => {
+                    if (len == 0 or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
+                    const v = stack.items[len - 1].value;
+                    const target = ops[0].unit_target;
+                    const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
+                    var probe: Value = .{ .allocator = g.gpa, .data = .{ .quantity = q } };
+                    const before: ChargeState = .of(g, run);
+                    if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .input = v, .result = &probe }))) return;
+                    if (v.references == 1) {
+                        v.data = .{ .quantity = q };
+                    } else {
+                        const r = model.scalar(g.gpa, .{ .quantity = q }) catch {
+                            before.restore(g, run);
+                            return;
+                        };
+                        v.release();
+                        stack.items[len - 1] = .{ .value = r };
+                    }
                 },
                 else => return,
             }
@@ -7221,12 +7219,59 @@ pub const Group = struct {
         }
     }
 
+    /// Keep the Number-only specialization narrow: carrying a runtime Data
+    /// union through every scalar step adds copies and tag checks to the hot
+    /// counting/addition path. Both specializations charge the same formulas.
+    inline fn fastArithmetic(g: *Group, run: *Run, charged: bool, frame: *Frame, code: []const lower.Instruction, ins: lower.Instruction, op: model.decimal.Operator, pair: [2]*Value, comptime quantity: bool) bool {
+        const result = if (quantity)
+            model.arithmeticResult(g.gpa, op, pair[0], pair[1]) catch return false
+        else
+            model.decimal.calculate(g.gpa, op, pair[0].data.number, pair[1].data.number) catch return false;
+        var probe: Value = .{ .allocator = g.gpa, .data = if (quantity) result else .{ .number = result } };
+        const before: ChargeState = .of(g, run);
+        if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .result = &probe }))) return false;
+        g.fastTick();
+        const stack = &frame.stack;
+        // Reuse a numeric local only after both instructions can complete,
+        // and only when removing the operands leaves it uniquely held.
+        const store = code[frame.pc + 1];
+        if (store.op == .store) {
+            const old = frame.locals[@intCast(store.operands[0].int)];
+            const held = @as(usize, @intFromBool(old == pair[0])) + @intFromBool(old == pair[1]);
+            const reusable = old.data == .number or (quantity and old.data == .quantity);
+            if (reusable and old.references == held + 1 and
+                !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
+                !(run.base == 0 and g.preemption(run) != null) and
+                fastCharge(run, charged, costs.chargeUnmeasured(.store)))
+            {
+                replaceOperands(stack, null);
+                if (quantity) old.data = result else old.data.number = result;
+                g.fastTick();
+                frame.pc += 2;
+                return true;
+            }
+        }
+        const r = model.scalar(g.gpa, if (quantity) result else .{ .number = result }) catch {
+            before.restore(g, run);
+            return false;
+        };
+        replaceOperands(stack, r);
+        frame.pc += 1;
+        return true;
+    }
+
     fn fastTick(g: *Group) void {
         if (g.host_poll != null) g.host_poll_ticks +%= 1;
     }
 
     /// The two Numbers on top of a stack, the first pushed first.
     fn numberOperands(items: []const Slot) ?[2]*Value {
+        const pair = valueOperands(items) orelse return null;
+        if (pair[0].data != .number or pair[1].data != .number) return null;
+        return pair;
+    }
+
+    fn valueOperands(items: []const Slot) ?[2]*Value {
         if (items.len < 2) return null;
         const x = switch (items[items.len - 2]) {
             .value => |v| v,
@@ -7236,7 +7281,6 @@ pub const Group = struct {
             .value => |v| v,
             else => return null,
         };
-        if (x.data != .number or y.data != .number) return null;
         return .{ x, y };
     }
 

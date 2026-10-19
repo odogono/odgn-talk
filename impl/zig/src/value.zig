@@ -692,8 +692,15 @@ pub inline fn scalar(gpa: std.mem.Allocator, data: Data) !*Value {
         .nothing => narrowScalar(gpa, .nothing, {}),
         .bool => |b| narrowScalar(gpa, .bool, b),
         .number => |n| narrowScalar(gpa, .number, n),
+        .quantity => |q| quantityScalar(gpa, q),
         else => scalarOwned(gpa, data),
     };
+}
+
+// Keep the larger Quantity initialization out of scalar's inlined callers:
+// inlining it changes register/stack allocation even in Text-heavy code.
+noinline fn quantityScalar(gpa: std.mem.Allocator, q: Quantity) !*Value {
+    return narrowScalar(gpa, .quantity, q);
 }
 
 fn narrowScalar(gpa: std.mem.Allocator, comptime tag: Kind, payload: @FieldType(Data, @tagName(tag))) !*Value {
@@ -728,6 +735,8 @@ test "small scalars initialize every header and payload and refuse before publis
         .{ .bool = true },
         .{ .number = try Decimal.parse("-12345678901234567890123456789012.00") },
         .{ .number = try Decimal.parse("0.000") },
+        .{ .quantity = .{ .number = try Decimal.parse("-2.50"), .unit = try units.Unit.parse("kg*mi^2/hr") } },
+        .{ .quantity = .{ .number = .{ .exponent = -3 }, .unit = try units.Unit.parse("m") } },
     };
     for (examples) |data| {
         var counting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
@@ -753,6 +762,10 @@ test "small scalars initialize every header and payload and refuse before publis
             .number => |n| {
                 try std.testing.expectEqual(n, v.data.number);
                 try std.testing.expectEqual(@as(u64, 16), logicalSize(v));
+            },
+            .quantity => |q| {
+                try std.testing.expectEqual(q, v.data.quantity);
+                try std.testing.expectEqual(@as(u64, 24), logicalSize(v));
             },
             else => unreachable,
         }
@@ -1339,6 +1352,13 @@ pub fn mapDelete(gpa: std.mem.Allocator, old: *const Value, key: []const u8) Err
 /// Applies `op` to numbers or Quantities, converting through Base Units.
 pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *Value) Error!*Value {
     if (x.data == .number and y.data == .number) return scalar(gpa, .{ .number = try decimal.calculate(gpa, op, x.data.number, y.data.number) });
+    return scalar(gpa, try arithmeticResult(gpa, op, x, y));
+}
+
+/// The Number or Quantity result, before allocating its immutable Value node.
+/// The machine may store it directly in a uniquely held numeric local.
+pub fn arithmeticResult(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *Value) Error!Data {
+    if (x.data == .number and y.data == .number) return .{ .number = try decimal.calculate(gpa, op, x.data.number, y.data.number) };
     if (op == .div or op == .mod) return error.InvalidValue;
     if (op == .add or op == .subtract) {
         if (x.data != .quantity or y.data != .quantity) return error.InvalidValue;
@@ -1346,7 +1366,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
         const r = y.data.quantity;
         if (!l.unit.compatible(&r.unit)) return error.IncompatibleUnits;
         const rhs = try l.unit.fromBase(gpa, try r.unit.toBase(gpa, r.number));
-        return scalar(gpa, .{ .quantity = .{ .number = try decimal.calculate(gpa, op, l.number, rhs), .unit = l.unit } });
+        return .{ .quantity = .{ .number = try decimal.calculate(gpa, op, l.number, rhs), .unit = l.unit } };
     }
     const l: Quantity = switch (x.data) {
         .quantity => |q| q,
@@ -1361,7 +1381,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
     const u = try units.Unit.combine(&l.unit, &r.unit, op == .divide);
     const base = try decimal.calculate(gpa, op, try l.unit.toBase(gpa, l.number), try r.unit.toBase(gpa, r.number));
     const n = try u.fromBase(gpa, base);
-    return scalar(gpa, if (u.empty()) .{ .number = n } else .{ .quantity = .{ .number = n, .unit = u } });
+    return if (u.empty()) .{ .number = n } else .{ .quantity = .{ .number = n, .unit = u } };
 }
 
 test "exact number arithmetic still allocates an immutable result and refuses atomically" {

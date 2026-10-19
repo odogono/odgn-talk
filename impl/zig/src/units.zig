@@ -30,6 +30,18 @@ const kind_factors = blk: {
     for (table.kind, 0..) |k, i| result[i] = if (k.factor) |f| Decimal.parse(f) catch unreachable else null;
     break :blk result;
 };
+// A single Kind can be converted without visiting either phase when every
+// step is an exact factor of one. Do not cancel nontrivial factors: their
+// separate rounding and intermediate overflows are observable.
+const identity_units = blk: {
+    @setEvalBranchQuota(100_000);
+    var result: [table.unit.len]bool = undefined;
+    for (table.unit, unit_factors, 0..) |u, factor_value, i| {
+        const extra = kind_factors[kindIndex(i)];
+        result[i] = u.ratio == null and isOne(factor_value) and (extra == null or isOne(extra.?));
+    }
+    break :blk result;
+};
 const ratio_numerator = Decimal.fromInt(@as(u8, 5));
 const ratio_denominator = Decimal.fromInt(@as(u8, 9));
 /// Each Unit Kind's base dimension, as the slot of the Kind whose dimension it
@@ -272,8 +284,27 @@ pub const Unit = struct {
         return self.convert(a, n, false, true);
     }
     fn convert(self: *const Unit, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
+        if (self.active == 0) return n;
+        // As in applyFactor, a zero or a positive exponent must still pass
+        // through Decimal arithmetic for sign/quantum/exponent clamping.
         const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
         var value = n;
+        if (@popCount(self.active) == 1) {
+            const k = @ctz(self.active);
+            const s = self.slots[k];
+            if (n.coefficient != 0 and n.exponent <= 0 and identity_units[s.unit]) return n;
+            // A lone non-ratio Kind has work in exactly one phase. Keep
+            // each unit/Kind factor and repetition separate, in the same
+            // order; ratio Units still need both phases below.
+            if (table.unit[s.unit].ratio == null) {
+                const op: dec.Operator = if ((s.exponent > 0) != from_base) .multiply else .divide;
+                for (0..@abs(s.exponent)) |_| {
+                    value = try applyFactor(calculate, a, op, value, unit_factors[s.unit]);
+                    if (kind_factors[k]) |extra| value = try applyFactor(calculate, a, op, value, extra);
+                }
+                return value;
+            }
+        }
         // Numerator factors precede denominator factors, both in kind order;
         // converting from Base Units reverses the phases.
         for (0..2) |step| {
@@ -368,8 +399,11 @@ pub const Plan = struct {
 /// representable exponent unchanged, so it is skipped; zeros and positive
 /// exponents still go through `calculate` for exponent clamping.
 fn applyFactor(calculate: anytype, a: std.mem.Allocator, op: dec.Operator, value: Decimal, f: Decimal) Error!Decimal {
-    if (f.coefficient == 1 and f.exponent == 0 and !f.negative and value.coefficient != 0 and value.exponent <= 0) return value;
+    if (isOne(f) and value.coefficient != 0 and value.exponent <= 0) return value;
     return calculate(a, op, value, f);
+}
+fn isOne(f: Decimal) bool {
+    return f.coefficient == 1 and f.exponent == 0 and !f.negative;
 }
 fn kindIndex(i: usize) usize {
     for (table.kind, 0..) |k, n| if (std.mem.eql(u8, k.name, table.unit[i].kind)) return n;
@@ -500,7 +534,7 @@ test "sparse and planned conversion agree with original steps including unbounde
     var examples: std.ArrayList(Unit) = .empty;
     defer examples.deinit(a);
     for (table.unit) |unit| try examples.append(a, try Unit.parse(unit.name));
-    for ([_][]const u8{ "1/degF", "degF^3/hr", "mL/ft^3", "kg*mi^2/hr", "mL^2/degF^2", "m^3/L", "m/m", "month", "year" }) |text| try examples.append(a, try Unit.parse(text));
+    for ([_][]const u8{ "1/degF", "degF^3/hr", "mL/ft^3", "kg*mi^2/hr", "mL^2/degF^2", "m^3/L", "m/m", "m^2", "1/m^2", "month", "year" }) |text| try examples.append(a, try Unit.parse(text));
     for (examples.items) |unit| {
         const descriptor = Descriptor.init(unit);
         var dimensions: [table.kind.len]i64 = @splat(0);

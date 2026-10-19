@@ -15,6 +15,10 @@ pub fn convert(a: Allocator, gpa: Allocator, v: *Value, target: []const u8) !?*V
 
 /// Uses code-owned metadata when Load verified a static Unit target.
 pub fn prepared(a: Allocator, gpa: Allocator, v: *Value, target: []const u8, descriptor: ?*const model.units.Descriptor) !?*Value {
+    if (descriptor) |d| if (v.data == .number or v.data == .quantity) {
+        const q = numericUnit(a, v, d) orelse return null;
+        return try model.scalar(gpa, .{ .quantity = q });
+    };
     if (std.mem.eql(u8, target, "text")) return switch (v.data) {
         .bytes => |b| if (unicode.utf8.validate(b)) try model.text(gpa, b) else null,
         else => try model.text(gpa, try chunks.textForm(a, v)),
@@ -80,6 +84,44 @@ pub fn prepared(a: Allocator, gpa: Allocator, v: *Value, target: []const u8, des
         break :blk unit.fromBase(a, from.toBase(a, source.number) catch return null) catch return null;
     } else source.number;
     return try model.scalar(gpa, .{ .quantity = .{ .number = n, .unit = unit.* } });
+}
+
+/// A verified Unit target applied to a Number or Quantity, before allocating
+/// its result node. Preserve the source-to-Base and Base-to-target steps.
+pub fn numericUnit(a: Allocator, v: *const Value, descriptor: *const model.units.Descriptor) ?model.Quantity {
+    const n = switch (v.data) {
+        .number => |n| n,
+        .quantity => |*q| blk: {
+            if (!std.mem.eql(i64, &q.unit.dimensions(), &descriptor.dimensions)) return null;
+            const base = q.unit.toBase(a, q.number) catch return null;
+            break :blk descriptor.plan.execute(a, base, true, false) catch return null;
+        },
+        else => return null,
+    };
+    return .{ .number = n, .unit = descriptor.unit };
+}
+
+test "numeric Unit results agree with dynamic conversion including zero rounding and refusal" {
+    const a = std.testing.allocator;
+    for ([_]Decimal{
+        .{ .exponent = -3 },
+        try Decimal.parse("-2.50"),
+        try Decimal.parse("9999999999999999999999999999999999"),
+        .{ .coefficient = 3, .exponent = -6176 },
+    }) |n| {
+        for ([_][]const u8{ "", "mm", "degF", "mL" }) |source| {
+            const v = if (source.len == 0) try model.scalar(a, .{ .number = n }) else try model.quantity(a, n, source);
+            defer v.release();
+            for ([_][]const u8{ "m", "mm", "degC", "L", "m^2", "month" }) |target| {
+                const descriptor = model.units.Descriptor.init(try model.units.Unit.parse(target));
+                const expected = try convert(a, a, v, target);
+                defer if (expected) |value| value.release();
+                const result = numericUnit(a, v, &descriptor);
+                try std.testing.expectEqual(expected != null, result != null);
+                if (expected) |value| try std.testing.expectEqual(value.data.quantity, result.?);
+            }
+        }
+    }
 }
 
 test "prepared targets preserve conversion outcomes for numbers Quantities and text" {

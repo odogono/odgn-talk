@@ -49,6 +49,29 @@ const mixed =
     \\
 ;
 
+/// Unit conversion, cancellation and shared aliases, plus exact and rounded
+/// division. Keep the original Values observable after each replacement.
+const quantities =
+    \\on run n
+    \\  put 0 into total
+    \\  put 0 m into distance
+    \\  repeat for each i in 1..n
+    \\    put distance into prior
+    \\    put (i * 1000 mm) as m into distance
+    \\    add distance / 1 m to total
+    \\    put distance + 250 mm into distance
+    \\    subtract 0.25 m from distance
+    \\    put distance * 2 into distance
+    \\    put distance / 2 into distance
+    \\    put i div 2 into whole
+    \\    put i mod 2 into remainder
+    \\    put i / 3 into rounded
+    \\  end repeat
+    \\  return [total, distance, prior, whole, remainder, rounded]
+    \\end run
+    \\
+;
+
 const Options = struct {
     fast: bool,
     limits: machine.Limits = .{},
@@ -133,6 +156,7 @@ fn expectSame(source: []const u8, n: i64, o: Options) !void {
 test "the fast path's Runs match the general loop's to completion" {
     try expectSame(loop, 40, .{ .fast = true });
     try expectSame(mixed, 8, .{ .fast = true });
+    try expectSame(quantities, 4, .{ .fast = true });
     // Shared locals keep their own values.
     const got = try trace(testing.allocator, mixed, 8, .{ .fast = true });
     defer testing.allocator.free(got);
@@ -143,17 +167,46 @@ test "the fast path faults where the general loop does on every Fuel and allocat
     // Every instruction boundary of the first iterations, including those
     // inside a fused pair.
     for (1..260) |fuel| {
+        try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
     }
     for (1..200) |alloc| {
+        try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+    }
+    // Quantity results occupy 24 logical bytes. Reach the later arithmetic
+    // and its stores too, checking immediately below and at each 8-byte
+    // accounting boundary without reloading for equivalent intermediate caps.
+    var alloc: u64 = 200;
+    while (alloc <= 1000) : (alloc += 8) {
+        try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc - 1 } });
+        try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+    }
+}
+
+test "numeric fast steps leave arithmetic errors and finally cleanup to the general loop" {
+    const a = testing.allocator;
+    for ([_][]const u8{
+        "n / 0",                                  "n div 0", "n mod 0",
+        "(n * 1 m) + 1 s",                        "n + 1 m", "(n * 1 m) mod 1 m",
+        "n * 9999999999999999999999999999999999",
+    }) |expression| {
+        for ([_]bool{ false, true }) |protected| {
+            const source = try std.fmt.allocPrint(a, "on run n\n{s}  return {s}\n{s}end run\n", .{
+                if (protected) "  try\n" else "",                                      expression,
+                if (protected) "  finally\n    put n / 2 into n\n  end try\n" else "",
+            });
+            defer a.free(source);
+            try expectSame(source, 2, .{ .fast = true });
+        }
     }
 }
 
 test "the fast path is preempted where the general loop is at every Fuel Slice" {
     for (1..60) |slice| {
+        try expectSame(quantities, 4, .{ .fast = true, .slice = slice });
         try expectSame(loop, 20, .{ .fast = true, .slice = slice });
         try expectSame(mixed, 4, .{ .fast = true, .slice = slice });
     }
@@ -165,7 +218,7 @@ test "the fast path recovers from a refused result node" {
     // something a Host compares. A refused Run must leak nothing, and any
     // Run that completes must match the unrefused one.
     const gpa = testing.allocator;
-    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 } }) |case| {
+    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 }, .{ quantities, 4 } }) |case| {
         const want = try trace(gpa, case[0], case[1], .{ .fast = true });
         defer gpa.free(want);
         for (0..80) |k| {

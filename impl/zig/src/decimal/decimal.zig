@@ -310,8 +310,15 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
             if (y.coefficient == 0) return null;
             const ideal = x.exponent - y.exponent;
             exponent = ideal;
-            coefficient = x.coefficient / y.coefficient;
-            var remainder = x.coefficient % y.coefficient;
+            // Catalogue powers of ten and dimension-cancelling division
+            // frequently have coefficient one. Their quotient already has
+            // the ideal exponent; avoid the runtime's wide division helper.
+            coefficient = x.coefficient;
+            var remainder: u128 = 0;
+            if (y.coefficient != 1) {
+                coefficient = x.coefficient / y.coefficient;
+                remainder = x.coefficient % y.coefficient;
+            }
             if (remainder != 0) {
                 // The quotient terminates only when the divisor in lowest
                 // terms has no prime factors but 2 and 5. Reject the rest
@@ -812,6 +819,10 @@ test "exact operators, trailing zeros and half-even" {
         .{ Operator.multiply, "2.50", "3", "7.50" },
         .{ Operator.divide, "10", "4", "2.5" },
         .{ Operator.divide, "7.50", "3", "2.50" },
+        .{ Operator.divide, "7.500", "1", "7.500" },
+        .{ Operator.divide, "7.500", "-1", "-7.500" },
+        .{ Operator.divide, "7.500", "0.001", "7500" },
+        .{ Operator.divide, "0.00", "-1", "0.00" },
         .{ Operator.divide, "1", "0.01", "100" },
         .{ Operator.divide, "1", "3", "0.3333333333333333333333333333333333" },
         .{ Operator.divide, "2", "3", "0.6666666666666666666666666666666667" },

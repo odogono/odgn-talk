@@ -84,6 +84,11 @@ paired conversion/comparison probes, separate CPU captures and surviving-copy
 assembly. `zig/unit-paths.py` reproduces the paired suite and optional macOS
 profiles against two prebuilt native Hosts.
 
+The [remaining Zig numeric-path measurements](results/2026-10-19-zig-number-paths.md)
+record Quantity arithmetic and conversion, coefficient-one division, constructor
+inlining controls, full-suite pairs and the four-runner numeric comparison for
+[#1290](https://github.com/odogono/odgn-talk/issues/1290).
+
 The [Zig Character indexing measurements](results/2026-10-14-zig-character-indexing.md)
 record paired forward-index improvements, scaling, negative-index limits and
 the fresh four-runner text comparison for
