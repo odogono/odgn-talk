@@ -837,10 +837,15 @@ export class Parser {
       return {
         k: 'CallStatement',
         call: this.call(name),
+        into: this.resultTarget(),
         wait: this.andWait(),
       };
     }
-    return { ...this.commandPhrase(name), wait: this.andWait() };
+    return {
+      ...this.commandPhrase(name),
+      into: this.resultTarget(),
+      wait: this.andWait(),
+    };
   }
 
   // A Command Call's arguments: a list, or one argument and then `label arg`
@@ -948,6 +953,7 @@ export class Parser {
         msg: phrase.name,
         args: phrase.args,
         target,
+        into: this.resultTarget(),
         wait: this.andWait(),
       };
     }
@@ -969,7 +975,15 @@ export class Parser {
     }
     this.expectWord('to', 'operator');
     const target = this.expr();
-    return { k: 'Send', msg, name, args, target, wait: this.andWait() };
+    return {
+      k: 'Send',
+      msg,
+      name,
+      args,
+      target,
+      into: this.resultTarget(),
+      wait: this.andWait(),
+    };
   }
 
   askTell(): Node {
@@ -1006,7 +1020,9 @@ export class Parser {
       if (this.isWord(t, 'end')) {
         break;
       }
-      lines.push(this.at(t, { k: 'OperationLine', ...this.operation(true) }));
+      lines.push(
+        this.at(t, { k: 'OperationLine', ...this.operation(true, true) }),
+      );
       this.endOfStatement();
     }
     this.next();
@@ -1032,7 +1048,7 @@ export class Parser {
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, an `ask`'s Result Target where `targets` allows it (ADR 0112),
+  // arguments, a Result Target where `targets` allows it,
   // and `and wait` where `waits` allows it.
   operation(
     waits: boolean,
@@ -1044,13 +1060,17 @@ export class Parser {
     }
     const op = this.next().v;
     const args = this.startsExpr(this.peek(0)) ? this.exprList() : [];
-    let into: Node | undefined;
-    if (targets && this.atOperatorWord('into')) {
-      this.next('operator');
-      const n = this.peek(0);
-      into = this.at(n, { k: 'Name', name: this.name('a name') });
-    }
+    const into = targets ? this.resultTarget() : undefined;
     return { op, args, into, wait: waits ? this.andWait() : false };
+  }
+
+  resultTarget(): Node | undefined {
+    if (!this.atOperatorWord('into')) {
+      return undefined;
+    }
+    this.next('operator');
+    const n = this.peek(0);
+    return this.at(n, { k: 'Name', name: this.name('a name') });
   }
 
   // `wait d`, `wait for ev [or d]`, and, where a block may go, the block

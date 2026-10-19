@@ -21,9 +21,11 @@
 ## Consequences
 
 - **Syntax:** after `tell`'s receiver, the end of the line opens a block and `to` gives the one-line form, so one token decides, and the predictive grammar keeps its two-token limit (ADR 0019).
-  - A block line is `Word ExpressionList? AndWait?`, and a line starting `end` always closes the block. `end` joins `ask`, `tell`, `send` and `wait` among the names a Capability refuses for an Operation, so every Operation can be called from a block.
+  - A block line is `Word ExpressionList? ResultTarget? AndWait?` (extended by [ADR 0114](0114-result-targets-apply-to-result-producing-calls.md)), and a line starting `end` always closes the block. `end` joins `ask`, `tell`, `send` and `wait` among the names a Capability refuses for an Operation, so every Operation can be called from a block.
   - `end tell` joins the explicit endings (ADR 0042). The block is a full statement, so a one-line `if` or `when` can't hold it.
   - Blank lines and comments may go between lines, and an empty block is allowed, as an empty `repeat` is.
 - **Meaning:** a block is exact shorthand for its lines' one-line calls, in order. It adds no instruction or cost, and no rule for `it`. A suspending line in a Join's body is a Join Member, as `ask … and wait` is.
 - **Errors:** no new code. A line's `and wait` that doesn't match its Operation is `wrong mode`, and an Operation its Grant doesn't declare is `unknown operation`, both at the Operation name. At run time, a line's instructions, its errors' `at` and its breakpoints are at its Operation name too.
 - **Surface:** Beginner Surface, with no `[[advanced]]` tag. The formatter keeps whichever form the author wrote, and `prefer-explicit-end` covers a bare `end` that closes a block.
+
+A result-producing line may name a Result Target before `and wait`, as its one-line `ask` does. A fire-and-forget line with one is `wrong mode` at the Operation name ([ADR 0114](0114-result-targets-apply-to-result-producing-calls.md)).

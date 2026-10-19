@@ -11,7 +11,7 @@ A load error, here as in every chapter, is a checker diagnostic: the Script or L
 ### Bodies and locals
 
 - **A body** is the code of a Handler, a function or a Lambda. Each Run of it has its own locals. A loop, a branch or a `try` block has no scope of its own.
-- **Its locals** are its parameters and every name it binds: a Container root it puts into that isn't a Script Variable, and the names bound by a `let`, `repeat for each`, `match`, `catch` or `wait for` pattern, including Captures ([Destructuring](#destructuring)), a `repeat`'s collecting target, an `ask`'s Result Target that isn't a Script Variable, and an offer's parameters.
+- **Its locals** are its parameters and every name it binds: a Container root it puts into that isn't a Script Variable, and the names bound by a `let`, `repeat for each`, `match`, `catch` or `wait for` pattern, including Captures ([Destructuring](#destructuring)), a `repeat`'s collecting target, a Result Target that isn't a Script Variable, and an offer's parameters.
 - **They start as Nothing.** When a body starts, every local that isn't a parameter holds Nothing, so reading one before anything is put into it gives Nothing.
 - **`it`** is a local of every body, and also starts as Nothing ([below](#it)).
 - **Script level:** a Script's Script Variables, Constants, Handlers, functions and Imports can be used from all of its bodies.
@@ -49,14 +49,14 @@ A Name that is none of these is a load error, except as a `send`'s receiver or a
 
 | Statement | `it` becomes |
 | --- | --- |
-| `ask … to …` | the Operation's result, also when it has a Result Target |
-| `send … and wait` | the receiver's reply |
+| `ask … to …`, a result-producing `tell`-block line or Host Command | the Operation's result |
+| `send … and wait`, or a Command Call sent up the Message Path with `and wait` | the receiver's reply |
 | a Command Call to a Handler of the Script or of a Library | the Handler's result |
 | a call statement, `f(x)` or `f(x) and wait` | the call's result |
 | `wait for` an event | the message, or Nothing on a timeout ([chapter 5](05-handlers-messages-and-scheduling.md)) |
 | a Join | the list of its members' answers, in start order |
 
-Nothing else sets it. A Join Member leaves it unchanged inside the Join's body.
+A Result Target leaves these rules unchanged. Nothing else sets `it`. A Join Member leaves it unchanged inside the Join's body.
 
 Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tested, not the body's `it`.
 
@@ -700,10 +700,20 @@ The function may live in a Library while the policies live in the calling Script
 
 ### Capabilities
 
-- **`ask g to op args`** calls the Operation `op` of the Grant `g`, with the arguments evaluated left to right, and puts its result in `it`. `ask g to op args into x` also puts the result into `x`, as `put it into x` would straight after the call: `x` is a Script Variable of that name, or else a local, and a Constant, `it` or `me` is the error that `put` gives. Both are written once the result arrives, with nothing between that can suspend or raise, and a call that fails, runs out of time or is abandoned writes neither ([ADR 0112](../docs/adr/0112-an-ask-may-name-a-result-target.md)). `and wait` must be written exactly when the Operation is declared suspending, and both are checked at load against the Grant ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)).
+- **`ask g to op args`** calls the Operation `op` of the Grant `g`, with the arguments evaluated left to right, and puts its result in `it`. A [Result Target](#result-targets), `into x`, also receives the result. `and wait` must be written exactly when the Operation is declared suspending, and both are checked at load against the Grant ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)).
 - **`tell g to op args`** calls a fire-and-forget Operation, and drops its result. `tell` on any other Operation is a load error.
-- **A `tell g` block** calls each line's Operation of `g` in order, as the one-line call that its Operation's declared mode allows: `tell g to op args` for a fire-and-forget Operation, and `ask g to op args` for any other, so an answer lands in `it` ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). A line ends in `and wait` exactly when its Operation is declared suspending. The block is nothing more than those calls: a later line's arguments see the `it` an earlier line left, and in a Join's body a line with `and wait` is a Join Member. A mismatched `and wait` is `wrong mode`, and an Operation `g` doesn't declare is `unknown operation`, both at the line's Operation name.
+- **A `tell g` block** calls each line's Operation of `g` in order, as the one-line call that its Operation's declared mode allows: `tell g to op args` for a fire-and-forget Operation, and `ask g to op args` for any other, so an answer lands in `it` ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). A result-producing line may take a Result Target before any `and wait`, with the same meaning as on `ask`. A fire-and-forget line with one is `wrong mode` at its Operation name. A line ends in `and wait` exactly when its Operation is declared suspending. The block is nothing more than those calls: a later line's arguments see the `it` an earlier line left, and in a Join's body a line with `and wait` is a Join Member. A mismatched `and wait` is `wrong mode`, and an Operation `g` doesn't declare is `unknown operation`, both at the line's Operation name.
 - **Grants, Shapes, costs and failures** are in [chapter 5](05-handlers-messages-and-scheduling.md) and [chapter 9](09-embedding.md). `say x` is short for `tell console to write x` ([chapter 12](12-sessions-and-tooling.md)).
+
+### Result Targets
+
+A Result Target, `into name`, keeps a call's answer in a named place as well as `it` ([ADR 0114](../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)). It may follow an `ask`, a result-producing `tell`-block Operation line, a Command Call, a call statement (`f(x) into answer`, also with `and wait`), or `send … into answer and wait` in either receiver order, including computed names and spreads.
+
+- **The Name:** it is written as `put it into name` would write it: a Script Variable if one exists, otherwise a body local. Existing parameters are writable locals. Constants, captured locals in a Lambda and collecting targets have the same write restrictions as `put`. `it` and `me` aren't Names here, so they are syntax errors, as are chunks, keys and any other Container beyond a bare Name. A target binds throughout its body, including before the call and outside a Join's branches and loops; a new local starts as Nothing.
+- **Timing:** outside a Join Member, once the call succeeds, `it` and the target receive the same value with no intervening Suspension Point or instruction that can raise a Script Error. An error in evaluating or executing the call, `timeout`, revocation, cancellation or abandonment does not assign its result to either. This doesn't undo writes made by the called code itself, and ordinary `catch` and Segment rollback rules still apply.
+- **No implicit waiting:** a target adds no suspension and changes neither resolution nor the existing `and wait` checks. A Command Call that resolves to a local or imported Handler takes its result, including Nothing on a fall-through return. A Host Command takes its immediate or suspending Operation's result; a fire-and-forget one, including `say`, has no result and is `wrong mode` at the command name. A Command Call sent up the Message Path, or an explicit `send`, needs `and wait` to have a target: without it, the load error is `missing and wait` at the command name or `send`. It never starts a fire-and-forget send and assigns Nothing as a substitute.
+- **Joins:** a member's target is registered when that member starts, and is written only when the whole Join succeeds, as [chapter 5](05-handlers-messages-and-scheduling.md#joins) specifies. An immediate call inside a Join remains an ordinary call and writes its target at once.
+- **Statement only:** a target doesn't turn a call into an expression and cannot appear inside an argument or `put` expression. `and wait` stays last.
 
 ### Messages and waiting
 

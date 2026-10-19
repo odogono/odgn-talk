@@ -157,21 +157,26 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "wrong mode",
-            .raised_when = "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, `tell … to` on one that isn't fire-and-forget, or a `tell` block line whose `and wait` is there on an Operation that isn't suspending, or missing on one that is",
-            .at = "`ask` or `tell`, or a `tell` block line's Operation name",
+            .raised_when = "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, `tell … to` on one that isn't fire-and-forget, a `tell` block line or Host Command whose `and wait` is there on an Operation that isn't suspending, or missing on one that is, or a fire-and-forget `tell` block line or Host Command (including `say`) with a Result Target",
+            .at = "`ask` or `tell`, a `tell` block line's Operation name, or the Host Command's name",
             .sources = &.{
                 "ADR 0012",
                 "ADR 0063",
+                "ADR 0094",
+                "ADR 0114",
                 "#115",
+                "#1350",
             },
         },
         .{
             .code = "missing and wait",
-            .raised_when = "A Command Call to a Handler that may suspend has no `and wait`",
-            .at = "the Handler's name",
+            .raised_when = "A Command Call to a Handler that may suspend has no `and wait`, or a `send` or a Command Call resolved to the Message Path has a Result Target without `and wait`",
+            .at = "the Handler's name, `send`, or the Command Call's name",
             .sources = &.{
                 "ADR 0012",
                 "#115",
+                "ADR 0114",
+                "#1350",
             },
         },
         .{
@@ -272,13 +277,13 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not in a join",
-            .raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, a member inside a `try`, or a member with a Result Target",
-            .at = "its first token, the member's, or the Result Target's `into`",
+            .raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, a member inside a `try`",
+            .at = "its first token or the member's",
             .sources = &.{
                 "ADR 0026",
                 "#115",
-                "ADR 0112",
-                "#1340",
+                "ADR 0114",
+                "#1350",
             },
         },
         .{
@@ -364,13 +369,15 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "can't write",
-            .raised_when = "A Container is rooted in a Constant, a Lambda puts into a captured local, the body of a `repeat` that collects writes its collecting target, through a Container rooted in it, a pattern that binds it or an inner loop that collects into it, or `set` writes a read-only property of a Host Object whose kind and key are known at load",
-            .at = "the Container's root, the binding, the inner loop's collecting target, or `set`",
+            .raised_when = "A Container or Result Target writes a Constant, a Lambda puts into a captured local, the body of a `repeat` that collects writes its collecting target, through a Container rooted in it, a Result Target, a pattern that binds it or an inner loop that collects into it, or `set` writes a read-only property of a Host Object whose kind and key are known at load",
+            .at = "the Container's root, the Result Target's Name, the binding, the inner loop's collecting target, or `set`",
             .sources = &.{
                 "ADR 0016",
                 "ADR 0025",
                 "ADR 0059",
                 "#115",
+                "ADR 0114",
+                "#1350",
             },
         },
         .{

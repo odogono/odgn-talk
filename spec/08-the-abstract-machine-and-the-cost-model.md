@@ -20,7 +20,7 @@ The state is defined abstractly. A Core may represent it any way it likes, as lo
   - its Delivery: the message's name and arguments, `me`, `the target`, its delivery id, and its open Verdict, if it holds one
   - while it dispatches, the Handler and the number of the clause being tried, and the arguments
   - while it waits, its wait: for `wait`, its deadline; for `wait-for` and `wait-for-any`, the event entry, the values the instruction popped, each `after` branch's deadline, and its place in the order waits began
-  - its pending calls, each with its call id, and for an open Join, each member in start order, with its answer once it has one
+  - its pending calls, each with its call id, and for an open Join, each member in start order, with its optional Result Target destination and its answer once it has one
   - its cleanup stack: one entry per `finally` block it is running because of an Error, cancellation or pending acceptance/offer transfer, giving the control activation, entry, Error or transfer mode, and progress
   - its dispatch-context stack: each original Error and fault position, retained continuations, the try being dispatched, owner-local reference, activation, selection boundary, pending target and arguments, attempt number and cleanup progress
   - its per-Run offer-attempt counter, initially zero, preserved across preemption and restore
@@ -650,9 +650,9 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `return e` | ⟦e⟧, or `const nothing`; with `finally` blocks open, `store t`, those blocks innermost first, `load t`; then `return` |
 | `veto e` | as `return e`, with `veto` in place of `return` |
 | `pass m` | with `finally` blocks open, those blocks innermost first; then `pass m` |
-| a Command Call `h a, …` | ⟦a⟧ … `call-handler h n` `store 0`, or `call-handler-wait h n` `store 0` with `and wait`. With no such Handler, `send-up h n`, or `send-up-wait h n` `store 0` with `and wait` |
+| a Command Call `h a, …` | ⟦a⟧ … `call-handler h n` `store 0`, or `call-handler-wait h n` `store 0` with `and wait`. With no such Handler, a Host Command lowers as its Operation call below; otherwise `send-up h n`, or `send-up-wait h n` `store 0` with `and wait` |
 | a call statement `f(a)` | the call, `call-value-wait` in place of `call-value` with `and wait`, then `store 0` |
-| `ask g to op a, …` | ⟦a⟧ … `ask`, or `ask-wait` with `and wait`, then `store 0`, or `join-ask` in a Join. With a Result Target `into x`, then `move 0 x` for a local, or `load 0` `store-var x` for a Script Variable |
+| `ask g to op a, …` | ⟦a⟧ … `ask`, or `ask-wait` with `and wait`, then `store 0`, or `join-ask` in a Join. Result Targets lower as [below](#result-targets) |
 | `tell g to op a, …` | ⟦a⟧ … `tell` |
 | a `tell g` block | each line as the one-line call its Operation's mode allows: `tell g to op a, …`, `ask g to op a, …`, or `ask g to op a, … and wait`, in order. The block itself emits nothing |
 | `say e` | ⟦e⟧ `tell console write 1` |
@@ -670,6 +670,25 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 - **A deadline** stays on the stack below a Timeout Block's body in the same way, and `timeout-end` pops it. Wherever an iterator depth or prefix is given, such as an Unwind Table entry's depth, an offer record's depth or a dispatch activation's prefix, it counts the deadlines below too. So a catch outside the block drops its deadline, and a `return` leaves it with the frame.
 - **`repeat for each`'s temp** is released after the `move`s, before the body.
 - **Grants:** the name after `ask` or `tell` is a Grant, and the Operation's mode picks `ask`, `ask-wait` or `tell`, checked at load ([chapter 5](05-handlers-messages-and-scheduling.md)). In a `tell` block, the mode alone picks it ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)).
+
+#### Result Targets
+
+A Result Target on an ordinary result-producing call adds `move 0 x` for a local, or `load 0` and `store-var x` for a Script Variable, immediately after the call's `store 0`. This applies to `ask`, immediate/suspending `tell`-block lines and Host Commands, local/imported Handler Command Calls, Command Calls that send up the Message Path with `and wait`, call statements and every waiting `send` variant. No expression is evaluated between these stores; no new instruction, Suspension Point or Script Error is introduced. The added ordinary instructions have their existing charges (1 Fuel for the local move, or 3 for `load 0` and `store-var`, and no allocation). A fire-and-forget line/Host Command has no target, and a Message Path call or `send` with one requires explicit `and wait` ([chapter 4](04-expressions-and-statements.md#result-targets)).
+
+For a Join Member, extend its member instruction with two optional trailing operands:
+
+| Instruction | Operands with a target |
+| --- | --- |
+| `join-ask` | `grant operation count target-kind target` |
+| `join-send` | `message count target-kind target` |
+| `join-send-named` | `count target-kind target` |
+| `join-send-spread` | `target-kind target` |
+
+`target-kind` is `local` or `variable`, and `target` is a non-negative local slot or Script Variable index in the calling frame's code unit. The pair is either entirely absent or entirely present; an absent pair retains the old meaning and encoding. The loader resolves and checks the Name as a `put` write, including captured-local and collecting-target restrictions. A member instruction records this destination alongside the member it starts. It neither writes the target nor pushes an answer, and adds no registration charge or allocation. Each execution of the instruction registers a fresh member/destination, so loops and conditionals need no static answer indexes. The descriptor is retained control, adds no logical size beyond the member's existing pending-call/answer state, and is dropped with the member on completion or abandonment.
+
+On successful `join-end` completion, convert and charge every answer and construct the whole answers list before assigning any target. The Join's completion charge includes 1 Fuel per started member with a local target and 3 Fuel per started member with a Script Variable target, including repeated destinations. Reserve all these charges before the first target write. There is no extra allocation for target assignment. The ordinary `join` charge of 10 Fuel remains at entry; its result-list allocation and the target-write charges are due only on successful completion. Then write the recorded targets in member start order and push the list. The next instruction is the existing `store 0`. No suspension or instruction that can raise a Script Error intervenes. A failed start, body error, failed answer conversion/charge, member failure, timeout, revocation or abandonment writes none of the member targets. A Limit Fault follows the ordinary Segment rollback rule. An immediate call inside the Join lowers as an ordinary call and is unaffected by this deferred assignment.
+
+**Delivery boundary ([ADR 0114](../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)):** these optional operands and completion charges are normative here. The generated instruction/rate tables still reflect the pre-extension executable Data Files. Add the optional pairs to `machine.toml` and the completion component to `costs.toml` with Core execution support, regenerate all consumers, and move the staged reference cases into shared sketches and Disassembly Cases at that stage. The [handoff](../docs/handoffs/1350-result-targets.md) identifies the exact deferred changes; a passing existing instruction-coverage check alone does not implement these rules.
 
 #### `match`
 
@@ -806,7 +825,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Sends:** a spreading `send`'s `const` of its static name, `list 0`, `list-append`s and `list-extend`s are the `send`'s, while each item's own expression keeps its position.
 - **`tell` blocks:** a line's `ask`, `ask-wait`, `join-ask` or `tell`, and the `store 0` after an `ask`, are its Operation name, since the line has no `ask` or `tell` of its own.
-- **Result Targets:** the `move`, or the `load 0` and `store-var`, of an `ask`'s Result Target are its Name.
+- **Result Targets:** the `move`, or the `load 0` and `store-var`, of an ordinary call's Result Target are its Name. A Join Member's destination operands keep the call instruction's position; `join-end` completion charging and assignment belong to the closing `end`.
 - **Whose Clauses:** the `property` or `property-delimited` of the walk, and an ordinal's `const n`, are the clause's chunk word. Its other instructions, outside ⟦x⟧, ⟦d⟧ and ⟦c⟧, are its `whose`.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
@@ -919,6 +938,7 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 - **Search and lookup** are indivisible. `unwind` charges `4 * frames` for frames the current search step leaves, at its driving raise or `catch-next`; subsequent popping is free. `offer-lookup` charges `4 * frames` atomically for the complete scan, including unknown names and wrong arity. Neither metadata nor entering a try costs Fuel. Search and lookup can incur Fuel Slice debt and preempt at the next instruction boundary. Cancellation charges no `unwind`.
 - **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
 - **Asynchronous metering:** a queued Host charge applies in its admission Pump, outside an instruction or Stretch, at the saved call position on refusal ([contract](embedding/metered-operations.md)). It contributes to Run, Script and Pump Fuel without creating a Segment.
+- **Join target writes:** the successful completion component defined under [Result Targets](#result-targets) is charged after every member answer has been converted and charged, before any member target is written. It is not charged for a failed or abandoned Join.
 - **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited: only its terms over `result`, since the rest was charged at the call, plus any additional unpaid cost that came with the answer; already accepted metering increments are not charged again. So a reply to `send … and wait` and the end of a `wait` charge nothing more.
 - **Lifecycle:** scope checks and suspension guards precede the guarded instruction's charge, after operand/Grant validation and any instruction-specific limit check. They add no separate rate; raised errors use normal error/unwind charges. Segment hooks and automatic abandonment consume no Script Fuel or allocation. Finalization follows the boundary's existing checks and charges ([lifecycle contract](embedding/scoped-effects.md)).
 - **Cleanup:** a cancelled Run's `finally` blocks are charged as any code is, but to its Cleanup Budget, not to its Fuel ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
