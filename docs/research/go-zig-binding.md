@@ -697,7 +697,56 @@ Interleaved local A/B on an Apple M5, 20,000 iterations, five rounds, p50 µs
 
 That is about 17% off a deferred call, close to the 4 µs export the issue
 estimated, with no change to Requests. Allocations are unchanged (144 per
-call). The guest's per-call linear-memory growth is a separate part of #1320.
+call).
+
+### Deferred-call acceptance after #1325 and #1326, 2026-10-19
+
+Both parts have merged: [#1325](https://github.com/odogono/odgn-talk/pull/1325)
+releases retired Calls after the Message Layer writes their notices and folds
+finished Runs' issued-call ranges into spans; [#1326](https://github.com/odogono/odgn-talk/pull/1326)
+queues settlements with the next Pump. Late answers still use the issued-call
+history, and the save format is unchanged. The embedded reactor was rebuilt
+with `build-artifact.py` after those changes; the current artifact records
+source `7baedc84c0ff2be21480ee7da8920db1b6c2f2f8` and SHA-256
+`28bd5f868aee52fb6dff325faeb7cec4d2b9dd5ee57c0dbc26894cdbea7bca0e`.
+
+The completed [go-zig-bench run 39255311353](https://github.com/odogono/odgn-talk/actions/runs/39255311353)
+measured the settle-pump change at `741fd953`, using artifact `c6de4844…`.
+Its full-suite results are archived under
+[`1320-settle-pump`](../../bench/results/go-zig-adapter/1320-settle-pump/).
+Compared with [run 39250561088](https://github.com/odogono/odgn-talk/actions/runs/39250561088)
+([raw baseline](../../bench/results/go-zig-adapter/2026-10-19-ci-after-1311-run2/)),
+`BackendDeferredCall/history=0` improved on all three platforms. Medians of
+five samples, before / after:
+
+| Platform | Zig mean (µs) | Zig p50 (µs) | Native mean (µs) |
+| --- | ---: | ---: | ---: |
+| Linux amd64 | 104.23 / 36.66 | 99.07 / 29.96 | 26.06 / 15.20 |
+| Linux arm64 | 161.04 / 138.64 | 154.81 / 128.67 | 23.24 / 24.46 |
+| macOS arm64 | 93.17 / 67.38 | 61.88 / 47.00 | 20.64 / 24.59 |
+
+These are separate CI jobs, not interleaved A/B. The large amd64 native
+change shows substantial runner variation, so the absolute reduction there
+cannot be attributed wholly to this change. The controlled local A/B above
+establishes about a 17% p50 reduction. These results satisfy #1320's
+improvement check; they do not establish #1103's remaining limits or prove
+that native timing is unchanged across jobs.
+
+`TestZigBackendDeferredCallsRetainNothing` now warms up for 2,000 calls, then
+checks unchanged guest linear-memory size every 20,000 calls through 200,000
+calls, and checks that the adapter retains no Call records. It runs in the
+ordinary `CGO_ENABLED=0 impl/go/zig-experimental-check.sh` gate, alongside
+`TestZigBackendDeferredAnswerRidesThePump`'s four-binary-frame assertion.
+The extended regression also reproduces the original bug against the pre-fix
+`f8644caf` artifact in an isolated Go-module copy: the first 20,000-call batch
+grows guest memory from 3,211,264 to 14,417,920 bytes. The full gate passes
+on the current artifact. Both tests also pass under `-race`: guest memory
+stays at 2,228,224 bytes throughout the 200,000 calls. Rebuilding the current Core
+with `build-artifact.py` reproduces the same embedded bytes.
+
+Elixir pins [reactor-v0.9.0](https://github.com/odogono/odgn-talk/releases/tag/reactor-v0.9.0)
+at that digest, incorporating both fixes. Its save format remains `zig/13`.
+The package's 102 tests pass on this reactor.
 
 ## Cancellation before subsequent callbacks, 2026-10-15
 

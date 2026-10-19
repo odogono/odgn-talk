@@ -1,0 +1,483 @@
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+                               │    native     │                  zig                   │
+                               │    sec/op     │    sec/op      vs base                 │
+Load/core/loop-4                  31.30µ ± ∞ ¹    89.87µ ± ∞ ¹   +187.15% (p=0.008 n=5)
+Load/core/fib-4                   34.65µ ± ∞ ¹    93.42µ ± ∞ ¹   +169.65% (p=0.008 n=5)
+Load/core/fib@slice=10-4          35.52µ ± ∞ ¹    95.94µ ± ∞ ¹   +170.13% (p=0.008 n=5)
+Load/core/fib@slice=100-4         34.69µ ± ∞ ¹    94.39µ ± ∞ ¹   +172.10% (p=0.008 n=5)
+Load/core/fib@slice=1000-4        34.74µ ± ∞ ¹    97.05µ ± ∞ ¹   +179.36% (p=0.008 n=5)
+Load/core/fib@slice=10000-4       34.94µ ± ∞ ¹    95.59µ ± ∞ ¹   +173.56% (p=0.008 n=5)
+Load/core/calls-4                 36.52µ ± ∞ ¹    99.70µ ± ∞ ¹   +172.98% (p=0.008 n=5)
+Load/core/lambdas-4               39.44µ ± ∞ ¹   102.12µ ± ∞ ¹   +158.96% (p=0.008 n=5)
+Load/numbers/add-4                32.84µ ± ∞ ¹    90.45µ ± ∞ ¹   +175.42% (p=0.008 n=5)
+Load/numbers/multiply-4           34.10µ ± ∞ ¹    92.17µ ± ∞ ¹   +170.25% (p=0.008 n=5)
+Load/numbers/divide-4             33.27µ ± ∞ ¹    90.35µ ± ∞ ¹   +171.57% (p=0.008 n=5)
+Load/numbers/quantity-4           41.48µ ± ∞ ¹   102.34µ ± ∞ ¹   +146.71% (p=0.008 n=5)
+Load/text/build-4                 27.90µ ± ∞ ¹    85.16µ ± ∞ ¹   +205.22% (p=0.008 n=5)
+Load/text/iterate-4               33.84µ ± ∞ ¹    96.16µ ± ∞ ¹   +184.18% (p=0.008 n=5)
+Load/text/index-4                 37.63µ ± ∞ ¹    98.93µ ± ∞ ¹   +162.87% (p=0.008 n=5)
+Load/text/patterns-4              33.25µ ± ∞ ¹    99.97µ ± ∞ ¹   +200.69% (p=0.008 n=5)
+Load/text/graphemes-4             34.29µ ± ∞ ¹    98.15µ ± ∞ ¹   +186.20% (p=0.008 n=5)
+Load/collections/list-build-4     33.60µ ± ∞ ¹    92.51µ ± ∞ ¹   +175.35% (p=0.008 n=5)
+Load/collections/list-append-4    44.06µ ± ∞ ¹   108.57µ ± ∞ ¹   +146.44% (p=0.008 n=5)
+Load/collections/map-build-4      39.28µ ± ∞ ¹   101.48µ ± ∞ ¹   +158.33% (p=0.008 n=5)
+Load/collections/list-update-4    48.34µ ± ∞ ¹   104.35µ ± ∞ ¹   +115.86% (p=0.008 n=5)
+Load/collections/map-update-4     52.74µ ± ∞ ¹   109.21µ ± ∞ ¹   +107.08% (p=0.008 n=5)
+Load/collections/iterate-4        53.09µ ± ∞ ¹   117.37µ ± ∞ ¹   +121.07% (p=0.008 n=5)
+Load/host/immediate-4             38.28µ ± ∞ ¹   143.06µ ± ∞ ¹   +273.76% (p=0.008 n=5)
+Load/host/suspending-4            38.57µ ± ∞ ¹   143.02µ ± ∞ ¹   +270.84% (p=0.008 n=5)
+Load/host/properties-4            30.65µ ± ∞ ¹   275.06µ ± ∞ ¹   +797.40% (p=0.008 n=5)
+Load/host/conversion-4            47.53µ ± ∞ ¹   165.82µ ± ∞ ¹   +248.88% (p=0.008 n=5)
+Load/host/pump-4                  13.60µ ± ∞ ¹    73.56µ ± ∞ ¹   +440.91% (p=0.008 n=5)
+Load/macro/transform-4            45.98µ ± ∞ ¹   113.54µ ± ∞ ¹   +146.90% (p=0.008 n=5)
+Load/macro/report-4               38.34µ ± ∞ ¹   100.20µ ± ∞ ¹   +161.36% (p=0.008 n=5)
+Load/macro/game-tick-4            55.01µ ± ∞ ¹   122.11µ ± ∞ ¹   +121.99% (p=0.008 n=5)
+Load/messaging/sends-4            44.72µ ± ∞ ¹   132.99µ ± ∞ ¹   +197.38% (p=0.008 n=5)
+Load/messaging/parents-4          40.98µ ± ∞ ¹   481.04µ ± ∞ ¹  +1073.77% (p=0.008 n=5)
+Load/messaging/joins-4            54.17µ ± ∞ ¹   161.00µ ± ∞ ¹   +197.22% (p=0.008 n=5)
+Load/messaging/suspend-4          30.27µ ± ∞ ¹    90.39µ ± ∞ ¹   +198.61% (p=0.008 n=5)
+Load/lifecycle/load-small-4       15.75µ ± ∞ ¹    68.98µ ± ∞ ¹   +337.84% (p=0.008 n=5)
+Load/lifecycle/load-large-4       2.454m ± ∞ ¹    2.763m ± ∞ ¹    +12.57% (p=0.008 n=5)
+Load/lifecycle/restore-4          54.96µ ± ∞ ¹   123.04µ ± ∞ ¹   +123.87% (p=0.008 n=5)
+Load/lifecycle/rollback-4         65.94µ ± ∞ ¹   183.55µ ± ∞ ¹   +178.36% (p=0.008 n=5)
+Run/core/loop-4                  2735.2µ ± ∞ ¹    676.1µ ± ∞ ¹    -75.28% (p=0.008 n=5)
+Run/core/fib-4                    1.951m ± ∞ ¹    1.876m ± ∞ ¹     -3.83% (p=0.008 n=5)
+Run/core/fib@slice=10-4           8.330m ± ∞ ¹   23.635m ± ∞ ¹   +183.72% (p=0.008 n=5)
+Run/core/fib@slice=100-4          2.819m ± ∞ ¹    4.159m ± ∞ ¹    +47.55% (p=0.008 n=5)
+Run/core/fib@slice=1000-4         2.092m ± ∞ ¹    2.197m ± ∞ ¹     +5.02% (p=0.008 n=5)
+Run/core/fib@slice=10000-4        1.969m ± ∞ ¹    1.965m ± ∞ ¹          ~ (p=1.000 n=5)
+Run/core/calls-4                  2.245m ± ∞ ¹    2.068m ± ∞ ¹     -7.89% (p=0.008 n=5)
+Run/core/lambdas-4                3.035m ± ∞ ¹    2.495m ± ∞ ¹    -17.79% (p=0.008 n=5)
+Run/numbers/add-4                1715.1µ ± ∞ ¹    810.0µ ± ∞ ¹    -52.77% (p=0.008 n=5)
+Run/numbers/multiply-4           1105.9µ ± ∞ ¹    493.9µ ± ∞ ¹    -55.34% (p=0.008 n=5)
+Run/numbers/divide-4             3560.2µ ± ∞ ¹    680.6µ ± ∞ ¹    -80.88% (p=0.008 n=5)
+Run/numbers/quantity-4           6827.6µ ± ∞ ¹    663.4µ ± ∞ ¹    -90.28% (p=0.008 n=5)
+Run/text/build-4                  675.9µ ± ∞ ¹    325.7µ ± ∞ ¹    -51.81% (p=0.008 n=5)
+Run/text/iterate-4                2.002m ± ∞ ¹    1.261m ± ∞ ¹    -37.02% (p=0.008 n=5)
+Run/text/index-4                  5.878m ± ∞ ¹    2.024m ± ∞ ¹    -65.56% (p=0.008 n=5)
+Run/text/patterns-4               4.580m ± ∞ ¹    2.073m ± ∞ ¹    -54.75% (p=0.008 n=5)
+Run/text/graphemes-4              3.601m ± ∞ ¹    3.503m ± ∞ ¹          ~ (p=0.056 n=5)
+Run/collections/list-build-4      755.9µ ± ∞ ¹    393.5µ ± ∞ ¹    -47.94% (p=0.008 n=5)
+Run/collections/list-append-4     3.267m ± ∞ ¹    1.787m ± ∞ ¹    -45.30% (p=0.008 n=5)
+Run/collections/map-build-4       928.5µ ± ∞ ¹   1067.6µ ± ∞ ¹    +14.98% (p=0.008 n=5)
+Run/collections/list-update-4     2.846m ± ∞ ¹    1.209m ± ∞ ¹    -57.52% (p=0.008 n=5)
+Run/collections/map-update-4      587.5µ ± ∞ ¹    716.0µ ± ∞ ¹    +21.88% (p=0.008 n=5)
+Run/collections/iterate-4         5.375m ± ∞ ¹    2.153m ± ∞ ¹    -59.95% (p=0.008 n=5)
+Run/host/immediate-4              1.092m ± ∞ ¹    3.340m ± ∞ ¹   +205.96% (p=0.008 n=5)
+Run/host/suspending-4             3.378m ± ∞ ¹    7.974m ± ∞ ¹   +136.08% (p=0.008 n=5)
+Run/host/properties-4             768.9µ ± ∞ ¹   2346.6µ ± ∞ ¹   +205.18% (p=0.008 n=5)
+Run/host/conversion-4             4.049m ± ∞ ¹    7.473m ± ∞ ¹    +84.56% (p=0.008 n=5)
+Run/host/pump-4                   4.791µ ± ∞ ¹   16.419µ ± ∞ ¹   +242.71% (p=0.008 n=5)
+Run/macro/transform-4            1071.6µ ± ∞ ¹    964.7µ ± ∞ ¹     -9.98% (p=0.008 n=5)
+Run/macro/report-4                1.489m ± ∞ ¹    1.761m ± ∞ ¹    +18.32% (p=0.008 n=5)
+Run/macro/game-tick-4             3.543m ± ∞ ¹    5.320m ± ∞ ¹    +50.18% (p=0.008 n=5)
+Run/messaging/sends-4            11.098m ± ∞ ¹    9.594m ± ∞ ¹    -13.55% (p=0.008 n=5)
+Run/messaging/parents-4          13.438m ± ∞ ¹    9.711m ± ∞ ¹    -27.73% (p=0.008 n=5)
+Run/messaging/joins-4             17.19m ± ∞ ¹    15.93m ± ∞ ¹     -7.33% (p=0.008 n=5)
+Run/messaging/suspend-4           11.03m ± ∞ ¹    12.92m ± ∞ ¹    +17.14% (p=0.008 n=5)
+Run/lifecycle/load-small-4        5.131µ ± ∞ ¹   16.154µ ± ∞ ¹   +214.83% (p=0.008 n=5)
+Run/lifecycle/load-large-4        327.1µ ± ∞ ¹    360.3µ ± ∞ ¹    +10.16% (p=0.008 n=5)
+Run/lifecycle/restore-4          25.524m ± ∞ ¹    4.306m ± ∞ ¹    -83.13% (p=0.008 n=5)
+Run/lifecycle/rollback-4          27.17m ± ∞ ¹    91.07m ± ∞ ¹   +235.14% (p=0.008 n=5)
+geomean                           296.3µ          470.6µ          +58.86%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                               │      native      │                   zig                    │
+                               │       B/op       │      B/op        vs base                 │
+Load/core/loop-4                    39.84Ki ± ∞ ¹     23.02Ki ± ∞ ¹          ~ (p=0.151 n=5)
+Load/core/fib-4                     36.93Ki ± ∞ ¹     23.89Ki ± ∞ ¹    -35.32% (p=0.008 n=5)
+Load/core/fib@slice=10-4            36.95Ki ± ∞ ¹     24.37Ki ± ∞ ¹    -34.05% (p=0.008 n=5)
+Load/core/fib@slice=100-4           36.94Ki ± ∞ ¹     24.17Ki ± ∞ ¹    -34.59% (p=0.008 n=5)
+Load/core/fib@slice=1000-4          36.94Ki ± ∞ ¹     23.79Ki ± ∞ ¹    -35.61% (p=0.008 n=5)
+Load/core/fib@slice=10000-4         36.94Ki ± ∞ ¹     23.46Ki ± ∞ ¹    -36.48% (p=0.008 n=5)
+Load/core/calls-4                   37.74Ki ± ∞ ¹     24.54Ki ± ∞ ¹    -34.97% (p=0.008 n=5)
+Load/core/lambdas-4                 41.95Ki ± ∞ ¹     25.71Ki ± ∞ ¹    -38.71% (p=0.008 n=5)
+Load/numbers/add-4                  33.36Ki ± ∞ ¹     22.62Ki ± ∞ ¹    -32.18% (p=0.008 n=5)
+Load/numbers/multiply-4             40.42Ki ± ∞ ¹     23.97Ki ± ∞ ¹    -40.69% (p=0.008 n=5)
+Load/numbers/divide-4               39.87Ki ± ∞ ¹     23.50Ki ± ∞ ¹    -41.05% (p=0.008 n=5)
+Load/numbers/quantity-4             46.52Ki ± ∞ ¹     25.66Ki ± ∞ ¹    -44.85% (p=0.008 n=5)
+Load/text/build-4                   31.74Ki ± ∞ ¹     22.25Ki ± ∞ ¹    -29.89% (p=0.008 n=5)
+Load/text/iterate-4                 40.77Ki ± ∞ ¹     26.33Ki ± ∞ ¹    -35.42% (p=0.008 n=5)
+Load/text/index-4                   44.11Ki ± ∞ ¹     25.33Ki ± ∞ ¹    -42.57% (p=0.008 n=5)
+Load/text/patterns-4                41.64Ki ± ∞ ¹     23.71Ki ± ∞ ¹    -43.04% (p=0.008 n=5)
+Load/text/graphemes-4               41.30Ki ± ∞ ¹     25.51Ki ± ∞ ¹    -38.23% (p=0.008 n=5)
+Load/collections/list-build-4       40.92Ki ± ∞ ¹     23.50Ki ± ∞ ¹    -42.58% (p=0.008 n=5)
+Load/collections/list-append-4      50.23Ki ± ∞ ¹     27.09Ki ± ∞ ¹    -46.06% (p=0.008 n=5)
+Load/collections/map-build-4        46.41Ki ± ∞ ¹     25.78Ki ± ∞ ¹    -44.45% (p=0.008 n=5)
+Load/collections/list-update-4      52.63Ki ± ∞ ¹     31.14Ki ± ∞ ¹    -40.83% (p=0.008 n=5)
+Load/collections/map-update-4       57.17Ki ± ∞ ¹     31.18Ki ± ∞ ¹    -45.47% (p=0.008 n=5)
+Load/collections/iterate-4          69.13Ki ± ∞ ¹     31.66Ki ± ∞ ¹    -54.21% (p=0.008 n=5)
+Load/host/immediate-4               40.68Ki ± ∞ ¹     50.67Ki ± ∞ ¹    +24.55% (p=0.008 n=5)
+Load/host/suspending-4              40.65Ki ± ∞ ¹     50.66Ki ± ∞ ¹    +24.64% (p=0.008 n=5)
+Load/host/properties-4              33.58Ki ± ∞ ¹   2478.67Ki ± ∞ ¹  +7281.16% (p=0.008 n=5)
+Load/host/conversion-4              52.29Ki ± ∞ ¹     57.58Ki ± ∞ ¹          ~ (p=0.690 n=5)
+Load/host/pump-4                    15.17Ki ± ∞ ¹     17.74Ki ± ∞ ¹          ~ (p=0.151 n=5)
+Load/macro/transform-4              50.96Ki ± ∞ ¹     27.60Ki ± ∞ ¹    -45.84% (p=0.008 n=5)
+Load/macro/report-4                 45.18Ki ± ∞ ¹     25.66Ki ± ∞ ¹    -43.21% (p=0.008 n=5)
+Load/macro/game-tick-4              71.12Ki ± ∞ ¹     25.72Ki ± ∞ ¹    -63.84% (p=0.008 n=5)
+Load/messaging/sends-4              40.01Ki ± ∞ ¹     31.55Ki ± ∞ ¹    -21.15% (p=0.008 n=5)
+Load/messaging/parents-4            41.69Ki ± ∞ ¹   2484.73Ki ± ∞ ¹  +5860.66% (p=0.008 n=5)
+Load/messaging/joins-4              52.04Ki ± ∞ ¹     44.52Ki ± ∞ ¹          ~ (p=0.651 n=5)
+Load/messaging/suspend-4            32.85Ki ± ∞ ¹     24.10Ki ± ∞ ¹    -26.62% (p=0.008 n=5)
+Load/lifecycle/load-small-4         17.27Ki ± ∞ ¹     15.20Ki ± ∞ ¹    -11.97% (p=0.008 n=5)
+Load/lifecycle/load-large-4        2839.7Ki ± ∞ ¹     742.3Ki ± ∞ ¹    -73.86% (p=0.008 n=5)
+Load/lifecycle/restore-4            62.00Ki ± ∞ ¹     36.62Ki ± ∞ ¹    -40.94% (p=0.008 n=5)
+Load/lifecycle/rollback-4           71.53Ki ± ∞ ¹     58.88Ki ± ∞ ¹    -17.68% (p=0.008 n=5)
+Run/core/loop-4                   218.803Ki ± ∞ ¹     8.568Ki ± ∞ ¹    -96.08% (p=0.008 n=5)
+Run/core/fib-4                    635.962Ki ± ∞ ¹     7.588Ki ± ∞ ¹    -98.81% (p=0.008 n=5)
+Run/core/fib@slice=10-4             4.520Mi ± ∞ ¹    10.937Mi ± ∞ ¹   +142.00% (p=0.008 n=5)
+Run/core/fib@slice=100-4            1.482Mi ± ∞ ¹     1.105Mi ± ∞ ¹    -25.46% (p=0.008 n=5)
+Run/core/fib@slice=1000-4           811.2Ki ± ∞ ¹     119.5Ki ± ∞ ¹    -85.26% (p=0.008 n=5)
+Run/core/fib@slice=10000-4         661.13Ki ± ∞ ¹     17.57Ki ± ∞ ¹    -97.34% (p=0.008 n=5)
+Run/core/calls-4                 1033.069Ki ± ∞ ¹     7.780Ki ± ∞ ¹    -99.25% (p=0.008 n=5)
+Run/core/lambdas-4               1476.467Ki ± ∞ ¹     8.198Ki ± ∞ ¹    -99.44% (p=0.008 n=5)
+Run/numbers/add-4                 500.988Ki ± ∞ ¹     7.533Ki ± ∞ ¹    -98.50% (p=0.008 n=5)
+Run/numbers/multiply-4            306.912Ki ± ∞ ¹     7.155Ki ± ∞ ¹    -97.67% (p=0.008 n=5)
+Run/numbers/divide-4             3247.509Ki ± ∞ ¹     7.151Ki ± ∞ ¹    -99.78% (p=0.008 n=5)
+Run/numbers/quantity-4           4896.691Ki ± ∞ ¹     6.958Ki ± ∞ ¹    -99.86% (p=0.008 n=5)
+Run/text/build-4                  536.407Ki ± ∞ ¹     6.591Ki ± ∞ ¹    -98.77% (p=0.008 n=5)
+Run/text/iterate-4                799.345Ki ± ∞ ¹     7.474Ki ± ∞ ¹    -99.07% (p=0.008 n=5)
+Run/text/index-4                 5212.412Ki ± ∞ ¹     7.240Ki ± ∞ ¹    -99.86% (p=0.008 n=5)
+Run/text/patterns-4              6451.224Ki ± ∞ ¹     6.661Ki ± ∞ ¹    -99.90% (p=0.008 n=5)
+Run/text/graphemes-4             1315.872Ki ± ∞ ¹     7.967Ki ± ∞ ¹    -99.39% (p=0.008 n=5)
+Run/collections/list-build-4      250.255Ki ± ∞ ¹     7.039Ki ± ∞ ¹    -97.19% (p=0.008 n=5)
+Run/collections/list-append-4     1087.41Ki ± ∞ ¹     18.55Ki ± ∞ ¹    -98.29% (p=0.008 n=5)
+Run/collections/map-build-4       666.999Ki ± ∞ ¹     6.979Ki ± ∞ ¹    -98.95% (p=0.008 n=5)
+Run/collections/list-update-4    1884.189Ki ± ∞ ¹     7.869Ki ± ∞ ¹    -99.58% (p=0.008 n=5)
+Run/collections/map-update-4      302.635Ki ± ∞ ¹     6.867Ki ± ∞ ¹    -97.73% (p=0.008 n=5)
+Run/collections/iterate-4         1741.50Ki ± ∞ ¹     10.32Ki ± ∞ ¹    -99.41% (p=0.008 n=5)
+Run/host/immediate-4                950.2Ki ± ∞ ¹    1183.7Ki ± ∞ ¹    +24.58% (p=0.008 n=5)
+Run/host/suspending-4               3.833Mi ± ∞ ¹     3.836Mi ± ∞ ¹          ~ (p=0.143 n=5)
+Run/host/properties-4               483.6Ki ± ∞ ¹     879.9Ki ± ∞ ¹    +81.93% (p=0.008 n=5)
+Run/host/conversion-4               4.556Mi ± ∞ ¹     3.767Mi ± ∞ ¹    -17.31% (p=0.008 n=5)
+Run/host/pump-4                     6.482Ki ± ∞ ¹     6.295Ki ± ∞ ¹     -2.89% (p=0.008 n=5)
+Run/macro/transform-4             560.646Ki ± ∞ ¹     9.337Ki ± ∞ ¹    -98.33% (p=0.008 n=5)
+Run/macro/report-4               1504.941Ki ± ∞ ¹     6.602Ki ± ∞ ¹    -99.56% (p=0.008 n=5)
+Run/macro/game-tick-4            1204.650Ki ± ∞ ¹     8.483Ki ± ∞ ¹    -99.30% (p=0.008 n=5)
+Run/messaging/sends-4              10.716Mi ± ∞ ¹     3.735Mi ± ∞ ¹    -65.14% (p=0.008 n=5)
+Run/messaging/parents-4            12.582Mi ± ∞ ¹     4.514Mi ± ∞ ¹    -64.12% (p=0.008 n=5)
+Run/messaging/joins-4              16.150Mi ± ∞ ¹     6.785Mi ± ∞ ¹    -57.98% (p=0.008 n=5)
+Run/messaging/suspend-4             8.241Mi ± ∞ ¹     4.752Mi ± ∞ ¹    -42.33% (p=0.008 n=5)
+Run/lifecycle/load-small-4          6.571Ki ± ∞ ¹     6.507Ki ± ∞ ¹     -0.98% (p=0.008 n=5)
+Run/lifecycle/load-large-4        158.048Ki ± ∞ ¹     6.675Ki ± ∞ ¹    -95.78% (p=0.008 n=5)
+Run/lifecycle/restore-4            16.841Mi ± ∞ ¹     9.310Mi ± ∞ ¹    -44.72% (p=0.008 n=5)
+Run/lifecycle/rollback-4            37.84Mi ± ∞ ¹     32.60Mi ± ∞ ¹    -13.83% (p=0.008 n=5)
+geomean                             240.2Ki           47.38Ki          -80.27%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                               │     native     │                  zig                  │
+                               │   allocs/op    │   allocs/op    vs base                │
+Load/core/loop-4                    270.0 ± ∞ ¹     100.0 ± ∞ ¹   -62.96% (p=0.048 n=5)
+Load/core/fib-4                     292.0 ± ∞ ¹     100.0 ± ∞ ¹   -65.75% (p=0.008 n=5)
+Load/core/fib@slice=10-4            292.0 ± ∞ ¹     100.0 ± ∞ ¹   -65.75% (p=0.008 n=5)
+Load/core/fib@slice=100-4          292.00 ± ∞ ¹     99.00 ± ∞ ¹   -66.10% (p=0.008 n=5)
+Load/core/fib@slice=1000-4          292.0 ± ∞ ¹     100.0 ± ∞ ¹   -65.75% (p=0.008 n=5)
+Load/core/fib@slice=10000-4        292.00 ± ∞ ¹     99.00 ± ∞ ¹   -66.10% (p=0.008 n=5)
+Load/core/calls-4                   303.0 ± ∞ ¹     100.0 ± ∞ ¹   -67.00% (p=0.008 n=5)
+Load/core/lambdas-4                 349.0 ± ∞ ¹     101.0 ± ∞ ¹   -71.06% (p=0.008 n=5)
+Load/numbers/add-4                 291.00 ± ∞ ¹     99.00 ± ∞ ¹   -65.98% (p=0.008 n=5)
+Load/numbers/multiply-4             298.0 ± ∞ ¹     100.0 ± ∞ ¹   -66.44% (p=0.008 n=5)
+Load/numbers/divide-4               281.0 ± ∞ ¹     100.0 ± ∞ ¹   -64.41% (p=0.008 n=5)
+Load/numbers/quantity-4             375.0 ± ∞ ¹     101.0 ± ∞ ¹   -73.07% (p=0.008 n=5)
+Load/text/build-4                  243.00 ± ∞ ¹     99.00 ± ∞ ¹   -59.26% (p=0.008 n=5)
+Load/text/iterate-4                 289.0 ± ∞ ¹     101.0 ± ∞ ¹   -65.05% (p=0.008 n=5)
+Load/text/index-4                   323.0 ± ∞ ¹     100.0 ± ∞ ¹   -69.04% (p=0.008 n=5)
+Load/text/patterns-4                288.0 ± ∞ ¹     101.0 ± ∞ ¹   -64.93% (p=0.008 n=5)
+Load/text/graphemes-4               302.0 ± ∞ ¹     101.0 ± ∞ ¹   -66.56% (p=0.008 n=5)
+Load/collections/list-build-4       285.0 ± ∞ ¹     101.0 ± ∞ ¹   -64.56% (p=0.008 n=5)
+Load/collections/list-append-4      371.0 ± ∞ ¹     101.0 ± ∞ ¹   -72.78% (p=0.008 n=5)
+Load/collections/map-build-4        341.0 ± ∞ ¹     101.0 ± ∞ ¹   -70.38% (p=0.008 n=5)
+Load/collections/list-update-4      446.0 ± ∞ ¹     101.0 ± ∞ ¹   -77.35% (p=0.008 n=5)
+Load/collections/map-update-4       511.0 ± ∞ ¹     101.0 ± ∞ ¹   -80.23% (p=0.008 n=5)
+Load/collections/iterate-4          460.0 ± ∞ ¹     101.0 ± ∞ ¹   -78.04% (p=0.008 n=5)
+Load/host/immediate-4               304.0 ± ∞ ¹     263.0 ± ∞ ¹   -13.49% (p=0.008 n=5)
+Load/host/suspending-4              301.0 ± ∞ ¹     263.0 ± ∞ ¹   -12.62% (p=0.008 n=5)
+Load/host/properties-4              271.0 ± ∞ ¹    1121.0 ± ∞ ¹  +313.65% (p=0.008 n=5)
+Load/host/conversion-4              371.0 ± ∞ ¹     264.0 ± ∞ ¹   -28.84% (p=0.008 n=5)
+Load/host/pump-4                   112.00 ± ∞ ¹     99.00 ± ∞ ¹   -11.61% (p=0.008 n=5)
+Load/macro/transform-4              400.0 ± ∞ ¹     102.0 ± ∞ ¹   -74.50% (p=0.008 n=5)
+Load/macro/report-4                 309.0 ± ∞ ¹     101.0 ± ∞ ¹   -67.31% (p=0.008 n=5)
+Load/macro/game-tick-4              547.0 ± ∞ ¹     101.0 ± ∞ ¹   -81.54% (p=0.008 n=5)
+Load/messaging/sends-4              328.0 ± ∞ ¹     161.0 ± ∞ ¹   -50.91% (p=0.008 n=5)
+Load/messaging/parents-4            358.0 ± ∞ ¹    1235.0 ± ∞ ¹  +244.97% (p=0.008 n=5)
+Load/messaging/joins-4              397.0 ± ∞ ¹     162.0 ± ∞ ¹   -59.19% (p=0.008 n=5)
+Load/messaging/suspend-4            273.0 ± ∞ ¹     100.0 ± ∞ ¹   -63.37% (p=0.008 n=5)
+Load/lifecycle/load-small-4         130.0 ± ∞ ¹     100.0 ± ∞ ¹   -23.08% (p=0.008 n=5)
+Load/lifecycle/load-large-4       19182.0 ± ∞ ¹     108.0 ± ∞ ¹   -99.44% (p=0.008 n=5)
+Load/lifecycle/restore-4            477.0 ± ∞ ¹     101.0 ± ∞ ¹   -78.83% (p=0.008 n=5)
+Load/lifecycle/rollback-4           566.0 ± ∞ ¹     265.0 ± ∞ ¹   -53.18% (p=0.008 n=5)
+Run/core/loop-4                    7978.0 ± ∞ ¹     141.0 ± ∞ ¹   -98.23% (p=0.008 n=5)
+Run/core/fib-4                     9039.0 ± ∞ ¹     124.0 ± ∞ ¹   -98.63% (p=0.008 n=5)
+Run/core/fib@slice=10-4            131.1k ± ∞ ¹    139.2k ± ∞ ¹    +6.17% (p=0.008 n=5)
+Run/core/fib@slice=100-4           25.18k ± ∞ ¹    14.01k ± ∞ ¹   -44.35% (p=0.008 n=5)
+Run/core/fib@slice=1000-4         11.026k ± ∞ ¹    1.504k ± ∞ ¹   -86.36% (p=0.008 n=5)
+Run/core/fib@slice=10000-4         9226.0 ± ∞ ¹     244.0 ± ∞ ¹   -97.36% (p=0.008 n=5)
+Run/core/calls-4                  16013.0 ± ∞ ¹     129.0 ± ∞ ¹   -99.19% (p=0.008 n=5)
+Run/core/lambdas-4                21994.0 ± ∞ ¹     134.0 ± ∞ ¹   -99.39% (p=0.008 n=5)
+Run/numbers/add-4                 10058.0 ± ∞ ¹     125.0 ± ∞ ¹   -98.76% (p=0.008 n=5)
+Run/numbers/multiply-4             7058.0 ± ∞ ¹     118.0 ± ∞ ¹   -98.33% (p=0.008 n=5)
+Run/numbers/divide-4             115948.0 ± ∞ ¹     118.0 ± ∞ ¹   -99.90% (p=0.008 n=5)
+Run/numbers/quantity-4           190402.0 ± ∞ ¹     115.0 ± ∞ ¹   -99.94% (p=0.008 n=5)
+Run/text/build-4                   2534.0 ± ∞ ¹     111.0 ± ∞ ¹   -95.62% (p=0.008 n=5)
+Run/text/iterate-4                15022.0 ± ∞ ¹     124.0 ± ∞ ¹   -99.17% (p=0.008 n=5)
+Run/text/index-4                 158693.0 ± ∞ ¹     121.0 ± ∞ ¹   -99.92% (p=0.008 n=5)
+Run/text/patterns-4               65392.0 ± ∞ ¹     111.0 ± ∞ ¹   -99.83% (p=0.008 n=5)
+Run/text/graphemes-4              29422.0 ± ∞ ¹     130.0 ± ∞ ¹   -99.56% (p=0.008 n=5)
+Run/collections/list-build-4       3599.0 ± ∞ ¹     115.0 ± ∞ ¹   -96.80% (p=0.008 n=5)
+Run/collections/list-append-4     16521.0 ± ∞ ¹     142.0 ± ∞ ¹   -99.14% (p=0.008 n=5)
+Run/collections/map-build-4        9805.0 ± ∞ ¹     114.0 ± ∞ ¹   -98.84% (p=0.008 n=5)
+Run/collections/list-update-4     52559.0 ± ∞ ¹     128.0 ± ∞ ¹   -99.76% (p=0.008 n=5)
+Run/collections/map-update-4       4594.0 ± ∞ ¹     113.0 ± ∞ ¹   -97.54% (p=0.008 n=5)
+Run/collections/iterate-4         22134.0 ± ∞ ¹     165.0 ± ∞ ¹   -99.25% (p=0.008 n=5)
+Run/host/immediate-4               12.25k ± ∞ ¹    15.34k ± ∞ ¹   +25.20% (p=0.008 n=5)
+Run/host/suspending-4              53.99k ± ∞ ¹    41.50k ± ∞ ¹   -23.14% (p=0.008 n=5)
+Run/host/properties-4              6.922k ± ∞ ¹   10.992k ± ∞ ¹   +58.80% (p=0.008 n=5)
+Run/host/conversion-4              72.16k ± ∞ ¹    64.11k ± ∞ ¹   -11.16% (p=0.008 n=5)
+Run/host/pump-4                     70.00 ± ∞ ¹    101.00 ± ∞ ¹   +44.29% (p=0.008 n=5)
+Run/macro/transform-4              8161.0 ± ∞ ¹     116.0 ± ∞ ¹   -98.58% (p=0.008 n=5)
+Run/macro/report-4                 4976.0 ± ∞ ¹     110.0 ± ∞ ¹   -97.79% (p=0.008 n=5)
+Run/macro/game-tick-4             28910.0 ± ∞ ¹     138.0 ± ∞ ¹   -99.52% (p=0.008 n=5)
+Run/messaging/sends-4             152.78k ± ∞ ¹    37.43k ± ∞ ¹   -75.50% (p=0.008 n=5)
+Run/messaging/parents-4           199.29k ± ∞ ¹    37.43k ± ∞ ¹   -81.22% (p=0.008 n=5)
+Run/messaging/joins-4             199.76k ± ∞ ¹    58.57k ± ∞ ¹   -70.68% (p=0.008 n=5)
+Run/messaging/suspend-4           222.03k ± ∞ ¹    60.13k ± ∞ ¹   -72.92% (p=0.008 n=5)
+Run/lifecycle/load-small-4          75.00 ± ∞ ¹    102.00 ± ∞ ¹   +36.00% (p=0.008 n=5)
+Run/lifecycle/load-large-4         2331.0 ± ∞ ¹     106.0 ± ∞ ¹   -95.45% (p=0.008 n=5)
+Run/lifecycle/restore-4          182.773k ± ∞ ¹    1.120k ± ∞ ¹   -99.39% (p=0.008 n=5)
+Run/lifecycle/rollback-4           283.2k ± ∞ ¹    300.1k ± ∞ ¹    +5.97% (p=0.008 n=5)
+geomean                            2.618k           308.3         -88.22%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                              │    native    │                 zig                  │
+                              │   fuel/op    │   fuel/op     vs base                │
+Run/core/loop-4                 48.02k ± ∞ ¹   48.02k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib-4                  46.37k ± ∞ ¹   46.37k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=10-4         46.37k ± ∞ ¹   46.37k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=100-4        46.37k ± ∞ ¹   46.37k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=1000-4       46.37k ± ∞ ¹   46.37k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=10000-4      46.37k ± ∞ ¹   46.37k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/calls-4                46.02k ± ∞ ¹   46.02k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/lambdas-4              58.03k ± ∞ ¹   58.03k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/add-4               26.03k ± ∞ ¹   26.03k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/multiply-4          18.03k ± ∞ ¹   18.03k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/divide-4            18.03k ± ∞ ¹   18.03k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/quantity-4          14.58k ± ∞ ¹   14.58k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/build-4                28.93k ± ∞ ¹   28.93k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/iterate-4              30.32k ± ∞ ¹   30.32k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/index-4                26.64k ± ∞ ¹   26.64k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/patterns-4             13.82k ± ∞ ¹   13.82k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/graphemes-4            43.52k ± ∞ ¹   43.52k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-build-4    19.09k ± ∞ ¹   19.09k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-append-4   52.06k ± ∞ ¹   52.06k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/map-build-4     14.09k ± ∞ ¹   14.09k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-update-4   28.55k ± ∞ ¹   28.55k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/map-update-4    8.056k ± ∞ ¹   8.056k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/iterate-4       89.46k ± ∞ ¹   89.46k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/immediate-4            13.52k ± ∞ ¹   13.52k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/suspending-4           13.52k ± ∞ ¹   13.52k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/properties-4           9.018k ± ∞ ¹   9.018k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/conversion-4           25.02k ± ∞ ¹   25.02k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/pump-4                  7.000 ± ∞ ¹    7.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/transform-4           20.66k ± ∞ ¹   20.66k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/report-4              86.56k ± ∞ ¹   86.56k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/game-tick-4           67.04k ± ∞ ¹   67.04k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/sends-4           67.52k ± ∞ ¹   67.52k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/parents-4         67.52k ± ∞ ¹   67.52k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/joins-4           127.2k ± ∞ ¹   127.2k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/suspend-4         48.02k ± ∞ ¹   48.02k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/load-small-4       7.000 ± ∞ ¹    7.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/load-large-4      4.609k ± ∞ ¹   4.609k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/restore-4         8.015k ± ∞ ¹   8.015k ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/rollback-4        102.0k ± ∞ ¹   102.0k ± ∞ ¹       ~ (p=1.000 n=5) ²
+geomean                         19.77k         19.77k        +0.00%
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
+
+                              │    native     │                  zig                  │
+                              │ logical-B/op  │ logical-B/op   vs base                │
+Run/core/loop-4                 62.50Ki ± ∞ ¹   62.50Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib-4                  46.22Ki ± ∞ ¹   46.22Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=10-4         46.22Ki ± ∞ ¹   46.22Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=100-4        46.22Ki ± ∞ ¹   46.22Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=1000-4       46.22Ki ± ∞ ¹   46.22Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/fib@slice=10000-4      46.22Ki ± ∞ ¹   46.22Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/calls-4                31.32Ki ± ∞ ¹   31.32Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/core/lambdas-4              62.62Ki ± ∞ ¹   62.62Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/add-4               31.35Ki ± ∞ ¹   31.35Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/multiply-4          31.35Ki ± ∞ ¹   31.35Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/divide-4            31.35Ki ± ∞ ¹   31.35Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/numbers/quantity-4          39.15Ki ± ∞ ¹   39.15Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/build-4                374.8Ki ± ∞ ¹   374.8Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/iterate-4              93.04Ki ± ∞ ¹   93.04Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/index-4                49.88Ki ± ∞ ¹   49.88Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/patterns-4             225.9Ki ± ∞ ¹   225.9Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/text/graphemes-4            144.1Ki ± ∞ ¹   144.1Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-build-4    2.882Mi ± ∞ ¹   2.882Mi ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-append-4   78.32Ki ± ∞ ¹   78.32Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/map-build-4     24.34Ki ± ∞ ¹   24.34Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/list-update-4   23.76Ki ± ∞ ¹   23.76Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/map-update-4    12.14Ki ± ∞ ¹   12.14Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/collections/iterate-4       195.6Ki ± ∞ ¹   195.6Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/immediate-4            15.70Ki ± ∞ ¹   15.70Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/suspending-4           15.70Ki ± ∞ ¹   15.70Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/properties-4           15.70Ki ± ∞ ¹   15.70Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/conversion-4           220.3Ki ± ∞ ¹   220.3Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/host/pump-4                   0.000 ± ∞ ¹     0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/transform-4           6.121Mi ± ∞ ¹   6.121Mi ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/report-4              1.232Mi ± ∞ ¹   1.232Mi ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/macro/game-tick-4           78.39Ki ± ∞ ¹   78.39Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/sends-4           93.82Ki ± ∞ ¹   93.82Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/parents-4         93.82Ki ± ∞ ¹   93.82Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/joins-4           239.1Ki ± ∞ ¹   239.1Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/messaging/suspend-4         31.32Ki ± ∞ ¹   31.32Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/load-small-4        0.000 ± ∞ ¹     0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/load-large-4      16.35Ki ± ∞ ¹   16.35Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/restore-4         7.836Ki ± ∞ ¹   7.836Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+Run/lifecycle/rollback-4        39.93Ki ± ∞ ¹   39.93Ki ± ∞ ¹       ~ (p=1.000 n=5) ²
+geomean                                     ³                  +0.00%               ³
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
+³ summaries must be >0 to compute geomean
+
+                              │    native     │                  zig                  │
+                              │   sec/fuel    │   sec/fuel     vs base                │
+Run/core/loop-4                  56.96n ± ∞ ¹    14.08n ± ∞ ¹   -75.28% (p=0.008 n=5)
+Run/core/fib-4                   42.08n ± ∞ ¹    40.47n ± ∞ ¹    -3.83% (p=0.008 n=5)
+Run/core/fib@slice=10-4          179.7n ± ∞ ¹    509.8n ± ∞ ¹  +183.70% (p=0.008 n=5)
+Run/core/fib@slice=100-4         60.79n ± ∞ ¹    89.70n ± ∞ ¹   +47.56% (p=0.008 n=5)
+Run/core/fib@slice=1000-4        45.12n ± ∞ ¹    47.39n ± ∞ ¹    +5.03% (p=0.008 n=5)
+Run/core/fib@slice=10000-4       42.47n ± ∞ ¹    42.38n ± ∞ ¹         ~ (p=0.881 n=5)
+Run/core/calls-4                 48.78n ± ∞ ¹    44.93n ± ∞ ¹    -7.89% (p=0.008 n=5)
+Run/core/lambdas-4               52.31n ± ∞ ¹    43.00n ± ∞ ¹   -17.80% (p=0.008 n=5)
+Run/numbers/add-4                65.89n ± ∞ ¹    31.12n ± ∞ ¹   -52.77% (p=0.008 n=5)
+Run/numbers/multiply-4           61.34n ± ∞ ¹    27.39n ± ∞ ¹   -55.35% (p=0.008 n=5)
+Run/numbers/divide-4            197.40n ± ∞ ¹    37.74n ± ∞ ¹   -80.88% (p=0.008 n=5)
+Run/numbers/quantity-4          468.30n ± ∞ ¹    45.50n ± ∞ ¹   -90.28% (p=0.008 n=5)
+Run/text/build-4                 23.37n ± ∞ ¹    11.26n ± ∞ ¹   -51.82% (p=0.008 n=5)
+Run/text/iterate-4               66.02n ± ∞ ¹    41.58n ± ∞ ¹   -37.02% (p=0.008 n=5)
+Run/text/index-4                220.60n ± ∞ ¹    75.98n ± ∞ ¹   -65.56% (p=0.008 n=5)
+Run/text/patterns-4              331.5n ± ∞ ¹    150.0n ± ∞ ¹   -54.75% (p=0.008 n=5)
+Run/text/graphemes-4             82.74n ± ∞ ¹    80.49n ± ∞ ¹         ~ (p=0.056 n=5)
+Run/collections/list-build-4     39.60n ± ∞ ¹    20.61n ± ∞ ¹   -47.95% (p=0.008 n=5)
+Run/collections/list-append-4    62.75n ± ∞ ¹    34.32n ± ∞ ¹   -45.31% (p=0.008 n=5)
+Run/collections/map-build-4      65.88n ± ∞ ¹    75.75n ± ∞ ¹   +14.98% (p=0.008 n=5)
+Run/collections/list-update-4    99.66n ± ∞ ¹    42.34n ± ∞ ¹   -57.52% (p=0.008 n=5)
+Run/collections/map-update-4     72.92n ± ∞ ¹    88.88n ± ∞ ¹   +21.89% (p=0.008 n=5)
+Run/collections/iterate-4        60.08n ± ∞ ¹    24.07n ± ∞ ¹   -59.94% (p=0.008 n=5)
+Run/host/immediate-4             80.75n ± ∞ ¹   247.10n ± ∞ ¹  +206.01% (p=0.008 n=5)
+Run/host/suspending-4            249.9n ± ∞ ¹    589.9n ± ∞ ¹  +136.05% (p=0.008 n=5)
+Run/host/properties-4            85.27n ± ∞ ¹   260.20n ± ∞ ¹  +205.15% (p=0.008 n=5)
+Run/host/conversion-4            161.8n ± ∞ ¹    298.7n ± ∞ ¹   +84.61% (p=0.008 n=5)
+Run/host/pump-4                  684.5n ± ∞ ¹   2346.0n ± ∞ ¹  +242.73% (p=0.008 n=5)
+Run/macro/transform-4            51.86n ± ∞ ¹    46.68n ± ∞ ¹    -9.99% (p=0.008 n=5)
+Run/macro/report-4               17.20n ± ∞ ¹    20.35n ± ∞ ¹   +18.31% (p=0.008 n=5)
+Run/macro/game-tick-4            52.84n ± ∞ ¹    79.36n ± ∞ ¹   +50.19% (p=0.008 n=5)
+Run/messaging/sends-4            164.4n ± ∞ ¹    142.1n ± ∞ ¹   -13.56% (p=0.008 n=5)
+Run/messaging/parents-4          199.0n ± ∞ ¹    143.8n ± ∞ ¹   -27.74% (p=0.008 n=5)
+Run/messaging/joins-4            135.1n ± ∞ ¹    125.2n ± ∞ ¹    -7.33% (p=0.008 n=5)
+Run/messaging/suspend-4          229.6n ± ∞ ¹    269.0n ± ∞ ¹   +17.16% (p=0.008 n=5)
+Run/lifecycle/load-small-4       733.1n ± ∞ ¹   2308.0n ± ∞ ¹  +214.83% (p=0.008 n=5)
+Run/lifecycle/load-large-4       70.97n ± ∞ ¹    78.18n ± ∞ ¹   +10.16% (p=0.008 n=5)
+Run/lifecycle/restore-4         3185.0n ± ∞ ¹    537.3n ± ∞ ¹   -83.13% (p=0.008 n=5)
+Run/lifecycle/rollback-4         266.3n ± ∞ ¹    892.6n ± ∞ ¹  +235.19% (p=0.008 n=5)
+geomean                          106.8n          91.88n         -13.94%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+pkg: github.com/odogono/odgn-talk/impl/go
+                                   │    native    │                    zig                    │
+                                   │    sec/op    │     sec/op       vs base                  │
+BackendRequest-4                     5.799µ ± ∞ ¹     14.818µ ± ∞ ¹    +155.53% (p=0.008 n=5)
+BackendDeferredCall/history=0-4      15.20µ ± ∞ ¹      36.66µ ± ∞ ¹    +141.15% (p=0.008 n=5)
+BackendDeferredCall/history=5000-4   14.85µ ± ∞ ¹      34.89µ ± ∞ ¹    +134.93% (p=0.008 n=5)
+BackendMultiGroup/groups=1-4         25.10µ ± ∞ ¹      29.69µ ± ∞ ¹     +18.32% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4         12.57µ ± ∞ ¹      12.71µ ± ∞ ¹           ~ (p=0.841 n=5)
+BackendMultiGroup/groups=16-4        11.55µ ± ∞ ¹      12.26µ ± ∞ ¹      +6.11% (p=0.008 n=5)
+GroupInstantiation-4                 5.289µ ± ∞ ¹     36.238µ ± ∞ ¹    +585.16% (p=0.008 n=5)
+BackendRetainedMemory-4              78.65m ± ∞ ¹     125.02m ± ∞ ¹     +58.96% (p=0.008 n=5)
+BackendColdStart/cache=none-4        1.835m ± ∞ ¹   1028.772m ± ∞ ¹  +55972.81% (p=0.008 n=5)
+BackendColdStart/cache=warm-4        1.805m ± ∞ ¹     34.838m ± ∞ ¹   +1829.58% (p=0.008 n=5)
+geomean                              76.17µ            327.6µ          +330.08%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                   │    native    │                  zig                  │
+                                   │   p50-sec    │    p50-sec     vs base                │
+BackendRequest-4                     4.537µ ± ∞ ¹   11.607µ ± ∞ ¹  +155.83% (p=0.008 n=5)
+BackendDeferredCall/history=0-4      11.20µ ± ∞ ¹    29.97µ ± ∞ ¹  +167.64% (p=0.008 n=5)
+BackendDeferredCall/history=5000-4   10.99µ ± ∞ ¹    29.30µ ± ∞ ¹  +166.74% (p=0.008 n=5)
+BackendMultiGroup/groups=1-4         22.33µ ± ∞ ¹    27.04µ ± ∞ ¹   +21.08% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4         35.19µ ± ∞ ¹    47.23µ ± ∞ ¹   +34.21% (p=0.008 n=5)
+BackendMultiGroup/groups=16-4        34.86µ ± ∞ ¹    45.77µ ± ∞ ¹   +31.29% (p=0.008 n=5)
+geomean                              15.75µ          29.01µ         +84.12%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                   │    native     │                 zig                 │
+                                   │    p99-sec    │   p99-sec     vs base               │
+BackendRequest-4                      34.10µ ± ∞ ¹   83.74µ ± ∞ ¹        ~ (p=0.095 n=5)
+BackendDeferredCall/history=0-4       83.05µ ± ∞ ¹   68.35µ ± ∞ ¹  -17.70% (p=0.016 n=5)
+BackendDeferredCall/history=5000-4    79.80µ ± ∞ ¹   63.45µ ± ∞ ¹  -20.49% (p=0.016 n=5)
+BackendMultiGroup/groups=1-4         110.49µ ± ∞ ¹   50.22µ ± ∞ ¹  -54.55% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4          317.0µ ± ∞ ¹   106.5µ ± ∞ ¹  -66.42% (p=0.008 n=5)
+BackendMultiGroup/groups=16-4        5159.7µ ± ∞ ¹   246.4µ ± ∞ ¹  -95.22% (p=0.008 n=5)
+geomean                               185.6µ         88.43µ        -52.35%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                   │     native     │                  zig                   │
+                                   │      B/op      │      B/op       vs base                │
+BackendRequest-4                      7.007Ki ± ∞ ¹    6.260Ki ± ∞ ¹   -10.66% (p=0.008 n=5)
+BackendDeferredCall/history=0-4       13.55Ki ± ∞ ¹    14.51Ki ± ∞ ¹    +7.06% (p=0.008 n=5)
+BackendDeferredCall/history=5000-4    13.56Ki ± ∞ ¹    14.81Ki ± ∞ ¹    +9.19% (p=0.008 n=5)
+BackendMultiGroup/groups=1-4         14.290Ki ± ∞ ¹    9.903Ki ± ∞ ¹   -30.70% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4          14.28Ki ± ∞ ¹    14.19Ki ± ∞ ¹    -0.62% (p=0.008 n=5)
+BackendMultiGroup/groups=16-4        14.271Ki ± ∞ ¹    9.871Ki ± ∞ ¹   -30.83% (p=0.008 n=5)
+GroupInstantiation-4                  6.341Ki ± ∞ ¹   54.396Ki ± ∞ ¹  +757.88% (p=0.008 n=5)
+geomean                               11.32Ki          13.92Ki         +23.04%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                   │   native    │                 zig                 │
+                                   │  allocs/op  │  allocs/op    vs base               │
+BackendRequest-4                     89.00 ± ∞ ¹    83.00 ± ∞ ¹   -6.74% (p=0.008 n=5)
+BackendDeferredCall/history=0-4      158.0 ± ∞ ¹    144.0 ± ∞ ¹   -8.86% (p=0.008 n=5)
+BackendDeferredCall/history=5000-4   159.0 ± ∞ ¹    145.0 ± ∞ ¹   -8.81% (p=0.008 n=5)
+BackendMultiGroup/groups=1-4         208.0 ± ∞ ¹    114.0 ± ∞ ¹  -45.19% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4         208.0 ± ∞ ¹    113.0 ± ∞ ¹  -45.67% (p=0.008 n=5)
+BackendMultiGroup/groups=16-4        207.0 ± ∞ ¹    112.0 ± ∞ ¹  -45.89% (p=0.008 n=5)
+GroupInstantiation-4                 67.00 ± ∞ ¹   111.00 ± ∞ ¹  +65.67% (p=0.008 n=5)
+geomean                              144.9          115.7        -20.16%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                              │    native    │                 zig                 │
+                              │    req/s     │    req/s      vs base               │
+BackendMultiGroup/groups=1-4    39.85k ± ∞ ¹   33.68k ± ∞ ¹  -15.48% (p=0.008 n=5)
+BackendMultiGroup/groups=4-4    79.54k ± ∞ ¹   78.68k ± ∞ ¹        ~ (p=0.841 n=5)
+BackendMultiGroup/groups=16-4   86.55k ± ∞ ¹   81.56k ± ∞ ¹   -5.76% (p=0.008 n=5)
+geomean                         64.98k         60.01k         -7.64%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                        │    native     │                  zig                  │
+                        │ heap-B/group  │  heap-B/group   vs base               │
+BackendRetainedMemory-4   61.16Ki ± ∞ ¹   104.25Ki ± ∞ ¹  +70.45% (p=0.008 n=5)
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                              │     native      │                     zig                     │
+                              │ first-group-sec │ first-group-sec   vs base                   │
+BackendColdStart/cache=none-4      172.2µ ± ∞ ¹   1022944.2µ ± ∞ ¹  +593937.37% (p=0.008 n=5)
+BackendColdStart/cache=warm-4      153.7µ ± ∞ ¹     31539.0µ ± ∞ ¹   +20420.49% (p=0.008 n=5)
+geomean                            162.7µ             179.6m        +110308.04%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                              │    native    │                    zig                    │
+                              │ process-sec  │   process-sec    vs base                  │
+BackendColdStart/cache=none-4   1.835m ± ∞ ¹   1028.772m ± ∞ ¹  +55977.24% (p=0.008 n=5)
+BackendColdStart/cache=warm-4   1.805m ± ∞ ¹     34.837m ± ∞ ¹   +1830.18% (p=0.008 n=5)
+geomean                         1.820m            189.3m        +10303.80%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                              │      native      │                    zig                    │
+                              │ second-group-sec │ second-group-sec  vs base                 │
+BackendColdStart/cache=none-4       22.76µ ± ∞ ¹      384.31µ ± ∞ ¹  +1588.47% (p=0.008 n=5)
+BackendColdStart/cache=warm-4       23.53µ ± ∞ ¹      346.01µ ± ∞ ¹  +1370.82% (p=0.008 n=5)
+geomean                             23.14µ             364.7µ        +1475.89%
+¹ need >= 6 samples for confidence interval at level 0.95
