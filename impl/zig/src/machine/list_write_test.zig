@@ -110,3 +110,36 @@ test "local List writes retain old wholes at instruction and restored boundaries
     try testing.expect(released_temp_seen);
     try testing.expect(suspended);
 }
+
+test "repeated List point writes preserve the original and exact charges across Fuel Slices" {
+    const a = testing.allocator;
+    const source =
+        \\on run n
+        \\  put [1, 2, 3, 4, 5, 6, 7, 8] into values
+        \\  put values into original
+        \\  repeat for each i in 1..n
+        \\    put i into item 1 of values
+        \\  end repeat
+        \\  return item 1 of original + item 1 of values
+        \\end run
+    ;
+    const n = try model.scalar(a, .{ .number = .fromInt(1500) });
+    defer n.release();
+    for ([_]u64{ 0, 100 }) |slice| {
+        var out: std.Io.Writer.Allocating = .init(a);
+        defer out.deinit();
+        var g: machine.Group = .init(a, &out.writer);
+        defer g.deinit();
+        try testing.expect(try g.load("s", source, .{}) == .loaded);
+        var args = [_]*model.Value{n.retain()};
+        const requested = try g.deliver("s", "run", &args, true);
+        for (0..1000) |_| {
+            try g.pumpWith(.{ .seconds = 0, .micros = 0 }, slice, 0);
+            if (g.results.get(requested)) |result| {
+                try testing.expectEqual(@as(i64, 1501), try result.data.number.integer(i64));
+                try testing.expect(std.mem.indexOf(u8, out.written(), "fuel=28553 alloc=24328") != null);
+                break;
+            }
+        } else return error.TestUnexpectedResult;
+    }
+}

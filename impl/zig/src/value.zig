@@ -175,8 +175,8 @@ pub const Value = struct {
         // Hidden List tails can make physical ownership deeper than a
         // Script's logical nesting. Teardown is iterative and allocates
         // nothing, including when the Group allocator has refused memory.
-        var pending: ?*Value = null;
-        queueRelease(self, &pending);
+        var pending: ?*Value = self;
+        self.release_next = null;
         while (pending) |node| {
             pending = node.release_next;
             const gpa = node.allocator;
@@ -1203,16 +1203,12 @@ pub fn listSet(gpa: std.mem.Allocator, root: **Value, index: usize, item: *Value
     } else {
         const copy = try gpa.dupe(*Value, old.data.list);
         errdefer gpa.free(copy);
-        const v = try gpa.create(Value);
+        const v = try narrowScalar(gpa, .list, copy);
         copy[index] = item;
         // The prior rank already exceeds every retained child's rank.
         // A replacement can only raise it. No child scan is needed.
-        v.* = .{
-            .allocator = gpa,
-            .data = .{ .list = copy },
-            .ownership_rank = @max(old.ownership_rank, rank),
-            .measure = measure orelse itemsSize(copy),
-        };
+        v.ownership_rank = @max(old.ownership_rank, rank);
+        v.measure = measure orelse itemsSize(copy);
         for (copy) |child| _ = child.retain();
         root.* = v;
         old.release();
