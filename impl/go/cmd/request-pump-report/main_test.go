@@ -11,7 +11,7 @@ import (
 
 func writeRun(t *testing.T, dir string, native, zig []float64) {
 	t.Helper()
-	for _, file := range []string{"base", "native", "zig-json", "zig-map", "zig-fields"} {
+	for _, file := range []string{"base", "native", "zig-json", "zig-fields"} {
 		values := zig
 		if file == "base" || file == "native" {
 			values = native
