@@ -1,8 +1,8 @@
 #!/bin/sh
 # The #1245/#1254 envelope gates on this machine: the unchanged
 # BackendRequest and the combined Request (and, recorded only, the combined
-# Function call) for native Go and for the Zig adapter over JSON and each
-# binary candidate, plus native BackendRequest at BASE (the commit before
+# Function call) for native Go and for the Zig adapter over JSON and the
+# fields exchange, plus native BackendRequest at BASE (the commit before
 # the experiment) for the no-regression check. Samples are interleaved, one
 # round per backend at a time, so drift affects every backend alike. Writes
 # raw output, the environment, paired ratios and a benchstat comparison to
@@ -48,13 +48,12 @@ run() { # file binary pattern [env]
 	shift 3
 	env "$@" "$binary" -test.run '^$' -test.bench "$pattern" -test.benchmem -test.benchtime "${iterations}x" -test.count 1 -test.timeout 0 >> "$out/$file.txt"
 }
-for f in base native zig-json zig-map zig-fields; do : > "$out/$f.txt"; done
+for f in base native zig-json zig-fields; do : > "$out/$f.txt"; done
 i=0
 while [ "$i" -lt "$count" ]; do
 	run base "$bin/base.test" "$request"
 	run native "$bin/native.test" "$all"
 	run zig-json "$bin/zig.test" "$request" TALK_ZIG_REQUEST_PUMP=
-	run zig-map "$bin/zig.test" "$all" TALK_ZIG_REQUEST_PUMP=map
 	run zig-fields "$bin/zig.test" "$all" TALK_ZIG_REQUEST_PUMP=fields
 	i=$((i + 1))
 done
@@ -62,5 +61,5 @@ done
 cd "$out"
 go -C "$here" run ./cmd/request-pump-report -rounds "$count" "$out" > "$out/paired.txt"
 go -C "$here" run "$benchstat" -table '' "$out/base.txt" "$out/native.txt" > "$out/regression.txt" 2>&1 || true
-go -C "$here" run "$benchstat" native="$out/native.txt" json="$out/zig-json.txt" map="$out/zig-map.txt" fields="$out/zig-fields.txt" > "$out/comparison.txt"
+go -C "$here" run "$benchstat" native="$out/native.txt" json="$out/zig-json.txt" fields="$out/zig-fields.txt" > "$out/comparison.txt"
 echo "$out"

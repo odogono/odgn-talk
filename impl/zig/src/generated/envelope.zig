@@ -3,7 +3,7 @@ pub const Kind = enum { bool, err, instant, int, limits, message, record, report
 pub const Direction = enum { host_to_guest, guest_to_host };
 pub const Field = struct { name: []const u8, kind: Kind, required: bool };
 pub const Entry = struct { tag: u8, name: []const u8, direction: Direction, fields: []const Field };
-pub const features: []const []const u8 = &.{ "request-pump-map-v1", "request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1" };
+pub const features: []const []const u8 = &.{ "request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1" };
 pub const messages: []const Entry = &.{
     .{ .tag = 0x1, .name = "request", .direction = .host_to_guest, .fields = &.{ .{ .name = "ref", .kind = .int, .required = true }, .{ .name = "group", .kind = .text, .required = true }, .{ .name = "to", .kind = .target, .required = false }, .{ .name = "message", .kind = .message, .required = false } } },
     .{ .tag = 0x2, .name = "call", .direction = .host_to_guest, .fields = &.{ .{ .name = "ref", .kind = .int, .required = true }, .{ .name = "group", .kind = .text, .required = true }, .{ .name = "fn", .kind = .value, .required = false }, .{ .name = "args", .kind = .values, .required = false }, .{ .name = "limits", .kind = .limits, .required = false } } },

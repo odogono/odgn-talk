@@ -1,7 +1,7 @@
 # Fields envelope tables (ADR 0110). Tags are hexadecimal in generated views.
 # Required means structurally present; conditional checks remain in codecs.
 
-features = ["request-pump-map-v1", "request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1"]
+features = ["request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1"]
 
 [[intentional_kinds]]
 name = "message"

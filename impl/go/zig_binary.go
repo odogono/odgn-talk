@@ -14,8 +14,7 @@ import (
 )
 
 // New guests negotiate the accepted fields envelope. An explicit empty
-// TALK_ZIG_REQUEST_PUMP keeps JSON for compatibility checks; map remains an
-// opt-in measurement candidate.
+// TALK_ZIG_REQUEST_PUMP keeps JSON for compatibility checks.
 var zigRequestPump = func() string {
 	if layout, ok := os.LookupEnv("TALK_ZIG_REQUEST_PUMP"); ok {
 		return layout
@@ -23,26 +22,20 @@ var zigRequestPump = func() string {
 	return "fields"
 }()
 
-type zbLayout byte
-
-const (
-	zbMap    zbLayout = 0
-	zbFields zbLayout = 1
-)
+// zbFields is the fields layout byte, the only binary layout (#1334).
+const zbFields byte = 1
 
 var zbPrefix = []byte("NTB\x01")
 
 // zigRequestPumpFeature is the hello feature for zigRequestPump, if any.
-func zigRequestPumpFeature() (string, zbLayout, bool, error) {
+func zigRequestPumpFeature() (string, bool, error) {
 	switch zigRequestPump {
 	case "":
-		return "", 0, false, nil
-	case "map":
-		return "request-pump-map-v1", zbMap, true, nil
+		return "", false, nil
 	case "fields":
-		return "request-pump-fields-v1", zbFields, true, nil
+		return "request-pump-fields-v1", true, nil
 	}
-	return "", 0, false, fmt.Errorf("TALK_ZIG_REQUEST_PUMP must be map, fields or empty, not %q", zigRequestPump)
+	return "", false, fmt.Errorf("TALK_ZIG_REQUEST_PUMP must be fields or empty, not %q", zigRequestPump)
 }
 
 // Fields-candidate message tags and positional fields.
@@ -200,18 +193,9 @@ func (f *zbFrame) bytes(ref int64) []byte {
 
 // zbInput starts an input of message tag m: everything before its ref.
 func (b *zigGroup) zbInput(m byte) (*zbWriter, int) {
-	layout := b.reg.layout
 	w := &zbWriter{buf: make([]byte, 0, 128)}
-	w.buf = append(append(w.buf, zbPrefix...), byte(layout))
-	positional := layout == zbFields
-	if positional {
-		w.buf = append(w.buf, m)
-	}
-	w.begin(zbMessages[m].fields, positional)
-	if !positional {
-		w.key("m")
-		w.ptext(zbMessages[m].name)
-	}
+	w.buf = append(append(w.buf, zbPrefix...), zbFields, m)
+	w.begin(zbMessages[m].fields, true)
 	w.key("ref")
 	return w, len(w.buf)
 }
