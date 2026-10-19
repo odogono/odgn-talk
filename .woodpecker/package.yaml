@@ -1,0 +1,49 @@
+# Share the path condition between PRs and main pushes. Manual runs stay full.
+when:
+  - event: pull_request
+    path: &paths
+      include:
+        - 'impl/ts/**'
+        - 'LICENSE'
+        - 'package.json'
+        - 'bun.lock'
+        - 'bunfig.toml'
+        - '.bunfig.toml'
+        - '.npmrc'
+        - '.githooks/**'
+        - '.gitattributes'
+        - 'tsconfig.base.json'
+        - 'tools/package.json'
+        - 'tools/unicode/**'
+        - 'spec/**'
+        - 'tools/ci/Dockerfile'
+        - 'tools/ci/Dockerfile.browser'
+        - '.woodpecker/package.yaml'
+      on_empty: true
+  - event: push
+    branch: main
+    path: *paths
+  - event: manual
+
+labels:
+  platform: linux/amd64
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19-2
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: package
+    image: odgn-talk-ci:2026-10-19-2-browser
+    directory: impl/ts
+    commands:
+      - bunx playwright install chromium-headless-shell
+      - bun run build
+      - bun run package:check

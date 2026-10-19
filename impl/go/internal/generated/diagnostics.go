@@ -272,11 +272,13 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a join",
-			RaisedWhen: "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`",
-			At:         "its first token, or the member's",
+			RaisedWhen: "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, a member inside a `try`, or a member with a Result Target",
+			At:         "its first token, the member's, or the Result Target's `into`",
 			Sources: []string{
 				"ADR 0026",
 				"#115",
+				"ADR 0112",
+				"#1340",
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
