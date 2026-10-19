@@ -6,6 +6,125 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Remeasurement after the merged performance work, 2026-10-19
+
+For [#1103](https://github.com/odogono/odgn-talk/issues/1103), two
+`go-zig-bench` dispatches measure current `main`,
+`46508d138e5090c7999637eeabb4f8ac6d0fa3b5`:
+[run 1](https://github.com/odogono/odgn-talk/actions/runs/39234138486) and
+[run 2](https://github.com/odogono/odgn-talk/actions/runs/39234205013).
+They include the binary fields default, #1273's guest-cost work, #1287's
+callback decoder, #1298's instruction fast path, #1302's List writes and
+#1306's numeric work. The artifact source is
+`73e91b2a6e515ca7e8fa88e9ff2507f833674648`, Zig 0.17.0, wasm32-wasi, safe,
+sha256 `fa24d7b7882ba86d3ab25cf77ca1544bb2c6a5e8954befe6907672a0c4fdf98a`.
+Both runs use Go 1.27.2, wazero v1.12.0 and `CGO_ENABLED=0`.
+
+Raw results and environment records are archived under
+[`2026-10-19-ci-run1`](../../bench/results/go-zig-adapter/2026-10-19-ci-run1/) and
+[`2026-10-19-ci-run2`](../../bench/results/go-zig-adapter/2026-10-19-ci-run2/).
+The `go-zig-adapter-*` jobs run the existing five-sample full suite; the
+`request-pump-*` jobs run ten interleaved rounds of 20,000 iterations against
+native, JSON, map and fields, with native Request at `ff543e29` as a regression
+control. Use ratios within a job; these runs do not isolate individual PRs.
+
+### Paired Request results
+
+The [Request/Pump protocol](request-pump-binary.md#measurement-protocol-1278)
+requires two runs at the same head, base and artifact for acceptance near a
+limit. Each cell below lists run 1 / run 2, using the median of paired round
+ratios. The full details and JSON comparisons are in the
+[binary research](request-pump-binary.md#remeasurement-after-the-merged-performance-work-2026-10-19).
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Fields Request / native Request | ≤ 3× | 3.123× / 4.002× | 2.539× / 2.507× | 2.546× / 2.677× | Miss on amd64 in both runs |
+| Fields combined / native combined | ≤ 3× | 2.806× / 3.639× | 2.202× / 2.265× | 2.190× / 2.208× | Miss on amd64 in run 2 |
+
+The ≤3× Request goal remains unmet. The amended ≤0.75×-JSON gate passes for
+both workloads in all six jobs: fields takes 0.444–0.551× JSON time for
+Request and 0.398–0.506× for combined Request. Native Request shows no
+significant slowdown against the base in any job (paired native/base medians
+0.970–1.016×); Linux arm64 run 2 improves 0.93% (`p=0.023`). This control
+does not establish no regression for every native workload.
+
+Linux amd64 used an Intel Xeon Platinum 8370C in Request/Pump run 1 and an
+AMD EPYC 7763 in run 2. The 28% change in Request ratio across identical
+source and artifact is a reason to retain both jobs and avoid attributing
+cross-run timing changes to an individual optimization.
+
+### Full-suite limits
+
+Each cell lists **run 1 / run 2**. These are ratios of the five-sample
+medians within each full-suite job, except the absolute cold-start time.
+They are separate from the paired Request assessment above. Host and
+messaging ranges cover their individual workloads, not sample variation.
+All required platforms and both runs must pass; a split result does not
+establish acceptance.
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 3.44–4.93× / 3.77–5.52× | 4.29–4.88× / 4.16–4.74× | 2.96–5.56× / 6.55–9.40× | Miss |
+| `host/conversion` | ≤ 3× | 2.72× / 2.96× | 3.14× / 3.04× | 2.31× / 3.86× | Miss |
+| `BackendDeferredCall/history=0` | ≤ 3× | 3.24× / 4.16× | 10.92× / 10.65× | 3.73× / 4.15× | Miss |
+| `messaging/*` | ≤ 2× | 0.67–1.14× / 0.70–1.20× | 0.61–1.05× / 0.61–1.05× | 0.71–1.61× / 0.97–2.25× | Miss in macOS run 2 |
+| `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.70× / 0.67× | 0.41× / 0.39× | 0.68× / 1.01× | Miss on Linux arm64 |
+| `BackendRequest` p99 | ≤ 3× | 0.78× / 0.68× | 1.58× / 1.41× | 1.68× / 0.87× | Pass |
+| `Load/core/loop` | ≤ 3× | 2.97× / 3.40× | 4.65× / 4.53× | 2.54× / 2.07× | Miss on Linux |
+| `GroupInstantiation` | ≤ 10× | 6.66× / 6.99× | 9.19× / 9.56× | 10.48× / 7.36× | Miss in macOS run 1 |
+| `BackendRetainedMemory` heap/Group | ≤ 4× | 1.70× / 1.70× | 1.70× / 1.70× | 1.70× / 1.70× | Pass |
+| `BackendColdStart/cache=warm` first Group | ≤ 250 ms | 31.9 / 43.0 ms | 47.4 / 47.2 ms | 52.7 / 60.1 ms | Pass |
+
+**#1103 remains incomplete.** Request p99, retained heap and warm-cache
+startup pass in every job. The immediate-call category still misses both
+the paired Request limit on amd64 and the callback limits above. Conversion,
+deferred calls, messaging, throughput, Load and instantiation do not pass
+across all required jobs.
+
+Messaging is much closer than the 2026-10-18 recorded range of 1.3–2.4×:
+every Linux workload is now at most 1.20× native, but macOS run 2's
+`messaging/suspend` is 2.253×. Instantiation likewise needs another improvement
+or more investigation: macOS run 1 measures 10.476×, so rounding or retaining
+only run 2 would incorrectly turn it into a pass. The persistent Linux arm64
+gaps are deferred calls (about 10.7×) and throughput (about 0.4×).
+
+For context, the other original #1054 limits, including #1101's rows:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2× | 1.43× / 1.51× | 1.15× / 1.14× | 1.04× / 1.41× | Pass |
+| `lifecycle/restore` | ≤ 1.5× | 0.16× / 0.18× | 0.16× / 0.16× | 0.12× / 0.17× | Pass |
+| `lifecycle/load-large` | ≤ 2.5× | 1.03× / 1.08× | 0.93× / 0.94× | 0.96× / 1.09× | Pass |
+| Zig deferred `history=5000` / `history=0` | ≤ 1.2× | 0.99× / 1.00× | 1.01× / 0.98× | 0.94× / 1.01× | Pass |
+| `lifecycle/rollback` | ≤ 2× | 3.92× / 4.31× | 5.19× / 5.24× | 3.95× / 5.66× | Miss |
+
+Fuel and logical bytes match native on every Run in all six full-suite jobs.
+The first Group without a compilation cache takes 1.12–1.76 s; this is
+recorded, not limited. Full-suite jobs measure native and then Zig rather
+than interleaving them, and their five samples are insufficient for
+benchstat's finite 95% confidence interval. Treat borderline or split results
+as unestablished, and do not infer individual-PR speedups or native regressions
+from changes against a different runner/job. The controlled native/base
+Request comparison is the regression evidence available in this workflow.
+
+### Correctness checks on the measured revision
+
+The following commands pass locally at the measured revision:
+
+```sh
+bun install --frozen-lockfile
+bun run unicode:check
+CGO_ENABLED=0 go -C impl/go test .
+CGO_ENABLED=0 impl/go/zig-experimental-check.sh
+CGO_ENABLED=0 go -C impl/go run ./cmd/corpus --check-passing
+CGO_ENABLED=0 go -C impl/go run -tags talk_zig_experimental ./cmd/corpus --check-passing
+```
+
+Both Corpus runners pass the existing gate, including the 446 listed cases.
+The selected adapter gate includes embedding, Sessions, facilities and the
+current seed, chunked-frame and Library-restore regressions. These checks
+do not turn a missed performance limit into an acceptance pass.
+
 ## Adapter measurements against native Go, 2026-10-17
 
 [#1054](https://github.com/odogono/odgn-talk/issues/1054) measures the public

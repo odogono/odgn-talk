@@ -1,0 +1,41 @@
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 7763 64-Core Processor                
+                     │   native    │                  json                  │                 map                  │                fields                │
+                     │   sec/op    │   sec/op     vs base                   │   sec/op     vs base                 │   sec/op     vs base                 │
+BackendRequestPump-4   11.67µ ± 1%                                            49.26µ ± 1%  +322.02% (p=0.000 n=10)   42.57µ ± 2%  +264.68% (p=0.000 n=10)
+BackendCallPump-4      10.49µ ± 2%                                            81.79µ ± 1%  +679.64% (p=0.000 n=10)   73.59µ ± 1%  +601.46% (p=0.000 n=10)
+BackendRequest-4       11.61µ ± 2%   84.50µ ± 1%  +627.99% (p=0.000 n=10)     54.12µ ± 1%  +366.31% (p=0.000 n=10)   46.47µ ± 1%  +300.35% (p=0.000 n=10)
+geomean                11.24µ        84.50µ       +627.99%                ¹   60.19µ       +435.35%                  52.60µ       +367.86%
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                     │   native    │                  json                   │                  map                  │                fields                 │
+                     │   p50-sec   │   p50-sec     vs base                   │   p50-sec     vs base                 │   p50-sec     vs base                 │
+BackendRequestPump-4   8.997µ ± 1%                                             46.602µ ± 2%  +418.00% (p=0.000 n=10)   39.974µ ± 1%  +344.33% (p=0.000 n=10)
+BackendRequest-4       8.906µ ± 1%   80.405µ ± 1%  +802.81% (p=0.000 n=10)     51.060µ ± 1%  +473.32% (p=0.000 n=10)   43.842µ ± 1%  +392.27% (p=0.000 n=10)
+geomean                8.951µ         80.40µ       +802.81%                ¹    48.78µ       +444.96%                   41.86µ       +367.69%
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                     │    native    │                  json                  │                 map                 │                fields                │
+                     │   p99-sec    │   p99-sec     vs base                  │   p99-sec    vs base                │   p99-sec     vs base                │
+BackendRequestPump-4   74.13µ ± 13%                                            83.76µ ± 3%  +13.00% (p=0.000 n=10)   74.94µ ± 11%        ~ (p=0.353 n=10)
+BackendRequest-4       70.96µ ±  6%   128.44µ ± 1%  +81.00% (p=0.000 n=10)     91.48µ ± 4%  +28.91% (p=0.000 n=10)   80.15µ ±  3%  +12.95% (p=0.000 n=10)
+geomean                72.53µ          128.4µ       +81.00%                ¹   87.53µ       +20.69%                  77.50µ         +6.86%
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                     │    native    │                 json                  │                 map                  │                fields                │
+                     │     B/op     │     B/op      vs base                 │     B/op      vs base                │     B/op      vs base                │
+BackendRequestPump-4   7.010Ki ± 0%                                           5.688Ki ± 0%  -18.86% (p=0.000 n=10)   4.968Ki ± 0%  -29.13% (p=0.000 n=10)
+BackendCallPump-4      7.321Ki ± 0%                                           7.577Ki ± 0%   +3.49% (p=0.000 n=10)   6.620Ki ± 0%   -9.58% (p=0.000 n=10)
+BackendRequest-4       7.009Ki ± 0%   6.383Ki ± 0%  -8.93% (p=0.000 n=10)     6.977Ki ± 0%   -0.46% (p=0.000 n=10)   6.213Ki ± 0%  -11.36% (p=0.000 n=10)
+geomean                7.112Ki        6.383Ki       -8.93%                ¹   6.699Ki        -5.80%                  5.890Ki       -17.18%
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                     │   native   │                  json                  │                 map                 │               fields               │
+                     │ allocs/op  │  allocs/op   vs base                   │  allocs/op   vs base                │ allocs/op   vs base                │
+BackendRequestPump-4   89.00 ± 0%                                            113.00 ± 0%  +26.97% (p=0.000 n=10)   63.00 ± 0%  -29.21% (p=0.000 n=10)
+BackendCallPump-4      79.00 ± 0%                                            144.00 ± 0%  +82.28% (p=0.000 n=10)   93.00 ± 0%  +17.72% (p=0.000 n=10)
+BackendRequest-4       89.00 ± 0%   179.00 ± 0%  +101.12% (p=0.000 n=10)     135.00 ± 0%  +51.69% (p=0.000 n=10)   79.00 ± 0%  -11.24% (p=0.000 n=10)
+geomean                85.53         179.0       +101.12%                ¹    130.0       +51.98%                  77.35        -9.56%
+¹ benchmark set differs from baseline; geomeans may not be comparable
