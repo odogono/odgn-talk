@@ -1132,7 +1132,7 @@ The compatibility check also runs against the previous embedded reactor:
 refusing the new feature keeps earlier binary Request/Pump and Object
 Collection negotiations rather than discarding them with Load's fallback.
 
-The [three-platform workflow](https://github.com/odogono/odgn-talk/actions/runs/39321128221)
+The [three-platform workflow](https://github.com/odogono/odgn-talk/actions/workflows/go-zig-bench.yml)
 runs the final reactor on Linux amd64, Linux arm64 and macOS arm64. Its results
 and the Linux ≤3× target remain pending. The two new vectors, `load-new-group`
 and `load-existing-group` in `impl/testdata/envelope-frames.json`, need human
