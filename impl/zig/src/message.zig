@@ -337,7 +337,9 @@ pub const Session = struct {
     core: *talk.Core,
     grants: std.ArrayList(*caps.Grant) = .empty,
     capability_handles: std.ArrayList(struct { name: []u8, definition: *caps.Capability }) = .empty,
-    groups: std.ArrayList(*GroupEntry) = .empty,
+    /// The Groups by handle, each keyed by its entry's own `name`. Nothing
+    /// depends on their order, so `drop-group` swaps the last one in.
+    groups: std.StringArrayHashMapUnmanaged(*GroupEntry) = .empty,
     /// Per-Operation and per-property Host contexts, owned here.
     op_contexts: std.ArrayList(*OpContext) = .empty,
     prop_contexts: std.ArrayList(*PropContext) = .empty,
@@ -413,7 +415,7 @@ pub const Session = struct {
             gpa.destroy(c);
         }
         s.effect_contexts.deinit(gpa);
-        for (s.groups.items) |e| e.destroy();
+        for (s.groups.values()) |e| e.destroy();
         s.groups.deinit(gpa);
         s.grants.deinit(gpa);
         for (s.capability_handles.items) |h| gpa.free(h.name);
@@ -435,8 +437,7 @@ pub const Session = struct {
     }
 
     fn groupNamed(s: *Session, name: []const u8) ?*GroupEntry {
-        for (s.groups.items) |e| if (std.mem.eql(u8, e.name, name)) return e;
-        return null;
+        return s.groups.get(name);
     }
 
     fn capabilityNamed(s: *Session, name: []const u8) ?*caps.Capability {
@@ -723,7 +724,7 @@ const FunctionToken = struct { entry: *GroupEntry, index: usize, token: []u8 };
 fn functionToken(s: *Session, v: *const Value) encoding.Error!FunctionToken {
     const f = v.data.function;
     var at: ?struct { *GroupEntry, usize } = null;
-    for (s.groups.items) |e| {
+    for (s.groups.values()) |e| {
         for (e.group.group.functions.items, 0..) |code, i| if (@intFromPtr(code) == f.identity) {
             at = .{ e, i };
         };
@@ -2695,7 +2696,7 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         entry.group.group.host_poll = inlinePoll;
         entry.group.group.host_poll_context = &entry.inline_trace.?;
     }
-    s.groups.append(s.gpa, entry) catch return hostError(s.gpa, ref, .out_of_memory);
+    s.groups.put(s.gpa, entry.name, entry) catch return hostError(s.gpa, ref, .out_of_memory);
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -3803,7 +3804,7 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
         entry.group.group.host_poll = inlinePoll;
         entry.group.group.host_poll_context = &entry.inline_trace.?;
     }
-    s.groups.append(s.gpa, entry) catch {
+    s.groups.put(s.gpa, entry.name, entry) catch {
         Direct.groupRelease(entry.group);
         for (entry.pending_trace.items) |line| s.gpa.free(line);
         entry.pending_trace.deinit(s.gpa);
@@ -4549,7 +4550,7 @@ fn loadExchange(s: *Session, entry: *GroupEntry) void {
 
 fn anyExchangeOpen(s: *Session) bool {
     if (s.x.open()) return true;
-    for (s.groups.items) |e| if (e.parked.open()) return true;
+    for (s.groups.values()) |e| if (e.parked.open()) return true;
     return false;
 }
 
@@ -4561,10 +4562,7 @@ fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         s.x.deinit(s.gpa);
         s.x_owner = null;
     }
-    for (s.groups.items, 0..) |e, i| if (e == entry) {
-        _ = s.groups.orderedRemove(i);
-        break;
-    };
+    _ = s.groups.swapRemove(entry.name);
     unbindGroup(s, entry);
     entry.destroy();
     var o = Out.init(s.gpa);
@@ -7867,7 +7865,7 @@ fn crossingParity(crossing: crossing_test.Crossing, control: crossing_test.Contr
     const src = try std.json.Stringify.valueAlloc(a, if (cleanup) crossing_test.cleanupSource(crossing) else crossing_test.source(crossing), .{});
     defer a.free(src);
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":{s}}}", .{ 6, granted.object.get("grant").?.integer, src }));
-    const entry = s.groups.items[0];
+    const entry = s.groups.values()[0];
     const g = &entry.group.group;
     if (other_run) {
         _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"work\",\"segmentLifecycle\":true,\"ops\":[{{\"name\":\"touch\",\"mode\":\"immediate\",\"result\":\"number\",\"segmentBound\":true}}]}}", .{12}));
@@ -8273,7 +8271,7 @@ test "every analysis exchange requires opt-in and validates its fields" {
         _ = try okOf(reply);
         if (reply.object.get("trace")) |lines| try t.expectEqual(@as(usize, 0), lines.array.items.len);
     }
-    try t.expectEqual(@as(usize, 0), s.groups.items.len);
+    try t.expectEqual(@as(usize, 0), s.groups.count());
 }
 
 test "analysis reports positioned syntax errors and ordered implicit bindings" {
@@ -8861,4 +8859,40 @@ test "a combined exchange pauses at JSON needs, takes token cancellation and end
         if (std.mem.eql(u8, line.string, "> cancel-delivery d2")) cancelled = true;
     }
     if (!cancelled) return unexpected(next);
+}
+
+test "drop-group and lookup stay exact with many live Groups" {
+    const t = std.testing;
+    const gpa = t.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"group-exchanges-v1\"]}}", .{1}));
+    const n = 600;
+    var ref: i64 = 10;
+    for (0..n) |i| {
+        ref += 1;
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g{d}\",\"name\":\"g{d}\",\"trace\":false}}", .{ ref, i, i }));
+    }
+    // Drop the first, the last and every third Group between, last first.
+    var i: usize = n;
+    while (i > 0) {
+        i -= 1;
+        if (i % 3 != 0 and i != n - 1) continue;
+        ref += 1;
+        _ = try okOf(try c.send("{{\"m\":\"drop-group\",\"ref\":{d},\"group\":\"g{d}\"}}", .{ ref, i }));
+    }
+    // Every survivor still answers to its handle; every dropped handle is
+    // unknown and free to reuse.
+    for (0..n) |k| {
+        const dropped = k % 3 == 0 or k == n - 1;
+        ref += 1;
+        const reply = try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g{d}\"}}", .{ ref, k });
+        if (dropped) try t.expectEqualStrings("host error", try errKind(reply)) else _ = try okOf(reply);
+        ref += 1;
+        const again = try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g{d}\",\"name\":\"g{d}\",\"trace\":false}}", .{ ref, k, k });
+        if (dropped) _ = try okOf(again) else try t.expectEqualStrings("host error", try errKind(again));
+    }
+    try t.expectEqual(@as(usize, n), s.groups.count());
 }
