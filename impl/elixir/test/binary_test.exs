@@ -10,6 +10,7 @@ defmodule NorthTalk.BinaryTest do
 
   defp json(text), do: Jason.decode!(text, objects: :ordered_objects, floats: :decimals)
   defp plain(%Jason.OrderedObject{values: values}), do: Map.new(values, fn {k, v} -> {k, plain(v)} end)
+  defp plain(map) when is_map(map) and not is_struct(map), do: Map.new(map, fn {k, v} -> {k, plain(v)} end)
   defp plain(list) when is_list(list), do: Enum.map(list, &plain/1)
   defp plain(other), do: other
 

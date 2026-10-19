@@ -61,9 +61,33 @@ defmodule NorthTalk.Instant do
   @doc "The `DateTime`, in UTC, with microsecond precision."
   def to_datetime(%__MODULE__{unix_us: us}), do: DateTime.from_unix!(us, :microsecond)
 
+  # 0000-01-01 and 9999-12-31, in days since the Unix epoch.
+  @first_day -719_528
+  @last_day 2_932_896
+
   @doc false
+  # Every binary callback need carries `now`, so the four-digit years are
+  # written directly rather than through DateTime.
   def format(%__MODULE__{unix_us: us}) do
     seconds = Integer.floor_div(us, 1_000_000)
+    days = Integer.floor_div(seconds, 86_400)
+
+    if days >= @first_day and days <= @last_day,
+      do: format_civil(days, seconds - days * 86_400, Integer.mod(us, 1_000_000)),
+      else: format_any(seconds, us)
+  end
+
+  defp format_civil(days, s, fraction) do
+    {y, m, d} = :calendar.gregorian_days_to_date(days - @first_day)
+
+    <<digits(div(y, 100))::binary, digits(rem(y, 100))::binary, ?-, digits(m)::binary, ?-, digits(d)::binary, ?T,
+      digits(div(s, 3600))::binary, ?:, digits(div(rem(s, 3600), 60))::binary, ?:, digits(rem(s, 60))::binary,
+      NorthTalk.CivilDate.fraction(fraction)::binary, ?Z>>
+  end
+
+  defp digits(n), do: <<?0 + div(n, 10), ?0 + rem(n, 10)>>
+
+  defp format_any(seconds, us) do
     base = seconds |> DateTime.from_unix!() |> DateTime.to_iso8601() |> String.trim_trailing("Z")
     base <> NorthTalk.CivilDate.fraction(Integer.mod(us, 1_000_000)) <> "Z"
   end

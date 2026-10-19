@@ -35,7 +35,7 @@ defmodule NorthTalk.OwnerProtocolTest do
 
           reply =
             if t.scenario == :bad_ref and frame["m"] == "pump",
-              do: %{reply | values: List.keystore(reply.values, "ref", 0, {"ref", -1})},
+              do: put_in(reply["ref"], -1),
               else: reply
 
           send(t.observer, {:reply, frame["m"], if(reply["need"], do: :need, else: :final)})
