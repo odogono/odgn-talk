@@ -52,7 +52,6 @@ defmodule NorthTalk.FaultTest do
 
   on forever
     repeat while true
-      put n + 1 into n
     end repeat
   end forever
 
