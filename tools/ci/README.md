@@ -7,26 +7,41 @@ The initial Woodpecker workflows supplement GitHub Actions:
   bootstrap succeeds, TS and Go run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
+- `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
+  `bun run check` gates, including generated tables and documentation checks.
+- `.woodpecker/tooling.yaml` runs the TS workflow's stack and tooling jobs:
+  workspace typechecking, generated Lints, CLI/editor/Folio/extension tests,
+  builds and Node runtime checks.
 
 These workflows do not yet cover the complete Actions matrix, including the
-package/browser checks, tooling checks, Go SQLite module, fuzz campaigns,
-Elixir, WASI, generated-file gates and Linux ARM runtime checks. Keep the Actions
-requirements until equivalent coverage is available.
+Conventions, package/browser checks, Go SQLite module, fuzz campaigns,
+Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
+broader Zig and platform matrix. Keep the Actions requirements until equivalent
+coverage is available.
 
 ## Linux worker image
 
 Build this image on each Linux Docker worker before enabling the workflow:
 
 ```sh
-docker build -t odgn-talk-ci:2026-10-19 tools/ci
+docker build -t odgn-talk-ci:2026-10-19-2 tools/ci
+docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 tools/ci
 ```
 
-The image contains Bun 1.4.2, Node 22, Go 1.27.2 and the C compiler needed for
-Go race tests. Change its tag in both the build command and workflow whenever
-the image changes. Woodpecker uses the existing local image by default.
+Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
+compiler needed for Go race tests. The default image uses Node 22 for parity with
+the Actions stack and CLI
+jobs. The `node24` image is used only for the required SQLite and notification
+runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
+both the build command and workflows whenever its image changes. Woodpecker
+uses existing local images by default.
 
-The TS suite has a 30-second per-test timeout to accommodate the slower shared
-VPS CPUs; its assertions are unchanged.
+The TS and tooling suites have a 30-second default per-test timeout to
+accommodate the slower shared VPS CPUs; their assertions are unchanged.
+
+The Spec and tooling workflows each report a separate status, and can run
+alongside the core workflow as agent capacity permits. Tooling steps run
+sequentially in their shared workspace to keep their generated builds ordered.
 
 The workflow selects an agent with `platform=linux/amd64` and `backend=docker`.
 

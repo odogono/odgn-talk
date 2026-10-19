@@ -1,5 +1,5 @@
 # Built on taito with:
-# docker build -t odgn-talk-ci:2026-10-19 tools/ci
+# docker build -t odgn-talk-ci:2026-10-19-2 tools/ci
 when:
   - event: pull_request
   - event: push
@@ -16,14 +16,14 @@ clone:
 
 steps:
   - name: workspace
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     commands:
       - git config --global --add safe.directory "$PWD"
       - bun install --frozen-lockfile
       - bun run unicode:check
 
   - name: ts-core
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     depends_on: [workspace]
     directory: impl/ts
     commands:
@@ -32,7 +32,7 @@ steps:
       - bun run corpus:run
 
   - name: go-core
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     depends_on: [workspace]
     directory: impl/go
     environment:
