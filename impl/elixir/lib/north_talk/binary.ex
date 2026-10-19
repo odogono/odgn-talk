@@ -20,8 +20,11 @@ defmodule NorthTalk.Binary do
 
   # Each frame's fields in order, with the item each takes
   # (spec/embedding/request-pump-binary.md). A `:protocol` field holds
-  # protocol items; inside its maps, `item/3` and `read_protocol/3` type the
-  # few nested Values by key.
+  # protocol items. Where nested protocol data holds Values, its kind says
+  # where: `{:map, kinds}` gives the kind of each listed key, and
+  # `{:list, kind}` the kind of each element.
+  @target {:map, %{"object" => :value}}
+  @message {:map, %{"args" => :args}}
   @base [{"ref", :protocol}, {"group", :text}]
   @notices [{"abandoned", :protocol}, {"settled", :protocol}, {"trace", :protocol}]
   @pump [{"now", :instant}, {"fuelSlice", :protocol}, {"fuelCap", :protocol}]
@@ -34,10 +37,10 @@ defmodule NorthTalk.Binary do
   ]
 
   @messages %{
-    0x01 => {"request", @base ++ [{"to", :protocol}, {"message", :protocol}]},
+    0x01 => {"request", @base ++ [{"to", @target}, {"message", @message}]},
     0x02 => {"call", @base ++ [{"fn", :value}, {"args", :args}, {"limits", :protocol}]},
     0x03 => {"pump", @base ++ @pump},
-    0x04 => {"request-pump", @base ++ [{"token", :token}, {"to", :protocol}, {"message", :protocol}] ++ @pump},
+    0x04 => {"request-pump", @base ++ [{"token", :token}, {"to", @target}, {"message", @message}] ++ @pump},
     0x05 =>
       {"call-pump", @base ++ [{"token", :token}, {"fn", :value}, {"args", :args}, {"limits", :protocol}] ++ @pump},
     0x06 => {"op-result", @base ++ @result},
@@ -78,23 +81,30 @@ defmodule NorthTalk.Binary do
            )
   @outer ~w(ref abandoned settled trace)
 
+  # Each Report's fields in order, as for frames; unlisted kinds are protocol.
   @reports [
     {"run end",
-     ~w(script run delivery broadcast handler fallback climbed outcome result error limit effect cleanupFailed at fuel alloc)},
-    {"run started", ~w(script run args rootDelivery parentRun parentCall delivery selector fn)},
-    {"run discarded", ~w(script run reason rootDelivery parentRun parentCall)},
-    {"run accounting", ~w(script run fuel state rootDelivery parentRun parentCall)},
-    {"causal work", ~w(rootDelivery liveRuns queuedMessages discardedMessages)},
-    {"stop", ~w(script reason discardedRuns droppedMessages pendingCalls)},
-    {"unhandled", ~w(delivery message target)},
-    {"call failed", ~w(script call operation detail)},
-    {"effect failure", ~w(script run grant segment phase status scope)},
-    {"decided", ~w(delivery broadcast verdict vetoes undecided)},
-    {"host error", ~w(code detail)},
-    {"charge result", ~w(request call fuel status)}
+     ~w(script run delivery broadcast handler fallback climbed outcome result error limit effect cleanupFailed at fuel alloc),
+     %{"result" => :value, "error" => :value}},
+    {"run started", ~w(script run args rootDelivery parentRun parentCall delivery selector fn),
+     %{"args" => :args, "fn" => :value}},
+    {"run discarded", ~w(script run reason rootDelivery parentRun parentCall), %{}},
+    {"run accounting", ~w(script run fuel state rootDelivery parentRun parentCall), %{}},
+    {"causal work", ~w(rootDelivery liveRuns queuedMessages discardedMessages), %{}},
+    {"stop", ~w(script reason discardedRuns droppedMessages pendingCalls), %{}},
+    {"unhandled", ~w(delivery message target), %{"message" => @message, "target" => :value}},
+    {"call failed", ~w(script call operation detail), %{}},
+    {"effect failure", ~w(script run grant segment phase status scope), %{}},
+    {"decided", ~w(delivery broadcast verdict vetoes undecided), %{"vetoes" => {:list, {:map, %{"reason" => :value}}}}},
+    {"host error", ~w(code detail), %{}},
+    {"charge result", ~w(request call fuel status), %{}}
   ]
-  @report_tags @reports |> Enum.with_index(1) |> Map.new(fn {{kind, keys}, tag} -> {kind, {tag, keys}} end)
-  @report_kinds @reports |> Enum.with_index(1) |> Map.new(fn {report, tag} -> {tag, report} end)
+  @report_tags @reports
+               |> Enum.with_index(1)
+               |> Map.new(fn {{kind, keys, kinds}, tag} ->
+                 {kind, {tag, Enum.map(keys, &{&1, Map.get(kinds, &1, :protocol)})}}
+               end)
+  @report_kinds Map.new(@report_tags, fn {kind, {tag, keys}} -> {tag, {kind, keys}} end)
 
   def feature, do: @feature
   def callbacks_feature, do: @callbacks_feature
@@ -137,8 +147,51 @@ defmodule NorthTalk.Binary do
   """
   def encode_answer(%{"m" => m} = answer, ref, group) do
     tag = @tags[m] || invalid("#{inspect(m)} has no binary form")
-    fields(tag, to_wire(tag, [{"ref", ref}, {"group", group} | Map.to_list(Map.delete(answer, "m"))]))
+    {_, [_ref, _group | schema]} = @messages[tag]
+    wire = answer_wire(tag, Map.delete(answer, "m"))
+    Enum.each(wire, fn {k, _} -> List.keymember?(schema, k, 0) or invalid("#{k} is not a field of this frame") end)
+    items = Enum.map(schema, fn {name, kind} -> field_item(kind, Map.get(wire, name)) end)
+
+    IO.iodata_to_binary([
+      @prefix,
+      tag,
+      6,
+      uint(length(schema) + 2),
+      field_item(:protocol, ref),
+      field_item(:text, group),
+      items
+    ])
   end
+
+  # An answer's fields as its binary form holds them, as `to_wire/2` gives
+  # a frame's: a result's outcome becomes an explicit field.
+  defp answer_wire(tag, answer) when tag in [6, 7] do
+    {charged, rest} = Map.pop(answer, "charged")
+
+    case Map.to_list(rest) do
+      [{"fail", failure}] ->
+        failure = Map.new(pairs(failure))
+
+        %{
+          "outcome" => "fail",
+          "value" => failure["data"],
+          "code" => failure["code"],
+          "message" => failure["message"],
+          "charged" => charged
+        }
+
+      [{outcome, value}] ->
+        if outcome not in outcomes(tag), do: invalid("missing callback outcome")
+        value = if outcome in ~w(result value), do: value
+        %{"outcome" => outcome, "value" => value, "charged" => charged}
+
+      _ ->
+        invalid("missing callback outcome")
+    end
+  end
+
+  defp answer_wire(8, answer), do: Map.delete(answer, "detail")
+  defp answer_wire(_, answer), do: answer
 
   defp fields(tag, data) do
     schema = @schemas[tag]
@@ -304,6 +357,18 @@ defmodule NorthTalk.Binary do
   defp field_item(:value, v), do: value_item(v)
   defp field_item(:args, v) when is_list(v), do: [6, uint(length(v)), Enum.map(v, &value_item/1)]
   defp field_item(:args, _), do: invalid("args must be a list")
+  defp field_item({:list, kind}, v) when is_list(v), do: [6, uint(length(v)), Enum.map(v, &field_item(kind, &1))]
+
+  defp field_item({:map, kinds}, v) when is_map(v) do
+    ps = pairs(v)
+
+    [
+      7,
+      uint(length(ps)),
+      Enum.map(ps, fn {k, x} -> [5, text_bytes(k, true), field_item(Map.get(kinds, k, :protocol), x)] end)
+    ]
+  end
+
   defp field_item(:reports, v), do: reports_item(v)
 
   defp field_item(:instant, v) when is_binary(v) do
@@ -313,7 +378,10 @@ defmodule NorthTalk.Binary do
     end
   end
 
-  defp field_item(_, v), do: item(v, "", "")
+  defp field_item(kind, v) when is_binary(v) and kind in [:protocol, :text], do: [0x12, text_bytes(v, false)]
+  defp field_item(:protocol, v) when is_integer(v), do: integer_item(v)
+  defp field_item(:protocol, v) when is_boolean(v), do: if(v, do: <<2>>, else: <<1>>)
+  defp field_item(_, v), do: item(v)
 
   defp read_kind(bin, :value), do: read_value(bin)
   defp read_kind(<<6, rest::binary>>, :args), do: read_list(rest, &read_value/1)
@@ -321,14 +389,18 @@ defmodule NorthTalk.Binary do
   defp read_kind(bin, :reports), do: read_reports(bin)
 
   defp read_kind(bin, :text) do
-    with {v, _} = read when is_binary(v) <- read_protocol(bin, "", ""), do: read, else: (_ -> malformed())
+    with {v, _} = read when is_binary(v) <- read_protocol(bin), do: read, else: (_ -> malformed())
   end
 
   defp read_kind(bin, :token) do
-    with {v, _} = read when is_integer(v) and v > 0 <- read_protocol(bin, "", ""), do: read, else: (_ -> malformed())
+    with {v, _} = read when is_integer(v) and v > 0 <- read_protocol(bin), do: read, else: (_ -> malformed())
   end
 
-  defp read_kind(bin, _), do: read_protocol(bin, "", "")
+  defp read_kind(<<0, rest::binary>>, _), do: {nil, rest}
+  defp read_kind(<<6, rest::binary>>, {:list, kind}), do: read_list(rest, &read_kind(&1, kind))
+  defp read_kind(<<7, rest::binary>>, {:map, kinds}), do: read_map(rest, &read_kind(&1, Map.get(kinds, &2, :protocol)))
+  defp read_kind(_, {_, _}), do: malformed()
+  defp read_kind(bin, _), do: read_protocol(bin)
 
   # ── Encoding ──
 
@@ -339,50 +411,31 @@ defmodule NorthTalk.Binary do
       Enum.map(reports, fn report ->
         report = pairs(report)
         {tag, keys} = @report_tags[get(report, "kind")] || invalid("#{inspect(get(report, "kind"))} is not a Report")
-        for {k, _} <- report, k != "kind", k not in keys, do: invalid("#{k} is not a field of this Report")
-        [tag, 6, uint(length(keys)), Enum.map(keys, &item(get(report, &1), &1, ""))]
+
+        for {k, _} <- report,
+            k != "kind",
+            not List.keymember?(keys, k, 0),
+            do: invalid("#{k} is not a field of this Report")
+
+        [tag, 6, uint(length(keys)), Enum.map(keys, fn {key, kind} -> field_item(kind, get(report, key)) end)]
       end)
     ]
   end
 
   defp reports_item(_), do: invalid("reports must be a list")
 
-  # A protocol item. Inside a protocol map or Report, a few keys hold Values.
-  defp item(nil, _key, _parent), do: <<0>>
+  # A protocol item: protocol data with no Value positions.
+  defp item(nil), do: <<0>>
+  defp item(true), do: <<2>>
+  defp item(false), do: <<1>>
+  defp item(v) when is_binary(v), do: [0x12, text_bytes(v, false)]
+  defp item(v) when is_integer(v), do: integer_item(v)
+  defp item(%Decimal{} = v), do: number_item(Decimal.to_string(v, :normal))
+  defp item(v) when is_list(v), do: [6, uint(length(v)), Enum.map(v, &item/1)]
 
-  defp item(v, key, parent) do
-    cond do
-      key in ~w(fn result error object target) or (key == "reason" and parent == "vetoes") ->
-        value_item(v)
-
-      key == "args" ->
-        if is_list(v), do: [6, uint(length(v)), Enum.map(v, &value_item/1)], else: invalid("args must be a list")
-
-      is_boolean(v) ->
-        if v, do: <<2>>, else: <<1>>
-
-      is_binary(v) and key in ~w(now nextDeadline) ->
-        case NorthTalk.Instant.parse(v) do
-          {:ok, %{unix_us: us}} -> [11, zigzag(us)]
-          :error -> invalid("#{inspect(v)} is not an instant")
-        end
-
-      is_binary(v) ->
-        [0x12, text_bytes(v, false)]
-
-      is_integer(v) ->
-        integer_item(v)
-
-      is_struct(v, Decimal) ->
-        number_item(Decimal.to_string(v, :normal))
-
-      is_list(v) ->
-        [6, uint(length(v)), Enum.map(v, &item(&1, "", key))]
-
-      true ->
-        ps = pairs(v)
-        [7, uint(length(ps)), Enum.map(ps, fn {k, x} -> [5, text_bytes(k, true), item(x, k, parent)] end)]
-    end
+  defp item(v) do
+    ps = pairs(v)
+    [7, uint(length(ps)), Enum.map(ps, fn {k, x} -> [5, text_bytes(k, true), item(x)] end)]
   end
 
   # A Value in the Value Encoding.
@@ -412,7 +465,7 @@ defmodule NorthTalk.Binary do
         [10, value_item(from), value_item(to)]
 
       [{"$instant", s}] ->
-        item(s, "now", "")
+        field_item(:instant, s)
 
       [{"$date", s}] ->
         [12, text_bytes(s, true)]
@@ -515,8 +568,8 @@ defmodule NorthTalk.Binary do
         _, {acc, <<0, rest::binary>>} ->
           {acc, rest}
 
-        key, {acc, rest} ->
-          {v, rest} = read_protocol(rest, key, "")
+        {key, kind}, {acc, rest} ->
+          {v, rest} = read_kind(rest, kind)
           {[{key, v} | acc], rest}
       end)
 
@@ -533,50 +586,25 @@ defmodule NorthTalk.Binary do
 
   defp read_report(_), do: malformed()
 
-  defp read_protocol(bin, key, parent) do
-    cond do
-      key in ~w(fn result error object target) or (key == "reason" and parent == "vetoes") ->
-        read_value(bin)
+  defp read_protocol(<<0, rest::binary>>), do: {nil, rest}
+  defp read_protocol(<<b, rest::binary>>) when b in [1, 2], do: {b == 2, rest}
+  defp read_protocol(<<b, _::binary>> = bin) when b in [3, 0x10], do: read_integer(bin)
 
-      key == "args" ->
-        case bin do
-          <<6, rest::binary>> -> read_list(rest, &read_value/1)
-          _ -> malformed()
-        end
-
-      true ->
-        case bin do
-          <<0, rest::binary>> ->
-            {nil, rest}
-
-          <<b, rest::binary>> when b in [1, 2] ->
-            {b == 2, rest}
-
-          <<b, _::binary>> when b in [3, 0x10] ->
-            read_integer(bin)
-
-          <<4, rest::binary>> ->
-            {s, rest} = read_decimal(rest)
-            {Decimal.new(s), rest}
-
-          <<b, rest::binary>> when b in [5, 0x12] ->
-            read_text(rest, b == 5)
-
-          <<11, rest::binary>> ->
-            {us, rest} = read_zigzag(rest)
-            {NorthTalk.Instant.format(%NorthTalk.Instant{unix_us: us}), rest}
-
-          <<6, rest::binary>> ->
-            read_list(rest, &read_protocol(&1, "", key))
-
-          <<7, rest::binary>> ->
-            read_map(rest, &read_protocol(&1, &2, parent))
-
-          _ ->
-            malformed()
-        end
-    end
+  defp read_protocol(<<4, rest::binary>>) do
+    {s, rest} = read_decimal(rest)
+    {Decimal.new(s), rest}
   end
+
+  defp read_protocol(<<b, rest::binary>>) when b in [5, 0x12], do: read_text(rest, b == 5)
+
+  defp read_protocol(<<11, rest::binary>>) do
+    {us, rest} = read_zigzag(rest)
+    {NorthTalk.Instant.format(%NorthTalk.Instant{unix_us: us}), rest}
+  end
+
+  defp read_protocol(<<6, rest::binary>>), do: read_list(rest, &read_protocol/1)
+  defp read_protocol(<<7, rest::binary>>), do: read_map(rest, fn bin, _ -> read_protocol(bin) end)
+  defp read_protocol(_), do: malformed()
 
   # A Value item, as its Value Encoding.
   defp read_value(<<0, rest::binary>>), do: {nil, rest}
