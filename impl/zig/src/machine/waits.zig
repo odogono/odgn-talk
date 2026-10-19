@@ -54,6 +54,7 @@ pub const Waits = struct {
         w.call_index.deinit(a);
         for ([_][]*Call{ w.calls.items, w.retired_calls.items }) |list| for (list) |c| {
             a.free(c.id);
+            a.free(c.site);
             releaseArgs(a, c);
             a.destroy(c);
         };
@@ -155,6 +156,34 @@ pub const Waits = struct {
         w.calls.shrinkRetainingCapacity(kept);
     }
 
+    /// Frees the retired Calls `keep.holds(id)` refuses, for a Host that
+    /// names Calls only by id (#1322). A talk.h Host may hold a `talk_call`
+    /// until its Group is released, so only the Message Layer calls this.
+    /// A Run's abandonment record borrows its Call's id until written, so
+    /// that Call stays. Each freed id stays issued, so a late answer is
+    /// still recognised.
+    pub fn releaseRetired(w: *Waits, a: Allocator, keep: anytype, runs: anytype) void {
+        var kept: usize = 0;
+        for (w.retired_calls.items) |c| {
+            if (keep.holds(c.id) or recorded(c, runs)) {
+                w.retired_calls.items[kept] = c;
+                kept += 1;
+                continue;
+            }
+            _ = w.call_index.remove(c.id);
+            a.free(c.id);
+            a.free(c.site);
+            a.destroy(c);
+        }
+        w.retired_calls.shrinkRetainingCapacity(kept);
+    }
+
+    fn recorded(c: *const Call, runs: anytype) bool {
+        var it = runs;
+        while (it.next()) |r| for (r.abandoned.items) |id| if (id.ptr == c.id.ptr) return true;
+        return false;
+    }
+
     /// A borrowed view of the table, plus the compact list of Calls a save
     /// needs. Retired and unreferenced Calls retain no save history (#1126).
     /// The caller holds input_lock throughout export and encoding.
@@ -168,26 +197,19 @@ pub const Waits = struct {
 
         /// Issued ranges are written in Run-id order, independent of hashing.
         pub fn writeIssued(e: Export, a: Allocator, out: anytype) !void {
-            try out.int(e.table.issued_calls.runs.count());
-            var ids: std.ArrayList([]const u8) = .empty;
-            defer ids.deinit(a);
-            var it = e.table.issued_calls.runs.keyIterator();
-            while (it.next()) |id| try ids.append(a, id.*);
-            sorting.stable([]const u8, ids.items, {}, struct {
-                fn less(_: void, x: []const u8, y: []const u8) bool {
-                    return std.mem.lessThan(u8, x, y);
+            try out.int(e.table.issued_calls.count());
+            try e.table.issued_calls.each(a, struct {
+                out: @TypeOf(out),
+                pub fn run(w: @This(), id: []const u8, ranges: []const issued.Range) !void {
+                    try w.out.str(id);
+                    try w.out.int(ranges.len);
+                    for (ranges) |range| {
+                        try w.out.int(range.first);
+                        try w.out.int(range.last);
+                        try w.out.flag(range.eligible);
+                    }
                 }
-            }.less);
-            for (ids.items) |id| {
-                try out.str(id);
-                const ranges = e.table.issued_calls.runs.get(id).?.items;
-                try out.int(ranges.len);
-                for (ranges) |range| {
-                    try out.int(range.first);
-                    try out.int(range.last);
-                    try out.flag(range.eligible);
-                }
-            }
+            }{ .out = out });
         }
 
         /// Waits refer to their Run and optional Join Member in table order.
@@ -217,7 +239,7 @@ pub const Waits = struct {
         for (0..count) |_| {
             const run = try a.dupe(u8, try in.str());
             errdefer a.free(run);
-            if (run.len == 0 or w.issued_calls.runs.contains(run)) return error.InvalidSave;
+            if (run.len == 0 or w.issued_calls.contains(run)) return error.InvalidSave;
             var ranges: std.ArrayList(issued.Range) = .empty;
             errdefer ranges.deinit(a);
             const n = try in.count();
@@ -229,7 +251,7 @@ pub const Waits = struct {
                     error.OutOfMemory => error.OutOfMemory,
                 };
             }
-            try w.issued_calls.runs.put(a, run, ranges);
+            try w.issued_calls.importRun(a, run, ranges);
         }
     }
 
@@ -461,6 +483,7 @@ fn bareRun() Run {
     run.continuing = false;
     run.resume_with = null;
     run.waited = .{};
+    run.abandoned = .empty;
     run.suspended_at = "";
     return run;
 }
@@ -673,6 +696,36 @@ test "issued eligibility outlives a refused Charge and its retired Call" {
     try t.expectEqual(true, w.issuedEligibilityLocked(c.id).?);
     w.unissueCall(t.allocator, &lock, "s/r1.c2");
     try t.expectEqual(@as(?bool, null), w.issuedEligibilityLocked("s/r1.c2"));
+}
+
+test "releasing retired Calls keeps those the Host holds and every issued id" {
+    var w: Waits = .{};
+    defer w.deinit(t.allocator);
+    var lock: Lock = .{};
+    var run = bareRun();
+    const held = try testCall(&w, "s/r1.c1");
+    const done = try testCall(&w, "s/r2.c1");
+    for ([_]*Call{ held, done }) |c| {
+        c.settlement_consumed = true;
+        try w.registerCall(t.allocator, &lock, c.id, false);
+    }
+    w.retireCalls(t.allocator, TestRuns{ .runs = &.{&run} });
+    const host = struct {
+        fn holds(_: @This(), id: []const u8) bool {
+            return std.mem.eql(u8, id, "s/r1.c1");
+        }
+    }{};
+    // An abandonment record not yet written borrows the id.
+    defer run.abandoned.deinit(t.allocator);
+    try run.abandoned.append(t.allocator, done.id);
+    w.releaseRetired(t.allocator, host, TestRuns{ .runs = &.{&run} });
+    try t.expectEqual(@as(usize, 2), w.retired_calls.items.len);
+    run.abandoned.clearRetainingCapacity();
+    w.releaseRetired(t.allocator, host, TestRuns{ .runs = &.{&run} });
+    try t.expectEqualSlices(*Call, &.{held}, w.retired_calls.items);
+    try t.expectEqual(held, w.callById("s/r1.c1").?);
+    try t.expectEqual(@as(?*Call, null), w.callById("s/r2.c1"));
+    try t.expectEqual(false, w.issuedEligibilityLocked("s/r2.c1").?);
 }
 
 test "retirement protects every awaited reference and a starting Call" {

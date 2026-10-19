@@ -3662,6 +3662,14 @@ pub const Group = struct {
         return g.waits.callById(id);
     }
 
+    /// Whether the Group issued this call id, even if it no longer keeps
+    /// the Call.
+    pub fn issued(g: *Group, id: []const u8) bool {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        return g.waits.issuedEligibilityLocked(id) != null;
+    }
+
     /// Traverses live Runs without allocating a second list. The Wait table
     /// uses this same view for retirement and save selection.
     pub fn liveRuns(g: *const Group) LiveRuns {
@@ -10035,15 +10043,21 @@ pub const Group = struct {
                 return err;
             };
             c.group = g;
-            c.at_unit = try g.keep.allocator().dupe(u8, local.at_unit);
+            c.at_unit = "";
+            c.segment = "";
             g.waits.addCall(gpa, c) catch |err| {
                 gpa.free(c.id);
                 gpa.destroy(c);
                 return err;
             };
             // Segment ids are normally instruction scratch. A retained
-            // Call exposes its originating Segment after later Pumps too.
-            c.segment = try g.keep.allocator().dupe(u8, local.segment);
+            // Call exposes its call site and originating Segment after
+            // later Pumps too, and frees them with itself (#1322).
+            c.site = try gpa.alloc(u8, local.at_unit.len + local.segment.len);
+            @memcpy(c.site[0..local.at_unit.len], local.at_unit);
+            @memcpy(c.site[local.at_unit.len..], local.segment);
+            c.at_unit = c.site[0..local.at_unit.len];
+            c.segment = c.site[local.at_unit.len..];
             // Its arguments, for the answer's check and for a save, which
             // a restore may reissue it with.
             c.args = try gpa.dupe(*Value, args);

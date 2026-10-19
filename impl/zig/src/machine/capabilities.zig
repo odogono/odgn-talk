@@ -722,6 +722,9 @@ pub const Call = struct {
     /// A suspending call's arguments, kept when its Operation checks the
     /// answer against them; the Group releases them.
     args: []*Value = &.{},
+    /// A suspending call's own copy of `at_unit` and `segment`, freed with
+    /// the Call; empty when they are borrowed.
+    site: []u8 = &.{},
     /// The Group's allocator, which owns a failure's code and message.
     gpa: std.mem.Allocator,
     /// Whether its wait ended without its answer: a failed Join, a

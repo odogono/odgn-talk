@@ -206,6 +206,12 @@ const GroupEntry = struct {
             } else i += 1;
         }
     }
+
+    /// Whether the Host is still working on this call.
+    pub fn holds(e: *const GroupEntry, id: []const u8) bool {
+        for (e.started.items) |x| if (std.mem.eql(u8, x, id)) return true;
+        return false;
+    }
 };
 
 /// What an `op-result` or `prop-result` brought back, for the re-made
@@ -1957,6 +1963,10 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     defer if (!entry.traced) {
         mg.trace = trace;
     };
+    // The Host names calls only by id and has heard of every retired one
+    // it isn't still working on. Between Pumps every Run is live, so none
+    // borrows a released id (#1322).
+    if (!resuming) mg.waits.releaseRetired(mg.gpa, entry, mg.liveRuns());
     if (resuming) mg.resumePump() catch |e| return pumpFailure(s, ref, entry, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return pumpFailure(s, ref, entry, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
@@ -2939,7 +2949,14 @@ fn requestChargeReply(s: *Session, msg: Json, ref: i64) []u8 {
 fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const call_id = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
-    const c = entry.group.group.callById(call_id) orelse return hostError(s.gpa, ref, .unknown_call);
+    // A released call's answer is queued by id and ignored at drain, as a
+    // retained one's is (#1322).
+    var late: caps.Call = undefined;
+    const c = entry.group.group.callById(call_id) orelse blk: {
+        if (!entry.group.group.issued(call_id)) return hostError(s.gpa, ref, .unknown_call);
+        late = .{ .id = call_id, .script = "", .grant = "", .binding = null, .now = .{ .seconds = 0, .micros = 0 }, .left = null, .group = &entry.group.group, .gpa = entry.group.group.gpa };
+        break :blk &late;
+    };
     const code = if (is_fail) blk: {
         const e = field(msg, "error") orelse break :blk Direct.callFail(c, null);
         const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -6416,6 +6433,42 @@ test "an Answer and metered charge during Start wait for the next Pump" {
     const reports = (try okOf(done)).object.get("reports").?.array.items;
     try std.testing.expectEqualStrings("charge result", reports[0].object.get("kind").?.string);
     try std.testing.expectEqualStrings("accepted", reports[0].object.get("status").?.string);
+}
+
+test "settled deferred calls leave nothing behind and a late answer is still ignored (#1322)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"abandoned-before-needs-v1\",\"crossing-trace-v1\"]}}", .{0}));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"suspending\",\"result\":\"number\"}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n ask api to read and wait\\n return it + 1\\nend go\"}}", .{ 4, grant.object.get("grant").?.integer }));
+    const entry = s.groupNamed("g").?;
+    for (0..50) |_| {
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+        const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
+        const id = (pumped.object.get("need") orelse return unexpected(pumped)).object.get("call").?.string;
+        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+        _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":41}}", .{ 7, id }));
+        const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8});
+        try std.testing.expectEqual(@as(i64, 42), (try runEnd(done)).object.get("result").?.integer);
+    }
+    // The Host has heard every call settle, so the Group keeps none of them.
+    try std.testing.expectEqual(@as(usize, 0), entry.started.items.len);
+    try std.testing.expect(entry.group.group.waits.retired_calls.items.len <= 1);
+    try std.testing.expect(entry.group.group.waits.call_index.count() <= 1);
+    // Every Run made the same one call, so their issued ids share one Span.
+    try std.testing.expectEqual(@as(usize, 0), entry.group.group.waits.issued_calls.runs.count());
+    try std.testing.expectEqual(@as(usize, 1), entry.group.group.waits.issued_calls.spans.get("s/r").?.items.len);
+    // A late answer to a released call is still known, and ignored.
+    _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"s/r1.c1\",\"value\":1}}", .{9}));
+    const late = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
+    try std.testing.expectEqualStrings("idle", (try okOf(late)).object.get("state").?.string);
+    // A call the Group never issued is still unknown.
+    const unknown = try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"s/r999.c1\",\"value\":1}}", .{11});
+    try std.testing.expect(unknown.object.get("err") != null);
 }
 
 test "paused cancellation and Rewind retain rollback and accounting" {
