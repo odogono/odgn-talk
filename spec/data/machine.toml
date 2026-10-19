@@ -48,6 +48,8 @@ fold = "`fold` if the operation ignores case, and absent otherwise"
 field = "a Binary Pattern field type: an integer type with its byte order, or a size unit"
 event = "an entry of the code unit's event table"
 code = "an Error Code from errors.toml"
+target-kind = "local or variable; present together with target"
+target = "a non-negative writable slot in the member start frame/body or its Script Variables; present together with target-kind"
 
 # ---------------------------------------------------------------------------
 # Values and slots
@@ -1482,7 +1484,7 @@ pushes = 0
 suspends = false
 cost = "send"
 errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "restricted operation"]
-does = "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does"
+does = "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does, and recording its optional Result Target for whole-Join success"
 
 [[instruction]]
 name = "send-spread-wait"
@@ -1564,46 +1566,46 @@ errors = ["scope open", "restricted operation"]
 [[instruction]]
 name = "join-ask"
 group = "effects"
-operands = ["grant", "operation", "count"]
+operands = ["grant", "operation", "count", "target-kind?", "target?"]
 pops = "count"
 pushes = 0
 suspends = false
 cost = "capability"
 errors = ["wrong kind", "capability revoked", "capability disabled", "restricted operation"]
-does = "Starts a suspending Operation as a Join Member"
+does = "Starts a suspending Operation as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write"
 
 [[instruction]]
 name = "join-send"
 group = "effects"
-operands = ["message", "count"]
+operands = ["message", "count", "target-kind?", "target?"]
 pops = "count + 1"
 pushes = 0
 suspends = false
 cost = "send"
 errors = ["mailbox full", "object gone", "wrong kind", "restricted operation"]
-does = "Starts a `send … and wait` as a Join Member"
+does = "Starts a `send … and wait` as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write"
 
 [[instruction]]
 name = "join-send-named"
 group = "effects"
-operands = ["count"]
+operands = ["count", "target-kind?", "target?"]
 pops = "count + 2"
 pushes = 0
 suspends = false
 cost = "send"
 errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "restricted operation"]
-does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does"
+does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does, and recording its optional Result Target for whole-Join success"
 
 [[instruction]]
 name = "join-send-spread"
 group = "effects"
-operands = []
+operands = ["target-kind?", "target?"]
 pops = 3
 pushes = 0
 suspends = false
 cost = "send"
 errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "restricted operation"]
-does = "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does"
+does = "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does, and recording its optional Result Target for whole-Join success"
 
 [[instruction]]
 name = "join-end"

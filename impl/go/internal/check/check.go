@@ -505,7 +505,7 @@ func bindingSites(n *syntax.Node, visit func(*syntax.Node)) {
 			return false
 		}
 		switch x.Kind {
-		case "ask":
+		case "ask", "tell", "send", "command", "call-statement":
 			if x.Target != nil {
 				visit(x.Target)
 			}
@@ -645,6 +645,9 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 					b.Captures = append(b.Captures, Symbol{Kind: "local", Name: x.Text, Index: slot})
 					b.Locals = append(b.Locals, x.Text)
 				}
+			}
+			if x.Target != nil {
+				captureWalk(x.Target, shadow)
 			}
 			for _, child := range syntax.SourceChildren(x) {
 				captureWalk(child, shadow)
@@ -1103,6 +1106,15 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	case "build":
 		u.bits(n)
 	case "command":
+		if n.Target != nil && !syntax.HasFlag(n, "and") {
+			if n.Text == "say" {
+				u.add("wrong mode", n.Pos())
+			} else if _, host := u.hostCommands[n]; !host {
+				if symbol, ok := u.Callee(b, n); !ok || symbol.Kind != "handler" {
+					u.add("missing and wait", n.Pos())
+				}
+			}
+		}
 		if _, host := u.hostCommands[n]; u.Options.Library && n.Text != "say" && !host {
 			if symbol, ok := u.Callee(b, n); !ok || symbol.Kind != "handler" {
 				u.add("not in a library", n.Pos())
@@ -1125,6 +1137,12 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	}
 	// Message receivers alone may name Scripts that have not been loaded yet.
 	if n.Kind == "send" {
+		if n.Target != nil {
+			u.checkWrite(n.Target, b)
+			if !syntax.HasFlag(n, "and") {
+				u.add("missing and wait", n.Pos())
+			}
+		}
 		for _, e := range n.Children {
 			u.validate(e, b, ctx)
 		}
@@ -1165,10 +1183,6 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			u.validate(e, b, ctx)
 		}
 		if n.Target != nil {
-			// A Join Member's result goes nowhere until the Join ends (ADR 0112).
-			if ctx.join > 0 && syntax.HasFlag(n, "and") {
-				u.add("not in a join", n.Target.Flags[0].Pos)
-			}
 			u.checkWrite(n.Target, b)
 		}
 		if syntax.HasFlag(n, "and") && b != nil && ctx.join == 0 {
@@ -1178,6 +1192,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 		return
+	}
+	if (n.Kind == "command" || n.Kind == "call-statement") && n.Target != nil {
+		u.checkWrite(n.Target, b)
 	}
 	for _, child := range n.Children {
 		u.validate(child, b, ctx)

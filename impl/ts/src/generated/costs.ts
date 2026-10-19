@@ -88,7 +88,7 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Char
   // wait
   (m) => ({ fuel: 10, alloc: 0 }),
   // join
-  (m) => ({ fuel: 10, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m) => ({ fuel: 10 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
   // timeout
   (m) => ({ fuel: 2, alloc: 40 }),
   // builtin.min

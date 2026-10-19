@@ -30,6 +30,8 @@ pub const MachineTableOperand = struct {
     field: []const u8,
     event: []const u8,
     code: []const u8,
+    target_kind: []const u8,
+    target: []const u8,
 };
 
 pub const MachineTableInstructionEntry = struct {
@@ -78,6 +80,8 @@ pub const machine: MachineTable = .{
         .field = "a Binary Pattern field type: an integer type with its byte order, or a size unit",
         .event = "an entry of the code unit's event table",
         .code = "an Error Code from errors.toml",
+        .target_kind = "local or variable; present together with target",
+        .target = "a non-negative writable slot in the member start frame/body or its Script Variables; present together with target-kind",
     },
     .instruction = &.{
         .{
@@ -1949,7 +1953,7 @@ pub const machine: MachineTable = .{
             .pushes = .{ .int = 0 },
             .suspends = false,
             .cost = "send",
-            .does = "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does",
+            .does = "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does, and recording its optional Result Target for whole-Join success",
             .errors = &.{
                 "bad message name",
                 "mailbox full",
@@ -2085,12 +2089,14 @@ pub const machine: MachineTable = .{
                 "grant",
                 "operation",
                 "count",
+                "target-kind?",
+                "target?",
             },
             .pops = .{ .text = "count" },
             .pushes = .{ .int = 0 },
             .suspends = false,
             .cost = "capability",
-            .does = "Starts a suspending Operation as a Join Member",
+            .does = "Starts a suspending Operation as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write",
             .errors = &.{
                 "wrong kind",
                 "capability revoked",
@@ -2104,12 +2110,14 @@ pub const machine: MachineTable = .{
             .operands = &.{
                 "message",
                 "count",
+                "target-kind?",
+                "target?",
             },
             .pops = .{ .text = "count + 1" },
             .pushes = .{ .int = 0 },
             .suspends = false,
             .cost = "send",
-            .does = "Starts a `send … and wait` as a Join Member",
+            .does = "Starts a `send … and wait` as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write",
             .errors = &.{
                 "mailbox full",
                 "object gone",
@@ -2122,12 +2130,14 @@ pub const machine: MachineTable = .{
             .group = "effects",
             .operands = &.{
                 "count",
+                "target-kind?",
+                "target?",
             },
             .pops = .{ .text = "count + 2" },
             .pushes = .{ .int = 0 },
             .suspends = false,
             .cost = "send",
-            .does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does",
+            .does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does, and recording its optional Result Target for whole-Join success",
             .errors = &.{
                 "bad message name",
                 "mailbox full",
@@ -2139,12 +2149,15 @@ pub const machine: MachineTable = .{
         .{
             .name = "join-send-spread",
             .group = "effects",
-            .operands = &.{},
+            .operands = &.{
+                "target-kind?",
+                "target?",
+            },
             .pops = .{ .int = 3 },
             .pushes = .{ .int = 0 },
             .suspends = false,
             .cost = "send",
-            .does = "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does",
+            .does = "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does, and recording its optional Result Target for whole-Join success",
             .errors = &.{
                 "bad message name",
                 "mailbox full",

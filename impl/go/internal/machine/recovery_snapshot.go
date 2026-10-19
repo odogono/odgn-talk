@@ -17,6 +17,41 @@ func (r *Run) ValidateSnapshot(code map[*State]bool) error {
 	if r.FrameCounter < 0 || r.OfferAttempt < 0 || r.Cancelling && len(r.Recoveries) > 0 || !r.Cancelling && (len(r.Cancellation) > 0 || len(r.CancellationOwners) > 0) {
 		return invalid()
 	}
+	if j := r.Join; j != nil {
+		if j.Frame < 0 || j.Frame >= len(r.Frames) {
+			return invalid()
+		}
+		for _, m := range j.Members {
+			if m.Frame != j.Frame {
+				return invalid()
+			}
+			f := r.Frames[m.Frame]
+			if !code[f.Code] || f.Body < 0 || f.Body >= len(f.Code.Unit.Bodies) {
+				return invalid()
+			}
+			body := f.Code.Unit.Bodies[f.Body]
+			if m.Start < 0 || m.Start >= len(body.Code) {
+				return invalid()
+			}
+			end := j.Start
+			for end < len(body.Code) && body.Code[end].Op != generated.OpJoinEnd {
+				end++
+			}
+			if m.Start <= j.Start || m.Start >= end {
+				return invalid()
+			}
+			ins := body.Code[m.Start]
+			switch ins.Op {
+			case generated.OpJoinAsk, generated.OpJoinSend, generated.OpJoinSendNamed, generated.OpJoinSendSpread:
+			default:
+				return invalid()
+			}
+			kind, index := r.memberTarget(m)
+			if kind != "" && (index < 0 || kind != "local" && kind != "variable" || kind == "local" && (index == 0 || index >= len(f.Locals)) || kind == "variable" && index >= len(r.State.Variables)) {
+				return invalid()
+			}
+		}
+	}
 	contexts := map[int]*RecoveryContext{}
 	order := map[int]int{}
 	frames := map[int]Frame{}

@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 13;
+pub const format_version: u32 = 14;
 
 pub const Error = error{
     InvalidSave,
@@ -834,8 +834,12 @@ const Saving = struct {
         }
         try s.o.flag(r.join != null);
         if (r.join) |j| {
+            try s.o.int(j.frame);
+            try s.o.int(j.start);
             try s.o.int(j.members.items.len);
             for (j.members.items) |m| {
+                try s.o.int(m.frame);
+                try s.o.int(m.start);
                 try s.pending(r, m.pending);
                 try s.waited(m.waited);
                 try s.resumeWith(m.with);
@@ -1679,12 +1683,14 @@ const Restoring = struct {
         if (try r.i.flag()) x.raised_at = .{ .line = try r.i.small(u32), .column = try r.i.small(u32) };
         if (try r.i.flag()) {
             const j = try a.create(machine.Join);
-            j.* = .{};
+            j.* = .{ .frame = try r.i.small(usize), .start = try r.i.small(u32) };
             x.join = j;
             const n = try r.i.count();
             for (0..n) |m| {
                 try j.members.append(a, .{ .pending = null, .waited = .{} });
                 const member = &j.members.items[m];
+                member.frame = try r.i.small(usize);
+                member.start = try r.i.small(u32);
                 try r.g.waits.importWait(x, m, try r.pending(x));
                 member.waited = try r.waited(s);
                 member.with = try r.resumeWith();
@@ -1805,6 +1811,36 @@ const Restoring = struct {
     /// and every frame and entry it names in bounds.
     fn checkRun(r: *Restoring, run: *Run) Error!void {
         const fs = run.frames.items;
+        if (run.join) |j| for (j.members.items) |m| {
+            if (m.frame >= fs.len or m.frame != j.frame) return error.InvalidSave;
+            const f = &fs[m.frame];
+            const code = run.script.unitIn(f.library);
+            if (m.start >= code.code.len) return error.InvalidSave;
+            if (j.start >= code.code.len or code.code[j.start].op != .join_start) return error.InvalidSave;
+            var end = j.start;
+            while (end < code.code.len and code.code[end].op != .join_end) : (end += 1) {}
+            if (m.start <= j.start or m.start >= end) return error.InvalidSave;
+            const ins = code.code[m.start];
+            const offset: usize = switch (ins.op) {
+                .join_ask => 3,
+                .join_send => 2,
+                .join_send_named => 1,
+                .join_send_spread => 0,
+                else => return error.InvalidSave,
+            };
+            const body = code.bodies[f.body];
+            if (m.start < body.first or m.start >= body.last) return error.InvalidSave;
+            if (ins.operands.len != offset) {
+                if (ins.operands.len != offset + 2) return error.InvalidSave;
+                const kind = ins.operands[offset].text;
+                if (!std.mem.eql(u8, kind, "local") and !std.mem.eql(u8, kind, "variable")) return error.InvalidSave;
+                if (ins.operands[offset + 1].int < 0) return error.InvalidSave;
+                const t = machine.memberTarget(run, m).?;
+                if (t.variable) {
+                    if (t.index >= run.script.variables.len) return error.InvalidSave;
+                } else if (t.index == 0 or t.index >= f.locals.len) return error.InvalidSave;
+            }
+        };
         const controlled = run.controls.items.len > 0;
         for (fs, 0..) |*f, n| {
             const code = run.script.unitIn(f.library);
@@ -3175,5 +3211,28 @@ test "shared Map blocks save as ordered values and restore across rollback" {
         _ = try g.deliver("s", "fault", &.{}, false);
         try g.pump(.{ .seconds = 1790000002, .micros = 0 });
         try testing.expect(try values.equal(script.variables[0]));
+    }
+}
+
+test "Join destination associations require their original frame and member instruction" {
+    const gpa = testing.allocator;
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    const source = "on go\n wait for all\n  send slow to me into x and wait\n end wait\nend go\non slow\n wait 1 s\n return 1\nend slow";
+    try testing.expect(try g.load("s", source, .{}) == .loaded);
+    _ = try g.deliver("s", "go", &.{}, false);
+    try g.pump(.{ .seconds = 1790000000, .micros = 0 });
+    const join = g.script("s").?.live.items[0].join.?;
+    const original = join.members.items[0];
+    for ([_]bool{ false, true }) |owner| {
+        join.members.items[0] = original;
+        if (owner) join.members.items[0].frame = 999 else join.members.items[0].start = 0;
+        const corrupt = try save(&g, gpa, try g.groupFingerprint());
+        defer gpa.free(corrupt);
+        var copy: Group = .init(gpa, null);
+        defer copy.deinit();
+        var result: Result = .{};
+        defer result.deinit(gpa);
+        try testing.expectError(error.InvalidSave, restore(&copy, corrupt, .{}, &result));
     }
 }

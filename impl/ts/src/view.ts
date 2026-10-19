@@ -213,6 +213,7 @@ export type Stmt =
   | { k: 'delete'; pos: Pos; target: Expr }
   | {
       args: Expr[];
+      into?: SemanticName;
       k: 'send';
       /** The message name, or for `send (e)` the expression that computes it. */
       message: string | Expr;
@@ -225,7 +226,7 @@ export type Stmt =
   | {
       args: Expr[];
       grant: string;
-      /** An `ask`'s Result Target (ADR 0112). */
+      /** A Result Target (ADR 0114). */
       into?: SemanticName;
       k: 'ask' | 'tell';
       operation: string;
@@ -251,8 +252,21 @@ export type Stmt =
   | { k: 'exit' | 'next'; pos: Pos }
   | { k: 'throw'; pos: Pos; value: Expr }
   | (Omit<Replace, 'k'> & { k: 'replace-statement' })
-  | { call: Expr & { k: 'call' }; k: 'call'; pos: Pos; wait: boolean }
-  | { args: Expr[]; k: 'command'; name: SemanticName; pos: Pos; wait: boolean }
+  | {
+      call: Expr & { k: 'call' };
+      into?: SemanticName;
+      k: 'call';
+      pos: Pos;
+      wait: boolean;
+    }
+  | {
+      args: Expr[];
+      into?: SemanticName;
+      k: 'command';
+      name: SemanticName;
+      pos: Pos;
+      wait: boolean;
+    }
   | {
       arms: { body: Stmt[]; cond: Expr }[];
       else: Stmt[] | null;
@@ -564,6 +578,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
             ? of<Expr[]>(children[withAt + 1])
             : [],
         target: of<Expr>(children[toAt + 1]),
+        ...resultInto(children, of),
         wait: nodeAt(0, 'AndWait') >= 0,
       } satisfies Stmt;
     }
@@ -609,6 +624,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
               grant: target.name.text,
               operation: (child.children[0] as Leaf).text,
               args: list >= 0 ? of<Expr[]>(child.children[list]) : [],
+              ...resultInto(child.children, of),
               wait: child.children.some(
                 c => c.kind === 'node' && c.rule === 'AndWait',
               ),
@@ -1146,6 +1162,16 @@ const fn = (node: SemanticNode, of: Of): Function => {
   };
 };
 
+const resultInto = (
+  children: readonly SemanticElement[],
+  of: Of,
+): { into?: SemanticName } => {
+  const into = children.find(
+    c => c.kind === 'node' && c.rule === 'ResultTarget',
+  );
+  return into ? { into: of<SemanticName>(into) } : {};
+};
+
 const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
   const { children } = node;
   const first = children[0]!;
@@ -1157,7 +1183,10 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
           k: 'call',
           pos: at,
           call: of<Expr & { k: 'call' }>(first),
-          wait: children.length > 1,
+          ...resultInto(children, of),
+          wait: children.some(
+            child => child.kind === 'node' && child.rule === 'AndWait',
+          ),
         };
       case 'Replace':
         return { ...of<Replace>(first), k: 'replace-statement' };
@@ -1178,6 +1207,7 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
         grant: command.grant,
         operation: command.operation,
         args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        ...resultInto(children, of),
         wait: children.some(
           child => child.kind === 'node' && child.rule === 'AndWait',
         ),
@@ -1188,6 +1218,7 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
       pos: at,
       name: first,
       args: list >= 0 ? of<Expr[]>(children[list]) : [],
+      ...resultInto(children, of),
       wait: children.some(
         child => child.kind === 'node' && child.rule === 'AndWait',
       ),

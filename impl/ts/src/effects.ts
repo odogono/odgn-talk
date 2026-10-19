@@ -269,7 +269,7 @@ export const checkEffectCall = (
   const fitsMode = asked
     ? decl.mode === (wait ? 'suspending' : 'immediate')
     : decl.mode === 'fire-and-forget';
-  if (!fitsMode) {
+  if (!fitsMode || (!asked && nodesOf(node, 'ResultTarget').length > 0)) {
     report('wrong mode', line ? op : (node.children[0] as Leaf));
     return;
   }

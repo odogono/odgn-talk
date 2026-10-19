@@ -109,6 +109,8 @@ The operand kinds:
 | `field` | a Binary Pattern field type: an integer type with its byte order, or a size unit |
 | `event` | an entry of the code unit's event table |
 | `code` | an Error Code from errors.toml |
+| `target-kind` | local or variable; present together with target |
+| `target` | a non-negative writable slot in the member start frame/body or its Script Variables; present together with target-kind |
 
 <!-- end -->
 
@@ -333,7 +335,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
 | `send-named` | `count` | count + 2 | 0 | Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
 | `send-named-wait` (suspends) | `count` | count + 2 | 1 | Sends as `send-named` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
-| `send-spread` |  | 3 | 0 | A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `send-spread` |  | 3 | 0 | A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does, and recording its optional Result Target for whole-Join success | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
 | `send-spread-wait` (suspends) |  | 3 | 1 | Sends as `send-spread` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
 | `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full`, `restricted operation` |
 | `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open`, `restricted operation` |
@@ -341,10 +343,10 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `wait-for` (suspends) | `event` | event | 1 | Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout | `wrong kind`, `scope open`, `restricted operation` |
 | `wait-for-any` (suspends) | `event` | event | 2 | The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number | `wrong kind`, `scope open`, `restricted operation` |
 | `join-start` |  | 0 | 0 | Starts a Join | `scope open`, `restricted operation` |
-| `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled`, `restricted operation` |
-| `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
-| `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
-| `join-send-spread` |  | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-ask` | `grant`, `operation`, `count`, `target-kind` (optional), `target` (optional) | count | 0 | Starts a suspending Operation as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write | `wrong kind`, `capability revoked`, `capability disabled`, `restricted operation` |
+| `join-send` | `message`, `count`, `target-kind` (optional), `target` (optional) | count + 1 | 0 | Starts a `send … and wait` as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write | `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-send-named` | `count`, `target-kind` (optional), `target` (optional) | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does, and recording its optional Result Target for whole-Join success | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-send-spread` | `target-kind` (optional), `target` (optional) | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does, and recording its optional Result Target for whole-Join success | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
 | `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout`, `restricted operation` |
 | `timeout-start` |  | 1 | 1 | `with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later | `wrong kind`, `restricted operation` |
 | `timeout-end` |  | 1 | 0 | Pops a Timeout Block's deadline as control leaves the block | `restricted operation` |
@@ -963,7 +965,7 @@ A formula is a sum of terms: a whole number, or a measure, optionally multiplied
 | `entries` | the number of keys, for a map; 0 for any other value |
 | `digits` | the number of digits in the coefficient, 1 for a zero, for a number or the number of a Quantity; 0 for any other value |
 | `scanned` | what the instruction examines, as its rate's `input` says |
-| `steps` | the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running) |
+| `steps` | at Join completion, the target-write Fuel defined by the join rate input; otherwise the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running) |
 | `program` | the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling) |
 | `frames` | the number of frames a catch search leaves or an offer lookup examines |
 | `clauses` | the number of Handler Clauses a dispatch tries |
@@ -1115,7 +1117,7 @@ Cost Model **0**.
 | `capability` | `10 + declared + size(result) / 32` | `size(result)` | the Operation's result, converted into Script values |
 | `send` | `20 + size(input) / 32` | `size(input)` | the message, whose size counts toward the receiver's mailbox |
 | `wait` | `10` | 0 |  |
-| `join` | `10` | `size(result)` |  |
+| `join` | `10 + steps` | `size(result)` | completion only: steps is 1 per started local Result Target plus 3 per started Script Variable Result Target, including duplicates; reserve after all answers convert and are charged, before any target write; no charge on failed or abandoned Joins, no registration charge, allocation or descriptor size |
 | `timeout` | `2` | `40` | a deadline holds a mathematical microsecond count and the block's duration |
 | `catch-accept` | `1` | 0 |  |
 | `catch-next` | `1` | 0 |  |
@@ -1213,6 +1215,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#890](https://github.com/odogono/odgn-talk/issues/890) | The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional |
 | [#1132](https://github.com/odogono/odgn-talk/issues/1132) | The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional |
 | [#1143](https://github.com/odogono/odgn-talk/issues/1143) | Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional. |
+| [#1350](https://github.com/odogono/odgn-talk/issues/1350) | Joins reserve 1 Fuel per started local Result Target and 3 per started Script Variable Result Target at successful completion, after answer conversion and charging and before any target write; no registration charge, extra allocation or descriptor logical size; Cost Model 0 remains provisional |
 
 <!-- end -->
 

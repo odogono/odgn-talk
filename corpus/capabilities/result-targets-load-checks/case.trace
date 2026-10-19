@@ -1,0 +1,12 @@
+# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
+
+> load s identity=76373c953cc5bb1dc3c116458a104f602837c9d8ed5059da1e4f1c3d24ad62b5
+diag s code="missing and wait" pos=2:2
+diag s code="missing and wait" pos=3:2
+diag s code="missing and wait" pos=4:2
+diag s code="wrong mode" pos=7:2
+diag s code="wrong mode" pos=9:3
+diag s code="can't write" pos=14:15
+diag s code="can't write" pos=18:16
+diag s code="can't write" pos=24:16
+> vars

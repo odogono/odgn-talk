@@ -373,7 +373,6 @@ func TestAskResultTarget(t *testing.T) {
 		{"  ask g to op x and wait into y", 2, 26},
 		{"  ask g to op into it", 2, 20},
 		{"  tell g to op x into y", 2, 18},
-		{"  tell g\n    op x into y\n  end tell", 3, 10},
 	} {
 		_, err := Parse("on t x\n" + tc.source + "\nend t\n")
 		e, ok := err.(*Error)

@@ -1,0 +1,6 @@
+on imported
+ return 21
+end imported
+function identity n
+ return n
+end identity

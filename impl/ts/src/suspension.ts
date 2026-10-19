@@ -2,6 +2,7 @@
 // suspend, inferred over the call graph to a fixpoint; `and wait` written
 // exactly on a Command Call to a Handler that may; and no Suspension Point
 // in a `finally` block, a named function, or a Handler called function-style.
+import { hostCommands } from './semantic';
 import { recoveryBody } from './recovery';
 import type { Report } from './control';
 import type {
@@ -78,6 +79,13 @@ const factsOf = (
         point(firstLeaf(node));
         break;
       case 'Send':
+        if (has(node, 'ResultTarget') && !waits) {
+          report('missing and wait', firstLeaf(node));
+        }
+        if (waits) {
+          point(firstLeaf(node));
+        }
+        break;
       case 'AskTell':
       case 'OperationLine':
         if (waits) {
@@ -87,6 +95,9 @@ const factsOf = (
       case 'SimpleStatement': {
         const [head] = node.children;
         if (head?.kind === 'name' && head.text === 'say') {
+          if (has(node, 'ResultTarget')) {
+            report('wrong mode', head);
+          }
           if (waits) {
             report('needless and wait', head);
           }
@@ -102,6 +113,12 @@ const factsOf = (
             if (waits && cleanup) {
               report("can't suspend here", head);
             }
+          } else if (
+            has(node, 'ResultTarget') &&
+            !waits &&
+            !hostCommands.has(node)
+          ) {
+            report('missing and wait', head);
           } else if (waits) {
             // No Handler: the message climbs the Message Path and waits.
             point(head);

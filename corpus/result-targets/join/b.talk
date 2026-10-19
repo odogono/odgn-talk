@@ -1,0 +1,3 @@
+on echo n
+ return n
+end echo

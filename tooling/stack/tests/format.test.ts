@@ -273,3 +273,14 @@ test('Nothing defaults preserve grouping, optional keys and lazy lowering', () =
   ).toBe(canonical(disassemble(compileSource(source, { name: 's' }).unit!)));
   expect(formatSource(formatted.source).source).toBe(formatted.source);
 });
+
+test('preserves Result Targets before and wait, with labels, comments and Operation lines', () => {
+  const source =
+    'on go\ntell api\nhold into x and wait-- answer\nend tell\nmove 1 to 2 into y\nsqrt(4) into z\nsend to me: move 1 to 2 into y and wait\nend go\n';
+  const formatted = formatSource(source);
+  expect(formatted.error).toBeNull();
+  expect(formatted.source).toBe(
+    'on go\n  tell api\n    hold into x and wait -- answer\n  end tell\n  move 1 to 2 into y\n  sqrt(4) into z\n  send to me: move 1 to 2 into y and wait\nend go\n',
+  );
+  expect(formatSource(formatted.source)).toEqual(formatted);
+});

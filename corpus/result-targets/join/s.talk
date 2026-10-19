@@ -1,0 +1,32 @@
+script variable last = 0
+script variable result
+script variable during
+on go
+ put 9 into x
+ wait for all
+  ask api to hold into x and wait
+  tell api
+   hold into last and wait
+  end tell
+  send echo with 3 to b into x and wait
+  send ("echo") with 4 to b into last and wait
+  send echo with ...[5] to b into x and wait
+  repeat 2 times
+   ask api to hold into last and wait
+  end repeat
+  if false then send echo with 0 to b into skipped and wait
+  put [x, last] into during
+ end wait
+ put [x, last, it] into result
+end go
+on failed
+ put 9 into x
+ try
+  wait for all
+   ask api to hold into x and wait
+   ask api to hold into last and wait
+  end wait
+ catch e
+  put [x, last] into result
+ end try
+end failed

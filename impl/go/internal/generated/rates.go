@@ -90,7 +90,7 @@ var CostRates = []CostRate{
 	{"capability", []CostTerm{{0, 0, 10, 1}, {16, 0, 1, 1}, {1, 2, 1, 32}}, []CostTerm{{1, 2, 1, 1}}},
 	{"send", []CostTerm{{0, 0, 20, 1}, {1, 1, 1, 32}}, []CostTerm{{1, 1, 1, 1}}},
 	{"wait", []CostTerm{{0, 0, 10, 1}}, []CostTerm{}},
-	{"join", []CostTerm{{0, 0, 10, 1}}, []CostTerm{{1, 2, 1, 1}}},
+	{"join", []CostTerm{{0, 0, 10, 1}, {11, 0, 1, 1}}, []CostTerm{{1, 2, 1, 1}}},
 	{"timeout", []CostTerm{{0, 0, 2, 1}}, []CostTerm{{0, 0, 40, 1}}},
 	{"builtin.min", []CostTerm{{0, 0, 4, 1}, {10, 0, 1, 1}}, []CostTerm{}},
 	{"builtin.max", []CostTerm{{0, 0, 4, 1}, {10, 0, 1, 1}}, []CostTerm{}},

@@ -868,6 +868,7 @@ const Frame = struct {
             .call => |cs| {
                 try f.call(cs.call, cs.wait != null);
                 try f.store(0, first);
+                try f.resultTarget(cs.into);
             },
             .command => |c| try f.command(first, c),
             .wait => |e| {
@@ -1281,7 +1282,8 @@ const Frame = struct {
             const operands: []const Operand = &.{ .{ .text = try l.a.dupe(u8, hc.grant) }, .{ .text = try l.a.dupe(u8, hc.operation) }, .{ .int = n } };
             if (hc.told) return f.emit(.tell, operands, first, "");
             try f.emit(if (waits) .ask_wait else .ask, operands, first, "");
-            return f.store(0, first);
+            try f.store(0, first);
+            return f.resultTarget(c.into);
         }
         if (l.checked.suspends.contains(name) or l.importedHandler(l.text(c.name))) {
             try f.emit(if (waits) .call_handler_wait else .call_handler, &.{ .{ .text = name }, .{ .int = n } }, first, "");
@@ -1290,6 +1292,7 @@ const Frame = struct {
             try f.emit(.send_up_wait, &.{ .{ .text = name }, .{ .int = n } }, first, "");
             try f.store(0, first);
         } else try f.emit(.send_up, &.{ .{ .text = name }, .{ .int = n } }, first, "");
+        try f.resultTarget(c.into);
     }
 
     fn send(f: *Frame, first: Tok, s: ast.Send) Allocator.Error!void {
@@ -1308,9 +1311,12 @@ const Frame = struct {
                 try f.emit(if (arg.spread != null) .list_extend else .list_append, &.{}, first, "");
             }
             try f.receiver(s.target);
-            if (f.join and waits) return f.emit(.join_send_spread, &.{}, first, "");
+            if (f.join and waits) return f.member(.join_send_spread, &.{}, first, s.into);
             try f.emit(if (waits) .send_spread_wait else .send_spread, &.{}, first, "");
-            if (waits) try f.store(0, first);
+            if (waits) {
+                try f.store(0, first);
+                try f.resultTarget(s.into);
+            }
             return;
         }
         if (s.computed) |e| try f.expr(e);
@@ -1318,13 +1324,16 @@ const Frame = struct {
         try f.receiver(s.target);
         const n: i64 = @intCast(s.args.len);
         if (s.computed != null) {
-            if (f.join and waits) return f.emit(.join_send_named, &.{.{ .int = n }}, first, "");
+            if (f.join and waits) return f.member(.join_send_named, &.{.{ .int = n }}, first, s.into);
             try f.emit(if (waits) .send_named_wait else .send_named, &.{.{ .int = n }}, first, "");
         } else {
-            if (f.join and waits) return f.emit(.join_send, &.{ .{ .text = name.? }, .{ .int = n } }, first, "");
+            if (f.join and waits) return f.member(.join_send, &.{ .{ .text = name.? }, .{ .int = n } }, first, s.into);
             try f.emit(if (waits) .send_wait else .send, &.{ .{ .text = name.? }, .{ .int = n } }, first, "");
         }
-        if (waits) try f.store(0, first);
+        if (waits) {
+            try f.store(0, first);
+            try f.resultTarget(s.into);
+        }
     }
 
     /// A `send`'s receiver or a `wait for`'s `from`: a Name that resolves to
@@ -1349,13 +1358,28 @@ const Frame = struct {
         if (!ask and !line) return f.emit(.tell, operands, at, "");
         if (line and !waits and mode == .fire_and_forget) return f.emit(.tell, operands, at, "");
         if (waits) {
-            if (f.join) return f.emit(.join_ask, operands, at, "");
+            if (f.join) return f.member(.join_ask, operands, at, op.into);
             try f.emit(.ask_wait, operands, at, "");
         } else try f.emit(.ask, operands, at, "");
         try f.store(0, at);
         // A Result Target is `put it into name`, with nothing between that
         // can suspend or raise (ADR 0112).
-        if (op.into) |t| switch (l.checked.refs.get(t) orelse check.Ref.local) {
+        try f.resultTarget(op.into);
+    }
+
+    fn member(f: *Frame, opcode: Opcode, operands: []const Operand, at: Tok, target: ?Tok) Allocator.Error!void {
+        const t = target orelse return f.emit(opcode, operands, at, "");
+        const dest: []const Operand = switch (f.l.checked.refs.get(t) orelse check.Ref.local) {
+            .variable => |v| &.{ .{ .text = "variable" }, .{ .int = v } },
+            else => &.{ .{ .text = "local" }, .{ .int = f.names.get(f.l.text(t)).? } },
+        };
+        const all = try std.mem.concat(f.l.a, Operand, &.{ operands, dest });
+        try f.emit(opcode, all, at, "");
+    }
+
+    fn resultTarget(f: *Frame, target: ?Tok) Allocator.Error!void {
+        const l = f.l;
+        if (target) |t| switch (l.checked.refs.get(t) orelse check.Ref.local) {
             .variable => |v| {
                 try f.load(0, t);
                 try f.emit(.store_var, &.{.{ .int = v }}, t, l.text(t));
@@ -2924,7 +2948,12 @@ pub fn disassemble(unit: *const Unit, w: *std.Io.Writer) std.Io.Writer.Error!voi
     for (unit.code, 0..) |ins, pc| {
         const meta = machine.instruction[@backingInt(ins.op)];
         try w.print("  {d:0>4} {d}:{d} {s}", .{ pc, ins.position.line, ins.position.column, meta.name });
-        var kinds: [4][]const u8 = undefined;
+        const max_operands = comptime blk: {
+            var count: usize = 0;
+            for (machine.instruction) |instruction| count = @max(count, instruction.operands.len);
+            break :blk count;
+        };
+        var kinds: [max_operands][]const u8 = undefined;
         var n: usize = 0;
         for (meta.operands) |k| {
             const optional = std.mem.endsWith(u8, k, "?");

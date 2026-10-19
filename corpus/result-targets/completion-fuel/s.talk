@@ -1,0 +1,7 @@
+script variable x = 0
+on go
+ wait for all
+  ask api to hold into x and wait
+  ask api to hold into x and wait
+ end wait
+end go

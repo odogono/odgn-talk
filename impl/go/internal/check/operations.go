@@ -221,7 +221,7 @@ func checkOperation(n *syntax.Node, grants map[string]map[string]OperationCheck,
 			mode = "suspending"
 		}
 	}
-	if d.Mode != mode {
+	if d.Mode != mode || n.Target != nil && mode == "fire-and-forget" {
 		report("wrong mode", n.Pos())
 		return
 	}

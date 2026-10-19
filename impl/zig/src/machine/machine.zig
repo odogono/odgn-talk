@@ -394,10 +394,30 @@ pub const EffectFailure = struct { grant: []const u8, phase: []const u8, status:
 
 /// A Join's members, in start order.
 pub const Join = struct {
+    frame: usize = 0,
+    start: u32 = 0,
     members: std.ArrayList(Member) = .empty,
 };
 
+pub const MemberTarget = struct { variable: bool, index: usize };
+
+pub fn memberTarget(run: *const Run, m: Member) ?MemberTarget {
+    const frame = &run.frames.items[m.frame];
+    const ins = unitOf(run, frame).code[m.start];
+    const offset: usize = switch (ins.op) {
+        .join_ask => 3,
+        .join_send => 2,
+        .join_send_named => 1,
+        else => 0,
+    };
+    if (ins.operands.len == offset) return null;
+    return .{ .variable = std.mem.eql(u8, ins.operands[offset].text, "variable"), .index = @intCast(ins.operands[offset + 1].int) };
+}
+
 pub const Member = struct {
+    /// The checked member instruction retains kind/index and its owning frame.
+    frame: usize = 0,
+    start: u32 = 0,
     /// What it waits on, until it settles.
     pending: ?*Pending,
     waited: Waited,
@@ -4797,7 +4817,19 @@ pub const Group = struct {
                     made += 1;
                 }
                 const list = try model.list(gpa, values);
-                run.alloc += costs.size(list);
+                errdefer list.release();
+                var steps: u64 = 0;
+                for (join.members.items) |m| if (memberTarget(run, m)) |t| {
+                    steps += if (t.variable) @as(u64, 3) else 1;
+                };
+                const total = costs.charge("join", &.{ .steps = steps, .result = list });
+                const before = costs.charge("join", &.{});
+                try g.payResumeConversion(run, total.fuel - before.fuel, total.alloc - before.alloc);
+                for (join.members.items, values) |m, v| if (memberTarget(run, m)) |t| {
+                    const slots = if (t.variable) run.script.variables else run.frames.items[m.frame].locals;
+                    slots[t.index].release();
+                    slots[t.index] = v.retain();
+                };
                 g.dropJoin(run);
                 try g.push(frame, list);
                 return null;
@@ -5437,6 +5469,9 @@ pub const Group = struct {
             g.destroyPending(p);
             return e;
         };
+        const m = &run.join.?.members.items[p.member.?];
+        m.frame = run.frames.items.len - 1;
+        m.start = run.frames.items[m.frame].pc - 1;
     }
 
     /// Abandons a Join's members still pending, or timed out, in start
@@ -8933,7 +8968,7 @@ pub const Group = struct {
                     return g.refuseOpenScope(run);
                 }
                 const join = try gpa.create(Join);
-                join.* = .{};
+                join.* = .{ .frame = run.frames.items.len - 1, .start = frame.pc - 1 };
                 run.join = join;
             },
             .join_end => {

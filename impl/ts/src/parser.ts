@@ -1204,11 +1204,17 @@ class Parser {
       return {
         k: 'CallStatement',
         call: (yield this.call(name)) as Node,
+        into: this.atOperatorWord('into')
+          ? ((yield this.resultTarget()) as string)
+          : undefined,
         wait: (yield this.andWait()) as boolean,
       };
     }
     return {
       ...((yield this.commandPhrase(name)) as Node),
+      into: this.atOperatorWord('into')
+        ? ((yield this.resultTarget()) as string)
+        : undefined,
       wait: (yield this.andWait()) as boolean,
     };
   }
@@ -1346,6 +1352,9 @@ class Parser {
           msg: phrase.name,
           args: phrase.args,
           target,
+          into: this.atOperatorWord('into')
+            ? ((yield this.resultTarget()) as string)
+            : undefined,
           wait: (yield this.andWait()) as boolean,
         };
       }
@@ -1373,6 +1382,9 @@ class Parser {
         name,
         args,
         target,
+        into: this.atOperatorWord('into')
+          ? ((yield this.resultTarget()) as string)
+          : undefined,
         wait: (yield this.andWait()) as boolean,
       };
     } finally {
@@ -1399,7 +1411,7 @@ class Parser {
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, an `ask`'s Result Target where `targets` allows it (ADR 0112),
+  // arguments, a Result Target where `targets` allows it (ADR 0114),
   // and `and wait` where `waits` allows it.
   *operation(waits: boolean, targets = false): ParseTask<Node> {
     const t = this.peek(0);
@@ -1423,7 +1435,7 @@ class Parser {
     };
   }
 
-  // `into x`: the Name an `ask`'s answer is put into (ADR 0112).
+  // `into x`: the Name the answer is put into (ADR 0114).
   *resultTarget(): ParseTask<string> {
     const frame = this.enter('ResultTarget');
     try {
@@ -1491,7 +1503,7 @@ class Parser {
         try {
           lines.push(
             this.at(t, {
-              ...((yield this.operation(true)) as Node),
+              ...((yield this.operation(true, true)) as Node),
               k: 'OperationLine',
             }),
           );

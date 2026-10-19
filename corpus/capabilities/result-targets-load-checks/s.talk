@@ -1,0 +1,26 @@
+on missing
+ unknown into x
+ send echo to me into x
+ send to me: echo into x
+end missing
+on fire
+ note into x
+ tell api
+  note into x
+ end tell
+end fire
+constant k = 1
+on constantTarget
+ sqrt(4) into k
+end constantTarget
+on collectingTarget
+ repeat 1 times collecting 1 into acc
+  sqrt(4) into acc
+ end repeat
+end collectingTarget
+on capturedTarget
+ put 1 into locked
+ put given
+  sqrt(4) into locked
+ end given into f
+end capturedTarget

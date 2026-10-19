@@ -1,0 +1,52 @@
+# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
+
+> load s identity=9e85346cc29dc1ba1e6e9841e6abc071172dce2a26ddd05cef83f04d2fe39870
+> load b identity=dad815031b1144f8c24656ea1a610a7427c39f421e9ab33a847d59fefdfe654d
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=api.hold args=[]
+call s/r1.c2 op=api.hold args=[]
+send s/r1.c3 to=b message=echo args=[3] wait=join
+send s/r1.c4 to=b message=echo args=[4] wait=join
+send s/r1.c5 to=b message=echo args=[5] wait=join
+call s/r1.c6 op=api.hold args=[]
+call s/r1.c7 op=api.hold args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=174 alloc=328 state=640 end=join-end
+seg b/r1 start from=s/r1.c3 handler=echo clause=1 fuel=7 alloc=0 state=96 end=return
+run b/r1 outcome=completed handler=echo value=3 fuel=7 alloc=0
+seg b/r2 start from=s/r1.c4 handler=echo clause=1 fuel=7 alloc=0 state=48 end=return
+run b/r2 outcome=completed handler=echo value=4 fuel=7 alloc=0
+seg b/r3 start from=s/r1.c5 handler=echo clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r3 outcome=completed handler=echo value=5 fuel=7 alloc=0
+pumped state=idle fuel=195 next=2026-09-30T09:00:30Z
+> answer s/r1.c1 value=1
+> answer s/r1.c2 value=2
+> pump clock=2026-09-30T09:00:01Z
+pumped state=idle fuel=0 next=2026-09-30T09:00:30Z
+> save s1
+> restore from=s1 fingerprint=d343c4e83c601511708208df564f29b60588ff87bbac11089fe1c011e3defb9c mode=full pending=[s/r1.c6, s/r1.c7]
+> settle s/r1.c7 how=answer value=7
+> settle s/r1.c6 how=answer value=6
+> pump clock=2026-09-30T09:00:02Z
+seg s/r1 resume fuel=34 alloc=504 state=336 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=208 alloc=832
+pumped state=idle fuel=34
+> vars
+vars s last=7 result=[5, 7, [1, 2, 3, 4, 5, 6, 7]] during=[9, 0]
+vars b
+> deliver d2 to=s message=failed
+> pump clock=2026-09-30T09:00:03Z
+call s/r2.c1 op=api.hold args=[]
+call s/r2.c2 op=api.hold args=[]
+seg s/r2 start delivery=d2 handler=failed clause=1 fuel=46 alloc=0 state=680 end=join-end
+pumped state=idle fuel=46 next=2026-09-30T09:00:33Z
+> answer s/r2.c1 value=20
+> fail s/r2.c2 error={code: "unavailable"}
+> pump clock=2026-09-30T09:00:04Z
+raise s/r2 code="unavailable" at=s:54 pos=28:3
+seg s/r2 resume fuel=19 alloc=80 state=144 end=return
+run s/r2 outcome=completed delivery=d2 handler=failed fuel=65 alloc=80
+pumped state=idle fuel=19
+> vars
+vars s last=7 result=[9, 7] during=[9, 0]
+vars b

@@ -150,6 +150,7 @@ pub const Arithmetic = struct {
 pub const ListItem = struct { spread: ?Tok, value: *Expr };
 
 pub const Send = struct {
+    into: ?Tok = null,
     /// The message's name, or null for a computed one.
     name: ?Tok,
     computed: ?*Expr,
@@ -166,7 +167,7 @@ pub const Operation = struct {
     target: ?*Expr,
     operation: Tok,
     args: []const *Expr,
-    /// An `ask`'s Result Target, `into name` (ADR 0112).
+    /// A Result Target, `into name` (ADR 0114).
     into: ?Tok = null,
     wait: ?Tok,
 };
@@ -190,9 +191,10 @@ pub const Replace = struct {
 
 pub const Choose = struct { name: Tok, args: []const *Expr };
 
-pub const CallStatement = struct { call: *Expr, wait: ?Tok };
+pub const CallStatement = struct { call: *Expr, into: ?Tok = null, wait: ?Tok };
 
 pub const Command = struct {
+    into: ?Tok = null,
     name: Tok,
     labels: []const Tok,
     args: []const *Expr,

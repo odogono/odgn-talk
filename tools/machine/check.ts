@@ -13,6 +13,7 @@
 // instruction with one stack depth, never underflows and ends in an
 // instruction that leaves the body. Not normative (ADR 0028).
 
+import { sourceGrants, sourceLibraries } from '../corpus/source-grants';
 import machine from '../../spec/data/machine.toml';
 import { isRejectedSource } from './rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -351,7 +352,13 @@ const lower = (
   compilePatterns(src, where);
   try {
     const unit = compileSource(name, kind, src, {
-      libraries,
+      libraries: new Map([
+        ...libraries,
+        ...[...sourceLibraries(resolve(ROOT, where))].map(
+          ([name, source]) => [name, parse(source).ast ?? []] as const,
+        ),
+      ]),
+      grants: sourceGrants(resolve(ROOT, where)),
       lenient,
       trustedStdlib: resolve(ROOT, where).startsWith(STDLIB + '/'),
     });

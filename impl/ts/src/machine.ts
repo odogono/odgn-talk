@@ -763,6 +763,8 @@ export type Member = {
   ms: number;
   /** A Script reply received before its preempted Join closes. */
   reply?: Resumption;
+  /** The checked member instruction retains its destination and owning frame. */
+  site: { frame: Frame; pc: number };
 };
 /** What resumes a suspended Run. */
 export type Resumption =
@@ -1589,6 +1591,54 @@ export class Run {
     this.cancellationOwners.forEach(add);
     this.cleanups.forEach(c => add(c.frame));
     this.cancellation?.forEach(c => add(c.frame));
+    if (this.suspended?.k === 'join') {
+      requireSnapshot(
+        this.join && this.suspended.members === this.join.members,
+      );
+    }
+    if (this.join) {
+      requireSnapshot(Array.isArray(this.join.members));
+      requireSnapshot(this.frames.includes(this.join.frame));
+      for (const m of this.join.members) {
+        requireSnapshot(
+          m.site &&
+            m.site.frame === this.join.frame &&
+            snapshotCounter(m.site.pc),
+        );
+        const f = m.site.frame;
+        requireSnapshot(
+          knownCode.has(f.code) && f.code.unit.bodies.includes(f.body),
+        );
+        let end = this.join.start;
+        while (
+          end < f.body.end &&
+          f.code.unit.code[end]!.opcode !== Op.JoinEnd
+        ) {
+          end++;
+        }
+        requireSnapshot(m.site.pc > this.join.start && m.site.pc < end);
+        const ins = f.code.unit.code[m.site.pc];
+        requireSnapshot(
+          ins &&
+            [
+              Op.JoinAsk,
+              Op.JoinSend,
+              Op.JoinSendNamed,
+              Op.JoinSendSpread,
+            ].includes(ins.opcode),
+        );
+        requireSnapshot(m.site.pc >= f.body.start && m.site.pc < f.body.end);
+        const t = this.memberTarget(m);
+        requireSnapshot(
+          !t ||
+            ((t.kind === 'local' || t.kind === 'variable') &&
+              snapshotCounter(t.index) &&
+              (t.kind === 'local'
+                ? t.index > 0 && t.index < f.locals.length
+                : t.index < this.script.variables.length)),
+        );
+      }
+    }
     const contexts = new Set(this.recoveries);
     requireSnapshot(contexts.size === this.recoveries.length);
     for (const c of this.recoveries) {
@@ -2718,9 +2768,24 @@ export class Run {
         }
       });
       const result = listValues(values);
-      const all = charge(JOIN, { result });
+      const targets = s.members.map(m => this.memberTarget(m));
+      const steps = targets.reduce(
+        (sum, t) => sum + (t ? (t.kind === 'local' ? 1 : 3) : 0),
+        0,
+      );
+      const all = charge(JOIN, { result, steps });
       const before = charge(JOIN, {});
       this.payAmount(all.fuel - before.fuel, all.alloc - before.alloc);
+      for (const [i, target] of targets.entries()) {
+        if (!target) {
+          continue;
+        }
+        if (target.kind === 'local') {
+          s.members[i]!.site.frame.locals[target.index] = values[i]!;
+        } else {
+          this.script.variables[target.index] = values[i]!;
+        }
+      }
       frame.stack.push(result);
       frame.pc++;
       return;
@@ -2786,6 +2851,28 @@ export class Run {
         return r.value;
     }
     throw new Error(`a Join's resumption for one call: ${r.k}`);
+  }
+
+  private memberTarget(
+    m: Member,
+  ): { index: number; kind: 'local' | 'variable' } | undefined {
+    const { frame, pc } = m.site;
+    const ins = frame.code.unit.code[pc]!;
+    const offset =
+      ins.opcode === Op.JoinAsk
+        ? 3
+        : ins.opcode === Op.JoinSend
+          ? 2
+          : ins.opcode === Op.JoinSendNamed
+            ? 1
+            : 0;
+    const kind = ins.operands[offset];
+    return kind === undefined
+      ? undefined
+      : {
+          kind: kind as 'local' | 'variable',
+          index: ins.operands[offset + 1] as number,
+        };
   }
 
   // A Join member's error, with `index` added at its end (chapter 6).
@@ -4267,6 +4354,7 @@ export class Run {
       const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
       if (member) {
         this.join!.members.push({
+          site: { frame: this.frame, pc: this.frame.pc },
           id,
           call: ctx,
           abort,
@@ -5292,6 +5380,7 @@ export class Run {
         this.calls++;
         if (join) {
           this.join!.members.push({
+            site: { frame, pc: frame.pc },
             id,
             call: null,
             abort: null,

@@ -1,5 +1,7 @@
 # Go Core
 
+A Result Target, `into name`, retains the answer of an `ask`, a `tell`-block Operation line, a Command Call (including a Host Command), a call statement or a waiting `send` ([ADR 0114](../../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)). It writes the bare Name with put semantics and keeps `it`; `and wait` remains last. Fire-and-forget calls reject targets, and a Message Path Command Call or explicit send needs explicit `and wait`. A Join records each reached member's destination and assigns them in start order only after every answer converts and all completion charges are reserved, so duplicate targets retain the last-started answer and failure writes no member targets. Saves retain the member instruction and its owning frame, including early answers and repeated destinations.
+
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
 package `northtalk`. It provides immutable values, decimal arithmetic, pinned
 Unicode text, a front end and standalone Abstract Machine execution. Its Group
@@ -131,7 +133,7 @@ was already stopped. Function Values made by the old code are stale afterwards.
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
-Saves are opaque `zig/13` bytes; native Go saves remain per-Core and cannot be
+Saves are opaque `zig/14` bytes; native Go saves remain per-Core and cannot be
 read by this backend. Restore compiles the supplied Libraries in its fresh
 guest, rebinds Grants and native Objects through the public callbacks, and
 returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and

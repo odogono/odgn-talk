@@ -864,6 +864,10 @@ const Checker = struct {
         };
     }
 
+    fn collectResult(c: *Checker, s: *Scope, target: ?Tok) Allocator.Error!void {
+        if (target) |t| if (c.rootBinds(s, c.text(t))) try c.bind(s, t, false);
+    }
+
     fn collectStmt(c: *Checker, s: *Scope, st: *const Stmt) Allocator.Error!void {
         switch (st.data) {
             .put => |p| {
@@ -883,6 +887,7 @@ const Checker = struct {
                 if (snd.computed) |e| try c.collectExpr(s, e);
                 for (snd.args) |arg| try c.collectExpr(s, arg.value);
                 try c.collectExpr(s, snd.target);
+                try c.collectResult(s, snd.into);
             },
             .ask => |op| {
                 try c.collectExprs(s, op.args);
@@ -890,12 +895,21 @@ const Checker = struct {
                 if (op.into) |t| if (c.rootBinds(s, c.text(t))) try c.bind(s, t, false);
             },
             .tell => |op| try c.collectExprs(s, op.args),
-            .tell_block => |tb| for (tb.lines) |line| try c.collectExprs(s, line.args),
+            .tell_block => |tb| for (tb.lines) |line| {
+                try c.collectExprs(s, line.args);
+                try c.collectResult(s, line.into);
+            },
             .@"return", .veto => |v| if (v) |e| try c.collectExpr(s, e),
             .throw, .wait => |e| try c.collectExpr(s, e),
             .choose => |ch| try c.collectExprs(s, ch.args),
-            .call => |cs| try c.collectExpr(s, cs.call),
-            .command => |cmd| try c.collectExprs(s, cmd.args),
+            .call => |cs| {
+                try c.collectExpr(s, cs.call);
+                try c.collectResult(s, cs.into);
+            },
+            .command => |cmd| {
+                try c.collectExprs(s, cmd.args);
+                try c.collectResult(s, cmd.into);
+            },
             .delete => |e| try c.collectRoot(s, e),
             .replace => |r| {
                 try c.collectCaptures(s, r.pattern);
@@ -1137,6 +1151,10 @@ const Checker = struct {
                 if (snd.computed) |e| try c.expr(s, e, .normal);
                 for (snd.args) |arg| try c.expr(s, arg.value, .normal);
                 try c.receiver(s, snd.target);
+                if (snd.into) |t| {
+                    try c.writeName(s, t, w);
+                    if (snd.wait == null) try c.report(.missing_and_wait, first);
+                }
                 if (snd.wait != null) try c.member(s, first, w);
             },
             .ask => |op| {
@@ -1145,8 +1163,6 @@ const Checker = struct {
                 try c.capability(first, op, true, false);
                 if (op.wait != null) try c.member(s, first, w);
                 if (op.into) |t| {
-                    // A Join Member's answer is in the Join's list.
-                    if (op.wait != null and w.join != null) try c.report(.not_in_a_join, t);
                     try c.writeName(s, t, w);
                 }
             },
@@ -1163,6 +1179,7 @@ const Checker = struct {
                     op.target = tb.target;
                     try c.capability(line.operation, op, false, true);
                     if (line.wait != null and c.lineSuspends(op)) try c.member(s, line.operation, w);
+                    if (line.into) |t| try c.writeName(s, t, w);
                 }
             },
             .@"return", .veto => |value| {
@@ -1201,6 +1218,7 @@ const Checker = struct {
             .call => |cs| {
                 const call = cs.call.data.call;
                 try c.callExpr(s, cs.call, .normal, cs.wait != null);
+                if (cs.into) |t| try c.writeName(s, t, w);
                 if (cs.wait != null) {
                     try c.intrinsic(s, first, w);
                     if (w.join != null) try c.report(.not_in_a_join, first);
@@ -1372,6 +1390,7 @@ const Checker = struct {
 
     fn command(c: *Checker, s: *Scope, first: Tok, cmd: ast.Command, w: Where) Allocator.Error!void {
         for (cmd.args) |arg| try c.expr(s, arg, .normal);
+        if (cmd.into) |t| try c.writeName(s, t, w);
         const sel = try c.selector(cmd.name, cmd.labels);
         const waits = cmd.wait != null;
         if (waits) {
@@ -1401,11 +1420,13 @@ const Checker = struct {
                 if (!write) try c.report(.unknown_operation, cmd.name);
             }
             if (cmd.args.len != 1) try c.report(.wrong_argument_count, cmd.name);
+            if (cmd.into != null) try c.report(.wrong_mode, cmd.name);
             if (waits) try c.report(.needless_and_wait, cmd.name);
             return;
         }
         // Only an unlabelled call's Selector is a single word.
         if (cmd.labels.len == 0) try c.hostCommand(cmd);
+        if (cmd.into != null and !waits and !c.commands.contains(cmd.name)) try c.report(.missing_and_wait, first);
         // Sent up the Message Path, or a suspending Host Command: `and wait`
         // is a Suspension Point.
         if (waits) try c.intrinsic(s, first, w);
@@ -1448,7 +1469,7 @@ const Checker = struct {
             const l = lit orelse continue;
             if (!accepts.call(accepts.context, i, l)) try c.report(.wrong_argument, arg.pos);
         };
-        if (waits != (o.mode == .suspending)) try c.report(.wrong_mode, cmd.name);
+        if (waits != (o.mode == .suspending) or (cmd.into != null and o.mode == .fire_and_forget)) try c.report(.wrong_mode, cmd.name);
     }
 
     fn importByName(c: *Checker, name: []const u8) ?Import {
@@ -1532,7 +1553,7 @@ const Checker = struct {
             (o.mode == .immediate and !waits) or (o.mode == .suspending and waits)
         else
             o.mode == .fire_and_forget;
-        if (!ok) try c.report(.wrong_mode, if (line) op.operation else keyword);
+        if (!ok or (op.into != null and o.mode == .fire_and_forget)) try c.report(.wrong_mode, if (line) op.operation else keyword);
     }
 
     /// A literal argument's kind, or null for anything else: the loader
@@ -2619,7 +2640,7 @@ test "Capability calls against the Script's Grants" {
     , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
 }
 
-test "a Result Target writes like put, and a Join Member has none (ADR 0112)" {
+test "Result Targets write like put, including Join Members (ADR 0114)" {
     try expectDiagnostics(
         \\script variable last
         \\constant limit = 3
@@ -2633,7 +2654,7 @@ test "a Result Target writes like put, and a Join Member has none (ADR 0112)" {
         \\  end wait
         \\  return fresh
         \\end t
-    , .{}, "can't write at 6:20\nnot in a join at 9:22\n");
+    , .{}, "can't write at 6:20\n");
 }
 
 test "Host Commands resolve after the unit's Handlers and are checked as Operation calls" {
