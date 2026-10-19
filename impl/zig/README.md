@@ -430,7 +430,12 @@ execution, Report writing and transport functions; nested timings overlap and
 listener overhead must be checked against its uninstrumented run. Ordinary
 acceptance skips this diagnostic. Shipped artifacts use the default strip setting.
 For the Message Layer, supply WASI imports and call `_initialize` once before
-serial export calls. `talk_buffer(n) -> i32` reserves the input frame's bytes;
+serial export calls. Opting in to
+[`chunked-wasi-v1`](../../spec/embedding/chunked-wasi.md) adds
+`talk_send_chunk`/`talk_reply_next` and inline continuation headers: transfers
+stay within 64 MiB, while logical messages may reach 2 GiB minus one byte.
+Complete messages are still assembled in memory before decoding.
+Legacy `talk_buffer(n) -> i32` reserves the input frame's bytes;
 write JSON without a length prefix. Zero or more than 64 MiB returns 0, which
 must not be written through. `talk_send(n) -> i64` returns the reply as unsigned
 `ptr << 32 | len`; copy it before the next `talk_send`. The input buffer lasts

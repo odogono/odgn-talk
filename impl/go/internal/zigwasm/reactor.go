@@ -102,11 +102,13 @@ func (e *Engine) InstantiateObserved(ctx context.Context, observer func([]byte) 
 // admission on the active export's stack; Host sink jobs use the adapter queue
 // and must not call Reactor exports. Returned bytes survive memory.grow.
 type Reactor struct {
-	mu     sync.Mutex
-	module api.Module
-	inline *inlineIO
-	buffer api.Function
-	send   api.Function
+	mu                   sync.Mutex
+	module               api.Module
+	inline               *inlineIO
+	buffer               api.Function
+	send                 api.Function
+	chunkSend, replyNext api.Function
+	chunkSize            int
 	// The input buffer talk_buffer last reserved, which lasts until the
 	// next talk_buffer, so frames that fit reuse it without that export.
 	input, reserved uint32
@@ -125,20 +127,69 @@ func (r *Reactor) MemoryBytes() uint32 {
 	return r.module.Memory().Size()
 }
 
-// maxFrame bounds every transport frame and inline event.
+// maxFrame bounds each transport chunk; maxMessage bounds reassembly.
 const maxFrame = 64 << 20
+const maxMessage = 1<<31 - 1
+const moreChunks = uint32(1 << 31)
+
+// chunkHeader tags a chunk of n bytes, followed by another when more is set.
+func chunkHeader(n int, more bool) uint32 {
+	if more {
+		return uint32(n) | moreChunks
+	}
+	return uint32(n)
+}
+
+// splitHeader reads a chunk header; only chunked transports carry the flag.
+func splitHeader(header uint32, chunked bool) (n uint32, more bool) {
+	if !chunked {
+		return header, false
+	}
+	return header &^ moreChunks, header&moreChunks != 0
+}
+
+// messageLimit bounds a whole message on the negotiated transport.
+func messageLimit(chunked bool) int {
+	if chunked {
+		return maxMessage
+	}
+	return maxFrame
+}
 
 // minReserve is the smallest input buffer reserved, enough for most frames.
 const minReserve = 4 << 10
 
+// EnableChunking follows a successful hello requesting chunked-wasi-v1.
+func (r *Reactor) EnableChunking() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.chunkSend = r.module.ExportedFunction("talk_send_chunk")
+	r.replyNext = r.module.ExportedFunction("talk_reply_next")
+	if r.chunkSend == nil || r.replyNext == nil {
+		return fmt.Errorf("guest omits chunked WASI exports")
+	}
+	r.chunkSize = maxFrame
+	if r.inline != nil {
+		r.inline.chunked = true
+	}
+	return nil
+}
+
 func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(frame) == 0 || len(frame) > maxFrame {
-		return nil, fmt.Errorf("frame length %d outside 1..64 MiB", len(frame))
+	limit := messageLimit(r.chunkSize != 0)
+	if len(frame) == 0 || len(frame) > limit {
+		return nil, fmt.Errorf("frame length %d outside 1..%d bytes", len(frame), limit)
 	}
-	if uint32(len(frame)) > r.reserved {
-		size := max(len(frame), minReserve)
+	size := len(frame)
+	send := r.send
+	if r.chunkSize != 0 {
+		size = min(size, r.chunkSize)
+		send = r.chunkSend
+	}
+	if uint32(size) > r.reserved {
+		size = max(size, minReserve)
 		r.stack[0] = uint64(size)
 		if err := r.buffer.CallWithStack(ctx, r.stack[:]); err != nil {
 			return nil, err
@@ -148,20 +199,44 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 		}
 		r.input, r.reserved = uint32(r.stack[0]), uint32(size)
 	}
-	if !r.module.Memory().Write(r.input, frame) {
-		return nil, fmt.Errorf("input buffer outside guest memory")
+	for at := 0; at < len(frame); {
+		n := len(frame) - at
+		if r.chunkSize != 0 {
+			n = min(n, r.chunkSize)
+		}
+		if !r.module.Memory().Write(r.input, frame[at:at+n]) {
+			return nil, fmt.Errorf("input buffer outside guest memory")
+		}
+		at += n
+		r.stack[0] = uint64(chunkHeader(n, at < len(frame)))
+		err := send.CallWithStack(ctx, r.stack[:])
+		if r.inline != nil && r.inline.err != nil {
+			return nil, r.inline.err
+		}
+		if err != nil {
+			return nil, err
+		}
+		if at < len(frame) && r.stack[0] != 0 {
+			return nil, fmt.Errorf("guest replied before final input chunk")
+		}
 	}
-	r.stack[0] = uint64(len(frame))
-	err := r.send.CallWithStack(ctx, r.stack[:])
-	if r.inline != nil && r.inline.err != nil {
-		return nil, r.inline.err
+	var result []byte
+	for {
+		count, more := splitHeader(uint32(r.stack[0]), r.chunkSize != 0)
+		if count == 0 || r.chunkSize != 0 && count > maxFrame || int64(len(result))+int64(count) > maxMessage {
+			return nil, fmt.Errorf("invalid reply chunk length %d", count)
+		}
+		reply, ok := r.module.Memory().Read(uint32(r.stack[0]>>32), count)
+		if !ok {
+			return nil, fmt.Errorf("reply outside guest memory")
+		}
+		result = append(result, reply...)
+		if !more {
+			return result, nil
+		}
+		r.stack[0] = 0
+		if err := r.replyNext.CallWithStack(ctx, r.stack[:]); err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
-	reply, ok := r.module.Memory().Read(uint32(r.stack[0]>>32), uint32(r.stack[0]))
-	if !ok {
-		return nil, fmt.Errorf("reply outside guest memory")
-	}
-	return append([]byte(nil), reply...), nil
 }

@@ -657,3 +657,53 @@ admission, non-observational Trace sinks and performance remain gates.
 The Message Layer definition now includes language-specific embedding adapters,
 with Appendix A regenerated. Native Go remains the default Core; no retirement
 ADR or production cutover is part of this experimental slice.
+
+## Large-state transport acceptance (#1286)
+
+On 2026-10-19, `chunked-wasi-v1` removes the large inspection failure without
+raising the 64 MiB transfer bound. The Go adapter negotiates it on shared and
+restored guests. Input assembly dispatches only the final chunk; output windows
+and inline continuation headers carry complete logical messages up to 2 GiB
+minus one byte. The [transport contract](../../spec/embedding/chunked-wasi.md)
+records bounds, ownership and failure behavior. The implementation source is the
+commit recorded by the refreshed [guest manifest](../../impl/go/internal/zigwasm/artifact.json).
+
+The root cause was the valid retained Text of 67,108,848 bytes: Inspect emits a
+`vars` Trace record whose JSON envelope exceeds 64 MiB before it returns the
+inspection reply. Removing that failure also exposes a large Save and its
+Base64 Restore input, so chunking covers both export directions and both inline
+directions. No reviewed expectation changed. The selected adapter gate now
+runs `TestLimitsStepFourAcceptance/limits/persistent-state-minimum`, including
+hidden Save/Restore replay. Transport regressions additionally cover large
+inputs, UTF-8 splits, final-chunk observation, malformed complete messages and
+response framing.
+
+Memory was measured with Go 1.27.2, Zig 0.17.0, `CGO_ENABLED=0`, darwin/arm64,
+using compiled Corpus binaries rather than including the compiler in the peak:
+
+```sh
+CGO_ENABLED=0 go -C impl/go build -o /tmp/corpus-native ./cmd/corpus
+CGO_ENABLED=0 go -C impl/go build -tags talk_zig_experimental -o /tmp/corpus-zig ./cmd/corpus
+/usr/bin/time -l /tmp/corpus-native limits/persistent-state-minimum
+/usr/bin/time -l /tmp/corpus-zig limits/persistent-state-minimum
+```
+
+Native Go passes at 676,888,576 bytes maximum resident set size (646 MiB).
+Untouched `fc005bca` panics at the inline frame guard, at 3,688,841,216 bytes
+(3.44 GiB). The completed chunked replay passes at 5,669,699,584 bytes (5.28 GiB)
+maximum resident set size; macOS also reports 7,108,630,264 bytes (6.62 GiB)
+peak memory footprint. These are individual local observations, not portable
+ceilings or a performance acceptance. Chunking bounds transfers, not total
+memory: the guest still retains Script state and builds Trace/JSON/Save data,
+both endpoints assemble whole messages, and wazero retains grown linear memory.
+This makes the complete valid replay possible but does not establish that such
+Groups are economical. Streaming serialization/decoding would be separate work.
+
+The full native Corpus passes all 446 cases. The full adapter run completes
+with 444 passing cases and two unchanged-baseline failures:
+[`builtins/random` (#1285)](https://github.com/odogono/odgn-talk/issues/1285) and
+[`save-restore/variables-only-restore` (#1304)](https://github.com/odogono/odgn-talk/issues/1304).
+The latter was separately reproduced from a clean `git archive fc005bca impl/go`
+build. Full Corpus acceptance remains blocked in
+[#1055](https://github.com/odogono/odgn-talk/issues/1055); fixing this transport
+does not approve Go Core retirement or satisfy #1103's performance limits.

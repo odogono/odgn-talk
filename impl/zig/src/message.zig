@@ -33,6 +33,8 @@ const Direct = talk.direct;
 
 /// The largest frame a Host may write, as the harnesses measure it.
 pub const max_frame: usize = 64 << 20;
+const max_message: usize = 0x7fffffff;
+const more_chunks: usize = 0x80000000;
 const protocol_version: i64 = 1;
 
 const quoted = encoding.quoted;
@@ -354,6 +356,7 @@ pub const Session = struct {
     /// A transport can serve queued inputs on the current guest stack.
     inline_io: ?*const fn ([]const u8) ?[]const u8 = null,
     inline_inputs: bool = false,
+    chunked_wasi: bool = false,
     inline_active: bool = false,
     active_ref: i64 = 0,
     /// `climb-v1`: a `run end` whose message climbed says so.
@@ -2207,6 +2210,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
+    if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw(",\"" ++ rp.feature_map ++ "\",\"" ++ rp.feature_fields ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -3694,7 +3698,7 @@ fn resolveResultReply(s: *Session, msg: Json, ref: i64) []u8 {
     }
     r.object_answers = s.gpa.alloc(bool, objects_given.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
     for (objects_given.array.items, r.object_answers) |b, *slot| slot.* = asBool(b) orelse return hostError(s.gpa, ref, .invalid_value);
-    const parsed = std.json.parseFromSlice(Json, s.gpa, restoring.frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch return hostError(s.gpa, ref, .out_of_memory);
+    const parsed = std.json.parseFromSlice(Json, s.gpa, restoring.frame, .{ .parse_numbers = false, .max_value_len = restoring.frame.len }) catch return hostError(s.gpa, ref, .out_of_memory);
     defer parsed.deinit();
     return restoreWith(s, parsed.value, ref, r);
 }
@@ -4224,7 +4228,7 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     if (!s.crossing_trace or !s.reply_error) return reply;
     // Errors retain the records made by the refused Host Input. Callback
     // records held in the machine are still held until their crossing returns.
-    const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch return reply;
+    const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = frame.len }) catch return reply;
     defer parsed.deinit();
     const entry = groupOf(s, parsed.value) orelse return reply;
     return withTrace(s, entry, reply);
@@ -4234,7 +4238,7 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     handling = s;
     defer handling = null;
     if (!std.unicode.utf8ValidateSlice(frame)) return protocolError(s.gpa, 0, "the frame is not UTF-8");
-    const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch |e| return if (e == error.OutOfMemory) oomReply() else protocolError(s.gpa, 0, "the frame is not JSON");
+    const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = frame.len }) catch |e| return if (e == error.OutOfMemory) oomReply() else protocolError(s.gpa, 0, "the frame is not JSON");
     defer parsed.deinit();
     const msg = parsed.value;
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
@@ -4311,6 +4315,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var function_metadata = s.function_metadata;
             var core_errors = s.core_errors;
             var inline_inputs = s.inline_inputs;
+            var chunked_wasi = s.chunked_wasi;
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
             var object_elements = s.object_elements;
@@ -4343,6 +4348,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     queued_inputs = true;
                 } else if (std.mem.eql(u8, name, "object-elements-v1")) {
                     object_elements = true;
+                } else if (std.mem.eql(u8, name, "chunked-wasi-v1") and builtin.target.os.tag == .wasi) {
+                    chunked_wasi = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
@@ -4358,6 +4365,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.function_metadata = function_metadata;
             s.core_errors = core_errors;
             s.inline_inputs = inline_inputs;
+            s.chunked_wasi = chunked_wasi;
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
             s.object_elements = object_elements;
@@ -5521,6 +5529,7 @@ fn bufferExport(n: usize) callconv(.c) usize {
 
 fn sendExport(n: usize) callconv(.c) u64 {
     const s = session() orelse return 0;
+    if (chunk_input.items.len != 0 or reply_at < reply_buffer.len) @trap();
     s.inline_io = wasiInline;
     const reply = if (n == 0 or n > in_buffer.len)
         protocolError(s.gpa, 0, "no frame of that length")
@@ -5530,7 +5539,55 @@ fn sendExport(n: usize) callconv(.c) u64 {
     // as is until the next export, not copied.
     freeReply(export_allocator, reply_buffer);
     reply_buffer = reply;
+    reply_at = reply_buffer.len;
     return (@as(u64, @intCast(@intFromPtr(reply_buffer.ptr))) << 32) | @as(u64, @intCast(reply_buffer.len));
+}
+
+// Only negotiated WASI callers use these exports. Intermediate input chunks
+// never reach the dispatcher. The reply retains its existing ownership until
+// the following request starts; readers advance through bounded windows.
+var chunk_input: std.ArrayList(u8) = .empty;
+var reply_at: usize = 0;
+
+fn nextReplyChunk() u64 {
+    if (reply_at >= reply_buffer.len) return 0;
+    const n = @min(max_frame, reply_buffer.len - reply_at);
+    const ptr = @intFromPtr(reply_buffer.ptr + reply_at);
+    reply_at += n;
+    const count = n | (if (reply_at < reply_buffer.len) more_chunks else @as(usize, 0));
+    return (@as(u64, @intCast(ptr)) << 32) | @as(u64, @intCast(count));
+}
+
+fn chunkExport(tagged: usize) callconv(.c) u64 {
+    const s = session() orelse return 0;
+    if (!s.chunked_wasi or reply_at < reply_buffer.len) @trap();
+    const n = tagged & ~more_chunks;
+    if (n == 0 or n > max_frame or n > in_buffer.len or chunk_input.items.len > max_message - n) @trap();
+    const more = tagged & more_chunks != 0;
+    if (chunk_input.items.len == 0) {
+        freeReply(export_allocator, reply_buffer);
+        reply_buffer = &.{};
+        reply_at = 0;
+    }
+    // The common single-chunk path needs no extra input copy.
+    if (more or chunk_input.items.len != 0) {
+        chunk_input.appendSlice(export_allocator, in_buffer[0..n]) catch @trap();
+        if (more) return 0;
+    }
+    s.inline_io = wasiInline;
+    const input = if (chunk_input.items.len != 0) chunk_input.items else in_buffer[0..n];
+    reply_buffer = handle(s, input);
+    if (reply_buffer.len > max_message) @trap();
+    chunk_input.deinit(export_allocator);
+    chunk_input = .empty;
+    reply_at = 0;
+    return nextReplyChunk();
+}
+
+fn nextReplyExport() callconv(.c) u64 {
+    const s = session() orelse return 0;
+    if (!s.chunked_wasi) return 0;
+    return nextReplyChunk();
 }
 
 fn initializeExport() callconv(.c) void {
@@ -5541,6 +5598,8 @@ comptime {
     if (builtin.target.os.tag == .wasi) {
         @export(&bufferExport, .{ .name = "talk_buffer" });
         @export(&sendExport, .{ .name = "talk_send" });
+        @export(&chunkExport, .{ .name = "talk_send_chunk" });
+        @export(&nextReplyExport, .{ .name = "talk_reply_next" });
         @export(&initializeExport, .{ .name = "_initialize" });
     }
 }
@@ -5642,7 +5701,7 @@ fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
     while (true) {
         // Most rounds are idle polls, which the Host answers `null`.
         if (std.mem.eql(u8, incoming, "null")) return;
-        const parsed = std.json.parseFromSlice(Json, s.gpa, incoming, .{ .allocate = .alloc_always, .parse_numbers = false, .max_value_len = max_frame }) catch @trap();
+        const parsed = std.json.parseFromSlice(Json, s.gpa, incoming, .{ .allocate = .alloc_always, .parse_numbers = false, .max_value_len = incoming.len }) catch @trap();
         defer parsed.deinit();
         if (parsed.value == .null) return;
         const msg = parsed.value;
@@ -5667,43 +5726,84 @@ fn wasiInline(event: []const u8) ?[]const u8 {
     const wasi = std.os.wasi;
     // Each WASI call crosses into the Host, so the header and event go in
     // one gathered write, and the reply usually arrives in one read.
-    var header: [4]u8 = undefined;
-    std.mem.writeInt(u32, &header, @intCast(event.len), .big);
-    var parts = [_]wasi.ciovec_t{ .{ .base = &header, .len = header.len }, .{ .base = event.ptr, .len = event.len } };
-    var first: usize = 0;
-    var skipped: usize = 0;
-    while (first < parts.len) {
-        var n: usize = 0;
-        if (wasi.fd_write(1, parts[first..].ptr, parts.len - first, &n) != .SUCCESS or n == 0) @trap();
-        skipped += n;
-        while (first < parts.len and skipped >= parts[first].len) {
-            skipped -= parts[first].len;
-            first += 1;
+    const chunked = session().?.chunked_wasi;
+    if (event.len > (if (chunked) max_message else max_frame)) @trap();
+    var at: usize = 0;
+    while (at < event.len) {
+        const n = @min(max_frame, event.len - at);
+        var header: [4]u8 = undefined;
+        const count = n | (if (at + n < event.len) more_chunks else @as(usize, 0));
+        std.mem.writeInt(u32, &header, @intCast(count), .big);
+        var parts = [_]wasi.ciovec_t{ .{ .base = &header, .len = header.len }, .{ .base = event.ptr + at, .len = n } };
+        var first: usize = 0;
+        var skipped: usize = 0;
+        while (first < parts.len) {
+            var written: usize = 0;
+            if (wasi.fd_write(1, parts[first..].ptr, parts.len - first, &written) != .SUCCESS or written == 0) @trap();
+            skipped += written;
+            while (first < parts.len and skipped >= parts[first].len) {
+                skipped -= parts[first].len;
+                first += 1;
+            }
+            if (first < parts.len) {
+                parts[first].base += skipped;
+                parts[first].len -= skipped;
+                skipped = 0;
+            }
         }
-        if (first < parts.len) {
-            parts[first].base += skipped;
-            parts[first].len -= skipped;
-            skipped = 0;
+        at += n;
+    }
+    if (inline_buffer.capacity > max_frame) {
+        inline_buffer.deinit(export_allocator);
+        inline_buffer = .empty;
+    } else inline_buffer.clearRetainingCapacity();
+    var input: WasiInlineInput = .{};
+    while (true) {
+        var header: [4]u8 = undefined;
+        if (!input.read(&header)) @trap();
+        const count = std.mem.readInt(u32, &header, .big);
+        const more = chunked and count & more_chunks != 0;
+        const size = if (chunked) count & ~more_chunks else count;
+        if (size == 0 or size > max_frame or inline_buffer.items.len > max_message - size) @trap();
+        const start = inline_buffer.items.len;
+        inline_buffer.resize(export_allocator, start + size) catch @trap();
+        if (!input.read(inline_buffer.items[start..])) @trap();
+        if (!more) {
+            if (input.start != input.end) @trap();
+            return inline_buffer.items;
         }
     }
-    // The Host writes nothing but this reply until the next event, so a
-    // read never takes bytes past it.
-    inline_buffer.resize(export_allocator, @max(inline_buffer.capacity, 256)) catch @trap();
-    var got: usize = 0;
-    while (got < 4) got += wasiReadSome(inline_buffer.items[got..]) orelse @trap();
-    const size = std.mem.readInt(u32, inline_buffer.items[0..4], .big);
-    if (size > max_frame or got > 4 + size) @trap();
-    inline_buffer.resize(export_allocator, 4 + size) catch @trap();
-    if (!wasiRead(inline_buffer.items[got..])) @trap();
-    return inline_buffer.items[4..];
 }
-fn wasiReadSome(bytes: []u8) ?usize {
-    if (builtin.target.os.tag != .wasi) return null;
-    const vec = [_]std.os.wasi.iovec_t{.{ .base = bytes.ptr, .len = bytes.len }};
-    var n: usize = 0;
-    if (std.os.wasi.fd_read(0, &vec, 1, &n) != .SUCCESS or n == 0) return null;
-    return n;
-}
+
+// Read small acknowledgements with their header in one WASI call, as before
+// chunking. Keep prefetched bytes when a short chunk ends inside that read.
+const WasiInlineInput = struct {
+    buffer: [256]u8 = undefined,
+    start: usize = 0,
+    end: usize = 0,
+
+    fn read(r: *WasiInlineInput, bytes: []u8) bool {
+        var rest = bytes;
+        while (rest.len > 0) {
+            if (r.start < r.end) {
+                const n = @min(rest.len, r.end - r.start);
+                @memcpy(rest[0..n], r.buffer[r.start..][0..n]);
+                r.start += n;
+                rest = rest[n..];
+            } else if (rest.len > r.buffer.len) {
+                return wasiRead(rest);
+            } else {
+                const vec = [_]std.os.wasi.iovec_t{.{ .base = &r.buffer, .len = r.buffer.len }};
+                var n: usize = 0;
+                if (std.os.wasi.fd_read(0, &vec, 1, &n) != .SUCCESS or n == 0) return false;
+                r.start = 0;
+                r.end = n;
+            }
+        }
+        return true;
+    }
+};
+
 fn wasiRead(bytes: []u8) bool {
     if (builtin.target.os.tag != .wasi) return false;
     var at: usize = 0;
