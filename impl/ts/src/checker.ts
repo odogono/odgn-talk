@@ -751,6 +751,15 @@ export const checkSyntax = (
   // `the target` has no child nodes, so the walk stops without marking a write.
   const containers: { node: SyntaxNode; root: Site }[] = [];
   for (const { element } of ordered) {
+    // A Result Target writes its Name as `put it into` does (ADR 0112).
+    if (element.kind === 'node' && element.rule === 'ResultTarget') {
+      const name = nodes(element).find(node => node.rule === 'Name');
+      const root = name && context.get(name)?.first;
+      if (root) {
+        containers.push({ node: element, root: mark(root, 'write', true) });
+      }
+      continue;
+    }
     if (element.kind !== 'node' || element.rule !== 'Container') {
       continue;
     }

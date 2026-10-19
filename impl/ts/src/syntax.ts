@@ -38,6 +38,7 @@ export type SyntaxRule =
   | 'ExpressionList'
   | 'Container'
   | 'AndWait'
+  | 'ResultTarget'
   | 'Send'
   | 'AskTell'
   | 'TellBlock'
