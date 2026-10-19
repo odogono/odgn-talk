@@ -1,9 +1,40 @@
 # Built on taito with:
 # docker build -t odgn-talk-ci:2026-10-19-2 tools/ci
+# Share the path condition between PRs and main pushes. Manual runs stay full.
 when:
   - event: pull_request
+    path: &paths
+      include:
+        - 'impl/ts/**'
+        - 'impl/testdata/**'
+        - 'corpus/**'
+        - 'tools/syntax/**'
+        - 'tools/grammar/**'
+        - 'tools/machine/**'
+        - 'tools/corpus/**'
+        - 'tools/costs/**'
+        - 'tools/envelope/**'
+        - 'package.json'
+        - 'bun.lock'
+        - 'bunfig.toml'
+        - '.bunfig.toml'
+        - '.npmrc'
+        - '.githooks/**'
+        - '.gitattributes'
+        - 'tsconfig.base.json'
+        - 'tools/package.json'
+        - 'tools/unicode/**'
+        - 'spec/**'
+        - 'tools/ci/Dockerfile'
+        - '.woodpecker/linux.yaml'
+        - 'impl/go/**'
+        - 'tools/go/**'
+      exclude:
+        - 'impl/go/sqlite/**'
+      on_empty: true
   - event: push
     branch: main
+    path: *paths
   - event: manual
 
 labels:
@@ -23,6 +54,32 @@ steps:
       - bun run unicode:check
 
   - name: ts-core
+    when:
+      - path:
+          include:
+            - 'impl/ts/**'
+            - 'impl/testdata/**'
+            - 'corpus/**'
+            - 'tools/syntax/**'
+            - 'tools/grammar/**'
+            - 'tools/machine/**'
+            - 'tools/corpus/**'
+            - 'tools/costs/**'
+            - 'tools/envelope/**'
+            - 'package.json'
+            - 'bun.lock'
+            - 'bunfig.toml'
+            - '.bunfig.toml'
+            - '.npmrc'
+            - '.githooks/**'
+            - '.gitattributes'
+            - 'tsconfig.base.json'
+            - 'tools/package.json'
+            - 'tools/unicode/**'
+            - 'spec/**'
+            - 'tools/ci/Dockerfile'
+            - '.woodpecker/linux.yaml'
+          on_empty: true
     image: odgn-talk-ci:2026-10-19-2
     depends_on: [workspace]
     directory: impl/ts
@@ -32,6 +89,34 @@ steps:
       - bun run corpus:run
 
   - name: go-core
+    when:
+      - path:
+          include:
+            - 'impl/go/**'
+            - 'impl/testdata/**'
+            - 'corpus/**'
+            - 'tools/go/**'
+            - 'tools/grammar/**'
+            - 'tools/machine/**'
+            - 'tools/corpus/**'
+            - 'tools/costs/**'
+            - 'tools/envelope/**'
+            - 'package.json'
+            - 'bun.lock'
+            - 'bunfig.toml'
+            - '.bunfig.toml'
+            - '.npmrc'
+            - '.githooks/**'
+            - '.gitattributes'
+            - 'tsconfig.base.json'
+            - 'tools/package.json'
+            - 'tools/unicode/**'
+            - 'spec/**'
+            - 'tools/ci/Dockerfile'
+            - '.woodpecker/linux.yaml'
+          exclude:
+            - 'impl/go/sqlite/**'
+          on_empty: true
     image: odgn-talk-ci:2026-10-19-2
     depends_on: [workspace]
     directory: impl/go
