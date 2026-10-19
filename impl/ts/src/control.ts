@@ -386,11 +386,19 @@ export const checkControl = (
         }
         break;
       case 'AskTell':
-      case 'OperationLine':
+      case 'OperationLine': {
         if (context.joinTry && waits(node)) {
           report('not in a join', node.children[0] as Leaf);
         }
+        // A Join Member's answer is in the Join's list (ADR 0112).
+        const into = node.children.find(
+          c => c.kind === 'node' && c.rule === 'ResultTarget',
+        );
+        if (context.join !== null && waits(node) && into?.kind === 'node') {
+          report('not in a join', into.children[0] as Leaf);
+        }
         break;
+      }
       case 'Wait': {
         const [head, next, third] = node.children;
         if (unit === 'library' && word(next, 'for')) {
