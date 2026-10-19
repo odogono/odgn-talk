@@ -38,7 +38,8 @@ func TestZigBackendCallbackEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := b.callback(need)
+	n := b.replyReader().zigReadNeed("op", need)
+	out, _, err := b.callback(&n)
 	raw, ok := out["result"].(json.RawMessage)
 	if err != nil || calls != 1 || out["charged"] != int64(2) || !ok || string(raw) != "41" {
 		t.Fatalf("callback reply: %v, %v; calls: %d", out, err, calls)
@@ -48,7 +49,8 @@ func TestZigBackendCallbackEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.callback(bad); err == nil || calls != 1 {
+	badNeed := b.replyReader().zigReadNeed("op", bad)
+	if _, _, err := b.callback(&badNeed); err == nil || calls != 1 {
 		t.Fatalf("malformed Fuel: %v; calls: %d", err, calls)
 	}
 }
@@ -83,7 +85,8 @@ func TestZigBackendPropertyEnvelopePreservesNullSetter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := b.callback(need); err != nil {
+		n := b.replyReader().zigReadNeed("prop", need)
+		if _, _, err := b.callback(&n); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,11 +139,11 @@ func TestZigBackendBinaryPropertyNeedMarksSetter(t *testing.T) {
 		return w.buf
 	}
 	for _, set := range []bool{true, false} {
-		p, err := zbParse(need(set))
-		if err != nil || p.need == nil || p.ref != 9 {
+		p, err := b.replyReader().read(need(set), 9, "pump")
+		if err != nil || p.need == nil {
 			t.Fatal(p, err)
 		}
-		frame, err := b.callbackBinary(p.need)
+		_, frame, err := b.callback(p.need)
 		if err != nil {
 			t.Fatal(err)
 		}

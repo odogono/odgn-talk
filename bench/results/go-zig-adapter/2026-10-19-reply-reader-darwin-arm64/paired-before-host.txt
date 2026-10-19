@@ -1,0 +1,48 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2254447 ns/op	     13518 fuel/op	     16072 logical-B/op	       166.8 ns/fuel	 1210496 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2289204 ns/op	     13518 fuel/op	     16072 logical-B/op	       169.3 ns/fuel	 1210496 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2258826 ns/op	     13518 fuel/op	     16072 logical-B/op	       167.1 ns/fuel	 1210520 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2237834 ns/op	     13518 fuel/op	     16072 logical-B/op	       165.5 ns/fuel	 1210495 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2250469 ns/op	     13518 fuel/op	     16072 logical-B/op	       166.5 ns/fuel	 1210496 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2210076 ns/op	     13518 fuel/op	     16072 logical-B/op	       163.5 ns/fuel	 1210494 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2235834 ns/op	     13518 fuel/op	     16072 logical-B/op	       165.4 ns/fuel	 1210494 B/op	   15201 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-10         	     200	   2252804 ns/op	     13518 fuel/op	     16072 logical-B/op	       166.7 ns/fuel	 1210495 B/op	   15201 allocs/op
+PASS

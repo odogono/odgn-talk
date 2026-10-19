@@ -1,0 +1,33 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+                      │ /tmp/issue-1333-bench/paired-before-fields.txt │ /tmp/issue-1333-bench/paired-after-fields.txt │
+                      │                     sec/op                     │         sec/op           vs base              │
+BackendRequestPump-10                                      7.803µ ± 7%               7.919µ ± 3%       ~ (p=0.878 n=8)
+BackendRequest-10                                          8.882µ ± 5%               9.055µ ± 3%       ~ (p=0.426 n=8)
+geomean                                                    8.325µ                    8.468µ       +1.72%
+
+                      │ /tmp/issue-1333-bench/paired-before-fields.txt │ /tmp/issue-1333-bench/paired-after-fields.txt │
+                      │                    p50-sec                     │         p50-sec          vs base              │
+BackendRequestPump-10                                      7.500µ ± 4%               7.563µ ± 2%       ~ (p=0.860 n=8)
+BackendRequest-10                                          8.542µ ± 2%               8.626µ ± 3%       ~ (p=0.264 n=8)
+geomean                                                    8.004µ                    8.077µ       +0.91%
+
+                      │ /tmp/issue-1333-bench/paired-before-fields.txt │ /tmp/issue-1333-bench/paired-after-fields.txt │
+                      │                    p99-sec                     │         p99-sec          vs base              │
+BackendRequestPump-10                                     11.15µ ± 73%              11.38µ ± 11%       ~ (p=0.878 n=8)
+BackendRequest-10                                         12.33µ ± 83%              12.85µ ± 19%       ~ (p=0.505 n=8)
+geomean                                                   11.72µ                    12.09µ        +3.13%
+
+                      │ /tmp/issue-1333-bench/paired-before-fields.txt │ /tmp/issue-1333-bench/paired-after-fields.txt │
+                      │                      B/op                      │          B/op            vs base              │
+BackendRequestPump-10                                     4.968Ki ± 0%              4.655Ki ± 0%  -6.29% (p=0.000 n=8)
+BackendRequest-10                                         6.275Ki ± 0%              5.651Ki ± 0%  -9.94% (p=0.000 n=8)
+geomean                                                   5.583Ki                   5.129Ki       -8.14%
+
+                      │ /tmp/issue-1333-bench/paired-before-fields.txt │ /tmp/issue-1333-bench/paired-after-fields.txt │
+                      │                   allocs/op                    │        allocs/op         vs base              │
+BackendRequestPump-10                                       63.00 ± 0%                62.00 ± 0%  -1.59% (p=0.000 n=8)
+BackendRequest-10                                           83.00 ± 0%                81.00 ± 0%  -2.41% (p=0.000 n=8)
+geomean                                                     72.31                     70.87       -2.00%
