@@ -3,11 +3,14 @@
 // `{"$function": [home, display, token]}`; both are checked against the
 // Group before they're sent, as the in-process Core checks `wrong group`.
 import { encodeValue } from '../encoding';
-import { HostError } from '../errors';
+import type { BinaryValueOptions } from '../binary-value';
+import { HostError, invalidValue } from '../errors';
 import type { HostObject } from '../objects';
 import { fromJson } from '../readers';
+import { heldValue } from '../request-pump-binary';
 import {
   functionValue,
+  objectValue,
   patternValue,
   requireValue,
   text,
@@ -96,7 +99,7 @@ export const encodeAll = (codec: Codec, vs: readonly Value[]): Raw[] =>
   vs.map(v => encode(codec, v));
 
 // `<function home:place {captures}>`, split so the TS display rebuilds it.
-const guestFunction = (codec: Codec, data: Json): Value => {
+const guestFunction = (codec: Codec, data: unknown): Value => {
   if (
     !Array.isArray(data) ||
     data.length !== 3 ||
@@ -128,7 +131,60 @@ const guestPattern = (data: Json): Value => {
   return patternValue({ source: data, program: 0, data: null });
 };
 
-export const decode = (codec: Codec, j: Json | undefined): Value =>
+// A binary need names an Object this Group lacks as a Value of this handle;
+// using it fails the callback, as a JSON need's unknown `$object` does.
+const unknownObject = Object.freeze({});
+
+/** How this Group's Values cross in binary callback frames. */
+export const binaryValues = (codec: Codec): BinaryValueOptions => ({
+  encodeFunction: guestPayload,
+  object: (kind, id) =>
+    codec.object(kind, id)?.value ??
+    objectValue({ kind, id, handle: unknownObject }),
+  decodeFunction: payload =>
+    guestFunction(
+      codec,
+      payload.map(v => v.asText()),
+    ),
+});
+
+const known = (v: Value): Value => {
+  const pending = [v];
+  while (pending.length) {
+    const next = pending.pop()!;
+    switch (next.kind) {
+      case 'object': {
+        const ref = next.asObjectRef()!;
+        if (ref.handle === unknownObject) {
+          invalidValue(`No Host Object ${ref.kind} ${ref.id}`);
+        }
+        break;
+      }
+      case 'list':
+        for (let i = 1; i <= next.length; i++) {
+          pending.push(next.index(i));
+        }
+        break;
+      case 'map':
+        for (const [, item] of next.entries()) {
+          pending.push(item);
+        }
+        break;
+      case 'range': {
+        const { from, to } = next.asRange()!;
+        pending.push(from, to);
+        break;
+      }
+    }
+  }
+  return v;
+};
+
+export const decode = (codec: Codec, j: Json | undefined): Value => {
+  const held = heldValue(j);
+  return held ? known(held) : decodeJson(codec, j);
+};
+const decodeJson = (codec: Codec, j: Json | undefined): Value =>
   fromJson(
     j ?? null,
     (kind, id) => codec.object(kind, id),

@@ -44,7 +44,7 @@ Binary callbacks reduce these workloads' elapsed time by about 6–11% under
 Node and increase it by about 11–18% under Bun on this machine. This is a
 runtime-dependent result, not a general speedup claim or a cross-platform gate.
 Hosts can select `binaryCallbacks: false` when the JSON layout serves their
-workload better. Both modes have identical Fuel and logical allocation for
+workload better; see the #1318 re-measurement below. Both modes have identical Fuel and logical allocation for
 every recorded Run. These logical counters do not measure JS allocations or GC.
 No JS heap allocation reduction is established here.
 
@@ -55,6 +55,36 @@ and accounting:
 - [Bun run 2](../../bench/results/ts-wasm-callbacks/2026-10-19-bun-2.json)
 - [Node run 1](../../bench/results/ts-wasm-callbacks/2026-10-19-node-1.json)
 - [Node run 2](../../bench/results/ts-wasm-callbacks/2026-10-19-node-2.json)
+
+## Schema-driven codec (#1318)
+
+#1318 replaces the codec's per-message branches and key-name type lists with
+one schema table. Each binary need's Values are decoded once, straight into
+the Group's Values, and results are encoded directly from the answer. Session
+checks a binary reply's tag against what was negotiated before decoding it.
+
+Re-measured on 2026-10-19 with the same program, artifact and runtimes. The
+machine was shared (load average 7–9), so absolute times are noisier than the
+runs above. To compare fairly, each runtime ran `main` (6d6ece60) and this
+change interleaved, run 1 / run 2:
+
+- **Bun, immediate:** paired binary/JSON 0.822× / 0.853× (main 1.068× / 1.067×).
+- **Bun, properties:** 0.783× / 0.804× (main 1.140× / 1.160×).
+- **Node, immediate:** 0.690× / 0.711× (main 0.925×; main's run 2 was disturbed by load, 1.147×).
+- **Node, properties:** 0.703× / 0.764× (main 0.890× / 0.913×).
+
+Binary callbacks are now faster than JSON under both runtimes, by about
+15–22% under Bun and 24–31% under Node. JSON-mode times are unchanged within
+noise. The median helper is still the upper-middle sample, as above.
+
+- This change: [Bun 1](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-bun-1.json),
+  [Bun 2](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-bun-2.json),
+  [Node 1](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-node-1.json),
+  [Node 2](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-node-2.json)
+- Interleaved `main`: [Bun 1](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-main-bun-1.json),
+  [Bun 2](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-main-bun-2.json),
+  [Node 1](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-main-node-1.json),
+  [Node 2](../../bench/results/ts-wasm-callbacks/2026-10-19-schema-main-node-2.json)
 
 Reproduce from the repository root:
 

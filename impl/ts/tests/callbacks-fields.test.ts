@@ -5,11 +5,23 @@ import { BinaryWriter, integerItem } from '../src/binary-value';
 import {
   callbacksFeature,
   decodeBinaryFrame,
+  decodeNeed,
   encodeBinaryFrame,
+  encodeResult,
   isRequestPumpBinary,
   requestPumpFeature,
 } from '../src/request-pump-binary';
-import { frameJSON, frameTree, plain, type Frame } from '../src/wasm/wire';
+import { num } from '../src/values';
+import { binaryValues, decode, encode } from '../src/wasm/codec';
+import {
+  answerFields,
+  field,
+  frameJSON,
+  frameTree,
+  listOf,
+  plain,
+  type Frame,
+} from '../src/wasm/wire';
 import { Reactor } from '../src/wasm/reactor';
 import { callbackScenario } from '../tools/wasm-callbacks';
 
@@ -112,6 +124,55 @@ test('callback result outcomes retain Nothing, decimal scale, failures and charg
   ]) {
     expect(roundTrip(packet)).toEqual(packet);
   }
+});
+
+test('direct results match the frame encoder byte for byte', () => {
+  const codec = { identity: {}, object: () => undefined };
+  for (const [need, answer] of [
+    ['op', { result: encode(codec, num(42)), charged: 3 }],
+    ['op', { fail: { code: 'oops', message: 'm', data: undefined } }],
+    ['prop', { ok: true }],
+    ['effect', { status: 'unknown' }],
+    ['release', {}],
+  ] as const) {
+    const frame = { ...answer, m: `${need}-result`, ref: 4, group: 'g' };
+    expect(
+      new Uint8Array(encodeResult(need, 4, 'g', answerFields(answer))!),
+    ).toEqual(new Uint8Array(encodeBinaryFrame(frameTree(frame))));
+  }
+  expect(encodeResult('resolve', 4, 'g', {})).toBeUndefined();
+});
+
+test('a direct need holds its Values, and an unknown Object fails only its use', () => {
+  const codec = { identity: {}, object: () => undefined };
+  const bytes = encodeBinaryFrame(
+    frameTree({
+      ref: 2,
+      need: {
+        m: 'op',
+        call: 'c',
+        script: 's',
+        run: 'r',
+        segment: 'seg',
+        grant: 'g',
+        capability: 'api',
+        operation: 'echo',
+        mode: 'immediate',
+        now: '2026-01-01T00:00:00Z',
+        args: [{ $dec: '1.50' }, { $object: ['thing', 'gone'] }],
+      },
+    }),
+  );
+  const need = field(decodeNeed(bytes, binaryValues(codec)), 'need');
+  const [first, second] = listOf(field(need, 'args'));
+  expect(decode(codec, first).toString()).toBe('1.50');
+  expect(() => decode(codec, second)).toThrow('No Host Object thing gone');
+  expect(() =>
+    decodeNeed(
+      encodeBinaryFrame(frameTree({ m: 'release-result', ref: 1, group: 'g' })),
+      {},
+    ),
+  ).toThrow();
 });
 
 const raw = (tag: number, count: number) => {
