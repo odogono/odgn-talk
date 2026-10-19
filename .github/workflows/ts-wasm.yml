@@ -3,17 +3,7 @@ name: TS embedding API on the Zig reactor
 # @northtalk/ts/wasm (ADR 0097): the TS embedding API over the Zig Core's
 # wasm32-wasi reactor. A change to either side can break the other.
 on:
-  pull_request:
-    paths:
-      - 'impl/ts/**'
-      - 'impl/zig/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/ts-wasm.yml'
-      - '.github/actions/setup-ts/**'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
