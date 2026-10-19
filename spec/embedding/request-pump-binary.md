@@ -178,6 +178,39 @@ the Host. `charged` is an optional integer. An unknown outcome, a result that
 doesn't match the open need, or another ref is a protocol error. As in JSON, a
 Value that doesn't decode is a host error.
 
+## Settlements carried by a Pump
+
+`settlements-fields-v1` ([#1320](https://github.com/odogono/odgn-talk/issues/1320))
+lets a Host queue its `answer` and `fail` inputs and send them inside the Pump
+that would drain them, instead of one exchange each. It is negotiated at
+`hello` together with `request-pump-fields-v1`; asked for without it, `hello`
+is a protocol error. It adds one fields-layout input:
+
+| Tag | Message | Fields in order |
+| --- | --- | --- |
+| `0a` | settle-pump | ref, group, now, fuelSlice, fuelCap, settlements |
+
+`settlements` is Nothing or a list. Each element is a positional list of
+`call`, `outcome`, `value`, `fuel`, `code` and `message`. `outcome` is
+`answer` or `fail`, as protocol text. An answer's `value` is its Value
+(Nothing answers Nothing) and `fuel` its optional late cost. A failure's
+`code` and optional `message` are protocol text and its `value` is its Data;
+a failure with no `code` fails the call as broken, as a JSON `fail` without
+`error` does.
+
+The guest decodes every settlement and finds every call before applying any.
+A structurally invalid settlement is a protocol error. A call the Group never
+issued, or a Value that doesn't decode, refuses the whole input with its host
+error, in Pump completion's layout, and applies none. Otherwise it applies the
+settlements in order, exactly as the separate `answer` and `fail` inputs
+would, then Pumps as `pump` does. A settle-pump refused before its Pump runs,
+such as for an unusable Clock or while a worker is paused, applies none; the
+Host keeps them queued.
+
+Settlements are inputs, so they keep their place among the Host's other inputs.
+A Host that sends any other input first sends its queued settlements, as
+ordinary `answer` and `fail` inputs or a settle-pump, ahead of it.
+
 ## Combined operations
 
 `request-pump` carries the ordinary Request target and message plus the Pump

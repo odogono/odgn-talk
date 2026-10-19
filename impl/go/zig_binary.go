@@ -53,6 +53,7 @@ const (
 	zbPump        byte = 0x03
 	zbRequestPump byte = 0x04
 	zbCallPump    byte = 0x05
+	zbSettlePump  byte = 0x0a
 	zbAdmission   byte = 0x81
 	zbCompletion  byte = 0x82
 )
@@ -66,6 +67,7 @@ var zbMessages = map[byte]struct {
 	zbPump:        {"pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap"}},
 	zbRequestPump: {"request-pump", []string{"ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap"}},
 	zbCallPump:    {"call-pump", []string{"ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap"}},
+	zbSettlePump:  {"settle-pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap", "settlements"}},
 	zbAdmission:   {"", []string{"ref", "delivery", "err", "abandoned", "settled", "trace"}},
 	zbCompletion:  {"", []string{"ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace"}},
 }
@@ -183,12 +185,18 @@ type zbFrame struct {
 	// sent is called under frameMu once the frame is committed to the queue
 	// or the guest, after which its token may be cancelled.
 	sent func()
+	// trailer, when set, writes the frame's last field once it is committed.
+	trailer func() []byte
 }
 
 func (f *zbFrame) bytes(ref int64) []byte {
 	out := make([]byte, 0, len(f.head)+10+len(f.tail))
 	out = zbAppendInt(append(out, f.head...), ref)
-	return append(out, f.tail...)
+	out = append(out, f.tail...)
+	if f.trailer != nil {
+		out = append(out, f.trailer()...)
+	}
+	return out
 }
 
 // zbInput starts an input of message tag m: everything before its ref.

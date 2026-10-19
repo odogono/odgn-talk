@@ -147,12 +147,25 @@ func (b *zigGroup) queueBinary(s *Script, to *Object, fn *Value, m Message, ctx 
 
 // pumpBinary is pump's exchange in a binary frame.
 func (b *zigGroup) pumpBinary(now time.Time, options PumpOptions) (PumpResult, error) {
-	w, split := b.zbInput(zbPump)
+	tag := zbPump
+	if b.reg.settlements {
+		tag = zbSettlePump
+	}
+	w, split := b.zbInput(tag)
 	w.key("group")
 	w.ptext(b.groupHandle())
 	zbClock(w, now, options)
+	frame := w.frame(split, true, nil)
+	var taken []zigSettlement
+	if b.reg.settlements {
+		// The queue is taken as the frame is committed, behind every input
+		// sent before it; its Nothing placeholder becomes the queue.
+		frame.tail = frame.tail[:len(frame.tail)-1]
+		frame.sent = func() { taken = b.takeSettlements() }
+		frame.trailer = func() []byte { return settlementsItem(taken) }
+	}
 	var result PumpResult
-	packet, err := b.exchangeFrame("pump", map[string]any{}, w.frame(split, true, nil), func(p zigPacket) error {
+	packet, err := b.exchangeFrame("pump", map[string]any{}, frame, func(p zigPacket) error {
 		if p.bin == nil || !p.bin.ok {
 			return nil
 		}
@@ -162,6 +175,8 @@ func (b *zigGroup) pumpBinary(now time.Time, options PumpOptions) (PumpResult, e
 		return err
 	})
 	if err == nil && packet.bin != nil && !packet.bin.ok {
+		// A refused Pump applied none of its settlements.
+		b.requeueSettlements(taken)
 		err = packet.bin.failure()
 	}
 	return result, err

@@ -38,6 +38,8 @@ type zigRegistry struct {
 	// whose layout Request, Function call and Pump frames then use.
 	binary bool
 	layout zbLayout
+	// settlements is whether the guest took settlements-fields-v1 (#1320).
+	settlements bool
 }
 
 func newZigRegistry() *zigRegistry {

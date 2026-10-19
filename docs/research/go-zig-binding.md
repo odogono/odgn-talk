@@ -674,6 +674,31 @@ for deferred calls. Further work should separate guest callback
 parsing/serialization from execution, and investigate the deferred settlement
 handoff independently. Required-platform acceptance still needs fresh CI evidence.
 
+### Settlements carried by the Pump (#1320), 2026-10-19
+
+With `settlements-fields-v1`, `Call.Answer` and `Call.Fail` queue their
+settlement, as native Go queues its input, and the next binary Pump carries
+the queue in a `settle-pump` frame
+([spec](../../spec/embedding/request-pump-binary.md#settlements-carried-by-a-pump)).
+Any other input first sends the queue as ordinary `answer`/`fail` inputs, so
+the guest's input order stays the Host's. A deferred call now makes four
+guest exports, all binary: `request`, `settle-pump` (→ `op` need),
+`op-result`, `settle-pump` carrying the answer. The JSON `answer` export is
+gone. `TestZigBackendDeferredAnswerRidesThePump` checks the frames sent.
+
+Interleaved local A/B on an Apple M5, 20,000 iterations, five rounds, p50 µs
+(main 4c84ef53 / this change):
+
+| Benchmark | main | this change |
+| --- | --- | --- |
+| `BackendDeferredCall/history=0` | 29.04–29.50 | 24.21–25.00 |
+| `BackendDeferredCall/history=5000` | 29.04–29.71 | 24.17–24.83 |
+| `BackendRequest` | 8.33–8.71 | 8.33–8.58 |
+
+That is about 17% off a deferred call, close to the 4 µs export the issue
+estimated, with no change to Requests. Allocations are unchanged (144 per
+call). The guest's per-call linear-memory growth is a separate part of #1320.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)

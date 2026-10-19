@@ -32,6 +32,8 @@ pub const Message = enum(u8) {
     pump = 0x03,
     request_pump = 0x04,
     call_pump = 0x05,
+    /// `settlements-fields-v1` (#1320): a Pump preceded by queued settlements.
+    settle_pump = 0x0a,
     admission = 0x81,
     completion = 0x82,
 
@@ -43,6 +45,7 @@ pub const Message = enum(u8) {
             .pump => "pump",
             .request_pump => "request-pump",
             .call_pump => "call-pump",
+            .settle_pump => "settle-pump",
             .admission, .completion => "",
         };
     }
@@ -54,21 +57,35 @@ pub const Message = enum(u8) {
             .pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap" },
             .request_pump => &.{ "ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap" },
             .call_pump => &.{ "ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap" },
+            .settle_pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap", "settlements" },
             .admission => &.{ "ref", "delivery", "err", "abandoned", "settled", "trace" },
             .completion => &.{ "ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace" },
         };
     }
 
     pub fn ofName(s: []const u8) ?Message {
-        for ([_]Message{ .request, .call, .pump, .request_pump, .call_pump }) |m| {
+        for ([_]Message{ .request, .call, .pump, .request_pump, .call_pump, .settle_pump }) |m| {
             if (std.mem.eql(u8, s, m.name())) return m;
         }
         return null;
     }
 
     /// Every field any input may carry, for the map candidate's first pass.
-    pub const input_fields: []const []const u8 = &.{ "m", "ref", "group", "token", "to", "message", "fn", "args", "limits", "now", "fuelSlice", "fuelCap" };
+    pub const input_fields: []const []const u8 = &.{ "m", "ref", "group", "token", "to", "message", "fn", "args", "limits", "now", "fuelSlice", "fuelCap", "settlements" };
+
+    /// Whether the input runs a Pump.
+    pub fn pumps(m: Message) bool {
+        return m == .pump or m == .request_pump or m == .call_pump or m == .settle_pump;
+    }
 };
+
+/// `settlements-fields-v1` (#1320): a Host's queued `answer` and `fail`
+/// inputs cross inside the `settle-pump` that would drain them.
+pub const feature_settlements = "settlements-fields-v1";
+/// One settlement, positionally. `outcome` is `answer` or `fail`; `value`
+/// is the answer or the failure's Data; `fuel` an answer's late cost; `code`
+/// and `message` a failure's, with no `code` failing the call as broken.
+pub const settlement_fields: []const []const u8 = &.{ "call", "outcome", "value", "fuel", "code", "message" };
 
 /// A specialized Report's tag and positional fields.
 pub const Report = enum(u8) {
