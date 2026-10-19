@@ -8,7 +8,23 @@ transferable browser codec; Elixir publishes them over its WASI reactor.** This 
 [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
 
+The fields tables are generated from [`envelope.toml`](../data/envelope.toml).
+Regenerate them and the four language catalogues with `bun run envelope:generate`.
+Codecs retain their hand-written validation and reshaping; the catalogue changes
+no wire bytes or negotiated versions.
+
 ## Negotiation and framing
+
+<!-- generated: envelope.features -->
+
+| Negotiated feature |
+| --- |
+| `request-pump-map-v1` |
+| `request-pump-fields-v1` |
+| `callbacks-fields-v1` |
+| `settlements-fields-v1` |
+
+<!-- end -->
 
 The experiment has two mutually exclusive feature names:
 `request-pump-map-v1` and `request-pump-fields-v1`. Initial `hello` and its reply
@@ -65,56 +81,152 @@ use a fixed order so field-order variation cannot decide the comparison.
 The fields candidate is a message tag followed by a list item. Its elements
 are positional; absence is Nothing, and list length must match exactly:
 
-| Tag | Message | Fields in order |
-| --- | --- | --- |
-| `01` | request | ref, group, to, message |
-| `02` | call | ref, group, fn, args, limits |
-| `03` | pump | ref, group, now, fuelSlice, fuelCap |
-| `04` | request-pump | ref, group, token, to, message, now, fuelSlice, fuelCap |
-| `05` | call-pump | ref, group, token, fn, args, limits, now, fuelSlice, fuelCap |
-| `81` | admission | ref, delivery, err, abandoned, settled, trace |
-| `82` | Pump completion | ref, delivery, token, state, nextDeadline, fuelUsed, reports, gone, err, abandoned, settled, trace |
+<!-- generated: envelope.messages -->
+
+| Tag | Message | Direction | Fields in order |
+| --- | --- | --- | --- |
+| `01` | request | host-to-guest | ref, group, to, message |
+| `02` | call | host-to-guest | ref, group, fn, args, limits |
+| `03` | pump | host-to-guest | ref, group, now, fuelSlice, fuelCap |
+| `04` | request-pump | host-to-guest | ref, group, token, to, message, now, fuelSlice, fuelCap |
+| `05` | call-pump | host-to-guest | ref, group, token, fn, args, limits, now, fuelSlice, fuelCap |
+| `81` | admission | guest-to-host | ref, delivery, err, abandoned, settled, trace |
+| `82` | completion | guest-to-host | ref, delivery, token, state, nextDeadline, fuelUsed, reports, gone, err, abandoned, settled, trace |
+
+<!-- end -->
 
 `delivery` and `token` in Pump completion are Nothing for ordinary Pump.
 Admission and Pump errors retain their ordinary error objects. `reports` is an
 ordered list; a report's existing data model remains authoritative. Each specialized Report is a report tag followed by a list of these fields,
 using Nothing for absent fields and retaining ordinary nested record shapes:
 
-| Tag | Report | Fields in order |
-| --- | --- | --- |
-| `01` | run end | script, run, delivery, broadcast, handler, fallback, climbed, outcome, result, error, limit, effect, cleanupFailed, at, fuel, alloc |
-| `02` | run started | script, run, args, rootDelivery, parentRun, parentCall, delivery, selector, fn |
-| `03` | run discarded | script, run, reason, rootDelivery, parentRun, parentCall |
-| `04` | run accounting | script, run, fuel, state, rootDelivery, parentRun, parentCall |
-| `05` | causal work | rootDelivery, liveRuns, queuedMessages, discardedMessages |
-| `06` | stop | script, reason, discardedRuns, droppedMessages, pendingCalls |
-| `07` | unhandled | delivery, message, target |
-| `08` | call failed | script, call, operation, detail |
-| `09` | effect failure | script, run, grant, segment, phase, status, scope |
-| `0a` | decided | delivery, broadcast, verdict, vetoes, undecided |
-| `0b` | host error | code, detail |
-| `0c` | charge result | request, call, fuel, status |
+<!-- generated: envelope.reports -->
+
+| Tag | Report | Direction | Fields in order |
+| --- | --- | --- | --- |
+| `01` | run end | guest-to-host | script, run, delivery, broadcast, handler, fallback, climbed, outcome, result, error, limit, effect, cleanupFailed, at, fuel, alloc |
+| `02` | run started | guest-to-host | script, run, args, rootDelivery, parentRun, parentCall, delivery, selector, fn |
+| `03` | run discarded | guest-to-host | script, run, reason, rootDelivery, parentRun, parentCall |
+| `04` | run accounting | guest-to-host | script, run, fuel, state, rootDelivery, parentRun, parentCall |
+| `05` | causal work | guest-to-host | rootDelivery, liveRuns, queuedMessages, discardedMessages |
+| `06` | stop | guest-to-host | script, reason, discardedRuns, droppedMessages, pendingCalls |
+| `07` | unhandled | guest-to-host | delivery, message, target |
+| `08` | call failed | guest-to-host | script, call, operation, detail |
+| `09` | effect failure | guest-to-host | script, run, grant, segment, phase, status, scope |
+| `0a` | decided | guest-to-host | delivery, broadcast, verdict, vetoes, undecided |
+| `0b` | host error | guest-to-host | code, detail |
+| `0c` | charge result | guest-to-host | request, call, fuel, status |
+
+<!-- end -->
 
 A common-case-only prototype is not an acceptance result.
 
 ### Envelope fields
 
-Both candidates give envelope fields these items. A field the table marks
-optional is omitted from a map and Nothing in a list.
+The Data File records each positional field's item kind and structural
+`required` flag. A required field must be present; conditional rules (such as a
+successful admission's delivery, a completion's state, and a failure's code)
+remain in the codec and the ordinary admission checks. Optional fields are
+omitted from a map and Nothing in a list. A Value position can carry Nothing.
 
-| Field | Item |
+`text` means protocol text (item `12`), `texts` a list of protocol texts,
+`int` either integer sign, `uint` a nonnegative integer, `bool` a boolean item,
+and `instant` an instant item. `value` and `values` use Value items and lists
+of Values. `target`, `message`, `limits` and `err` retain the nested map shapes
+described below. `record` is nested protocol data whose keys select Value
+positions (for example a veto's `reason`); `reports` is the specialized tagged
+Report list, and `settlements` is the positional settlement list. Neither is
+an ordinary list of generic items. Token positivity and uniqueness remain
+ordinary protocol checks.
+
+A target is a map with `script` as protocol text or `object` as an Object Value.
+A message has `name` as protocol text, `args` as a list of Values and optional
+`limits`. Limits carry integer overrides by name; any other item is the
+sentinel for an override the Host cannot represent, refused with the ordinary
+record. Errors retain `kind`, and a Host error's `code` and `detail`, as
+protocol text. Fuel options are optional integers; absent means zero.
+A Report Value the Core cannot encode is Nothing.
+
+<!-- generated: envelope.fields -->
+
+| Field | Kinds by use |
 | --- | --- |
-| `m` (map inputs only), `group`, `delivery`, Script names, `kind`, `state`, codes | protocol text |
-| `ref` | integer or negative integer |
-| `token` | positive integer |
-| `to` | map: `script` as protocol text, or `object` as an object item |
-| `message` | map: `name` as protocol text, `args` as a list of Values, optional `limits` |
-| `fn`, `args`, Report Values | Value items; a Report Value the Core can't encode is Nothing |
-| `limits` | map of integer items by override name; any other item is the sentinel for an override the Host can't represent, refused with the ordinary record |
-| `now`, `nextDeadline` | instant item |
-| `fuelSlice`, `fuelCap` | optional integers; absent is zero |
-| `err` | map: `kind`, and a host error's `code` and `detail`, as protocol text |
-| `abandoned`, `settled`, `trace`, `gone`, Stop's id lists | lists of protocol text |
+| `abandoned` | `texts` |
+| `alloc` | `uint` |
+| `args` | `values` |
+| `at` | `record` |
+| `automatic` | `bool` |
+| `broadcast` | `text` |
+| `call` | `text` |
+| `capability` | `text` |
+| `charged` | `uint` |
+| `cleanupFailed` | `record` |
+| `climbed` | `bool` |
+| `code` | `text` |
+| `coordinator` | `text` |
+| `delivery` | `text` |
+| `detail` | `text` |
+| `discardedMessages` | `uint` |
+| `discardedRuns` | `texts` |
+| `droppedMessages` | `texts` |
+| `effect` | `record` |
+| `err` | `err` |
+| `error` | `value` |
+| `fallback` | `bool` |
+| `fn` | `value` |
+| `fuel` | `uint` (run end, run accounting, charge result); `int` (settlement) |
+| `fuelCap` | `int` |
+| `fuelLeft` | `uint` |
+| `fuelSlice` | `int` |
+| `fuelUsed` | `uint` |
+| `gone` | `texts` |
+| `grant` | `text` |
+| `grants` | `texts` |
+| `group` | `text` |
+| `handler` | `text` |
+| `limit` | `text` |
+| `limits` | `limits` |
+| `liveRuns` | `uint` |
+| `message` | `message` (request, request-pump, unhandled); `text` (op-result, prop-result, settlement) |
+| `mode` | `text` |
+| `nextDeadline` | `instant` |
+| `now` | `instant` |
+| `object` | `texts` |
+| `op` | `text` |
+| `operation` | `text` (op); `record` (call failed) |
+| `outcome` | `text` |
+| `parentCall` | `text` |
+| `parentRun` | `text` |
+| `pendingCalls` | `texts` |
+| `phase` | `text` |
+| `prop` | `text` |
+| `queuedMessages` | `uint` |
+| `reason` | `text` |
+| `ref` | `int` |
+| `reports` | `reports` |
+| `request` | `text` |
+| `result` | `value` |
+| `rootDelivery` | `text` |
+| `run` | `text` |
+| `scope` | `text` |
+| `script` | `text` |
+| `segment` | `text` |
+| `selector` | `value` (prop); `text` (run started) |
+| `set` | `bool` |
+| `settled` | `texts` |
+| `settlements` | `settlements` |
+| `state` | `text` |
+| `status` | `text` |
+| `target` | `value` |
+| `to` | `target` |
+| `token` | `uint` |
+| `trace` | `texts` |
+| `undecided` | `record` |
+| `value` | `value` |
+| `verdict` | `text` |
+| `vetoes` | `record` |
+
+<!-- end -->
 
 The map candidate's replies keep the JSON reply shapes: an admission is
 `{ref, ok: {delivery, trace?}}` or `{ref, err, trace?}`, and a completion is
@@ -149,16 +261,20 @@ need's final reply keeps the layout of its exchange.
 Frames use the `NTB` prefix and the fields layout byte `01`, then a message
 tag and a positional list, as above:
 
-| Tag | Message | Fields in order |
-| --- | --- | --- |
-| `06` | op-result | ref, group, outcome, value, code, message, charged |
-| `07` | prop-result | ref, group, outcome, value, code, message, charged |
-| `08` | effect-result | ref, group, status |
-| `09` | release-result | ref, group |
-| `83` | op need | ref, call, script, run, segment, grant, capability, operation, mode, now, args, scope, automatic, fuelLeft, abandoned, settled, trace |
-| `84` | prop need | ref, object, prop, set, value, op, selector, abandoned, settled, trace |
-| `85` | effect need | ref, script, run, segment, grant, grants, coordinator, phase, now, abandoned, settled, trace |
-| `86` | release need | ref, script, grant, reason, now, abandoned, settled, trace |
+<!-- generated: envelope.callbacks -->
+
+| Tag | Message | Direction | Fields in order |
+| --- | --- | --- | --- |
+| `06` | op-result | host-to-guest | ref, group, outcome, value, code, message, charged |
+| `07` | prop-result | host-to-guest | ref, group, outcome, value, code, message, charged |
+| `08` | effect-result | host-to-guest | ref, group, status |
+| `09` | release-result | host-to-guest | ref, group |
+| `83` | op | guest-to-host | ref, call, script, run, segment, grant, capability, operation, mode, now, args, scope, automatic, fuelLeft, abandoned, settled, trace |
+| `84` | prop | guest-to-host | ref, object, prop, set, value, op, selector, abandoned, settled, trace |
+| `85` | effect | guest-to-host | ref, script, run, segment, grant, grants, coordinator, phase, now, abandoned, settled, trace |
+| `86` | release | guest-to-host | ref, script, grant, reason, now, abandoned, settled, trace |
+
+<!-- end -->
 
 The fields keep their JSON meanings and the envelope item types above. Names,
 ids, `mode`, `phase`, `reason`, `outcome`, `status` and `code` are protocol text;
@@ -186,9 +302,26 @@ that would drain them, instead of one exchange each. It is negotiated at
 `hello` together with `request-pump-fields-v1`; asked for without it, `hello`
 is a protocol error. It adds one fields-layout input:
 
-| Tag | Message | Fields in order |
+<!-- generated: envelope.settle-pump -->
+
+| Tag | Message | Direction | Fields in order |
+| --- | --- | --- | --- |
+| `0a` | settle-pump | host-to-guest | ref, group, now, fuelSlice, fuelCap, settlements |
+
+<!-- end -->
+
+<!-- generated: envelope.settlement -->
+
+| Field | Kind | Required |
 | --- | --- | --- |
-| `0a` | settle-pump | ref, group, now, fuelSlice, fuelCap, settlements |
+| call | `text` | true |
+| outcome | `text` | true |
+| value | `value` | false |
+| fuel | `int` | false |
+| code | `text` | false |
+| message | `text` | false |
+
+<!-- end -->
 
 `settlements` is Nothing or a list. Each element is a positional list of
 `call`, `outcome`, `value`, `fuel`, `code` and `message`. `outcome` is
@@ -317,3 +450,22 @@ continuations, cancellation races, stale tokens, worker exclusion, partial
 success, Function lifecycle and unsupported negotiation. Browser interoperability
 uses transferred buffers and the same codec vectors. Folio transport migration
 and its structured-clone comparison remain separate work.
+
+## Shared frame vectors
+
+[`envelope-frames.json`](../../impl/testdata/envelope-frames.json) contains the
+fields-layout frames for every message and Report tag, including the three
+frames formerly kept in Elixir's `request_pump_fields.txt`. Each vector records
+a name, numeric tag, direction, hexadecimal bytes, and `tree`: the decoded
+Message Layer tree as ordered JSON text. Keeping that text lossless preserves
+u64 correlation tokens, decimal scale and ordered Value Maps. The TS codec
+produced the bytes once. They require human first review before merge; codec
+agreement is execution evidence, not that approval. After review, a disagreeing
+codec gets a bug issue rather than an edited vector. The independent binary
+Value item vectors remain unchanged.
+
+`bun run envelope:check` validates the Data File and deliberate field-kind
+conflicts, checks coverage against the actual frame bytes (Report tags have
+their own namespace), and compares both decoded trees and re-encoded bytes
+through the TS codec. Zig's envelope tests consume the same checked-in file.
+The generator never rewrites vectors.

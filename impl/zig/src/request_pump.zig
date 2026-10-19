@@ -570,6 +570,83 @@ test "shared binary Value vectors cross the envelope" {
     }
 }
 
+test "shared fields frame vectors match the existing guest tables and reader writer" {
+    const generated = @import("generated/envelope.zig");
+    const a = std.testing.allocator;
+    const Vector = struct { name: []const u8, tag: u8, direction: []const u8, hex: []const u8, tree: []const u8 };
+    const vectors = try std.json.parseFromSlice([]Vector, a, @embedFile("envelope-frames"), .{});
+    defer vectors.deinit();
+    const Codec = struct {
+        fn record(w: *Writer, r: *Reader, names: []const []const u8) !void {
+            try std.testing.expectEqual(tag.list, try r.byte());
+            try std.testing.expectEqual(names.len, try r.uint());
+            try w.begin(names, true);
+            for (names) |name| {
+                try w.key(name);
+                if (std.mem.eql(u8, name, "reports") and r.data[r.at] != tag.nothing) {
+                    try std.testing.expectEqual(tag.list, try r.byte());
+                    const count = try r.uint();
+                    try w.list(count);
+                    for (0..@intCast(count)) |_| {
+                        const report_tag = try r.byte();
+                        const report = std.enums.fromInt(Report, report_tag) orelse return error.TestUnexpectedResult;
+                        try w.byte(report_tag);
+                        try record(w, r, report.fields());
+                    }
+                } else if (std.mem.eql(u8, name, "settlements") and r.data[r.at] != tag.nothing) {
+                    try std.testing.expectEqual(tag.list, try r.byte());
+                    const count = try r.uint();
+                    try w.list(count);
+                    for (0..@intCast(count)) |_| try record(w, r, settlement_fields);
+                } else {
+                    const span = try r.skip();
+                    try w.raw(span);
+                }
+            }
+            try w.end();
+        }
+    };
+    // The generated catalogue is not used by the guest yet. Hold it to the
+    // existing hand-written tables so the Spec stage cannot silently drift.
+    for (generated.messages) |entry| {
+        const names = if (std.enums.fromInt(Message, entry.tag)) |message|
+            message.fields()
+        else
+            (std.enums.fromInt(Callback, entry.tag) orelse return error.TestUnexpectedResult).fields();
+        try std.testing.expectEqual(names.len, entry.fields.len);
+        for (names, entry.fields) |name, field| try std.testing.expectEqualStrings(name, field.name);
+    }
+    for (generated.reports) |entry| {
+        const report = std.enums.fromInt(Report, entry.tag) orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqualStrings(report.kind(), entry.name);
+        try std.testing.expectEqual(report.fields().len, entry.fields.len);
+        for (report.fields(), entry.fields) |name, field| try std.testing.expectEqualStrings(name, field.name);
+    }
+    try std.testing.expectEqual(settlement_fields.len, generated.settlement.len);
+    for (settlement_fields, generated.settlement) |name, field| try std.testing.expectEqualStrings(name, field.name);
+    for (vectors.value) |vector| {
+        const bytes = try a.alloc(u8, vector.hex.len / 2);
+        defer a.free(bytes);
+        _ = try std.fmt.hexToBytes(bytes, vector.hex);
+        try std.testing.expectEqualStrings(prefix, bytes[0..4]);
+        try std.testing.expectEqual(@as(u8, 1), bytes[4]);
+        try std.testing.expectEqual(vector.tag, bytes[5]);
+        try std.testing.expectEqualStrings(if (vector.tag < 128) "host-to-guest" else "guest-to-host", vector.direction);
+        const names = if (std.enums.fromInt(Message, vector.tag)) |message|
+            message.fields()
+        else
+            (std.enums.fromInt(Callback, vector.tag) orelse return error.TestUnexpectedResult).fields();
+        var r: Reader = .{ .data = bytes, .at = 6 };
+        var w = Writer.init(a);
+        defer w.deinit();
+        try w.header(.fields);
+        try w.byte(vector.tag);
+        try Codec.record(&w, &r, names);
+        try std.testing.expect(r.done());
+        try std.testing.expectEqualSlices(u8, bytes, w.out.items);
+    }
+}
+
 test "envelope integer bounds and canonical magnitudes" {
     for ([_][]const u8{
         &.{ 0x10, 0 }, // Negative zero.

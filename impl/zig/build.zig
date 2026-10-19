@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
     });
     // Lets the tests hold talk.zig's enums to talk.h's.
     core.addAnonymousImport("request-pump-vectors", .{ .root_source_file = b.path("../testdata/request-pump-binary.json") });
+    core.addAnonymousImport("envelope-frames", .{ .root_source_file = b.path("../testdata/envelope-frames.json") });
     core.addAnonymousImport("talk.h", .{ .root_source_file = b.path("include/talk.h") });
     // The normative `:inspect` reader, from the Spec, which the Session
     // Host and the Message Layer's `analysis-v1` share.

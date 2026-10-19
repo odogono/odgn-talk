@@ -2,11 +2,11 @@ defmodule NorthTalk.BinaryTest do
   use ExUnit.Case, async: true
   alias NorthTalk.{Binary, HostError}
 
-  @vectors "test/fixtures/request_pump_fields.txt"
+  @vectors "../testdata/envelope-frames.json"
            |> File.read!()
-           |> String.split("\n", trim: true)
-           |> Enum.reject(&String.starts_with?(&1, "#"))
-           |> Enum.chunk_every(2)
+           |> Jason.decode!()
+           |> Enum.filter(&String.starts_with?(&1["name"], "legacy-"))
+           |> Enum.map(&[&1["tree"], &1["hex"]])
 
   defp json(text), do: Jason.decode!(text, objects: :ordered_objects, floats: :decimals)
   defp plain(%Jason.OrderedObject{values: values}), do: Map.new(values, fn {k, v} -> {k, plain(v)} end)
