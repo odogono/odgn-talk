@@ -1,0 +1,29 @@
+name: woodpecker-almere
+
+services:
+  linux-agent:
+    image: woodpeckerci/woodpecker-agent:v3.19.0
+    command: agent
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    volumes:
+      - linux-agent-config:/etc/woodpecker
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - agent_secret
+    environment:
+      WOODPECKER_SERVER: 100.123.192.28:9000
+      WOODPECKER_AGENT_SECRET_FILE: /run/secrets/agent_secret
+      WOODPECKER_HOSTNAME: almere-linux
+      WOODPECKER_BACKEND: docker
+      WOODPECKER_BACKEND_DOCKER_VOLUMES: woodpecker-go-cache:/woodpecker-go-cache
+      WOODPECKER_MAX_WORKFLOWS: "2"
+      WOODPECKER_AGENT_LABELS: platform=linux/arm64,!backend=docker,repo=*
+
+volumes:
+  linux-agent-config:
+
+secrets:
+  agent_secret:
+    file: ./agent-secret

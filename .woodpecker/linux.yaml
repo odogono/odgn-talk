@@ -38,7 +38,6 @@ when:
   - event: manual
 
 labels:
-  platform: linux/amd64
   backend: docker
 
 clone:
@@ -50,7 +49,7 @@ steps:
     image: odgn-talk-ci:2026-10-19-2
     commands:
       - git config --global --add safe.directory "$PWD"
-      - bun install --frozen-lockfile
+      - bun install --frozen-lockfile --network-concurrency 16
       - bun run unicode:check
 
   - name: ts-core
