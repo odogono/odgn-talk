@@ -704,6 +704,29 @@ with 444 passing cases and two unchanged-baseline failures:
 [`builtins/random` (#1285)](https://github.com/odogono/odgn-talk/issues/1285) and
 [`save-restore/variables-only-restore` (#1304)](https://github.com/odogono/odgn-talk/issues/1304).
 The latter was separately reproduced from a clean `git archive fc005bca impl/go`
-build. Full Corpus acceptance remains blocked in
+build. It is resolved in the follow-up below. Full Corpus acceptance remains blocked in
 [#1055](https://github.com/odogono/odgn-talk/issues/1055); fixing this transport
 does not approve Go Core retirement or satisfy #1103's performance limits.
+
+### Library replacement restore follow-up (#1304, 2026-10-19)
+
+The mismatch came from the Go adapter's replay bridge, which did not retain
+Libraries after AddLibrary or ReplaceLibrary. The Corpus's replacement step
+therefore obtained no current handles from `replay.Libraries` and kept offering
+the original `fmt` to Restore. Zig correctly performed a full restore against
+that matching identity; neither its Library lookup nor its mismatch policy was
+at fault.
+
+The adapter now retains registered handles and updates them after successful
+replacement, recompiling handles for transitive dependants through Zig as well.
+It records only source imports as dependencies, so an unused offered Library
+cannot introduce a false dependency. Refused replacements retain the old set.
+`TestLibraryReplayAfterReplacement` exercises this replay-to-Restore seam on
+native Go and the adapter, including matching full restore, rejected
+replacement, RejectMismatch and VariablesOnly. The unchanged
+`save-restore/variables-only-restore` case passes through both backends.
+
+With this follow-up rebased on the #1285 fix, the full native and adapter
+Corpus runs each pass 446/446 on Go 1.27.2, `CGO_ENABLED=0`, darwin/arm64. No
+expectations changed. This is Corpus evidence for #1055, not retirement or
+performance acceptance.

@@ -10,6 +10,8 @@ selection='^(TestGroupRandomSeedAndRestore|TestZigCombined.*|TestCombined.*|Test
 # Reissue Fuel faults in open Joins remain #1068; the unsettled-call half
 # already passes.
 go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$' -count=1 "$@" .
+# Replay must offer current Library identities to Restore after replacement.
+go test -tags talk_zig_experimental -run '^TestLibraryReplayAfterReplacement$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
 go test -tags talk_zig_experimental -count=1 "$@" ./session
 # The CLI has no tests of its own; build it so the REPL links against the adapter.
