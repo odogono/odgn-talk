@@ -30,6 +30,7 @@ export const envelopeFeatures = [
   'request-pump-fields-v1',
   'callbacks-fields-v1',
   'settlements-fields-v1',
+  'load-fields-v1',
 ] as const;
 export const envelopeMessages: readonly EnvelopeEntry[] = [
   {
@@ -156,6 +157,24 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
       { name: 'fuelSlice', kind: 'int', required: false },
       { name: 'fuelCap', kind: 'int', required: false },
       { name: 'settlements', kind: 'settlements', required: false },
+    ],
+  },
+  {
+    tag: 11,
+    name: 'load',
+    direction: 'host-to-guest',
+    fields: [
+      { name: 'ref', kind: 'int', required: true },
+      { name: 'group', kind: 'text', required: true },
+      { name: 'name', kind: 'text', required: true },
+      { name: 'source', kind: 'text', required: true },
+      { name: 'grants', kind: 'record', required: false },
+      { name: 'grantsAsUsed', kind: 'bool', required: false },
+      { name: 'owner', kind: 'record', required: false },
+      { name: 'objects', kind: 'record', required: false },
+      { name: 'limits', kind: 'limits', required: false },
+      { name: 'newGroup', kind: 'record', required: false },
+      { name: 'refuseWorker', kind: 'bool', required: false },
     ],
   },
   {

@@ -46,7 +46,11 @@ defmodule NorthTalk.Binary do
     0x06 => {"op-result", @base ++ @result},
     0x07 => {"prop-result", @base ++ @result},
     0x08 => {"effect-result", @base ++ [{"status", :protocol}]},
-    0x09 => {"release-result", @base}
+    0x09 => {"release-result", @base},
+    0x0B =>
+      {"load",
+       @base ++
+         Enum.map(~w(name source grants grantsAsUsed owner objects limits newGroup refuseWorker), &{&1, :protocol})}
   }
   @needs %{
     0x83 =>
@@ -287,6 +291,7 @@ defmodule NorthTalk.Binary do
 
   defp shape(tag, pairs) when is_map_key(@messages, tag) do
     if not is_binary(get(pairs, "group")), do: malformed()
+    if tag == 0x0B and not (is_binary(get(pairs, "name")) and is_binary(get(pairs, "source"))), do: malformed()
     OrderedObject.new([{"m", elem(@messages[tag], 0)} | pairs])
   end
 

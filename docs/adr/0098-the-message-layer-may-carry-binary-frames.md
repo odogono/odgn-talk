@@ -16,4 +16,4 @@ The binary form keeps the Value Encoding's rule that the same value gives the sa
 - The Zig reactor reads and writes both forms. Go, Elixir and TS Hosts may opt in independently.
 - The `GLOSSARY.md` definition of the Message Layer no longer says JSON only.
 - Acceptance for the feature is #1103's: the crossing rows pass in `go-zig-bench` with it on. If the faster-JSON work passes them first, this feature isn't implemented, and this ADR is superseded.
-- Superseded by [ADR 0110](0110-request-and-pump-have-an-optional-binary-exchange.md): only Request, Function call and Pump frames are binary, under a negotiated envelope; other messages stay JSON.
+- Superseded by [ADR 0110](0110-request-and-pump-have-an-optional-binary-exchange.md): Request, Function call, Pump, callback and Load frames can use separately negotiated fields-envelope features; other messages stay JSON.

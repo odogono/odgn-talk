@@ -116,6 +116,8 @@ type zigGroup struct {
 	settlementsMu sync.Mutex
 	settlements   []zigSettlement
 	flushing      int
+	// Guest state exists; accessed by the export owner.
+	created bool
 	// Whether the Group has had nothing but its name, so it may move guest.
 	untouched bool
 	dropping  runtime.Cleanup
@@ -125,8 +127,8 @@ type zigGroup struct {
 var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "function-metadata-v1", "core-message-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1", "queued-inputs-v1", "chunked-wasi-v1"}
 
 // zigOptionalFeatures are used when the guest offers them: Object Collection
-// declarations need object-elements-v1 (#1143).
-var zigOptionalFeatures = []any{"object-elements-v1"}
+// declarations need object-elements-v1 (#1143); binary Load needs load-fields-v1.
+var zigOptionalFeatures = []any{"object-elements-v1", "load-fields-v1"}
 
 func newZigGroup(g *Group) groupBackend { return newZigSharedGroup(g) }
 
@@ -232,9 +234,36 @@ var zigFrameSeen func([]byte)
 // frame is called only by the export owner; replies own Go memory.
 func (b *zigGroup) frame(out zigOut) (zigResponse, error) {
 	fields := out.fields
+	method := fields["m"].(string)
+	// Session declarations do not require a Group. Every other first frame
+	// creates it, with Load folding creation into its own binary envelope.
+	firstGroup := b.shared != nil && !b.created && method != "new-group" && method != "hello" && method != "define-object-kind" && method != "define-capability" && method != "grant"
+	if firstGroup && !(method == "load" && b.reg.load) {
+		init := b.groupFields()
+		init["m"], init["ref"], init["group"] = "new-group", fields["ref"], b.handle
+		reply, err := b.frame(zigOut{fields: init})
+		if err != nil {
+			return zigResponse{}, err
+		}
+		if reply.failure != nil {
+			return reply, nil
+		}
+		b.createdGroup()
+	}
 	var data []byte
 	var err error
-	if out.bin != nil {
+	if method == "load" && b.reg.load {
+		if firstGroup {
+			fields["newGroup"] = b.groupFields()
+		}
+		data, err = zbLoad(fields)
+		if err != nil {
+			return zigResponse{}, err
+		}
+		if firstGroup {
+			b.createdGroup()
+		}
+	} else if out.bin != nil {
 		data = out.bin.bytes(fields["ref"].(int64))
 	} else if data, err = zigJSON(nil, fields); err != nil {
 		return zigResponse{}, err
@@ -807,6 +836,7 @@ func (b *zigGroup) checkHello() error {
 	if err != nil {
 		return err
 	}
+	wantedLoad := true
 	features := append(slices.Clone(zigFeatures), zigOptionalFeatures...)
 	if wanted {
 		features = append(features, binary)
@@ -822,12 +852,15 @@ func (b *zigGroup) checkHello() error {
 		// A guest refuses a feature it does not know, leaving its session
 		// unchanged, so ask again without the optional ones.
 		wanted = false
+		wantedLoad = false
 		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
 	}
 	if err == nil {
 		features := hello.get("features").items()
 		for _, offered := range features {
 			switch zigText(offered) {
+			case "load-fields-v1":
+				b.reg.load = wantedLoad
 			case "object-elements-v1":
 				b.reg.elements = true
 			case binary:

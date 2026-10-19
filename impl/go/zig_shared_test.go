@@ -71,6 +71,9 @@ func TestZigBackendSharedGuestServesAnotherGroupDuringACallback(t *testing.T) {
 func TestZigBackendDropsCollectedGroupFromItsGuest(t *testing.T) {
 	c := New()
 	kept, dropped := zigGroupsOnOneGuest(t, c)
+	if _, err := dropped.Load(LoadOptions{Name: "s", Source: "on ping\n return 1\nend ping\n"}); err != nil {
+		t.Fatal(err)
+	}
 	guest, handle := kept.backend.(*zigGroup).shared, dropped.backend.(*zigGroup).handle
 	dropped = nil
 	inspect := []byte(`{"m":"inspect","ref":1,"group":"` + handle + `"}`)

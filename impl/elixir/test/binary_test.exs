@@ -5,7 +5,7 @@ defmodule NorthTalk.BinaryTest do
   @vectors "../testdata/envelope-frames.json"
            |> File.read!()
            |> Jason.decode!()
-           |> Enum.filter(&String.starts_with?(&1["name"], "legacy-"))
+           |> Enum.filter(&(String.starts_with?(&1["name"], "legacy-") or String.starts_with?(&1["name"], "load-")))
            |> Enum.map(&[&1["tree"], &1["hex"]])
 
   defp json(text), do: Jason.decode!(text, objects: :ordered_objects, floats: :decimals)

@@ -272,7 +272,11 @@ negotiates `group-exchanges-v1`, so each Group on a guest has its own exchange
 and holds the guest for one frame at a time, even while it waits on a Host
 callback ([the contract](../../spec/embedding/group-exchanges.md)). A new Group
 skips a guest holding an Object Kind the Core has since redefined. A restored
-Group has a guest of its own. Each process
+Group has a guest of its own. A new Group initially reserves only a handle.
+With `load-fields-v1`, its first Load sends raw UTF-8 source and the Group's
+name, Trace flag and seed in one binary frame; another first Group operation
+creates guest state with `new-group`. An unused Group needs no `drop-group`.
+Guests without the feature retain JSON Load. Each process
 compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
 names a directory, where wazero keeps compiled code for later processes,
 keyed by its version and the artifact. `BenchmarkBackendColdStart` measures

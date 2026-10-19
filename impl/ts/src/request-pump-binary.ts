@@ -505,13 +505,18 @@ const schema = (
   toWire: extra.toWire,
 });
 
-const message = (tag: number, name: string, fields: Fields): Schema =>
+const message = (
+  tag: number,
+  name: string,
+  fields: Fields,
+  required: readonly string[] = ['group'],
+): Schema =>
   schema(
     tag,
     name,
-    tag < 6 || tag === 10 ? 'message' : 'result',
+    tag < 6 || tag === 10 || tag === 11 ? 'message' : 'result',
     fields,
-    ['group'],
+    required,
     (_, pairs) => new JsonObject([['m', name], ...pairs]),
   );
 
@@ -764,6 +769,24 @@ const schemas: readonly Schema[] = [
     ...pumpFields,
     settlements: 'settlements',
   }),
+  message(
+    11,
+    'load',
+    {
+      ref: 'int',
+      group: 'text',
+      name: 'text',
+      source: 'text',
+      grants: 'record',
+      grantsAsUsed: 'bool',
+      owner: 'record',
+      objects: 'record',
+      limits: 'record',
+      newGroup: 'record',
+      refuseWorker: 'bool',
+    },
+    ['group', 'name', 'source'],
+  ),
   reply(
     0x81,
     'admission',

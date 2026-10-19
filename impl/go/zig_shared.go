@@ -39,6 +39,8 @@ type zigRegistry struct {
 	binary bool
 	// settlements is whether the guest took settlements-fields-v1 (#1320).
 	settlements bool
+	// load is whether the guest took load-fields-v1 (#1329).
+	load bool
 }
 
 func newZigRegistry() *zigRegistry {
@@ -167,7 +169,7 @@ func newZigSharedGroup(g *Group) *zigGroup {
 	return b
 }
 
-// join makes b a new Group on s, to be dropped from it when collected.
+// join reserves a handle on s. The first Group frame creates guest state.
 func (b *zigGroup) join(s *zigShared) error {
 	s.mu.Lock()
 	s.groups++
@@ -178,17 +180,25 @@ func (b *zigGroup) join(s *zigShared) error {
 	if s.helloErr != nil {
 		return s.helloErr
 	}
-	// The Message Layer carries integers at or above 2^53 as decimal text.
+	b.created = false
+	b.untouched = true
+	return nil
+}
+
+// groupFields preserves the Message Layer's exact unsigned seed representation.
+func (b *zigGroup) groupFields() map[string]any {
 	var seed any = b.group.options.Seed
 	if b.group.options.Seed >= 1<<53 {
 		seed = strconv.FormatUint(b.group.options.Seed, 10)
 	}
-	if _, err := b.send("new-group", map[string]any{"name": b.group.Name(), "trace": b.group.options.Trace != nil, "seed": seed}); err != nil {
-		return err
-	}
-	b.untouched = true
-	b.dropping = runtime.AddCleanup(b.group, dropZigGroup, zigDrop{s, b.handle})
-	return nil
+	return map[string]any{"name": b.group.Name(), "trace": b.group.options.Trace != nil, "seed": seed}
+}
+
+// createdGroup starts cleanup only once guest state may exist. An untouched
+// Group consumes neither guest state nor a drop-group export.
+func (b *zigGroup) createdGroup() {
+	b.created = true
+	b.dropping = runtime.AddCleanup(b.group, dropZigGroup, zigDrop{b.shared, b.handle})
 }
 
 // moveForKind moves an untouched Group to one of its Core's guests where
@@ -218,8 +228,10 @@ func (b *zigGroup) moveForKind(kind *ObjectKind) bool {
 		pool.next = (pool.next + 1) % len(pool.guests)
 	}
 	pool.mu.Unlock()
-	b.dropping.Stop()
-	dropZigGroup(zigDrop{b.shared, b.handle})
+	if b.created {
+		b.dropping.Stop()
+		dropZigGroup(zigDrop{b.shared, b.handle})
+	}
 	if err := b.join(to); err != nil {
 		panic(err)
 	}

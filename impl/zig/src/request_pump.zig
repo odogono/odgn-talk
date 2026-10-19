@@ -7,6 +7,8 @@ const model = @import("value.zig");
 const Allocator = std.mem.Allocator;
 
 pub const prefix = "NTB\x01";
+pub const feature_load = "load-fields-v1";
+
 pub const feature_fields = "request-pump-fields-v1";
 
 /// The layout byte after the prefix: the fields layout, the only one.
@@ -34,6 +36,7 @@ pub const Message = enum(u8) {
     call_pump = 0x05,
     /// `settlements-fields-v1` (#1320): a Pump preceded by queued settlements.
     settle_pump = 0x0a,
+    load = 0x0b,
     admission = 0x81,
     completion = 0x82,
 
@@ -44,6 +47,7 @@ pub const Message = enum(u8) {
             .pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap" },
             .request_pump => &.{ "ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap" },
             .call_pump => &.{ "ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap" },
+            .load => &.{ "ref", "group", "name", "source", "grants", "grantsAsUsed", "owner", "objects", "limits", "newGroup", "refuseWorker" },
             .settle_pump => &.{ "ref", "group", "now", "fuelSlice", "fuelCap", "settlements" },
             .admission => &.{ "ref", "delivery", "err", "abandoned", "settled", "trace" },
             .completion => &.{ "ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace" },

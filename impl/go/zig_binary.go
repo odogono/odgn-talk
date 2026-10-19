@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -46,6 +47,7 @@ const (
 	zbRequestPump byte = 0x04
 	zbCallPump    byte = 0x05
 	zbSettlePump  byte = 0x0a
+	zbLoadTag     byte = 0x0b
 	zbAdmission   byte = 0x81
 	zbCompletion  byte = 0x82
 )
@@ -59,6 +61,7 @@ var zbMessages = map[byte]struct {
 	zbPump:        {"pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap"}},
 	zbRequestPump: {"request-pump", []string{"ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap"}},
 	zbCallPump:    {"call-pump", []string{"ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap"}},
+	zbLoadTag:     {"load", []string{"ref", "group", "name", "source", "grants", "grantsAsUsed", "owner", "objects", "limits", "newGroup", "refuseWorker"}},
 	zbSettlePump:  {"settle-pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap", "settlements"}},
 	zbAdmission:   {"", []string{"ref", "delivery", "err", "abandoned", "settled", "trace"}},
 	zbCompletion:  {"", []string{"ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace"}},
@@ -628,4 +631,75 @@ func zbInstant(span []byte) (time.Time, bool) {
 // zbDecodeValue reads a Value item against this Group.
 func (b *zigGroup) zbDecodeValue(span []byte) (Value, error) {
 	return b.replyReader().zbDecodeValue(span)
+}
+
+// zbLoad writes protocol data directly; source is raw UTF-8 with a byte length,
+// so quotes, newlines and backslashes need no JSON escaping.
+func zbLoad(fields map[string]any) ([]byte, error) {
+	w := &zbWriter{buf: make([]byte, 0, 256)}
+	w.buf = append(append(w.buf, zbPrefix...), zbFields, zbLoadTag)
+	w.begin(zbMessages[zbLoadTag].fields, true)
+	for _, name := range zbMessages[zbLoadTag].fields {
+		w.key(name)
+		if err := w.protocol(fields[name]); err != nil {
+			return nil, err
+		}
+	}
+	w.end()
+	return w.buf, nil
+}
+
+// protocol accepts only the shallow metadata shapes built by Load. It never
+// walks Host Values; the Value codec remains responsible for those.
+func (w *zbWriter) protocol(v any) error {
+	switch v := v.(type) {
+	case nil:
+		w.buf = append(w.buf, 0)
+	case bool:
+		if v {
+			w.buf = append(w.buf, 2)
+		} else {
+			w.buf = append(w.buf, 1)
+		}
+	case string:
+		if !utf8.ValidString(v) {
+			return &HostError{InvalidValue, "invalid UTF-8"}
+		}
+		w.ptext(v)
+	case int:
+		w.int(int64(v))
+	case int64:
+		w.int(v)
+	case uint64:
+		w.buf = binary.AppendUvarint(append(w.buf, 3), v)
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		w.buf = append(w.buf, 7)
+		w.uvarint(uint64(len(keys)))
+		for _, k := range keys {
+			if !utf8.ValidString(k) {
+				return &HostError{InvalidValue, "invalid UTF-8"}
+			}
+			w.buf = append(w.buf, 5)
+			w.uvarint(uint64(len(k)))
+			w.buf = append(w.buf, k...)
+			if err := w.protocol(v[k]); err != nil {
+				return err
+			}
+		}
+	case []any:
+		w.list(len(v))
+		for _, item := range v {
+			if err := w.protocol(item); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported Load metadata %T", v)
+	}
+	return nil
 }
