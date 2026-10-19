@@ -38,8 +38,7 @@ const identity_units = blk: {
     var result: [table.unit.len]bool = undefined;
     for (table.unit, unit_factors, 0..) |u, factor_value, i| {
         const extra = kind_factors[kindIndex(i)];
-        result[i] = u.ratio == null and factor_value.coefficient == 1 and factor_value.exponent == 0 and
-            (extra == null or (extra.?.coefficient == 1 and extra.?.exponent == 0));
+        result[i] = u.ratio == null and isOne(factor_value) and (extra == null or isOne(extra.?));
     }
     break :blk result;
 };
@@ -400,8 +399,11 @@ pub const Plan = struct {
 /// representable exponent unchanged, so it is skipped; zeros and positive
 /// exponents still go through `calculate` for exponent clamping.
 fn applyFactor(calculate: anytype, a: std.mem.Allocator, op: dec.Operator, value: Decimal, f: Decimal) Error!Decimal {
-    if (f.coefficient == 1 and f.exponent == 0 and !f.negative and value.coefficient != 0 and value.exponent <= 0) return value;
+    if (isOne(f) and value.coefficient != 0 and value.exponent <= 0) return value;
     return calculate(a, op, value, f);
+}
+fn isOne(f: Decimal) bool {
+    return f.coefficient == 1 and f.exponent == 0 and !f.negative;
 }
 fn kindIndex(i: usize) usize {
     for (table.kind, 0..) |k, n| if (std.mem.eql(u8, k.name, table.unit[i].kind)) return n;

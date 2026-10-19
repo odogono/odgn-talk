@@ -7196,7 +7196,6 @@ pub const Group = struct {
                 .convert => {
                     if (len == 0 or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
                     const v = stack.items[len - 1].value;
-                    if (v.data != .number and v.data != .quantity) return;
                     const target = ops[0].unit_target;
                     const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
                     var probe: Value = .{ .allocator = g.gpa, .data = .{ .quantity = q } };
