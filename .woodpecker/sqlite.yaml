@@ -1,0 +1,51 @@
+# Share the path condition between PRs and main pushes. Manual runs stay full.
+when:
+  - event: pull_request
+    path: &paths
+      include:
+        - 'impl/go/**'
+        - 'corpus/sqlite-kit/**'
+        - 'package.json'
+        - 'bun.lock'
+        - 'bunfig.toml'
+        - '.bunfig.toml'
+        - '.npmrc'
+        - '.githooks/**'
+        - '.gitattributes'
+        - 'tsconfig.base.json'
+        - 'tools/package.json'
+        - 'tools/unicode/**'
+        - 'spec/**'
+        - 'tools/ci/Dockerfile'
+        - '.woodpecker/sqlite.yaml'
+      on_empty: true
+  - event: push
+    branch: main
+    path: *paths
+  - event: manual
+
+labels:
+  platform: linux/amd64
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19-2
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: go-sqlite
+    image: odgn-talk-ci:2026-10-19-2
+    directory: impl/go/sqlite
+    environment:
+      GOCACHE: /woodpecker-go-cache/${CI_REPO}/build
+      GOMODCACHE: /woodpecker-go-cache/${CI_REPO}/modules
+    commands:
+      - go vet ./...
+      - go test -v -count=1 ./...
+      - go test -race -count=1 ./...

@@ -977,7 +977,11 @@ export class Parser {
     const target = this.expr();
     this.expectWord('to', 'operator');
     // The word after `to` is always an Operation name, reserved or not.
-    return { k: verb, target, ...this.operation(verb === 'ask') };
+    return {
+      k: verb,
+      target,
+      ...this.operation(verb === 'ask', verb === 'ask'),
+    };
   }
 
   // `tell g to op args`, or, where a block may go, a `tell g` block of
@@ -1028,15 +1032,25 @@ export class Parser {
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, and `and wait` where `waits` allows it.
-  operation(waits: boolean): { args: Node[]; op: string; wait: boolean } {
+  // arguments, an `ask`'s Result Target where `targets` allows it (ADR 0112),
+  // and `and wait` where `waits` allows it.
+  operation(
+    waits: boolean,
+    targets = false,
+  ): { args: Node[]; into?: Node; op: string; wait: boolean } {
     const t = this.peek(0);
     if (t.t !== 'word' || t.v === '_') {
       this.fail(t, 'an Operation name');
     }
     const op = this.next().v;
     const args = this.startsExpr(this.peek(0)) ? this.exprList() : [];
-    return { op, args, wait: waits ? this.andWait() : false };
+    let into: Node | undefined;
+    if (targets && this.atOperatorWord('into')) {
+      this.next('operator');
+      const n = this.peek(0);
+      into = this.at(n, { k: 'Name', name: this.name('a name') });
+    }
+    return { op, args, into, wait: waits ? this.andWait() : false };
   }
 
   // `wait d`, `wait for ev [or d]`, and, where a block may go, the block

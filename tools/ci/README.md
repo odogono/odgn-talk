@@ -4,7 +4,7 @@ The initial Woodpecker workflows supplement GitHub Actions:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
   tests, race tests and Corpus in Linux containers. After the shared workspace
-  bootstrap succeeds, TS and Go run in parallel.
+  bootstrap succeeds, affected TS and Go steps run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
 - `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
@@ -14,12 +14,48 @@ The initial Woodpecker workflows supplement GitHub Actions:
   builds and Node runtime checks.
 - `.woodpecker/conventions.yaml` runs the existing PR title and changelog
   checker on PR code updates and metadata edits, with full Git history.
+- `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
+  SQLite module, reusing the Go build and module caches.
+- `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
+  the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
+  under TypeScript 5.9 and the latest TypeScript.
 
-These workflows do not yet cover the complete Actions matrix, including the
-package/browser checks, Go SQLite module, fuzz campaigns,
-Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
-broader Zig and platform matrix. Keep any additional Actions requirements until
+These workflows do not yet cover the complete Actions matrix, including fuzz
+campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
+and the broader Zig and platform matrix. Keep any additional Actions requirements until
 equivalent coverage is available.
+
+## Selecting checks
+
+PRs use their complete changed-file list; pushes to `main` use the files changed
+by that push. The expensive workflows filter those paths before taking a worker
+slot. The Linux core workflow also filters its TS and Go steps independently.
+
+| Change | Selected checks, in addition to Conventions and Spec |
+| --- | --- |
+| Root README, `docs/` or changelog only | None |
+| Go Core | Go core step and Go SQLite |
+| Go SQLite module only | Go SQLite |
+| TS Core | TS core step, package and tooling |
+| `tooling/` or `bench/ts/` only | Tooling |
+| Zig Core or native sidecar checks | macOS sidecar |
+| Spec, dependency lock or shared bootstrap inputs | All consumers |
+| Workflow or worker image | Affected workflows |
+
+Keep Spec on every PR and push to `main`: its lint, generated-file and Markdown
+link checks span the repository. Keep Conventions unfiltered on PR code and
+metadata updates. Spec Markdown remains a Core trigger because tests read prose
+examples directly. Shared Corpus, fixture and reference-tool inputs also select
+their consumers; filters intentionally prefer an extra check over missing one.
+Each workflow includes its own configuration, and Docker consumers include their
+worker image inputs. Tooling includes the whole TS workspace typecheck, including
+`tools/` and `bench/ts/`.
+
+Manual pipelines run every optional workflow and both core steps regardless of
+changed paths. Conventions requires PR metadata and remains a PR-only check.
+Empty or unavailable changed-file lists also run all optional checks
+(`on_empty: true`). Path filters do not remove jobs already queued from older
+revisions: PR branches must include these workflow changes to benefit.
 
 ## Linux worker image
 
@@ -47,6 +83,26 @@ sequentially in their shared workspace to keep their generated builds ordered.
 
 Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
 Conventions additionally requires `role=conventions`.
+
+### Browser worker image
+
+After building the default Linux image, build the browser variant on each
+general Linux Docker worker before enabling the package workflow:
+
+```sh
+docker build -f tools/ci/Dockerfile.browser -t odgn-talk-ci:2026-10-19-2-browser tools/ci
+```
+
+It adds Playwright's Chromium headless shell and system dependencies to the
+Node 22 image. `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` makes the installed
+browser available to the workspace's Playwright package. The workflow's install
+command ensures that the browser revision matches the locked workspace version;
+with the matching image, it reuses the installed browser without downloading it.
+Keep `PLAYWRIGHT_VERSION` in `Dockerfile.browser` aligned with `bun.lock`, and
+use a new browser image tag in the workflow and build command when rebuilding.
+
+Package and SQLite checks report separate optional statuses. They share the
+general agent's existing capacity and do not request the Conventions role.
 
 ### Dedicated Conventions worker
 
