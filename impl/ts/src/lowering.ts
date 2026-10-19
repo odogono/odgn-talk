@@ -601,6 +601,18 @@ class BodyLowering {
     );
   }
 
+  // A Result Target is `put it into x`, with nothing between that can
+  // suspend or raise; its instructions are the target Name's (ADR 0112).
+  resultTarget(name: SemanticName) {
+    const at = { line: name.span.line, col: name.span.col };
+    const slot = this.slotOf(name.binding!);
+    if (slot !== undefined) {
+      return this.emit(at, 'move', 0, slot);
+    }
+    this.emit(at, 'load', 0);
+    this.store(name, at);
+  }
+
   // ------------------------------------------------------------- bodies
 
   *initialiser(decls: Decl[]): Task {
@@ -837,7 +849,11 @@ class BodyLowering {
           return void this.emit(at, 'join-ask', s.grant, s.operation, n);
         }
         this.emit(at, s.wait ? 'ask-wait' : 'ask', s.grant, s.operation, n);
-        return void this.emit(at, 'store', 0);
+        this.emit(at, 'store', 0);
+        if (s.into) {
+          this.resultTarget(s.into);
+        }
+        return;
       }
       case 'send': {
         // A computed name is evaluated first, below the arguments (ADR 0057).

@@ -1451,3 +1451,55 @@ test('implicit property targets preserve Library restrictions', () => {
     expect(result.diagnostics.map(d => d.code)).toEqual(['not in a library']);
   }
 });
+
+const named = (source: string, text: string) =>
+  names(checkSource(source).tree!.root).filter(n => n.text === text);
+
+describe('Result Targets (ADR 0112)', () => {
+  test('a target binds a body local, or writes a Script Variable', () => {
+    const local = named(
+      'on t\n  ask clock to now into x\n  return x\nend t',
+      'x',
+    );
+    expect(local.map(n => n.binding?.kind)).toEqual(['local', 'local']);
+    expect(local[0]!.binding).toBe(local[1]!.binding);
+    const variable = named(
+      'script variable x\non t\n  ask clock to now into x\nend t',
+      'x',
+    );
+    expect(variable.map(n => n.binding?.kind)).toEqual([
+      'script variable',
+      'script variable',
+    ]);
+  });
+
+  test('a Constant target is the error `put` gives', () => {
+    expect(diagnostics('constant k = 1\non t\n  put 2 into k\nend t')).toEqual([
+      ["can't write", 3, 14],
+    ]);
+    expect(
+      diagnostics('constant k = 1\non t\n  ask clock to now into k\nend t'),
+    ).toEqual([["can't write", 3, 25]]);
+  });
+
+  test('a Join Member is `not in a join` at its `into`', () => {
+    expect(
+      diagnostics(
+        'on t\n  wait for all\n    ask g to op into y and wait\n  end wait\nend t',
+      ),
+    ).toEqual([['not in a join', 3, 17]]);
+    expect(
+      diagnostics(
+        'on t\n  wait for all\n    if true then\n      ask g to op into y and wait\n    end if\n  end wait\nend t',
+      ),
+    ).toEqual([['not in a join', 4, 19]]);
+  });
+
+  test('an immediate `ask` in a Join may have one', () => {
+    expect(
+      diagnostics(
+        'on t\n  wait for all\n    ask g to op into y\n    ask g to op and wait\n  end wait\nend t',
+      ),
+    ).toEqual([]);
+  });
+});

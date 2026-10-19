@@ -1,0 +1,26 @@
+when:
+  - event: [pull_request, pull_request_metadata]
+
+labels:
+  platform: linux/amd64
+  backend: docker
+  role: conventions
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+    settings:
+      partial: false
+      depth: 0
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19-2
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: conventions
+    image: odgn-talk-ci:2026-10-19-2
+    commands:
+      - bun tools/commits/woodpecker.ts

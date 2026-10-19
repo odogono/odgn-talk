@@ -153,6 +153,9 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.emit(pos, op, text(n.Params[0].Text), text(n.Text), number(len(n.Children)))
 		if n.Kind == "ask" && op != "join-ask" {
 			u.store(pos, 0)
+			if n.Target != nil {
+				u.resultTarget(n.Target)
+			}
 		}
 	case "send":
 		if slices.ContainsFunc(n.Children, func(arg *syntax.Node) bool { return arg.Kind == "spread" }) {

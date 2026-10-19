@@ -478,6 +478,10 @@ _Avoid_: deadline scope, time limit block, timeout scope
 A Capability with an Operation that the Host declares may take time to answer, so calling that Operation is a Suspension Point. Every other Operation answers immediately.
 _Avoid_: async function, blocking call
 
+**Result Target**:
+The `into name` that may end an `ask`, naming where the Operation's result is put as well as `it`.
+_Avoid_: result binding, into clause, out parameter
+
 **Message Path**:
 The chain a message follows when a Script has no matching Handler Clause for it, and no Fallback Handler takes it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
 _Avoid_: bubbling, propagation, inheritance chain

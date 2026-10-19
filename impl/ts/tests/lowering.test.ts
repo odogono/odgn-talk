@@ -3,13 +3,21 @@ import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import {
+  bool,
   checkSource,
   compileSource,
+  defineCapability,
   disassemble,
   exportsOf,
   LoweringError,
+  newGroup,
+  parseInstant,
+  ScriptError,
+  shape,
+  text,
   type CodeUnit,
   type Instruction,
+  type Value,
 } from '../src/index';
 import { patternSource, quantityText } from '../src/canonical';
 import { instructionSpec, operandKinds } from '../src/code-unit';
@@ -702,4 +710,175 @@ test('Nothing branch requires a value and preserves equal depth on both edges', 
   expect(verify(malformed)).toContain(
     `go: ${malformed.bodies[0]!.start} branch-not-nothing pops 1 of 0`,
   );
+});
+
+// Result Targets on `ask` (ADR 0112): `put it into x` straight after the
+// `store 0`, mapped to the target Name.
+const after = (unit: CodeUnit, op: string, n: number) => {
+  const lines = code(unit);
+  const i = lines.findIndex(line => line.includes(` ${op} `));
+  return lines.slice(i, i + n).map(line => line.slice(5));
+};
+describe('Result Targets', () => {
+  test('a local target is moved from `it`, at the target Name', () => {
+    const unit = compile(
+      'on t item\n  ask world to carries item into carried\n  return carried\nend t\n',
+    );
+    expect(after(unit, 'ask', 3)).toEqual([
+      '2:3 ask world carries 1',
+      '2:3 store 0 ; it',
+      '2:34 move 0 2 ; it, carried',
+    ]);
+  });
+
+  test('a suspending ask takes its target as an immediate one does', () => {
+    const unit = compile(
+      'on t key\n  ask storage to load key into saved and wait\n  return saved\nend t\n',
+    );
+    expect(after(unit, 'ask-wait', 3)).toEqual([
+      '2:3 ask-wait storage load 1',
+      '2:3 store 0 ; it',
+      '2:32 move 0 2 ; it, saved',
+    ]);
+  });
+
+  test('a Script Variable target is stored from `it`', () => {
+    const unit = compile(
+      'script variable last\non t\n  ask clock to now into last\nend t\n',
+    );
+    expect(after(unit, 'ask', 4)).toEqual([
+      '3:3 ask clock now 0',
+      '3:3 store 0 ; it',
+      '3:25 load 0 ; it',
+      '3:25 store-var 0 ; last',
+    ]);
+  });
+
+  test('slots follow the first binding site', () => {
+    const unit = compile(
+      'on t\n  ask g to a into x\n  put 1 into y\n  ask g to b into y\n  return [x, y]\nend t\n',
+    );
+    expect(code(unit).filter(line => line.includes('move'))).toEqual([
+      expect.stringMatching(/move 0 1 ; it, x$/),
+      expect.stringMatching(/move 0 2 ; it, y$/),
+    ]);
+  });
+
+  test('an immediate ask in a Join keeps its target', () => {
+    const unit = compile(
+      'on t\n  wait for all\n    ask g to op into y\n    ask g to op and wait\n  end wait\nend t\n',
+    );
+    expect(code(unit).some(line => line.includes('move 0 1 ; it, y'))).toBe(
+      true,
+    );
+  });
+
+  test('a Join Member with a target is not in a join', () => {
+    const result = compileSource(
+      'on t\n  wait for all\n    ask g to op into y and wait\n  end wait\nend t\n',
+      { name: 'test' },
+    );
+    expect(result.unit).toBeFalsy();
+    expect(
+      result.diagnostics.map(d => [d.code, d.span.line, d.span.col]),
+    ).toEqual([['not in a join', 3, 17]]);
+  });
+});
+
+describe('running Result Targets', () => {
+  const now = parseInstant('2026-10-19T09:00:00Z');
+  const storage = defineCapability('storage', {
+    load: {
+      mode: 'suspending',
+      args: [shape.text],
+      result: shape.text,
+      cost: { fuel: 0 },
+      start: (call, key) =>
+        key!.asText() === 'gone'
+          ? call.fail(new ScriptError('missing', 'no such key'))
+          : call.answer(text('page')),
+    },
+  });
+  const pieces: Record<string, [boolean, string]> = {
+    sword: [true, 'hall'],
+    lamp: [false, 'cellar'],
+    key: [false, 'hall'],
+  };
+  const world = defineCapability('world', {
+    carries: {
+      mode: 'immediate',
+      args: [shape.text],
+      result: shape.bool,
+      cost: { fuel: 0 },
+      do: (_, item) => bool(pieces[item!.asText()!]![0]),
+    },
+    lies: {
+      mode: 'immediate',
+      args: [shape.text],
+      result: shape.text,
+      cost: { fuel: 0 },
+      do: (_, item) => text(pieces[item!.asText()!]![1]),
+    },
+  });
+  const run = (source: string, message: string, args: Value[] = []) => {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    group
+      .load({
+        name: 's',
+        source,
+        grants: {
+          storage: storage.grant('all', undefined),
+          world: world.grant('all', undefined),
+        },
+      })
+      .deliver({ name: message, args });
+    for (let i = 0; i < 3; i++) {
+      group.pump(now);
+    }
+    group.inspect();
+    return lines.at(-1);
+  };
+
+  test('the target holds the answer after a suspending ask resumes', () => {
+    expect(
+      run(
+        'script variable a\nscript variable b\non go\n  ask storage to load "p" into saved and wait\n  put saved into a\n  ask storage to load "q" into b and wait\nend go',
+        'go',
+      ),
+    ).toBe('vars s a="page" b="page"');
+  });
+
+  test('the target is unchanged when the ask raises', () => {
+    expect(
+      run(
+        'script variable a = "old"\nscript variable b\non go\n  put "kept" into saved\n  try\n    ask storage to load "gone" into a and wait\n  catch e\n    try\n      ask storage to load "gone" into saved and wait\n    catch e2\n      put saved into b\n    end try\n  end try\nend go',
+        'go',
+      ),
+    ).toBe('vars s a="old" b="kept"');
+  });
+
+  // Mercenary's delivery pattern, written with Result Targets.
+  const delivery = `script variable said = []
+on deliver item, room
+  ask world to carries item into carried
+  ask world to lies item into location
+  if not carried and location is not room then
+    put "no " & item after said
+  else
+    put "yes " & item after said
+  end if
+end deliver`;
+
+  test("Mercenary's delivery script loads and runs", () => {
+    expect(run(delivery, 'deliver', [text('sword'), text('cellar')])).toBe(
+      'vars s said=["yes sword"]',
+    );
+    expect(run(delivery, 'deliver', [text('lamp'), text('hall')])).toBe(
+      'vars s said=["no lamp"]',
+    );
+    expect(run(delivery, 'deliver', [text('key'), text('hall')])).toBe(
+      'vars s said=["yes key"]',
+    );
+  });
 });

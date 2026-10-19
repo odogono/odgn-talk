@@ -33,7 +33,7 @@ func deferredCall(t *testing.T, g *Group, s *Script, ready <-chan struct{}) {
 }
 
 // Settled deferred calls must not leave state behind, in the guest or in the
-// adapter (#1322).
+// adapter, including across the 200,000-call acceptance run (#1320, #1322).
 func TestZigBackendDeferredCallsRetainNothing(t *testing.T) {
 	core := New()
 	started := make(chan *Call, 1)
@@ -66,13 +66,18 @@ func TestZigBackendDeferredCallsRetainNothing(t *testing.T) {
 		deferredCall(t, g, s, ready)
 	}
 	before := b.reactor.MemoryBytes()
-	for range 20000 {
-		deferredCall(t, g, s, ready)
+	const callsPerBatch = 20000
+	const batches = 10
+	for batch := range batches {
+		for range callsPerBatch {
+			deferredCall(t, g, s, ready)
+		}
+		after := b.reactor.MemoryBytes()
+		if after != before {
+			t.Fatalf("guest memory grew from %d to %d bytes after %d deferred calls", before, after, (batch+1)*callsPerBatch)
+		}
 	}
-	after := b.reactor.MemoryBytes()
-	if after != before {
-		t.Errorf("guest memory grew from %d to %d bytes over 20,000 deferred calls", before, after)
-	}
+	t.Logf("guest memory stayed at %d bytes across %d deferred calls", before, batches*callsPerBatch)
 	b.callsMu.Lock()
 	calls, failures, restored := len(b.calls), len(b.failureDetails), len(b.restoredCalls)
 	b.callsMu.Unlock()

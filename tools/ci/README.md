@@ -1,10 +1,11 @@
 # Woodpecker CI
 
-The initial Woodpecker workflows supplement GitHub Actions:
+Woodpecker runs pull-request checks. GitHub Actions runs the broader matrix on
+`main` or manually, without adding duplicate checks to PRs:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
   tests, race tests and Corpus in Linux containers. After the shared workspace
-  bootstrap succeeds, TS and Go run in parallel.
+  bootstrap succeeds, affected TS and Go steps run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
 - `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
@@ -12,12 +13,55 @@ The initial Woodpecker workflows supplement GitHub Actions:
 - `.woodpecker/tooling.yaml` runs the TS workflow's stack and tooling jobs:
   workspace typechecking, generated Lints, CLI/editor/Folio/extension tests,
   builds and Node runtime checks.
+- `.woodpecker/conventions.yaml` runs the existing PR title and changelog
+  checker on PR code updates and metadata edits, with full Git history.
+- `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
+  SQLite module, reusing the Go build and module caches.
+- `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
+  the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
+  under TypeScript 5.9 and the latest TypeScript.
 
-These workflows do not yet cover the complete Actions matrix, including the
-Conventions, package/browser checks, Go SQLite module, fuzz campaigns,
-Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
-broader Zig and platform matrix. Keep the Actions requirements until equivalent
-coverage is available.
+These workflows do not yet cover the complete Actions matrix, including fuzz
+campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
+and the broader Zig and platform matrix. GitHub Actions keeps that coverage on
+`main` and through manual runs. Go/Zig timing measurements run only on demand.
+
+Use **Actions → workflow → Run workflow** to run a retained Actions workflow on
+a selected branch before merging when its additional coverage is needed. Release,
+deployment, issue-graph and nightly-fuzz triggers remain separate. The redundant
+Actions Conventions workflow is removed; Woodpecker supplies the required check.
+
+## Selecting checks
+
+PRs use their complete changed-file list; pushes to `main` use the files changed
+by that push. The expensive workflows filter those paths before taking a worker
+slot. The Linux core workflow also filters its TS and Go steps independently.
+
+| Change | Selected checks, in addition to Conventions and Spec |
+| --- | --- |
+| Root README, `docs/` or changelog only | None |
+| Go Core | Go core step and Go SQLite |
+| Go SQLite module only | Go SQLite |
+| TS Core | TS core step, package and tooling |
+| `tooling/` or `bench/ts/` only | Tooling |
+| Zig Core or native sidecar checks | macOS sidecar |
+| Spec, dependency lock or shared bootstrap inputs | All consumers |
+| Workflow or worker image | Affected workflows |
+
+Keep Spec on every PR and push to `main`: its lint, generated-file and Markdown
+link checks span the repository. Keep Conventions unfiltered on PR code and
+metadata updates. Spec Markdown remains a Core trigger because tests read prose
+examples directly. Shared Corpus, fixture and reference-tool inputs also select
+their consumers; filters intentionally prefer an extra check over missing one.
+Each workflow includes its own configuration, and Docker consumers include their
+worker image inputs. Tooling includes the whole TS workspace typecheck, including
+`tools/` and `bench/ts/`.
+
+Manual pipelines run every optional workflow and both core steps regardless of
+changed paths. Conventions requires PR metadata and remains a PR-only check.
+Empty or unavailable changed-file lists also run all optional checks
+(`on_empty: true`). Path filters do not remove jobs already queued from older
+revisions: PR branches must include these workflow changes to benefit.
 
 ## Linux worker image
 
@@ -30,8 +74,8 @@ docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 too
 
 Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
 compiler needed for Go race tests. The default image uses Node 22 for parity with
-the Actions stack and CLI
-jobs. The `node24` image is used only for the required SQLite and notification
+the Actions stack and CLI jobs. The `node24` image is used only for the required
+SQLite and notification
 runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
 both the build command and workflows whenever its image changes. Woodpecker
 uses existing local images by default.
@@ -43,7 +87,81 @@ The Spec and tooling workflows each report a separate status, and can run
 alongside the core workflow as agent capacity permits. Tooling steps run
 sequentially in their shared workspace to keep their generated builds ordered.
 
-The workflow selects an agent with `platform=linux/amd64` and `backend=docker`.
+Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
+Conventions additionally requires `role=conventions`.
+
+### Browser worker image
+
+After building the default Linux image, build the browser variant on each
+general Linux Docker worker before enabling the package workflow:
+
+```sh
+docker build -f tools/ci/Dockerfile.browser -t odgn-talk-ci:2026-10-19-2-browser tools/ci
+```
+
+It adds Playwright's Chromium headless shell and system dependencies to the
+Node 22 image. `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` makes the installed
+browser available to the workspace's Playwright package. The workflow's install
+command ensures that the browser revision matches the locked workspace version;
+with the matching image, it reuses the installed browser without downloading it.
+Keep `PLAYWRIGHT_VERSION` in `Dockerfile.browser` aligned with `bun.lock`, and
+use a new browser image tag in the workflow and build command when rebuilding.
+
+Package and SQLite checks report separate optional statuses. They share the
+general agent's existing capacity and do not request the Conventions role.
+
+### Dedicated Conventions worker
+
+Reserve one agent for Conventions so the required merge check does not queue
+behind core, Spec or tooling workflows. Add this service to the server's existing
+Compose file, reusing its `agent_secret` secret and server network:
+
+```yaml
+services:
+  conventions-agent:
+    image: woodpeckerci/woodpecker-agent:v3.19.0
+    command: agent
+    restart: unless-stopped
+    depends_on:
+      - server
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    volumes:
+      - conventions-agent-config:/etc/woodpecker
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - agent_secret
+    environment:
+      WOODPECKER_SERVER: server:9000
+      WOODPECKER_AGENT_SECRET_FILE: /run/secrets/agent_secret
+      WOODPECKER_HOSTNAME: taito-conventions
+      WOODPECKER_BACKEND: docker
+      WOODPECKER_MAX_WORKFLOWS: "1"
+      WOODPECKER_AGENT_LABELS: platform=linux/amd64,backend=docker,!role=conventions,repo=*
+
+volumes:
+  conventions-agent-config:
+```
+
+The mandatory `!role=conventions` agent label accepts only workflows explicitly
+requesting `role: conventions`. General agents omit that role, so they cannot
+take Conventions jobs. Keep the dedicated agent's config volume separate from
+other agents so it receives its own agent ID. It serves Conventions workflows
+from all activated repositories that request this role.
+
+Build the Linux worker image on that host, then start the agent **before**
+deploying the workflow label:
+
+```sh
+docker compose config --quiet
+docker compose up -d --no-deps conventions-agent
+```
+
+The general Linux agent can keep its existing two-workflow capacity. This
+reserves queue capacity, while CPU, memory and disk remain shared on the host.
+Verify Conventions runs on `taito-conventions` while general workflows are
+busy. To roll back, remove the workflow's `role` label first; stop the dedicated
+agent only after those labelled workflows have finished or been cancelled.
 
 ### Persistent Go caches
 
@@ -102,4 +220,35 @@ present in the revision being built. For a PR opened before activation, trigger
 a new event or start a manual pipeline after the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
-reported the expected statuses. Existing Actions requirements remain separate.
+reported the expected statuses. Only `ci/woodpecker/pr/conventions` is currently
+required; the other Woodpecker checks remain optional. Actions workflows do not
+automatically run on PRs.
+
+### Required Conventions check
+
+The Conventions adapter reads the current PR title, body, base branch and head
+from GitHub's public API, then invokes `tools/commits/check.ts pr` with metadata
+in environment variables. It rejects stale revisions and API failures. It
+requires a public GitHub repository and uses one unauthenticated API request
+per run, subject to GitHub's public API rate limit.
+
+Woodpecker normally gives `pull_request` and `pull_request_metadata` events
+different status names. Configure this on the **server** to keep Conventions
+edits on the same required status while preserving other workflow names and
+matrix suffixes:
+
+```yaml
+WOODPECKER_STATUS_CONTEXT_FORMAT: '{{ .context }}/{{ if and (eq .event "pull_request_metadata") (eq .workflow "conventions") }}pr{{ else }}{{ .event }}{{ end }}/{{ .workflow }}{{if not (eq .axis_id 0)}}/{{.axis_id}}{{end}}'
+```
+
+Recreate the server after changing its environment. Verify an invalid title and
+a body requiring a missing changelog fragment both fail the existing
+`ci/woodpecker/pr/conventions` status, and restoring valid metadata makes that
+same status pass. Only then replace the Actions-bound `conventions` requirement
+with `ci/woodpecker/pr/conventions`. Select **Any source**, since Woodpecker
+posts OAuth commit statuses rather than GitHub Actions checks. Keep any other
+required checks and branch protection settings intact.
+
+PR branches must contain the Conventions workflow and adapter. Update existing
+branches from `main` before requiring the check for them. Existing PR branches
+also need the updated Actions workflow files to stop the old PR-triggered jobs.

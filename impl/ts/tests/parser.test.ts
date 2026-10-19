@@ -155,3 +155,44 @@ end play`;
   expect(parsed.error).toBeNull();
   expect(syntaxText(parsed.tree!)).toBe(source);
 });
+
+describe('Result Targets (ADR 0112)', () => {
+  const find = (node: SyntaxNode, rule: string): SyntaxNode | undefined => {
+    if (node.rule === rule) {
+      return node;
+    }
+    for (const child of node.children) {
+      const found = child.kind === 'node' ? find(child, rule) : undefined;
+      if (found) {
+        return found;
+      }
+    }
+    return undefined;
+  };
+
+  test('an `ask` names its target after its arguments and before `and wait`', () => {
+    const source =
+      'on t key\n  ask storage to load key into saved and wait\nend t';
+    const parsed = parseSource(source);
+    expect(syntaxText(parsed.tree!)).toBe(source);
+    const ask = find(parsed.tree!, 'AskTell')!;
+    expect(
+      ask.children.flatMap(c => (c.kind === 'node' ? [c.rule] : [])),
+    ).toEqual(['Expression', 'ExpressionList', 'ResultTarget', 'AndWait']);
+    const target = find(ask, 'ResultTarget')!;
+    expect(target.children[0]).toMatchObject({ v: 'into' });
+    expect(rules(target)).toEqual(['ResultTarget', 'Name']);
+  });
+
+  test.each([
+    ['  ask g to op x into item 1 of xs', 2, 27],
+    ['  ask g to op x and wait into y', 2, 26],
+    ['  ask g to op into it', 2, 20],
+    ['  tell g to op x into y', 2, 18],
+    ['  tell g\n    op into y\n  end tell', 3, 8],
+  ])('rejects %s', (line, l, c) => {
+    const { error } = parseSource(`on t x\n${line}\nend t\n`);
+    expect(error).not.toBeNull();
+    expect([error!.tok.line, error!.tok.col]).toEqual([l, c]);
+  });
+});
