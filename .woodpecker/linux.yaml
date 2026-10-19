@@ -1,0 +1,40 @@
+# Built on taito with:
+# docker build -t odgn-talk-ci:2026-10-19 tools/ci
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+  - event: manual
+
+labels:
+  platform: linux/amd64
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: ts-core
+    image: odgn-talk-ci:2026-10-19
+    directory: impl/ts
+    commands:
+      - bun test --timeout 30000 tests
+      - bun run build
+      - bun run corpus:run
+
+  - name: go-core
+    image: odgn-talk-ci:2026-10-19
+    directory: impl/go
+    commands:
+      - go vet ./...
+      - go test ./...
+      - go test -race ./...
+      - go run ./cmd/corpus --check-passing
