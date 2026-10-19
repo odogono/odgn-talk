@@ -327,47 +327,66 @@ export const runProgram = (
   let steps = 0;
   let found: Found | null = null;
   let list: Thread[] = [];
-  let marks = new Set<number>();
+  let next: Thread[] = [];
+  // Each generation is one position's set of marks. Reuse its storage and the
+  // two thread lists rather than allocating a Set and a list per Character.
+  const marks = new Uint32Array(code.length);
+  let generation = 1;
+  // Seeds share one array; `save` copies before it writes a slot.
+  const emptySlots: (number | null)[] = Array(slotCount).fill(null);
+  const pending: Pick<Thread, 'pc' | 'slots'>[] = [];
   // Adding follows jumps, splits, saves and asserts in priority order.
-  const add = (into: Thread[], thread: Thread, pos: number) => {
-    const pending: Thread[] = [thread];
-    while (pending.length) {
-      const t = pending.pop()!;
-      if (marks.has(t.pc)) {
-        continue;
-      }
-      marks.add(t.pc);
-      const op = code[t.pc]!;
-      switch (op.op) {
-        case 'jump':
-          pending.push({ ...t, pc: op.a });
-          break;
-        case 'split':
-          pending.push({ ...t, pc: op.b }, { ...t, pc: op.a });
-          break;
-        case 'save': {
-          const slots = t.slots.slice();
-          slots[op.n] = pos;
-          pending.push({ ...t, pc: t.pc + 1, slots });
-          break;
+  const add = (
+    into: Thread[],
+    pc: number,
+    slots: Thread['slots'],
+    start: number,
+    pos: number,
+  ) => {
+    for (;;) {
+      while (marks[pc] !== generation) {
+        marks[pc] = generation;
+        const op = code[pc]!;
+        switch (op.op) {
+          case 'jump':
+            pc = op.a;
+            continue;
+          case 'split':
+            pending.push({ pc: op.b, slots });
+            pc = op.a;
+            continue;
+          case 'save':
+            slots = slots.slice();
+            slots[op.n] = pos;
+            pc++;
+            continue;
+          case 'assert':
+            if (holds(op.k, cs, pos)) {
+              pc++;
+              continue;
+            }
+            break;
+          default:
+            into.push({ pc, slots, start });
         }
-        case 'assert':
-          if (holds(op.k, cs, pos)) {
-            pending.push({ ...t, pc: t.pc + 1 });
-          }
-          break;
-        default:
-          into.push(t);
+        // A consuming op or failed assert ends this branch.
+        break;
       }
+      const branch = pending.pop();
+      if (!branch) {
+        return;
+      }
+      pc = branch.pc;
+      slots = branch.slots;
     }
   };
   for (let pos = from; pos <= cs.length; pos++) {
     if (seeds ? !found : pos === from) {
-      add(list, { pc: 0, slots: Array(slotCount).fill(null), start: pos }, pos);
+      add(list, 0, emptySlots, pos, pos);
     }
     steps += list.length;
-    const next: Thread[] = [];
-    marks = new Set();
+    next.length = 0;
+    generation++;
     for (const t of list) {
       const op = code[t.pc]!;
       if (op.op === 'match') {
@@ -391,10 +410,12 @@ export const runProgram = (
             : op.fold === simpleFold(ch)
           : op.op === 'class' && inClass(op.k, ch);
       if (ok) {
-        add(next, { ...t, pc: t.pc + 1 }, pos + 1);
+        add(next, t.pc + 1, t.slots, t.start, pos + 1);
       }
     }
+    const spare = list;
     list = next;
+    next = spare;
     if (!list.length && (found || !seeds)) {
       break;
     }

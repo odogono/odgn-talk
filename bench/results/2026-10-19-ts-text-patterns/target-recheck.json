@@ -1,0 +1,406 @@
+{
+  "metadata": {
+    "filter": "text/patterns",
+    "first": "before",
+    "order": "Per workload: 3 fresh process pairs, alternating AB/BA",
+    "started": "2026-10-19T06:49:11.878Z",
+    "finishedTiming": "2026-10-19T06:49:13.928Z",
+    "startingLoad": [
+      5.33642578125,
+      6.3388671875,
+      4.845703125
+    ],
+    "endingLoad": [
+      5.33642578125,
+      6.3388671875,
+      4.845703125
+    ],
+    "baseline": "3ba52a1d5baf1d7a45f982383dfceafbe5bfb342",
+    "head": "3ba52a1d5baf1d7a45f982383dfceafbe5bfb342",
+    "diff": "diff --git a/impl/ts/src/patterns.ts b/impl/ts/src/patterns.ts\nindex 19290a84..63f82b20 100644\n--- a/impl/ts/src/patterns.ts\n+++ b/impl/ts/src/patterns.ts\n@@ -327,47 +327,64 @@ export const runProgram = (\n   let steps = 0;\n   let found: Found | null = null;\n   let list: Thread[] = [];\n-  let marks = new Set<number>();\n+  let next: Thread[] = [];\n+  // Each generation is one position's set of marks. Reuse its storage and the\n+  // two thread lists rather than allocating a Set and a list per Character.\n+  const marks: number[] = Array(code.length).fill(0);\n+  let generation = 1;\n+  const emptySlots: (number | null)[] = Array(slotCount).fill(null);\n+  const pending: { pc: number; slots: (number | null)[] }[] = [];\n   // Adding follows jumps, splits, saves and asserts in priority order.\n-  const add = (into: Thread[], thread: Thread, pos: number) => {\n-    const pending: Thread[] = [thread];\n-    while (pending.length) {\n-      const t = pending.pop()!;\n-      if (marks.has(t.pc)) {\n-        continue;\n-      }\n-      marks.add(t.pc);\n-      const op = code[t.pc]!;\n-      switch (op.op) {\n-        case 'jump':\n-          pending.push({ ...t, pc: op.a });\n-          break;\n-        case 'split':\n-          pending.push({ ...t, pc: op.b }, { ...t, pc: op.a });\n-          break;\n-        case 'save': {\n-          const slots = t.slots.slice();\n-          slots[op.n] = pos;\n-          pending.push({ ...t, pc: t.pc + 1, slots });\n-          break;\n+  const add = (\n+    into: Thread[],\n+    pc: number,\n+    slots: (number | null)[],\n+    start: number,\n+    pos: number,\n+  ) => {\n+    for (;;) {\n+      while (marks[pc] !== generation) {\n+        marks[pc] = generation;\n+        const op = code[pc]!;\n+        switch (op.op) {\n+          case 'jump':\n+            pc = op.a;\n+            continue;\n+          case 'split':\n+            pending.push({ pc: op.b, slots });\n+            pc = op.a;\n+            continue;\n+          case 'save':\n+            slots = slots.slice();\n+            slots[op.n] = pos;\n+            pc++;\n+            continue;\n+          case 'assert':\n+            if (holds(op.k, cs, pos)) {\n+              pc++;\n+              continue;\n+            }\n+            break;\n+          default:\n+            into.push({ pc, slots, start });\n         }\n-        case 'assert':\n-          if (holds(op.k, cs, pos)) {\n-            pending.push({ ...t, pc: t.pc + 1 });\n-          }\n-          break;\n-        default:\n-          into.push(t);\n+        break;\n+      }\n+      const branch = pending.pop();\n+      if (!branch) {\n+        return;\n       }\n+      pc = branch.pc;\n+      slots = branch.slots;\n     }\n   };\n   for (let pos = from; pos <= cs.length; pos++) {\n     if (seeds ? !found : pos === from) {\n-      add(list, { pc: 0, slots: Array(slotCount).fill(null), start: pos }, pos);\n+      add(list, 0, emptySlots, pos, pos);\n     }\n     steps += list.length;\n-    const next: Thread[] = [];\n-    marks = new Set();\n+    next.length = 0;\n+    generation++;\n     for (const t of list) {\n       const op = code[t.pc]!;\n       if (op.op === 'match') {\n@@ -391,10 +408,10 @@ export const runProgram = (\n             : op.fold === simpleFold(ch)\n           : op.op === 'class' && inClass(op.k, ch);\n       if (ok) {\n-        add(next, { ...t, pc: t.pc + 1 }, pos + 1);\n+        add(next, t.pc + 1, t.slots, t.start, pos + 1);\n       }\n     }\n-    list = next;\n+    [list, next] = [next, list];\n     if (!list.length && (found || !seeds)) {\n       break;\n     }\ndiff --git a/impl/ts/src/values.ts b/impl/ts/src/values.ts\nindex c8260d30..fdfd29ce 100644\n--- a/impl/ts/src/values.ts\n+++ b/impl/ts/src/values.ts\n@@ -817,7 +817,8 @@ export const map = (\n       invalidValue(`Duplicate map key: ${displayText(nfc)}`);\n     }\n     seen.add(nfc);\n-    pairs.push(Object.freeze([nfc, value] as const));\n+    // MapStorage owns and freezes its pairs; this validation buffer stays local.\n+    pairs.push([nfc, value]);\n   }\n   return makeValue('map', MapStorage.copy(pairs));\n };\n",
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "sourceSha256": {
+      "impl/ts/src/patterns.ts": "ac73f654807b2c12dea0aa382840cdbffccccd82d77f918a6ae28325dcb652f2",
+      "impl/ts/src/values.ts": "1027a2390a0251fa8ebb26e18be3209666b7f54ace536ba3e2c575bfc76407b1"
+    },
+    "bundleSha256": {
+      "before": "f0657bc0eacbdcadbe0d71c973198cd5f6bf0b530820c40faf0f45dff62d5c47",
+      "after": "2202e21f90a0096acea1eaa2fdbf406f6bd4cc983f9a3709f09f6cf497093134"
+    },
+    "warmupRuns": 5,
+    "samples": 5,
+    "minSampleMs": 50
+  },
+  "records": [
+    {
+      "round": 1,
+      "variant": "before",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 9,
+              "ns": 6130268.555555555
+            },
+            {
+              "runs": 9,
+              "ns": 5745536.999999999
+            },
+            {
+              "runs": 9,
+              "ns": 5726486.111111111
+            },
+            {
+              "runs": 9,
+              "ns": 5711402.777777774
+            },
+            {
+              "runs": 9,
+              "ns": 5778597.222222219
+            }
+          ],
+          "load": [
+            1237250.0000000172,
+            716166.9999999844,
+            618583.9999999985,
+            566541.0000000292,
+            542708.0000000047,
+            449624.9999999691,
+            453041.9999999822,
+            434708.0000000005,
+            382165.9999999838,
+            416917.0000000122
+          ]
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 10,
+              "ns": 5328820.8
+            },
+            {
+              "runs": 11,
+              "ns": 4747113.636363635
+            },
+            {
+              "runs": 11,
+              "ns": 4833098.545454546
+            },
+            {
+              "runs": 11,
+              "ns": 4941625.000000001
+            },
+            {
+              "runs": 11,
+              "ns": 4815193.181818183
+            }
+          ],
+          "load": [
+            1220167.0000000035,
+            755625.0000000091,
+            641999.9999999959,
+            579499.9999999959,
+            538250.000000005,
+            487999.99999999953,
+            478083.0000000265,
+            477665.99999999924,
+            4548167.000000035,
+            628833.9999999835
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 10,
+              "ns": 5311295.9
+            },
+            {
+              "runs": 11,
+              "ns": 4844515.181818181
+            },
+            {
+              "runs": 11,
+              "ns": 4857859.909090907
+            },
+            {
+              "runs": 11,
+              "ns": 4806462.181818181
+            },
+            {
+              "runs": 11,
+              "ns": 4625545.454545457
+            }
+          ],
+          "load": [
+            1256500.0000000168,
+            716875.000000016,
+            633082.9999999992,
+            583250.000000021,
+            549708.0000000097,
+            480209.0000000021,
+            492374.9999999814,
+            454291.000000012,
+            448291.9999999808,
+            436125.0000000041
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 8,
+              "ns": 6315802
+            },
+            {
+              "runs": 9,
+              "ns": 5797361.11111111
+            },
+            {
+              "runs": 9,
+              "ns": 5670861.111111109
+            },
+            {
+              "runs": 10,
+              "ns": 5520429.200000001
+            },
+            {
+              "runs": 9,
+              "ns": 5627152.77777778
+            }
+          ],
+          "load": [
+            1233957.9999999728,
+            712666.0000000129,
+            601665.999999966,
+            573374.9999999986,
+            534416.9999999622,
+            475250.0000000168,
+            481999.9999999709,
+            442541.00000000565,
+            443541.0000000388,
+            428334.00000000664
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 9,
+              "ns": 6021199.111111111
+            },
+            {
+              "runs": 9,
+              "ns": 5623398.222222222
+            },
+            {
+              "runs": 9,
+              "ns": 5626986.111111111
+            },
+            {
+              "runs": 9,
+              "ns": 5579578.666666666
+            },
+            {
+              "runs": 9,
+              "ns": 5730291.666666662
+            }
+          ],
+          "load": [
+            1241624.999999999,
+            697000.0000000027,
+            616375.000000005,
+            543250.0000000005,
+            541832.9999999969,
+            479791.9999999749,
+            461792.0000000026,
+            459541.0000000015,
+            439250.0000000155,
+            439958.0000000469
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "beforeLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "afterLoad": [
+        5.33642578125,
+        6.3388671875,
+        4.845703125
+      ],
+      "measurements": [
+        {
+          "name": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "run": [
+            {
+              "runs": 10,
+              "ns": 5235837.499999999
+            },
+            {
+              "runs": 11,
+              "ns": 4825420.454545454
+            },
+            {
+              "runs": 11,
+              "ns": 4843140.181818182
+            },
+            {
+              "runs": 11,
+              "ns": 4819090.909090911
+            },
+            {
+              "runs": 11,
+              "ns": 4648965.909090908
+            }
+          ],
+          "load": [
+            1223749.9999999953,
+            717416.999999955,
+            612875.000000031,
+            558124.9999999614,
+            525874.999999985,
+            442667.0000000286,
+            437874.9999999627,
+            423666.0000000256,
+            394917.00000002084,
+            400791.00000002654
+          ]
+        }
+      ]
+    }
+  ],
+  "workloads": [
+    {
+      "name": "text/patterns",
+      "n": 300,
+      "expect": "900",
+      "smoke": {
+        "n": 4,
+        "expect": "12"
+      },
+      "source": "-- Find all three maximal digit runs, compiling the Pattern during Load.\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    put every match of <digits> in \"a12 b345 c6\" into hits\n    add the length of hits to total\n  end repeat\n  return total\nend run\n"
+    }
+  ],
+  "heapFile": "target-recheck-heap.json.gz"
+}
