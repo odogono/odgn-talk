@@ -65,6 +65,11 @@ pub fn check() !void {
         const entry = try entryFor(env.messages, vector.tag);
         try std.testing.expectEqualStrings(if (entry.direction == .host_to_guest) "host-to-guest" else "guest-to-host", vector.direction);
         const tree = (try std.json.parseFromSlice(Json, a, vector.tree, .{ .parse_numbers = false })).value;
+        if (get(tree, "m") != .null) {
+            try std.testing.expectEqualStrings(entry.name, get(tree, "m").string);
+        } else if (get(tree, "need") != .null) {
+            try std.testing.expectEqualStrings(entry.name, get(get(tree, "need"), "m").string);
+        }
         var flat: std.json.ObjectMap = .empty;
         var pairs = tree.object.iterator();
         while (pairs.next()) |pair| {
