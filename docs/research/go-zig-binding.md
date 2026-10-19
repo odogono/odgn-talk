@@ -30,12 +30,12 @@ limit counts as accepted, so the passes below are evidence, not acceptance.
 
 Medians of ten paired round ratios, each against native from the same job:
 
-| Workload                          | Limit       | Linux amd64 | Linux arm64 | macOS arm64 | Result           |
-| --------------------------------- | ----------- | ----------: | ----------: | ----------: | ---------------- |
-| Fields Request / native Request   | ≤ 3×        |      2.310× |      2.614× |      2.727× | Pass in this run |
-| Fields combined / native combined | ≤ 3×        |      1.992× |      2.256× |      2.402× | Pass in this run |
-| Fields Request / JSON Request     | ≤ 0.75×     |      0.481× |      0.484× |      0.487× | Pass             |
-| Native Request / base Request     | no slowdown |      0.976× |      0.990× |      0.996× | Pass             |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Fields Request / native Request | ≤ 3× | 2.310× | 2.614× | 2.727× | Pass in this run |
+| Fields combined / native combined | ≤ 3× | 1.992× | 2.256× | 2.402× | Pass in this run |
+| Fields Request / JSON Request | ≤ 0.75× | 0.481× | 0.484× | 0.487× | Pass |
+| Native Request / base Request | no slowdown | 0.976× | 0.990× | 0.996× | Pass |
 
 Linux amd64 Request/Pump ran on an Intel Xeon Platinum 8573C; the
 full-suite amd64 job ran on an AMD EPYC 7763. The earlier runs showed a 28%
@@ -47,18 +47,18 @@ Request pass is accepted.
 Ratios of the five-sample medians within each full-suite job, except the
 absolute cold-start time.
 
-| Workload                                         | Limit    | Linux amd64 | Linux arm64 | macOS arm64 | Result                   |
-| ------------------------------------------------ | -------- | ----------: | ----------: | ----------: | ------------------------ |
-| `host/immediate`, `host/properties`, `host/pump` | ≤ 3×     |  3.77–7.06× |  2.86–4.79× |  3.33–3.81× | Miss                     |
-| `host/conversion`                                | ≤ 3×     |       3.13× |       2.02× |       2.02× | Miss on amd64            |
-| `BackendDeferredCall/history=0`                  | ≤ 3×     |       4.85× |       8.04× |       3.82× | Miss                     |
-| `messaging/*`                                    | ≤ 2×     |  0.75–1.73× |  0.62–1.15× |  0.68–1.60× | Pass                     |
-| `BackendMultiGroup/groups=16` req/s              | ≥ 0.5×   |       0.62× |       0.68× |       1.40× | Pass                     |
-| `BackendRequest` p99                             | ≤ 3×     |       1.25× |       1.43× |       4.00× | Miss on macOS            |
-| `Load/core/loop`                                 | ≤ 3×     |       3.79× |       4.51× |       2.37× | Miss on Linux            |
-| `GroupInstantiation`                             | ≤ 10×    |       9.35× |       9.28× |       9.79× | Pass, close to the limit |
-| `BackendRetainedMemory` heap/Group               | ≤ 4×     |       1.70× |       1.70× |       1.70× | Pass                     |
-| `BackendColdStart/cache=warm` first Group        | ≤ 250 ms |     52.6 ms |     47.0 ms |     78.2 ms | Pass                     |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 3.77–7.06× | 2.86–4.79× | 3.33–3.81× | Miss |
+| `host/conversion` | ≤ 3× | 3.13× | 2.02× | 2.02× | Miss on amd64 |
+| `BackendDeferredCall/history=0` | ≤ 3× | 4.85× | 8.04× | 3.82× | Miss |
+| `messaging/*` | ≤ 2× | 0.75–1.73× | 0.62–1.15× | 0.68–1.60× | Pass |
+| `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.62× | 0.68× | 1.40× | Pass |
+| `BackendRequest` p99 | ≤ 3× | 1.25× | 1.43× | 4.00× | Miss on macOS |
+| `Load/core/loop` | ≤ 3× | 3.79× | 4.51× | 2.37× | Miss on Linux |
+| `GroupInstantiation` | ≤ 10× | 9.35× | 9.28× | 9.79× | Pass, close to the limit |
+| `BackendRetainedMemory` heap/Group | ≤ 4× | 1.70× | 1.70× | 1.70× | Pass |
+| `BackendColdStart/cache=warm` first Group | ≤ 250 ms | 52.6 ms | 47.0 ms | 78.2 ms | Pass |
 
 `BackendRequest` mean time is 4.08×, 2.62× and 4.62× native. The whole
 cold-start process with a warm cache takes 57.1, 52.6 and 100.1 ms.
@@ -73,13 +73,13 @@ regression. Linux arm64 deferred calls stay the largest gap at 8.04×.
 
 The other original #1054 limits:
 
-| Workload                                                                | Limit  | Linux amd64 | Linux arm64 | macOS arm64 | Result |
-| ----------------------------------------------------------------------- | ------ | ----------: | ----------: | ----------: | ------ |
-| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2×   |       1.52× |       1.16× |       1.17× | Pass   |
-| `lifecycle/restore`                                                     | ≤ 1.5× |       0.17× |       0.18× |       0.15× | Pass   |
-| `lifecycle/load-large`                                                  | ≤ 2.5× |       1.15× |       0.94× |       0.94× | Pass   |
-| Zig deferred `history=5000` / `history=0`                               | ≤ 1.2× |       1.08× |       0.90× |       0.91× | Pass   |
-| `lifecycle/rollback`                                                    | ≤ 2×   |       4.84× |       4.75× |       4.05× | Miss   |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2× | 1.52× | 1.16× | 1.17× | Pass |
+| `lifecycle/restore` | ≤ 1.5× | 0.17× | 0.18× | 0.15× | Pass |
+| `lifecycle/load-large` | ≤ 2.5× | 1.15× | 0.94× | 0.94× | Pass |
+| Zig deferred `history=5000` / `history=0` | ≤ 1.2× | 1.08× | 0.90× | 0.91× | Pass |
+| `lifecycle/rollback` | ≤ 2× | 4.84× | 4.75× | 4.05× | Miss |
 
 Fuel and logical bytes match native on every Run in all three full-suite
 jobs. The first Group without a compilation cache takes 1.61–2.14 s; this is
@@ -115,10 +115,10 @@ limit. Each cell below lists run 1 / run 2, using the median of paired round
 ratios. The full details and JSON comparisons are in the
 [binary research](request-pump-binary.md#remeasurement-after-the-merged-performance-work-2026-10-19).
 
-| Workload                          | Limit |     Linux amd64 |     Linux arm64 |     macOS arm64 | Result                     |
-| --------------------------------- | ----- | --------------: | --------------: | --------------: | -------------------------- |
-| Fields Request / native Request   | ≤ 3×  | 3.123× / 4.002× | 2.539× / 2.507× | 2.546× / 2.677× | Miss on amd64 in both runs |
-| Fields combined / native combined | ≤ 3×  | 2.806× / 3.639× | 2.202× / 2.265× | 2.190× / 2.208× | Miss on amd64 in run 2     |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Fields Request / native Request | ≤ 3× | 3.123× / 4.002× | 2.539× / 2.507× | 2.546× / 2.677× | Miss on amd64 in both runs |
+| Fields combined / native combined | ≤ 3× | 2.806× / 3.639× | 2.202× / 2.265× | 2.190× / 2.208× | Miss on amd64 in run 2 |
 
 The ≤3× Request goal remains unmet. The amended ≤0.75×-JSON gate passes for
 both workloads in all six jobs: fields takes 0.444–0.551× JSON time for
@@ -141,18 +141,18 @@ messaging ranges cover their individual workloads, not sample variation.
 All required platforms and both runs must pass; a split result does not
 establish acceptance.
 
-| Workload                                         | Limit    |             Linux amd64 |             Linux arm64 |             macOS arm64 | Result              |
-| ------------------------------------------------ | -------- | ----------------------: | ----------------------: | ----------------------: | ------------------- |
-| `host/immediate`, `host/properties`, `host/pump` | ≤ 3×     | 3.44–4.93× / 3.77–5.52× | 4.29–4.88× / 4.16–4.74× | 2.96–5.56× / 6.55–9.40× | Miss                |
-| `host/conversion`                                | ≤ 3×     |           2.72× / 2.96× |           3.14× / 3.04× |           2.31× / 3.86× | Miss                |
-| `BackendDeferredCall/history=0`                  | ≤ 3×     |           3.24× / 4.16× |         10.92× / 10.65× |           3.73× / 4.15× | Miss                |
-| `messaging/*`                                    | ≤ 2×     | 0.67–1.14× / 0.70–1.20× | 0.61–1.05× / 0.61–1.05× | 0.71–1.61× / 0.97–2.25× | Miss in macOS run 2 |
-| `BackendMultiGroup/groups=16` req/s              | ≥ 0.5×   |           0.70× / 0.67× |           0.41× / 0.39× |           0.68× / 1.01× | Miss on Linux arm64 |
-| `BackendRequest` p99                             | ≤ 3×     |           0.78× / 0.68× |           1.58× / 1.41× |           1.68× / 0.87× | Pass                |
-| `Load/core/loop`                                 | ≤ 3×     |           2.97× / 3.40× |           4.65× / 4.53× |           2.54× / 2.07× | Miss on Linux       |
-| `GroupInstantiation`                             | ≤ 10×    |           6.66× / 6.99× |           9.19× / 9.56× |          10.48× / 7.36× | Miss in macOS run 1 |
-| `BackendRetainedMemory` heap/Group               | ≤ 4×     |           1.70× / 1.70× |           1.70× / 1.70× |           1.70× / 1.70× | Pass                |
-| `BackendColdStart/cache=warm` first Group        | ≤ 250 ms |          31.9 / 43.0 ms |          47.4 / 47.2 ms |          52.7 / 60.1 ms | Pass                |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 3.44–4.93× / 3.77–5.52× | 4.29–4.88× / 4.16–4.74× | 2.96–5.56× / 6.55–9.40× | Miss |
+| `host/conversion` | ≤ 3× | 2.72× / 2.96× | 3.14× / 3.04× | 2.31× / 3.86× | Miss |
+| `BackendDeferredCall/history=0` | ≤ 3× | 3.24× / 4.16× | 10.92× / 10.65× | 3.73× / 4.15× | Miss |
+| `messaging/*` | ≤ 2× | 0.67–1.14× / 0.70–1.20× | 0.61–1.05× / 0.61–1.05× | 0.71–1.61× / 0.97–2.25× | Miss in macOS run 2 |
+| `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.70× / 0.67× | 0.41× / 0.39× | 0.68× / 1.01× | Miss on Linux arm64 |
+| `BackendRequest` p99 | ≤ 3× | 0.78× / 0.68× | 1.58× / 1.41× | 1.68× / 0.87× | Pass |
+| `Load/core/loop` | ≤ 3× | 2.97× / 3.40× | 4.65× / 4.53× | 2.54× / 2.07× | Miss on Linux |
+| `GroupInstantiation` | ≤ 10× | 6.66× / 6.99× | 9.19× / 9.56× | 10.48× / 7.36× | Miss in macOS run 1 |
+| `BackendRetainedMemory` heap/Group | ≤ 4× | 1.70× / 1.70× | 1.70× / 1.70× | 1.70× / 1.70× | Pass |
+| `BackendColdStart/cache=warm` first Group | ≤ 250 ms | 31.9 / 43.0 ms | 47.4 / 47.2 ms | 52.7 / 60.1 ms | Pass |
 
 **#1103 remains incomplete.** Request p99, retained heap and warm-cache
 startup pass in every job. The immediate-call category still misses both
@@ -169,13 +169,13 @@ gaps are deferred calls (about 10.7×) and throughput (about 0.4×).
 
 For context, the other original #1054 limits, including #1101's rows:
 
-| Workload                                                                | Limit  |   Linux amd64 |   Linux arm64 |   macOS arm64 | Result |
-| ----------------------------------------------------------------------- | ------ | ------------: | ------------: | ------------: | ------ |
-| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2×   | 1.43× / 1.51× | 1.15× / 1.14× | 1.04× / 1.41× | Pass   |
-| `lifecycle/restore`                                                     | ≤ 1.5× | 0.16× / 0.18× | 0.16× / 0.16× | 0.12× / 0.17× | Pass   |
-| `lifecycle/load-large`                                                  | ≤ 2.5× | 1.03× / 1.08× | 0.93× / 0.94× | 0.96× / 1.09× | Pass   |
-| Zig deferred `history=5000` / `history=0`                               | ≤ 1.2× | 0.99× / 1.00× | 1.01× / 0.98× | 0.94× / 1.01× | Pass   |
-| `lifecycle/rollback`                                                    | ≤ 2×   | 3.92× / 4.31× | 5.19× / 5.24× | 3.95× / 5.66× | Miss   |
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2× | 1.43× / 1.51× | 1.15× / 1.14× | 1.04× / 1.41× | Pass |
+| `lifecycle/restore` | ≤ 1.5× | 0.16× / 0.18× | 0.16× / 0.16× | 0.12× / 0.17× | Pass |
+| `lifecycle/load-large` | ≤ 2.5× | 1.03× / 1.08× | 0.93× / 0.94× | 0.96× / 1.09× | Pass |
+| Zig deferred `history=5000` / `history=0` | ≤ 1.2× | 0.99× / 1.00× | 1.01× / 0.98× | 0.94× / 1.01× | Pass |
+| `lifecycle/rollback` | ≤ 2× | 3.92× / 4.31× | 5.19× / 5.24× | 3.95× / 5.66× | Miss |
 
 Fuel and logical bytes match native on every Run in all six full-suite jobs.
 The first Group without a compilation cache takes 1.12–1.76 s; this is
@@ -217,12 +217,12 @@ runs it on each platform. All runs use Go 1.27.2, wazero v1.12.0,
 `079a7c36` by Zig 0.17.0 (wasm32-wasi, ReleaseSafe, sha256
 `18c5ac696faa06a5784543b881608c50291b333c20fd556b724f3e039fdb65ee`).
 
-| Platform    | Machine                        | Commit                                | Results                                                                           |
-| ----------- | ------------------------------ | ------------------------------------- | --------------------------------------------------------------------------------- |
-| Linux amd64 | CI, AMD EPYC 7763, 4 vCPU      | `55a2d794` (merge of `b7ef6e42`)      | [ci-linux-amd64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-amd64/)   |
-| Linux arm64 | CI, 4 vCPU                     | `55a2d794`                            | [ci-linux-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-arm64/)   |
-| macOS arm64 | CI, Apple M1 (virtual), 3 vCPU | `55a2d794`                            | [ci-darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-darwin-arm64/) |
-| macOS arm64 | Local Apple M5                 | `7bb8942d` with the benchmark changes | [darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-darwin-arm64/)       |
+| Platform | Machine | Commit | Results |
+|---|---|---|---|
+| Linux amd64 | CI, AMD EPYC 7763, 4 vCPU | `55a2d794` (merge of `b7ef6e42`) | [ci-linux-amd64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-amd64/) |
+| Linux arm64 | CI, 4 vCPU | `55a2d794` | [ci-linux-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-arm64/) |
+| macOS arm64 | CI, Apple M1 (virtual), 3 vCPU | `55a2d794` | [ci-darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-darwin-arm64/) |
+| macOS arm64 | Local Apple M5 | `7bb8942d` with the benchmark changes | [darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-darwin-arm64/) |
 
 Each directory holds `env.txt`, raw output for both backends and a benchstat
 `comparison.txt`. Shared runners are noisy, so read results as ratios within
@@ -240,23 +240,23 @@ follow-ups: [#1101](https://github.com/odogono/odgn-talk/issues/1101) for
 deferred-call age and rollback, and
 [#1103](https://github.com/odogono/odgn-talk/issues/1103) for the rest.
 
-| Workload                  | Measure                                                            | Limit    | Linux amd64 | Linux arm64 | macOS CI | Result |
-| ------------------------- | ------------------------------------------------------------------ | -------- | ----------- | ----------- | -------- | ------ |
-| Warm execution            | worst Run of core, collections, macro                              | ≤ 2×     | 1.78×       | 1.35×       | 1.49×    | Pass   |
-| Restore                   | `lifecycle/restore`                                                | ≤ 1.5×   | 0.20×       | 0.19×       | 0.19×    | Pass   |
-| Large Load                | `lifecycle/load-large`                                             | ≤ 2.5×   | 2.09×       | 1.56×       | 1.74×    | Pass   |
-| Load into a new Group     | `Load/core/loop`                                                   | ≤ 3×     | 23.9×       | 19.5×       | 17.4×    | Miss   |
-| Group on shared code      | `GroupInstantiation`                                               | ≤ 10×    | 107×        | 84×         | 88×      | Miss   |
-| Cold start                | first Group in a fresh process                                     | ≤ 250 ms | 1.57 s      | 1.40 s      | 1.50 s   | Miss   |
-| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3×     | 16–20×      | 11–19×      | 11–18×   | Miss   |
-| Value conversion          | `host/conversion`                                                  | ≤ 3×     | 7.5×        | 6.2×        | 4.8×     | Miss   |
-| Deferred call             | `BackendDeferredCall/history=0`                                    | ≤ 3×     | 16.7×       | 21.7×       | 22.8×    | Miss   |
-| Deferred call with age    | Zig `history=5000` ÷ `history=0`                                   | ≤ 1.2×   | 1.76×       | 1.89×       | 1.74×    | Miss   |
-| Rollback                  | `lifecycle/rollback`                                               | ≤ 2×     | 108×        | 104×        | 106×     | Miss   |
-| Messaging                 | `messaging/*`                                                      | ≤ 2×     | 2.9–6.9×    | 2.6–6.3×    | 3.5–5.3× | Miss   |
-| Multi-Group throughput    | `BackendMultiGroup/groups=16` req/s                                | ≥ 0.5×   | 0.20×       | 0.19×       | 0.26×    | Miss   |
-| Tail latency              | `BackendRequest` p99                                               | ≤ 3×     | 11.3×       | 8.9×        | 10.2×    | Miss   |
-| Retained memory           | `BackendRetainedMemory` heap per Group                             | ≤ 4×     | 38×         | 31×         | 38×      | Miss   |
+| Workload | Measure | Limit | Linux amd64 | Linux arm64 | macOS CI | Result |
+|---|---|---|---|---|---|---|
+| Warm execution | worst Run of core, collections, macro | ≤ 2× | 1.78× | 1.35× | 1.49× | Pass |
+| Restore | `lifecycle/restore` | ≤ 1.5× | 0.20× | 0.19× | 0.19× | Pass |
+| Large Load | `lifecycle/load-large` | ≤ 2.5× | 2.09× | 1.56× | 1.74× | Pass |
+| Load into a new Group | `Load/core/loop` | ≤ 3× | 23.9× | 19.5× | 17.4× | Miss |
+| Group on shared code | `GroupInstantiation` | ≤ 10× | 107× | 84× | 88× | Miss |
+| Cold start | first Group in a fresh process | ≤ 250 ms | 1.57 s | 1.40 s | 1.50 s | Miss |
+| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 16–20× | 11–19× | 11–18× | Miss |
+| Value conversion | `host/conversion` | ≤ 3× | 7.5× | 6.2× | 4.8× | Miss |
+| Deferred call | `BackendDeferredCall/history=0` | ≤ 3× | 16.7× | 21.7× | 22.8× | Miss |
+| Deferred call with age | Zig `history=5000` ÷ `history=0` | ≤ 1.2× | 1.76× | 1.89× | 1.74× | Miss |
+| Rollback | `lifecycle/rollback` | ≤ 2× | 108× | 104× | 106× | Miss |
+| Messaging | `messaging/*` | ≤ 2× | 2.9–6.9× | 2.6–6.3× | 3.5–5.3× | Miss |
+| Multi-Group throughput | `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.20× | 0.19× | 0.26× | Miss |
+| Tail latency | `BackendRequest` p99 | ≤ 3× | 11.3× | 8.9× | 10.2× | Miss |
+| Retained memory | `BackendRetainedMemory` heap per Group | ≤ 4× | 38× | 31× | 38× | Miss |
 
 The absolute figures behind those ratios, on Linux amd64, native then Zig:
 
@@ -321,23 +321,23 @@ amd64 runner was an AMD EPYC 9V45, not the 7763 of the first run. Results are in
 Eight limits now pass and seven miss. Native Go's fuel and logical bytes match
 Zig's on every Run, as before.
 
-| Workload                  | Measure                                                            | Limit    | Linux amd64 | Linux arm64 | macOS CI | Result |
-| ------------------------- | ------------------------------------------------------------------ | -------- | ----------- | ----------- | -------- | ------ |
-| Warm execution            | worst Run of core, collections, macro, excluding `fib@slice`       | ≤ 2×     | 1.78×       | 1.41×       | 0.98×    | Pass   |
-| Restore                   | `lifecycle/restore`                                                | ≤ 1.5×   | 0.18×       | 0.17×       | 0.12×    | Pass   |
-| Large Load                | `lifecycle/load-large`                                             | ≤ 2.5×   | 2.02×       | 1.43×       | 1.11×    | Pass   |
-| Load into a new Group     | `Load/core/loop`                                                   | ≤ 3×     | 2.58×       | 4.33×       | 1.98×    | Miss   |
-| Group on shared code      | `GroupInstantiation`                                               | ≤ 10×    | 6.1×        | 9.2×        | 14.4×    | Miss   |
-| Cold start                | first Group, warm `NORTHTALK_ZIG_CACHE_DIR`                        | ≤ 250 ms | 28 ms       | 43 ms       | 49 ms    | Pass   |
-| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3×     | 5.6–7.2×    | 4.9–9.2×    | 4.0–6.2× | Miss   |
-| Value conversion          | `host/conversion`                                                  | ≤ 3×     | 3.5×        | 3.8×        | 2.3×     | Miss   |
-| Deferred call             | `BackendDeferredCall/history=0`                                    | ≤ 3×     | 5.7×        | 13.0×       | 6.3×     | Miss   |
-| Deferred call with age    | Zig `history=5000` ÷ `history=0`                                   | ≤ 1.2×   | 1.00×       | 1.00×       | 1.03×    | Pass   |
-| Rollback                  | `lifecycle/rollback`                                               | ≤ 2×     | 4.7×        | 5.6×        | 3.9×     | Miss   |
-| Messaging                 | `messaging/*`                                                      | ≤ 2×     | 1.8–2.4×    | 1.5–2.4×    | 1.3–2.1× | Miss   |
-| Multi-Group throughput    | `BackendMultiGroup/groups=16` req/s                                | ≥ 0.5×   | 0.37×       | 0.30×       | 0.69×    | Miss   |
-| Tail latency              | `BackendRequest` p99                                               | ≤ 3×     | 2.1×        | 2.8×        | 2.7×     | Pass   |
-| Retained memory           | `BackendRetainedMemory` heap per Group                             | ≤ 4×     | 1.7×        | 1.7×        | 1.7×     | Pass   |
+| Workload | Measure | Limit | Linux amd64 | Linux arm64 | macOS CI | Result |
+|---|---|---|---|---|---|---|
+| Warm execution | worst Run of core, collections, macro, excluding `fib@slice` | ≤ 2× | 1.78× | 1.41× | 0.98× | Pass |
+| Restore | `lifecycle/restore` | ≤ 1.5× | 0.18× | 0.17× | 0.12× | Pass |
+| Large Load | `lifecycle/load-large` | ≤ 2.5× | 2.02× | 1.43× | 1.11× | Pass |
+| Load into a new Group | `Load/core/loop` | ≤ 3× | 2.58× | 4.33× | 1.98× | Miss |
+| Group on shared code | `GroupInstantiation` | ≤ 10× | 6.1× | 9.2× | 14.4× | Miss |
+| Cold start | first Group, warm `NORTHTALK_ZIG_CACHE_DIR` | ≤ 250 ms | 28 ms | 43 ms | 49 ms | Pass |
+| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 5.6–7.2× | 4.9–9.2× | 4.0–6.2× | Miss |
+| Value conversion | `host/conversion` | ≤ 3× | 3.5× | 3.8× | 2.3× | Miss |
+| Deferred call | `BackendDeferredCall/history=0` | ≤ 3× | 5.7× | 13.0× | 6.3× | Miss |
+| Deferred call with age | Zig `history=5000` ÷ `history=0` | ≤ 1.2× | 1.00× | 1.00× | 1.03× | Pass |
+| Rollback | `lifecycle/rollback` | ≤ 2× | 4.7× | 5.6× | 3.9× | Miss |
+| Messaging | `messaging/*` | ≤ 2× | 1.8–2.4× | 1.5–2.4× | 1.3–2.1× | Miss |
+| Multi-Group throughput | `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.37× | 0.30× | 0.69× | Miss |
+| Tail latency | `BackendRequest` p99 | ≤ 3× | 2.1× | 2.8× | 2.7× | Pass |
+| Retained memory | `BackendRetainedMemory` heap per Group | ≤ 4× | 1.7× | 1.7× | 1.7× | Pass |
 
 The absolute figures on Linux amd64, native then Zig:
 
@@ -611,11 +611,11 @@ gone. `TestZigBackendDeferredAnswerRidesThePump` checks the frames sent.
 Interleaved local A/B on an Apple M5, 20,000 iterations, five rounds, p50 µs
 (main 4c84ef53 / this change):
 
-| Benchmark                          | main        | this change |
-| ---------------------------------- | ----------- | ----------- |
-| `BackendDeferredCall/history=0`    | 29.04–29.50 | 24.21–25.00 |
+| Benchmark | main | this change |
+| --- | --- | --- |
+| `BackendDeferredCall/history=0` | 29.04–29.50 | 24.21–25.00 |
 | `BackendDeferredCall/history=5000` | 29.04–29.71 | 24.17–24.83 |
-| `BackendRequest`                   | 8.33–8.71   | 8.33–8.58   |
+| `BackendRequest` | 8.33–8.71 | 8.33–8.58 |
 
 That is about 17% off a deferred call, close to the 4 µs export the issue
 estimated, with no change to Requests. Allocations are unchanged (144 per
