@@ -12,12 +12,14 @@ The initial Woodpecker workflows supplement GitHub Actions:
 - `.woodpecker/tooling.yaml` runs the TS workflow's stack and tooling jobs:
   workspace typechecking, generated Lints, CLI/editor/Folio/extension tests,
   builds and Node runtime checks.
+- `.woodpecker/conventions.yaml` runs the existing PR title and changelog
+  checker on PR code updates and metadata edits, with full Git history.
 
 These workflows do not yet cover the complete Actions matrix, including the
-Conventions, package/browser checks, Go SQLite module, fuzz campaigns,
+package/browser checks, Go SQLite module, fuzz campaigns,
 Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
-broader Zig and platform matrix. Keep the Actions requirements until equivalent
-coverage is available.
+broader Zig and platform matrix. Keep any additional Actions requirements until
+equivalent coverage is available.
 
 ## Linux worker image
 
@@ -30,8 +32,8 @@ docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 too
 
 Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
 compiler needed for Go race tests. The default image uses Node 22 for parity with
-the Actions stack and CLI
-jobs. The `node24` image is used only for the required SQLite and notification
+the Actions stack and CLI jobs. The `node24` image is used only for the required
+SQLite and notification
 runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
 both the build command and workflows whenever its image changes. Woodpecker
 uses existing local images by default.
@@ -43,7 +45,61 @@ The Spec and tooling workflows each report a separate status, and can run
 alongside the core workflow as agent capacity permits. Tooling steps run
 sequentially in their shared workspace to keep their generated builds ordered.
 
-The workflow selects an agent with `platform=linux/amd64` and `backend=docker`.
+Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
+Conventions additionally requires `role=conventions`.
+
+### Dedicated Conventions worker
+
+Reserve one agent for Conventions so the required merge check does not queue
+behind core, Spec or tooling workflows. Add this service to the server's existing
+Compose file, reusing its `agent_secret` secret and server network:
+
+```yaml
+services:
+  conventions-agent:
+    image: woodpeckerci/woodpecker-agent:v3.19.0
+    command: agent
+    restart: unless-stopped
+    depends_on:
+      - server
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    volumes:
+      - conventions-agent-config:/etc/woodpecker
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - agent_secret
+    environment:
+      WOODPECKER_SERVER: server:9000
+      WOODPECKER_AGENT_SECRET_FILE: /run/secrets/agent_secret
+      WOODPECKER_HOSTNAME: taito-conventions
+      WOODPECKER_BACKEND: docker
+      WOODPECKER_MAX_WORKFLOWS: "1"
+      WOODPECKER_AGENT_LABELS: platform=linux/amd64,backend=docker,!role=conventions,repo=*
+
+volumes:
+  conventions-agent-config:
+```
+
+The mandatory `!role=conventions` agent label accepts only workflows explicitly
+requesting `role: conventions`. General agents omit that role, so they cannot
+take Conventions jobs. Keep the dedicated agent's config volume separate from
+other agents so it receives its own agent ID. It serves Conventions workflows
+from all activated repositories that request this role.
+
+Build the Linux worker image on that host, then start the agent **before**
+deploying the workflow label:
+
+```sh
+docker compose config --quiet
+docker compose up -d --no-deps conventions-agent
+```
+
+The general Linux agent can keep its existing two-workflow capacity. This
+reserves queue capacity, while CPU, memory and disk remain shared on the host.
+Verify Conventions runs on `taito-conventions` while general workflows are
+busy. To roll back, remove the workflow's `role` label first; stop the dedicated
+agent only after those labelled workflows have finished or been cancelled.
 
 ### Persistent Go caches
 
@@ -103,3 +159,32 @@ a new event or start a manual pipeline after the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
 reported the expected statuses. Existing Actions requirements remain separate.
+
+### Required Conventions check
+
+The Conventions adapter reads the current PR title, body, base branch and head
+from GitHub's public API, then invokes `tools/commits/check.ts pr` with metadata
+in environment variables. It rejects stale revisions and API failures. It
+requires a public GitHub repository and uses one unauthenticated API request
+per run, subject to GitHub's public API rate limit.
+
+Woodpecker normally gives `pull_request` and `pull_request_metadata` events
+different status names. Configure this on the **server** to keep Conventions
+edits on the same required status while preserving other workflow names and
+matrix suffixes:
+
+```yaml
+WOODPECKER_STATUS_CONTEXT_FORMAT: '{{ .context }}/{{ if and (eq .event "pull_request_metadata") (eq .workflow "conventions") }}pr{{ else }}{{ .event }}{{ end }}/{{ .workflow }}{{if not (eq .axis_id 0)}}/{{.axis_id}}{{end}}'
+```
+
+Recreate the server after changing its environment. Verify an invalid title and
+a body requiring a missing changelog fragment both fail the existing
+`ci/woodpecker/pr/conventions` status, and restoring valid metadata makes that
+same status pass. Only then replace the Actions-bound `conventions` requirement
+with `ci/woodpecker/pr/conventions`. Select **Any source**, since Woodpecker
+posts OAuth commit statuses rather than GitHub Actions checks. Keep any other
+required checks and branch protection settings intact.
+
+PR branches must contain the Conventions workflow and adapter. Update existing
+branches from `main` before requiring the check for them. GitHub's Conventions
+workflow can continue reporting its result as an additional check.
