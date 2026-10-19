@@ -17,6 +17,8 @@ import {
   encodeBinaryFrame,
   isRequestPumpBinary,
   requestPumpFeature,
+  callbacksFeature,
+  isCallbackResult,
 } from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
 import { guestPayload } from './codec';
@@ -50,6 +52,7 @@ export const features = [
 export const optionalFeatures = [
   'object-elements-v1',
   requestPumpFeature,
+  callbacksFeature,
 ] as const;
 
 export type Versions = {
@@ -124,6 +127,7 @@ export class Session {
   /** Whether the guest accepts Object Collection declarations. */
   readonly elements: boolean;
   readonly requestPump: boolean;
+  readonly callbacks: boolean;
   #token = 0n;
 
   nextToken(): Raw {
@@ -137,15 +141,22 @@ export class Session {
     module: WebAssembly.Module,
     diagnostics: Diagnostics,
     private readonly registry: Registry,
+    binaryCallbacks = true,
   ) {
     this.reactor = new Reactor(module, diagnostics);
     const hello = this.exchange('hello', {
       protocol: 1,
-      features: [...features, ...optionalFeatures],
+      features: [
+        ...features,
+        ...optionalFeatures.filter(
+          f => binaryCallbacks || f !== callbacksFeature,
+        ),
+      ],
     });
     const offered = new Set(textsOf(field(hello, 'features')));
     this.elements = offered.has('object-elements-v1');
     this.requestPump = offered.has(requestPumpFeature);
+    this.callbacks = binaryCallbacks && offered.has(callbacksFeature);
     const missing = features.filter(f => !offered.has(f));
     if (missing.length) {
       throw new InstanceLostError(`talk.wasm lacks ${missing.join(', ')}`);
@@ -175,7 +186,9 @@ export class Session {
     const binaryExchange = this.requestPump && binaryMethods.has(m);
     let initial = true;
     for (;;) {
-      const binary = binaryExchange && initial;
+      const binary =
+        (binaryExchange && initial) ||
+        (this.callbacks && isCallbackResult(frame.m as string));
       const input = binary
         ? new Uint8Array(
             encodeBinaryFrame(frameTree(frame), {
@@ -185,13 +198,17 @@ export class Session {
         : encoder.encode(frameJSON(frame));
       const output = this.reactor.frameBytes(input);
       const binaryReply = isRequestPumpBinary(new Uint8Array(output));
-      if (binaryReply && !binaryExchange) {
-        throw new InstanceLostError('Unnegotiated binary reply');
-      }
       const packet = binaryReply
         ? decodeBinaryFrame(output)
         : readReply(decoder.decode(output));
       initial = false;
+      const need = field(packet, 'need');
+      if (
+        binaryReply &&
+        (need === undefined ? !binaryExchange : !this.callbacks)
+      ) {
+        throw new InstanceLostError('Unnegotiated binary reply');
+      }
       if (intOf(field(packet, 'ref')) !== ref) {
         throw new InstanceLostError(`The reply to ${m} has another ref`);
       }
@@ -200,7 +217,6 @@ export class Session {
       if (err !== undefined) {
         throw failure(err);
       }
-      const need = field(packet, 'need');
       if (binaryExchange && !binaryReply && need === undefined) {
         throw new InstanceLostError(
           'The binary exchange ended with a JSON success',

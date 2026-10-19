@@ -37,6 +37,8 @@ export type WasmSource =
   | string;
 
 export type CoreOptions = {
+  /** Request binary callbacks when offered. False keeps JSON for compatibility checks. */
+  binaryCallbacks?: boolean;
   /** Lines the reactor writes to stdout or stderr. Defaults to console.warn. */
   diagnostics?: (line: string) => void;
   /** The reactor. Defaults to `talk.wasm` beside this module. */
@@ -95,7 +97,11 @@ export class WasmCore {
   readonly #groupCore: GroupCore;
 
   /** @internal Use createCore. */
-  constructor(module: WebAssembly.Module, diagnostics: (line: string) => void) {
+  constructor(
+    module: WebAssembly.Module,
+    diagnostics: (line: string) => void,
+    private readonly binaryCallbacks = true,
+  ) {
     this.#module = module;
     this.#diagnostics = diagnostics;
     this.#libraries = this.#session();
@@ -108,19 +114,24 @@ export class WasmCore {
   }
 
   #session(): Session {
-    return new Session(this.#module, this.#diagnostics, {
-      handleOf: def => {
-        let handle = this.#handles.get(def);
-        if (handle === undefined) {
-          const n = this.#named.get(def.name) ?? 0;
-          this.#named.set(def.name, n + 1);
-          handle = n ? `${def.name}#${n + 1}` : def.name;
-          this.#handles.set(def, handle);
-        }
-        return handle;
+    return new Session(
+      this.#module,
+      this.#diagnostics,
+      {
+        handleOf: def => {
+          let handle = this.#handles.get(def);
+          if (handle === undefined) {
+            const n = this.#named.get(def.name) ?? 0;
+            this.#named.set(def.name, n + 1);
+            handle = n ? `${def.name}#${n + 1}` : def.name;
+            this.#handles.set(def, handle);
+          }
+          return handle;
+        },
+        kinds: this.#kinds,
       },
-      kinds: this.#kinds,
-    });
+      this.binaryCallbacks,
+    );
   }
 
   defineCapability = defineCapability;
@@ -255,4 +266,5 @@ export const createCore = async (o: CoreOptions = {}): Promise<WasmCore> =>
     await compile(o.wasm ?? new URL('./talk.wasm', import.meta.url)),
     // eslint-disable-next-line no-console -- the reactor's own fatal errors, unless the Host takes them.
     o.diagnostics ?? (line => console.warn(`talk.wasm: ${line}`)),
+    o.binaryCallbacks,
   );

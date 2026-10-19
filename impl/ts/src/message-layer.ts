@@ -9,5 +9,6 @@ export {
   decodeBinaryFrame,
   isRequestPumpBinary,
   requestPumpFeature,
+  callbacksFeature,
 } from './request-pump-binary';
 export { JsonNumber, JsonObject, readOrderedJSON, type Json } from './readers';

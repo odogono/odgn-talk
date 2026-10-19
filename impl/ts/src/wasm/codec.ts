@@ -6,7 +6,13 @@ import { encodeValue } from '../encoding';
 import { HostError } from '../errors';
 import type { HostObject } from '../objects';
 import { fromJson } from '../readers';
-import { functionValue, patternValue, text, type Value } from '../values';
+import {
+  functionValue,
+  patternValue,
+  requireValue,
+  text,
+  type Value,
+} from '../values';
 import { quoteJSON } from '../encoding';
 import { Raw, type Json } from './wire';
 
@@ -63,16 +69,19 @@ const checkOwned = (codec: Codec, v: Value): void => {
 };
 
 export const encode = (codec: Codec, v: Value): Raw => {
+  // Keep Host return validation synchronous even when JSON encoding is deferred.
+  requireValue(v);
   checkOwned(codec, v);
   return new Raw(
-    encodeValue(v, other => {
-      if (other.kind === 'pattern') {
-        return `{"$pattern":${quoteJSON(other.patternSource()!)}}`;
-      }
-      const f = other.asFunction()!;
-      const code = f.code as GuestFunction;
-      return `{"$function":[${quoteJSON(f.home)},${quoteJSON(other.toString())},${quoteJSON(code.token)}]}`;
-    }),
+    () =>
+      encodeValue(v, other => {
+        if (other.kind === 'pattern') {
+          return `{"$pattern":${quoteJSON(other.patternSource()!)}}`;
+        }
+        const f = other.asFunction()!;
+        const code = f.code as GuestFunction;
+        return `{"$function":[${quoteJSON(f.home)},${quoteJSON(other.toString())},${quoteJSON(code.token)}]}`;
+      }),
     v,
   );
 };

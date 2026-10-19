@@ -21,9 +21,17 @@ export class Raw {
   readonly [raw] = true;
   /** `value`, when given, is the Value `json` encodes. */
   constructor(
-    readonly json: string,
+    private source: string | (() => string),
     readonly value?: Value,
   ) {}
+
+  /** Binary frames use `value` directly; only JSON frames need its encoding. */
+  get json(): string {
+    if (typeof this.source === 'function') {
+      this.source = this.source();
+    }
+    return this.source;
+  }
 }
 
 export type Frame =

@@ -38,9 +38,13 @@ jobs:
       - run: zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
         working-directory: impl/zig
       - uses: ./.github/actions/setup-ts
-      # The same Host code on both Cores.
-      - run: bun test tests/wasm.test.ts examples/core-switch
+      # Host parity in both callback layouts, plus real protocol-frame checks.
+      - run: bun test tests/wasm.test.ts tests/callbacks-fields.test.ts tests/request-pump-binary.test.ts tests/combined.test.ts examples/core-switch
         working-directory: impl/ts
-      # Every Trace Case, in both replays, with the reactor behind the facade.
-      - run: bun tools/wasm-corpus.ts --quiet
+      # Every Trace Case in both replays, on Bun and Node, in both callback layouts.
+      - run: bun test tests/wasm-runtimes.test.ts
+        working-directory: impl/ts
+      - run: bunx playwright install --with-deps chromium-headless-shell
+        working-directory: impl/ts
+      - run: bun tools/request-pump-browser.ts
         working-directory: impl/ts

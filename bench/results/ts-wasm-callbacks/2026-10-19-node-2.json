@@ -1,0 +1,780 @@
+{
+  "environment": {
+    "runtime": {
+      "node": "26.12.0",
+      "acorn": "8.19.0",
+      "ada": "4.0.0",
+      "amaro": "1.1.11",
+      "ares": "1.34.8",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "libffi": "3.8.0",
+      "llhttp": "9.4.3",
+      "merve": "1.2.2",
+      "modules": "147",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.70.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "4.0.3",
+      "simdjson": "5.0.5",
+      "simdutf": "9.3.0",
+      "sqlite": "3.54.0",
+      "tz": "2026a",
+      "undici": "8.11.2",
+      "unicode": "17.0",
+      "uv": "1.53.0",
+      "uvwasi": "0.0.23",
+      "v8": "14.6.202.34-node.39",
+      "zlib": "1.2.12",
+      "zstd": "1.5.7"
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "os": "27.0.0",
+    "cpu": "Apple M5"
+  },
+  "artifactSha256": "fb70d30dad2b98414d56ad7f11fd6fd1c9b84568c966328d6fed3caf76066c3f",
+  "n": 1000,
+  "rounds": 30,
+  "warmup": 10,
+  "results": {
+    "host/immediate": {
+      "jsonNsPerCallback": 10634.500000000002,
+      "binaryNsPerCallback": 10062.667000000034,
+      "pairedRatio": 0.9410640715850939,
+      "samples": [
+        {
+          "json": {
+            "nsPerCallback": 13885.208000000033,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 22329.415999999983,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 15026.457999999991,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 21325.45799999997,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 15053.583000000004,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 13493.749999999978,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 12829.542000000003,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 13241.291000000047,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 13091.416999999978,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 11583.499999999958,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 11882.208999999988,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 11235.415999999987,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 11721.249999999998,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 11295.749999999998,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 11557.042000000025,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10875.91699999996,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 11410.459000000059,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10578.000000000087,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 11108.582999999953,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10588.582999999971,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10749.167000000056,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10062.667000000034,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10747.124999999984,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9830.708999999955,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10608.499999999935,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9843.54200000007,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10627.708000000099,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9943.499999999973,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10578.666999999996,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10051.375000000007,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10513.500000000022,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9746.832999999924,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10574.915999999916,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9833.458999999948,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10519.83300000006,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9866.875000000051,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10534.49999999998,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9891.540999999961,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10599.500000000035,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9865.87499999996,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10485.625000000027,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9868.583000000057,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10452.125000000024,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9880.416999999967,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10486.582999999997,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10110.99999999999,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10634.500000000002,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9808.667000000014,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10553.874999999947,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10118.66699999996,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10481.957999999962,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10167.709000000059,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10695.499999999924,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9989.874999999984,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10844.333000000006,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9969.08300000007,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10585.08299999994,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 10180.25,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 10417.249999999967,
+            "fuel": 27018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 9952.833000000055,
+            "fuel": 27018,
+            "alloc": 32072
+          }
+        }
+      ]
+    },
+    "host/properties": {
+      "jsonNsPerCallback": 5707.124999999905,
+      "binaryNsPerCallback": 5137.4580000001515,
+      "pairedRatio": 0.8950678724622383,
+      "samples": [
+        {
+          "json": {
+            "nsPerCallback": 7831.2499999999545,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5779.332999999951,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5804.082999999991,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5479.000000000042,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 6054.957999999942,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5148.791999999957,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5889.459000000215,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4888.582999999925,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5640.124999999898,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5005.540999999994,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5863.667000000078,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5308.334000000059,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5664.291999999932,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5199.583999999959,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5652.667000000065,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4998.207999999977,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5743.082999999842,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5189.958000000161,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5887.33400000001,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5319.666999999981,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5731.8330000000515,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4997.500000000173,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5662.375000000111,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5318.95899999995,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5628.832999999986,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5149.749999999813,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5707.124999999905,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4919.957999999951,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5670.083999999861,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5015.458000000081,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5698.417000000063,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4997.041999999965,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5530.665999999883,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4901.374999999916,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5673.000000000002,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5063.667000000123,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5556.500000000142,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5091.957999999977,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5599.124999999958,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5053.042000000005,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5493.6250000000655,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5187.417000000096,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5554.250000000138,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5002.915999999914,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5861.458000000084,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5137.4580000001515,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 6129.083000000037,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5336.83300000007,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5965.792000000192,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5373.790999999983,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5741.749999999911,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5371.417000000065,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5572.875000000067,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5173.207999999931,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5596.084000000019,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5008.874999999989,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5739.499999999907,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 4897.458999999799,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        },
+        {
+          "json": {
+            "nsPerCallback": 5792.58300000015,
+            "fuel": 17018,
+            "alloc": 32072
+          },
+          "binary": {
+            "nsPerCallback": 5074.457999999822,
+            "fuel": 17018,
+            "alloc": 32072
+          }
+        }
+      ]
+    }
+  }
+}
