@@ -10,8 +10,6 @@ package northtalk
 
 const zigSettlementsFeature = "settlements-fields-v1"
 
-var zbSettlementFields = []string{"call", "outcome", "value", "fuel", "code", "message"}
-
 // zigSettlement is one queued answer or fail: its settle-pump list item, and
 // its ordinary input for a flush.
 type zigSettlement struct {
@@ -24,7 +22,7 @@ type zigSettlement struct {
 // in Answer or Fail, and queues it for the next Pump.
 func (b *zigGroup) queueSettlement(c *Call, kind string, v Value, e *ScriptError, fuel int64, fields map[string]any) error {
 	w := &zbWriter{}
-	w.begin(zbSettlementFields, true)
+	w.begin(zbSettlement, true)
 	w.key("call")
 	w.ptext(string(c.id))
 	w.key("outcome")

@@ -117,7 +117,7 @@ func TestZigBackendReplyToleratesDeepPayloads(t *testing.T) {
 
 // These tests exercise the reader without New, zigEngine or talk.wasm. The
 // fixture holds independently written frames rather than the adapter's writer
-// output. #1332 will supply shared fields vectors once its Go step lands.
+// output. Shared schema/Value vectors are checked in zig_envelope_test.go.
 type zigReplyFixture struct {
 	Name, Sent, JSON, Fields string
 }

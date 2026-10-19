@@ -301,7 +301,7 @@ func (b zigReplyReader) decodeCompletion(body zigReply, p *zbPacket) (completion
 		result.Reports = make([]Report, 0, len(p.rows))
 	}
 	for _, row := range p.rows {
-		if err := add(zbReports[row.kind].kind, row.view); err != nil {
+		if err := add(zbReportSchemas[byte(row.kind)].name, row.view); err != nil {
 			completion.err = err
 			return
 		}

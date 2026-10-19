@@ -1,0 +1,41 @@
+{
+  "method": "Ten alternating before/after rounds; same embedded reactor, GOMAXPROCS=3. Fields exchange and callbacks. Request/RequestPump/CallPump: 5000 iterations/sample. Host immediate/properties/conversion/pump: 100 iterations/sample. Baseline source e4275bb0; compare the October 19 callback-fields report too.",
+  "archivedBaseline": "bench/results/go-zig-adapter/2026-10-19-callbacks-fields-darwin-arm64/after.txt",
+  "results": {
+    "BenchmarkBackendRequestPump-3": {
+      "beforeMedianNs": 7937.0,
+      "afterMedianNs": 7837.5,
+      "afterBeforeRatio": 0.9874637772458108
+    },
+    "BenchmarkBackendCallPump-3": {
+      "beforeMedianNs": 12442.5,
+      "afterMedianNs": 12413.0,
+      "afterBeforeRatio": 0.9976290938316255
+    },
+    "BenchmarkBackendRequest-3": {
+      "beforeMedianNs": 9042.0,
+      "afterMedianNs": 8912.0,
+      "afterBeforeRatio": 0.9856226498562265
+    },
+    "BenchmarkRun/host/immediate-3": {
+      "beforeMedianNs": 2262780.5,
+      "afterMedianNs": 2232761.0,
+      "afterBeforeRatio": 0.9867333574776697
+    },
+    "BenchmarkRun/host/properties-3": {
+      "beforeMedianNs": 1422814.0,
+      "afterMedianNs": 1399114.0,
+      "afterBeforeRatio": 0.9833428684283398
+    },
+    "BenchmarkRun/host/conversion-3": {
+      "beforeMedianNs": 5248151.0,
+      "afterMedianNs": 5190415.5,
+      "afterBeforeRatio": 0.9889988874176829
+    },
+    "BenchmarkRun/host/pump-3": {
+      "beforeMedianNs": 11893.0,
+      "afterMedianNs": 11787.5,
+      "afterBeforeRatio": 0.9911292356848567
+    }
+  }
+}
