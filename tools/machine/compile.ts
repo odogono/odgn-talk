@@ -861,6 +861,11 @@ export class BodyCompiler {
         case 'Let':
           patSites(s.pat);
           return;
+        case 'ask':
+          if (s.into) {
+            site(s.into.name, s.into);
+          }
+          return;
         case 'If':
           s.then.forEach(walk);
           for (const e of s.elses ?? []) {
@@ -2218,10 +2223,27 @@ export class BodyCompiler {
       return void this.emit('tell', [g, s.op, s.args.length]);
     }
     if (s.wait && this.join) {
+      if (s.into) {
+        this.fail(s.into, "a Join Member's answer is in the Join's list");
+      }
       return void this.emit('join-ask', [g, s.op, s.args.length]);
     }
     this.emit(s.wait ? 'ask-wait' : 'ask', [g, s.op, s.args.length]);
     this.emit('store', [0], ['it']);
+    if (s.into) {
+      // A Result Target is `put it into x`, with nothing between that can
+      // suspend or raise (ADR 0112).
+      this.pos(s.into, () => this.resultTarget(s.into));
+    }
+  }
+
+  resultTarget(n: Node) {
+    const p = this.resolve(n.name, n);
+    if (p.k === 'local') {
+      return void this.emit('move', [0, p.slot], [n.name]);
+    }
+    this.emit('load', [0], ['it']);
+    this.store(n.name, n);
   }
 
   send(s: Node) {

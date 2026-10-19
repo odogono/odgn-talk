@@ -652,7 +652,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `pass m` | with `finally` blocks open, those blocks innermost first; then `pass m` |
 | a Command Call `h a, …` | ⟦a⟧ … `call-handler h n` `store 0`, or `call-handler-wait h n` `store 0` with `and wait`. With no such Handler, `send-up h n`, or `send-up-wait h n` `store 0` with `and wait` |
 | a call statement `f(a)` | the call, `call-value-wait` in place of `call-value` with `and wait`, then `store 0` |
-| `ask g to op a, …` | ⟦a⟧ … `ask`, or `ask-wait` with `and wait`, then `store 0`, or `join-ask` in a Join |
+| `ask g to op a, …` | ⟦a⟧ … `ask`, or `ask-wait` with `and wait`, then `store 0`, or `join-ask` in a Join. With a Result Target `into x`, then `move 0 x` for a local, or `load 0` `store-var x` for a Script Variable |
 | `tell g to op a, …` | ⟦a⟧ … `tell` |
 | a `tell g` block | each line as the one-line call its Operation's mode allows: `tell g to op a, …`, `ask g to op a, …`, or `ask g to op a, … and wait`, in order. The block itself emits nothing |
 | `say e` | ⟦e⟧ `tell console write 1` |
@@ -806,6 +806,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Sends:** a spreading `send`'s `const` of its static name, `list 0`, `list-append`s and `list-extend`s are the `send`'s, while each item's own expression keeps its position.
 - **`tell` blocks:** a line's `ask`, `ask-wait`, `join-ask` or `tell`, and the `store 0` after an `ask`, are its Operation name, since the line has no `ask` or `tell` of its own.
+- **Result Targets:** the `move`, or the `load 0` and `store-var`, of an `ask`'s Result Target are its Name.
 - **Whose Clauses:** the `property` or `property-delimited` of the walk, and an ordinal's `const n`, are the clause's chunk word. Its other instructions, outside ⟦x⟧, ⟦d⟧ and ⟦c⟧, are its `whose`.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
