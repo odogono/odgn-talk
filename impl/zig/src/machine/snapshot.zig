@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 14;
+pub const format_version: u32 = 15;
 
 pub const Error = error{
     InvalidSave,
@@ -1030,6 +1030,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
                 try o.int(op.required());
                 try o.int(op.args.len);
                 try o.flag(op.command);
+                try o.int(op.labels.len);
+                for (op.labels) |l| try o.str(l);
             };
             try o.flag(sg.revoked);
             try o.flag(sg.disabled);
@@ -1188,7 +1190,7 @@ const SavedGrant = struct {
     disabled: bool,
 };
 
-const SavedOperation = struct { name: []const u8, mode: capabilities.Mode, required: usize, total: usize, command: bool };
+const SavedOperation = struct { name: []const u8, mode: capabilities.Mode, required: usize, total: usize, command: bool, labels: []const []const u8 };
 
 const Restoring = struct {
     i: In,
@@ -2004,7 +2006,9 @@ fn placeholder(g: *Group, saved: SavedGrant) !*capabilities.Grant {
             s.* = if (i < o.required) any else try capabilities.Shape.optional(a, any);
         }
         const result: ?*capabilities.Shape = if (o.mode == .fire_and_forget) null else try capabilities.Shape.kind(a, .any);
-        op.* = .{ .name = try a.dupe(u8, o.name), .args = args, .result = result, .mode = o.mode, .command = o.command, .host = .{ .call = unbound } };
+        const labels = try a.alloc([]const u8, o.labels.len);
+        for (o.labels, labels) |l, *x| x.* = try a.dupe(u8, l);
+        op.* = .{ .name = try a.dupe(u8, o.name), .args = args, .result = result, .mode = o.mode, .command = o.command, .labels = labels, .host = .{ .call = unbound } };
     }
     const capability = try a.create(capabilities.Capability);
     capability.* = .{ .name = try a.dupe(u8, saved.capability), .operations = ops };
@@ -2080,7 +2084,16 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
             const json = try r.kept();
             const capability = try r.kept();
             const ops = try k.alloc(SavedOperation, try i.count());
-            for (ops) |*o| o.* = .{ .name = try r.kept(), .mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave, .required = try i.small(usize), .total = try i.small(usize), .command = try i.flag() };
+            for (ops) |*o| {
+                o.name = try r.kept();
+                o.mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave;
+                o.required = try i.small(usize);
+                o.total = try i.small(usize);
+                o.command = try i.flag();
+                const labels = try k.alloc([]const u8, try i.count());
+                for (labels) |*l| l.* = try r.kept();
+                o.labels = labels;
+            }
             break :blk .{ .name = name, .json = json, .capability = capability, .ops = ops, .revoked = try i.flag(), .disabled = try i.flag() };
         };
         const rebound: ?*capabilities.Grant = if (r.options.grants) |x| x.call(x.context, out.name, saved.name) else null;
@@ -2917,6 +2930,12 @@ test "Argument Labels are in the Group Fingerprint and restore's declaration mat
     var restored: Result = .{};
     defer restored.deinit(gpa);
     try testing.expectEqual(Outcome.full, try restore(&same, bytes, .{ .grants = .{ .context = &grant, .call = Host.rebind } }, &restored));
+    // Unbound, the saved declarations still check the labelled call.
+    var unbound_group: Group = .init(gpa, null);
+    defer unbound_group.deinit();
+    var unbound_result: Result = .{};
+    defer unbound_result.deinit(gpa);
+    try testing.expectEqual(Outcome.full, try restore(&unbound_group, bytes, .{}, &unbound_result));
     // Labels that differ, or none, are a declaration mismatch.
     for ([_][]const []const u8{ &.{"toward"}, &.{} }) |labels| {
         ops[0].labels = labels;
