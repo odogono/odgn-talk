@@ -106,7 +106,7 @@ Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* only chunks and keys on the path to a root Name, or else `not a container` */
 PropertyTarget ::= ChunkLevel  /* a Container, or a key target with only chunks and keys on the path to me, it or the target; see chapter 4 */
 Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
-                          | 'to' Expression ':' CommandPhrase ) AndWait?
+                          | 'to' Expression ':' CommandPhrase ) ResultTarget? AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? ResultTarget? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
 ResultTarget   ::= 'into' Name
@@ -118,8 +118,8 @@ Exit           ::= 'exit' 'repeat'
 Next           ::= 'next' 'repeat'
 Throw          ::= 'throw' Expression
 Replace        ::= 'replace' 'first'? ChunkLevel 'in' Container 'with' Expression
-CallStatement  ::= Call AndWait?
-CommandCall    ::= CommandPhrase AndWait?
+CallStatement  ::= Call ResultTarget? AndWait?
+CommandCall    ::= CommandPhrase ResultTarget? AndWait?
 CommandPhrase  ::= Name ( Expression ( ( ',' Expression )* | ( Label Expression )+ ) )?
 ExpressionList ::= Expression ( ',' Expression )*
 SendList       ::= ListItem ( ',' ListItem )*
@@ -149,7 +149,7 @@ WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' B
 Event          ::= MessageName ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
 TellBlock      ::= 'tell' Expression NL ( OperationLine? NL )* 'end' 'tell'?
-OperationLine  ::= Word ExpressionList? AndWait?
+OperationLine  ::= Word ExpressionList? ResultTarget? AndWait?
 TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 
 /* ## expressions */

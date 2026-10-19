@@ -49,7 +49,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - the reply it waits for, if it waits in a `send … and wait` or a Function Value call to another Script
   - its wait, with each deadline as an absolute Instant and its place in the order waits began
   - the deadline of each Timeout Block it is inside, as an absolute Instant ([chapter 5](05-handlers-messages-and-scheduling.md#timeout-blocks))
-  - its pending calls, and its Join's members with the answers that have arrived
+  - its pending calls, and its Join's members with the answers that have arrived and each member's optional Result Target (the owning frame and local slot, or Script Variable index)
   - its dispatch-context stack, retained continuations, activation PCs and operand stacks, owning-frame identities and shared locals, the try being dispatched and selection boundaries
   - its pending acceptance or offer target and evaluated arguments, cleanup queue and progress, inherited/entered scope identities, and per-Run offer-attempt counter
   - its cleanup stack
@@ -144,7 +144,8 @@ Each pending call is a suspending Operation call that hadn't been answered when 
 - **Deadlines:** a settled call's `maxPending` or `MaxWait` deadline, and a Timeout Block's deadline, keep their saved Instants. A reissued or adopted call overdue at the first Pump times out at step 3, unless it has been answered by then.
 - **Misuse:** settling a call id that isn't pending, settling one twice, or settling once the first Pump has started, is the Host error `unknown call`. Each is known at the call, so `Settle` returns it, and nothing is queued.
 
-- **Joins:** each member is settled on its own. A Join still waits for all its members, and one member's failure fails the Join as usual ([chapter 5](05-handlers-messages-and-scheduling.md#joins)).
+- **Result Targets:** an ordinary pending call resumes before its `store 0` and target stores, so restore assigns its eventual result once without repeating the Host effect. A Join preserves the target of every started member, including repeated executions of one member line, and early answers without writing any target. Restore validates each target's kind and index against its owning frame/code unit; a non-writable or out-of-range destination, missing owner or inconsistent member descriptor is `invalid save`. This retained control requires a private save-format change in each Core that adds it; older formats are rejected rather than silently losing assignments.
+- **Joins:** each member is settled on its own. A Join still waits for all its members, writes its targets in start order only after whole-Join success, and one member's failure fails the Join without writing any member target ([chapter 5](05-handlers-messages-and-scheduling.md#joins)).
 - **Fire-and-forget and immediate calls** never pend, so they never need settling.
 
 ### Across Scripts

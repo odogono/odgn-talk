@@ -477,7 +477,7 @@ A Capability with an Operation that the Host declares may take time to answer, s
 _Avoid_: async function, blocking call
 
 **Result Target**:
-The `into name` that may end an `ask`, naming where the Operation's result is put as well as `it`.
+The `into name` on a result-producing call statement, Command Call, `ask`, `tell`-block Operation line or waiting `send`, naming where its answer is put. A Join Member's Result Target receives its answer when the whole Join succeeds; `it` holds the Join's list of answers.
 _Avoid_: result binding, into clause, out parameter
 
 **Message Path**:

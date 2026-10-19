@@ -288,6 +288,17 @@ type Import = {
 };
 
 export type Options = {
+  /** Optional declarations for checking/lowering Operation and Host Command modes. */
+  grants?: Record<
+    string,
+    Record<
+      string,
+      {
+        command?: boolean;
+        mode: 'immediate' | 'suspending' | 'fire-and-forget';
+      }
+    >
+  >;
   // A name that resolves to nothing is a well-known object, not an error.
   lenient?: boolean;
   // Names a Library imports resolve against these sources, so the compiler
@@ -841,6 +852,15 @@ export class BodyCompiler {
     };
     const walk = (s: Node) => {
       exprSites(s);
+      if (s.into) {
+        if (
+          this.u.definitionIndex.has(s.into.name) ||
+          this.u.imports.get(s.into.name)?.what === 'constant'
+        ) {
+          this.fail(s.into, `\`${s.into.name}\` can't be put into`);
+        }
+        site(s.into.name, s.into);
+      }
       switch (s.k) {
         case 'Put':
         case 'add':
@@ -861,10 +881,8 @@ export class BodyCompiler {
         case 'Let':
           patSites(s.pat);
           return;
-        case 'ask':
-          if (s.into) {
-            site(s.into.name, s.into);
-          }
+        case 'TellBlock':
+          s.lines.forEach(walk);
           return;
         case 'If':
           s.then.forEach(walk);
@@ -1312,11 +1330,15 @@ export class BodyCompiler {
         return this.askTell(s);
       case 'TellBlock':
         // Each line is the one-line call its Operation's mode allows (ADR
-        // 0063). With no declarations here, a line is lowered as an `ask`,
-        // which is what loading chooses for any Operation but a
-        // fire-and-forget one.
+        // 0063). Without optional Grant declarations, default to `ask`,
+        // which loading chooses for any non-fire-and-forget Operation.
         for (const line of s.lines) {
-          this.askTell({ ...line, k: 'ask', target: s.target });
+          const mode = this.u.opts.grants?.[s.target.name]?.[line.op]?.mode;
+          this.askTell({
+            ...line,
+            k: mode === 'fire-and-forget' && !line.wait ? 'tell' : 'ask',
+            target: s.target,
+          });
         }
         return;
       case 'Send':
@@ -2183,38 +2205,83 @@ export class BodyCompiler {
   }
 
   command(s: Node) {
+    if (this.join && s.wait) {
+      this.fail(s, 'a waiting Command Call is not in a join');
+    }
     if (s.name === 'say') {
+      if (s.into) {
+        this.fail(s, '`say` has no result (wrong mode)');
+      }
       s.args.forEach((a: Node) => this.expr(a));
       this.at(s);
       this.emit('tell', ['console', 'write', s.args.length]);
       return;
     }
-    s.args.forEach((a: Node) => this.expr(a));
-    this.at(s);
     const local = this.u.handlers.has(s.name);
     const imp = this.u.imports.get(s.name);
+    if (!local && imp?.what !== 'handler') {
+      const offered = Object.entries(this.u.opts.grants ?? {}).filter(
+        ([, ops]) => ops[s.name]?.command,
+      );
+      if (offered.length > 1) {
+        this.fail(s, `ambiguous Host Command \`${s.name}\``);
+      }
+      if (offered.length) {
+        const [grant, ops] = offered[0]!;
+        return this.askTell({
+          ...s,
+          k:
+            ops[s.name]!.mode === 'fire-and-forget' && !s.wait ? 'tell' : 'ask',
+          target: { k: 'Name', name: grant },
+          op: s.name,
+        });
+      }
+      if (s.into && !s.wait) {
+        this.fail(s, 'a Result Target on a Message Path call needs `and wait`');
+      }
+    }
+    s.args.forEach((a: Node) => this.expr(a));
+    this.at(s);
     if (local || imp?.what === 'handler') {
       this.emit(s.wait ? 'call-handler-wait' : 'call-handler', [
         imp ? `${imp.library}:${imp.name}` : s.name,
         s.args.length,
       ]);
       this.emit('store', [0], ['it']);
+      this.storeResultTarget(s.into);
     } else if (s.wait) {
       this.emit('send-up-wait', [s.name, s.args.length]);
       this.emit('store', [0], ['it']);
+      this.storeResultTarget(s.into);
     } else {
       this.emit('send-up', [s.name, s.args.length]);
     }
   }
 
   callStatement(s: Node) {
+    if (this.join && s.wait) {
+      this.fail(s, 'a waiting call statement is not in a join');
+    }
     this.call(s.call, s.wait);
     this.emit('store', [0], ['it']);
+    this.storeResultTarget(s.into);
   }
 
   askTell(s: Node) {
     if (s.target.k !== 'Name') {
       this.fail(s.target, "`ask` and `tell` take a Grant's name");
+    }
+    const mode = this.u.opts.grants?.[s.target.name]?.[s.op]?.mode;
+    if (s.k === 'tell' && s.into) {
+      this.fail(s, 'a fire-and-forget Operation has no result (wrong mode)');
+    }
+    if (
+      mode &&
+      (s.k === 'tell'
+        ? mode !== 'fire-and-forget'
+        : mode !== (s.wait ? 'suspending' : 'immediate'))
+    ) {
+      this.fail(s, 'the call does not fit its Operation (wrong mode)');
     }
     s.args.forEach((a: Node) => this.expr(a));
     this.at(s);
@@ -2223,18 +2290,34 @@ export class BodyCompiler {
       return void this.emit('tell', [g, s.op, s.args.length]);
     }
     if (s.wait && this.join) {
-      if (s.into) {
-        this.fail(s.into, "a Join Member's answer is in the Join's list");
-      }
-      return void this.emit('join-ask', [g, s.op, s.args.length]);
+      return void this.emit('join-ask', [
+        g,
+        s.op,
+        s.args.length,
+        ...this.joinTarget(s.into),
+      ]);
     }
     this.emit(s.wait ? 'ask-wait' : 'ask', [g, s.op, s.args.length]);
     this.emit('store', [0], ['it']);
-    if (s.into) {
-      // A Result Target is `put it into x`, with nothing between that can
-      // suspend or raise (ADR 0112).
-      this.pos(s.into, () => this.resultTarget(s.into));
+    this.storeResultTarget(s.into);
+  }
+
+  storeResultTarget(n?: Node) {
+    if (n) {
+      this.pos(n, () => this.resultTarget(n));
     }
+  }
+
+  // Staged optional operands; machine.toml adopts these with the Cores.
+  joinTarget(n?: Node): Arg[] {
+    if (!n) {
+      return [];
+    }
+    const p = this.resolve(n.name, n);
+    if (p.k !== 'local' && p.k !== 'variable') {
+      this.fail(n, `\`${n.name}\` can't be put into`);
+    }
+    return [p.k, p.slot];
   }
 
   resultTarget(n: Node) {
@@ -2247,6 +2330,9 @@ export class BodyCompiler {
   }
 
   send(s: Node) {
+    if (s.into && !s.wait) {
+      this.fail(s, 'a Result Target on `send` needs `and wait`');
+    }
     // A spread in `with` builds the arguments as one list, below the
     // receiver, under the name as text (ADR 0064).
     if (s.args.some((a: Node) => a.k === 'Spread')) {
@@ -2266,11 +2352,12 @@ export class BodyCompiler {
       this.expr(s.target);
       this.at(s);
       if (s.wait && this.join) {
-        return void this.emit('join-send-spread', []);
+        return void this.emit('join-send-spread', this.joinTarget(s.into));
       }
       this.emit(s.wait ? 'send-spread-wait' : 'send-spread', []);
       if (s.wait) {
         this.emit('store', [0], ['it']);
+        this.storeResultTarget(s.into);
       }
       return;
     }
@@ -2283,16 +2370,24 @@ export class BodyCompiler {
     this.at(s);
     if (s.name) {
       if (s.wait && this.join) {
-        return void this.emit('join-send-named', [s.args.length]);
+        return void this.emit('join-send-named', [
+          s.args.length,
+          ...this.joinTarget(s.into),
+        ]);
       }
       this.emit(s.wait ? 'send-named-wait' : 'send-named', [s.args.length]);
     } else if (s.wait && this.join) {
-      return void this.emit('join-send', [s.msg, s.args.length]);
+      return void this.emit('join-send', [
+        s.msg,
+        s.args.length,
+        ...this.joinTarget(s.into),
+      ]);
     } else {
       this.emit(s.wait ? 'send-wait' : 'send', [s.msg, s.args.length]);
     }
     if (s.wait) {
       this.emit('store', [0], ['it']);
+      this.storeResultTarget(s.into);
     }
   }
 
