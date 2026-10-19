@@ -31,9 +31,9 @@ func (t *zigTraceLines) take() []string {
 	return lines
 }
 
-// zigCombinedLayouts runs f on new guests negotiating each binary candidate.
+// zigCombinedLayouts runs f on new guests negotiating the fields layout.
 func zigCombinedLayouts(t *testing.T, f func(t *testing.T)) {
-	for _, layout := range []string{"map", "fields"} {
+	for _, layout := range []string{"fields"} {
 		t.Run(layout, func(t *testing.T) {
 			old := zigRequestPump
 			zigRequestPump = layout

@@ -27,7 +27,6 @@ export type EnvelopeEntry = {
   readonly fields: readonly EnvelopeField[];
 };
 export const envelopeFeatures = [
-  'request-pump-map-v1',
   'request-pump-fields-v1',
   'callbacks-fields-v1',
   'settlements-fields-v1',

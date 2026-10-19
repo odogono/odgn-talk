@@ -799,7 +799,7 @@ func (b *zigGroup) groupHandle() string {
 // checkHello opens the guest's session and checks it offers every feature
 // the adapter requires.
 func (b *zigGroup) checkHello() error {
-	binary, layout, wanted, err := zigRequestPumpFeature()
+	binary, wanted, err := zigRequestPumpFeature()
 	if err != nil {
 		return err
 	}
@@ -814,7 +814,7 @@ func (b *zigGroup) checkHello() error {
 	if callbacks {
 		features = append(features, zigCallbacksFeature)
 	}
-	if wanted && layout == zbFields {
+	if wanted {
 		features = append(features, zigSettlementsFeature)
 	}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": features})
@@ -832,9 +832,9 @@ func (b *zigGroup) checkHello() error {
 				b.reg.elements = true
 			case binary:
 				// Binary frames only after the reply shows the feature.
-				b.reg.binary, b.reg.layout = wanted, layout
+				b.reg.binary = wanted
 			case zigSettlementsFeature:
-				b.reg.settlements = wanted && layout == zbFields
+				b.reg.settlements = wanted
 			}
 		}
 		for _, required := range zigFeatures {

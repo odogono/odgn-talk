@@ -34,10 +34,9 @@ type zigRegistry struct {
 	definitions   map[*CapabilityDef]string
 	// elements is whether the guest offered object-elements-v1 (#1143).
 	elements bool
-	// binary is whether the guest took zigRequestPump's candidate (#1245),
-	// whose layout Request, Function call and Pump frames then use.
+	// binary is whether the guest took request-pump-fields-v1 (#1245), so
+	// Request, Function call and Pump frames are binary.
 	binary bool
-	layout zbLayout
 	// settlements is whether the guest took settlements-fields-v1 (#1320).
 	settlements bool
 }

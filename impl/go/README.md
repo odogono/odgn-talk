@@ -2042,9 +2042,8 @@ combined APIs use the guest's combined messages after ordinary admission checks.
 Their Pending is registered before sending; context cancellation uses the
 exchange's token until its final reply, then the delivery id. Unsupported guests
 refuse combined operations before admission, without a two-call fallback.
-Set `TALK_ZIG_REQUEST_PUMP=map` to measure the other envelope, `fields` to select
-fields explicitly, or an empty value to keep JSON and test unsupported combined
-calls. `BackendRequestPump` and `BackendCallPump` benchmark the public APIs;
+Set `TALK_ZIG_REQUEST_PUMP=fields` to select fields explicitly, or an empty
+value to keep JSON and test unsupported combined calls. `BackendRequestPump` and `BackendCallPump` benchmark the public APIs;
 `BackendRequest` retains the separate-call workload.
 
 Host callbacks negotiate `callbacks-fields-v1` by default as well, so the

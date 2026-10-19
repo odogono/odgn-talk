@@ -70,11 +70,7 @@ jobs:
           CGO_ENABLED: '0'
           TALK_ZIG_REQUEST_PUMP: ''
       - run: impl/go/zig-experimental-check.sh -race
-      # The same suites over each binary Request/Pump candidate (#1245).
-      - run: impl/go/zig-experimental-check.sh
-        env:
-          CGO_ENABLED: '0'
-          TALK_ZIG_REQUEST_PUMP: map
+      # The same suites over the binary Request/Pump exchange (#1245).
       - run: impl/go/zig-experimental-check.sh
         env:
           CGO_ENABLED: '0'

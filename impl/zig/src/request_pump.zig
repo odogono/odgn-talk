@@ -7,10 +7,10 @@ const model = @import("value.zig");
 const Allocator = std.mem.Allocator;
 
 pub const prefix = "NTB\x01";
-pub const feature_map = "request-pump-map-v1";
 pub const feature_fields = "request-pump-fields-v1";
 
-pub const Layout = enum(u8) { map = 0, fields = 1 };
+/// The layout byte after the prefix: the fields layout, the only one.
+pub const layout_fields: u8 = 0x01;
 
 pub const tag = struct {
     pub const nothing: u8 = 0x00;
@@ -25,7 +25,7 @@ pub const tag = struct {
     pub const protocol_text: u8 = 0x12;
 };
 
-/// Inputs and replies of the fields candidate, by message tag.
+/// Request/Pump inputs and replies, by message tag.
 pub const Message = enum(u8) {
     request = 0x01,
     call = 0x02,
@@ -36,19 +36,6 @@ pub const Message = enum(u8) {
     settle_pump = 0x0a,
     admission = 0x81,
     completion = 0x82,
-
-    /// The map candidate's `m`.
-    pub fn name(m: Message) []const u8 {
-        return switch (m) {
-            .request => "request",
-            .call => "call",
-            .pump => "pump",
-            .request_pump => "request-pump",
-            .call_pump => "call-pump",
-            .settle_pump => "settle-pump",
-            .admission, .completion => "",
-        };
-    }
 
     pub fn fields(m: Message) []const []const u8 {
         return switch (m) {
@@ -62,16 +49,6 @@ pub const Message = enum(u8) {
             .completion => &.{ "ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace" },
         };
     }
-
-    pub fn ofName(s: []const u8) ?Message {
-        for ([_]Message{ .request, .call, .pump, .request_pump, .call_pump, .settle_pump }) |m| {
-            if (std.mem.eql(u8, s, m.name())) return m;
-        }
-        return null;
-    }
-
-    /// Every field any input may carry, for the map candidate's first pass.
-    pub const input_fields: []const []const u8 = &.{ "m", "ref", "group", "token", "to", "message", "fn", "args", "limits", "now", "fuelSlice", "fuelCap", "settlements" };
 
     /// Whether the input runs a Pump.
     pub fn pumps(m: Message) bool {
@@ -119,7 +96,7 @@ pub const Report = enum(u8) {
         };
     }
 
-    /// The map candidate's `kind`, as the JSON Report writes it.
+    /// The JSON Report's `kind`, which the generated tables name it by.
     pub fn kind(r: Report) []const u8 {
         return switch (r) {
             .run_end => "run end",
@@ -139,7 +116,7 @@ pub const Report = enum(u8) {
 };
 
 /// `callbacks-fields-v1` (#1311): Host callback needs and their results
-/// cross as fields-layout frames, whatever Request/Pump layout was chosen.
+/// cross as fields-layout frames.
 pub const feature_callbacks = "callbacks-fields-v1";
 
 /// A callback need's or result's message tag and positional fields. A need
@@ -181,7 +158,7 @@ fn sameName(x: []const u8, y: []const u8) bool {
 }
 
 /// Writes one frame. A record is a map (named fields, absent ones omitted)
-/// or, for the fields candidate's messages and Reports, a list whose
+/// or, for messages and Reports, a list whose
 /// positions are the record's field names (absent ones Nothing).
 pub const Writer = struct {
     a: Allocator,
@@ -202,9 +179,9 @@ pub const Writer = struct {
         return w.out.toOwnedSlice(w.a);
     }
 
-    pub fn header(w: *Writer, layout: Layout) Allocator.Error!void {
+    pub fn header(w: *Writer) Allocator.Error!void {
         try w.out.appendSlice(w.a, prefix);
-        try w.out.append(w.a, @backingInt(layout));
+        try w.out.append(w.a, layout_fields);
     }
     pub fn byte(w: *Writer, b: u8) Allocator.Error!void {
         try w.out.append(w.a, b);
@@ -639,7 +616,7 @@ test "shared fields frame vectors match the existing guest tables and reader wri
         var r: Reader = .{ .data = bytes, .at = 6 };
         var w = Writer.init(a);
         defer w.deinit();
-        try w.header(.fields);
+        try w.header();
         try w.byte(vector.tag);
         try Codec.record(&w, &r, names);
         try std.testing.expect(r.done());
