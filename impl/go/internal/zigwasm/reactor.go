@@ -132,6 +132,30 @@ const maxFrame = 64 << 20
 const maxMessage = 1<<31 - 1
 const moreChunks = uint32(1 << 31)
 
+// chunkHeader tags a chunk of n bytes, followed by another when more is set.
+func chunkHeader(n int, more bool) uint32 {
+	if more {
+		return uint32(n) | moreChunks
+	}
+	return uint32(n)
+}
+
+// splitHeader reads a chunk header; only chunked transports carry the flag.
+func splitHeader(header uint32, chunked bool) (n uint32, more bool) {
+	if !chunked {
+		return header, false
+	}
+	return header &^ moreChunks, header&moreChunks != 0
+}
+
+// messageLimit bounds a whole message on the negotiated transport.
+func messageLimit(chunked bool) int {
+	if chunked {
+		return maxMessage
+	}
+	return maxFrame
+}
+
 // minReserve is the smallest input buffer reserved, enough for most frames.
 const minReserve = 4 << 10
 
@@ -154,10 +178,7 @@ func (r *Reactor) EnableChunking() error {
 func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	limit := maxFrame
-	if r.chunkSize != 0 {
-		limit = maxMessage
-	}
+	limit := messageLimit(r.chunkSize != 0)
 	if len(frame) == 0 || len(frame) > limit {
 		return nil, fmt.Errorf("frame length %d outside 1..%d bytes", len(frame), limit)
 	}
@@ -187,11 +208,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 			return nil, fmt.Errorf("input buffer outside guest memory")
 		}
 		at += n
-		count := uint32(n)
-		if at < len(frame) {
-			count |= moreChunks
-		}
-		r.stack[0] = uint64(count)
+		r.stack[0] = uint64(chunkHeader(n, at < len(frame)))
 		err := send.CallWithStack(ctx, r.stack[:])
 		if r.inline != nil && r.inline.err != nil {
 			return nil, r.inline.err
@@ -205,11 +222,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	}
 	var result []byte
 	for {
-		count := uint32(r.stack[0])
-		more := r.chunkSize != 0 && count&moreChunks != 0
-		if r.chunkSize != 0 {
-			count &^= moreChunks
-		}
+		count, more := splitHeader(uint32(r.stack[0]), r.chunkSize != 0)
 		if count == 0 || r.chunkSize != 0 && count > maxFrame || int64(len(result))+int64(count) > maxMessage {
 			return nil, fmt.Errorf("invalid reply chunk length %d", count)
 		}

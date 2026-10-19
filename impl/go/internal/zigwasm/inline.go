@@ -24,11 +24,7 @@ func (s *inlineIO) Write(p []byte) (int, error) {
 	}
 	s.written = append(s.written, p...)
 	for len(s.written) >= 4 {
-		header := binary.BigEndian.Uint32(s.written)
-		more := s.chunked && header&moreChunks != 0
-		if s.chunked {
-			header &^= moreChunks
-		}
+		header, more := splitHeader(binary.BigEndian.Uint32(s.written), s.chunked)
 		n := int(header)
 		if n == 0 || n > maxFrame {
 			s.err = fmt.Errorf("inline event exceeds 64 MiB")
@@ -57,10 +53,7 @@ func (s *inlineIO) Write(p []byte) (int, error) {
 			s.err = err
 			return 0, err
 		}
-		limit := maxFrame
-		if s.chunked {
-			limit = maxMessage
-		}
+		limit := messageLimit(s.chunked)
 		if len(reply) == 0 || len(reply) > limit {
 			s.err = fmt.Errorf("inline response length %d outside 1..%d bytes", len(reply), limit)
 			return 0, s.err
@@ -71,13 +64,7 @@ func (s *inlineIO) Write(p []byte) (int, error) {
 		}
 		for at := 0; at < len(reply); {
 			n := min(maxFrame, len(reply)-at)
-			count := uint32(n)
-			if at+n < len(reply) {
-				count |= moreChunks
-			}
-			var header [4]byte
-			binary.BigEndian.PutUint32(header[:], count)
-			s.read = append(s.read, header[:]...)
+			s.read = binary.BigEndian.AppendUint32(s.read, chunkHeader(n, at+n < len(reply)))
 			s.read = append(s.read, reply[at:at+n]...)
 			at += n
 		}
