@@ -1,10 +1,11 @@
 # Woodpecker CI
 
-The initial Woodpecker workflows supplement GitHub Actions:
+Woodpecker runs pull-request checks. GitHub Actions runs the broader matrix on
+`main` or manually, without adding duplicate checks to PRs:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
   tests, race tests and Corpus in Linux containers. After the shared workspace
-  bootstrap succeeds, TS and Go run in parallel.
+  bootstrap succeeds, affected TS and Go steps run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
 - `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
@@ -22,8 +23,45 @@ The initial Woodpecker workflows supplement GitHub Actions:
 
 These workflows do not yet cover the complete Actions matrix, including fuzz
 campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
-and the broader Zig and platform matrix. Keep any additional Actions requirements until
-equivalent coverage is available.
+and the broader Zig and platform matrix. GitHub Actions keeps that coverage on
+`main` and through manual runs. Go/Zig timing measurements run only on demand.
+
+Use **Actions → workflow → Run workflow** to run a retained Actions workflow on
+a selected branch before merging when its additional coverage is needed. Release,
+deployment, issue-graph and nightly-fuzz triggers remain separate. The redundant
+Actions Conventions workflow is removed; Woodpecker supplies the required check.
+
+## Selecting checks
+
+PRs use their complete changed-file list; pushes to `main` use the files changed
+by that push. The expensive workflows filter those paths before taking a worker
+slot. The Linux core workflow also filters its TS and Go steps independently.
+
+| Change | Selected checks, in addition to Conventions and Spec |
+| --- | --- |
+| Root README, `docs/` or changelog only | None |
+| Go Core | Go core step and Go SQLite |
+| Go SQLite module only | Go SQLite |
+| TS Core | TS core step, package and tooling |
+| `tooling/` or `bench/ts/` only | Tooling |
+| Zig Core or native sidecar checks | macOS sidecar |
+| Spec, dependency lock or shared bootstrap inputs | All consumers |
+| Workflow or worker image | Affected workflows |
+
+Keep Spec on every PR and push to `main`: its lint, generated-file and Markdown
+link checks span the repository. Keep Conventions unfiltered on PR code and
+metadata updates. Spec Markdown remains a Core trigger because tests read prose
+examples directly. Shared Corpus, fixture and reference-tool inputs also select
+their consumers; filters intentionally prefer an extra check over missing one.
+Each workflow includes its own configuration, and Docker consumers include their
+worker image inputs. Tooling includes the whole TS workspace typecheck, including
+`tools/` and `bench/ts/`.
+
+Manual pipelines run every optional workflow and both core steps regardless of
+changed paths. Conventions requires PR metadata and remains a PR-only check.
+Empty or unavailable changed-file lists also run all optional checks
+(`on_empty: true`). Path filters do not remove jobs already queued from older
+revisions: PR branches must include these workflow changes to benefit.
 
 ## Linux worker image
 
@@ -182,7 +220,9 @@ present in the revision being built. For a PR opened before activation, trigger
 a new event or start a manual pipeline after the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
-reported the expected statuses. Existing Actions requirements remain separate.
+reported the expected statuses. Only `ci/woodpecker/pr/conventions` is currently
+required; the other Woodpecker checks remain optional. Actions workflows do not
+automatically run on PRs.
 
 ### Required Conventions check
 
@@ -210,5 +250,5 @@ posts OAuth commit statuses rather than GitHub Actions checks. Keep any other
 required checks and branch protection settings intact.
 
 PR branches must contain the Conventions workflow and adapter. Update existing
-branches from `main` before requiring the check for them. GitHub's Conventions
-workflow can continue reporting its result as an additional check.
+branches from `main` before requiring the check for them. Existing PR branches
+also need the updated Actions workflow files to stop the old PR-triggered jobs.

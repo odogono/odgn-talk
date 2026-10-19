@@ -1,20 +1,7 @@
 name: Zig Core
 
 on:
-  pull_request:
-    paths:
-      - 'impl/zig/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'tools/zig/**'
-      - 'tools/unicode/**'
-      - 'tools/wasi/**'
-      - 'tools/sidecar/**'
-      - 'bench/message-layer/elixir/**'
-      - 'impl/elixir/**'
-      - 'tooling/fuzz/**'
-      - '.github/workflows/zig.yml'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
