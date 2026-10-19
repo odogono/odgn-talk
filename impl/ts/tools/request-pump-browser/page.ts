@@ -27,6 +27,24 @@ const run = async () => {
     count++;
   }
   const worker = new Worker('/worker.js', { type: 'module' });
+  const callbackWorker = async (binary: boolean): Promise<unknown> => {
+    const worker = new Worker('/wasm-worker.js', { type: 'module' });
+    try {
+      return await new Promise((resolve, reject) => {
+        worker.onerror = event => reject(new Error(event.message));
+        worker.onmessage = ({ data }) => {
+          if (data.error) {
+            reject(new Error(data.error));
+          } else {
+            resolve(data.result);
+          }
+        };
+        worker.postMessage(binary);
+      });
+    } finally {
+      worker.terminate();
+    }
+  };
   const transfer = (
     buffer: ArrayBuffer,
     frame: boolean,
@@ -78,12 +96,21 @@ const run = async () => {
     ) {
       throw new Error('Combined envelope lost its token or decimal scale');
     }
+    const binary = await callbackWorker(true);
+    const json = await callbackWorker(false);
+    if (
+      JSON.stringify(binary) !== JSON.stringify(json) ||
+      !JSON.stringify(binary).includes('release:stop')
+    ) {
+      throw new Error('WASM worker callbacks differ between binary and JSON');
+    }
     return {
       vectors: count,
       workerValueTransfers: count,
       workerCombinedTransfers: 1,
       ownership: 'detached in both directions',
       core: 'ts',
+      wasmCallbackModes: ['binary', 'json'],
     };
   } finally {
     worker.terminate();

@@ -38,7 +38,7 @@ type Setup = {
   }[];
   versions: { costModel: string; language: string };
 };
-const readSetup = (dir: string): Setup =>
+export const readSetup = (dir: string): Setup =>
   Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8')) as Setup;
 const checkVersions = (setup: Setup) => {
   if (

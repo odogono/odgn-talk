@@ -32,6 +32,7 @@ import {
 } from './values';
 
 export const requestPumpFeature = 'request-pump-fields-v1';
+export const callbacksFeature = 'callbacks-fields-v1';
 const prefix = [0x4e, 0x54, 0x42, 1, 1];
 const messages = [
   ['request', ['ref', 'group', 'to', 'message']],
@@ -56,6 +57,93 @@ const messages = [
     ],
   ],
 ] as const;
+const resultFields = [
+  'ref',
+  'group',
+  'outcome',
+  'value',
+  'code',
+  'message',
+  'charged',
+] as const;
+const callbackResults = [
+  ['op-result', resultFields],
+  ['prop-result', resultFields],
+  ['effect-result', ['ref', 'group', 'status']],
+  ['release-result', ['ref', 'group']],
+] as const;
+const notices = ['abandoned', 'settled', 'trace'];
+const callbackNeeds: readonly (readonly [string, readonly string[]])[] = [
+  [
+    'op',
+    [
+      'ref',
+      'call',
+      'script',
+      'run',
+      'segment',
+      'grant',
+      'capability',
+      'operation',
+      'mode',
+      'now',
+      'args',
+      'scope',
+      'automatic',
+      'fuelLeft',
+      ...notices,
+    ],
+  ],
+  [
+    'prop',
+    ['ref', 'object', 'prop', 'set', 'value', 'op', 'selector', ...notices],
+  ],
+  [
+    'effect',
+    [
+      'ref',
+      'script',
+      'run',
+      'segment',
+      'grant',
+      'grants',
+      'coordinator',
+      'phase',
+      'now',
+      ...notices,
+    ],
+  ],
+  ['release', ['ref', 'script', 'grant', 'reason', 'now', ...notices]],
+];
+/** Callback result methods whose wire form is selected independently of Pump. */
+const callbackResultNames = new Set<string>(callbackResults.map(([m]) => m));
+export const isCallbackResult = (m: string): boolean =>
+  callbackResultNames.has(m);
+const opOutcomes = ['result', 'started', 'done', 'fail', 'limit', 'hostError'];
+const propOutcomes = ['value', 'ok', 'fail', 'hostError'];
+const outcomes = (m: string): readonly string[] =>
+  m === 'op-result' ? opOutcomes : propOutcomes;
+const uintFields = new Set(['ref', 'charged', 'fuelLeft']);
+const boolFields = new Set(['automatic', 'set']);
+const textListFields = new Set(['object', 'grants', ...notices]);
+const resultHinted = new Set(['value', 'selector']);
+const requiredNeedFields: readonly (readonly string[])[] = [
+  [
+    'call',
+    'script',
+    'run',
+    'segment',
+    'grant',
+    'capability',
+    'operation',
+    'mode',
+    'now',
+    'args',
+  ],
+  ['object', 'prop'],
+  ['script', 'run', 'segment', 'grant', 'grants', 'phase', 'now'],
+  ['script', 'grant', 'reason', 'now'],
+];
 const admission = ['ref', 'delivery', 'err', 'abandoned', 'settled', 'trace'];
 const completion = [
   'ref',
@@ -429,6 +517,56 @@ const itemJson = (
   return result;
 };
 
+// Callback fields have no nested protocol records. Keep their Value positions
+// explicit: a property Object is two protocol texts, not an Object Value item.
+const callbackItem = (
+  item: BinaryItem,
+  name: string,
+  o: BinaryValueOptions,
+): Json => {
+  if (item.tag === 0) {
+    return null;
+  }
+  if (name === 'value' || name === 'selector') {
+    itemValue(item, metadata(o));
+    return itemJson(item, o, true);
+  }
+  if (name === 'args') {
+    if (item.tag !== 6) {
+      return binaryFailure();
+    }
+    const meta = metadata(o);
+    return children(item).map(v => {
+      itemValue(v, meta);
+      return itemJson(v, o, true);
+    });
+  }
+  if (uintFields.has(name)) {
+    if (itemInteger(item) < 0n && name !== 'ref') {
+      return binaryFailure();
+    }
+  } else if (boolFields.has(name)) {
+    if (item.tag !== 1 && item.tag !== 2) {
+      return binaryFailure();
+    }
+  } else if (name === 'now') {
+    if (item.tag !== 11) {
+      return binaryFailure();
+    }
+  } else if (textListFields.has(name)) {
+    const texts = item.tag === 6 ? children(item) : undefined;
+    if (!texts || texts.some(v => v.tag !== 18)) {
+      return binaryFailure();
+    }
+    if (name === 'object' && texts.length !== 2) {
+      return binaryFailure();
+    }
+  } else if (item.tag !== 18) {
+    return binaryFailure();
+  }
+  return itemJson(item, o);
+};
+
 /** True before any attempt to interpret a frame as UTF-8 or JSON. */
 export const isRequestPumpBinary = (bytes: Uint8Array): boolean =>
   bytes.length >= 3 &&
@@ -441,19 +579,82 @@ export const encodeBinaryFrame = (
   o: BinaryValueOptions = {},
 ): ArrayBuffer => {
   const m = field(frame, 'm');
+  const need = field(frame, 'need');
+  const callback = callbackResults.findIndex(([name]) => name === m);
+  const needIndex =
+    need === undefined
+      ? -1
+      : callbackNeeds.findIndex(([name]) => name === field(need, 'm'));
   const input = messages.findIndex(([name]) => name === m);
   const isCompletion =
     input < 0 &&
+    callback < 0 &&
+    needIndex < 0 &&
     (field(frame, 'token') !== undefined ||
       field(field(frame, 'ok') ?? new JsonObject([]), 'state') !== undefined);
-  const tag = input >= 0 ? input + 1 : isCompletion ? 0x82 : 0x81;
-  if (m !== undefined && input < 0) {
+  const tag =
+    callback >= 0
+      ? callback + 6
+      : needIndex >= 0
+        ? needIndex + 0x83
+        : input >= 0
+          ? input + 1
+          : isCompletion
+            ? 0x82
+            : 0x81;
+  if (
+    (m !== undefined && input < 0 && callback < 0) ||
+    (need !== undefined && needIndex < 0)
+  ) {
     return binaryFailure();
   }
   const names: readonly string[] =
-    input >= 0 ? messages[input]![1] : isCompletion ? completion : admission;
+    callback >= 0
+      ? callbackResults[callback]![1]
+      : needIndex >= 0
+        ? callbackNeeds[needIndex]![1]
+        : input >= 0
+          ? messages[input]![1]
+          : isCompletion
+            ? completion
+            : admission;
   let data = frame;
-  if (input < 0) {
+  if (needIndex >= 0) {
+    data = record([
+      ...object(need!).pairs,
+      ...object(frame).pairs.filter(([k]) => k !== 'need'),
+    ]);
+    if (field(need!, 'm') === 'prop') {
+      data = record([
+        ...object(data).pairs.filter(([k]) => k !== 'object' && k !== 'set'),
+        ['object', field(field(need!, 'object') ?? null, '$object')],
+        ['set', field(need!, 'value') !== undefined],
+      ]);
+    }
+  } else if (callback >= 0 && callback <= 1) {
+    const present = outcomes(m as string).filter(
+      k => field(frame, k) !== undefined,
+    );
+    if (present.length !== 1) {
+      return binaryFailure();
+    }
+    const outcome = present[0]!;
+    const fail = field(frame, 'fail');
+    data = record([
+      ...object(frame).pairs.filter(([k]) => !present.includes(k)),
+      ['outcome', outcome],
+      [
+        'value',
+        fail === undefined
+          ? outcome === 'result' || outcome === 'value'
+            ? field(frame, outcome)
+            : undefined
+          : field(fail, 'data'),
+      ],
+      ['code', fail === undefined ? undefined : field(fail, 'code')],
+      ['message', fail === undefined ? undefined : field(fail, 'message')],
+    ]);
+  } else if (input < 0 && callback < 0) {
     const ok = field(frame, 'ok');
     data = record([
       ...object(frame).pairs.filter(([k]) => k !== 'ok'),
@@ -494,7 +695,16 @@ export const encodeBinaryFrame = (
         }
       }
     } else {
-      w.item(jsonItem(j ?? null, o, name));
+      const item = jsonItem(
+        j ?? null,
+        o,
+        (callback >= 0 || needIndex >= 0) && resultHinted.has(name)
+          ? 'result'
+          : needIndex >= 0 && name === 'object'
+            ? ''
+            : name,
+      );
+      w.item(item);
     }
   }
   return w.buffer();
@@ -511,14 +721,20 @@ export const decodeBinaryFrame = (
     }
   }
   const tag = r.byte();
-  const names =
-    tag >= 1 && tag <= 5
-      ? messages[tag - 1]![1]
-      : tag === 0x81
-        ? admission
-        : tag === 0x82
-          ? completion
-          : binaryFailure();
+  const callback = tag >= 6 && tag <= 9 ? callbackResults[tag - 6] : undefined;
+  const need =
+    tag >= 0x83 && tag <= 0x86 ? callbackNeeds[tag - 0x83] : undefined;
+  const names = callback
+    ? callback[1]
+    : need
+      ? need[1]
+      : tag >= 1 && tag <= 5
+        ? messages[tag - 1]![1]
+        : tag === 0x81
+          ? admission
+          : tag === 0x82
+            ? completion
+            : binaryFailure();
   if (r.byte() !== 6 || r.uint() !== BigInt(names.length)) {
     binaryFailure();
   }
@@ -609,7 +825,10 @@ export const decodeBinaryFrame = (
         binaryFailure();
       }
       if (item.tag !== 0) {
-        pairs.push([name, convert(item, name)]);
+        pairs.push([
+          name,
+          callback || need ? callbackItem(item, name, o) : convert(item, name),
+        ]);
       }
     }
   }
@@ -617,6 +836,71 @@ export const decodeBinaryFrame = (
   const top = new JsonObject(pairs);
   if (!isNumber(field(top, 'ref'))) {
     return binaryFailure();
+  }
+  if (need) {
+    if (
+      requiredNeedFields[tag - 0x83]!.some(k => field(top, k) === undefined)
+    ) {
+      return binaryFailure();
+    }
+    const ps = pairs.filter(
+      ([k]) => k !== 'ref' && !notices.includes(k) && k !== 'set',
+    );
+    if (need[0] === 'prop') {
+      const set = field(top, 'set') === true;
+      const hasValue = field(top, 'value') !== undefined;
+      if (!set && hasValue) {
+        return binaryFailure();
+      }
+      const at = ps.findIndex(([k]) => k === 'object');
+      if (at < 0) {
+        return binaryFailure();
+      }
+      ps[at] = ['object', new JsonObject([['$object', ps[at]![1]]])];
+      if (set && !hasValue) {
+        ps.push(['value', null]);
+      }
+    }
+    return record([
+      ...pairs.filter(([k]) => k === 'ref' || notices.includes(k)),
+      ['need', record([['m', need[0]], ...ps])],
+    ]);
+  }
+  if (callback) {
+    if (typeof field(top, 'group') !== 'string') {
+      return binaryFailure();
+    }
+    let ps = pairs;
+    if (tag <= 7) {
+      const outcome = field(top, 'outcome');
+      if (
+        typeof outcome !== 'string' ||
+        !outcomes(callback[0]).includes(outcome)
+      ) {
+        return binaryFailure();
+      }
+      ps = pairs.filter(
+        ([k]) => k === 'ref' || k === 'group' || k === 'charged',
+      );
+      ps.push([
+        outcome,
+        outcome === 'fail'
+          ? record([
+              ['code', field(top, 'code')],
+              ['message', field(top, 'message')],
+              ['data', field(top, 'value') ?? null],
+            ])
+          : outcome === 'result' || outcome === 'value'
+            ? (field(top, 'value') ?? null)
+            : outcome === 'hostError'
+              ? ''
+              : true,
+      ]);
+      if (outcome === 'fail' && typeof field(top, 'code') !== 'string') {
+        return binaryFailure();
+      }
+    }
+    return record([['m', callback[0]], ...ps]);
   }
   if (tag <= 5) {
     if (typeof field(top, 'group') !== 'string') {

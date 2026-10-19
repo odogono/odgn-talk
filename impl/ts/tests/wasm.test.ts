@@ -28,6 +28,16 @@ const cores: [string, () => Promise<Core>, NT][] = [
     () => wasm.createCore({ wasm: module!, diagnostics: () => {} }),
     wasm,
   ],
+  [
+    'wasm JSON callbacks',
+    () =>
+      wasm.createCore({
+        wasm: module!,
+        diagnostics: () => {},
+        binaryCallbacks: false,
+      }),
+    wasm,
+  ],
 ];
 const second = 1_000_000n;
 
@@ -38,7 +48,9 @@ const both = (name: string, f: (core: Core, nt: NT) => unknown) =>
     for (const [, make, nt] of cores) {
       results.push(await f(await make(), nt));
     }
-    expect(results[1]).toEqual(results[0]);
+    for (const result of results.slice(1)) {
+      expect(result).toEqual(results[0]);
+    }
   });
 
 const kinds = (reports: readonly wasm.Report[]) => reports.map(r => r.kind);
@@ -173,6 +185,32 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
         ),
         fired,
       };
+    },
+  );
+
+  both(
+    'A primitive Host result fails its call and leaves later work runnable',
+    async (core, nt) => {
+      const cap = core.defineCapability('api', {
+        bad: {
+          mode: 'immediate',
+          cost: { fuel: 1 },
+          // A JavaScript Host can return a primitive despite the TS declaration.
+          do: () => 42 as unknown as wasm.Value,
+        },
+      });
+      const g = core.newGroup({ name: 'g' });
+      const s = g.load({
+        name: 's',
+        source:
+          'on bad\n ask api to bad\nend bad\non good\n return 1\nend good',
+        grants: { api: cap.grant('all', undefined) },
+      });
+      s.deliver({ name: 'bad' });
+      const good = s.request({ name: 'good' });
+      const reports = g.pump(second).reports;
+      expect(reports.filter(r => r.kind === 'call failed')).toHaveLength(1);
+      return { ends: ends(reports), value: (await good.result).toString() };
     },
   );
 

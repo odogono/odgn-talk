@@ -149,17 +149,30 @@ Each Group has a guest instance of its own, with its own Instance Owner. Grant b
 - `restore-bindings-v1`, which rebinds Grants during a restore.
 
 The optional `request-pump-fields-v1` feature selects ADR 0110's binary Request,
-Function-call and Pump envelopes. Needs and their answers remain JSON, and each
-exchange retains its own final-reply format across nested callbacks. Guests
+Function-call and Pump envelopes. Each exchange retains its own final-reply
+format across nested callbacks. Guests
 without the feature keep ordinary JSON operations and refuse combined calls
 before admission. A combined Request registers cancellation before transmission,
 uses a Session-unique token during callbacks, then installs the delivery id
 before publishing final observations. An already-aborted signal is ordered as
 admission, cancellation and one Pump on the negotiated guest.
 
+The independently optional `callbacks-fields-v1` feature moves Operation,
+property, effect and Grant release needs and results to the binary fields
+envelope. It is requested by default, including when Request/Pump binary is
+unavailable. `createCore({ wasm, binaryCallbacks: false })` keeps JSON callbacks
+for compatibility and performance comparisons; guests without this feature also
+retain JSON callbacks. Trace and resolve needs and their answers stay JSON.
+Nothing setters, failure Data, charge accounting and crossing notices keep the
+same meanings in either layout. Binary results use Values directly and defer
+their JSON Value Encoding until a JSON frame needs it. The
+[local measurements](../../docs/research/ts-wasm-callbacks.md) show a Node speedup
+and a Bun slowdown for immediate-call and property workloads; measure the
+layout against the Host's own workload.
+
 It differs from the TS Core in these ways:
 
-- **Making the Core:** `createCore` is asynchronous and takes `{ wasm, diagnostics }`. `core.versions` replaces `coreVersions`: the language, Cost Model and Unicode versions match the TS Core's, and the Core and save format are Zig's. Use the Core's methods: the package exports no free `newGroup`, `restore`, `compileLibrary` or `defineCapability`.
+- **Making the Core:** `createCore` is asynchronous and takes `{ wasm, diagnostics, binaryCallbacks }`. `core.versions` replaces `coreVersions`: the language, Cost Model and Unicode versions match the TS Core's, and the Core and save format are Zig's. Use the Core's methods: the package exports no free `newGroup`, `restore`, `compileLibrary` or `defineCapability`.
 - **Saves** are in the Zig format, so neither Core restores the other's ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)).
 - **Libraries and Object Kinds** must come from this Core's `compileLibrary` and `defineObjectKind`, so it can declare them in each guest. A Library compiled elsewhere is refused with `invalid value`.
 - **Each Group costs a guest:** about 2 MiB of linear memory and 150 KB of JS heap ([figures](../../docs/research/zig-browser-figures.md)). Nothing caps a guest's memory. A trap or an unreadable reply throws `InstanceLostError` and loses only that Group. `Group.memoryBytes()` gives its linear memory.
@@ -174,10 +187,11 @@ It differs from the TS Core in these ways:
 bun test tests/wasm.test.ts examples/core-switch # the same Host code on both Cores
 bun tools/wasm-corpus.ts                         # every Trace Case, through the facade
 bun tools/wasm-browser.ts                        # both Cores in headless Chromium, with figures
-bun tools/request-pump-browser.ts                # TS worker, transferred buffers in real Chromium
+bun tools/request-pump-browser.ts                # TS transfers and WASM callbacks in real workers
+bun test tests/wasm-runtimes.test.ts              # callbacks and Trace Cases, Bun/Node × binary/JSON
 ```
 
-`wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
+`wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. Its `--json-callbacks` flag retains the compatibility layout. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
 
 ## Transferable Message Layer codecs
 
@@ -195,12 +209,16 @@ Frame codecs take and return ordered Message Layer JSON nodes (`JsonObject`,
 `JsonNumber`, `readOrderedJSON`, also exported by the subpath). They preserve
 exact integer/decimal text and adapter Value tags; they do not execute messages
 or negotiate for a transport. A Host negotiates `request-pump-fields-v1` through
-JSON hello before sending binary frames, and keeps needs/answers in JSON.
+JSON hello before sending Request/Pump binary frames. Callback needs/results
+use the independently negotiated `callbacks-fields-v1`; other needs and their
+answers remain JSON.
 
 The shared [vectors](../testdata/request-pump-binary.json) run against Go, Zig
 and TS. `bun impl/ts/tools/request-pump-browser.ts` from the repository root
 verifies those vectors in Chromium, transfers buffers both ways to a worker
-running the TS Core and executes a combined Request. Use `$CHROME` for a custom
+running the TS Core and executes a combined Request. A second worker runs the
+WASM callback Host in both binary and JSON modes and compares its Values,
+effects, release hooks and Trace. Use `$CHROME` for a custom
 Chromium executable. Folio's application messages retain structured clone;
 these correctness checks establish no browser performance benefit.
 

@@ -35,10 +35,12 @@ const pumped = (outcome: PumpedRequest) => {
   return outcome.pump.result;
 };
 
-for (const backend of ['ts', 'wasm'] as const) {
+for (const backend of ['ts', 'wasm', 'wasm JSON callbacks'] as const) {
   const core = async () =>
-    backend === 'ts' ? createCore() : createWasmCore({ wasm: module! });
-  describe.skipIf(backend === 'wasm' && !module)(
+    backend === 'ts'
+      ? createCore()
+      : createWasmCore({ wasm: module!, binaryCallbacks: backend === 'wasm' });
+  describe.skipIf(backend !== 'ts' && !module)(
     `${backend} combined operations`,
     () => {
       test('admits once, retains ordering, uses ordinary Trace and omits initial readiness', async () => {
@@ -200,7 +202,7 @@ for (const backend of ['ts', 'wasm'] as const) {
         });
       });
 
-      test('cancellation during a JSON callback cancels the provisional Request; competing workers admit nothing', async () => {
+      test('cancellation during a callback cancels the provisional Request; competing workers admit nothing', async () => {
         const c = await core();
         const abort = new AbortController();
         let competing: PumpedRequest | undefined;
