@@ -81,6 +81,7 @@ test {
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
     _ = @import("machine/clause_charge_test.zig");
+    _ = @import("machine/fast_steps_test.zig");
     _ = @import("machine/error_during_test.zig");
     _ = @import("machine/lifecycle_test.zig");
     _ = @import("machine/extend_veto_test.zig");

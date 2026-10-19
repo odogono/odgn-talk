@@ -86,6 +86,20 @@ pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
     return chargeRate(rate, m);
 }
 
+// Each instruction's charge when its formulas measure nothing: no subject,
+// and zero scanned, count, steps and declared Fuel.
+const unmeasured_charges = blk: {
+    @setEvalBranchQuota(100_000);
+    var out: [machine.instruction.len]Charge = undefined;
+    for (instruction_rates, 0..) |rate, i| out[i] = chargeRateGeneric(rate, &.{});
+    break :blk out;
+};
+
+/// `chargeInstruction(op, &.{})`, read from a table.
+pub fn chargeUnmeasured(op: Opcode) Charge {
+    return unmeasured_charges[@backingInt(op)];
+}
+
 fn chargeRate(found: ?*const rates.CostRate, m: *const Measures) Charge {
     const rate = found orelse return .{ .fuel = 0, .alloc = 0 };
     if (rate.formula) |formula| {
@@ -159,6 +173,12 @@ fn scalars(text: []const u8) u64 {
 
 fn digits(c: u128) u64 {
     var n: u64 = 1;
+    // Most coefficients fit 64 bits, whose division is much cheaper.
+    if (c <= std.math.maxInt(u64)) {
+        var y: u64 = @intCast(c);
+        while (y >= 10) : (y /= 10) n += 1;
+        return n;
+    }
     var x = c;
     while (x >= 10) : (x /= 10) n += 1;
     return n;
