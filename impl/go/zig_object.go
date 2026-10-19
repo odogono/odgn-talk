@@ -197,24 +197,7 @@ func wireDisplay(f *corevalue.FunctionData) string {
 // decodeValue reads a Value Encoding from the guest. A Function Value
 // becomes an opaque value of this Group: its Code is the guest's token, so
 // equal tokens are equal values, and its display is the guest's.
-func (b *zigGroup) decodeValue(raw []byte) (Value, error) {
-	v, err := corevalue.DecodeWire(raw, b.zigResolveObject, func(payload corevalue.Value) (corevalue.Value, error) {
-		return b.zigFunction(payload.Items())
-	})
-	if err != nil {
-		return Nothing, &HostError{InvalidValue, err.Error()}
-	}
-	return Value{v}, nil
-}
-
-// zigResolveObject is a guest Object handle's registered Value.
-func (b *zigGroup) zigResolveObject(kind, id string) (corevalue.Value, error) {
-	o, ok := b.resolve(kind, id)
-	if !ok {
-		return corevalue.Value{}, fmt.Errorf("object not resolved")
-	}
-	return o.Value().inner, nil
-}
+func (b *zigGroup) decodeValue(raw []byte) (Value, error) { return zigDecodeValue(raw, b) }
 
 // zigFunction is a guest Function payload's opaque Value of this Group: its
 // Code is the guest's token, so equal tokens are equal values, and its

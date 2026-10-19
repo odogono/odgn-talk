@@ -3,7 +3,6 @@
 package northtalk
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,12 +48,15 @@ func zigEngine() *zigwasm.Engine {
 		}
 		defer reactor.Close(ctx)
 		data, err := reactor.Frame(ctx, []byte(`{"m":"hello","ref":1,"protocol":1}`))
-		var root zigReply
 		if err == nil {
-			root, err = zigParseReply(data)
-		}
-		if err == nil {
-			err = zigDecode(root.get("ok"), reflect.ValueOf(&zigCompiled.versions).Elem())
+			reply, readErr := (zigReplyReader{}).read(data, 1, "hello")
+			err = readErr
+			if err == nil {
+				err = reply.failure
+			}
+			if err == nil {
+				err = zigDecode(reply.body, reflect.ValueOf(&zigCompiled.versions).Elem())
+			}
 		}
 		if err == nil && (zigCompiled.versions.Language != generated.Version.Language || zigCompiled.versions.CostModel != fmt.Sprint(generated.Costs.Version) || zigCompiled.versions.Unicode != generated.UnicodeVersion) {
 			err = fmt.Errorf("embedded Zig artifact does not match Go data-model versions")
@@ -101,8 +103,7 @@ type zigGroup struct {
 	calls          map[CallID]context.CancelFunc
 	failureDetails map[CallID]string
 	// The last need's clock reading, as sent and as parsed.
-	nowRaw         string
-	now            time.Time
+	replyClock     zigReplyClock
 	restoreOptions *RestoreOptions
 	restoredCalls  map[CallID]*Call
 	paused         bool
@@ -164,26 +165,27 @@ func (b *zigGroup) send(m string, fields map[string]any) (zigReply, error) {
 }
 
 func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(zigReply) error) (zigReply, error) {
-	packet, err := b.exchangeFrame(m, fields, nil, okReceipt(receipt))
-	if err != nil {
-		return nil, err
-	}
-	if packet.bin != nil {
-		return nil, fmt.Errorf("Zig replied in binary to %s", m)
-	}
-	return packet.ok, nil
+	reply, err := b.exchangeDecoded(m, fields, okReceipt(receipt))
+	return reply.body, err
 }
 
-// exchangeFrame is exchange whose first frame may be binary. A binary final
-// reply returns whole, its error included; JSON errors and needs are as
-// exchange's. Continuations after needs are JSON.
-func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame, receipt zigReceipt) (zigPacket, error) {
+func (b *zigGroup) exchangeDecoded(m string, fields map[string]any, receipt zigReceipt) (zigResponse, error) {
+	reply, err := b.exchangeFrame(m, fields, nil, receipt)
+	if err == nil {
+		err = reply.failure
+	}
+	return reply, err
+}
+
+// exchangeFrame sends the first frame and answers decoded needs until a final
+// reply. Refusals stay in the reply so combined receipts retain admission.
+func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame, receipt zigReceipt) (zigResponse, error) {
 	defer runtime.KeepAlive(b)
 	// Queued settlements go first, unless this frame carries them or is
 	// one of them.
 	if b.reg.settlements && m != "answer" && m != "fail" && (first == nil || first.trailer == nil) {
 		if err := b.flushSettlements(); err != nil {
-			return zigPacket{}, err
+			return zigResponse{}, err
 		}
 	}
 	var ref int64
@@ -201,81 +203,41 @@ func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame
 		packet, err := b.export(zigOut{fields: fields, bin: first}, receipt)
 		first = nil
 		if err != nil {
-			return zigPacket{}, err
+			return zigResponse{}, err
 		}
-		if p := packet.bin; p != nil && p.need != nil {
-			// A binary need is answered in binary (#1311).
-			if first, err = b.callbackBinary(p.need); err != nil {
-				return zigPacket{}, err
-			}
-			fields, m = map[string]any{}, zbCallbacks[p.need.tag].kind+"-result"
-			continue
-		}
-		if packet.bin != nil {
+		if packet.need == nil {
 			return packet, nil
 		}
-		if packet.err.present() {
-			return zigPacket{}, zigFailure(packet.err)
-		}
-		need := packet.need
-		if !need.present() {
-			return packet, nil
-		}
-		fields, err = b.callback(need)
+		fields, first, err = b.callback(packet.need)
 		if err != nil {
-			return zigPacket{}, err
+			return zigResponse{}, err
 		}
-		m = zigText(need.get("m")) + "-result"
+		m = packet.need.kind + "-result"
 	}
 }
 
 // observe publishes every reply outside the export lock, including refused
 // reentrant worker calls which can carry earlier buffered Trace records.
-func (b *zigGroup) observe(packet zigPacket, m string) {
-	if p := packet.bin; p != nil {
-		// A binary reply carries its notices as protocol text lists.
-		abandoned, _ := zbTexts(p.abandoned)
-		settled, _ := zbTexts(p.settled)
-		trace, _ := zbTexts(p.trace)
-		b.abandonedIDs(abandoned)
-		b.settledIDs(settled)
-		for _, line := range trace {
-			b.group.emit(line)
-		}
-		return
-	}
-	var ok [3]zigReply
-	packet.ok.lookup(zigObservedKeys, ok[:])
-	b.abandoned(packet.abandoned)
-	b.abandoned(ok[0])
-	b.settled(packet.settled)
-	b.settled(ok[1])
-	for _, line := range packet.trace.items() {
-		b.group.emit(zigText(line))
-	}
-	// Grants is a name-to-Operations map; "trace" is a legal Grant name,
-	// and Grant inspection itself produces no Trace records.
-	if m != "grants" {
-		for _, line := range ok[2].items() {
-			b.group.emit(zigText(line))
-		}
+func (b *zigGroup) observe(reply zigResponse) {
+	b.abandonedIDs(reply.abandoned)
+	b.settledIDs(reply.settled)
+	for _, line := range reply.trace {
+		b.group.emit(line)
 	}
 }
-
-var zigObservedKeys = []string{"abandoned", "settled", "trace"}
 
 // zigFrameSeen, set by tests, sees each frame an export sends.
 var zigFrameSeen func([]byte)
 
 // frame is called only by the export owner; replies own Go memory.
-func (b *zigGroup) frame(out zigOut) (zigPacket, error) {
+func (b *zigGroup) frame(out zigOut) (zigResponse, error) {
 	fields := out.fields
 	var data []byte
 	var err error
 	if out.bin != nil {
 		data = out.bin.bytes(fields["ref"].(int64))
 	} else if data, err = zigJSON(nil, fields); err != nil {
-		return zigPacket{}, err
+		return zigResponse{}, err
 	}
 	if zigFrameSeen != nil {
 		zigFrameSeen(data)
@@ -286,60 +248,19 @@ func (b *zigGroup) frame(out zigOut) (zigPacket, error) {
 		data, err = b.reactor.Frame(context.Background(), data)
 	}
 	if err != nil {
-		return zigPacket{}, err
+		return zigResponse{}, err
 	}
-	if bytes.HasPrefix(data, zbPrefix[:3]) {
-		bin, err := zbParse(data)
-		if err != nil {
-			return zigPacket{}, err
-		}
-		if bin.ref != fields["ref"] {
-			return zigPacket{}, fmt.Errorf("Zig reply ref mismatch")
-		}
-		b.frameMu.Lock()
-		defer b.frameMu.Unlock()
-		if bin.need != nil {
-			b.paused = true
-		} else if bin.completion && bin.ok {
-			b.paused = false
-		}
-		return zigPacket{bin: bin}, nil
-	}
-	root, err := zigParseReply(data)
+	reply, err := b.replyReader().read(data, fields["ref"].(int64), fields["m"].(string))
 	if err != nil {
-		return zigPacket{}, err
-	}
-	packet := zigReadPacket(root)
-	if !packet.ref.present() {
-		return zigPacket{}, fmt.Errorf("Zig reply omitted ref")
-	}
-	if got, ok := packet.ref.int64(); !ok || got != fields["ref"] {
-		return zigPacket{}, fmt.Errorf("Zig reply ref mismatch")
+		return zigResponse{}, err
 	}
 	b.frameMu.Lock()
-	defer b.frameMu.Unlock()
-	if packet.need.present() {
-		b.paused = true
-	} else if !packet.err.present() && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result") {
-		b.paused = false
-	}
-	return packet, nil
+	reply.updatePause(&b.paused)
+	b.frameMu.Unlock()
+	return reply, nil
 }
-func zigFailure(failure zigReply) error {
-	switch zigText(failure.get("kind")) {
-	case "host error":
-		return &HostError{Code: HostErrorCode(zigText(failure.get("code"))), Detail: zigText(failure.get("detail"))}
-	case "mailbox full":
-		return ErrMailboxFull
-	case "load error":
-		rejected := new(LoadError)
-		if err := zigDecode(failure, reflect.ValueOf(rejected).Elem()); err != nil {
-			return err
-		}
-		return rejected
-	default:
-		return fmt.Errorf("Zig Message Layer: %s", zigText(failure.get("detail")))
-	}
+func (b *zigGroup) replyReader() zigReplyReader {
+	return zigReplyReader{resolver: b, clock: &b.replyClock}
 }
 
 // A rejected worker never starts a second conversation. While paused, ask the
@@ -431,15 +352,24 @@ func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx contex
 	// may enqueue or Pump immediately after that lock is released.
 	var id DeliveryID
 	var pending *Pending
-	_, err = b.exchange(method, fields, func(reply zigReply) error {
-		id = DeliveryID(zigText(reply.get("delivery")))
+	reply, err := b.exchangeFrame(method, fields, nil, func(reply zigResponse) error {
+		if reply.failure != nil {
+			return nil
+		}
+		id = reply.admission.delivery
+		if how != "request" {
+			id = DeliveryID(zigText(reply.body.get("delivery")))
+		}
 		if strings.HasSuffix(how, "broadcast") {
-			id = DeliveryID(zigText(reply.get("broadcast")))
+			id = DeliveryID(zigText(reply.body.get("broadcast")))
 		}
 		pending = b.admitted(id, how, ctx, d)
 		return nil
 	})
 	if err != nil {
+		return "", nil, err
+	}
+	if err = reply.failure; err != nil {
 		return "", nil, err
 	}
 	b.ready()
@@ -572,74 +502,30 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 		return b.pumpBinary(now, options)
 	}
 	var result PumpResult
-	_, err := b.exchange("pump", zigPumpFields(now, options), func(reply zigReply) error {
+	reply, err := b.exchangeFrame("pump", zigPumpFields(now, options), nil, func(reply zigResponse) error {
+		if reply.failure != nil {
+			return nil
+		}
 		var err error
-		result, err = b.pumpReceipt(reply)
+		result, err = b.completePump(reply.completion)
 		clear(b.restoredCalls)
 		return err
 	})
-
+	if err == nil {
+		err = reply.failure
+	}
 	return result, err
 }
-func (b *zigGroup) pumpReceipt(reply zigReply) (PumpResult, error) {
-	var result PumpResult
-	if err := b.decode(reply, reflect.ValueOf(&result).Elem()); err != nil {
-		return result, err
+func (b *zigGroup) completePump(c zigCompletion) (PumpResult, error) {
+	if c.err != nil {
+		return c.result, c.err
 	}
-	// A Run whose message climbed the Message Path hasn't answered its asker.
-	climbed := map[Report]bool{}
-	for _, row := range reply.get("reports").items() {
-		report, err := zigReportOf(zigText(row.get("kind")))
-		if err != nil {
-			return result, err
-		}
-		if err := b.decode(row, reflect.ValueOf(report).Elem()); err != nil {
-			return result, err
-		}
-		if c, _ := row.get("climbed").boolean(); c {
-			climbed[report] = true
-		}
-		result.Reports = append(result.Reports, report)
-	}
-	var gone []string
-	for _, id := range reply.get("gone").items() {
-		gone = append(gone, zigText(id))
-	}
-	return b.finishPump(result, climbed, gone)
-}
-
-// zigReportOf is an empty Report of a guest Report kind.
-func zigReportOf(kind string) (Report, error) {
-	switch kind {
-	case "run end":
-		return &RunEnd{}, nil
-	case "run started":
-		return &RunStarted{}, nil
-	case "run discarded":
-		return &RunDiscarded{}, nil
-	case "run accounting":
-		return &RunAccounting{}, nil
-	case "causal work":
-		return &CausalWork{}, nil
-	case "stop":
-		return &Stop{}, nil
-	case "unhandled":
-		return &Unhandled{}, nil
-	case "host error":
-		return &HostError{}, nil
-	case "effect failure":
-		return &EffectFailure{}, nil
-	case "call failed":
-		return &CallFailed{}, nil
-	case "decided":
-		return &Decided{}, nil
-	}
-	return nil, backendUnsupported("Report " + kind)
+	return b.finishPump(c.result, c.climbed, c.gone)
 }
 
 // finishPump completes Host-only Report details and settles the futures a
 // Pump's Reports and stale Function Value calls end, from either encoding.
-func (b *zigGroup) finishPump(result PumpResult, climbed map[Report]bool, gone []string) (PumpResult, error) {
+func (b *zigGroup) finishPump(result PumpResult, climbed []Report, gone []string) (PumpResult, error) {
 	for _, report := range result.Reports {
 		if effect, ok := report.(*EffectFailure); ok {
 			effect.Detail = b.effectDetail(effect)
@@ -691,7 +577,7 @@ func (b *zigGroup) finishPump(result PumpResult, climbed map[Report]bool, gone [
 			b.runs[r.Run] = r.Delivery
 		case *RunEnd:
 			delete(b.runs, r.Run)
-			if climbed[r] {
+			if slices.Contains(climbed, Report(r)) {
 				continue
 			}
 			if unhandled[r.Delivery] {
@@ -822,214 +708,10 @@ func zigOverride(l LimitOverride) (map[string]any, error) {
 	return out, nil
 }
 
-// The envelope is read in place from the reply's bytes. Data payloads are
-// decoded once, straight from their own bytes, as Value Encodings, preserving
-// tags and decimals.
-func zigDecode(src zigReply, dst reflect.Value) error { return zigDecodeResolving(src, dst, nil) }
-
 // decode resolves Object handles and Function Values in Value Encodings
 // against this Group.
 func (b *zigGroup) decode(src zigReply, dst reflect.Value) error {
 	return zigDecodeResolving(src, dst, b)
-}
-
-// zigField identifies one destination field in an envelope struct.
-type zigField struct {
-	index     int
-	name      string
-	anonymous bool
-}
-
-type zigStructFields struct {
-	fields []zigField
-	keys   []string
-}
-
-var zigFieldCache sync.Map // reflect.Type -> zigStructFields
-
-func zigFields(t reflect.Type) zigStructFields {
-	if cached, ok := zigFieldCache.Load(t); ok {
-		return cached.(zigStructFields)
-	}
-	var fields zigStructFields
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if f.Name == "Reports" {
-			continue
-		}
-		key := strings.ToLower(f.Name[:1]) + f.Name[1:]
-		if f.Name == "ID" || f.Name == "PC" {
-			key = strings.ToLower(f.Name)
-		}
-		if f.Name == "Function" {
-			key = "fn"
-		}
-		fields.fields = append(fields.fields, zigField{i, f.Name, f.Anonymous})
-		if f.Anonymous {
-			// Embedded fields read the enclosing object themselves.
-			key = ""
-		}
-		fields.keys = append(fields.keys, key)
-	}
-	zigFieldCache.Store(t, fields)
-	return fields
-}
-
-var (
-	zigObjectType      = reflect.TypeFor[*Object]()
-	zigValueType       = reflect.TypeFor[Value]()
-	zigPairType        = reflect.TypeFor[Pair]()
-	zigTimeType        = reflect.TypeFor[time.Time]()
-	zigScriptErrorType = reflect.TypeFor[ScriptError]()
-)
-
-func zigDecodeResolving(src zigReply, dst reflect.Value, b *zigGroup) error {
-	if !src.present() {
-		return nil
-	}
-	switch dst.Type() {
-	case zigObjectType:
-		ref := src.get("$object").items()
-		o, ok := (*Object)(nil), false
-		if b != nil && len(ref) == 2 {
-			o, ok = b.resolve(zigText(ref[0]), zigText(ref[1]))
-		}
-		if !ok {
-			return fmt.Errorf("Zig named an unknown Object")
-		}
-		dst.Set(reflect.ValueOf(o))
-		return nil
-	case zigValueType:
-		v, err := b.decodeValue(src)
-		if err != nil {
-			return err
-		}
-		dst.Set(reflect.ValueOf(v))
-		return nil
-	case zigPairType:
-		items := src.items()
-		if len(items) != 2 {
-			return fmt.Errorf("invalid Zig variable pair")
-		}
-		dst.FieldByName("Key").SetString(zigText(items[0]))
-		return zigDecodeResolving(items[1], dst.FieldByName("Val"), b)
-	case zigTimeType:
-		t, err := time.Parse(time.RFC3339Nano, zigText(src))
-		if err != nil {
-			return err
-		}
-		dst.Set(reflect.ValueOf(t))
-		return nil
-	case zigScriptErrorType:
-		var data []Pair
-		for _, pair := range src.entries() {
-			switch pair.Key {
-			case "code":
-				dst.FieldByName("Code").SetString(zigText(pair.Val))
-			case "message":
-				dst.FieldByName("Message").SetString(zigText(pair.Val))
-			default:
-				var v Value
-				if err := zigDecodeResolving(pair.Val, reflect.ValueOf(&v).Elem(), b); err != nil {
-					return err
-				}
-				data = append(data, KV(pair.Key, v))
-			}
-		}
-		v, err := Map(data...)
-		if err != nil {
-			return err
-		}
-		dst.FieldByName("Data").Set(reflect.ValueOf(v))
-		return nil
-	}
-	if values, ok := zigEnums[dst.Type()]; ok {
-		return zigEnumText(zigText(src), dst, values)
-	}
-	switch dst.Kind() {
-	case reflect.Pointer:
-		dst.Set(reflect.New(dst.Type().Elem()))
-		return zigDecodeResolving(src, dst.Elem(), b)
-	case reflect.Struct:
-		if !src.isMap() {
-			return fmt.Errorf("invalid Zig %s", dst.Type())
-		}
-		fields := zigFields(dst.Type())
-		// Most envelopes fit on the stack. Read spans in one pass without
-		// allocating a member list or copying every key, including unknown ones.
-		var local [16]zigReply
-		values := local[:]
-		if len(fields.fields) > len(values) {
-			values = make([]zigReply, len(fields.fields))
-		}
-		values = values[:len(fields.fields)]
-		src.lookup(fields.keys, values)
-		for i, f := range fields.fields {
-			if f.anonymous {
-				if err := zigDecodeResolving(src, dst.Field(f.index), b); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := zigDecodeResolving(values[i], dst.Field(f.index), b); err != nil {
-				return fmt.Errorf("%s: %w", f.name, err)
-			}
-		}
-	case reflect.Slice:
-		if !src.isList() {
-			return fmt.Errorf("expected Zig array for %s", dst.Type())
-		}
-		items := src.items()
-		dst.Set(reflect.MakeSlice(dst.Type(), len(items), len(items)))
-		for i, item := range items {
-			if err := zigDecodeResolving(item, dst.Index(i), b); err != nil {
-				return err
-			}
-		}
-	case reflect.String:
-		v, ok := src.text()
-		if !ok {
-			return fmt.Errorf("expected Zig text")
-		}
-		dst.SetString(v)
-	case reflect.Bool:
-		v, ok := src.boolean()
-		if !ok {
-			return fmt.Errorf("expected Zig boolean")
-		}
-		dst.SetBool(v)
-	case reflect.Int, reflect.Int64:
-		v, ok := src.int64()
-		if !ok {
-			return fmt.Errorf("expected Zig integer")
-		}
-		if dst.OverflowInt(v) {
-			return fmt.Errorf("Zig integer overflow")
-		}
-		dst.SetInt(v)
-	default:
-		return fmt.Errorf("unsupported Zig field type %s", dst.Type())
-	}
-	return nil
-}
-
-var zigGroupStates = map[string]int{"idle": int(Idle), "sliced": int(Sliced), "stopped": int(Stopped), "rewound": int(Rewound)}
-
-// zigEnums are the envelope enums the guest writes as text.
-var zigEnums = map[reflect.Type]map[string]int{
-	reflect.TypeFor[GroupState](): zigGroupStates,
-	reflect.TypeFor[Outcome]():    {"completed": int(Completed), "errored": int(Errored), "limit fault": int(LimitFault), "cancelled": int(Cancelled), "unhandled": int(UnhandledOutcome), "dropped": int(Dropped), "effect failed": int(EffectFailureOutcome)},
-	reflect.TypeFor[Verdict]():    {"allowed": int(Allowed), "vetoed": int(Vetoed), "undecided": int(Undecided)},
-	reflect.TypeFor[RunStatus]():  {"ready": int(Ready), "suspended": int(Suspended), "parked": int(Parked), "preempted": int(Preempted)},
-}
-
-func zigEnumText(text string, dst reflect.Value, values map[string]int) error {
-	v, ok := values[text]
-	if !ok {
-		return fmt.Errorf("unknown Zig %s %q", dst.Type(), text)
-	}
-	dst.SetInt(int64(v))
-	return nil
 }
 
 // Raw Value Encodings are trusted outputs of EncodeValue. Copy them directly:

@@ -1,0 +1,23 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+                  │ /tmp/issue-1333-bench/paired-before-json.txt │ /tmp/issue-1333-bench/paired-after-json.txt │
+                  │                    sec/op                    │           sec/op            vs base         │
+BackendRequest-10                                    18.48µ ± 2%                  18.61µ ± 2%  ~ (p=0.442 n=8)
+
+                  │ /tmp/issue-1333-bench/paired-before-json.txt │ /tmp/issue-1333-bench/paired-after-json.txt │
+                  │                   p50-sec                    │          p50-sec            vs base         │
+BackendRequest-10                                    18.02µ ± 2%                  18.19µ ± 1%  ~ (p=0.291 n=8)
+
+                  │ /tmp/issue-1333-bench/paired-before-json.txt │ /tmp/issue-1333-bench/paired-after-json.txt │
+                  │                   p99-sec                    │          p99-sec            vs base         │
+BackendRequest-10                                    23.73µ ± 3%                  23.60µ ± 6%  ~ (p=0.742 n=8)
+
+                  │ /tmp/issue-1333-bench/paired-before-json.txt │ /tmp/issue-1333-bench/paired-after-json.txt │
+                  │                     B/op                     │         B/op           vs base              │
+BackendRequest-10                                   5.729Ki ± 0%            5.808Ki ± 0%  +1.36% (p=0.000 n=8)
+
+                  │ /tmp/issue-1333-bench/paired-before-json.txt │ /tmp/issue-1333-bench/paired-after-json.txt │
+                  │                  allocs/op                   │       allocs/op        vs base              │
+BackendRequest-10                                     143.0 ± 0%              142.0 ± 0%  -0.70% (p=0.000 n=8)

@@ -1,0 +1,29 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                    sec/op                    │           sec/op            vs base         │
+Run/host/immediate-10                                    2.252m ± 2%                  2.285m ± 2%  ~ (p=0.195 n=8)
+
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                   fuel/op                    │         fuel/op           vs base           │
+Run/host/immediate-10                                    13.52k ± 0%                13.52k ± 0%  ~ (p=1.000 n=8) ¹
+¹ all samples are equal
+
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                 logical-B/op                 │       logical-B/op        vs base           │
+Run/host/immediate-10                                   15.70Ki ± 0%               15.70Ki ± 0%  ~ (p=1.000 n=8) ¹
+¹ all samples are equal
+
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                   sec/fuel                   │          sec/fuel           vs base         │
+Run/host/immediate-10                                    166.6n ± 2%                  169.0n ± 2%  ~ (p=0.168 n=8)
+
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                     B/op                     │         B/op           vs base              │
+Run/host/immediate-10                                   1.154Mi ± 0%            1.063Mi ± 0%  -7.95% (p=0.000 n=8)
+
+                      │ /tmp/issue-1333-bench/paired-before-host.txt │ /tmp/issue-1333-bench/paired-after-host.txt │
+                      │                  allocs/op                   │       allocs/op        vs base              │
+Run/host/immediate-10                                    15.20k ± 0%             14.20k ± 0%  -6.59% (p=0.000 n=8)

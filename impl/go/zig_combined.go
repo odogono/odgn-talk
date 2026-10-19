@@ -121,23 +121,19 @@ func (b *zigGroup) queueBinary(s *Script, to *Object, fn *Value, m Message, ctx 
 	})
 	var id DeliveryID
 	var pending *Pending
-	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigPacket) error {
-		switch {
-		case p.bin != nil && p.bin.ok:
-			id = DeliveryID(p.bin.delivery)
-		case p.bin == nil && !p.err.present():
-			id = DeliveryID(zigText(p.ok.get("delivery")))
-		default:
+	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+		if !p.admission.assigned {
 			return nil
 		}
+		id = p.admission.delivery
 		pending = b.admitted(id, "request", ctx, nil)
 		return nil
 	})
 	if err != nil {
 		return "", nil, err
 	}
-	if packet.bin != nil && !packet.bin.ok {
-		return "", nil, packet.bin.failure()
+	if packet.failure != nil {
+		return "", nil, packet.failure
 	}
 	if notify {
 		b.ready()
@@ -165,19 +161,19 @@ func (b *zigGroup) pumpBinary(now time.Time, options PumpOptions) (PumpResult, e
 		frame.trailer = func() []byte { return settlementsItem(taken) }
 	}
 	var result PumpResult
-	packet, err := b.exchangeFrame("pump", map[string]any{}, frame, func(p zigPacket) error {
-		if p.bin == nil || !p.bin.ok {
+	packet, err := b.exchangeFrame("pump", map[string]any{}, frame, func(p zigResponse) error {
+		if p.failure != nil {
 			return nil
 		}
 		var err error
-		result, err = b.zbPumpResult(p.bin)
+		result, err = b.completePump(p.completion)
 		clear(b.restoredCalls)
 		return err
 	})
-	if err == nil && packet.bin != nil && !packet.bin.ok {
+	if err == nil && packet.failure != nil {
 		// A refused Pump applied none of its settlements.
 		b.requeueSettlements(taken)
-		err = packet.bin.failure()
+		err = packet.failure
 	}
 	return result, err
 }
@@ -265,33 +261,30 @@ func (b *zigGroup) queueCombined(s *Script, to *Object, fn *Value, m Message, ct
 	var id DeliveryID
 	frame := w.frame(split, true, nil)
 	frame.sent = func() { corr.sent = true }
-	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigPacket) error {
-		if p.bin == nil {
-			return nil
-		}
-		if !p.bin.hasDelivery {
+	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+		if !p.admission.assigned {
 			corr.refused = true
 			return nil
 		}
-		if p.bin.token != token {
+		if p.admission.token != token {
 			return fmt.Errorf("Zig reply names another token")
 		}
 		// Install the delivery and retire the token before any observation.
-		id = DeliveryID(p.bin.delivery)
+		id = p.admission.delivery
 		corr.delivery = id
 		b.pendingMu.Lock()
 		b.pending[id] = pending
 		b.pendingMu.Unlock()
-		if !p.bin.ok {
-			c.err = p.bin.failure()
+		if p.failure != nil {
+			c.err = p.failure
 			return nil
 		}
 		var err error
-		c.result, err = b.zbPumpResult(p.bin)
+		c.result, err = b.completePump(p.completion)
 		clear(b.restoredCalls)
 		return err
 	})
-	refused := err != nil || packet.bin != nil && !packet.bin.hasDelivery
+	refused := err != nil || !packet.admission.assigned
 	if refused {
 		b.frameMu.Lock()
 		if corr.delivery == "" {
@@ -306,8 +299,8 @@ func (b *zigGroup) queueCombined(s *Script, to *Object, fn *Value, m Message, ct
 	if err != nil {
 		return id, nil, err
 	}
-	if packet.bin != nil && !packet.bin.hasDelivery {
-		return "", nil, packet.bin.failure()
+	if !packet.admission.assigned {
+		return "", nil, packet.failure
 	}
 	b.frameMu.Lock()
 	early := corr.early

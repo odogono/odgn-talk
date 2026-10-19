@@ -91,14 +91,14 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		b.observe(packet, fields["m"].(string))
-		if packet.err.present() {
-			t.Fatal(string(packet.root))
+		b.observe(packet)
+		if packet.failure != nil {
+			t.Fatal(packet.failure)
 		}
 		// A binary need (#1311) still takes its JSON result.
-		kind := zigText(packet.need.get("m"))
-		if p := packet.bin; p != nil && p.need != nil {
-			kind = zbCallbacks[p.need.tag].kind
+		kind := ""
+		if packet.need != nil {
+			kind = packet.need.kind
 		}
 		if kind == "" {
 			completed = true

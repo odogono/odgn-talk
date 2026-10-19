@@ -67,7 +67,10 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 	if !ok {
 		return nil, result, g.refuse(InvalidValue, "invalid mismatch policy")
 	}
-	_, err = b.exchange("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply zigReply) error {
+	_, err = b.exchangeDecoded("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply zigResponse) error {
+		if reply.failure != nil {
+			return nil
+		}
 		return b.restoreReceipt(reply, &result)
 	})
 	if err != nil {
@@ -76,15 +79,15 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 	return g, result, nil
 }
 
-func (b *zigGroup) restoreBindings(need zigReply) (map[string]any, error) {
+func (b *zigGroup) restoreBindings(need *zigNeed) (map[string]any, error) {
 	o := b.restoreOptions
 	if o == nil {
 		return nil, fmt.Errorf("unexpected Zig restore callback")
 	}
-	asked := need.get("grants").items()
+	asked := need.bindGrants
 	grants := make([]any, len(asked))
 	for i, pair := range asked {
-		script, name := zigTextPair(pair)
+		script, name := pair[0], pair[1]
 		var offered *Grant
 		if o.Grants != nil {
 			offered = o.Grants(script, name)
@@ -104,10 +107,10 @@ func (b *zigGroup) restoreBindings(need zigReply) (map[string]any, error) {
 		}
 		s.grants[name] = kept[name]
 	}
-	asked = need.get("objects").items()
+	asked = need.bindObjects
 	objects := make([]bool, len(asked))
 	for i, pair := range asked {
-		kind, id := zigTextPair(pair)
+		kind, id := pair[0], pair[1]
 		var native any
 		if o.Resolve != nil {
 			native, objects[i] = o.Resolve(kind, id)
@@ -138,7 +141,8 @@ func (b *zigGroup) restoreObject(kind, id string, native any, disposed bool) {
 	b.group.objects[key] = object
 }
 
-func (b *zigGroup) restoreReceipt(reply zigReply, result *RestoreResult) error {
+func (b *zigGroup) restoreReceipt(response zigResponse, result *RestoreResult) error {
+	reply := response.body
 	// Resolution order need not be load order; ScriptNames must retain it.
 	names := reply.get("scripts").items()
 	scripts := make([]*Script, 0, len(names))
@@ -191,7 +195,7 @@ func (b *zigGroup) restoreReceipt(reply zigReply, result *RestoreResult) error {
 		kind, id := zigTextPair(pair)
 		result.Disposed = append(result.Disposed, ObjectRef{Kind: kind, ID: id})
 	}
-	reports, err := b.pumpReceipt(reply)
+	reports, err := b.completePump(response.completion)
 	result.Reports = reports.Reports
 	return err
 }

@@ -191,12 +191,6 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 	}
 }
 
-func (b *zigGroup) abandoned(ids zigReply) {
-	for _, raw := range ids.items() {
-		b.abandonedIDs([]string{zigText(raw)})
-	}
-}
-
 func (b *zigGroup) abandonedIDs(ids []string) {
 	for _, raw := range ids {
 		id := CallID(raw)
@@ -212,17 +206,6 @@ func (b *zigGroup) abandonedIDs(ids []string) {
 
 // The Core distinguishes a queued answer from one actually consumed. In
 // particular a sliced ready Run can still be cancelled before resumption.
-func (b *zigGroup) settled(ids zigReply) {
-	if !ids.present() {
-		return
-	}
-	var texts []string
-	for _, raw := range ids.items() {
-		texts = append(texts, zigText(raw))
-	}
-	b.settledIDs(texts)
-}
-
 func (b *zigGroup) settledIDs(ids []string) {
 	b.callsMu.Lock()
 	defer b.callsMu.Unlock()

@@ -4,389 +4,382 @@ package northtalk
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"strconv"
-	"unicode/utf8"
+	"reflect"
+	"time"
+
+	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-// zigReply is one JSON value of a guest frame, kept as its raw bytes; nil is
-// absent. A frame is validated once, on a heap stack (ADR 0088), and its
-// envelope is then read in place. Each Value Encoding payload is decoded
-// once, from its own bytes, by decodeValue.
-type zigReply []byte
+// zigValueResolver supplies the identities that belong to the Host, rather
+// than the envelope. Codec tests can supply these without instantiating a guest.
+type zigValueResolver interface {
+	resolve(kind, id string) (*Object, bool)
+	zigFunction(parts []corevalue.Value) (corevalue.Value, error)
+}
 
-// zigParseReply validates one guest frame and returns its root value.
-func zigParseReply(data []byte) (zigReply, error) {
-	if !utf8.Valid(data) {
-		return nil, fmt.Errorf("invalid UTF-8 JSON")
+type zigReplyClock struct {
+	raw string
+	now time.Time
+}
+
+type zigReplyReader struct {
+	resolver zigValueResolver
+	clock    *zigReplyClock
+}
+
+// zigResponse is independent of the reply's envelope. body retains only the
+// JSON success bodies outside the Request/Pump family, for their callers.
+// A failure may accompany an assigned admission when only its Pump failed.
+type zigResponse struct {
+	body                      zigReply
+	failure                   error
+	need                      *zigNeed
+	admission                 zigAdmitted
+	completion                zigCompletion
+	abandoned, settled, trace []string
+	pause                     zigPause
+}
+
+type zigAdmitted struct {
+	delivery DeliveryID
+	token    uint64
+	assigned bool
+}
+
+type zigCompletion struct {
+	result  PumpResult
+	climbed []Report
+	gone    []string
+	// A decoding failure is applied by the receipt, after admission bookkeeping.
+	err error
+}
+
+type zigPause uint8
+
+const (
+	zigPauseUnchanged zigPause = iota
+	zigPauseSet
+	zigPauseClear
+)
+
+func (r zigResponse) updatePause(paused *bool) {
+	switch r.pause {
+	case zigPauseSet:
+		*paused = true
+	case zigPauseClear:
+		*paused = false
 	}
-	start := zigSpace(data, 0)
-	end, err := zigValidate(data, start)
+}
+
+// read validates every envelope's ref and normalizes its outcome, notices and
+// pause transition. No borrowed packet or envelope spans escape the reader.
+func (r zigReplyReader) read(data []byte, ref int64, sent string) (zigResponse, error) {
+	if bytes.HasPrefix(data, zbPrefix[:3]) {
+		var p zbPacket
+		err := zbParse(data, &p)
+		if err != nil {
+			return zigResponse{}, err
+		}
+		if p.ref != ref {
+			return zigResponse{}, fmt.Errorf("Zig reply ref mismatch")
+		}
+		reply := zigResponse{admission: zigAdmitted{DeliveryID(p.delivery), p.token, p.hasDelivery}}
+		reply.abandoned, _ = zbTexts(p.abandoned)
+		reply.settled, _ = zbTexts(p.settled)
+		reply.trace, _ = zbTexts(p.trace)
+		if p.need.tag != 0 {
+			need := r.zbReadNeed(&p.need)
+			reply.need = &need
+		} else if !p.ok {
+			reply.failure = p.failure()
+		} else if p.completion {
+			reply.completion = r.decodeCompletion(nil, &p)
+		}
+		reply.pause = zigReplyPause(sent, reply.need != nil, reply.failure == nil, true, p.completion)
+		return reply, nil
+	}
+	root, err := zigParseReply(data)
 	if err != nil {
-		return nil, err
+		return zigResponse{}, err
 	}
-	if zigSpace(data, end) != len(data) {
-		return nil, fmt.Errorf("invalid JSON at byte %d", end)
-	}
-	return zigReply(data[start:end]), nil
+	return r.readJSON(root, ref, sent)
 }
 
-// zigPacket is a reply's envelope, read in one pass over its members.
-type zigPacket struct {
-	root                                          zigReply
-	ref, ok, err, need, abandoned, settled, trace zigReply
-	// bin is a binary reply (#1245), whose envelope is read separately.
-	bin *zbPacket
+func (r zigReplyReader) readJSON(root zigReply, ref int64, sent string) (zigResponse, error) {
+	p := zigReadPacket(root)
+	if ref != 0 {
+		if !p.ref.present() {
+			return zigResponse{}, fmt.Errorf("Zig reply omitted ref")
+		}
+		if got, ok := p.ref.int64(); !ok || got != ref {
+			return zigResponse{}, fmt.Errorf("Zig reply ref mismatch")
+		}
+	}
+	reply := zigResponse{body: p.ok}
+	var notices [3]zigReply
+	p.ok.lookup(zigObservedKeys, notices[:])
+	reply.abandoned = append(zigReplyTexts(p.abandoned), zigReplyTexts(notices[0])...)
+	reply.settled = append(zigReplyTexts(p.settled), zigReplyTexts(notices[1])...)
+	reply.trace = zigReplyTexts(p.trace)
+	// Grants is a name-to-Operations map: "trace" is a legal Grant name.
+	if sent != "grants" {
+		reply.trace = append(reply.trace, zigReplyTexts(notices[2])...)
+	}
+
+	switch sent {
+	case "request", "call", "request-pump", "call-pump":
+		id := p.ok.get("delivery")
+		if !id.present() {
+			id = root.get("delivery")
+		}
+		reply.admission.delivery = DeliveryID(zigText(id))
+		reply.admission.assigned = id.present()
+		if n, ok := root.get("token").int64(); ok && n > 0 {
+			reply.admission.token = uint64(n)
+		}
+		reply.body = nil
+	}
+
+	if p.need.present() {
+		need := r.zigReadNeed(zigText(p.need.get("m")), p.need)
+		reply.need = &need
+	} else if p.err.present() {
+		reply.failure = zigFailure(p.err)
+	} else {
+		// Callback result names identify continuations, not the initial Pump.
+		if sent == "pump" || sent != "grants" && p.ok.get("reports") != nil {
+			reply.completion = r.decodeCompletion(p.ok, nil)
+			if sent == "pump" || p.ok.get("state").present() {
+				reply.body = nil
+			}
+		}
+	}
+	reply.pause = zigReplyPause(sent, reply.need != nil, reply.failure == nil, false, false)
+	return reply, nil
 }
 
-var zigPacketKeys = []string{"ref", "ok", "err", "need", "abandoned", "settled", "trace"}
-
-func zigReadPacket(root zigReply) zigPacket {
-	var f [7]zigReply
-	root.lookup(zigPacketKeys, f[:])
-	return zigPacket{root: root, ref: f[0], ok: f[1], err: f[2], need: f[3], abandoned: f[4], settled: f[5], trace: f[6]}
+// readInline unwraps an admission acknowledgement or reads an event with no
+// ref. Its caller owns the admission queue and checks that an ack was expected.
+func (r zigReplyReader) readInline(data []byte, ref int64, sent string) (zigResponse, bool, error) {
+	root, err := zigParseReply(data)
+	if err != nil {
+		return zigResponse{}, false, err
+	}
+	if reply := root.get("reply"); reply.present() {
+		response, err := r.readJSON(reply, ref, sent)
+		return response, true, err
+	}
+	response, err := r.readJSON(root, 0, "")
+	return response, false, err
 }
 
-func zigSpace(d []byte, i int) int {
-	for i < len(d) && (d[i] == ' ' || d[i] == '\t' || d[i] == '\r' || d[i] == '\n') {
-		i++
+// zigReplyPause is the one pause rule. JSON continuations lack a completion
+// tag, so their sent message names carry that information instead.
+func zigReplyPause(sent string, need, ok, binary, completion bool) zigPause {
+	if need {
+		return zigPauseSet
 	}
-	return i
+	if ok {
+		if binary {
+			if completion {
+				return zigPauseClear
+			}
+		} else {
+			switch sent {
+			case "pump", "op-result", "trace-result", "release-result", "resolve-result":
+				return zigPauseClear
+			}
+		}
+	}
+	return zigPauseUnchanged
 }
 
-// zigValidate checks the JSON value at d[i:] and returns its end. Containers
-// are tracked on a heap stack, so depth is bounded only by memory.
-func zigValidate(d []byte, i int) (int, error) {
-	var stack []byte
-	bad := func() (int, error) { return 0, fmt.Errorf("invalid JSON at byte %d", i) }
-	key := func() bool {
-		i = zigSpace(d, i)
-		end, ok := zigValidString(d, i)
-		if !ok {
-			return false
-		}
-		i = zigSpace(d, end)
-		if i >= len(d) || d[i] != ':' {
-			return false
-		}
-		i++
-		return true
+var zigObservedKeys = []string{"abandoned", "settled", "trace"}
+
+func zigReplyTexts(raw zigReply) []string {
+	var texts []string
+	for _, item := range raw.items() {
+		texts = append(texts, zigText(item))
 	}
-	for {
-		i = zigSpace(d, i)
-		if i >= len(d) {
-			return bad()
-		}
-		switch c := d[i]; c {
-		case '{', '[':
-			closing := byte('}')
-			if c == '[' {
-				closing = ']'
-			}
-			i = zigSpace(d, i+1)
-			if i < len(d) && d[i] == closing {
-				i++
-				break
-			}
-			stack = append(stack, c)
-			if c == '{' && !key() {
-				return bad()
-			}
-			continue
-		case '"':
-			end, ok := zigValidString(d, i)
-			if !ok {
-				return bad()
-			}
-			i = end
-		case 't', 'f', 'n':
-			lit := "null"
-			if c == 't' {
-				lit = "true"
-			} else if c == 'f' {
-				lit = "false"
-			}
-			if !bytes.HasPrefix(d[i:], []byte(lit)) {
-				return bad()
-			}
-			i += len(lit)
-		default:
-			end, ok := zigValidNumber(d, i)
-			if !ok {
-				return bad()
-			}
-			i = end
-		}
-		for {
-			if len(stack) == 0 {
-				return i, nil
-			}
-			i = zigSpace(d, i)
-			if i >= len(d) {
-				return bad()
-			}
-			top := stack[len(stack)-1]
-			if d[i] == ',' {
-				i++
-				if top == '{' && !key() {
-					return bad()
-				}
-				break
-			}
-			if top == '{' && d[i] == '}' || top == '[' && d[i] == ']' {
-				i++
-				stack = stack[:len(stack)-1]
-				continue
-			}
-			return bad()
-		}
-	}
+	return texts
 }
 
-func zigValidString(d []byte, i int) (int, bool) {
-	if i >= len(d) || d[i] != '"' {
-		return 0, false
-	}
-	for i++; i < len(d); i++ {
-		switch c := d[i]; {
-		case c == '"':
-			return i + 1, true
-		case c < 0x20:
-			return 0, false
-		case c == '\\':
-			i++
-			if i >= len(d) {
-				return 0, false
-			}
-			switch d[i] {
-			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-			case 'u':
-				if i+4 >= len(d) {
-					return 0, false
-				}
-				for _, h := range d[i+1 : i+5] {
-					if !(h >= '0' && h <= '9' || h >= 'a' && h <= 'f' || h >= 'A' && h <= 'F') {
-						return 0, false
-					}
-				}
-				i += 4
-			default:
-				return 0, false
-			}
+func (r zigReplyReader) resolveObject(kind, id string) (corevalue.Value, error) {
+	if r.resolver != nil {
+		if o, ok := r.resolver.resolve(kind, id); ok {
+			return o.Value().inner, nil
 		}
 	}
-	return 0, false
+	return corevalue.Value{}, fmt.Errorf("object not resolved")
 }
 
-func zigValidNumber(d []byte, i int) (int, bool) {
-	digits := func() bool {
-		start := i
-		for i < len(d) && d[i] >= '0' && d[i] <= '9' {
-			i++
-		}
-		return i > start
+func (r zigReplyReader) resolveFunction(parts []corevalue.Value) (corevalue.Value, error) {
+	if r.resolver == nil {
+		return corevalue.Value{}, fmt.Errorf("function not resolved")
 	}
-	if i < len(d) && d[i] == '-' {
-		i++
-	}
-	if i < len(d) && d[i] == '0' {
-		i++
-	} else if !digits() {
-		return 0, false
-	}
-	if i < len(d) && d[i] == '.' {
-		i++
-		if !digits() {
-			return 0, false
-		}
-	}
-	if i < len(d) && (d[i] == 'e' || d[i] == 'E') {
-		i++
-		if i < len(d) && (d[i] == '+' || d[i] == '-') {
-			i++
-		}
-		if !digits() {
-			return 0, false
-		}
-	}
-	return i, true
+	return r.resolver.zigFunction(parts)
 }
 
-// zigSkip returns the end of the already-validated value at d[i:].
-func zigSkip(d []byte, i int) int {
-	depth := 0
-	for ; i < len(d); i++ {
-		switch d[i] {
-		case '"':
-			for i++; d[i] != '"'; i++ {
-				if d[i] == '\\' {
-					i++
-				}
-			}
-			if depth == 0 {
-				return i + 1
-			}
-		case '{', '[':
-			depth++
-		case '}', ']':
-			if depth == 0 {
-				return i
-			}
-			depth--
-			if depth == 0 {
-				return i + 1
-			}
-		case ',', ' ', '\t', '\r', '\n':
-			if depth == 0 {
-				return i
-			}
-		}
+func zigDecodeValue(raw []byte, resolver zigValueResolver) (Value, error) {
+	r := zigReplyReader{resolver: resolver}
+	v, err := corevalue.DecodeWire(raw, r.resolveObject, func(payload corevalue.Value) (corevalue.Value, error) { return r.resolveFunction(payload.Items()) })
+	if err != nil {
+		return Nothing, &HostError{InvalidValue, err.Error()}
 	}
-	return i
+	return Value{v}, nil
 }
 
-// members calls yield with each raw key and value of an object, until it
-// returns false.
-func (r zigReply) members(yield func(key []byte, val zigReply) bool) {
-	if len(r) == 0 || r[0] != '{' {
+// decodeCompletion reads Pump-shaped results, including lifecycle Reports.
+// Group settlement remains with the receipt, after admission is registered.
+func (b zigReplyReader) decodeCompletion(body zigReply, p *zbPacket) (completion zigCompletion) {
+	result := &completion.result
+	if p == nil {
+		var err error
+		*result, err = b.decodePumpHeader(body)
+		if err != nil {
+			completion.err = err
+			return
+		}
+
+		for _, row := range body.get("reports").items() {
+			report, err := zigReportOf(zigText(row.get("kind")))
+			if err != nil {
+				completion.err = err
+				return
+			}
+			if err := zigDecodeResolving(row, reflect.ValueOf(report).Elem(), b.resolver); err != nil {
+				completion.err = err
+				return
+			}
+			if c, _ := row.get("climbed").boolean(); c {
+				completion.climbed = append(completion.climbed, report)
+			}
+			result.Reports = append(result.Reports, report)
+		}
+		completion.gone = zigReplyTexts(body.get("gone"))
 		return
 	}
-	i := 1
-	for {
-		i = zigSpace(r, i)
-		if i >= len(r) || r[i] != '"' {
-			return
-		}
-		keyEnd := zigSkip(r, i)
-		key := r[i+1 : keyEnd-1]
-		i = zigSpace(r, keyEnd) + 1
-		i = zigSpace(r, i)
-		end := zigSkip(r, i)
-		if !yield(key, r[i:end:end]) {
-			return
-		}
-		i = zigSpace(r, end)
-		if i >= len(r) || r[i] != ',' {
-			return
-		}
-		i++
+	state, _ := zbText(p.state)
+	stateValue, valid := zigGroupStates[state]
+	if !valid {
+		completion.err = fmt.Errorf("unknown Zig %s %q", reflect.TypeFor[GroupState](), state)
+		return
 	}
-}
-
-func zigKeyIs(raw []byte, key string) bool {
-	if bytes.IndexByte(raw, '\\') < 0 {
-		return string(raw) == key
+	result.State = GroupState(stateValue)
+	if p.deadline != nil {
+		t, ok := zbInstant(p.deadline)
+		if !ok {
+			completion.err = errZigBinary
+			return
+		}
+		result.NextDeadline = t
 	}
-	return zigUnquote(raw) == key
-}
+	fuel, ok := zbInt(p.fuel)
+	if !ok {
+		completion.err = errZigBinary
+		return
+	}
+	result.FuelUsed = fuel
 
-// get is the member named key, or nil.
-func (r zigReply) get(key string) zigReply {
-	var found zigReply
-	r.members(func(k []byte, v zigReply) bool {
-		if zigKeyIs(k, key) {
-			found = v
-			return false
+	add := func(kind string, row zbView) error {
+		report, err := zigReportOf(kind)
+		if err != nil {
+			return err
 		}
-		return true
-	})
-	return found
-}
-
-// lookup fills out[i] with the first member named keys[i], in one pass.
-func (r zigReply) lookup(keys []string, out []zigReply) {
-	r.members(func(k []byte, v zigReply) bool {
-		for i, key := range keys {
-			if out[i] == nil && zigKeyIs(k, key) {
-				out[i] = v
-			}
+		if err := b.zbDecodeReport(row, report); err != nil {
+			return err
 		}
-		return true
-	})
-}
-
-type zigMember struct {
-	Key string
-	Val zigReply
-}
-
-func (r zigReply) entries() []zigMember {
-	var out []zigMember
-	r.members(func(k []byte, v zigReply) bool {
-		key := string(k)
-		if bytes.IndexByte(k, '\\') >= 0 {
-			key = zigUnquote(k)
+		if c := row.get("climbed"); len(c) == 1 && c[0] == 0x02 {
+			completion.climbed = append(completion.climbed, report)
 		}
-		out = append(out, zigMember{key, v})
-		return true
-	})
-	return out
-}
-
-// items are an array's elements; anything else has none.
-func (r zigReply) items() []zigReply {
-	if len(r) == 0 || r[0] != '[' {
+		result.Reports = append(result.Reports, report)
 		return nil
 	}
-	var out []zigReply
-	for i := zigSpace(r, 1); i < len(r) && r[i] != ']'; {
-		end := zigSkip(r, i)
-		out = append(out, r[i:end:end])
-		i = zigSpace(r, end)
-		if i < len(r) && r[i] == ',' {
-			i = zigSpace(r, i+1)
+	if p.fields {
+		// zbParse read the positional Reports as it found the list's end.
+		if len(p.rows) > 0 {
+			result.Reports = make([]Report, 0, len(p.rows))
+		}
+		for _, row := range p.rows {
+			if err := add(zbReports[row.kind].kind, row.view); err != nil {
+				completion.err = err
+				return
+			}
+		}
+	} else {
+		r := zbReader{d: p.reports}
+		if t, err := r.byte(); err != nil || t != 0x06 {
+			completion.err = errZigBinary
+			return
+		}
+		n, err := r.uvarint()
+		if err != nil || n > uint64(len(p.reports)) {
+			completion.err = errZigBinary
+			return
+		}
+		if n > 0 {
+			result.Reports = make([]Report, 0, n)
+		}
+		for range n {
+			span, err := r.skip()
+			if err != nil {
+				completion.err = err
+				return
+			}
+			row, err := zbMapView(span)
+			if err != nil {
+				completion.err = err
+				return
+			}
+			kind, _ := zbText(row.get("kind"))
+			if err := add(kind, row); err != nil {
+				completion.err = err
+				return
+			}
+		}
+		if r.at != len(p.reports) {
+			completion.err = errZigBinary
+			return
 		}
 	}
-	return out
-}
-
-func (r zigReply) present() bool { return len(r) != 0 && string(r) != "null" }
-func (r zigReply) isMap() bool   { return len(r) != 0 && r[0] == '{' }
-func (r zigReply) isList() bool  { return len(r) != 0 && r[0] == '[' }
-
-func (r zigReply) text() (string, bool) {
-	if len(r) < 2 || r[0] != '"' {
-		return "", false
+	var err error
+	completion.gone, err = zbTexts(p.gone)
+	if len(completion.gone) == 0 {
+		completion.gone = nil
 	}
-	inner := r[1 : len(r)-1]
-	if bytes.IndexByte(inner, '\\') < 0 {
-		return string(inner), true
+	if err != nil {
+		completion.err = err
+		return
 	}
-	return zigUnquote(inner), true
+	return
 }
 
-func (r zigReply) boolean() (bool, bool) {
-	switch string(r) {
-	case "true":
-		return true, true
-	case "false":
-		return false, true
+// zigReportOf is an empty Report of a guest Report kind.
+func zigReportOf(kind string) (Report, error) {
+	switch kind {
+	case "run end":
+		return &RunEnd{}, nil
+	case "run started":
+		return &RunStarted{}, nil
+	case "run discarded":
+		return &RunDiscarded{}, nil
+	case "run accounting":
+		return &RunAccounting{}, nil
+	case "causal work":
+		return &CausalWork{}, nil
+	case "stop":
+		return &Stop{}, nil
+	case "unhandled":
+		return &Unhandled{}, nil
+	case "host error":
+		return &HostError{}, nil
+	case "effect failure":
+		return &EffectFailure{}, nil
+	case "call failed":
+		return &CallFailed{}, nil
+	case "decided":
+		return &Decided{}, nil
 	}
-	return false, false
-}
-
-func (r zigReply) int64() (int64, bool) {
-	n, err := strconv.ParseInt(string(r), 10, 64)
-	return n, err == nil
-}
-
-// zigUnquote decodes a validated string body that holds escapes.
-func zigUnquote(inner []byte) string {
-	var s string
-	quoted := make([]byte, 0, len(inner)+2)
-	quoted = append(append(append(quoted, '"'), inner...), '"')
-	_ = json.Unmarshal(quoted, &s)
-	return s
-}
-
-func zigText(r zigReply) string { s, _ := r.text(); return s }
-
-// zigTextPair reads a two-text array, such as a [kind, id] Object reference.
-func zigTextPair(r zigReply) (string, string) {
-	items := r.items()
-	if len(items) != 2 {
-		return "", ""
-	}
-	return zigText(items[0]), zigText(items[1])
+	return nil, backendUnsupported("Report " + kind)
 }

@@ -170,8 +170,11 @@ func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error)
 		return nil, err
 	}
 	var reports []Report
-	_, err = b.exchange("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how}, func(reply zigReply) error {
-		result, err := b.pumpReceipt(reply)
+	_, err = b.exchangeDecoded("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how}, func(reply zigResponse) error {
+		if reply.failure != nil {
+			return nil
+		}
+		result, err := b.completePump(reply.completion)
 		reports = result.Reports
 		return err
 	})

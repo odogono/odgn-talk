@@ -18,7 +18,7 @@ type zigAdmission struct {
 	receipt  zigReceipt
 	done     chan struct{}
 	finished chan struct{}
-	packet   zigPacket
+	packet   zigResponse
 	err      error
 }
 
@@ -37,7 +37,7 @@ type zigOut struct {
 }
 
 // zigReceipt records a completed reply under the receipt lock.
-type zigReceipt func(zigPacket) error
+type zigReceipt func(zigResponse) error
 
 // okReceipt adapts a receipt of a JSON reply's ok value; needs and errors
 // carry none.
@@ -45,11 +45,11 @@ func okReceipt(receipt func(zigReply) error) zigReceipt {
 	if receipt == nil {
 		return nil
 	}
-	return func(packet zigPacket) error {
-		if packet.bin != nil || packet.err.present() {
+	return func(packet zigResponse) error {
+		if packet.failure != nil {
 			return nil
 		}
-		return receipt(packet.ok)
+		return receipt(packet.body)
 	}
 }
 
@@ -58,7 +58,7 @@ func okReceipt(receipt func(zigReply) error) zigReceipt {
 // arriving after its final checkpoint are served at the export boundary.
 // Inline admission carries JSON, so a queued ordinary binary input crosses
 // as JSON; a binary worker input waits for the boundary.
-func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigPacket, error) {
+func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigResponse, error) {
 	fields := out.fields
 	b.frameMu.Lock()
 	if out.bin != nil && out.bin.sent != nil {
@@ -69,7 +69,7 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigPacket, error) {
 			json, err := out.bin.json()
 			if err != nil {
 				b.frameMu.Unlock()
-				return zigPacket{}, err
+				return zigResponse{}, err
 			}
 			json["m"], json["ref"], json["group"] = fields["m"], fields["ref"], fields["group"]
 			fields, out = json, zigOut{fields: json}
@@ -81,7 +81,7 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigPacket, error) {
 		<-req.done
 		func() {
 			defer func() { close(req.finished); b.wakeInline() }()
-			b.observe(req.packet, req.fields["m"].(string))
+			b.observe(req.packet)
 		}()
 		return req.packet, req.err
 	}
@@ -95,7 +95,7 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigPacket, error) {
 		if err == nil {
 			err = fmt.Errorf("guest returned without acknowledging inline admission")
 		}
-		b.finishAdmission(req, zigPacket{}, err)
+		b.finishAdmission(req, zigResponse{}, err)
 	}
 	b.frameMu.Lock()
 	if err == nil {
@@ -115,25 +115,18 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigPacket, error) {
 		b.correlate(next.fields)
 		b.frameMu.Unlock()
 		if err != nil {
-			b.finishAdmission(next, zigPacket{}, err)
+			b.finishAdmission(next, zigResponse{}, err)
 		} else {
 			reply, e := b.frame(zigOut{fields: next.fields, bin: next.bin})
 			b.finishAdmission(next, reply, e)
 		}
 	}
-	b.observe(packet, fields["m"].(string))
+	b.observe(packet)
 	return packet, err
 }
 
-func (b *zigGroup) finishAdmission(req *zigAdmission, packet zigPacket, err error) {
+func (b *zigGroup) finishAdmission(req *zigAdmission, packet zigResponse, err error) {
 	b.frameMu.Lock()
-	if err == nil && packet.bin == nil {
-		if !packet.ref.present() {
-			err = fmt.Errorf("inline reply omitted ref")
-		} else if ref, ok := packet.ref.int64(); !ok || ref != req.fields["ref"] {
-			err = fmt.Errorf("inline reply ref mismatch")
-		}
-	}
 	if err == nil {
 		err = applyReceipt(packet, req.receipt)
 	}
@@ -145,27 +138,31 @@ func (b *zigGroup) finishAdmission(req *zigAdmission, packet zigPacket, err erro
 // inlineEvent is called only by the export goroutine. Sink work runs on a Host
 // goroutine; the guest services its inputs until that work has acknowledged.
 func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
-	root, err := zigParseReply(data)
+	var ref int64
+	var sent string
+	if req := b.inlineRequest; req != nil {
+		ref, sent = req.fields["ref"].(int64), req.fields["m"].(string)
+	}
+	event, ack, err := b.replyReader().readInline(data, ref, sent)
 	if err != nil {
 		return nil, err
 	}
-	event := zigReadPacket(root)
-	if reply := root.get("reply"); reply.present() {
+	if ack {
 		req := b.inlineRequest
 		if req == nil {
 			return nil, fmt.Errorf("inline reply without admission")
 		}
 		b.inlineRequest = nil
 		b.inlineWait = append(b.inlineWait, req.finished)
-		b.finishAdmission(req, zigReadPacket(reply), nil)
-	} else if event.trace.present() || event.need.present() {
+		b.finishAdmission(req, event, nil)
+	} else if len(event.trace) > 0 || event.need != nil {
 		done := make(chan struct{})
 		b.inlineWait = append(b.inlineWait, done)
 		go func() {
 			defer func() { close(done); b.wakeInline() }()
-			b.observe(event, "")
-			if need := event.need; need.present() {
-				_, err := b.callback(need)
+			b.observe(event)
+			if need := event.need; need != nil {
+				_, _, err := b.callback(need)
 				if err != nil {
 					b.frameMu.Lock()
 					b.inlineError = err
@@ -175,7 +172,7 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 		}()
 	} else {
 		// Polls can carry cancellation/settlement notices even without Trace.
-		b.observe(event, "")
+		b.observe(event)
 	}
 	for {
 		kept := b.inlineWait[:0]
@@ -212,8 +209,8 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 }
 
 // applyReceipt records a completed reply; needs carry none.
-func applyReceipt(packet zigPacket, receipt zigReceipt) error {
-	if receipt == nil || packet.need.present() || packet.bin != nil && packet.bin.need != nil {
+func applyReceipt(packet zigResponse, receipt zigReceipt) error {
+	if receipt == nil || packet.need != nil {
 		return nil
 	}
 	return receipt(packet)
