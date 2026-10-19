@@ -1,0 +1,9 @@
+-- fine.talk: the same Operations called as they are declared, labelled and
+-- positional, so the Script loads.
+
+on go
+  ask world to move "a" to "b"
+  ask world to move "a", "b"
+  tell world to slide "a" across "b" by 2
+  ask world to swap "a", "b"
+end go

@@ -16,7 +16,11 @@ type Node struct {
 	// Target is a result-producing statement's Result Target Name (ADR 0114). Walk skips it: it
 	// is a write, which binding passes read explicitly. Its one Flag is the
 	// `into` token.
-	Target  *Node
+	Target *Node
+	// Labels are an Operation call's Argument Labels, one before each
+	// argument after the first, as written (ADR 0115). Only the checker
+	// reads them.
+	Labels  []Token
 	Flags   []Token
 	HasElse bool
 	Private bool

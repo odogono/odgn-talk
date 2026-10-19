@@ -1,0 +1,10 @@
+-- s.talk: routes through the router Library.
+
+use route from router
+
+script variable last = ""
+
+on go a, b
+  route a, b
+  put it into last
+end go

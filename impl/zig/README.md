@@ -202,6 +202,24 @@ the Group Fingerprint and restore matching write `"command":true` after
 resolution never outlives the Grants it was made against; the code identity is
 unchanged.
 
+**Argument Labels** ([ADR 0115](../../docs/adr/0115-operation-declarations-may-declare-argument-labels.md)):
+an Operation Declaration's `labels` (`talk_operation.labels`/`labels_lens`/
+`labels_len` and the same on `talk_operation_check`, the Message Layer's
+`"labels": [...]` on `define-capability` and `compile-library`, `case.toml`'s
+`labels = [...]`) give one word per argument after the first. The parser reads
+`ask`, `tell` and `tell` block line arguments as a Command Call's phrase does,
+into `ast.Operation.labels`. The checker reports `wrong argument count` first,
+then `wrong labels` at the first label that isn't the declared one at its
+position (`check.Operation.wrongLabel`), alongside any `wrong argument`; the
+labels join each `Need`, so an importer's `use` line rechecks them. A `command`
+Operation answers its plain name and, for each argument count from 2 it takes,
+its name and that prefix of its labels as a Selector (`check.Operation.spells`);
+a labelled Command Call no Operation spells stays a message. Lowering, `op`
+frames and the Trace never see labels. `validScopes` refuses a wrong length or
+a word that isn't an Argument Label word; the Fingerprint, saves, restore
+matching and the Host Manifest write `"labels"` after `args`, only when not
+empty.
+
 ## Lowering
 
 `lower.lower` turns a unit that checks clean into a code unit: its constant

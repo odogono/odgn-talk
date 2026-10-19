@@ -1,0 +1,15 @@
+-- shadow.talk: a Handler takes the labelled spelling's Selector.
+
+script variable seen = []
+
+on move piece to square
+  return "handled " & square
+end move
+
+on go a, b
+  move a to b
+  put it after seen
+  move a, b
+  put it after seen
+  move a at b
+end go

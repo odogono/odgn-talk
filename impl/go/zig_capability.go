@@ -117,6 +117,9 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 		if op.Command {
 			fields["command"] = true
 		}
+		if len(op.Labels) > 0 {
+			fields["labels"] = op.Labels
+		}
 		if op.Result.inner.Kind != "" {
 			encoded, err := zigShape(op.Result.inner, 0)
 			if err != nil {

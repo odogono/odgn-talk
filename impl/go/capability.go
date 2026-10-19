@@ -33,6 +33,7 @@ type ScopeDecl struct{ Opens, Abandon, Closes string }
 type Operation struct {
 	Name         string
 	Args         []Shape
+	Labels       []string // one Argument Label per argument after the first, or none (ADR 0115)
 	Result       Shape
 	Cost         Cost
 	Mode         Mode
@@ -196,6 +197,20 @@ func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordi
 		if op.Command && slices.Contains(generated.Grammar.Reserved, op.Name) {
 			return invalid(op.Name + " is a Reserved Word, so it can't be a command")
 		}
+		// Labels are Argument Label words, one per argument after the first
+		// (ADR 0115). An empty list is the same as none.
+		if len(op.Labels) > 0 && len(op.Labels) != len(op.Args)-1 {
+			return invalid("labels must have one entry per argument after the first")
+		}
+		for _, label := range op.Labels {
+			if !syntax.IsLabel(label) {
+				return invalid(label + " is not an Argument Label word")
+			}
+		}
+		if len(op.Labels) == 0 {
+			op.Labels = nil
+		}
+		op.Labels = slices.Clone(op.Labels)
 		if op.Cost.Fuel < 0 || op.Cost.Alloc < 0 || op.Cost.Fuel > 9007199254740991 || op.Cost.Alloc > 9007199254740991 {
 			return invalid("invalid Operation cost")
 		}
@@ -443,14 +458,14 @@ func (s *Script) Revoke(grantName string) {
 
 func modeName(m Mode) string { return []string{"immediate", "suspending", "fire-and-forget"}[m] }
 
-// operationCheck is an Operation's mode, argument Shapes and `command` flag,
-// for the load checks and Host Command resolution.
+// operationCheck is an Operation's mode, argument Shapes, labels and
+// `command` flag, for the load checks and Host Command resolution.
 func operationCheck(d Operation) check.OperationCheck {
 	args := make([]shape.Shape, len(d.Args))
 	for i, s := range d.Args {
 		args[i] = s.inner
 	}
-	return check.OperationCheck{Mode: modeName(d.Mode), Args: args, Command: d.Command}
+	return check.OperationCheck{Mode: modeName(d.Mode), Args: args, Command: d.Command, Labels: d.Labels}
 }
 
 // Answer queues a suspending call's settlement for the next Pump.

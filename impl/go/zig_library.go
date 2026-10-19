@@ -96,6 +96,9 @@ func (b *zigGroup) compileLibrary(l *Library) (zigReply, error) {
 				if check.Command {
 					decl["command"] = true
 				}
+				if len(check.Labels) > 0 {
+					decl["labels"] = check.Labels
+				}
 				declared[op] = decl
 			}
 			decls[grant] = declared

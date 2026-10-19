@@ -61,6 +61,7 @@ export const operationData = (name: string, op: Operation<unknown>) => ({
   name,
   mode: op.mode,
   args: (op.args ?? []).map(shapeData),
+  ...(op.labels?.length ? { labels: [...op.labels] } : {}),
   ...(op.result ? { result: shapeData(op.result) } : {}),
   cost: { fuel: op.cost.fuel, alloc: op.cost.alloc ?? 0 },
   ...(op.mode === 'suspending' && op.maxPendingMs !== undefined

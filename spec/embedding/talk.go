@@ -308,8 +308,9 @@ type ErrorDecl struct {
 // Operation is one Operation Declaration paired with the Host function that
 // implements it. Exactly one of Do, Start and Fire is set, matching Mode.
 type Operation struct {
-	Name         string  // a literal word; `ask`, `tell`, `send`, `wait` and `end` are refused
-	Args         []Shape // an Optional suffix may be omitted; Host functions receive only supplied args
+	Name         string   // a literal word; `ask`, `tell`, `send`, `wait` and `end` are refused
+	Args         []Shape  // an Optional suffix may be omitted; Host functions receive only supplied args
+	Labels       []string // one Argument Label word per argument after the first, or none; a call may write them (ADR 0115)
 	Result       Shape
 	Cost         Cost
 	Mode         Mode
@@ -767,11 +768,12 @@ type TraceSink interface{ Record(line string) }
 // Libraries (ADR 0020; #71)
 // ---------------------------------------------------------------------------
 
-// GrantDecls gives compile-time modes, argument Shapes and `command` flags by the Grant name in source.
+// GrantDecls gives compile-time modes, argument Shapes, labels and `command` flags by the Grant name in source.
 type OperationCheck struct {
 	Mode    Mode
 	Args    []Shape
-	Command bool // also a Host Command (ADR 0094)
+	Command bool     // also a Host Command (ADR 0094)
+	Labels  []string // the Argument Labels a call may write (ADR 0115)
 }
 type GrantDecls map[string]map[string]OperationCheck
 

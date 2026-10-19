@@ -229,6 +229,8 @@ export type Stmt =
       /** A Result Target (ADR 0114). */
       into?: SemanticName;
       k: 'ask' | 'tell';
+      /** A labelled call's Argument Labels, checked at load only (ADR 0115). */
+      labels?: string[];
       operation: string;
       pos: Pos;
       wait: boolean;
@@ -407,6 +409,18 @@ const isToken = (
   text?: string,
 ): element is SemanticToken =>
   element?.kind === 'token' && (text === undefined || element.text === text);
+// A call's Argument Labels, from its argument list, when it writes any.
+const labelsOf = (list: SemanticElement | undefined): { labels?: string[] } => {
+  const labels =
+    list?.kind === 'node'
+      ? list.children.flatMap(child =>
+          child.kind === 'node' && child.rule === 'Label'
+            ? [(child.children[0] as SemanticToken).text]
+            : [],
+        )
+      : [];
+  return labels.length ? { labels } : {};
+};
 const words = (node: SemanticNode) =>
   node.children
     .map(child => (child.kind === 'node' ? '' : child.text))
@@ -595,6 +609,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         grant: target.name.text,
         operation: (children[3] as Leaf).text,
         args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        ...labelsOf(children[list]),
         ...(into >= 0 && { into: of<SemanticName>(children[into]) }),
         wait: nodeAt(4, 'AndWait') >= 0,
       } satisfies Stmt;
@@ -624,6 +639,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
               grant: target.name.text,
               operation: (child.children[0] as Leaf).text,
               args: list >= 0 ? of<Expr[]>(child.children[list]) : [],
+              ...labelsOf(child.children[list]),
               ...resultInto(child.children, of),
               wait: child.children.some(
                 c => c.kind === 'node' && c.rule === 'AndWait',

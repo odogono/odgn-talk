@@ -18,10 +18,11 @@ const (
 type OperationCheck struct {
 	Mode    Mode
 	Args    []Shape
-	Command bool // also a Host Command (ADR 0094)
+	Command bool     // also a Host Command (ADR 0094)
+	Labels  []string // the Argument Labels a call may write (ADR 0115)
 }
 
-// GrantDecls supplies compile-time modes, argument Shapes and `command` flags by source Grant name.
+// GrantDecls supplies compile-time modes, argument Shapes, labels and `command` flags by source Grant name.
 type GrantDecls map[string]map[string]OperationCheck
 type LibrarySource struct {
 	Name    string
@@ -109,7 +110,7 @@ func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Lib
 		for op, d := range ops {
 			args := make([]Shape, len(d.Args))
 			copy(args, d.Args)
-			decl := check.OperationCheck{Mode: modeName(d.Mode), Command: d.Command}
+			decl := check.OperationCheck{Mode: modeName(d.Mode), Command: d.Command, Labels: slices.Clone(d.Labels)}
 			for _, arg := range args {
 				decl.Args = append(decl.Args, arg.inner)
 			}

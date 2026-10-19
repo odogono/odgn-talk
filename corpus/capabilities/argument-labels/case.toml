@@ -1,0 +1,60 @@
+# argument-labels: an Operation Declaration may declare Argument Labels, and
+# a call may write them between its arguments (ADR 0115; spec chapter 4,
+# Capabilities). `labelled` and `positional` make the same calls, the first
+# with labels and the second with commas, so their Runs have the same calls,
+# answers, Fuel, allocation and Persistent State: the labels are checked at
+# load and change nothing else. `labelled` covers an `ask` with a Result
+# Target, a one-line `tell`, a `tell` block line, a suspending `ask … and
+# wait`, a Join Member, and calls that leave off trailing Optional
+# arguments, and so their labels.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "world"
+name = "move"
+mode = "immediate"
+args = ["text", "text"]
+labels = ["to"]
+result = "text"
+cost = { fuel = 10 }
+
+[[operations]]
+capability = "world"
+name = "place"
+mode = "fire-and-forget"
+args = ["text", "text"]
+labels = ["at"]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "world"
+name = "fetch"
+mode = "suspending"
+args = ["text", "text"]
+labels = ["toward"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+
+[[operations]]
+capability = "world"
+name = "mark"
+mode = "fire-and-forget"
+args = ["text", { optional = "text" }, { optional = "number" }]
+labels = ["at", "by"]
+cost = { fuel = 1 }
+
+[[scripts]]
+name = "labelled"
+source = "labelled.talk"
+grants = { world = { ops = "all" } }
+
+[[scripts]]
+name = "positional"
+source = "positional.talk"
+grants = { world = { ops = "all" } }

@@ -1,0 +1,61 @@
+# Unblessed: Argument Labels on Operations (#1341); first blessing awaits human review.
+# argument-labels: d1 and d2 ring "pass" and "red hangar" through each form,
+# and both fetches are answered with 3. d3 and d4 gather through a Join of
+# two labelled or positional fetches, answered with 4 and 5.
+
+> load labelled identity=eb2af2641048e459c91f31b426a73f0120e4f7670a6a34878b17d5a26368d980
+> load positional identity=bdda54a20943f6a8e615c3098a2c76576fc80afa11977a540ec223255bb659c5
+> stub world.move value="red hangar"
+> stub world.move value="red hangar"
+> deliver d1 to=labelled message=ring args=["pass", "red hangar"]
+> deliver d2 to=positional message=ring args=["pass", "red hangar"]
+> pump clock=2026-09-30T09:00:00Z
+call labelled/r1.c1 op=world.move args=["pass", "red hangar"] result="red hangar"
+call labelled/r1.c2 op=world.place args=["beacon", "red hangar"]
+call labelled/r1.c3 op=world.place args=["flag", "red hangar"]
+call labelled/r1.c4 op=world.fetch args=["pass", "red hangar"]
+seg labelled/r1 start delivery=d1 handler=ring clause=1 fuel=97 alloc=26 state=362 end=ask-wait
+call positional/r1.c1 op=world.move args=["pass", "red hangar"] result="red hangar"
+call positional/r1.c2 op=world.place args=["beacon", "red hangar"]
+call positional/r1.c3 op=world.place args=["flag", "red hangar"]
+call positional/r1.c4 op=world.fetch args=["pass", "red hangar"]
+seg positional/r1 start delivery=d2 handler=ring clause=1 fuel=97 alloc=26 state=362 end=ask-wait
+pumped state=idle fuel=194 next=2026-09-30T09:00:05Z
+> answer labelled/r1.c4 value=3
+> answer positional/r1.c4 value=3
+> pump clock=2026-09-30T09:00:01Z
+call labelled/r1.c5 op=world.mark args=["pass"]
+call labelled/r1.c6 op=world.mark args=["pass", "red hangar"]
+call labelled/r1.c7 op=world.mark args=["pass", "red hangar", 2]
+seg labelled/r1 resume fuel=54 alloc=32 state=42 end=return
+run labelled/r1 outcome=completed delivery=d1 handler=ring fuel=151 alloc=58
+call positional/r1.c5 op=world.mark args=["pass"]
+call positional/r1.c6 op=world.mark args=["pass", "red hangar"]
+call positional/r1.c7 op=world.mark args=["pass", "red hangar", 2]
+seg positional/r1 resume fuel=54 alloc=32 state=42 end=return
+run positional/r1 outcome=completed delivery=d2 handler=ring fuel=151 alloc=58
+pumped state=idle fuel=108
+> deliver d3 to=labelled message=gather args=["a", "b"]
+> deliver d4 to=positional message=gather args=["a", "b"]
+> pump clock=2026-09-30T09:00:02Z
+call labelled/r2.c1 op=world.fetch args=["a", "b"]
+call labelled/r2.c2 op=world.fetch args=["b", "a"]
+seg labelled/r2 start delivery=d3 handler=gather clause=1 fuel=88 alloc=0 state=380 end=join-end
+call positional/r2.c1 op=world.fetch args=["a", "b"]
+call positional/r2.c2 op=world.fetch args=["b", "a"]
+seg positional/r2 start delivery=d4 handler=gather clause=1 fuel=88 alloc=0 state=380 end=join-end
+pumped state=idle fuel=176 next=2026-09-30T09:00:07Z
+> answer labelled/r2.c1 value=4
+> answer labelled/r2.c2 value=5
+> answer positional/r2.c1 value=4
+> answer positional/r2.c2 value=5
+> pump clock=2026-09-30T09:00:03Z
+seg labelled/r2 resume fuel=21 alloc=128 state=42 end=return
+run labelled/r2 outcome=completed delivery=d3 handler=gather fuel=109 alloc=128
+seg positional/r2 resume fuel=21 alloc=128 state=42 end=return
+run positional/r2 outcome=completed delivery=d4 handler=gather fuel=109 alloc=128
+pumped state=idle fuel=42
+
+> vars
+vars labelled total=7 spot="red hangar"
+vars positional total=7 spot="red hangar"

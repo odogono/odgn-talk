@@ -16,6 +16,9 @@ export type ManifestOperation = {
   description?: string;
   errors: string[];
   examples?: string[];
+  /** Argument Labels, one per argument after the first, that a call may
+   * write between its arguments (ADR 0115); absent when it declares none. */
+  labels?: string[];
   /** Whole milliseconds, on a suspending Operation only. */
   maxPending?: number;
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
@@ -191,6 +194,9 @@ export const readManifest = (value: unknown): HostManifest => {
           : { examples: array(op.examples).map(string) }),
         mode,
         args: array(op.args ?? []).map(v => shape(v)),
+        ...(op.labels === undefined || !array(op.labels).length
+          ? {}
+          : { labels: array(op.labels).map(string) }),
         ...(op.result === undefined ? {} : { result: shape(op.result) }),
         ...(op.cost === undefined ? {} : { cost: cost(op.cost) }),
         ...(op.maxPending === undefined
@@ -282,8 +288,28 @@ export const grantDeclarations = (manifest: HostManifest): GrantDecls =>
       Object.fromEntries(
         [...operations].map(([name, op]) => [
           name,
-          { mode: op.mode, args: op.args, command: op.command },
+          {
+            mode: op.mode,
+            args: op.args,
+            command: op.command,
+            ...(op.labels ? { labels: op.labels } : {}),
+          },
         ]),
       ),
     ]),
   );
+
+/** The Selectors a Host Command answers: its name, and for an Operation with
+ * labels, its name and labels for each argument count it accepts past the
+ * first, so `move` with `labels = ["to"]` answers `move` and `move:to:`
+ * (ADR 0115). Only a trailing Optional suffix may be left off. */
+export const commandSelectors = (op: ManifestOperation): string[] => {
+  const labels = op.labels ?? [];
+  const selectors = [op.name];
+  for (let n = 2; n <= labels.length + 1; n++) {
+    if (op.args.slice(n).every(s => s.k === 'optional')) {
+      selectors.push(`${[op.name, ...labels.slice(0, n - 1)].join(':')}:`);
+    }
+  }
+  return selectors;
+};

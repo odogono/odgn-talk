@@ -1210,6 +1210,13 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
             } else null;
             const segment_bound = if (case_setup.field(t, "segmentBound")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false;
             bound = bound or segment_bound;
+            const labels = try case_setup.labels(a, t);
+            const label_ptrs = try a.alloc([*c]const u8, labels.len);
+            const label_lens = try a.alloc(usize, labels.len);
+            for (labels, label_ptrs, label_lens) |l, *x, *n| {
+                x.* = l.ptr;
+                n.* = l.len;
+            }
             try ops.append(a, .{
                 .name = name.ptr,
                 .name_len = name.len,
@@ -1228,6 +1235,9 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 .metering = if (case_setup.field(t, "metering")) |m| m.string.ptr else null,
                 .metering_len = if (case_setup.field(t, "metering")) |m| m.string.len else 0,
                 .command = if (case_setup.field(t, "command")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false,
+                .labels = label_ptrs.ptr,
+                .labels_lens = label_lens.ptr,
+                .labels_len = labels.len,
             });
         }
         var def: ?*c.talk_capability_def = null;

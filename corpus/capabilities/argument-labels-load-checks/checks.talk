@@ -1,0 +1,13 @@
+-- checks.talk: one load diagnostic for each call.
+
+on go
+  ask world to move "a" at "b"
+  tell world to slide "a" across "b" to 2
+  ask world to swap "a" to "b"
+  ask world to move "a" to "b" to "c"
+  ask world to move "a" to "b" and wait
+  tell world
+    slide "a" toward "b" by 2
+  end tell
+  ask world to move 1 at "b"
+end go

@@ -147,7 +147,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "wrong labels",
-			RaisedWhen: "A labelled Capability call, or a labelled call of a Host Command, writes an Argument Label that isn't the one its Operation Declaration gives that position, or labels an Operation that declares none; a wrong argument count is `wrong argument count` instead",
+			RaisedWhen: "A labelled `ask`, `tell` or `tell` block line writes an Argument Label that isn't the one its Operation Declaration gives that position, or labels an Operation that declares none; a wrong argument count is `wrong argument count` instead",
 			At:         "the first label that doesn't match",
 			Sources: []string{
 				"ADR 0115",

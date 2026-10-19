@@ -20,6 +20,7 @@ import {
 import { unitKinds } from './generated/syntax';
 import type { Group } from './group';
 import { RESERVED } from './lexer';
+import { validArgumentLabel } from './selectors';
 
 export type Shape =
   | { k: 'any' }
@@ -1017,6 +1018,11 @@ type OpBase = {
   description?: string;
   errors?: ErrorDecl[];
   examples?: string[];
+  /**
+   * Argument Labels, one per argument after the first, that a call may write
+   * between its arguments; checked at load only (ADR 0115). Empty is absent.
+   */
+  labels?: string[];
   result?: Shape;
 };
 /** What the Core gives a Host function at each call (chapter 9, The call). */
@@ -1142,6 +1148,20 @@ export const defineCapability = <B = void>(
     // A Command Call can't start with a Reserved Word (ADR 0094).
     if (op.command && RESERVED.has(opName)) {
       invalidValue(`${opName} is a Reserved Word, so it can't be a command`);
+    }
+    if (op.labels !== undefined) {
+      if (
+        !Array.isArray(op.labels) ||
+        [...op.labels].some(
+          label => typeof label !== 'string' || !validArgumentLabel(label),
+        )
+      ) {
+        invalidValue('labels must be a list of Argument Label words');
+      }
+      // One label per argument after the first; an empty list is none.
+      if (op.labels.length && op.labels.length !== (op.args?.length ?? 0) - 1) {
+        invalidValue('labels must have one entry per argument after the first');
+      }
     }
     if (op.description !== undefined && typeof op.description !== 'string') {
       invalidValue('description must be text');

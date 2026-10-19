@@ -45,6 +45,32 @@ export const commandManifest = {
     ],
   ]),
 };
+// A `world` Grant whose `move` is a Host Command with labels, answering
+// `move` and `move:to:` (ADR 0115).
+export const labelledCommandManifest = {
+  ...fixtureManifest,
+  capabilities: new Map([['world', 'world']]),
+  grants: new Map([
+    [
+      'world',
+      new Map<string, ManifestOperation>([
+        [
+          'move',
+          {
+            name: 'move',
+            mode: 'fire-and-forget',
+            args: [{ k: 'value' }, { k: 'value' }],
+            labels: ['to'],
+            command: true,
+            segmentBound: false,
+            errors: [],
+            declaration: {},
+          },
+        ],
+      ]),
+    ],
+  ]),
+};
 const script = (body: string) => `on demo\n${body}\nend demo`;
 const join = (lines: number) =>
   script(`wait for all\n${'say 1\n'.repeat(lines)}end wait`);
@@ -135,6 +161,12 @@ export const fixtures: readonly {
     positive: `on hide x\nend hide\n${script('hide 1')}`,
     negative: `on hide x to y\nend hide\n${script('hide 1')}`,
     options: { manifest: commandManifest },
+  },
+  {
+    id: 'shadowed-host-command',
+    positive: `on move a to b\nend move\n${script('move 1 to 2')}`,
+    negative: `on move a at b\nend move\n${script('move 1 to 2')}`,
+    options: { manifest: labelledCommandManifest },
   },
   {
     id: 'unknown-message',

@@ -73,10 +73,11 @@ type errorData struct {
 	Fields []fieldData `json:"fields"`
 }
 type opData struct {
-	Name   string `json:"name"`
-	Mode   string `json:"mode"`
-	Args   []any  `json:"args"`
-	Result any    `json:"result,omitempty"`
+	Name   string   `json:"name"`
+	Mode   string   `json:"mode"`
+	Args   []any    `json:"args"`
+	Labels []string `json:"labels,omitempty"`
+	Result any      `json:"result,omitempty"`
 	Cost   struct {
 		Fuel  int64 `json:"fuel"`
 		Alloc int64 `json:"alloc"`
@@ -89,7 +90,7 @@ type opData struct {
 }
 
 func operationData(op Operation) opData {
-	out := opData{Name: op.Name, Mode: modeName(op.Mode), Args: []any{}, SegmentBound: op.SegmentBound, Command: op.Command}
+	out := opData{Name: op.Name, Mode: modeName(op.Mode), Args: []any{}, Labels: op.Labels, SegmentBound: op.SegmentBound, Command: op.Command}
 	for _, arg := range op.Args {
 		out.Args = append(out.Args, shapeData(arg.inner))
 	}

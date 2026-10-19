@@ -8,7 +8,7 @@ import type {
 } from '@northtalk/ts';
 import { builtins, properties } from './generated/lints';
 import type { LintId } from './lint';
-import type { HostManifest } from './lsp/manifest';
+import { commandSelectors, type HostManifest } from './lsp/manifest';
 
 type Emit = (
   id: LintId,
@@ -1211,12 +1211,14 @@ export const lintBindings = (
       }
     }
   }
-  // Each Host Command the Script's Grants offer, with the Grants offering it.
+  // Each Selector a Host Command the Script's Grants offer answers, with the
+  // Grants offering it: a labelled one answers its labelled spelling too,
+  // and a Handler may shadow either on its own (ADR 0115).
   const commands = new Map<string, string[]>();
   for (const [grant, operations] of manifest?.grants ?? []) {
     for (const op of operations.values()) {
-      if (op.command) {
-        commands.set(op.name, [...(commands.get(op.name) ?? []), grant]);
+      for (const selector of op.command ? commandSelectors(op) : []) {
+        commands.set(selector, [...(commands.get(selector) ?? []), grant]);
       }
     }
   }
@@ -1249,7 +1251,7 @@ export const lintBindings = (
       const grants = unit === 'script' ? commands.get(name) : undefined;
       if (grants) {
         emit('shadowed-host-command', message(clause)!.span, {
-          name,
+          name: name.replaceAll(':', ' ').trim(),
           grant: grants.join(', '),
         });
       }

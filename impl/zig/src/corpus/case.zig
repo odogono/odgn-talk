@@ -184,6 +184,15 @@ fn standardArity(call: []const u8) struct { required: usize, total: usize } {
     return .{ .required = required, .total = total };
 }
 
+/// An `[[operations]]` table's `labels`, as text (ADR 0115).
+pub fn labels(a: Allocator, t: Table) Allocator.Error![]const []const u8 {
+    const v = field(t, "labels") orelse return &.{};
+    if (v != .array) return &.{};
+    const out = try a.alloc([]const u8, v.array.len);
+    for (v.array, out) |x, *y| y.* = if (x == .string) x.string else "";
+    return out;
+}
+
 /// Reads a case's setup.
 pub fn read(a: Allocator, toml: []const u8) Error!Setup {
     return fromTables(a, try tables(a, toml));
@@ -197,7 +206,7 @@ pub fn fromTables(a: Allocator, all: []const Table) Error!Setup {
             const args = if (field(t, "args")) |v| (if (v == .array) v.array else &.{}) else &.{};
             const n = arity(args);
             const command = if (field(t, "command")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false;
-            try declared.append(a, .{ .capability = string(t, "capability"), .operation = .{ .name = string(t, "name"), .mode = parseMode(string(t, "mode")), .required = n.required, .total = n.total, .command = command } });
+            try declared.append(a, .{ .capability = string(t, "capability"), .operation = .{ .name = string(t, "name"), .mode = parseMode(string(t, "mode")), .required = n.required, .total = n.total, .command = command, .labels = try labels(a, t) } });
         } else if (std.mem.eql(u8, t.header, "[[standard]]")) {
             const capability = string(t, "capability");
             for (stdlib.operation) |o| if (std.mem.eql(u8, o.capability, capability)) {

@@ -2885,6 +2885,58 @@ test "a save from language 1.0-rc.2 is a mismatch, refused or restored variables
     try testing.expectEqual(@as(usize, 1), result.dropped.len);
 }
 
+test "Argument Labels are in the Group Fingerprint and restore's declaration matching (ADR 0115)" {
+    const gpa = testing.allocator;
+    const Host = struct {
+        fn call(_: ?*anyopaque, c: *capabilities.Call, _: []const *Value) capabilities.Outcome {
+            return .{ .value = model.text(c.gpa, "moved") catch return .broken };
+        }
+        fn rebind(context: ?*anyopaque, _: []const u8, _: []const u8) ?*capabilities.Grant {
+            return @ptrCast(@alignCast(context.?));
+        }
+    };
+    var text: capabilities.Shape = .{ .allocator = gpa, .data = .{ .kind = .text } };
+    var args = [_]*capabilities.Shape{ &text, &text };
+    var ops = [_]capabilities.Operation{.{ .name = "move", .args = &args, .labels = &.{"to"}, .result = &text, .mode = .immediate, .host = .{ .call = Host.call } }};
+    var capability: capabilities.Capability = .{ .name = "world", .operations = &ops };
+    try testing.expect(capability.validScopes());
+    var kept = [_]bool{true};
+    var grant: capabilities.Grant = .{ .capability = &capability, .operations = &kept };
+    const json = try fingerprint.grantJson(gpa, &capability, &kept);
+    defer gpa.free(json);
+    try testing.expectEqualStrings("{\"capability\":\"world\",\"operations\":[{\"name\":\"move\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"labels\":[\"to\"],\"result\":\"text\",\"cost\":{\"fuel\":0,\"alloc\":0}}]}", json);
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    const named = [_]machine.NamedGrant{.{ .name = "world", .grant = &grant }};
+    try testing.expect(try g.load("s", "on go\n  ask world to move \"a\" to \"b\"\n  return it\nend go\n", .{ .grants = &named }) == .loaded);
+    const print = try g.groupFingerprint();
+    const bytes = try save(&g, gpa, print);
+    defer gpa.free(bytes);
+    var same: Group = .init(gpa, null);
+    defer same.deinit();
+    var restored: Result = .{};
+    defer restored.deinit(gpa);
+    try testing.expectEqual(Outcome.full, try restore(&same, bytes, .{ .grants = .{ .context = &grant, .call = Host.rebind } }, &restored));
+    // Labels that differ, or none, are a declaration mismatch.
+    for ([_][]const []const u8{ &.{"toward"}, &.{} }) |labels| {
+        ops[0].labels = labels;
+        var other: Group = .init(gpa, null);
+        defer other.deinit();
+        var refused: Result = .{};
+        defer refused.deinit(gpa);
+        try testing.expectEqual(Outcome.mismatch, try restore(&other, bytes, .{ .grants = .{ .context = &grant, .call = Host.rebind } }, &refused));
+    }
+    ops[0].labels = &.{"to"};
+    try testing.expectEqualSlices(u8, &print, &(try g.groupFingerprint()));
+    // A wrong length, or a word that can't be a label, isn't valid.
+    for ([_][]const []const u8{ &.{ "to", "by" }, &.{"from"}, &.{"with"}, &.{"otherwise"}, &.{"if"}, &.{"two words"}, &.{""}, &.{"9x"} }) |labels| {
+        ops[0].labels = labels;
+        try testing.expect(!capability.validScopes());
+    }
+    ops[0].labels = &.{"_x"};
+    try testing.expect(capability.validScopes());
+}
+
 test "a save restores to the same save, and a restored Group goes on" {
     const gpa = testing.allocator;
     var g = try busyGroup(gpa);

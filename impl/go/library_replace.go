@@ -82,7 +82,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 					} else if d.Mode == "fire-and-forget" {
 						mode = FireAndForget
 					}
-					declarations[grant][op] = OperationCheck{mode, args, d.Command}
+					declarations[grant][op] = OperationCheck{mode, args, d.Command, d.Labels}
 				}
 			}
 			replacement, e := g.core.compileLibrary(original.source, candidate, declarations)

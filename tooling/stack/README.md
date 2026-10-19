@@ -4,7 +4,6 @@ The formatter, LSP and debugger accept Nothing defaults and optional map-key rea
 
 **Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter preserves `--|` Declaration Documentation and hover uses the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
-
 `@northtalk/tooling` is the browser-safe TypeScript tooling stack over
 `@northtalk/ts`. It imports only the Core; file, stdio and process handling
 belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
@@ -161,8 +160,8 @@ browser worker can post the messages directly. `server.exitCode` becomes 0 on
 `shutdown` followed by `exit`, or 1 on `exit` without shutdown.
 
 The server supports LSP 3.17 initialization, incremental document changes,
-versioned push diagnostics, completion, hover, definition, references,
-implementation, call hierarchy, rename, inlay hints, formatting and Lint quick
+versioned push diagnostics, completion, hover, signature help, definition,
+references, implementation, call hierarchy, rename, inlay hints, formatting and Lint quick
 fixes. Positions are UTF-16, including
 CRLF and supplementary Unicode characters; the Core's scalar columns stay
 internal. Suspension marks use `textDocument/inlayHint` with a `⏸` label on
@@ -230,6 +229,16 @@ colon-separated wire names. Manifest `messages[].name` contains the Selector,
 with no extra fields; the reader checks its parts and argument count and uses
 argument placeholders in completion. Between arguments, completion offers the
 next matching label. Legacy `send` completion offers only unlabelled messages.
+
+An Operation Declaration's `labels` ([ADR 0115](../../docs/adr/0115-operation-declarations-may-declare-argument-labels.md))
+make its dictionary entry the labelled call, `ask world to move ‹text› to
+‹text›`. Between an `ask`, `tell` or `tell` block line's arguments, completion
+offers the next declared label, and a labelled Host Command also answers its
+labelled Selector, for completion, hover and the `shadowed-host-command` Lint.
+Signature help (`textDocument/signatureHelp`, triggered by a space or comma)
+shows the call the cursor's arguments belong to, an Operation's or a Command
+Call's Handler, Host Command or Host message, with the argument at the cursor
+active by the commas and labels before it.
 
 Messages have senders and implementors, as in Smalltalk's browser. On a message
 name in a Handler head, `send`, `pass`, `wait for` event or Command Call,
@@ -373,9 +382,12 @@ each Script and Library's source in `text`, or provide a source reader:
 ```ts
 import { ReplayDebugger } from '@northtalk/tooling/debug';
 
-const debug = new ReplayDebugger({
-  scripts: [{ name: 's', source: 's.talk', text: source }],
-}, trace);
+const debug = new ReplayDebugger(
+  {
+    scripts: [{ name: 's', source: 's.talk', text: source }],
+  },
+  trace,
+);
 debug.setBreakpoints([{ unit: 's', line: 2 }]);
 debug.resume();
 if (debug.isPaused) {

@@ -1,8 +1,9 @@
 // The load-time checks of `ask`, `tell` and `say` against a Script's Grants
 // (chapter 2, Load-time diagnostics; chapter 9, Shapes): the Grant and
 // Operation exist, the call fits the Operation's mode, it passes as many
-// arguments as its required and Optional positions permit, and each literal
-// argument fits its Shape.
+// arguments as its required and Optional positions permit, any Argument
+// Labels it writes are the declared ones, and each literal argument fits its
+// Shape.
 import { acceptsArgumentCount, type Shape } from './capabilities';
 import type { Report } from './control';
 import {
@@ -23,7 +24,12 @@ export type GrantDecls = Readonly<
     Readonly<
       Record<
         string,
-        { args: readonly Shape[]; command?: boolean; mode: OperationMode }
+        {
+          args: readonly Shape[];
+          command?: boolean;
+          labels?: readonly string[];
+          mode: OperationMode;
+        }
       >
     >
   >
@@ -282,6 +288,15 @@ export const checkEffectCall = (
     report('wrong argument count', op);
     return;
   }
+  // A labelled call writes the declared labels in order, so one that leaves
+  // off trailing Optional arguments writes a prefix of them (ADR 0115).
+  const declared = decl.labels ?? [];
+  const wrong = (list ? nodesOf(list, 'Label') : []).find(
+    (label, i) => firstLeaf(label)?.text !== declared[i],
+  );
+  if (wrong) {
+    report('wrong labels', firstLeaf(wrong)!);
+  }
   args.forEach((arg, i) => {
     const literal = literalOf(arg);
     if (literal && !fits(literal, decl.args[i]!)) {
@@ -291,28 +306,53 @@ export const checkEffectCall = (
 };
 
 /**
+ * The Selectors a Host Command answers: its name, and for an Operation with
+ * `labels`, its name and the labels of each argument count it accepts past
+ * the first, so `move` with `labels = ["to"]` answers `move` and `move:to:`
+ * (ADR 0115).
+ */
+const commandSelectors = (
+  operation: string,
+  decl: { args: readonly Shape[]; labels?: readonly string[] },
+): string[] => {
+  const selectors = [operation];
+  const labels = decl.labels ?? [];
+  for (let n = 2; n <= labels.length + 1; n++) {
+    if (acceptsArgumentCount(decl.args, n)) {
+      selectors.push(`${[operation, ...labels.slice(0, n - 1)].join(':')}:`);
+    }
+  }
+  return selectors;
+};
+
+/**
  * Resolve each Command Call that names no Handler of the unit, local or
  * imported, to a Host Command: an Operation its Grants declare `command`
- * (ADR 0094). Only an unlabelled call's Selector is a single word, so a
- * labelled one never matches. A fire-and-forget one without `and wait` is
- * called as `tell`, and any other as `ask`, decided here once, so an
- * importer's recheck never changes it. An Import named like a Host Command,
- * or a call that two Grants offer, is a `name clash`. Gives each resolved
- * call for the compile cache key.
+ * (ADR 0094), by any of its Selectors (ADR 0115). A labelled call whose
+ * Selector the Operation doesn't spell stays a message. A fire-and-forget
+ * one without `and wait` is called as `tell`, and any other as `ask`,
+ * decided here once, so an importer's recheck never changes it. An Import
+ * named like a Host Command, or a call that two Grants offer, is a
+ * `name clash`. Gives each resolved call for the compile cache key.
  */
 export const resolveHostCommands = (
   root: SemanticNode,
   grants: GrantDecls,
   report: Report,
 ): string[] => {
-  const offered = new Map<string, { grant: string; mode: OperationMode }[]>();
+  const offered = new Map<
+    string,
+    { grant: string; mode: OperationMode; operation: string }[]
+  >();
   for (const [grant, ops] of Object.entries(grants)) {
     for (const [operation, decl] of Object.entries(ops)) {
       if (decl.command) {
-        offered.set(operation, [
-          ...(offered.get(operation) ?? []),
-          { grant, mode: decl.mode },
-        ]);
+        for (const selector of commandSelectors(operation, decl)) {
+          offered.set(selector, [
+            ...(offered.get(selector) ?? []),
+            { grant, mode: decl.mode, operation },
+          ]);
+        }
       }
     }
   }
@@ -353,8 +393,8 @@ export const resolveHostCommands = (
       report('name clash', head);
       continue;
     }
-    const { grant, mode } = found[0]!;
-    hostCommands.set(element, { grant, operation: head.text });
+    const { grant, mode, operation } = found[0]!;
+    hostCommands.set(element, { grant, operation });
     const told =
       mode === 'fire-and-forget' && !nodesOf(element, 'AndWait').length;
     if (told) {
@@ -362,7 +402,7 @@ export const resolveHostCommands = (
     }
     commands.push({
       at: element.span.start,
-      key: `${element.span.start} ${grant}.${head.text} ${told ? 'tell' : 'ask'}`,
+      key: `${element.span.start} ${grant}.${operation} ${told ? 'tell' : 'ask'}`,
     });
   }
   return commands.sort((a, b) => a.at - b.at).map(c => c.key);

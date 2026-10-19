@@ -1,0 +1,18 @@
+# Unblessed: Argument Labels on Operations (#1341); first blessing awaits human review.
+# argument-labels-library: s routes once through the Library; other doesn't
+# load.
+
+> add-library router identity=021ef70193cc46553838c79de968de4cd5addf36726ec397ae59cf8732355edb
+> load s identity=eb301410844614c7aecd1b5badab03ffe1dd2f280ead3afdc625a6953a9b0020
+> load other identity=d66b7d3478329da55fc688dfd09854c4129d92e9e5a649b03c5c2bd9e78f24fc
+diag other code="wrong labels" pos=3:1
+> stub world.move value="red hangar"
+> deliver d1 to=s message=go args=["pass", "red hangar"]
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=world.move args=["pass", "red hangar"] result="red hangar"
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=52 alloc=26 state=26 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=52 alloc=26
+pumped state=idle fuel=52
+
+> vars
+vars s last="red hangar"

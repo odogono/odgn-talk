@@ -1487,3 +1487,239 @@ test('Result Targets define, reference and rename the same put binding across ca
     { line: 6, character: 8 },
   ]);
 });
+
+describe('Argument Labels on Operations (ADR 0115)', () => {
+  const host = {
+    ...manifest,
+    grants: [
+      ...manifest.grants,
+      {
+        name: 'world',
+        capability: 'world',
+        operations: [
+          {
+            name: 'move',
+            mode: 'immediate',
+            args: ['text', 'text'],
+            labels: ['to'],
+            cost: { fuel: 1, alloc: 0 },
+            command: true,
+            description: 'Moves a piece.',
+          },
+          {
+            name: 'place',
+            mode: 'fire-and-forget',
+            args: ['text', 'text', { optional: 'number' }],
+            labels: ['at', 'facing'],
+            cost: { fuel: 1, alloc: 0 },
+          },
+          {
+            name: 'swap',
+            mode: 'immediate',
+            args: ['text', 'text'],
+            cost: { fuel: 1, alloc: 0 },
+          },
+        ],
+      },
+    ],
+  };
+  type Help = {
+    activeParameter: number;
+    activeSignature: number;
+    signatures: {
+      documentation?: string;
+      label: string;
+      parameters: { label: [number, number] }[];
+    }[];
+  } | null;
+  // The signature at the end of the last line, with its parameters' text.
+  const help = (source: string, line = source.split('\n').length - 1) => {
+    const { request } = setup(source, host);
+    const result = (request as (method: string, params: object) => unknown)(
+      'textDocument/signatureHelp',
+      at(line, source.split('\n')[line]!.length),
+    ) as Help;
+    return result
+      ? {
+          ...result,
+          params: result.signatures.map(s =>
+            s.parameters.map(p => s.label.slice(...p.label)),
+          ),
+        }
+      : null;
+  };
+  const labels = (source: string, line = source.split('\n').length - 1) =>
+    setup(source, host)
+      .request(
+        'textDocument/completion',
+        at(line, source.split('\n')[line]!.length),
+      )
+      .map(i => i.label);
+  const codes = (source: string) =>
+    (
+      setup(source, host)
+        .sent.filter(m => m.method === 'textDocument/publishDiagnostics')
+        .at(-1)!.params as Published
+    ).diagnostics.map(d => d.code);
+
+  test('the manifest reader keeps labels and the dictionary writes the labelled call', () => {
+    const read = readManifest(host).grants.get('world')!;
+    expect(read.get('move')!.labels).toEqual(['to']);
+    expect(read.get('swap')!.labels).toBeUndefined();
+    const { request } = setup('', host);
+    const dictionary = request('northtalk/dictionary', {});
+    expect(dictionary).toContain('ask world to move ‹text› to ‹text›');
+    expect(dictionary).toContain(
+      'tell world to place ‹text› at ‹text› [facing ‹number›]',
+    );
+    expect(dictionary).toContain('ask world to swap ‹text›, ‹text›');
+    expect(dictionary).toContain(
+      'Host Command: also callable as `move` alone, or as `move ‹text› to ‹text›`',
+    );
+  });
+
+  test('completion offers the next declared label of an Operation call', () => {
+    expect(labels('on demo\n  ask world to move "a" ')).toEqual(['to']);
+    expect(labels('on demo\n  tell world to place "a" ')).toEqual(['at']);
+    expect(labels('on demo\n  tell world to place "a" at "b" ')).toEqual([
+      'facing',
+    ]);
+    expect(labels('on demo\n  tell world to place "a" at "b" fa')).toEqual([
+      'facing',
+    ]);
+    expect(labels('on demo\n  tell world\n    place "a" ')).toEqual(['at']);
+    // A wrong label so far, or an Operation without labels, offers none.
+    expect(labels('on demo\n  tell world to place "a" on "b" ')).not.toContain(
+      'facing',
+    );
+    expect(labels('on demo\n  ask world to swap "a" ')).not.toContain('to');
+    // A labelled Host Command's labelled spelling is a Command Call.
+    expect(labels('on demo\n  move "a" ')).toEqual(['to']);
+  });
+
+  test('hover shows the labelled call of an Operation and a labelled Host Command', () => {
+    const source =
+      'on demo\n  ask world to move "a" to "b"\n  move "a" to "b"\nend demo';
+    const { request } = setup(source, host);
+    expect(request('textDocument/hover', at(1, 16)).contents.value).toContain(
+      'ask world to move ‹text› to ‹text›',
+    );
+    const command = request('textDocument/hover', at(2, 3)).contents.value;
+    expect(command).toContain('Moves a piece.');
+    expect(command).toContain('ask world to move ‹text› to ‹text›');
+  });
+
+  test('a wrong label is a load diagnostic and the positional call stays valid', () => {
+    expect(
+      codes('on demo\n  ask world to move "a" at "b"\nend demo'),
+    ).toContain('wrong labels');
+    expect(
+      codes('on demo\n  ask world to swap "a" to "b"\nend demo'),
+    ).toContain('wrong labels');
+    expect(
+      codes(
+        'on demo\n  ask world to move "a", "b"\n  ask world to move "a" to "b"\n  tell world\n    place "a" at "b"\n  end tell\nend demo',
+      ),
+    ).not.toContain('wrong labels');
+  });
+
+  test('signature help shows the labelled call and the argument at the cursor', () => {
+    expect(help('on demo\n  ask world to move ')).toMatchObject({
+      signatures: [
+        {
+          label: 'ask world to move ‹text› to ‹text›',
+          documentation: 'Moves a piece.',
+        },
+      ],
+      params: [['‹text›', 'to ‹text›']],
+      activeParameter: 0,
+    });
+    expect(help('on demo\n  ask world to move "a" to ')?.activeParameter).toBe(
+      1,
+    );
+    expect(help('on demo\n  ask world to move "a", ')?.activeParameter).toBe(1);
+    expect(
+      help('on demo\n  tell world to place "a" at "b" facing '),
+    ).toMatchObject({
+      signatures: [
+        { label: 'tell world to place ‹text› at ‹text› [facing ‹number›]' },
+      ],
+      params: [['‹text›', 'at ‹text›', '[facing ‹number›]']],
+      activeParameter: 2,
+    });
+    expect(help('on demo\n  ask world to swap "a", ')).toMatchObject({
+      signatures: [{ label: 'ask world to swap ‹text›, ‹text›' }],
+      params: [['‹text›', '‹text›']],
+      activeParameter: 1,
+    });
+    // A `tell` block's line is the call without its receiver.
+    expect(help('on demo\n  tell world\n    place "a" at ')).toMatchObject({
+      signatures: [{ label: 'place ‹text› at ‹text› [facing ‹number›]' }],
+      activeParameter: 1,
+    });
+    // No signature while naming the Operation, past `into` or off the call.
+    expect(help('on demo\n  ask world to move')).toBeNull();
+    expect(help('on demo\n  ask world to move "a" to "b" into x')).toBeNull();
+    expect(help('on demo\n  ask world to move "a" to "b"\n')).toBeNull();
+    expect(help('on demo\n  ask world to fly "a"')).toBeNull();
+  });
+
+  test('signature help shows the Handler, Host Command or message a Command Call names', () => {
+    expect(help('on demo\n  move "a" to ')).toMatchObject({
+      signatures: [
+        { label: 'move ‹text› to ‹text›', documentation: 'Moves a piece.' },
+      ],
+      params: [['‹text›', 'to ‹text›']],
+      activeParameter: 1,
+    });
+    expect(help('on demo\n  move "a", ')).toMatchObject({
+      signatures: [{ label: 'move ‹text›, ‹text›' }],
+      activeParameter: 1,
+    });
+    // Both spellings fit until a comma or a label decides.
+    expect(help('on demo\n  move ')?.signatures.map(s => s.label)).toEqual([
+      'move ‹text›, ‹text›',
+      'move ‹text› to ‹text›',
+    ]);
+    // A Script's own Handler takes the labelled spelling.
+    const own = help(
+      'on move piece to square\nend move\non demo\n  move "a" to ',
+    );
+    expect(own).toMatchObject({
+      signatures: [{ label: 'move piece to square' }],
+      params: [['piece', 'to square']],
+      activeParameter: 1,
+    });
+    expect(help('on demo\n  demo ')?.signatures.map(s => s.label)).toEqual([
+      'demo',
+    ]);
+  });
+
+  test('a Handler shadowing either spelling of a labelled Host Command is Linted', () => {
+    expect(
+      codes(
+        'on move piece to square\nend move\non demo\n  move "a" to "b"\nend demo',
+      ),
+    ).toContain('shadowed-host-command');
+    expect(
+      codes(
+        'on move piece at square\nend move\non demo\n  move "a" at "b"\nend demo',
+      ),
+    ).not.toContain('shadowed-host-command');
+  });
+
+  test('the server advertises signature help', () => {
+    const sent: RpcMessage[] = [];
+    const server = createLanguageServer(message => sent.push(message));
+    server.handle({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { capabilities: {} },
+    });
+    expect(
+      (sent[0]!.result as { capabilities: Record<string, unknown> })
+        .capabilities.signatureHelpProvider,
+    ).toEqual({ triggerCharacters: [' ', ','] });
+  });
+});

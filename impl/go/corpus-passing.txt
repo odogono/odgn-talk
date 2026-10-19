@@ -25,6 +25,9 @@ cancellation/policy-dispatch-limits
 cancellation/queueing-policies
 cancellation/refused-host-crossings
 cancellation/replaced-wait-state
+capabilities/argument-labels
+capabilities/argument-labels-library
+capabilities/argument-labels-load-checks
 capabilities/argument-shape-diagnostics
 capabilities/argument-shapes
 capabilities/calls
@@ -63,6 +66,7 @@ capabilities/effect-unrelated-abandon-failed
 capabilities/grants-as-used
 capabilities/host-commands
 capabilities/host-commands-grants-as-used
+capabilities/host-commands-labels
 capabilities/host-commands-library
 capabilities/host-commands-load-checks
 capabilities/host-commands-shadowing

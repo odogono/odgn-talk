@@ -1,0 +1,47 @@
+# argument-labels-load-checks: a labelled Operation call is checked at load
+# against its declaration (ADR 0115; spec chapter 4, Capabilities). A label
+# that isn't the declared one at its position, or any label on an Operation
+# that declares none, is `wrong labels` at that label, in a one-line `ask` or
+# `tell` and in a `tell` block line. The argument count is checked first, so
+# too many labelled arguments are `wrong argument count` at the Operation's
+# name, and a labelled call still has its mode checked. A wrong label is a
+# rule of its own, so a literal argument that breaks its Shape on the same
+# call is `wrong argument` as well.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "world"
+name = "move"
+mode = "immediate"
+args = ["text", "text"]
+labels = ["to"]
+result = "text"
+
+[[operations]]
+capability = "world"
+name = "slide"
+mode = "fire-and-forget"
+args = ["text", "text", "number"]
+labels = ["across", "by"]
+
+[[operations]]
+capability = "world"
+name = "swap"
+mode = "immediate"
+args = ["text", "text"]
+result = "text"
+
+[[scripts]]
+name = "checks"
+source = "checks.talk"
+grants = { world = { ops = "all" } }
+
+[[scripts]]
+name = "fine"
+source = "fine.talk"
+grants = { world = { ops = "all" } }
