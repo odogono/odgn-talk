@@ -387,6 +387,7 @@ pub const Session = struct {
     callbacks: bool = false,
     /// `settlements-fields-v1` (#1320): `settle-pump` carries queued settlements.
     settlements: bool = false,
+    load_fields: bool = false,
     /// Combined exchanges' correlation tokens, bound until their final reply.
     bindings: std.ArrayList(Binding) = .empty,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -2260,7 +2261,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
-    o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\"]") catch return oomReply();
+    o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\",\"" ++ rp.feature_load ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2658,15 +2659,25 @@ fn grantReply(s: *Session, msg: Json, ref: i64) []u8 {
 }
 
 fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
-    const group_handle = asText(field(msg, "group")) orelse asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const code = createGroup(s, msg);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    const handle_name = asText(field(msg, "group")) orelse asText(field(msg, "name")).?;
+    return finishOk(s, &o, s.groupNamed(handle_name));
+}
+
+fn createGroup(s: *Session, msg: Json) talk.HostErrorCode {
+    const group_handle = asText(field(msg, "group")) orelse asText(field(msg, "name")) orelse return .invalid_value;
     const name = asText(field(msg, "name")) orelse group_handle;
-    if (s.groupNamed(group_handle) != null) return hostError(s.gpa, ref, .name_reused);
-    const entry = s.gpa.create(GroupEntry) catch return hostError(s.gpa, ref, .out_of_memory);
+    if (s.groupNamed(group_handle) != null) return .name_reused;
+    const entry = s.gpa.create(GroupEntry) catch return .out_of_memory;
     entry.* = .{
         .gpa = s.gpa,
         .name = s.gpa.dupe(u8, group_handle) catch {
             s.gpa.destroy(entry);
-            return hostError(s.gpa, ref, .out_of_memory);
+            return .out_of_memory;
         },
         .group = undefined,
         .traced = asBool(field(msg, "trace")) orelse false,
@@ -2680,14 +2691,14 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
     const seed: u64 = if (field(msg, "seed")) |j| asSeed(j) orelse {
         s.gpa.free(entry.name);
         s.gpa.destroy(entry);
-        return hostError(s.gpa, ref, .invalid_value);
+        return .invalid_value;
     } else 0;
     const options: talk.GroupOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .memory_cap = std.math.maxInt(usize), .seed = seed };
     const code = Direct.newGroup(s.core, &options, &group);
     if (code != .ok) {
         s.gpa.free(entry.name);
         s.gpa.destroy(entry);
-        return hostError(s.gpa, ref, code);
+        return code;
     }
     entry.group = group.?;
     if (s.inline_inputs) {
@@ -2696,11 +2707,11 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         entry.group.group.host_poll = inlinePoll;
         entry.group.group.host_poll_context = &entry.inline_trace.?;
     }
-    s.groups.put(s.gpa, entry.name, entry) catch return hostError(s.gpa, ref, .out_of_memory);
-    var o = Out.init(s.gpa);
-    defer o.deinit();
-    beginOk(&o, ref) catch return oomReply();
-    return finishOk(s, &o, entry);
+    s.groups.put(s.gpa, entry.name, entry) catch {
+        entry.destroy();
+        return .out_of_memory;
+    };
+    return .ok;
 }
 
 fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
@@ -4299,6 +4310,10 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
+    return handleMessage(s, msg, ref, m, frame);
+}
+
+fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) []u8 {
     s.active_ref = ref;
     if (s.group_exchanges and s.restoring == null) {
         // Each Group's exchange gates only that Group's frames. A frame
@@ -4378,11 +4393,14 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var request_pump = s.request_pump;
             var callbacks = s.callbacks;
             var settlements = s.settlements;
+            var load_fields = s.load_fields;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, rp.feature_fields)) {
                     // It does not imply `binary-frames-v1`, which this Core lacks.
                     request_pump = true;
+                } else if (std.mem.eql(u8, name, rp.feature_load)) {
+                    load_fields = true;
                 } else if (std.mem.eql(u8, name, rp.feature_callbacks)) {
                     callbacks = true;
                 } else if (std.mem.eql(u8, name, rp.feature_settlements)) {
@@ -4419,6 +4437,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.request_pump = request_pump;
             s.callbacks = callbacks;
             s.settlements = settlements;
+            s.load_fields = load_fields;
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
             s.climb = climb;
@@ -5274,6 +5293,10 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     if (s.callbacks and frame.len > rp.prefix.len + 1 and frame[rp.prefix.len] == rp.layout_fields) {
         if (rp.Callback.result(frame[rp.prefix.len + 1])) |c| return handleCallbackResult(s, c, frame[rp.prefix.len + 2 ..]);
     }
+    if (frame.len > rp.prefix.len + 1 and frame[rp.prefix.len] == rp.layout_fields and frame[rp.prefix.len + 1] == @backingInt(rp.Message.load)) {
+        if (!s.load_fields) return protocolError(s.gpa, 0, "load-fields-v1 was not negotiated");
+        return handleBinaryLoad(s, frame[rp.prefix.len + 2 ..]);
+    }
     if (!s.request_pump) return protocolError(s.gpa, 0, "binary frames were not negotiated");
     if (frame.len < rp.prefix.len + 1 or frame[rp.prefix.len] != rp.layout_fields) return protocolError(s.gpa, 0, "the binary layout was not negotiated");
     var in = switch (readBinary(s, frame[rp.prefix.len + 1 ..])) {
@@ -5288,6 +5311,98 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     if (s.x.held != null) return binaryPaused(s, &in, s.x.held_ref);
     if (s.x.paused_ref) |paused| return binaryPaused(s, &in, paused);
     return binaryDispatch(s, &in);
+}
+
+/// Load metadata uses protocol items only. Build the existing validation
+/// tree without JSON scanning or escaping. The work list also handles hostile
+/// nesting without using the WASI stack.
+fn loadProtocol(a: Allocator, span: []const u8) rp.Error!Json {
+    const ProtocolWork = struct { span: []const u8, out: *Json };
+    var result: Json = .null;
+    var work: std.ArrayList(ProtocolWork) = .empty;
+    defer work.deinit(a);
+    try work.append(a, .{ .span = span, .out = &result });
+    while (work.pop()) |item| {
+        var r: rp.Reader = .{ .data = item.span };
+        switch (try r.byte()) {
+            0 => item.out.* = .null,
+            1 => item.out.* = .{ .bool = false },
+            2 => item.out.* = .{ .bool = true },
+            3 => {
+                const n = try r.uint();
+                item.out.* = if (n <= std.math.maxInt(i64)) .{ .integer = @intCast(n) } else .{ .number_string = try std.fmt.allocPrint(a, "{d}", .{n}) };
+            },
+            0x10 => {
+                const n = (try rp.intOf(item.span)) orelse return error.Malformed;
+                item.out.* = .{ .integer = n };
+                r.at = r.data.len;
+            },
+            0x12 => {
+                item.out.* = .{ .string = try rp.ptextOf(item.span) };
+                r.at = r.data.len;
+            },
+            6 => {
+                const n = try r.uint();
+                if (n > r.data.len - r.at) return error.Malformed;
+                var list = std.array_list.Managed(Json).init(a);
+                try list.resize(@intCast(n));
+                item.out.* = .{ .array = list };
+                for (list.items) |*slot| try work.append(a, .{ .span = try r.skip(), .out = slot });
+            },
+            7 => {
+                const n = try r.uint();
+                if (n > (r.data.len - r.at) / 2) return error.Malformed;
+                var map: std.json.ObjectMap = .empty;
+                try map.ensureTotalCapacity(a, @intCast(n));
+                for (0..@intCast(n)) |_| {
+                    if (try r.byte() != rp.tag.text) return error.Malformed;
+                    const key = try r.bytes();
+                    if (!std.unicode.utf8ValidateSlice(key)) return error.Malformed;
+                    const kv = try map.getOrPut(a, key);
+                    if (kv.found_existing) return error.Malformed;
+                    try work.append(a, .{ .span = try r.skip(), .out = kv.value_ptr });
+                }
+                item.out.* = .{ .object = map };
+            },
+            else => return error.Malformed,
+        }
+        if (!r.done()) return error.Malformed;
+    }
+    return result;
+}
+
+fn handleBinaryLoad(s: *Session, payload: []const u8) []u8 {
+    var arena = std.heap.ArenaAllocator.init(s.gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const names = rp.Message.load.fields();
+    var spans: [11]?[]const u8 = undefined;
+    var r: rp.Reader = .{ .data = payload };
+    r.record(names, true, &spans) catch return protocolError(s.gpa, 0, "malformed Load frame");
+    if (!r.done()) return protocolError(s.gpa, 0, "bytes after the Load frame");
+    const ref = (rp.intOf(spans[0] orelse return protocolError(s.gpa, 0, "no ref")) catch null) orelse return protocolError(s.gpa, 0, "no ref");
+    s.active_ref = ref;
+    for (spans[1..4]) |span| {
+        const bytes = span orelse return protocolError(s.gpa, ref, "missing Load text");
+        if (bytes[0] != rp.tag.protocol_text) return protocolError(s.gpa, ref, "Load text requires protocol text");
+    }
+    var map: std.json.ObjectMap = .empty;
+    for (names, spans) |name, span| {
+        if (span) |bytes| map.put(a, name, loadProtocol(a, bytes) catch |err| return if (err == error.OutOfMemory) oomReply() else protocolError(s.gpa, ref, "malformed Load metadata")) catch return oomReply();
+    }
+    const msg: Json = .{ .object = map };
+    if (field(msg, "newGroup")) |init| {
+        if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
+        if (!s.group_exchanges and anyExchangeOpen(s)) return protocolError(s.gpa, ref, "a Group's exchange is open");
+        if (init != .object) return hostError(s.gpa, ref, .invalid_value);
+        var options = init;
+        options.object.put(a, "group", field(msg, "group") orelse return hostError(s.gpa, ref, .invalid_value)) catch return oomReply();
+        const code = createGroup(s, options);
+        if (code != .ok) return hostError(s.gpa, ref, code);
+    }
+    const reply = handleMessage(s, msg, ref, "load", &.{});
+    if (!s.crossing_trace or !s.reply_error) return reply;
+    return withTrace(s, groupOf(s, msg) orelse return reply, reply);
 }
 
 /// As pausedAdmission: inputs join the paused worker's queue; another
@@ -5342,7 +5457,7 @@ fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
             if (in.pump_refusal) |code| return pumpFailure(s, in.ref, entry, code);
             return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
         },
-        .admission, .completion => unreachable,
+        .load, .admission, .completion => unreachable,
     }
 }
 
@@ -5360,7 +5475,7 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
     var r: rp.Reader = .{ .data = payload };
     const message_tag = r.byte() catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     const m = std.enums.fromInt(rp.Message, message_tag) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-    if (m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+    if (m == .load or m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     r.record(m.fields(), true, spans[0..m.fields().len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     if (m == .settle_pump and !s.settlements) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     const names = m.fields();
@@ -8861,4 +8976,55 @@ test "drop-group and lookup stay exact with many live Groups" {
         if (dropped) _ = try okOf(again) else try t.expectEqualStrings("host error", try errKind(again));
     }
     try t.expectEqual(@as(usize, n), s.groups.count());
+}
+
+fn binLoadFrame(a: Allocator, ref: i64, name: []const u8, source: []const u8, create: bool) ![]u8 {
+    var w = rp.Writer.init(a);
+    defer w.deinit();
+    try binInput(&w, .load, ref, "g");
+    try w.key("name");
+    try w.ptext(name);
+    try w.key("source");
+    try w.ptext(source);
+    if (create) {
+        try w.key("newGroup");
+        try w.begin(&.{}, false);
+        try w.key("name");
+        try w.ptext("tenant");
+        try w.key("trace");
+        try w.boolean(true);
+        try w.end();
+    }
+    try w.end();
+    return w.finish();
+}
+
+test "load-fields-v1 creates once, keeps refused-load diagnostics and recovers from malformed frames" {
+    const a = std.testing.allocator;
+    const s = Session.init(a) orelse return error.OutOfMemory;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const source = "on ping\n return 1\nend ping\n";
+    const first = try binLoadFrame(a, 2, "s", source, true);
+    defer a.free(first);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, first)));
+    try std.testing.expectEqual(@as(usize, 0), s.groups.count());
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"load-fields-v1\",\"crossing-trace-v1\",\"group-exchanges-v1\"]}}", .{1}));
+    _ = try okOf(try binReply(&c, first));
+    try std.testing.expectEqual(@as(usize, 1), s.groups.count());
+    try std.testing.expectEqualStrings("host error", try errKind(try binReply(&c, first)));
+    const broken = try binLoadFrame(a, 3, "broken", "on x\n return (\nend x\n", false);
+    defer a.free(broken);
+    const refused = try binReply(&c, broken);
+    try std.testing.expectEqualStrings("load error", try errKind(refused));
+    try std.testing.expect((field(refused, "trace") orelse return error.TestUnexpectedResult).array.items.len > 0);
+    const later = try binLoadFrame(a, 4, "later", source, false);
+    defer a.free(later);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, later[0 .. later.len - 1])));
+    const invalid = try binLoadFrame(a, 5, "invalid", &.{0xff}, false);
+    defer a.free(invalid);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, invalid)));
+    _ = try okOf(try binReply(&c, later));
+    try std.testing.expect(Direct.groupScript(s.groupNamed("g").?.group, "later", 5) != null);
 }

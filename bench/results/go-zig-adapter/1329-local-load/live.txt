@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkZigBackendLoadLiveGroups/live=0         	    5000	     18184 ns/op	     15613 load-ns/op
+BenchmarkZigBackendLoadLiveGroups/live=0         	    5000	     17772 ns/op	     15305 load-ns/op
+BenchmarkZigBackendLoadLiveGroups/live=0         	    5000	     17805 ns/op	     15296 load-ns/op
+BenchmarkZigBackendLoadLiveGroups/live=20000     	    5000	     17669 ns/op	     15125 load-ns/op
+BenchmarkZigBackendLoadLiveGroups/live=20000     	    5000	     17661 ns/op	     15113 load-ns/op
+BenchmarkZigBackendLoadLiveGroups/live=20000     	    5000	     17946 ns/op	     15370 load-ns/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	2.773s

@@ -134,7 +134,9 @@ export const envelopeViews = (data: Catalogue): Record<string, string> => {
   ].sort();
   return {
     'envelope.messages': entriesTable(
-      data.messages.filter(e => e.tag <= 5 || e.tag === 0x81 || e.tag === 0x82),
+      data.messages.filter(
+        e => e.tag <= 5 || e.tag === 11 || e.tag === 0x81 || e.tag === 0x82,
+      ),
       'Message',
     ),
     'envelope.callbacks': entriesTable(

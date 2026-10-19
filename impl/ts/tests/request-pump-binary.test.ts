@@ -215,7 +215,12 @@ test('truncated records, unknown tags/layouts, extra fields and trailing bytes a
   expect(() =>
     encodeBinaryFrame(frame({ m: 'pump', ref: 1, extra: true })),
   ).toThrow();
-  expect(() => encodeBinaryFrame(frame({ m: 'load', ref: 1 }))).toThrow();
+  expect(() => encodeBinaryFrame(frame({ m: 'unknown', ref: 1 }))).toThrow();
+  expect(() =>
+    decodeBinaryFrame(
+      encodeBinaryFrame(frame({ m: 'load', ref: 1, group: 'g' })),
+    ),
+  ).toThrow();
 });
 
 const artifact = resolve(

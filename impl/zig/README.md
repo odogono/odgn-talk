@@ -445,6 +445,12 @@ error. Either export may grow memory, so refresh memory views
 after calls. Host Operations and properties use interim needs and result
 messages, without custom Host imports or reentrant exports.
 
+`load-fields-v1` independently enables binary Load inputs with raw UTF-8
+source and optional `newGroup` fields, as the
+[binary-exchange contract](../../spec/embedding/request-pump-binary.md#load-and-deferred-group-creation)
+describes. JSON Load and `new-group` remain supported. Both paths use the
+same Load validation, worker exclusion and Trace; replies remain JSON.
+
 Message Layer frames have no JSON nesting-depth cap. Parsed Value Encodings,
 including Function captures, go directly to the Core's heap-stack Value builder
 without recursive JSON re-encoding. Replies use the iterative Value writer.

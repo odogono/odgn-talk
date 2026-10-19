@@ -1,0 +1,24 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkGroupInstantiation-4   	   20000	     65614 ns/op	   20627 B/op	      67 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     18332 ns/op	   17755 B/op	      58 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     18630 ns/op	   17776 B/op	      59 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkGroupInstantiation-4   	   20000	     62945 ns/op	   18399 B/op	      68 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     17801 ns/op	   14930 B/op	      58 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     18006 ns/op	   17072 B/op	      59 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkGroupInstantiation-4   	   20000	     57374 ns/op	   20659 B/op	      68 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     17518 ns/op	   17024 B/op	      58 allocs/op
+BenchmarkGroupInstantiation-4   	   20000	     17734 ns/op	   14979 B/op	      59 allocs/op
+PASS

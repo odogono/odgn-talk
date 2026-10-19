@@ -22,6 +22,7 @@ no wire bytes or negotiated versions.
 | `request-pump-fields-v1` |
 | `callbacks-fields-v1` |
 | `settlements-fields-v1` |
+| `load-fields-v1` |
 
 <!-- end -->
 
@@ -87,6 +88,7 @@ are positional; absence is Nothing, and list length must match exactly:
 | `03` | pump | host-to-guest | ref, group, now, fuelSlice, fuelCap |
 | `04` | request-pump | host-to-guest | ref, group, token, to, message, now, fuelSlice, fuelCap |
 | `05` | call-pump | host-to-guest | ref, group, token, fn, args, limits, now, fuelSlice, fuelCap |
+| `0b` | load | host-to-guest | ref, group, name, source, grants, grantsAsUsed, owner, objects, limits, newGroup, refuseWorker |
 | `81` | admission | guest-to-host | ref, delivery, err, abandoned, settled, trace |
 | `82` | completion | guest-to-host | ref, delivery, token, state, nextDeadline, fuelUsed, reports, gone, err, abandoned, settled, trace |
 
@@ -178,7 +180,8 @@ A Report Value the Core cannot encode is Nothing.
 | `fuelUsed` | `uint` |
 | `gone` | `texts` |
 | `grant` | `text` |
-| `grants` | `texts` |
+| `grants` | `record` (load); `texts` (effect) |
+| `grantsAsUsed` | `bool` |
 | `group` | `text` |
 | `handler` | `text` |
 | `limit` | `text` |
@@ -186,12 +189,16 @@ A Report Value the Core cannot encode is Nothing.
 | `liveRuns` | `uint` |
 | `message` | `message` (request, request-pump, unhandled); `text` (op-result, prop-result, settlement) |
 | `mode` | `text` |
+| `name` | `text` |
+| `newGroup` | `record` |
 | `nextDeadline` | `instant` |
 | `now` | `instant` |
 | `object` | `texts` |
+| `objects` | `record` |
 | `op` | `text` |
 | `operation` | `text` (op); `record` (call failed) |
 | `outcome` | `text` |
+| `owner` | `record` |
 | `parentCall` | `text` |
 | `parentRun` | `text` |
 | `pendingCalls` | `texts` |
@@ -200,6 +207,7 @@ A Report Value the Core cannot encode is Nothing.
 | `queuedMessages` | `uint` |
 | `reason` | `text` |
 | `ref` | `int` |
+| `refuseWorker` | `bool` |
 | `reports` | `reports` |
 | `request` | `text` |
 | `result` | `value` |
@@ -212,6 +220,7 @@ A Report Value the Core cannot encode is Nothing.
 | `set` | `bool` |
 | `settled` | `texts` |
 | `settlements` | `settlements` |
+| `source` | `text` |
 | `state` | `text` |
 | `status` | `text` |
 | `target` | `value` |
@@ -336,6 +345,33 @@ Host keeps them queued.
 Settlements are inputs, so they keep their place among the Host's other inputs.
 A Host that sends any other input first sends its queued settlements, as
 ordinary `answer` and `fail` inputs or a settle-pump, ahead of it.
+
+## Load and deferred Group creation
+
+`load-fields-v1` (#1329) independently negotiates the fields-layout `load`
+input (tag `0b`). Its reply, including diagnostics and Trace, remains the
+ordinary JSON Load reply. JSON `load` and `new-group` remain available.
+
+`name` and `source` are protocol text: UTF-8 byte strings with a byte length,
+without JSON escaping or normalization. `grants`, `grantsAsUsed`, `owner`,
+`objects` and `limits` have their JSON Load meanings. The maps are protocol
+maps; Object references keep their `{"$object":[kind,id]}` shape, with
+protocol-text strings. Nothing omits an optional field. `refuseWorker` keeps
+the inline-input worker refusal semantics.
+
+An optional `newGroup` protocol map contains `name`, `trace` and `seed`, with
+the meanings and defaults of `new-group`. Its handle is the outer `group`.
+The guest validates the envelope before creating the Group. An existing handle
+is refused as `name reused`; it never replaces that Group. Creation precedes
+the ordinary Load, and a refused Load leaves the newly created Group available
+for a later Load. Restores and open exchanges keep their ordinary exclusion
+rules. The Group must already exist when `newGroup` is absent.
+
+A Host may reserve a handle locally and defer guest creation until its first
+Group operation. A first Load carries `newGroup`; another first operation can
+use the ordinary `new-group` exchange. An unused Group needs no `drop-group`.
+Session declarations and Grant creation do not require guest Group state.
+No Script compilation, Load validation, worker exclusion or Trace rule changes.
 
 ## Combined operations
 
