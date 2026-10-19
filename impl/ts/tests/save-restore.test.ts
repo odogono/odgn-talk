@@ -17,6 +17,7 @@ import {
 } from '../src/index';
 import { languageVersion } from '../src/generated/machine';
 import { sha256 } from '../src/sha256';
+import { packGraph, unpackGraph } from '../src/snapshot-codec';
 
 const options = (trace: string[]) => ({
   name: 'resumed',
@@ -270,11 +271,10 @@ describe('restore compatibility and durable values', () => {
     g.pump(0n);
     g.script('s')!.deliver({ name: 'go' });
     const outer = JSON.parse(new TextDecoder().decode(g.save()));
-    const saved = JSON.parse(outer.payload);
+    const saved = outer.payload;
     expect(saved.language).toBe(languageVersion);
     saved.language = '1.0-rc.2';
-    outer.payload = JSON.stringify(saved);
-    outer.hash = sha256(outer.payload);
+    outer.hash = sha256(JSON.stringify(saved));
     const old = new TextEncoder().encode(JSON.stringify(outer));
     expect(() => restore(old, options([]))).toThrow('save mismatch');
     const { group: copy, result } = restore(old, {
@@ -628,15 +628,16 @@ test('restore refuses checksummed non-canonical Value Encodings', () => {
   ]);
   for (const source of ['{"$dec":"3"}', '{"$dec":"-9007199254740991"}']) {
     const envelope = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = JSON.parse(envelope.payload);
-    const node = saved.graph.nodes.find(
+    const saved = envelope.payload;
+    const graph = unpackGraph(saved.graph);
+    const node = graph.nodes.find(
       (n: { data: unknown; kind: string }) =>
         n.kind === 'value' && n.data === '3',
     );
     expect(node).toBeDefined();
-    node.data = source;
-    envelope.payload = JSON.stringify(saved);
-    envelope.hash = sha256(envelope.payload);
+    node!.data = source;
+    saved.graph = packGraph(graph);
+    envelope.hash = sha256(JSON.stringify(saved));
     expect(() =>
       restore(new TextEncoder().encode(JSON.stringify(envelope)), options([])),
     ).toThrow(expect.objectContaining({ code: 'invalid save' }));
@@ -646,25 +647,24 @@ test('restore refuses checksummed non-canonical Value Encodings', () => {
 test('checksummed malformed graphs and unsupported formats are invalid saves', () => {
   const bytes = newGroup({ name: 'g' }).save();
   for (const mutate of [
-    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
-      s.graph.nodes[0]!.data = null;
+    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
+      s.graph.nodes[0]![1] = null;
     },
-    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
+    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
       s.format = 1;
     },
-    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
+    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
       s.format = 4;
     },
     // Format 7 held nanosecond Instants and Civil Dates (ADR 0091).
-    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
+    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
       s.format = 7;
     },
   ]) {
     const outer = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = JSON.parse(outer.payload);
+    const saved = outer.payload;
     mutate(saved);
-    outer.payload = JSON.stringify(saved);
-    outer.hash = sha256(outer.payload);
+    outer.hash = sha256(JSON.stringify(saved));
     try {
       restore(new TextEncoder().encode(JSON.stringify(outer)), options([]));
       throw new Error('Accepted invalid save');

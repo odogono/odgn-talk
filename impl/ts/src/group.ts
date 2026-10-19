@@ -79,6 +79,7 @@ import {
   type Graph,
   type References,
 } from './snapshot';
+import { packGraph, unpackGraph, type PackedGraph } from './snapshot-codec';
 import {
   makeObject,
   propertyChecks,
@@ -208,11 +209,21 @@ export type PumpedRequest =
       pump: { ok: true; result: PumpResult } | { error: unknown; ok: false };
       requested: Requested;
     };
+/** Native TS only; the Zig-backed adapter retains its own save format. */
+export type SaveOptions = { sources?: 'embedded' | 'external' };
+export type ScriptCodeRequest = {
+  /** Base source first, then extensions in their saved order. */
+  identities: readonly string[];
+  name: string;
+};
+export type ScriptSources = { extensions?: readonly string[]; source: string };
 export type RestoreOptions = GroupOptions & {
   grants(script: string, name: string): Grant<unknown> | undefined;
   libraries: readonly Library[];
   onMismatch: 'reject' | 'variables only';
   resolve(kind: string, id: string): { native: unknown } | undefined;
+  /** Native TS external-source snapshots only. Different code requires variables-only policy. */
+  scriptSources?(request: ScriptCodeRequest): ScriptSources | undefined;
 };
 export type PendingCall = {
   args: Value[];
@@ -954,8 +965,15 @@ export class Group {
   }
 
   /** Worker. Host callbacks, bindings and native objects aren't in the bytes. */
-  save(): Uint8Array {
+  save(o: SaveOptions = {}): Uint8Array {
     this.worker();
+    if (
+      o.sources !== undefined &&
+      o.sources !== 'embedded' &&
+      o.sources !== 'external'
+    ) {
+      throw new HostError('invalid value', 'Unknown snapshot source mode');
+    }
     const id = `s${++this.saves}`;
     if (
       this.effectStateUnknown ||
@@ -1019,6 +1037,7 @@ export class Group {
       fingerprint: hexOf(this.fingerprint()),
       name: this.name,
       id,
+      sourceMode: o.sources ?? 'embedded',
       libraries: [...this.libraries.values()].map(l => [l.name, identityOf(l)]),
       objects: [...this.objects].map(([key, o]) => ({
         key,
@@ -1032,12 +1051,15 @@ export class Group {
       })),
       scripts: this.scripts.map(s => ({
         name: s.name,
-        sources: s.units.map(unit => unit.source),
+        identities: s.units.map(unit => unit.identity),
+        ...(o.sources === 'external'
+          ? {}
+          : { sources: s.units.map(unit => unit.source) }),
         limits: s.limits,
         grants: [...s.grants].map(([name, grant]) => ({
           name,
           capability: grant.capability.name,
-          operations: [...grant.ops].map(name => ({
+          operations: [...grant.ops].sort(compareNames).map(name => ({
             name,
             declaration: savedOperation(grant.capability.operations.get(name)!),
           })),
@@ -1052,11 +1074,8 @@ export class Group {
       })),
       graph: saveGraph(state, this.snapshotReferences()),
     };
-    const payload = JSON.stringify(saved);
     this.trace?.(recordLine('save', [id], [], true));
-    return new TextEncoder().encode(
-      JSON.stringify({ hash: sha256(payload), payload }),
-    );
+    return writeSave(saved);
   }
 
   /** Build and check the complete replacement before publishing the Group. */
@@ -1110,6 +1129,25 @@ export class Group {
       );
     let loadFailure: LoadError | undefined;
     for (const script of saved.scripts) {
+      const supplied =
+        saved.sourceMode === 'external'
+          ? o.scriptSources?.({
+              name: script.name,
+              identities: [...script.identities],
+            })
+          : undefined;
+      if (saved.sourceMode === 'external' && !supplied) {
+        throw new HostError(
+          'save mismatch',
+          `Missing sources for Script ${script.name}`,
+        );
+      }
+      const sources = supplied
+        ? [supplied.source, ...(supplied.extensions ?? [])]
+        : script.sources!;
+      if (sources.some(source => typeof source !== 'string')) {
+        throw new HostError('invalid value', 'Script sources must be text');
+      }
       const grants: Record<string, Grant<unknown>> = Object.create(null);
       const revoked = new Set<string>();
       for (const grant of script.grants) {
@@ -1155,7 +1193,7 @@ export class Group {
       try {
         group.load({
           name: script.name,
-          source: script.sources[0]!,
+          source: sources[0]!,
           limits: script.limits,
           grants,
           owner: script.owner
@@ -1169,9 +1207,12 @@ export class Group {
           ),
         });
         const state = group.scripts.at(-1)!;
-        for (const source of script.sources.slice(1)) {
+        for (const source of sources.slice(1)) {
           group.applyExtension(state, source, undefined, false);
         }
+        mismatch ||=
+          state.units.length !== script.identities.length ||
+          state.units.some((unit, i) => unit.identity !== script.identities[i]);
         state.revoked = revoked;
         state.unbound = new Set(revoked);
       } catch (error) {
@@ -1312,9 +1353,23 @@ export class Group {
       for (const name of runtime.revoked) {
         script.revoked.add(name);
       }
+      let variables = runtime.variables;
+      if (mismatch) {
+        for (const r of savedRuns(runtime)) {
+          if (
+            !r.parked &&
+            !r.resuming &&
+            !r.cleanupReady &&
+            !r.run.suspended &&
+            !r.run.done
+          ) {
+            variables = r.run.segmentBase;
+          }
+        }
+      }
       script.loaded.variables = script.loaded.variableNames.map((name, j) => {
         const old = runtime.variableNames.indexOf(name);
-        return old >= 0 ? runtime.variables[old]! : script.loaded.variables[j]!;
+        return old >= 0 ? variables[old]! : script.loaded.variables[j]!;
       });
       if (mismatch) {
         result.discardedRuns.push(...savedRuns(runtime).map(r => r.id));
@@ -5254,12 +5309,14 @@ type SavedGroup = {
   }[];
   scripts: {
     grants: SavedGrant[];
+    identities: string[];
     limits: Limits;
     name: string;
     objects: [string, string][];
     owner: string | null;
-    sources: string[];
+    sources?: string[];
   }[];
+  sourceMode: 'embedded' | 'external';
 };
 type SavedScriptState = Pick<
   ScriptState,
@@ -5391,18 +5448,52 @@ const savedOperation = (op: Operation<unknown>): Operation<unknown> =>
   Object.fromEntries(
     Object.entries(op).filter(([key]) => !unsavedOperationKeys.has(key)),
   ) as Operation<unknown>;
+type SavedWire = Omit<SavedGroup, 'graph' | 'scripts'> & {
+  declarations: Omit<SavedGrant, 'name'>[];
+  graph: PackedGraph;
+  scripts: (Omit<SavedGroup['scripts'][number], 'grants'> & {
+    grants: { declaration: number; name: string }[];
+  })[];
+};
+const writeSave = (saved: SavedGroup): Uint8Array => {
+  const declarations: SavedWire['declarations'] = [];
+  const seen = new Map<string, number>();
+  const scripts = saved.scripts.map(script => ({
+    ...script,
+    grants: script.grants.map(({ name, ...declaration }) => {
+      const key = canonicalJSON(declaration);
+      let id = seen.get(key);
+      if (id === undefined) {
+        id = declarations.length;
+        declarations.push(declaration);
+        seen.set(key, id);
+      }
+      return { name, declaration: id };
+    }),
+  }));
+  const payload: SavedWire = {
+    ...saved,
+    declarations,
+    scripts,
+    graph: packGraph(saved.graph),
+  };
+  return new TextEncoder().encode(
+    JSON.stringify({ hash: sha256(JSON.stringify(payload)), payload }),
+  );
+};
 const readSave = (bytes: Uint8Array): SavedGroup => {
   try {
     const outer = JSON.parse(
       new TextDecoder('utf-8', { fatal: true }).decode(bytes),
-    ) as { hash: string; payload: string };
+    ) as { hash: string; payload: SavedWire };
     if (
-      typeof outer.payload !== 'string' ||
-      sha256(outer.payload) !== outer.hash
+      !outer.payload ||
+      typeof outer.payload !== 'object' ||
+      sha256(JSON.stringify(outer.payload)) !== outer.hash
     ) {
       throw new Error('Corrupt save');
     }
-    const saved = JSON.parse(outer.payload) as SavedGroup;
+    const saved = outer.payload;
     if (
       saved.family !== 'odgn-talk-ts' ||
       saved.format !== saveFormatVersion ||
@@ -5410,11 +5501,69 @@ const readSave = (bytes: Uint8Array): SavedGroup => {
       !Array.isArray(saved.scripts) ||
       !Array.isArray(saved.objects) ||
       !Array.isArray(saved.libraries) ||
+      !Array.isArray(saved.declarations) ||
+      !['embedded', 'external'].includes(saved.sourceMode) ||
       !Array.isArray(saved.graph.nodes)
     ) {
       throw new Error('Unreadable save');
     }
-    return saved;
+    const names = new Set<string>();
+    const scripts = saved.scripts.map(script => {
+      if (
+        typeof script.name !== 'string' ||
+        names.has(script.name) ||
+        !Array.isArray(script.identities) ||
+        !script.identities.length ||
+        script.identities.some(
+          id => typeof id !== 'string' || !/^[\da-f]{64}$/.test(id),
+        ) ||
+        (saved.sourceMode === 'embedded' &&
+          (!Array.isArray(script.sources) ||
+            script.sources.length !== script.identities.length ||
+            script.sources.some(s => typeof s !== 'string'))) ||
+        (saved.sourceMode === 'external' && script.sources !== undefined) ||
+        !Array.isArray(script.grants)
+      ) {
+        throw new Error('Invalid saved Script');
+      }
+      names.add(script.name);
+      const grants = new Set<string>();
+      return {
+        ...script,
+        grants: script.grants.map(grant => {
+          if (
+            typeof grant.name !== 'string' ||
+            grants.has(grant.name) ||
+            !Number.isSafeInteger(grant.declaration) ||
+            grant.declaration < 0 ||
+            grant.declaration >= saved.declarations.length
+          ) {
+            throw new Error('Invalid saved Grant');
+          }
+          grants.add(grant.name);
+          return {
+            ...saved.declarations[grant.declaration]!,
+            name: grant.name,
+          };
+        }),
+      };
+    });
+    for (const declaration of saved.declarations) {
+      if (
+        !declaration ||
+        typeof declaration.capability !== 'string' ||
+        !Array.isArray(declaration.operations) ||
+        declaration.operations.some(
+          op =>
+            typeof op.name !== 'string' ||
+            !op.declaration ||
+            typeof op.declaration !== 'object',
+        )
+      ) {
+        throw new Error('Invalid saved declaration');
+      }
+    }
+    return { ...saved, scripts, graph: unpackGraph(saved.graph) };
   } catch {
     throw new HostError('invalid save');
   }

@@ -10,7 +10,12 @@ import type { Core } from '../core';
 import { sizeOf } from '../costs';
 import { encodeValue } from '../encoding';
 import { HostError, ScriptError } from '../errors';
-import type { Group, RestoreOptions, RestoreResult } from '../group';
+import type {
+  Group,
+  RestoreOptions,
+  RestoreResult,
+  SaveOptions,
+} from '../group';
 import { sha256 } from '../sha256';
 import { hostScriptError } from '../store-capability';
 import { compareText } from '../text';
@@ -57,7 +62,7 @@ export type NotificationRouter = {
     o: RestoreOptions,
   ): { group: Group; result: RestoreResult; routing: RoutingResult };
   /** A checkpoint; throws effects pending as Group.save does. */
-  save(group: Group): Uint8Array;
+  save(group: Group, options?: SaveOptions): Uint8Array;
   unwatch(call: Call<string>, name: string): void;
   /** Registers or replaces a watch; throws ScriptError `watch limit` {limit}. */
   watch(
@@ -406,8 +411,8 @@ export const createRouter = (o: RouterOptions): NotificationRouter => {
       }
     },
 
-    save(group) {
-      const bytes = group.save();
+    save(group, options) {
+      const bytes = group.save(options);
       const state = groups.get(group);
       const watches = order(state?.watches ?? []);
       const routing: RoutingState = {

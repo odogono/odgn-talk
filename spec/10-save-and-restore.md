@@ -35,7 +35,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 - **Each Broadcast in progress:** its id, its recipients, and for a Broadcast Decision, which recipients have sealed and the vetoes so far ([chapter 5](05-handlers-messages-and-scheduling.md#decisions)).
 - **The versions:** the language version, the Cost Model version, the save-format version and the Group Fingerprint ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)).
 - **Each Script:**
-  - its name, its source and each extension's source, its limits, and its Grants by name, each with its Capability's name and its kept Operations
+  - its name, its source and each extension's source (or their verified identities in the native TS [external-source mode](#native-ts-source-modes)), its limits, and its Grants by name, each with its Capability's name and its kept Operations
   - its owner and its well-known objects, by Host Object id
   - its Script Variables, its definitions' values, its mailbox and work queue in order, and each clause's queue of parked Runs
   - its counters (`FuelTotal`, `AllocTotal`, `Runs`, `Faults`) and its Persistent State size
@@ -67,6 +67,49 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 - **Metering:** save restrictions prevent a pending metered call or unresolved charging future from entering a snapshot. Save the next Group-wide charge request id and all accepted accounting normally; declaration matching includes `metering` ([contract](embedding/metered-operations.md#accounting-and-saves)).
 - **Futures:** a `Request`, `Call` or `Decide` the Host is waiting on has a delivery id in the save, but its future belongs to the old Group. After a restore, the Host learns the outcome from the `run end` or `decided` report with that delivery id.
 - **Other Groups:** a save covers exactly one Group. A Delivery already made into another Group, and messages already sent outside it, aren't part of it.
+
+### Native TS source modes
+
+The native TS Core supports two source-storage modes ([ADR 0111](../docs/adr/0111-snapshot-sources-may-come-from-the-host.md)). `group.save()` and
+`group.save({sources: 'embedded'})` produce an Embedded-source Snapshot.
+`group.save({sources: 'external'})` produces an External-source Snapshot:
+it holds each Script's ordered base and extension identities instead of their
+sources. Libraries already come from the Host by identity in either mode.
+Go, Zig, their Message Layer and `@northtalk/ts/wasm` do not implement this
+extension.
+
+To restore external sources, the Host supplies the synchronous
+`scriptSources({name, identities})` option. It returns `{source, extensions?}`,
+with extensions in application order. The Core loads these units against the
+supplied Libraries and Grants and recomputes every identity, including exact
+source text and imported Library identities, before accepting a continuation.
+An embedded-source restore uses its saved sources and never calls this option.
+
+A missing callback or `undefined` bundle fails the whole Restore with
+`save mismatch`, even with variables-only policy. Different code also rejects
+under `onMismatch: 'reject'`. With `onMismatch: 'variables only'`, supplied
+replacement code may instead initialize the whole Group and carry variables
+by name from the saved prospective post-rollback bindings. This discards every
+Script's continuations, including those whose code matched, and returns the
+ordinary discarded Runs, dropped messages, abandoned calls and accounting
+reports. Carried Function Values are stale. No source is silently substituted
+for a full continuation. A replacement that does not load or exceeds the state
+cap fails atomically, as for other variables-only restores. A Host may then
+apply its ordinary Reload policy; removed Scripts require an explicit
+replacement bundle rather than disappearing during Restore.
+
+Both modes retain all execution state and saved Grant declarations, including
+the declarations needed to compile an unbound, revoked Grant. They share a
+compact private JSON graph encoding, intern repeated declarations and graph
+keys, and checksum an unescaped payload. Encoding details remain outside
+parity; source storage changes no Fuel, accounting, settlement or live-effect
+rules. Native TS writes and reads format 10 only; earlier formats, including
+format 9, fail with `invalid save`, without automatic migration.
+
+The native TS router forwards `router.save(group, options)` to Group Save and
+ties its routing state to those bytes as usual. Restore receives the same
+`scriptSources` option through the existing checkpoint options. Session saves
+keep embedded sources by default.
 
 ## Restoring
 
@@ -148,7 +191,7 @@ A checkpoint restored with the same Store revisions restores the same watches, p
 
 ## Variables-only restore
 
-A variables-only restore rebuilds each Script from its saved source and then each of its extensions in the order they were made, against the Core's current versions, the Libraries given and the Grants re-bound, and keeps only its Script Variables. It follows the Reload rule, [carrying variables over](#carrying-variables-over) for every Script at once.
+A variables-only restore rebuilds each Script from its saved source and then each of its extensions in the order they were made (or the Host-supplied bundle in native TS external-source mode), against the Core's current versions, the Libraries given and the Grants re-bound, and keeps only its Script Variables. It follows the Reload rule, [carrying variables over](#carrying-variables-over) for every Script at once.
 
 - **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked and disabled Grants. Host Objects are kept, and resolved as for a full restore.
 - **Discarded:** every Run, suspended, parked or preempted, the mailbox, the work queue, the input queue, each Broadcast in progress and the Fuel Slice debt. Runs are discarded with no `finally`. The result lists the discarded Runs in `DiscardedRuns`, the dropped Deliveries (the mailboxes' and the input queue's) in `DroppedMessages`, and the abandoned calls in `AbandonedCalls`, so the Host can cancel the ones it still has. `Pending` is empty.

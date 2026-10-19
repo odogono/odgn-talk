@@ -1,3 +1,4 @@
+import { packGraph, unpackGraph } from '../src/snapshot-codec';
 import { expect, test } from 'bun:test';
 import { compileLibrary, HostError, newGroup, restore } from '../src/index';
 import { sha256 } from '../src/sha256';
@@ -102,14 +103,18 @@ test('restore rejects malformed stale Function Value metadata', () => {
     ['name', 1],
   ]) {
     const outer = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = JSON.parse(outer.payload);
-    const head = saved.graph.nodes.find(
-      (node: { data: [string, unknown][]; kind: string }) =>
-        node.kind === 'object' && node.data.some(([key]) => key === 'min'),
-    );
-    head.data.find(([key]: [string, unknown]) => key === field)[1] = value;
-    outer.payload = JSON.stringify(saved);
-    outer.hash = sha256(outer.payload);
+    const saved = outer.payload;
+    const graph = unpackGraph(saved.graph);
+    const head = graph.nodes.find(
+      node =>
+        node.kind === 'object' &&
+        Array.isArray(node.data) &&
+        node.data.some(([key]) => key === 'min'),
+    )!;
+    (head.data as [string, unknown][]).find(([key]) => key === field)![1] =
+      value;
+    saved.graph = packGraph(graph);
+    outer.hash = sha256(JSON.stringify(saved));
     expect(() =>
       restore(new TextEncoder().encode(JSON.stringify(outer)), {
         name: 'resumed',

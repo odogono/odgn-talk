@@ -173,7 +173,7 @@ layout against the Host's own workload.
 It differs from the TS Core in these ways:
 
 - **Making the Core:** `createCore` is asynchronous and takes `{ wasm, diagnostics, binaryCallbacks }`. `core.versions` replaces `coreVersions`: the language, Cost Model and Unicode versions match the TS Core's, and the Core and save format are Zig's. Use the Core's methods: the package exports no free `newGroup`, `restore`, `compileLibrary` or `defineCapability`.
-- **Saves** are in the Zig format, so neither Core restores the other's ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)).
+- **Saves** have no native TS source-mode options or `scriptSources` callback and are in the Zig format, so neither Core restores the other's ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)).
 - **Libraries and Object Kinds** must come from this Core's `compileLibrary` and `defineObjectKind`, so it can declare them in each guest. A Library compiled elsewhere is refused with `invalid value`.
 - **Each Group costs a guest:** about 2 MiB of linear memory and 150 KB of JS heap ([figures](../../docs/research/zig-browser-figures.md)). Nothing caps a guest's memory. A trap or an unreadable reply throws `InstanceLostError` and loses only that Group. `Group.memoryBytes()` gives its linear memory.
 - **Frames** are at most 64 MiB. A larger one, such as a save restored past that size, throws `FrameRefusedError` and leaves the Group usable.
@@ -649,7 +649,7 @@ preserve the count ([#1262](https://github.com/odogono/odgn-talk/issues/1262)).
 - **Reload, Extend and Library replacement:** `script.reload(source, carry)` stages checking and initialisation before discarding old work without cleanup. It resets variables or carries them by name, drops all extensions, makes old Function Values stale, and preserves the Script's Host bindings, limits, counters and load order. `script.extend(source)` adds only new names in a separate code unit, links existing definitions and variable slots, and keeps old Runs and Function Values live. An extension that would exceed Persistent State is refused unchanged, as now settled in chapter 10. `group.replaceLibrary(library, carry)` checks and rebuilds transitive Library importers and every affected Script with its extensions before changing anything; successful replacement stops affected Scripts in load order. The runner replays all three inputs. Their Trace source fields use display-form text while preserving the exact source scalars, including decomposed text, as now settled in chapter 11.
 - **Function Value calls:** `group.call(fn, args, {signal, limits})` queues a Host Request to the Home Script. A foreign `f(x) and wait` pays the `call` rate and starts a concurrent mailbox Run there, with that Script's Grants and limits. Defaults and captures bind in the value's code unit. Replies, errors, cancellation, timeouts, Stop and pending foreign calls after restore reuse the message machinery. Group identities reject foreign and old Host handles at every inbound Host boundary, including nested values and captures; stale Host calls fail at drain. Foreign waits use the effective Run MaxWait override. Library Constant callbacks, including nested values and defaults, bind to each importing/calling Script. `readDisplay` takes an optional third argument resolving a Function Value's complete display form against a previously held handle; corpus replay remembers nested handles from reports and Capability arguments. The Spec settles arity checks outside a Host-called function's body, no-clause charging, mailbox contents, inspection labels and `{fn, args}` in an uncaught error's `during` binding.
 - **Run accounting:** Pump, Reload, Library replacement and Restore return dispatch/discard lifecycle events and cumulative per-Run Fuel and causal queue counts. Detached sends and error Handlers retain ancestry; observation charges stay with the waiting Run. Accounting adds no Trace records or execution costs.
-- **Save and restore:** `group.save()` emits checksummed, same-family format-5 bytes (older formats are no longer readable: they lack causal accounting state or stale Function Values' documentation, names and arities) without native objects, Host callbacks, bindings or futures. `restore(bytes, {libraries, grants, resolve, onMismatch, name, trace})` stages code and compatibility checks before resolving objects, then rebuilds shared machine state, including preempted frames, dispatch contexts and activations, shared owner locals, pending transfers and arguments, cleanup progress and attempt counters, rollback bases, counters, debt, queues, timers, Joins, open Decisions, extension closures and Text Patterns. Before rebinding a Run, Restore validates code/body/PC identities, owner-local aliasing, dispatch phases, action arity and slots, cleanup table references and acyclic ownership; malformed control returns `invalid save`. A mismatch rejects or carries variables by name, discarding work and reporting open Decisions at the first Pump. `group.settle(id, settlement)` accepts Answer, Fail, Reissue or Adopt once before that Pump; missing settlements fail as `call lost` before timers. Reissue charges count toward Pump cap and slice debt. Adoptability follows the original call style, and queued settlements survive another save. `group.objectById(kind, id)` returns the handle with that kind and id, disposed or not, which is how a Host reaches the handles Restore made. `group.fingerprint()` hashes canonical code, Library, Grant declaration and limit data, excluding runtime state and Host implementations. The Spec now fixes inner declaration key order, optional error catalogue semantics, Save counter effects, numeric call ordering and partial Broadcast discard aggregation.
+- **Save and restore:** `group.save()` emits checksummed, same-family format-10 bytes (format 9 and older are no longer readable; no automatic migration is supplied) without native objects, Host callbacks, bindings or futures. `restore(bytes, {libraries, grants, resolve, onMismatch, name, trace})` stages code and compatibility checks before resolving objects, then rebuilds shared machine state, including preempted frames, dispatch contexts and activations, shared owner locals, pending transfers and arguments, cleanup progress and attempt counters, rollback bases, counters, debt, queues, timers, Joins, open Decisions, extension closures and Text Patterns. Before rebinding a Run, Restore validates code/body/PC identities, owner-local aliasing, dispatch phases, action arity and slots, cleanup table references and acyclic ownership; malformed control returns `invalid save`. A mismatch rejects or carries variables by name, discarding work and reporting open Decisions at the first Pump. `group.settle(id, settlement)` accepts Answer, Fail, Reissue or Adopt once before that Pump; missing settlements fail as `call lost` before timers. Reissue charges count toward Pump cap and slice debt. Adoptability follows the original call style, and queued settlements survive another save. `group.objectById(kind, id)` returns the handle with that kind and id, disposed or not, which is how a Host reaches the handles Restore made. `group.fingerprint()` hashes canonical code, Library, Grant declaration and limit data, excluding runtime state and Host implementations. The Spec now fixes inner declaration key order, optional error catalogue semantics, Save counter effects, numeric call ordering and partial Broadcast discard aggregation.
 - **Uncaught errors:** a Run ending `errored` queues an ordinary `error` message for its Script's `on error` clauses. Their text shorthand matches `code`, and `during` binds `{name, args}` for a message or `{fn, args}` for a Function Value call before dispatch tests. Function metadata retains the original Function Value and captures through local calls, preemption and Save/Restore. Pending `wait for error` subscriptions observe it even without an `on error` clause. The queued message counts toward Persistent State until dispatch. An unmatched internal error message never climbs, a full mailbox notes `error-dropped`, and an error Handler that errors sends no further error message.
 - **`send`** puts a message in another Script's mailbox, written as a `send` record, and its Run starts `from` the sending Run. A receiver Name that resolves to nothing else names a Script, even one loaded later, and a Script the Group doesn't hold raises `object gone`. `me` names the Script's owner, or sends to the Script itself when it has none.
 - **`compileLibrary({ name, version, source }, imports, declarations)`** checks and compiles a Library once per process for each code identity, running its initialiser to compute its Constants, or throws `LoadError`. Its optional declarations argument is a `GrantDecls` map of modes, argument Shapes and `command` flags. Its optional fourth argument, `{ atCaller: true }`, is TS-only and outside the Spec: an error raised in the Library gets an `at` naming the call that entered it, as for stdlib code, while the Trace still records the raise by its Library instruction. `northtalk test` compiles its Test Library this way. Direct calls are checked on every request, including cache hits; `needs` is a sorted, deduplicated list that includes every definition and transitive import. Script imports check all needed Operations and revalidate their call modes, counts and literal Shapes against the caller's kept Grants. Missing Operations report `missing grant` at the Script's `use` line with the Library call site in the diagnostic message. Reload, Extend, replacement and restore use the same import checks, and replacement retains dependent Libraries' compile declarations. The runner supplies declarations from `case.toml`. `group.addLibrary` writes `add-library` with its identity, and refuses a stdlib name, a name the Group holds, or a Library whose imports the Group doesn't hold with the same identities. A Script's and a Library's code identity covers its direct imports'.
@@ -668,6 +668,52 @@ The Host-side `decodeJson` and `encodeJson` follow chapter 7's plain JSON mappin
 bun test impl/ts/tests/group.test.ts tests/corpus.test.ts
 bun run corpus:run text-model/host-text-joins-in-nfc
 ```
+
+## Snapshot source modes
+
+The native TS Core supports `group.save({sources: 'embedded' | 'external'})`.
+Omitting the option keeps an Embedded-source Snapshot, including each Script's
+base and extension sources. Both modes use the same compact, checksummed JSON
+graph and deduplicated Grant declarations. Libraries, bindings and native
+objects still come from the Host. Compression belongs to the Host.
+
+An External-source Snapshot keeps ordered code-unit identities instead of
+Script sources. Restore requests each bundle synchronously:
+
+```ts
+const bytes = group.save({ sources: 'external' });
+const restored = core.restore(bytes, {
+  name: 'game', libraries, grants, resolve, onMismatch: 'reject',
+  scriptSources: ({ name, identities }) => codeCatalog.lookup(name, identities),
+});
+```
+
+`scriptSources` returns `{source: string, extensions?: readonly string[]}`;
+extensions apply in that order. Keep exact source text and Library identities
+for full continuation: even comments and whitespace contribute to code
+identity. A missing bundle fails with `save mismatch`, even under
+`onMismatch: 'variables only'`. The callback is never used for embedded sources.
+
+A Host may deliberately return current code when historical sources are gone.
+Only variables-only policy accepts a different identity: the **whole Group**
+loses its continuations, mailboxes and input queue, even for unchanged Scripts.
+Variables carry by name from prospective post-rollback bindings; counters and
+accounting remain, Function Values become stale, and Restore reports discarded
+Runs/messages/calls. A missing Script needs an explicit replacement bundle.
+Load failures and Persistent State overflow fail the restore as a whole.
+A Host can then use its ordinary Reload policy. For pending calls after a full
+restore, settle each before the first Pump as usual.
+
+`router.save(group, options)` forwards the source mode when checkpointing Store
+watches; `router.restore` forwards `scriptSources` through its restore options.
+Session saves retain embedded sources. The option is native TS only: Go, Zig,
+the Message Layer and `@northtalk/ts/wasm` do not support it. There is no
+cross-Core compatibility or legacy format reader. Format-9 saves must be
+consumed with the old Core or replaced under the Host's own upgrade policy.
+
+See [chapter 10](../../spec/10-save-and-restore.md#native-ts-source-modes)
+for the contract and the [snapshot benchmark](../../bench/README.md#ts-snapshot-sizes)
+for reproducible synthetic size and timing measurements.
 
 ## Generated Unicode tables
 

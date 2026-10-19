@@ -650,7 +650,7 @@ export interface Group {
   /** Worker. Synchronous. now is epoch microseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
   /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
-  save(): Uint8Array;
+  save(o?: SaveOptions): Uint8Array;
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
   inspect(): Inspection;
@@ -813,12 +813,22 @@ export type Report =
 // Save and restore (ADR 0008)
 // ---------------------------------------------------------------------------
 
+/** Options are a native TS extension; other Cores, including TS/WASM, retain save(). */
+export interface SaveOptions { sources?: "embedded" | "external" }
+export interface ScriptCodeRequest {
+  name: string;
+  /** Base source identity first, then extensions in saved order. */
+  identities: readonly string[];
+}
+export interface ScriptSources { source: string; extensions?: readonly string[] }
 export interface RestoreOptions extends GroupOptions {
   libraries: Library[];
   grants(script: string, name: string): Grant<any> | undefined;
   /** An id it can't resolve restores as a disposed Host Object. */
   resolve(kind: string, id: string): { native: unknown } | undefined;
   onMismatch: "reject" | "variables only";
+  /** Native TS external-source snapshots only; called synchronously once per Script. */
+  scriptSources?(request: ScriptCodeRequest): ScriptSources | undefined;
 }
 export interface PendingCall { id: string; script: string; grant: string; operation: OperationRef; args: Value[] }
 export interface RestoreResult {
@@ -890,7 +900,7 @@ export interface NotificationRouter {
   pumped(group: Group): boolean;
   detach(group: Group): void;
   /** A checkpoint; throws effects pending as Group.save does. */
-  save(group: Group): Uint8Array;
+  save(group: Group, o?: SaveOptions): Uint8Array;
   restore(core: Pick<Core, "restore">, checkpoint: Uint8Array, o: RestoreOptions):
     { group: Group; result: RestoreResult; routing: RoutingResult };
 }
