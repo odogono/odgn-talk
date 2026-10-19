@@ -116,3 +116,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0112: An `ask` may name a Result Target](0112-an-ask-may-name-a-result-target.md)
 - [0113: Library code may wait for messages to the calling Run's Script](0113-library-code-may-wait-for-messages-to-the-calling-runs-script.md)
 - [0114: Result Targets apply to result-producing calls](0114-result-targets-apply-to-result-producing-calls.md)
+- [0115: Operation Declarations may declare Argument Labels](0115-operation-declarations-may-declare-argument-labels.md)

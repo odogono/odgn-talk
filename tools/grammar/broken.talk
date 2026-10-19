@@ -538,6 +538,54 @@ end t
 on t
   move knight, 3 to sq
 end t
+-- case: an Operation's label with no argument (ADR 0115)
+-- expect: unexpected token at 2:30
+on t
+  ask world to move "pass" to
+end t
+-- case: an Operation's trailing label doesn't continue the line
+-- expect: unexpected token at 2:30
+on t
+  ask world to move "pass" to
+    "red hangar"
+end t
+-- case: a comma after an Operation's labelled argument
+-- expect: unexpected token at 2:39
+on t
+  ask world to move "pass" to "hangar", 3
+end t
+-- case: a label after an Operation's positional argument list
+-- expect: unexpected token at 2:31
+on t
+  ask world to move "pass", 3 to "hangar"
+end t
+-- case: `from` can't be an Operation's label
+-- expect: unexpected token at 2:28
+on t
+  ask world to move "pass" from "hangar"
+end t
+-- case: `with` can't be an Operation's label
+-- expect: unexpected token at 2:29
+on t
+  tell world to move "pass" with "hangar"
+end t
+-- case: `into` is an `ask`'s Result Target, never a label, so it takes a bare Name
+-- expect: unexpected token at 2:33
+on t
+  ask world to move "pass" into "hangar"
+end t
+-- case: a one-line `tell` takes no Result Target after a label
+-- expect: unexpected token at 2:36
+on t
+  tell world to move "pass" to "a" into x
+end t
+-- case: a `tell` block line's label with no argument
+-- expect: unexpected token at 3:19
+on t
+  tell world
+    move "pass" to
+  end tell
+end t
 -- case: target-first `send` without the colon
 -- expect: unexpected token at 2:17
 on t
@@ -773,8 +821,8 @@ on t
     if ready then fill "#fff"
   end tell
 end t
--- case: a nested `tell` is an Operation named `tell`, so `to` can't follow its argument
--- expect: unexpected token at 3:14
+-- case: a nested `tell` is an Operation named `tell`, whose `to` is a label (ADR 0115), so its argument `write` ends before `"x"`
+-- expect: unexpected token at 3:23
 on t
   tell canvas
     tell log to write "x"

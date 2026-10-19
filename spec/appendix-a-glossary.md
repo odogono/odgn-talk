@@ -377,7 +377,7 @@ A statement that starts with a word that isn't a Reserved Word, calling the Hand
 _Avoid_: procedure call, invocation, message send (a `send` is something else)
 
 **Host Command**:
-A Command Call spelling of a granted Operation, written without `ask` or `tell`, e.g. `hide welcomeText` for `tell folio to hide welcomeText`. It is open to any Script holding a Grant that includes the Operation, and a Handler the Script defines with the same Selector takes precedence over it. It never climbs the Message Path.
+A Command Call spelling of a granted Operation, written without `ask` or `tell`, e.g. `hide welcomeText` for `tell folio to hide welcomeText`. It is open to any Script holding a Grant that includes the Operation, and a Handler the Script defines with the same Selector takes precedence over it. An Operation that declares Argument Labels has a second, labelled spelling with its own Selector, e.g. `move a to b`. It never climbs the Message Path.
 _Avoid_: built-in command, host function, prelude command
 
 **Import**:
@@ -427,7 +427,7 @@ An `on <message> … end` block that runs when its message or event reaches the 
 _Avoid_: callback, listener, function
 
 **Argument Label**:
-A word in a Handler's head, and at its call sites, that names the parameter after it, e.g. `to` in `on move piece to square` and `move knight to "e4"`.
+A word in a Handler's head, and at its call sites, that names the parameter after it, e.g. `to` in `on move piece to square` and `move knight to "e4"`. An Operation may declare labels too, and a call to it may write them, e.g. `ask world to move "pass" to "red hangar"`; unlike a Handler's, they don't change the name being called.
 _Avoid_: keyword (that means a Reserved Word or a contextual keyword), named argument, parameter name
 
 **Selector**:

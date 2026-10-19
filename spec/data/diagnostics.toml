@@ -101,6 +101,12 @@ at = "the argument's first token"
 sources = ["ADR 0030", "#115"]
 
 [[diagnostic]]
+code = "wrong labels"
+raised_when = "A labelled Capability call, or a labelled call of a Host Command, writes an Argument Label that isn't the one its Operation Declaration gives that position, or labels an Operation that declares none; a wrong argument count is `wrong argument count` instead"
+at = "the first label that doesn't match"
+sources = ["ADR 0115", "#1341"]
+
+[[diagnostic]]
 code = "unknown operation"
 raised_when = "`ask`, `tell` or a `tell` block names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare"
 at = "the Grant's name, or the Operation's"

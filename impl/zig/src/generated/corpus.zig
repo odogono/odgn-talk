@@ -2136,5 +2136,14 @@ pub const corpus: CorpusTable = .{
                 "disassembly",
             },
         },
+        .{
+            .table = "operations",
+            .key = "labels",
+            .is = "optional list of Argument Label words, one per argument after the first; a call may write them between its arguments, and they are checked at load (ADR 0115)",
+            .kinds = &.{
+                "trace",
+                "disassembly",
+            },
+        },
     },
 };

@@ -146,6 +146,15 @@ var Diagnostics = DiagnosticsTable{
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
+			Code:       "wrong labels",
+			RaisedWhen: "A labelled Capability call, or a labelled call of a Host Command, writes an Argument Label that isn't the one its Operation Declaration gives that position, or labels an Operation that declares none; a wrong argument count is `wrong argument count` instead",
+			At:         "the first label that doesn't match",
+			Sources: []string{
+				"ADR 0115",
+				"#1341",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
 			Code:       "unknown operation",
 			RaisedWhen: "`ask`, `tell` or a `tell` block names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare",
 			At:         "the Grant's name, or the Operation's",

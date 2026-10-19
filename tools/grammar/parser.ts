@@ -1048,20 +1048,34 @@ export class Parser {
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, a Result Target where `targets` allows it,
-  // and `and wait` where `waits` allows it.
+  // arguments, a list or one argument and then `label arg` pairs (ADR 0115),
+  // a Result Target where `targets` allows it, and `and wait` where `waits`
+  // allows it.
   operation(
     waits: boolean,
     targets = false,
-  ): { args: Node[]; into?: Node; op: string; wait: boolean } {
+  ): {
+    args: Node[];
+    into?: Node;
+    labels: string[];
+    op: string;
+    wait: boolean;
+  } {
     const t = this.peek(0);
     if (t.t !== 'word' || t.v === '_') {
       this.fail(t, 'an Operation name');
     }
     const op = this.next().v;
-    const args = this.startsExpr(this.peek(0)) ? this.exprList() : [];
+    const args = this.startsExpr(this.peek(0)) ? [this.expr()] : [];
+    const labels: string[] = [];
+    if (args.length && this.isOp(this.peek(0, 'operator'), ',')) {
+      this.next('operator');
+      args.push(...this.exprList());
+    } else if (args.length) {
+      this.labelled(() => this.expr(), labels, args);
+    }
     const into = targets ? this.resultTarget() : undefined;
-    return { op, args, into, wait: waits ? this.andWait() : false };
+    return { op, args, labels, into, wait: waits ? this.andWait() : false };
   }
 
   resultTarget(): Node | undefined {

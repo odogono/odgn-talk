@@ -1,0 +1,38 @@
+-- Argument Labels on Capability Operation calls (ADR 0115). The labels are
+-- checked against the Operation Declaration at load; the Operation keeps its
+-- one-word name.
+
+on play
+  -- A labelled `ask`, and the positional call to the same Operation.
+  ask world to move "pass" to "red hangar"
+  ask world to move "pass", "red hangar"
+  -- Several labels, with expressions in each slot.
+  ask world to slide rook across "a1" to "a" & 8 by 2 * 3
+  -- A Result Target and `and wait` after a labelled argument.
+  ask world to move "pass" to "red hangar" into location
+  ask world to fetch "pass" toward "hangar" into saved and wait
+  ask world to fetch "pass" toward "hangar" and wait
+  -- A one-line `tell` takes labels too.
+  tell world to place "beacon" at "red hangar"
+  -- Labels after an `of` chain, a call and a group.
+  ask world to move item 1 of pieces to (the square of target)
+  ask world to move first(pieces) to "e4"
+  -- `to` is reserved, so a chunk word before it stays a Name.
+  ask world to move word to x
+  -- A one-line `if` ends the labelled call at `else`.
+  if ready then ask world to move a to b else ask world to move b to a
+end play
+
+on run
+  -- `tell` block lines take labels.
+  tell world
+    move "pass" to "red hangar"
+    fetch "pass" toward "hangar" and wait
+    place "beacon" at "red hangar"
+  end tell
+  -- A Join Member may be labelled.
+  wait for all
+    ask world to fetch "a" toward "b" and wait
+    ask world to fetch "c" toward "d" and wait
+  end wait
+end run

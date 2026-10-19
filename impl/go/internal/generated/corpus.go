@@ -2137,5 +2137,14 @@ var Corpus = CorpusTable{
 				"disassembly",
 			},
 		},
+		CorpusTableSetupEntry{
+			Table: "operations",
+			Key:   "labels",
+			Is:    "optional list of Argument Label words, one per argument after the first; a call may write them between its arguments, and they are checked at load (ADR 0115)",
+			Kinds: []string{
+				"trace",
+				"disassembly",
+			},
+		},
 	},
 }
