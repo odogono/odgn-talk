@@ -135,8 +135,15 @@ colima status woodpecker
 docker --context colima-woodpecker compose -f ~/woodpecker/compose.linux.yaml ps
 ```
 
-To remove this capacity, stop its agent and Colima profile. Taito stays eligible
-for the same workflows.
+To disable this capacity, unload the VM starter before stopping the agent and
+profile, so the five-minute check does not restart it. Taito stays eligible for
+the same workflows:
+
+```sh
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.woodpecker.colima.plist
+docker --context colima-woodpecker compose -f ~/woodpecker/compose.linux.yaml stop
+colima stop woodpecker
+```
 
 ### Browser worker image
 
