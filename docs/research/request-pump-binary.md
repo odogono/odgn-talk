@@ -265,6 +265,67 @@ repeating jobs tests variation between runner machines. The report remains
 measurement evidence, with acceptance assessed across jobs rather than an
 automatic pass/fail from one sample set.
 
+## Remeasurement after the merged performance work, 2026-10-19
+
+Two full `go-zig-bench` dispatches measure `main` at
+`46508d138e5090c7999637eeabb4f8ac6d0fa3b5`:
+[run 1](https://github.com/odogono/odgn-talk/actions/runs/39234138486) and
+[run 2](https://github.com/odogono/odgn-talk/actions/runs/39234205013).
+Both use the default protocol above: ten interleaved rounds of 20,000
+iterations, Go 1.27.2, wazero v1.12.0 and `CGO_ENABLED=0`. The base is
+`ff543e29af2164f477c1d013fb2df19a0079d14b`; the safe WASI artifact is built
+from `73e91b2a6e515ca7e8fa88e9ff2507f833674648`, sha256
+`fa24d7b7882ba86d3ab25cf77ca1544bb2c6a5e8954befe6907672a0c4fdf98a`.
+Raw samples, `paired.txt`, benchstat comparisons, native/base regressions and
+environment records are archived under
+[`2026-10-19-ci-run1`](../../bench/results/go-zig-adapter/2026-10-19-ci-run1/) and
+[`2026-10-19-ci-run2`](../../bench/results/go-zig-adapter/2026-10-19-ci-run2/),
+in the `request-pump-*` directories.
+
+These are **medians of paired round ratios**, rather than ratios of independent
+medians. Each cell lists run 1 / run 2; every ratio uses native from the same job.
+
+| Platform | Fields Request / native | Fields combined / native combined | Native Request / base |
+| --- | ---: | ---: | ---: |
+| Linux amd64 | 3.123× / 4.002× | 2.806× / 3.639× | 1.008× / 1.014× |
+| Linux arm64 | 2.539× / 2.507× | 2.202× / 2.265× | 1.001× / 0.986× |
+| macOS arm64 | 2.546× / 2.677× | 2.190× / 2.208× | 0.970× / 1.016× |
+
+**The ≤3× native goal does not pass.** Unchanged Request misses on Linux amd64
+in both runs, and combined Request misses there in run 2. Both workloads pass
+on both arm64 platforms in both runs. Keep the failing amd64 jobs in the
+assessment; the earlier #1273 measurements above do not override this evidence.
+
+The amended binary-versus-JSON gate still passes in every job:
+
+| Platform | Fields Request / JSON Request | Fields combined / JSON Request |
+| --- | ---: | ---: |
+| Linux amd64 | 0.519× / 0.551× | 0.469× / 0.506× |
+| Linux arm64 | 0.461× / 0.444× | 0.398× / 0.403× |
+| macOS arm64 | 0.523× / 0.505× | 0.456× / 0.473× |
+
+That is 45–60% less time than JSON across these paired medians. Benchstat
+finds no significant native Request slowdown against the base in any job;
+Linux arm64 run 2 improves 0.93% (`p=0.023`). This no-regression check covers
+Request, not every native workload. Fields combined Function calls remain
+recorded without a gate (3.572–6.997× native).
+
+Across all six jobs, fields Request uses 79 Go allocations and 6,362 B/op,
+versus native's 89 allocations and 7,177 B/op. JSON uses 179 allocations and
+6,536 B/op. These Go-heap counters exclude allocations within guest linear
+memory; they do not imply that fields executes less work than native.
+
+The runs include #1273's guest-cost work, #1287's callback decoder change,
+#1298's instruction fast path, #1302's List writes and #1306's numeric work.
+They compare the current adapter with native and JSON within each job; they
+do not isolate the speedup of any individual PR. The two amd64 Request
+ratios differ by 28% despite identical source and artifact: run 1 used an
+Intel Xeon Platinum 8370C and run 2 an AMD EPYC 7763. Cross-job absolute
+timings cannot attribute a regression to one of those changes.
+
+The broader #1103 limits are assessed in the
+[binding research](go-zig-binding.md#remeasurement-after-the-merged-performance-work-2026-10-19).
+
 ## Remaining implementation
 
 Steps 1–3 below are done in #1253. Step 4 passed the amended gate in #1268.

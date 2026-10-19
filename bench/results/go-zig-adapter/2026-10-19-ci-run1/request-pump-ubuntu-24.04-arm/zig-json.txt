@@ -1,0 +1,50 @@
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     55344 ns/op	     50933 p50-ns	    106441 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     55591 ns/op	     50532 p50-ns	    106817 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     54389 ns/op	     50189 p50-ns	    102041 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     56568 ns/op	     52293 p50-ns	    104274 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     56525 ns/op	     51964 p50-ns	    108001 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     56190 ns/op	     51941 p50-ns	    106417 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     55963 ns/op	     51332 p50-ns	    104897 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     58797 ns/op	     54652 p50-ns	    106865 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     56700 ns/op	     52437 p50-ns	    102209 p99-ns	    6536 B/op	     179 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4   	   20000	     55135 ns/op	     51013 p50-ns	    103513 p99-ns	    6536 B/op	     179 allocs/op
+PASS
