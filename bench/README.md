@@ -182,6 +182,21 @@ Profile mode repeats validated Runs for three seconds after warm-up. Profiles
 also contain process startup, Load, validation and warm-up; their sample shares
 do not establish a timing speedup.
 
+The [TS messaging and lifecycle measurements](results/2026-10-18-ts-messaging-lifecycle.md)
+record alternating batches with both Core initialization orders, separate CPU
+and heap probes, and traced/untraced equivalence for
+[#1292](https://github.com/odogono/odgn-talk/issues/1292). To reproduce:
+
+```sh
+bun bench/ts/src/compare-messaging-lifecycle.ts <before-ref> .cache/ts-messaging-lifecycle
+bun bench/ts/src/compare-messaging-lifecycle.ts <before-ref> .cache/ts-messaging-lifecycle-reversed '' after
+```
+
+The helper substitutes only `group.ts` in the before bundle. An optional third
+argument filters workload names; the fourth selects which Core initializes
+first. It validates output, Fuel and logical allocation on every Run. Run the
+commands sequentially; CPU and heap observations stay outside timing.
+
 The [TS range construction measurements](results/2026-10-15-ts-range-construction.md)
 record alternating before/after timings, separate CPU profiles and heap/forced-GC
 probes for [#943](https://github.com/odogono/odgn-talk/issues/943). To reproduce,

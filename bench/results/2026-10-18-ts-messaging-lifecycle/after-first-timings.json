@@ -1,0 +1,1222 @@
+{
+  "metadata": {
+    "baselineRevision": "f67b03f22cb25c61b71f072b7aef1eecf233f83c",
+    "checkoutRevision": "f67b03f22cb25c61b71f072b7aef1eecf233f83c",
+    "substitutedSource": "impl/ts/src/group.ts",
+    "sourceSha256": {
+      "before": "e6b124db4b38a070dbbec929f17274c0b68a2ad700af4faeb7800a7745e499df",
+      "after": "ba3573399ba9714c5926b6057b79684ae9e64aeb6e4de8a4e7c8c7d96377ef9a"
+    },
+    "bundleSha256": {
+      "before": "c1f42981bca5e59e0ab134e72103967c12db4e784cdb1559572c546f52532616",
+      "before-probe": "5e8e7bf1f2b9ac1c05168ee2f725db4166d39732f4e47751d4c16d2b0d4cccab",
+      "after": "8a1a4df1f8e7471431da3a3099c940423e383ee10f9d8b28ca239c6469ebbe11",
+      "after-probe": "35a34f665b340fb557bf07366d7bafe696f1ab4d67dce4876afa337a97a739bb"
+    },
+    "diff": "diff --git a/impl/ts/src/group.ts b/impl/ts/src/group.ts\nindex c0770c17..67963395 100644\n--- a/impl/ts/src/group.ts\n+++ b/impl/ts/src/group.ts\n@@ -659,7 +659,7 @@ export class Group {\n     this.settleReply(id, reply);\n   }\n   readonly name: string;\n-  private readonly trace: (line: string) => void;\n+  private readonly trace: ((line: string) => void) | undefined;\n   private readonly onReady: (() => void) | undefined;\n   private readonly scripts: ScriptState[] = [];\n   private readonly libraries = new Map<string, Library>();\n@@ -963,8 +963,8 @@ export class Group {\n         this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),\n       )\n     ) {\n-      this.trace(recordLine('save', [id], [], true));\n-      this.trace(\n+      this.trace?.(recordLine('save', [id], [], true));\n+      this.trace?.(\n         recordLine(\n           'refused',\n           [],\n@@ -1053,7 +1053,7 @@ export class Group {\n       graph: saveGraph(state, this.snapshotReferences()),\n     };\n     const payload = JSON.stringify(saved);\n-    this.trace(recordLine('save', [id], [], true));\n+    this.trace?.(recordLine('save', [id], [], true));\n     return new TextEncoder().encode(\n       JSON.stringify({ hash: sha256(payload), payload }),\n     );\n@@ -1069,11 +1069,13 @@ export class Group {\n     const group = new Group({\n       name: o.name,\n       onReady: o.onReady,\n-      trace: line => {\n-        if (emitting) {\n-          o.trace?.(line);\n-        }\n-      },\n+      trace: o.trace\n+        ? line => {\n+            if (emitting) {\n+              o.trace?.(line);\n+            }\n+          }\n+        : undefined,\n     });\n     const disposed: [string, string][] = [];\n     const unbound: string[] = [];\n@@ -1606,7 +1608,7 @@ export class Group {\n         } else {\n           s.queue = s.queue.filter(q => q !== item);\n           d.unsubscribe?.();\n-          this.trace(\n+          this.trace?.(\n             recordLine(\n               'run',\n               [],\n@@ -1679,7 +1681,7 @@ export class Group {\n   private applyInput(action: InputAction) {\n     switch (action.k) {\n       case 'refusal':\n-        this.trace(\n+        this.trace?.(\n           recordLine('refused', [], [['code', JSON.stringify(action.code)]]),\n         );\n         break;\n@@ -1711,7 +1713,7 @@ export class Group {\n         if (running?.run.rewindable && !s.stopped) {\n           this.rewindRunning(s, running);\n         } else {\n-          this.trace(\n+          this.trace?.(\n             recordLine('note', [action.id], [['kind', 'not-rewindable']]),\n           );\n         }\n@@ -1746,7 +1748,7 @@ export class Group {\n           delivery.fn &&\n           !(delivery.fn.asFunction()!.code as { home: Loaded }).home.live\n         ) {\n-          this.trace(\n+          this.trace?.(\n             recordLine('note', [delivery.id], [['kind', 'function-gone']]),\n           );\n           this.answer(delivery, { kind: 'function gone' });\n@@ -1780,7 +1782,7 @@ export class Group {\n             code,\n             detail: 'invalid queued parent relationship',\n           });\n-          this.trace(\n+          this.trace?.(\n             recordLine('refused', [], [['code', JSON.stringify(code)]]),\n           );\n         } else {\n@@ -1856,7 +1858,7 @@ export class Group {\n     this.accountEnd(running, 'discarded', 'rewind');\n     this.debugController?.ended(running.run);\n     for (const id of pending) {\n-      this.trace(recordLine('abandon', [id], []));\n+      this.trace?.(recordLine('abandon', [id], []));\n     }\n     s.parked = s.parked.filter(r => r !== running);\n     s.queue = s.queue.filter(q => q !== running);\n@@ -2006,7 +2008,7 @@ export class Group {\n     releaseReason: ReleaseReason = 'stop',\n   ) {\n     this.releaseGrants(s, releaseReason);\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'stopped',\n         [s.name],\n@@ -2071,8 +2073,8 @@ export class Group {\n     if (this.pumping) {\n       this.inputs.push({ line, urgent: true, action: { k: 'refusal', code } });\n     } else {\n-      this.trace(line);\n-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n+      this.trace?.(line);\n+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n     }\n   }\n \n@@ -2081,7 +2083,8 @@ export class Group {\n       const urgent = this.inputs.filter(i => i.urgent);\n       this.inputs = this.inputs.filter(i => !i.urgent);\n       for (const input of urgent) {\n-        this.trace(typeof input.line === 'string' ? input.line : input.line());\n+        const line = typeof input.line === 'string' ? input.line : input.line();\n+        this.trace?.(line);\n         this.applyInput(input.action);\n       }\n     }\n@@ -2099,13 +2102,16 @@ export class Group {\n       }\n       this.randomState = seedState(options.seed);\n     }\n-    this.trace = line => {\n-      if (this.drainingTrace) {\n-        this.drainingTrace.push(line);\n-      } else {\n-        options.trace?.(line);\n-      }\n-    };\n+    // Optional calls also skip formatting and Trace-only state traversal.\n+    this.trace = options.trace\n+      ? line => {\n+          if (this.drainingTrace) {\n+            this.drainingTrace.push(line);\n+          } else {\n+            options.trace!(line);\n+          }\n+        }\n+      : undefined;\n   }\n \n   script(name: string): Script | undefined {\n@@ -2190,8 +2196,8 @@ export class Group {\n       counters.fuelTotal += run.fuel;\n       counters.allocTotal += run.alloc;\n     }\n-    this.trace(recordLine('counters', [name], [], true));\n-    this.trace(\n+    this.trace?.(recordLine('counters', [name], [], true));\n+    this.trace?.(\n       recordLine(\n         'counters',\n         [name],\n@@ -2243,7 +2249,9 @@ export class Group {\n       undefined,\n       propertyChecks(o.objects ?? {}, o.owner),\n     );\n-    this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));\n+    this.trace?.(\n+      recordLine('load', [o.name], [['identity', p.identity]], true),\n+    );\n     const limits = { ...defaultLimits, ...o.limits };\n     const loaded = this.loadPrepared(o.name, p, limits);\n     const used = o.grantsAsUsed\n@@ -2348,7 +2356,7 @@ export class Group {\n   private writeDiagnostics(error: unknown) {\n     if (error instanceof LoadError) {\n       for (const d of error.diagnostics) {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'diag',\n             [d.unit],\n@@ -2433,7 +2441,7 @@ export class Group {\n       (carry === 'carry variables' || extensions.length > 0) &&\n       loaded.variablesSize() > s.limits.persistentState\n     ) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'refused',\n           [],\n@@ -2456,7 +2464,7 @@ export class Group {\n     this.requireKnownEffects();\n     const s = this.scripts.find(s => s.name === name)!;\n     const p = prepare('script', name, source, this.libraries);\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'reload',\n         [name],\n@@ -2610,7 +2618,7 @@ export class Group {\n           n => Object.hasOwn(existing, n) || Object.hasOwn(s.objects, n),\n         )\n       ) {\n-        this.trace(\n+        this.trace?.(\n           recordLine('refused', [], [['code', JSON.stringify('name reused')]]),\n         );\n         throw new HostError('name reused');\n@@ -2626,7 +2634,7 @@ export class Group {\n       s.loaded.variablesSize() +\n       extension.variablesSize();\n     if (checkState && state > s.limits.persistentState) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'refused',\n           [],\n@@ -2655,7 +2663,7 @@ export class Group {\n     this.requireKnownEffects();\n     const s = this.scripts.find(s => s.name === name)!;\n     const p = this.extension(s, source);\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'extend',\n         [name],\n@@ -2730,11 +2738,11 @@ export class Group {\n    */\n   addLibrary(l: Library): void {\n     this.worker();\n-    this.trace(\n+    this.trace?.(\n       recordLine('add-library', [l.name], [['identity', identityOf(l)]], true),\n     );\n     const refuse = (code: HostErrorCode, message: string): never => {\n-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n       throw new HostError(code, message);\n     };\n     if (stdlibNames.has(l.name)) {\n@@ -2760,7 +2768,7 @@ export class Group {\n   replaceLibrary(l: Library, carry: CarryOver): Report[] {\n     this.worker();\n     this.requireKnownEffects();\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'replace-library',\n         [l.name],\n@@ -2773,7 +2781,7 @@ export class Group {\n       ),\n     );\n     const refuse = (code: HostErrorCode): never => {\n-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));\n       throw new HostError(code);\n     };\n     if (stdlibNames.has(l.name)) {\n@@ -3031,7 +3039,7 @@ export class Group {\n     if (settled.k === 'ready') {\n       this.ready(settled.s, settled.running, settled.r);\n     } else if (settled.k === 'late' && (r.k === 'answer' || r.k === 'fail')) {\n-      this.trace(recordLine('note', [id], [['kind', 'late-answer']]));\n+      this.trace?.(recordLine('note', [id], [['kind', 'late-answer']]));\n     }\n   }\n \n@@ -3469,7 +3477,7 @@ export class Group {\n       vetoes,\n       undecided,\n     };\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'decided',\n         [decision.id],\n@@ -3739,7 +3747,7 @@ export class Group {\n   // A message past the last Owning Script: `unhandled`, and a `send … and\n   // wait` or Request for it fails with `send failed`.\n   private unhandled(delivery: Delivery, reports: Report[], run?: string) {\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'unhandled',\n         [delivery.id],\n@@ -3838,7 +3846,7 @@ export class Group {\n \n   private pumpWorker(now: bigint, o: PumpOptions): PumpResult {\n     if (this.lastClock !== null && now < this.lastClock) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'pump',\n           [],\n@@ -3850,7 +3858,7 @@ export class Group {\n           true,\n         ),\n       );\n-      this.trace(recordLine('refused', [], [['code', '\"clock backwards\"']]));\n+      this.trace?.(recordLine('refused', [], [['code', '\"clock backwards\"']]));\n       throw new HostError('clock backwards');\n     }\n     this.pumping = true;\n@@ -3878,6 +3886,7 @@ export class Group {\n     this.drainingTrace = outputLines;\n     try {\n       for (const input of drained) {\n+        // A deferred line also selects Broadcast recipients at drain time.\n         inputLines.push(\n           typeof input.line === 'string' ? input.line : input.line(),\n         );\n@@ -3887,9 +3896,9 @@ export class Group {\n       this.drainingTrace = null;\n     }\n     for (const line of inputLines) {\n-      this.trace(line);\n+      this.trace?.(line);\n     }\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'pump',\n         [],\n@@ -3902,7 +3911,7 @@ export class Group {\n       ),\n     );\n     for (const line of outputLines) {\n-      this.trace(line);\n+      this.trace?.(line);\n     }\n     if (firstRestorePump) {\n       for (const id of [...this.unsettled].sort(compareCallIds)) {\n@@ -3993,7 +4002,7 @@ export class Group {\n         : mathematicalNext < now\n           ? now\n           : null;\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'pumped',\n         [],\n@@ -4246,14 +4255,14 @@ export class Group {\n     }\n     let outcome = run.ended;\n     if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {\n-      this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));\n+      this.trace?.(recordLine('note', [running.id], [['kind', 'no-verdict']]));\n     }\n     if (outcome) {\n       this.debugController?.ended(run);\n       s.suspended.delete(running);\n     }\n     if (outcome?.kind === 'limit fault') {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'fault',\n           [running.id],\n@@ -4266,12 +4275,12 @@ export class Group {\n         ),\n       );\n       for (const id of run.faultAbandons) {\n-        this.trace(recordLine('abandon', [id], []));\n+        this.trace?.(recordLine('abandon', [id], []));\n       }\n     }\n     if (outcome?.kind === 'cancelled' && outcome.cleanupFailed) {\n       const failed = outcome.cleanupFailed;\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'cleanup-failed',\n           [running.id],\n@@ -4319,7 +4328,7 @@ export class Group {\n         calls: end === 'stop' ? [] : (this.waitView(running).calls ?? []),\n       });\n     const start: [string, string | null][] =\n-      how === 'start'\n+      this.trace && how === 'start'\n         ? [\n             ['delivery', running.delivery.id],\n             ['broadcast', running.delivery.broadcast ?? null],\n@@ -4339,12 +4348,14 @@ export class Group {\n             ],\n           ]\n         : [];\n-    const stretch: [string, string][] = [\n-      ['fuel', String(run.fuel - fuel0)],\n-      ['alloc', String(run.alloc - alloc0)],\n-    ];\n+    const stretch: [string, string][] = this.trace\n+      ? [\n+          ['fuel', String(run.fuel - fuel0)],\n+          ['alloc', String(run.alloc - alloc0)],\n+        ]\n+      : [];\n     if (running.rewound) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'seg',\n           [running.id, how],\n@@ -4360,7 +4371,7 @@ export class Group {\n       return;\n     }\n     if (s.stopped) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'seg',\n           [running.id, how],\n@@ -4380,7 +4391,7 @@ export class Group {\n     if (running.parked && !outcome) {\n       s.queue.shift();\n       s.parked.push(running);\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'seg',\n           [running.id, how],\n@@ -4399,7 +4410,7 @@ export class Group {\n       const suspension = run.suspended;\n       s.queue.shift();\n       const deadline = this.suspended(s, running, suspension);\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'seg',\n           [running.id, how],\n@@ -4433,7 +4444,7 @@ export class Group {\n       return;\n     }\n     if (!outcome) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'preempt',\n           [running.id, how],\n@@ -4444,7 +4455,7 @@ export class Group {\n       return;\n     }\n     s.queue.shift();\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'seg',\n         [running.id, how],\n@@ -4483,7 +4494,7 @@ export class Group {\n \n   private writeCancellationAbandons(run: Run) {\n     for (const id of run.cancellationAbandons) {\n-      this.trace(recordLine('abandon', [id], []));\n+      this.trace?.(recordLine('abandon', [id], []));\n     }\n     run.cancellationAbandons = [];\n   }\n@@ -4545,7 +4556,7 @@ export class Group {\n       running.recordsWritten = i + 1;\n       const rec = run.records[i]!;\n       if (rec.kind === 'scope') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'scope',\n             [rec.id],\n@@ -4559,7 +4570,7 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'effect') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'effect',\n             [rec.segment],\n@@ -4573,7 +4584,7 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'effect-failure') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'effect-failure',\n             [running.id],\n@@ -4607,11 +4618,11 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'abandon') {\n-        this.trace(recordLine('abandon', [rec.id], []));\n+        this.trace?.(recordLine('abandon', [rec.id], []));\n         continue;\n       }\n       if (rec.kind === 'unhandled') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'unhandled',\n             [],\n@@ -4634,7 +4645,7 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'prop') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'prop',\n             [running.id],\n@@ -4651,7 +4662,7 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'call') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'call',\n             [rec.id],\n@@ -4670,14 +4681,14 @@ export class Group {\n       }\n       if (rec.kind === 'call-failed') {\n         if (rec.id) {\n-          this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));\n+          this.trace?.(recordLine('call-failed', [rec.id], [['op', rec.op]]));\n           this.observer?.({ k: 'call', call: rec.id, run: running.id });\n         }\n         this.drainReports.push(this.callFailed(run.script.name, rec));\n         continue;\n       }\n       if (rec.kind === 'send') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             'send',\n             [rec.id ?? running.id],\n@@ -4696,7 +4707,7 @@ export class Group {\n         continue;\n       }\n       if (rec.kind === 'offer-chosen' || rec.kind === 'offer-entered') {\n-        this.trace(\n+        this.trace?.(\n           recordLine(\n             rec.kind,\n             [running.id],\n@@ -4722,7 +4733,7 @@ export class Group {\n       }\n       const at = `${rec.unit}:${rec.pc}`;\n       const pos = `${rec.line}:${rec.col}`;\n-      this.trace(\n+      this.trace?.(\n         rec.kind === 'raise'\n           ? recordLine(\n               'raise',\n@@ -4773,7 +4784,7 @@ export class Group {\n     const error = outcome.kind === 'errored' ? outcome.error : null;\n     const limit =\n       outcome.kind === 'limit fault' ? limitWord(outcome.limit) : null;\n-    this.trace(\n+    this.trace?.(\n       recordLine(\n         'run',\n         [running.id],\n@@ -4874,7 +4885,7 @@ export class Group {\n       const waiting =\n         s.queue.filter(item => !('run' in item)).length + s.incoming;\n       if (waiting >= s.limits.mailboxDepth) {\n-        this.trace(\n+        this.trace?.(\n           recordLine('note', [running.id], [['kind', 'error-dropped']]),\n         );\n       } else {\n@@ -4932,7 +4943,9 @@ export class Group {\n       const waiting =\n         next.s.queue.filter(item => !('run' in item)).length + next.s.incoming;\n       if (waiting >= next.s.limits.mailboxDepth) {\n-        this.trace(recordLine('note', [running.id], [['kind', 'climb-full']]));\n+        this.trace?.(\n+          recordLine('note', [running.id], [['kind', 'climb-full']]),\n+        );\n         this.unhandled(delivery, reports, running.id);\n         return;\n       }\n@@ -5075,10 +5088,10 @@ export class Group {\n \n   inspect(): Inspection {\n     this.worker();\n-    this.trace(recordLine('vars', [], [], true));\n+    this.trace?.(recordLine('vars', [], [], true));\n     const view = this.inspection();\n     for (const s of view.scripts) {\n-      this.trace(\n+      this.trace?.(\n         recordLine(\n           'vars',\n           [s.name],\n",
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "started": "2026-10-18T21:27:03.795Z",
+    "finishedTiming": "2026-10-18T21:27:57.914Z",
+    "startingLoad": [
+      3.24365234375,
+      3.1884765625,
+      2.5625
+    ],
+    "endingLoad": [
+      3.87646484375,
+      3.35693359375,
+      2.662109375
+    ],
+    "settings": {
+      "warmupRuns": 20,
+      "rounds": 3,
+      "batches": 7,
+      "runsPerBatch": 10
+    },
+    "first": "after",
+    "order": "Per workload: same-process isolated bundles, alternating AB/BA batches"
+  },
+  "workloads": [
+    {
+      "name": "core/loop",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": {
+        "n": 100,
+        "expect": "5050"
+      },
+      "source": "-- A counting loop: the cost of the loop itself and integer addition.\non run n\n  put 0 into total\n  put 0 into i\n  repeat while i < n\n    add 1 to i\n    add i to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "host/immediate",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "immediate",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install immediate bindings; this is a runner limitation, not a Core limitation."
+      },
+      "source": "-- Immediate identity Operations; argument and result conversion are timed.\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    ask host to echo i\n    add it to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "host/pump",
+      "n": 1,
+      "expect": "nothing",
+      "smoke": {
+        "n": 1,
+        "expect": "nothing"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      },
+      "source": "-- Empty Handler: one Delivery and one Pump, independent of N.\non run n\nend run\n"
+    },
+    {
+      "name": "messaging/sends",
+      "n": 1500,
+      "expect": "1125750",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "partner",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."
+      },
+      "source": "-- Sends to another Script, each waiting for its reply: one send, one Run in\n-- the receiver, and one suspend and resume of the sender.\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    send echo with i to partner and wait\n    add it to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "messaging/parents",
+      "n": 1500,
+      "expect": "1125750",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "parents",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install parents bindings; this is a runner limitation, not a Core limitation."
+      },
+      "source": "-- Sends to a leaf Host Object that has no Owning Script, so each climbs the\n-- Message Path through its parents to this Script, which owns the root.\non ping x\n  return x\nend ping\n\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    send ping with i to leaf and wait\n    add it to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "messaging/joins",
+      "n": 300,
+      "expect": "361200",
+      "smoke": {
+        "n": 2,
+        "expect": "24"
+      },
+      "host": "partner",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."
+      },
+      "source": "-- Joins of eight sends to another Script: starting each Join Member, and one\n-- suspend and resume for the whole Join.\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    wait for all\n      repeat for each j in 1..8\n        send echo with i to partner and wait\n      end repeat\n    end wait\n    repeat for each answer in it\n      add answer to total\n    end repeat\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "messaging/suspend",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      },
+      "source": "-- A zero wait in every iteration: the Run suspends, and the next Pump\n-- resumes it, with no Host Operation involved.\non run n\n  put 0 into total\n  repeat for each i in 1..n\n    wait 0 s\n    add i to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "lifecycle/load-small",
+      "n": 1,
+      "expect": "1",
+      "smoke": {
+        "n": 1,
+        "expect": "1"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      },
+      "source": "-- A small Script whose Load time is the measurement. Its Run is trivial.\non run n\n  return n\nend run\n"
+    },
+    {
+      "name": "lifecycle/load-large",
+      "n": 1,
+      "expect": "1291",
+      "smoke": {
+        "n": 1,
+        "expect": "1291"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      },
+      "source": "-- A large Script whose Load time is the measurement: 40 functions that each\n-- use loops, Maps, Lists, text and a try. Its Run calls each one once.\n\nfunction step1 x\n  put {id: x, label: \"item 1 of \" & x, tags: [x, x + 1]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 1 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 1\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step1\n\nfunction step2 x\n  put {id: x, label: \"item 2 of \" & x, tags: [x, x + 2]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 2 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 2\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step2\n\nfunction step3 x\n  put {id: x, label: \"item 3 of \" & x, tags: [x, x + 3]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 3 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 3\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step3\n\nfunction step4 x\n  put {id: x, label: \"item 4 of \" & x, tags: [x, x + 4]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 4 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 4\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step4\n\nfunction step5 x\n  put {id: x, label: \"item 5 of \" & x, tags: [x, x + 5]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 5 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 5\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step5\n\nfunction step6 x\n  put {id: x, label: \"item 6 of \" & x, tags: [x, x + 6]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 6 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 6\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step6\n\nfunction step7 x\n  put {id: x, label: \"item 7 of \" & x, tags: [x, x + 7]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 7 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 7\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step7\n\nfunction step8 x\n  put {id: x, label: \"item 8 of \" & x, tags: [x, x + 8]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 8 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 8\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step8\n\nfunction step9 x\n  put {id: x, label: \"item 9 of \" & x, tags: [x, x + 9]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 9 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 9\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step9\n\nfunction step10 x\n  put {id: x, label: \"item 10 of \" & x, tags: [x, x + 10]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 10 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 10\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step10\n\nfunction step11 x\n  put {id: x, label: \"item 11 of \" & x, tags: [x, x + 11]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 11 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 11\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step11\n\nfunction step12 x\n  put {id: x, label: \"item 12 of \" & x, tags: [x, x + 12]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 12 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 12\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step12\n\nfunction step13 x\n  put {id: x, label: \"item 13 of \" & x, tags: [x, x + 13]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 13 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 13\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step13\n\nfunction step14 x\n  put {id: x, label: \"item 14 of \" & x, tags: [x, x + 14]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 14 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 14\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step14\n\nfunction step15 x\n  put {id: x, label: \"item 15 of \" & x, tags: [x, x + 15]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 15 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 15\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step15\n\nfunction step16 x\n  put {id: x, label: \"item 16 of \" & x, tags: [x, x + 16]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 16 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 16\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step16\n\nfunction step17 x\n  put {id: x, label: \"item 17 of \" & x, tags: [x, x + 17]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 17 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 17\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step17\n\nfunction step18 x\n  put {id: x, label: \"item 18 of \" & x, tags: [x, x + 18]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 18 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 18\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step18\n\nfunction step19 x\n  put {id: x, label: \"item 19 of \" & x, tags: [x, x + 19]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 19 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 19\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step19\n\nfunction step20 x\n  put {id: x, label: \"item 20 of \" & x, tags: [x, x + 20]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 20 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 20\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step20\n\nfunction step21 x\n  put {id: x, label: \"item 21 of \" & x, tags: [x, x + 21]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 21 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 21\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step21\n\nfunction step22 x\n  put {id: x, label: \"item 22 of \" & x, tags: [x, x + 22]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 22 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 22\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step22\n\nfunction step23 x\n  put {id: x, label: \"item 23 of \" & x, tags: [x, x + 23]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 23 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 23\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step23\n\nfunction step24 x\n  put {id: x, label: \"item 24 of \" & x, tags: [x, x + 24]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 24 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 24\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step24\n\nfunction step25 x\n  put {id: x, label: \"item 25 of \" & x, tags: [x, x + 25]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 25 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 25\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step25\n\nfunction step26 x\n  put {id: x, label: \"item 26 of \" & x, tags: [x, x + 26]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 26 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 26\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step26\n\nfunction step27 x\n  put {id: x, label: \"item 27 of \" & x, tags: [x, x + 27]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 27 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 27\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step27\n\nfunction step28 x\n  put {id: x, label: \"item 28 of \" & x, tags: [x, x + 28]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 28 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 28\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step28\n\nfunction step29 x\n  put {id: x, label: \"item 29 of \" & x, tags: [x, x + 29]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 29 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 29\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step29\n\nfunction step30 x\n  put {id: x, label: \"item 30 of \" & x, tags: [x, x + 30]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 30 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 30\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step30\n\nfunction step31 x\n  put {id: x, label: \"item 31 of \" & x, tags: [x, x + 31]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 31 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 31\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step31\n\nfunction step32 x\n  put {id: x, label: \"item 32 of \" & x, tags: [x, x + 32]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 32 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 32\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step32\n\nfunction step33 x\n  put {id: x, label: \"item 33 of \" & x, tags: [x, x + 33]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 33 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 33\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step33\n\nfunction step34 x\n  put {id: x, label: \"item 34 of \" & x, tags: [x, x + 34]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 34 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 34\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step34\n\nfunction step35 x\n  put {id: x, label: \"item 35 of \" & x, tags: [x, x + 35]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 35 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 35\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step35\n\nfunction step36 x\n  put {id: x, label: \"item 36 of \" & x, tags: [x, x + 36]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 36 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 36\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step36\n\nfunction step37 x\n  put {id: x, label: \"item 37 of \" & x, tags: [x, x + 37]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 37 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 37\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step37\n\nfunction step38 x\n  put {id: x, label: \"item 38 of \" & x, tags: [x, x + 38]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 38 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 38\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step38\n\nfunction step39 x\n  put {id: x, label: \"item 39 of \" & x, tags: [x, x + 39]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 39 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 39\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step39\n\nfunction step40 x\n  put {id: x, label: \"item 40 of \" & x, tags: [x, x + 40]} into record\n  put 0 into total\n  repeat for each t in record's tags\n    if t > 40 then\n      add t to total\n    else\n      subtract 1 from total\n    end if\n  end repeat\n  try\n    if total < 0 then throw {code: \"negative 40\"}\n  catch {code: c}\n    add the length of c to total\n  end try\n  return total + the length of record's label\nend step40\n\non run n\n  put 0 into total\n  add step1(n) to total\n  add step2(n) to total\n  add step3(n) to total\n  add step4(n) to total\n  add step5(n) to total\n  add step6(n) to total\n  add step7(n) to total\n  add step8(n) to total\n  add step9(n) to total\n  add step10(n) to total\n  add step11(n) to total\n  add step12(n) to total\n  add step13(n) to total\n  add step14(n) to total\n  add step15(n) to total\n  add step16(n) to total\n  add step17(n) to total\n  add step18(n) to total\n  add step19(n) to total\n  add step20(n) to total\n  add step21(n) to total\n  add step22(n) to total\n  add step23(n) to total\n  add step24(n) to total\n  add step25(n) to total\n  add step26(n) to total\n  add step27(n) to total\n  add step28(n) to total\n  add step29(n) to total\n  add step30(n) to total\n  add step31(n) to total\n  add step32(n) to total\n  add step33(n) to total\n  add step34(n) to total\n  add step35(n) to total\n  add step36(n) to total\n  add step37(n) to total\n  add step38(n) to total\n  add step39(n) to total\n  add step40(n) to total\n  return total\nend run\n"
+    },
+    {
+      "name": "lifecycle/restore",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "restore",
+      "outlier": false,
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install restore bindings; this is a runner limitation, not a Core limitation."
+      },
+      "source": "-- The `restore` Host fills the rows once, then each Run saves the Group,\n-- restores it, and delivers `run` to the restored Script, which reads them.\nscript variable rows = []\n\non fill n\n  put [] into rows\n  repeat for each i in 1..n\n    put {id: i, name: \"row \" & i, tags: [i, i * 2]} after rows\n  end repeat\nend fill\n\non run n\n  put 0 into total\n  repeat for each row in rows\n    add row's id to total\n  end repeat\n  return total\nend run\n"
+    },
+    {
+      "name": "lifecycle/rollback",
+      "n": 300,
+      "expect": "300",
+      "smoke": {
+        "n": 2,
+        "expect": "2"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install suspending bindings; this is a runner limitation, not a Core limitation."
+      },
+      "host": "suspending",
+      "source": "-- N Runs that each change a Script Variable and then start a Join one member\n-- wider than MaxJoin. Each Limit Fault rolls its Segment back, so `count`\n-- ends at 0 again. The members are suspending Host calls, so the 16 that\n-- start before the fault leave no work in another Script.\nscript variable count = 0\n\non fill\n  add 1 to count\n  wait for all\n    repeat for each i in 1..17\n      ask host to later i and wait\n    end repeat\n  end wait\nend fill\n\non run n\n  put 0 into faults\n  repeat for each i in 1..n\n    try\n      send fill to me and wait\n    catch {code: \"send failed\", reason: \"limit fault\"}\n      add 1 to faults\n    end try\n  end repeat\n  return faults + count\nend run\n"
+    }
+  ],
+  "records": [
+    {
+      "benchmark": "core/loop",
+      "n": 2000,
+      "round": 1,
+      "expected": {
+        "alloc": 64000,
+        "fuel": 48016,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          3378229.200000004,
+          3446233.3,
+          3338270.8000000035,
+          3608775.000000003,
+          2887012.4999999916,
+          2873929.099999998,
+          2907466.700000009
+        ],
+        "after": [
+          3353112.499999997,
+          3352699.9999999986,
+          3308070.8999999957,
+          3461666.6000000066,
+          2868733.2999999966,
+          2884020.799999996,
+          2925445.8999999994
+        ]
+      }
+    },
+    {
+      "benchmark": "core/loop",
+      "n": 2000,
+      "round": 2,
+      "expected": {
+        "alloc": 64000,
+        "fuel": 48016,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          2893375.0000000033,
+          3497954.200000004,
+          2906570.899999997,
+          2877350.000000001,
+          2837183.400000003,
+          2881833.400000005,
+          2849112.500000001
+        ],
+        "after": [
+          2904962.499999999,
+          3619600.000000003,
+          2948904.1000000043,
+          2845491.700000002,
+          2836612.500000001,
+          2831866.5999999894,
+          2820345.900000007
+        ]
+      }
+    },
+    {
+      "benchmark": "core/loop",
+      "n": 2000,
+      "round": 3,
+      "expected": {
+        "alloc": 64000,
+        "fuel": 48016,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          2859108.399999991,
+          2826949.999999988,
+          2825291.7000000025,
+          2831279.1999999946,
+          2818683.299999998,
+          2825137.500000005,
+          2826183.300000002
+        ],
+        "after": [
+          2832679.099999996,
+          2811258.399999997,
+          2806120.799999985,
+          2813458.300000002,
+          2923358.4000000064,
+          2860404.2000000165,
+          2834012.500000017
+        ]
+      }
+    },
+    {
+      "benchmark": "host/immediate",
+      "n": 500,
+      "round": 1,
+      "expected": {
+        "alloc": 16072,
+        "fuel": 13518,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          1643425.000000002,
+          2054420.9000000139,
+          1679987.499999993,
+          1724700.000000007,
+          1657958.400000007,
+          1670712.5000000133,
+          1642354.1999999997
+        ],
+        "after": [
+          1864408.299999991,
+          1320183.3999999962,
+          1452591.6999999937,
+          1689662.5000000086,
+          1248362.5000000075,
+          1374133.299999994,
+          1247712.4999999886
+        ]
+      }
+    },
+    {
+      "benchmark": "host/immediate",
+      "n": 500,
+      "round": 2,
+      "expected": {
+        "alloc": 16072,
+        "fuel": 13518,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          1710012.4999999932,
+          1667754.200000013,
+          1744458.2999999966,
+          1747841.7000000037,
+          1810783.4000000139,
+          1765112.4999999865,
+          1853975.0000000368
+        ],
+        "after": [
+          1390816.5999999936,
+          1266425.000000004,
+          1433037.5000000005,
+          1277341.699999988,
+          1487954.2000000128,
+          1333779.0999999926,
+          1540833.3000000084
+        ]
+      }
+    },
+    {
+      "benchmark": "host/immediate",
+      "n": 500,
+      "round": 3,
+      "expected": {
+        "alloc": 16072,
+        "fuel": 13518,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          1808366.6999999876,
+          1847466.6999999955,
+          1875508.3000000014,
+          1884329.1000000134,
+          1858224.999999993,
+          3120833.3000000035,
+          2257012.4999999735
+        ],
+        "after": [
+          1346329.1000000027,
+          1531333.4000000395,
+          1382933.4000000018,
+          1608320.8999999897,
+          1372479.1000000094,
+          1858783.3000000045,
+          1432279.1999999937
+        ]
+      }
+    },
+    {
+      "benchmark": "host/pump",
+      "n": 1,
+      "round": 1,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "nothing"
+      },
+      "samplesNs": {
+        "before": [
+          11050.00000002292,
+          11754.199999995762,
+          10904.200000004494,
+          11983.30000001988,
+          10133.29999996131,
+          10929.100000021208,
+          10783.399999991161
+        ],
+        "after": [
+          7937.499999979991,
+          7520.9000000086235,
+          8112.500000015643,
+          9020.800000007512,
+          8362.5000000211,
+          7895.899999994072,
+          9004.200000026685
+        ]
+      }
+    },
+    {
+      "benchmark": "host/pump",
+      "n": 1,
+      "round": 2,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "nothing"
+      },
+      "samplesNs": {
+        "before": [
+          11612.500000001091,
+          11291.60000000411,
+          11058.300000013332,
+          12045.900000020993,
+          11599.999999998545,
+          11200.000000008004,
+          11829.100000022663
+        ],
+        "after": [
+          8679.099999972095,
+          8612.500000026557,
+          8741.700000018682,
+          7658.400000036636,
+          8754.199999975754,
+          7720.900000003894,
+          8220.80000002643
+        ]
+      }
+    },
+    {
+      "benchmark": "host/pump",
+      "n": 1,
+      "round": 3,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "nothing"
+      },
+      "samplesNs": {
+        "before": [
+          12620.900000001711,
+          12683.300000026065,
+          11145.800000031159,
+          17624.99999999818,
+          13458.300000002055,
+          13408.299999991868,
+          12166.700000034325
+        ],
+        "after": [
+          7887.499999969805,
+          7883.300000003146,
+          243020.80000002208,
+          9883.300000001327,
+          9366.700000009587,
+          7816.59999997828,
+          9354.20000000704
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/sends",
+      "n": 1500,
+      "round": 1,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          12102279.099999987,
+          14458929.199999968,
+          12416245.799999978,
+          13036345.79999998,
+          13442504.199999984,
+          12490145.799999982,
+          13336516.699999992
+        ],
+        "after": [
+          8357795.900000019,
+          8803379.10000003,
+          7808824.9999999795,
+          8614274.999999998,
+          7667024.999999967,
+          7799350.000000005,
+          8531912.499999998
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/sends",
+      "n": 1500,
+      "round": 2,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          13869045.90000004,
+          13747441.600000003,
+          11857812.5,
+          12909333.29999998,
+          11703370.799999993,
+          12359229.200000027,
+          13331779.199999982
+        ],
+        "after": [
+          8805170.799999995,
+          8901475.000000028,
+          7811716.6,
+          8396233.399999982,
+          8819195.90000007,
+          8176770.8000000315,
+          8229745.8
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/sends",
+      "n": 1500,
+      "round": 3,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          11154604.199999994,
+          13116100.000000006,
+          13060516.700000063,
+          12852049.999999963,
+          13353841.600000033,
+          12663554.2,
+          12878904.200000035
+        ],
+        "after": [
+          8196008.299999994,
+          8126733.299999977,
+          7348733.300000003,
+          7951858.300000003,
+          7813933.400000041,
+          7477983.300000051,
+          8353037.500000028
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/parents",
+      "n": 1500,
+      "round": 1,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          13422408.39999995,
+          15478191.700000023,
+          15116774.999999871,
+          14902133.30000006,
+          16082091.69999991,
+          14708420.800000021,
+          15084929.200000077
+        ],
+        "after": [
+          9411395.800000083,
+          9769583.299999977,
+          8680962.499999987,
+          9386358.300000029,
+          9412662.500000078,
+          8652662.500000041,
+          10240183.29999999
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/parents",
+      "n": 1500,
+      "round": 2,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          13753362.500000004,
+          14859658.399999898,
+          12995974.999999998,
+          14254854.100000013,
+          14254874.999999994,
+          13739266.700000007,
+          15029029.199999968
+        ],
+        "after": [
+          8173108.299999876,
+          9714116.699999977,
+          9733350.000000063,
+          9535579.099999996,
+          9823895.899999844,
+          9488987.499999894,
+          9650412.499999948
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/parents",
+      "n": 1500,
+      "round": 3,
+      "expected": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      },
+      "samplesNs": {
+        "before": [
+          13746325.000000069,
+          14832174.999999916,
+          15182904.19999994,
+          15078133.299999898,
+          15361175.000000004,
+          13482808.300000032,
+          14866437.499999847
+        ],
+        "after": [
+          8916395.900000134,
+          9280470.799999965,
+          9446179.200000007,
+          8599016.599999959,
+          10048087.50000011,
+          8622083.299999941,
+          9790287.499999976
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/joins",
+      "n": 300,
+      "round": 1,
+      "expected": {
+        "alloc": 244872,
+        "fuel": 127218,
+        "outcome": "completed",
+        "result": "361200"
+      },
+      "samplesNs": {
+        "before": [
+          23918695.800000023,
+          18528320.900000107,
+          20347025.00000003,
+          18992950.00000002,
+          20290341.69999995,
+          19443779.19999988,
+          18801491.60000001
+        ],
+        "after": [
+          16227624.9999999,
+          14619683.40000003,
+          13461549.999999989,
+          14038258.400000086,
+          14366204.199999994,
+          13391649.999999937,
+          14384274.99999998
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/joins",
+      "n": 300,
+      "round": 2,
+      "expected": {
+        "alloc": 244872,
+        "fuel": 127218,
+        "outcome": "completed",
+        "result": "361200"
+      },
+      "samplesNs": {
+        "before": [
+          19875454.199999876,
+          20558208.399999786,
+          20396387.500000127,
+          19322591.599999942,
+          19698712.499999963,
+          18132508.299999975,
+          19932479.199999943
+        ],
+        "after": [
+          12651141.699999971,
+          15076458.300000012,
+          13687312.499999825,
+          14666287.499999816,
+          13932970.900000146,
+          13652712.49999969,
+          13178625.0000001
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/joins",
+      "n": 300,
+      "round": 3,
+      "expected": {
+        "alloc": 244872,
+        "fuel": 127218,
+        "outcome": "completed",
+        "result": "361200"
+      },
+      "samplesNs": {
+        "before": [
+          19434945.80000006,
+          20028070.800000206,
+          18810754.10000012,
+          19529487.49999996,
+          19644729.200000074,
+          18944495.800000004,
+          18978425.000000063
+        ],
+        "after": [
+          14203574.99999991,
+          13195620.799999962,
+          14060754.200000156,
+          14328883.400000269,
+          13590149.999999994,
+          13617662.500000006,
+          13416008.299999885
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "n": 2000,
+      "round": 1,
+      "expected": {
+        "alloc": 32072,
+        "fuel": 48018,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          13790683.400000125,
+          12809045.899999911,
+          11844237.499999871,
+          11883116.599999994,
+          11735862.500000076,
+          11924187.49999997,
+          11822795.799999949
+        ],
+        "after": [
+          8486229.199999798,
+          7491079.199999876,
+          6889895.800000158,
+          6619379.200000185,
+          6667325.000000346,
+          6699270.900000192,
+          6711179.19999997
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "n": 2000,
+      "round": 2,
+      "expected": {
+        "alloc": 32072,
+        "fuel": 48018,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          9895399.99999979,
+          9813295.899999866,
+          9929183.300000295,
+          9879149.999999937,
+          10004275.000000052,
+          9882345.800000258,
+          10047858.300000008
+        ],
+        "after": [
+          5723783.2999999225,
+          5311924.999999974,
+          5323216.599999796,
+          5354829.200000313,
+          5290616.700000101,
+          5397587.500000009,
+          5323045.799999818
+        ]
+      }
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "n": 2000,
+      "round": 3,
+      "expected": {
+        "alloc": 32072,
+        "fuel": 48018,
+        "outcome": "completed",
+        "result": "2001000"
+      },
+      "samplesNs": {
+        "before": [
+          9993224.999999803,
+          10068508.400000064,
+          9876583.30000013,
+          10058333.399999902,
+          9986829.19999992,
+          10355870.800000047,
+          10073637.500000041
+        ],
+        "after": [
+          5390366.699999867,
+          5323625.000000174,
+          5421283.30000014,
+          5312362.500000017,
+          5469050.0000000615,
+          5372141.700000065,
+          5462233.299999935
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "n": 1,
+      "round": 1,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "1"
+      },
+      "samplesNs": {
+        "before": [
+          6804.1999998968095,
+          6245.900000067195,
+          5583.299999852898,
+          6299.999999828287,
+          5620.899999848916,
+          6170.900000142865,
+          5341.70000028098
+        ],
+        "after": [
+          5179.199999838602,
+          5591.699999786215,
+          4325.000000244472,
+          4770.800000187592,
+          4358.400000273832,
+          3958.29999979469,
+          5449.999999837019
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "n": 1,
+      "round": 2,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "1"
+      },
+      "samplesNs": {
+        "before": [
+          6108.299999687006,
+          6170.899999779067,
+          5883.299999914016,
+          5683.29999987327,
+          6104.199999754201,
+          5562.5000000873115,
+          5774.999999994179
+        ],
+        "after": [
+          3895.899999770336,
+          4391.699999905541,
+          4500.000000189175,
+          4854.100000011385,
+          3983.400000288384,
+          4729.199999928824,
+          4508.399999758694
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "n": 1,
+      "round": 3,
+      "expected": {
+        "alloc": 0,
+        "fuel": 7,
+        "outcome": "completed",
+        "result": "1"
+      },
+      "samplesNs": {
+        "before": [
+          6270.89999979944,
+          7862.500000192085,
+          6204.100000104518,
+          6204.100000104518,
+          6100.00000015134,
+          6599.999999889405,
+          5645.799999911105
+        ],
+        "after": [
+          119162.49999994761,
+          4983.300000094459,
+          5666.600000040489,
+          4366.600000139442,
+          4683.400000067195,
+          4012.499999953434,
+          4512.500000055297
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "n": 1,
+      "round": 1,
+      "expected": {
+        "alloc": 16742,
+        "fuel": 4609,
+        "outcome": "completed",
+        "result": "1291"
+      },
+      "samplesNs": {
+        "before": [
+          534737.4999997555,
+          673879.0999999765,
+          654629.1999999085,
+          704145.9000000032,
+          710279.20000015,
+          727624.9999998981,
+          716204.099999959
+        ],
+        "after": [
+          529033.3999997529,
+          511470.8000000974,
+          652624.9999998981,
+          730154.2000001064,
+          731695.7999999431,
+          887520.9000001631,
+          733816.5999997727
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "n": 1,
+      "round": 2,
+      "expected": {
+        "alloc": 16742,
+        "fuel": 4609,
+        "outcome": "completed",
+        "result": "1291"
+      },
+      "samplesNs": {
+        "before": [
+          708054.1999999696,
+          850545.7999999635,
+          731149.9999999796,
+          628733.4000000556,
+          508075.0000000989,
+          488874.9999998254,
+          504391.5999998717
+        ],
+        "after": [
+          726520.7999997074,
+          716887.4999999389,
+          706466.6999998735,
+          501991.5999997465,
+          633300.0000002357,
+          476920.89999982266,
+          483862.500000032
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "n": 1,
+      "round": 3,
+      "expected": {
+        "alloc": 16742,
+        "fuel": 4609,
+        "outcome": "completed",
+        "result": "1291"
+      },
+      "samplesNs": {
+        "before": [
+          484995.7999998879,
+          483820.9000001371,
+          483625.00000002905,
+          646695.8000000886,
+          487024.99999999424,
+          505437.49999997095,
+          478299.9999999447
+        ],
+        "after": [
+          626408.3000001847,
+          472466.60000018886,
+          478916.6999998997,
+          457950.00000034634,
+          475854.20000032167,
+          464325.0000000989,
+          607275.0000002998
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "n": 500,
+      "round": 1,
+      "expected": {
+        "alloc": 8024,
+        "fuel": 8015,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          7360812.500000248,
+          6827991.699999983,
+          6650654.199999917,
+          7482933.300000149,
+          6894991.7000001725,
+          6647291.700000278,
+          6853700.000000027
+        ],
+        "after": [
+          6959625.000000233,
+          7050000,
+          7362779.099999897,
+          6861745.900000097,
+          7911941.6999998065,
+          6578383.399999803,
+          6528708.400000324
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "n": 500,
+      "round": 2,
+      "expected": {
+        "alloc": 8024,
+        "fuel": 8015,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          6938508.299999739,
+          7018183.399999907,
+          6589458.300000114,
+          6488595.900000291,
+          7475654.100000247,
+          6655087.499999718,
+          7424554.100000022
+        ],
+        "after": [
+          6977475.000000049,
+          6655720.89999987,
+          6983845.799999836,
+          7266954.200000328,
+          6707608.299999992,
+          7377333.300000099,
+          6610054.200000013
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "n": 500,
+      "round": 3,
+      "expected": {
+        "alloc": 8024,
+        "fuel": 8015,
+        "outcome": "completed",
+        "result": "125250"
+      },
+      "samplesNs": {
+        "before": [
+          6698891.70000024,
+          6854245.900000024,
+          7565850.000000137,
+          7384508.300000017,
+          7181566.700000258,
+          8065970.800000286,
+          5849341.70000015
+        ],
+        "after": [
+          6813108.300000022,
+          7661325.000000216,
+          6948295.800000051,
+          7738833.39999993,
+          7993916.700000045,
+          7047999.999999957,
+          6392216.700000063
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "n": 300,
+      "round": 1,
+      "expected": {
+        "alloc": 40888,
+        "fuel": 102023,
+        "outcome": "completed",
+        "result": "300"
+      },
+      "samplesNs": {
+        "before": [
+          65462483.399999835,
+          59901820.79999977,
+          59170166.70000012,
+          56757850.00000032,
+          58646641.69999959,
+          57105174.999999866,
+          60041679.09999961
+        ],
+        "after": [
+          52139195.90000005,
+          52951629.200000025,
+          49299850.00000015,
+          49600991.69999958,
+          47019804.10000033,
+          49232445.89999958,
+          49581116.59999995
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "n": 300,
+      "round": 2,
+      "expected": {
+        "alloc": 40888,
+        "fuel": 102023,
+        "outcome": "completed",
+        "result": "300"
+      },
+      "samplesNs": {
+        "before": [
+          57819245.89999981,
+          61766570.80000005,
+          61685183.30000006,
+          60441791.699999884,
+          58078529.20000005,
+          59432520.90000024,
+          59816545.90000035
+        ],
+        "after": [
+          51450462.500000134,
+          52078445.79999946,
+          49707566.70000046,
+          52556787.50000007,
+          51696899.99999973,
+          51874708.40000024,
+          49182175.00000028
+        ]
+      }
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "n": 300,
+      "round": 3,
+      "expected": {
+        "alloc": 40888,
+        "fuel": 102023,
+        "outcome": "completed",
+        "result": "300"
+      },
+      "samplesNs": {
+        "before": [
+          59871270.799999915,
+          59856362.50000025,
+          59967674.999999866,
+          58332587.50000022,
+          59143216.6000006,
+          56814662.50000012,
+          64084254.09999982
+        ],
+        "after": [
+          51704829.19999994,
+          49645204.09999968,
+          53403379.09999944,
+          54672870.899999544,
+          55186537.50000012,
+          52867933.300000004,
+          50444141.70000018
+        ]
+      }
+    }
+  ]
+}

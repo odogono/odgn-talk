@@ -1,0 +1,22 @@
+# Benchmark results, 2026-10-18
+
+Commit `reactor-v0.5.0-77-gf67b03f2-dirty` on Apple M5 (10 cores, 24 GiB), darwin arm64.
+Versions: bun 1.4.3, cost model 0, language 1.0-rc.3.
+Settings: count 10, filter messaging, runners ts, smoke false.
+
+| Benchmark | Runner | Load median (µs) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |
+| - | - | -: | -: | -: | -: | -: | -: | -: | -: |
+| messaging/joins | ts | 164.3 | 12.577 | 11.143 | 127218 | 98.9 | 239.1 KiB | 2.6 MiB |  |
+| messaging/parents | ts | 114.8 | 8.118 | 7.143 | 67518 | 120.2 | 93.8 KiB | 1.3 MiB |  |
+| messaging/sends | ts | 146.1 | 7.130 | 6.289 | 67518 | 105.6 | 93.8 KiB | 1.8 MiB |  |
+| messaging/suspend | ts | 89.1 | 5.808 | 5.168 | 48018 | 120.9 | 31.3 KiB | 223.1 KiB |  |
+
+## Fuel parity
+
+Every Benchmark used the same Fuel on each Core.
+
+## Cost Model outliers
+
+Benchmarks whose ns/Fuel is more than 3× their runner's median. These are advisory: any reweighting goes through the Spec.
+
+None.
