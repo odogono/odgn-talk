@@ -1,0 +1,70 @@
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     21952 ns/op	     19631 p50-ns	     55701 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     48648 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     24498 ns/op	     22015 p50-ns	     59893 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     24985 ns/op	     22742 p50-ns	     59325 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     46628 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     29645 ns/op	     26991 p50-ns	     64924 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     23303 ns/op	     20775 p50-ns	     59981 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     45811 ns/op	    6428 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     25264 ns/op	     22830 p50-ns	     59717 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     21864 ns/op	     19727 p50-ns	     55141 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     42876 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     24845 ns/op	     22151 p50-ns	     62620 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     23518 ns/op	     21255 p50-ns	     57885 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     48317 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     28768 ns/op	     26182 p50-ns	     65620 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     23117 ns/op	     20455 p50-ns	     60044 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     47363 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27085 ns/op	     24446 p50-ns	     64309 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     24445 ns/op	     22126 p50-ns	     58548 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     49317 ns/op	    6428 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     28358 ns/op	     25734 p50-ns	     64708 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     23326 ns/op	     20847 p50-ns	     59796 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     47595 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27943 ns/op	     25519 p50-ns	     61181 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     23224 ns/op	     20703 p50-ns	     59621 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     45749 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     28265 ns/op	     25431 p50-ns	     66476 p99-ns	    6362 B/op	      79 allocs/op
+PASS
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequestPump-4   	   20000	     24716 ns/op	     22407 p50-ns	     57429 p99-ns	    5087 B/op	      63 allocs/op
+BenchmarkBackendCallPump-4      	   20000	     51875 ns/op	    6427 B/op	      81 allocs/op
+BenchmarkBackendRequest-4       	   20000	     27788 ns/op	     25119 p50-ns	     65893 p99-ns	    6362 B/op	      79 allocs/op
+PASS
