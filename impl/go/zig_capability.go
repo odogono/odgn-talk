@@ -209,6 +209,20 @@ func zigReadCallNeed(need zigReply) zigCallNeed {
 	return zigCallNeed{script: f[0], grant: f[1], now: f[2], reason: f[3], operation: f[4], capability: f[5], args: f[6], call: f[7], automatic: f[8], scope: f[9], run: f[10], segment: f[11], fuelLeft: f[12]}
 }
 
+// zigNow reads a need's Host clock reading. A Run's callbacks repeat one
+// reading, so the last one parsed is reused.
+func (b *zigGroup) zigNow(raw zigReply) (time.Time, error) {
+	if len(raw) != 0 && string(raw) == b.nowRaw {
+		return b.now, nil
+	}
+	now, err := time.Parse(time.RFC3339Nano, zigText(raw))
+	if err != nil {
+		return time.Time{}, err
+	}
+	b.nowRaw, b.now = string(raw), now
+	return now, nil
+}
+
 func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 	kind := zigText(need.get("m"))
 	if kind == "trace" {
@@ -240,7 +254,7 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 		if grant.definition.release == nil {
 			return nil, fmt.Errorf("Zig release names a Grant without a release hook")
 		}
-		now, err := time.Parse(time.RFC3339Nano, zigText(n.now))
+		now, err := b.zigNow(n.now)
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +282,7 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 		}
 		args = append(args, v)
 	}
-	now, err := time.Parse(time.RFC3339Nano, zigText(n.now))
+	now, err := b.zigNow(n.now)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +470,7 @@ func (b *zigGroup) effect(need zigReply) (map[string]any, error) {
 		}
 		grants = append(grants, SegmentGrant{GrantName: n, Binding: g.binding})
 	}
-	now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
+	now, err := b.zigNow(need.get("now"))
 	if err != nil {
 		return nil, err
 	}

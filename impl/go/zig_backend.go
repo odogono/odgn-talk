@@ -100,6 +100,9 @@ type zigGroup struct {
 	callsMu        sync.Mutex
 	calls          map[CallID]context.CancelFunc
 	failureDetails map[CallID]string
+	// The last need's clock reading, as sent and as parsed.
+	nowRaw         string
+	now            time.Time
 	restoreOptions *RestoreOptions
 	restoredCalls  map[CallID]*Call
 	paused         bool

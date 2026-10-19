@@ -249,6 +249,9 @@ func (n Number) Compare(m Number) int {
 
 func (n Number) Integer() (*big.Int, bool) { r := n.Rat(); return new(big.Int).Set(r.Num()), r.IsInt() }
 func (n Number) Int64() (int64, error) {
+	if i, ok := n.SmallInteger(); ok {
+		return i, nil
+	}
 	i, ok := n.Integer()
 	if !ok || !i.IsInt64() {
 		return 0, invalid
