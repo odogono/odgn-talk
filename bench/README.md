@@ -125,6 +125,10 @@ collecting and item-write size sweeps, paired collection and transform timings,
 allocation probes and residual AppleScript gaps for
 [#924](https://github.com/odogono/odgn-talk/issues/924).
 
+The [Zig item-write measurements](results/2026-10-19-zig-list-item-writes.md)
+compare replacement with append, paired instruction and ownership workloads,
+and AppleScript for [#1291](https://github.com/odogono/odgn-talk/issues/1291).
+
 The [Zig Value allocation measurements](results/2026-10-14-zig-value-allocations.md)
 record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node

@@ -884,6 +884,14 @@ clear the runtime local. Such locals still contribute to retained frame size
 and Save/Restore. The [local-write ownership investigation](../../bench/results/2026-10-15-zig-local-list-writes.md)
 explains why last-use loads alone cannot enable unique machine point writes.
 
+List point replacements initialize the active List payload directly. Local
+`load`, `store` and `move` instructions avoid the general instruction handler;
+stack pushes reuse available capacity directly, and shared-reference releases
+inline their decrement. Each instruction still reaches the ordinary charging,
+preemption and retained-state boundaries. The
+[item-write measurements](../../bench/results/2026-10-19-zig-list-item-writes.md)
+compare replacement with append and record accounting and ownership checks.
+
 Forward Character reads walk only through the requested end and keep byte
 offsets instead of segmentation arrays. Missing and reversed reads still
 charge every Character as scanned input. Negative indexes retain full

@@ -8350,7 +8350,11 @@ pub const Group = struct {
     };
 
     /// Pushes a value the frame takes; refused, the value is released.
-    fn push(g: *Group, frame: *Frame, v: *Value) !void {
+    inline fn push(g: *Group, frame: *Frame, v: *Value) !void {
+        if (frame.stack.items.len < frame.stack.capacity) {
+            frame.stack.appendAssumeCapacity(.{ .value = v });
+            return;
+        }
         frame.stack.append(g.gpa, .{ .value = v }) catch |e| {
             v.release();
             return e;
@@ -8393,7 +8397,29 @@ pub const Group = struct {
         }
     }
 
-    fn instruction(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+    // Local traffic needs no unit lookup or restricted-operation check.
+    // Keep each canonical instruction at execute's ordinary charge boundary.
+    inline fn instruction(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+        const ops = ins.operands;
+        switch (ins.op) {
+            .load => try g.push(frame, frame.locals[@intCast(ops[0].int)].retain()),
+            .store => {
+                const s: usize = @intCast(ops[0].int);
+                frame.locals[s].release();
+                frame.locals[s] = pop(frame);
+            },
+            .move => {
+                const from: usize = @intCast(ops[0].int);
+                const to: usize = @intCast(ops[1].int);
+                frame.locals[to].release();
+                frame.locals[to] = frame.locals[from].retain();
+            },
+            else => return g.instructionGeneral(run, frame, ins, m),
+        }
+        return .next;
+    }
+
+    fn instructionGeneral(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
         if (frame.restricted and restrictedOperation(frame, ins)) {
             m.restricted_refusal = true;
             // Match the ordinary failed-instruction stack shape. execute has
@@ -8415,18 +8441,7 @@ pub const Group = struct {
                 try g.push(frame, v);
             },
             .pop => frame.stack.pop().?.release(gpa),
-            .load => try g.push(frame, frame.locals[@intCast(ops[0].int)].retain()),
-            .store => {
-                const s: usize = @intCast(ops[0].int);
-                frame.locals[s].release();
-                frame.locals[s] = pop(frame);
-            },
-            .move => {
-                const from: usize = @intCast(ops[0].int);
-                const to: usize = @intCast(ops[1].int);
-                frame.locals[to].release();
-                frame.locals[to] = frame.locals[from].retain();
-            },
+            .load, .store, .move => unreachable,
             .load_var => try g.push(frame, run.script.variables[@intCast(ops[0].int)].retain()),
             .store_var => {
                 // A write it can't pay for faults before it writes, so the
