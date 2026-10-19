@@ -36,8 +36,10 @@ must contain Bash, Git, Git LFS, `plugin-git` 2.10.1, Bun, Go, Zig 0.17.0 and Py
 Bun and Go are needed for the repository's Unicode bootstrap check.
 
 Configure the Mac agent with a mandatory `!backend=local` label so only workflows
-explicitly requesting the native backend can run there. Restrict both agents
-to this repository with `repo=odogono/odgn-talk`.
+explicitly requesting the native backend can run there. The shared workers use
+`repo=*` and serve activated repositories; the server restricts repository
+owners to `odogono` and sign-in to the configured administrator. For a worker
+dedicated to this repository, use `repo=odogono/odgn-talk` instead.
 
 The installed Mac LaunchAgent runs while its user is logged in and the machine
 is awake.
