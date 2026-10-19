@@ -3,7 +3,8 @@
 The initial Woodpecker workflows supplement GitHub Actions:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
-  tests, race tests and Corpus in Linux containers.
+  tests, race tests and Corpus in Linux containers. After the shared workspace
+  bootstrap succeeds, TS and Go run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
 
@@ -28,6 +29,32 @@ The TS suite has a 30-second per-test timeout to accommodate the slower shared
 VPS CPUs; its assertions are unchanged.
 
 The workflow selects an agent with `platform=linux/amd64` and `backend=docker`.
+
+### Persistent Go caches
+
+Create a Docker volume on each Linux worker:
+
+```sh
+docker volume create woodpecker-go-cache
+```
+
+Add this environment variable to the Docker agent and recreate the agent:
+
+```yaml
+WOODPECKER_BACKEND_DOCKER_VOLUMES: woodpecker-go-cache:/woodpecker-go-cache
+```
+
+The Go step stores its build and module caches under repository-specific
+directories in that volume. `-count=1` keeps both ordinary and race tests running
+on every pipeline; compilation and downloads can be reused. Go's Unicode
+bootstrap remains uncached. Without the agent mount the workflow still runs,
+but its caches disappear with the step container.
+
+This agent-managed volume is mounted in every Docker step. Repository
+directories prevent accidental collisions, but do not isolate caches from
+other jobs on the worker. Use it only for repositories and approved contributions
+that share the worker's trust boundary. Repository trusted-volume, network and
+privileged capabilities are not required.
 
 ## Native Mac worker
 

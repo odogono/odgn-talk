@@ -24,6 +24,7 @@ steps:
 
   - name: ts-core
     image: odgn-talk-ci:2026-10-19
+    depends_on: [workspace]
     directory: impl/ts
     commands:
       - bun test --timeout 30000 tests
@@ -32,9 +33,13 @@ steps:
 
   - name: go-core
     image: odgn-talk-ci:2026-10-19
+    depends_on: [workspace]
     directory: impl/go
+    environment:
+      GOCACHE: /woodpecker-go-cache/${CI_REPO}/build
+      GOMODCACHE: /woodpecker-go-cache/${CI_REPO}/modules
     commands:
       - go vet ./...
-      - go test ./...
-      - go test -race ./...
+      - go test -count=1 ./...
+      - go test -race -count=1 ./...
       - go run ./cmd/corpus --check-passing
