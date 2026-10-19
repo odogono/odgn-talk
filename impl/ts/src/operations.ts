@@ -1514,6 +1514,17 @@ export const chunkSet = (
   part: Value,
   delimiter: Value | null,
 ): Value => {
+  if (kind === 'item' && whole.kind === 'list') {
+    // Most point writes already have an exact small integer. Resolve it
+    // without constructing the general BigInt/range index representation.
+    const written = smallOf(indexValue);
+    const i = written < 0 ? whole.length + written : written - 1;
+    if (i >= 0 && i < whole.length) {
+      const result = listWithItem(whole, i, part);
+      cacheListEdit(result, whole, i, part);
+      return result;
+    }
+  }
   const index = indexOf(indexValue);
   if (whole.kind === 'text' && textKinds.has(kind)) {
     const d = delimiterText(delimiter);

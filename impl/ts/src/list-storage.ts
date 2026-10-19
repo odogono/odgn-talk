@@ -3,6 +3,36 @@ import { at, put, remove, total, type Tree } from './persistent-tree';
 
 const chunkSize = 32;
 
+/** Replacement keeps the tree's shape, spans and endpoint keys unchanged. */
+const replaceItem = (
+  root: Tree<number, readonly Value[]>,
+  i: number,
+  value: Value,
+): Tree<number, readonly Value[]> => {
+  const offset = total(root.left);
+  let left = root.left;
+  let right = root.right;
+  let chunk = root.value;
+  if (i < offset) {
+    left = replaceItem(left!, i, value);
+  } else if (i >= offset + root.span) {
+    right = replaceItem(right!, i - offset - root.span, value);
+  } else {
+    const copy = chunk.slice();
+    copy[i - offset] = value;
+    chunk = copy;
+  }
+  return {
+    key: root.key,
+    value: chunk,
+    span: root.span,
+    left,
+    right,
+    height: root.height,
+    total: root.total,
+  };
+};
+
 /** A persistent sequence of small chunks. Growth and point edits copy only a
  * chunk and its AVL path, including when extending a retained older List. */
 export class ListStorage {
@@ -40,13 +70,16 @@ export class ListStorage {
   }
 
   set(i: number, value: Value | undefined): ListStorage {
+    if (value !== undefined) {
+      return new ListStorage(
+        replaceItem(this.#root!, i, value),
+        this.#first,
+        this.#last,
+      );
+    }
     const found = at(this.#root, i)!;
     const chunk = [...found.node.value];
-    if (value === undefined) {
-      chunk.splice(found.offset, 1);
-    } else {
-      chunk[found.offset] = value;
-    }
+    chunk.splice(found.offset, 1);
     const root = chunk.length
       ? put(this.#root, found.node.key, chunk, chunk.length)
       : remove(this.#root, found.node.key);
