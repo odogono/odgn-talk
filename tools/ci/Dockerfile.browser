@@ -1,0 +1,9 @@
+FROM odgn-talk-ci:2026-10-19-2
+
+# Keep this version aligned with playwright in bun.lock. Rebuild under a new
+# image tag when either the base image or Playwright changes.
+ARG PLAYWRIGHT_VERSION=1.64.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+RUN npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium-headless-shell \
+    && rm -rf /var/lib/apt/lists/* /root/.npm
