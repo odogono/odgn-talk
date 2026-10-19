@@ -92,7 +92,7 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Rules: [the binary exchange contract](../../spec/embedding/request-pump-binary.md), [binary Value items](../../spec/embedding/binary-frames.md#items), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)
 - Copy from: [`request_pump_test.exs`](test/request_pump_test.exs), whose wrapping transport observes binary frames and can hide the feature. [`binary_test.exs`](test/binary_test.exs) checks the codec against bytes the TS codec wrote, in [`test/fixtures/request_pump_fields.txt`](test/fixtures/request_pump_fields.txt).
 - Gotcha: a decoded frame is a `Jason.OrderedObject`, so read its fields with `frame["key"]`, not a map pattern.
-- Check: `mix test test/request_pump_test.exs test/binary_test.exs`
+- Check: `mix test test/request_pump_test.exs test/binary_test.exs test/callback_fields_test.exs`; `NORTH_TALK_CALLBACKS=fields mix test` runs the suite with binary callbacks by default. Both modes run in CI.
 
 ## Host errors, limits and faults
 

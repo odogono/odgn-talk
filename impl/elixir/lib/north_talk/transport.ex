@@ -1,8 +1,8 @@
 defmodule NorthTalk.Transport do
   @moduledoc """
   Carries Message Layer frames to one Core instance and back
-  (spec/09-embedding.md#the-message-layer). Each frame is the JSON only; the
-  transport adds its own framing.
+  (spec/09-embedding.md#the-message-layer). Each frame is JSON or a negotiated binary
+  envelope; the transport adds its own framing.
 
   `exchange/2` returns `{:error, reason}` when the instance is lost: a Wasm
   trap, an exit or a timeout. It returns `{:refused, reason}` when the

@@ -24,6 +24,49 @@ defmodule NorthTalk.BinaryTest do
     end
   end
 
+  test "callback results use the specified tags and preserve Nothing and failure Data" do
+    for {tag, m, result} <- [
+          {6, "op-result", %{"result" => nil}},
+          {6, "op-result", %{"started" => true}},
+          {6, "op-result", %{"done" => true}},
+          {6, "op-result", %{"limit" => true}},
+          {6, "op-result", %{"hostError" => true}},
+          {7, "prop-result", %{"value" => nil}},
+          {7, "prop-result", %{"ok" => true}},
+          {7, "prop-result",
+           %{"fail" => %{"code" => "bad", "message" => "no", "data" => [nil, %{"$bytes" => "AAE="}]}}},
+          {8, "effect-result", %{"status" => "failed"}},
+          {9, "release-result", %{}}
+        ] do
+      frame = Map.merge(%{"m" => m, "ref" => 1, "group" => "g"}, result)
+      assert <<"NTB", 1, 1, ^tag, _::binary>> = bytes = Binary.encode(frame)
+      assert plain(Binary.decode(bytes)) == frame
+    end
+
+    # Independent literal vector: ref=1, group=g, outcome=result, Nothing,
+    # absent code/message, charged=0.
+    assert Binary.encode(%{"m" => "op-result", "ref" => 1, "group" => "g", "result" => nil, "charged" => 0}) ==
+             <<"NTB", 1, 1, 6, 6, 7, 3, 1, 0x12, 1, "g", 0x12, 6, "result", 0, 0, 0, 3, 0>>
+  end
+
+  test "callback needs keep notices outside the need and distinguish a Nothing setter" do
+    for need <- [
+          %{"m" => "op", "args" => [nil, %{"$function" => ["s", "f", "h"]}], "automatic" => false},
+          %{"m" => "prop", "object" => ["box", "one"], "prop" => "value"},
+          %{"m" => "prop", "object" => ["box", "one"], "prop" => "value", "value" => nil},
+          %{"m" => "prop", "object" => ["box", "one"], "op" => "at", "selector" => 2},
+          %{"m" => "effect", "grants" => ["a", "b"], "phase" => "begin"},
+          %{"m" => "release", "reason" => "stop", "now" => "2026-10-19T12:00:00Z"}
+        ] do
+      frame = %{"ref" => 1, "need" => need, "abandoned" => ["c1"], "settled" => ["c2"], "trace" => ["line"]}
+      bytes = Binary.encode(frame)
+      decoded = plain(Binary.decode(bytes))
+      assert decoded == frame
+      assert_raise HostError, fn -> Binary.decode(bytes <> <<0>>) end
+      assert_raise HostError, fn -> Binary.decode(binary_part(bytes, 0, byte_size(bytes) - 1)) end
+    end
+  end
+
   test "every specialized Report keeps its kind" do
     kinds = [
       "run end",
