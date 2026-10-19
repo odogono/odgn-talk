@@ -86,9 +86,57 @@ accommodate the slower shared VPS CPUs; their assertions are unchanged.
 The Spec and tooling workflows each report a separate status, and can run
 alongside the core workflow as agent capacity permits. Tooling steps run
 sequentially in their shared workspace to keep their generated builds ordered.
+The shared core, tooling and package bootstraps limit Bun to 16 concurrent
+downloads; the default concurrency stalled cold installs in the M4's CI VM.
 
-Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
-Conventions additionally requires `role=conventions`.
+The core, tooling and package workflows select `backend=docker` so they can run
+on either general Linux worker: taito (`linux/amd64`) or almere-linux
+(`linux/arm64`). Both hosts keep locally built versions of the same image tags
+for their CPU architecture. Woodpecker assigns each workflow to an available
+matching agent; taito remains eligible when almere is offline. Spec and Go
+SQLite remain on taito. Conventions additionally requires `role=conventions`
+and keeps its reserved taito worker.
+
+### M4 Linux worker
+
+Almere has a separate Colima profile for CI, using Apple's virtualization with
+6 CPUs, 10 GiB RAM and a 60 GiB disk. Its native macOS agent continues running
+the Zig sidecar. The Docker agent adds two Linux workflow slots without adding
+PR checks. It requires an explicit `backend: docker` workflow label, and serves
+all activated repositories that match its labels.
+
+```sh
+colima start woodpecker --cpus 6 --memory 10 --disk 60 --arch aarch64 \
+  --vm-type vz --runtime docker --activate=false
+```
+
+Use `docker --context colima-woodpecker` for CI administration. The profile does
+not select itself as the active Docker context. Build all three Linux worker
+images in this context before enabling jobs. Copy `compose.almere.yaml` to
+`~/woodpecker/compose.linux.yaml`, beside the existing private `agent-secret`
+file, then start it:
+
+```sh
+cd ~/woodpecker
+docker --context colima-woodpecker volume create woodpecker-go-cache
+docker --context colima-woodpecker compose -f compose.linux.yaml config --quiet
+docker --context colima-woodpecker compose -f compose.linux.yaml up -d
+```
+
+The agent config volume is separate from the native macOS agent. Its containers,
+workspaces and Go cache live in the Linux VM. `start-almere-linux.sh` is installed
+as `~/woodpecker/start-linux-worker.sh`; the `dev.woodpecker.colima` LaunchAgent
+runs it at login and every five minutes to start the CI VM when needed. Docker
+restarts the agent with the VM. This worker is available while alex is logged in
+and the Mac is awake. Check it with:
+
+```sh
+colima status woodpecker
+docker --context colima-woodpecker compose -f ~/woodpecker/compose.linux.yaml ps
+```
+
+To remove this capacity, stop its agent and Colima profile. Taito stays eligible
+for the same workflows.
 
 ### Browser worker image
 
@@ -107,8 +155,9 @@ with the matching image, it reuses the installed browser without downloading it.
 Keep `PLAYWRIGHT_VERSION` in `Dockerfile.browser` aligned with `bun.lock`, and
 use a new browser image tag in the workflow and build command when rebuilding.
 
-Package and SQLite checks report separate optional statuses. They share the
-general agent's existing capacity and do not request the Conventions role.
+Package and SQLite checks report separate optional statuses. Package can use
+either general Docker worker; SQLite uses taito. Neither requests the Conventions
+role.
 
 ### Dedicated Conventions worker
 
