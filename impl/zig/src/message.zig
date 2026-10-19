@@ -377,6 +377,8 @@ pub const Session = struct {
     request_pump: ?rp.Layout = null,
     /// `callbacks-fields-v1` (#1311): callback needs and results are binary.
     callbacks: bool = false,
+    /// `settlements-fields-v1` (#1320): `settle-pump` carries queued settlements.
+    settlements: bool = false,
     /// Combined exchanges' correlation tokens, bound until their final reply.
     bindings: std.ArrayList(Binding) = .empty,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -2247,7 +2249,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
-    o.raw(",\"" ++ rp.feature_map ++ "\",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\"]") catch return oomReply();
+    o.raw(",\"" ++ rp.feature_map ++ "\",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -4357,6 +4359,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var queued_inputs = s.queued_inputs;
             var request_pump: ?rp.Layout = null;
             var callbacks = s.callbacks;
+            var settlements = s.settlements;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, rp.feature_map) or std.mem.eql(u8, name, rp.feature_fields)) {
@@ -4366,6 +4369,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     request_pump = if (std.mem.eql(u8, name, rp.feature_map)) .map else .fields;
                 } else if (std.mem.eql(u8, name, rp.feature_callbacks)) {
                     callbacks = true;
+                } else if (std.mem.eql(u8, name, rp.feature_settlements)) {
+                    settlements = true;
                 } else if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
                     early = true;
                 } else if (std.mem.eql(u8, name, "crossing-trace-v1")) {
@@ -4395,8 +4400,10 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             if (request_pump) |chosen| if (s.request_pump) |held| if (held != chosen) return protocolError(s.gpa, ref, "the request-pump candidate is fixed for the Session");
+            if (settlements and (request_pump orelse s.request_pump) != .fields) return protocolError(s.gpa, ref, "settlements-fields-v1 needs request-pump-fields-v1");
             if (request_pump != null) s.request_pump = request_pump;
             s.callbacks = callbacks;
+            s.settlements = settlements;
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
             s.climb = climb;
@@ -5244,19 +5251,39 @@ const BinInput = struct {
     /// A combined input's Pump inputs it can't use: admitted, its Pump is
     /// then refused, as an ordinary Pump with them would be.
     pump_refusal: ?talk.HostErrorCode = null,
+    /// A `settle-pump`'s settlements, applied in order before its Pump.
+    settlements: []Settlement = &.{},
 
     fn deinit(in: *BinInput, gpa: Allocator) void {
         for (in.args) |v| v.release();
         gpa.free(in.args);
         if (in.function) |f| f.release();
+        releaseSettlements(gpa, in.settlements);
     }
 };
+
+/// A queued `answer` or `fail`, as its JSON input would carry it.
+const Settlement = struct {
+    call: *talk.Call,
+    fail: bool,
+    /// The answer, or the failure's Data.
+    value: ?*Value,
+    fuel: i64,
+    /// A failure's code; none fails the call as broken.
+    code: ?[]const u8,
+    message: ?[]const u8,
+};
+
+fn releaseSettlements(gpa: Allocator, settlements: []Settlement) void {
+    for (settlements) |st| if (st.value) |v| v.release();
+    gpa.free(settlements);
+}
 
 const BinRead = union(enum) { input: BinInput, reply: []u8 };
 
 /// A refusal before execution, in the reply format of the input's exchange.
 fn binRefusal(s: *Session, layout: rp.Layout, m: rp.Message, ref: i64, entry: ?*GroupEntry, code: talk.HostErrorCode) []u8 {
-    if (m != .pump) return binAdmission(s, layout, ref, entry, .{ .code = code });
+    if (m != .pump and m != .settle_pump) return binAdmission(s, layout, ref, entry, .{ .code = code });
     const saved = s.x.bin;
     s.x.bin = .{ .layout = layout };
     defer s.x.bin = saved;
@@ -5304,7 +5331,7 @@ fn binaryPaused(s: *Session, layout: rp.Layout, in: *BinInput, worker_ref: i64) 
     if (in.entry != entry) return protocolError(s.gpa, in.ref, "a paused input must address the worker's Group");
     const held = enterPaused(s, entry);
     defer leavePaused(s, held);
-    if (in.m == .pump or in.m == .request_pump or in.m == .call_pump) {
+    if (in.m.pumps()) {
         entry.group.group.refuseWorker(.{ .pump = .{ .now = in.now, .slice = @intCast(@min(in.slice, std.math.maxInt(i64))), .cap = @intCast(@min(in.cap, std.math.maxInt(i64))) } });
         return binRefusal(s, layout, in.m, in.ref, entry, .reentrant_call);
     }
@@ -5316,7 +5343,9 @@ fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
     switch (in.m) {
         .request => return binAdmissionOwned(s, layout, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
         .call => return binAdmissionOwned(s, layout, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
-        .pump => {
+        .pump, .settle_pump => {
+            const code = applySettlements(in.settlements);
+            if (code != .ok) return binRefusal(s, layout, in.m, in.ref, entry, code);
             endBinary(s);
             s.x.bin = .{ .layout = layout };
             return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
@@ -5385,6 +5414,7 @@ fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
         }
         break :blk m;
     };
+    if (m == .settle_pump and !s.settlements) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     const names = m.fields();
     const Get = struct {
         names: []const []const u8,
@@ -5441,11 +5471,15 @@ fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
         if (readArgs(s, entry, g.get("args"), &in.args)) |code| return refuse.code(s, layout, &in, code);
         in.limits = (overrideOfBinary(g.get("limits")) catch return malformedFrame(s, ref));
     }
-    if (m == .pump or m == .request_pump or m == .call_pump) {
+    if (m.pumps()) {
         if (pumpInputs(&in, g.get("now"), g.get("fuelSlice"), g.get("fuelCap"))) |code| {
-            if (m == .pump) return refuse.code(s, layout, &in, code);
+            if (m == .pump or m == .settle_pump) return refuse.code(s, layout, &in, code);
             in.pump_refusal = code;
         }
+    }
+    if (m == .settle_pump) {
+        const code = readSettlements(s, entry, g.get("settlements"), &in.settlements) catch return malformedFrame(s, ref);
+        if (code) |c| return refuse.code(s, layout, &in, c);
     }
     ok = true;
     return .{ .input = in };
@@ -5469,6 +5503,66 @@ fn pumpInputs(in: *BinInput, now: ?[]const u8, slice: ?[]const u8, cap: ?[]const
     if (slice) |x| in.slice = rp.uintOf(x) catch return .invalid_value;
     if (cap) |x| in.cap = rp.uintOf(x) catch return .invalid_value;
     return null;
+}
+
+/// Decodes a `settle-pump`'s settlements into `out`, every call found and
+/// Value decoded before any is applied; the refusal code, or null.
+fn readSettlements(s: *Session, entry: *GroupEntry, span: ?[]const u8, out: *[]Settlement) rp.Error!?talk.HostErrorCode {
+    const given = span orelse return null;
+    const items = try rp.listOf(given, s.gpa);
+    defer s.gpa.free(items);
+    const list = try s.gpa.alloc(Settlement, items.len);
+    var made: usize = 0;
+    // Releases the decoded ones, and the whole list, on any refusal.
+    errdefer abandonSettlements(s.gpa, list, made);
+    for (items) |item| {
+        var f: [rp.settlement_fields.len]?[]const u8 = undefined;
+        var r: rp.Reader = .{ .data = item };
+        try r.record(rp.settlement_fields, true, &f);
+        if (!r.done()) return error.Malformed;
+        const id = try rp.ptextOf(f[0] orelse return error.Malformed);
+        const outcome = try rp.ptextOf(f[1] orelse return error.Malformed);
+        const fail = std.mem.eql(u8, outcome, "fail");
+        if (!fail and !std.mem.eql(u8, outcome, "answer")) return error.Malformed;
+        const fuel: i64 = if (f[3]) |x| (try rp.intOf(x)) orelse return error.Malformed else 0;
+        const code = if (f[4]) |x| try rp.ptextOf(x) else null;
+        const message = if (f[5]) |x| try rp.ptextOf(x) else null;
+        if (fail and (f[3] != null or (code == null and (message != null or f[2] != null))) or !fail and (code != null or message != null)) return error.Malformed;
+        if (fuel < 0 or fuel > 9_007_199_254_740_991) return error.Malformed;
+        const call = entry.group.group.callById(id) orelse {
+            abandonSettlements(s.gpa, list, made);
+            return .unknown_call;
+        };
+        var value: ?*Value = null;
+        if (f[2] != null or !fail) {
+            entry.wrong_group = false;
+            value = binary_value.decode(s.gpa, f[2] orelse &.{rp.tag.nothing}, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| {
+                abandonSettlements(s.gpa, list, made);
+                return binDecodeError(e, entry);
+            };
+        }
+        list[made] = .{ .call = call, .fail = fail, .value = value, .fuel = fuel, .code = code, .message = message };
+        made += 1;
+    }
+    out.* = list;
+    return null;
+}
+
+fn abandonSettlements(gpa: Allocator, list: []Settlement, made: usize) void {
+    for (list[0..made]) |st| if (st.value) |v| v.release();
+    gpa.free(list);
+}
+
+fn applySettlements(settlements: []const Settlement) talk.HostErrorCode {
+    for (settlements) |st| {
+        const code = if (st.fail) blk: {
+            const c = st.code orelse break :blk Direct.callFail(st.call, null);
+            const failure: talk.ScriptError = .{ .code = c.ptr, .code_len = c.len, .message = if (st.message) |m| m.ptr else null, .message_len = if (st.message) |m| m.len else 0, .data = st.value };
+            break :blk Direct.callFail(st.call, &failure);
+        } else Direct.callAnswerWithCost(st.call, st.value.?, st.fuel);
+        if (code != .ok) return code;
+    }
+    return .ok;
 }
 
 /// A Host Object by kind and id, as objectOf finds one.
@@ -8476,6 +8570,59 @@ test "callbacks-fields-v1: op and release needs and their results cross in binar
     try std.testing.expectEqualStrings("stop", release.object.get("reason").?.string);
     try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binResult(a, .op_result, 9, "result", 1))));
     _ = try okOf(try binReply(&c, try binResult(a, .release_result, 9, null, null)));
+}
+
+/// A settle-pump with one settlement of `call`, or with `outcome` malformed.
+fn binSettlePump(a: Allocator, ref: i64, call: []const u8, outcome: []const u8, value: i64) ![]u8 {
+    var w = rp.Writer.init(a);
+    defer w.deinit();
+    try binInput(&w, .fields, .settle_pump, ref, "g");
+    try w.key("now");
+    try w.instant(.{ .seconds = now_2026, .micros = 0 });
+    try w.key("settlements");
+    try w.list(1);
+    try w.begin(rp.settlement_fields, true);
+    try w.key("call");
+    try w.ptext(call);
+    try w.key("outcome");
+    try w.ptext(outcome);
+    try w.key("value");
+    try w.int(value);
+    try w.end();
+    try w.end();
+    return w.finish();
+}
+
+test "settlements-fields-v1: a settle-pump applies its settlements, then Pumps (#1320)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    // It needs the fields layout, and a settle-pump needs it negotiated.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"settlements-fields-v1\"]}}", .{1})));
+    _ = try okOf(try binHello(&c, 2, "request-pump-fields-v1"));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binSettlePump(a, 3, "x", "answer", 1))));
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\",\"function-metadata-v1\",\"core-message-v1\",\"request-pump-fields-v1\",\"settlements-fields-v1\"]}}", .{4}));
+    try std.testing.expect(s.settlements);
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"suspending\",\"args\":[],\"result\":\"number\"}}]}}", .{5}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{6}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n ask api to read and wait\\n return it + 1\\nend go\"}}", .{ 8, grant.object.get("grant").?.integer }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[]}}}}", .{9}));
+    const pumped = try binReply(&c, "{\"m\":\"pump\",\"ref\":10,\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}");
+    const need = pumped.object.get("need") orelse return unexpected(pumped);
+    const call = need.object.get("call").?.string;
+    _ = try binReply(&c, "{\"m\":\"op-result\",\"ref\":10,\"group\":\"g\",\"started\":true}");
+    // A malformed settlement is a protocol error, and an unknown call
+    // refuses the Pump; neither applies anything.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binSettlePump(a, 11, call, "nonsense", 41))));
+    const refused = try binReply(&c, try binSettlePump(a, 12, "s.r9.c1", "answer", 41));
+    errdefer std.debug.print("refused: {f}\n", .{std.json.fmt(refused, .{})});
+    try std.testing.expectEqualStrings("unknown call", refused.object.get("err").?.object.get("code").?.string);
+    const done = try binReply(&c, try binSettlePump(a, 13, call, "answer", 41));
+    errdefer std.debug.print("done: {f}\n", .{std.json.fmt(done, .{})});
+    try std.testing.expectEqual(@as(i64, 42), (try reportOf(done, "run end")).object.get("result").?.integer);
 }
 
 test "request-pump negotiation is exclusive, fixed for the Session and required" {
