@@ -144,11 +144,15 @@ func (b *zigGroup) resolve(kind, id string) (*Object, bool) {
 	return b.group.ObjectByID(kind, id)
 }
 
+var zigPropertyNeedKeys = []string{"object", "prop", "value", "op"}
+
 // A property crossing runs the public Get or Set with the Host's own handle.
 // The guest has already charged, checked read-only and Set's Shape; it
 // checks Get's result Shape after the reply.
 func (b *zigGroup) property(need zigReply) (map[string]any, error) {
-	ref := need.get("object").get("$object").items()
+	var fields [4]zigReply
+	need.lookup(zigPropertyNeedKeys, fields[:])
+	ref := fields[0].get("$object").items()
 	o, ok := (*Object)(nil), false
 	if len(ref) == 2 {
 		o, ok = b.resolve(zigText(ref[0]), zigText(ref[1]))
@@ -156,21 +160,18 @@ func (b *zigGroup) property(need zigReply) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an unknown Object")
 	}
-	set, collection := false, false
-	for _, entry := range need.entries() {
-		set = set || entry.Key == "value"
-		collection = collection || entry.Key == "op"
-	}
+	// Presence, including an explicit null, distinguishes a setter from a getter.
+	set, collection := fields[2] != nil, fields[3] != nil
 	if collection {
 		return b.collection(need, o)
 	}
-	prop, ok := o.kind.props[zigText(need.get("prop"))]
+	prop, ok := o.kind.props[zigText(fields[1])]
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an undeclared property")
 	}
 	var input Value
 	if set {
-		if err := b.decode(need.get("value"), reflect.ValueOf(&input).Elem()); err != nil {
+		if err := b.decode(fields[2], reflect.ValueOf(&input).Elem()); err != nil {
 			return nil, err
 		}
 	}

@@ -1,0 +1,37 @@
+File: zig-backend.test
+Type: cpu
+Time: 2026-10-18 21:51:04 BST
+Duration: 704.24ms, Total samples = 640ms (90.88%)
+Showing nodes accounting for 640ms, 100% of 640ms total
+Showing top 30 nodes out of 81
+      flat  flat%   sum%        cum   cum%
+     470ms 73.44% 73.44%      470ms 73.44%  runtime.pthread_cond_signal
+      60ms  9.38% 82.81%       60ms  9.38%  runtime.pthread_cond_wait
+      50ms  7.81% 90.62%       50ms  7.81%  runtime.madvise
+      20ms  3.12% 93.75%       20ms  3.12%  runtime.memmove
+      20ms  3.12% 96.88%       20ms  3.12%  runtime.usleep
+      10ms  1.56% 98.44%       10ms  1.56%  runtime.(*mspan).moveInlineMarks
+      10ms  1.56%   100%       10ms  1.56%  syscall.rawsyscalln
+         0     0%   100%      470ms 73.44%  _.goready.func1
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Call).Answer
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Call).AnswerWithCost
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Call).queueSettlement
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Core).NewGroup
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Group).Pump
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*Group).pumpOwned
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchange
+         0     0%   100%       20ms  3.12%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchangeFrame
+         0     0%   100%       20ms  3.12%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).export
+         0     0%   100%       20ms  3.12%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).frame
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pump
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pumpBinary
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).send (inline)
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).settleCall
+         0     0%   100%       20ms  3.12%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).shareFrame
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.newZigGroup
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.newZigShared
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.newZigSharedGroup
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.zigEngine
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.zigEngine.func1
+         0     0%   100%       10ms  1.56%  github.com/odogono/odgn-talk/impl/go.zigSharedGuest
+         0     0%   100%       20ms  3.12%  github.com/odogono/odgn-talk/impl/go/internal/zigwasm.(*Reactor).Frame

@@ -233,7 +233,11 @@ adapter, including the unchanged tenants example and the Store and sqlite test
 kits. The Session Host, REPL and every Session Transcript run on the adapter
 ([#1053](https://github.com/odogono/odgn-talk/issues/1053)); CI runs them on
 Linux amd64/arm64 and macOS arm64 and cross-builds each target without cgo.
-Full Corpus acceptance remains separate work.
+Full Corpus acceptance remains separate work. Group initialization currently
+omits `GroupOptions.Seed`, so a nondefault seed does not reproduce native Go's
+random sequence ([#1285](https://github.com/odogono/odgn-talk/issues/1285)).
+Inspecting the large persistent-state Corpus case also exceeds the transport's
+64 MiB frame limit ([#1286](https://github.com/odogono/odgn-talk/issues/1286)).
 
 Store retains `machine.ErrorValue`, `machine.Size` and the `internal/value`
 Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module uses

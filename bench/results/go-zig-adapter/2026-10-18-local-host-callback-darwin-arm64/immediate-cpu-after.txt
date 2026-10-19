@@ -1,0 +1,38 @@
+File: after-host.test
+Type: cpu
+Time: 2026-10-18 21:55:54 BST
+Duration: 4.38s, Total samples = 3.88s (88.65%)
+Showing nodes accounting for 3.48s, 89.69% of 3.88s total
+Dropped 56 nodes (cum <= 0.02s)
+Showing top 30 nodes out of 137
+      flat  flat%   sum%        cum   cum%
+     2.22s 57.22% 57.22%      2.22s 57.22%  runtime._ExternalCode
+     0.16s  4.12% 61.34%      0.16s  4.12%  runtime.kevent
+     0.15s  3.87% 65.21%      0.15s  3.87%  github.com/odogono/odgn-talk/impl/go.zigSkip
+     0.15s  3.87% 69.07%      0.15s  3.87%  runtime.memmove
+     0.07s  1.80% 70.88%      0.07s  1.80%  internal/bytealg.IndexByteString
+     0.06s  1.55% 72.42%      0.06s  1.55%  github.com/odogono/odgn-talk/impl/go.zigValidString
+     0.05s  1.29% 73.71%      0.15s  3.87%  github.com/odogono/odgn-talk/impl/go.zigKeyIs
+     0.05s  1.29% 75.00%      0.20s  5.15%  github.com/odogono/odgn-talk/impl/go.zigReply.lookup.func1
+     0.05s  1.29% 76.29%      0.05s  1.29%  runtime.getMCache (inline)
+     0.05s  1.29% 77.58%      0.05s  1.29%  runtime.madvise
+     0.05s  1.29% 78.87%      0.10s  2.58%  runtime.mallocgcTinySC2
+     0.04s  1.03% 79.90%      0.04s  1.03%  runtime.memclrNoHeapPointers
+     0.03s  0.77% 80.67%      0.86s 22.16%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).callback
+     0.03s  0.77% 81.44%      0.03s  0.77%  github.com/odogono/odgn-talk/impl/go.zigSpace (inline)
+     0.03s  0.77% 82.22%      0.03s  0.77%  internal/bytealg.IndexByte
+     0.03s  0.77% 82.99%      0.03s  0.77%  internal/runtime/atomic.(*UnsafePointer).Load (inline)
+     0.03s  0.77% 83.76%      0.03s  0.77%  runtime.pthread_cond_signal
+     0.03s  0.77% 84.54%      0.03s  0.77%  runtime.releasem (inline)
+     0.02s  0.52% 85.05%      0.05s  1.29%  github.com/odogono/odgn-talk/impl/go.zigValidate.func2
+     0.02s  0.52% 85.57%      0.03s  0.77%  internal/runtime/maps.(*Map).getWithoutKeySmallFastStr
+     0.02s  0.52% 86.08%      0.02s  0.52%  internal/strconv.ParseUint
+     0.02s  0.52% 86.60%      0.02s  0.52%  internal/sync.(*Mutex).Lock (inline)
+     0.02s  0.52% 87.11%      0.02s  0.52%  regexp.(*Regexp).doOnePass
+     0.02s  0.52% 87.63%      0.05s  1.29%  runtime.mapaccess2_faststr
+     0.02s  0.52% 88.14%      0.02s  0.52%  runtime.memequal
+     0.02s  0.52% 88.66%      0.02s  0.52%  unicode/utf8.ValidString
+     0.01s  0.26% 88.92%      1.26s 32.47%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchangeFrame
+     0.01s  0.26% 89.18%      0.02s  0.52%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).shareFrame
+     0.01s  0.26% 89.43%      0.07s  1.80%  github.com/odogono/odgn-talk/impl/go.zigJSON
+     0.01s  0.26% 89.69%      0.11s  2.84%  github.com/odogono/odgn-talk/impl/go.zigReadPacket

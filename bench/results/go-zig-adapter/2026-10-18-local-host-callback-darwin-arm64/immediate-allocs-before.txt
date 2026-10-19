@@ -1,0 +1,37 @@
+File: zig-host.test
+Type: alloc_objects
+Time: 2026-10-18 21:50:44 BST
+Showing nodes accounting for 28075848, 99.68% of 28166682 total
+Dropped 108 nodes (cum <= 140833)
+Showing top 30 nodes out of 60
+      flat  flat%   sum%        cum   cum%
+   4489279 15.94% 15.94%    4489279 15.94%  math/big.nat.make (inline)
+   3713777 13.18% 29.12%    3713777 13.18%  github.com/odogono/odgn-talk/impl/go.zigReply.text
+   3709337 13.17% 42.29%   21947879 77.92%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).callback
+   3694677 13.12% 55.41%    3694677 13.12%  github.com/odogono/odgn-talk/impl/go.zigJSON
+   2949193 10.47% 65.88%    2949193 10.47%  math/big.NewInt (inline)
+   1771318  6.29% 72.17%   28042370 99.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchangeFrame
+   1163299  4.13% 76.30%    1818668  6.46%  github.com/odogono/odgn-talk/impl/go/internal/decimal.pow10
+   1146915  4.07% 80.37%    8560857 30.39%  github.com/odogono/odgn-talk/impl/go/internal/decimal.Number.Integer
+    958522  3.40% 83.77%    6889646 24.46%  github.com/odogono/odgn-talk/impl/go/internal/decimal.Number.Rat
+    950286  3.37% 87.15%    8803880 31.26%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).decodeValue
+    851980  3.02% 90.17%     851980  3.02%  math/big.nat.itoa
+    589850  2.09% 92.27%     589850  2.09%  github.com/odogono/odgn-talk/impl/go/internal/value.Fields.Value
+    567991  2.02% 94.28%     567991  2.02%  github.com/odogono/odgn-talk/impl/go.zigReply.items
+    524304  1.86% 96.14%     524304  1.86%  strings.NewReader (inline)
+    470825  1.67% 97.82%     473347  1.68%  github.com/odogono/odgn-talk/impl/go/internal/zigwasm.(*Reactor).Frame
+    327685  1.16% 98.98%    5316736 18.88%  github.com/odogono/odgn-talk/impl/go/internal/value.EncodeWire
+    163842  0.58% 99.56%     163842  0.58%  strings.(*Builder).WriteString (inline)
+     32768  0.12% 99.68%     884748  3.14%  math/big.(*Int).Text (inline)
+         0     0% 99.68%   28106085 99.78%  github.com/odogono/odgn-talk/bench/go.(*Loaded).Run
+         0     0% 99.68%   28160934   100%  github.com/odogono/odgn-talk/bench/go.BenchmarkRun.func1
+         0     0% 99.68%   28106085 99.78%  github.com/odogono/odgn-talk/bench/go.pump
+         0     0% 99.68%   28042370 99.56%  github.com/odogono/odgn-talk/impl/go.(*Group).Pump (inline)
+         0     0% 99.68%   28042370 99.56%  github.com/odogono/odgn-talk/impl/go.(*Group).pumpOwned
+         0     0% 99.68%    4192099 14.88%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).export
+         0     0% 99.68%    4171813 14.81%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).frame
+         0     0% 99.68%   28042370 99.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pump
+         0     0% 99.68%   28042370 99.56%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pumpBinary
+         0     0% 99.68%     473347  1.68%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).shareFrame
+         0     0% 99.68%    5316736 18.88%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).zigEncoded
+         0     0% 99.68%    3713777 13.18%  github.com/odogono/odgn-talk/impl/go.zigText (inline)

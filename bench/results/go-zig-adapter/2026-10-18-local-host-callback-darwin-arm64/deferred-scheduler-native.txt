@@ -1,0 +1,36 @@
+Main binary filename not available.
+Type: delay
+Showing nodes accounting for 66358.64us, 95.35% of 69592.17us total
+Dropped 163 nodes (cum <= 347.96us)
+Showing top 30 nodes out of 44
+      flat  flat%   sum%        cum   cum%
+54818.55us 78.77% 78.77% 54818.55us 78.77%  runtime.chansend1
+ 6203.59us  8.91% 87.69%  6203.59us  8.91%  runtime.systemstack_switch
+ 3775.35us  5.42% 93.11%  3775.35us  5.42%  runtime.selectnbsend
+  496.70us  0.71% 93.82%   496.70us  0.71%  runtime.goschedIfBusy
+  364.35us  0.52% 94.35%  3152.39us  4.53%  runtime.gcMarkDone
+  308.61us  0.44% 94.79%  1148.61us  1.65%  runtime.growslice
+  157.25us  0.23% 95.02%  1671.62us  2.40%  runtime.newobject
+  110.85us  0.16% 95.18%   409.54us  0.59%  runtime.mapassign_faststr
+   55.17us 0.079% 95.26% 56534.20us 81.24%  github.com/odogono/odgn-talk/impl/go/internal/machine.(*Run).ExecuteHosted
+   23.23us 0.033% 95.29%   356.22us  0.51%  runtime.mallocgcSmallScanNoHeaderSC6
+   16.77us 0.024% 95.31%  3792.12us  5.45%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1.3
+    9.54us 0.014% 95.33% 60951.29us 87.58%  github.com/odogono/odgn-talk/impl/go_test.deferredRequest
+    7.30us  0.01% 95.34% 60993.34us 87.64%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1
+    6.59us 0.0095% 95.35% 60149.75us 86.43%  github.com/odogono/odgn-talk/impl/go.(*Group).pumpOwned
+    4.80us 0.0069% 95.35% 55266.04us 79.41%  github.com/odogono/odgn-talk/impl/go.(*Group).crossHost
+         0     0% 95.35%  3978.74us  5.72%  github.com/odogono/odgn-talk/impl/go.(*Call).Answer
+         0     0% 95.35%  3978.74us  5.72%  github.com/odogono/odgn-talk/impl/go.(*Call).AnswerWithCost
+         0     0% 95.35%  3978.74us  5.72%  github.com/odogono/odgn-talk/impl/go.(*Call).queueSettlement
+         0     0% 95.35% 60149.75us 86.43%  github.com/odogono/odgn-talk/impl/go.(*Group).Pump
+         0     0% 95.35%   718.66us  1.03%  github.com/odogono/odgn-talk/impl/go.(*Group).admit
+         0     0% 95.35%   718.66us  1.03%  github.com/odogono/odgn-talk/impl/go.(*Group).admitWithReady
+         0     0% 95.35%   718.66us  1.03%  github.com/odogono/odgn-talk/impl/go.(*Group).deliver
+         0     0% 95.35%   718.66us  1.03%  github.com/odogono/odgn-talk/impl/go.(*Group).enqueue
+         0     0% 95.35%   674.24us  0.97%  github.com/odogono/odgn-talk/impl/go.(*Group).flushAccounting
+         0     0% 95.35% 55886.07us 80.31%  github.com/odogono/odgn-talk/impl/go.(*Group).operation
+         0     0% 95.35% 55261.24us 79.41%  github.com/odogono/odgn-talk/impl/go.(*Group).operation.func2
+         0     0% 95.35% 59402.23us 85.36%  github.com/odogono/odgn-talk/impl/go.(*Group).runPump
+         0     0% 95.35% 55886.07us 80.31%  github.com/odogono/odgn-talk/impl/go.(*Group).runPump.func12
+         0     0% 95.35%   718.66us  1.03%  github.com/odogono/odgn-talk/impl/go.(*Script).Request
+         0     0% 95.35%   675.46us  0.97%  github.com/odogono/odgn-talk/impl/go.(*Script).start
