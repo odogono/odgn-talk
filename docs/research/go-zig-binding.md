@@ -6,6 +6,84 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Confirming run after the binary callback envelope, 2026-10-19
+
+A second `go-zig-bench` dispatch measured `main` at
+`3b9e67add4344b52853b3f66ba0946a06d383047`:
+[run 39250561088](https://github.com/odogono/odgn-talk/actions/runs/39250561088).
+That head adds only TypeScript, Elixir, workflow and documentation changes to
+the first run's `f8644caf`; `impl/go`, `impl/zig`, `bench/go` and `spikes`
+are unchanged. The artifact (sha256 `fb70d30d…`), Request/Pump base, Go and
+wazero versions match the first run, so the two runs satisfy the
+[Request/Pump protocol](request-pump-binary.md#measurement-protocol-1278).
+Raw results and environment records are archived under
+[`2026-10-19-ci-after-1311-run2`](../../bench/results/go-zig-adapter/2026-10-19-ci-after-1311-run2/).
+
+The runner CPUs swapped on amd64: Request/Pump ran on an AMD EPYC 9V74 and
+the full suite on an Intel Xeon Platinum 8573C, the reverse of the first run.
+
+### Paired Request results, both runs
+
+Medians of ten paired round ratios, run 1 / run 2:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Fields Request / native Request | ≤ 3× | 2.310 / 2.590× | 2.614 / 2.707× | 2.727 / 2.451× | Pass in both |
+| Fields combined / native combined | ≤ 3× | 1.992 / 2.173× | 2.256 / 2.239× | 2.402 / 2.197× | Pass in both |
+| Fields Request / JSON Request | ≤ 0.75× | 0.481 / 0.489× | 0.484 / 0.511× | 0.487 / 0.505× | Pass in both |
+| Native Request / base Request | no slowdown | 0.976 / 1.002× | 0.990 / 0.992× | 0.996 / 0.995× | Pass in both |
+
+### Full-suite limits, both runs
+
+Run 1 / run 2, ratios of the five-sample medians within each job, except the
+absolute cold-start time:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 3.77–7.06 / 3.13–3.85× | 2.86–4.79 / 2.75–4.66× | 3.33–3.81 / 2.53–3.72× | Miss in both |
+| `host/conversion` | ≤ 3× | 3.13 / 1.95× | 2.02 / 1.95× | 2.02 / 1.62× | Mixed on amd64; pass in both elsewhere |
+| `BackendDeferredCall/history=0` | ≤ 3× | 4.85 / 4.00× | 8.04 / 6.93× | 3.82 / 4.51× | Miss in both |
+| `messaging/*` | ≤ 2× | 0.75–1.73 / 0.79–1.20× | 0.62–1.15 / 0.63–1.10× | 0.68–1.60 / 0.76–2.06× | Mixed on macOS; pass in both on Linux |
+| `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.62 / 0.89× | 0.68 / 0.67× | 1.40 / 1.70× | Pass in both |
+| `BackendRequest` p99 | ≤ 3× | 1.25 / 0.75× | 1.43 / 1.34× | 4.00 / 2.00× | Mixed on macOS; pass in both on Linux |
+| `Load/core/loop` | ≤ 3× | 3.79 / 3.13× | 4.51 / 4.56× | 2.37 / 1.80× | Miss in both on Linux; pass in both on macOS |
+| `GroupInstantiation` | ≤ 10× | 9.35 / 9.22× | 9.28 / 9.12× | 9.79 / 7.12× | Pass in both, close to the limit |
+| `BackendRetainedMemory` heap/Group | ≤ 4× | 1.70 / 1.70× | 1.70 / 1.70× | 1.70 / 1.70× | Pass in both |
+| `BackendColdStart/cache=warm` first Group | ≤ 250 ms | 52.6 / 51.5 ms | 47.0 / 46.8 ms | 78.2 / 60.7 ms | Pass in both |
+
+The `host/*` ranges include `host/suspending`. In run 2, `BackendRequest` mean
+time is 2.19×, 2.99× and 3.35× native, and the whole cold-start process with
+a warm cache takes 56.1, 51.8 and 70.9 ms.
+
+**#1103 remains incomplete.** The paired Request goal, 16-Group throughput,
+Group instantiation, retained memory and cold start pass in both runs on
+every job and are accepted. Host callbacks, deferred calls, Linux
+`Load/core/loop` and rollback miss in both. Three results are mixed:
+
+- amd64 `host/conversion` passes in run 2 (1.95×) after 3.13× in run 1; the
+  full-suite job changed from AMD EPYC 7763 to Intel Xeon, so a third run on
+  the same CPU is needed to settle it.
+- macOS `BackendRequest` p99 is 2.00× (159.9 µs against 80.0 µs), so run 1's
+  4.00× did not repeat. It passes in run 2 only because native's p99 also
+  rose; Zig's p99 fell from 186.0 µs to 159.9 µs.
+- macOS `messaging/suspend` misses at 2.06× in run 2 after 1.60× in run 1.
+  The other messaging rows stay at or below 0.97× (amd64), 0.79× (arm64)
+  and 1.01× (macOS) in both runs.
+
+The other original #1054 limits, run 1 / run 2:
+
+| Workload | Limit | Linux amd64 | Linux arm64 | macOS arm64 | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| Warm execution, worst core/collections/macro Run, excluding `fib@slice` | ≤ 2× | 1.52 / 1.58× | 1.16 / 1.14× | 1.17 / 1.08× | Pass in both |
+| `lifecycle/restore` | ≤ 1.5× | 0.17 / 0.19× | 0.18 / 0.16× | 0.15 / 0.14× | Pass in both |
+| `lifecycle/load-large` | ≤ 2.5× | 1.15 / 1.08× | 0.94 / 0.93× | 0.94 / 0.94× | Pass in both |
+| Zig deferred `history=5000` / `history=0` | ≤ 1.2× | 1.08 / 1.00× | 0.90 / 1.07× | 0.91 / 0.96× | Pass in both |
+| `lifecycle/rollback` | ≤ 2× | 4.84 / 3.62× | 4.75 / 4.65× | 4.05 / 4.04× | Miss in both |
+
+Fuel and logical bytes match native on every Run in all three run-2
+full-suite jobs. The first Group without a compilation cache takes
+1.58–1.83 s.
+
 ## Remeasurement after the binary callback envelope, 2026-10-19
 
 After #1313 (#1311, the `callbacks-fields-v1` host callback envelope)
