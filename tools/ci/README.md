@@ -14,11 +14,15 @@ The initial Woodpecker workflows supplement GitHub Actions:
   builds and Node runtime checks.
 - `.woodpecker/conventions.yaml` runs the existing PR title and changelog
   checker on PR code updates and metadata edits, with full Git history.
+- `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
+  SQLite module, reusing the Go build and module caches.
+- `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
+  the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
+  under TypeScript 5.9 and the latest TypeScript.
 
-These workflows do not yet cover the complete Actions matrix, including the
-package/browser checks, Go SQLite module, fuzz campaigns,
-Elixir, WASI, the remaining Go/Zig formatting and generated-file gates, and the
-broader Zig and platform matrix. Keep any additional Actions requirements until
+These workflows do not yet cover the complete Actions matrix, including fuzz
+campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
+and the broader Zig and platform matrix. Keep any additional Actions requirements until
 equivalent coverage is available.
 
 ## Linux worker image
@@ -47,6 +51,26 @@ sequentially in their shared workspace to keep their generated builds ordered.
 
 Linux workflows select an agent with `platform=linux/amd64` and `backend=docker`.
 Conventions additionally requires `role=conventions`.
+
+### Browser worker image
+
+After building the default Linux image, build the browser variant on each
+general Linux Docker worker before enabling the package workflow:
+
+```sh
+docker build -f tools/ci/Dockerfile.browser -t odgn-talk-ci:2026-10-19-2-browser tools/ci
+```
+
+It adds Playwright's Chromium headless shell and system dependencies to the
+Node 22 image. `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` makes the installed
+browser available to the workspace's Playwright package. The workflow's install
+command ensures that the browser revision matches the locked workspace version;
+with the matching image, it reuses the installed browser without downloading it.
+Keep `PLAYWRIGHT_VERSION` in `Dockerfile.browser` aligned with `bun.lock`, and
+use a new browser image tag in the workflow and build command when rebuilding.
+
+Package and SQLite checks report separate optional statuses. They share the
+general agent's existing capacity and do not request the Conventions role.
 
 ### Dedicated Conventions worker
 
