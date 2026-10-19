@@ -14,13 +14,13 @@ clone:
 
 steps:
   - name: workspace
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     commands:
       - bun install --frozen-lockfile
       - bun run unicode:check
 
   - name: stack
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     directory: tooling/stack
     commands:
       - bun test --timeout 30000 tests
@@ -28,7 +28,7 @@ steps:
       - bun run test:node
 
   - name: tooling
-    image: odgn-talk-ci:2026-10-19
+    image: odgn-talk-ci:2026-10-19-2
     commands:
       - bun run typecheck
       - bun run lints:check
@@ -45,7 +45,7 @@ steps:
       - bun run build
 
   - name: node-runtimes
-    image: odgn-talk-ci:2026-10-19-node24
+    image: odgn-talk-ci:2026-10-19-2-node24
     directory: impl/ts
     environment:
       NORTHTALK_SQLITE_RUNTIMES: node

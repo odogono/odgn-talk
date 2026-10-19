@@ -9,4 +9,5 @@ RUN apt-get update \
 
 COPY --from=go /usr/local/go /usr/local/go
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+RUN ln -s bun /usr/local/bin/bunx
 ENV PATH="/usr/local/go/bin:${PATH}"

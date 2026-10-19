@@ -24,12 +24,13 @@ coverage is available.
 Build this image on each Linux Docker worker before enabling the workflow:
 
 ```sh
-docker build -t odgn-talk-ci:2026-10-19 tools/ci
-docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-node24 tools/ci
+docker build -t odgn-talk-ci:2026-10-19-2 tools/ci
+docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 tools/ci
 ```
 
-Both images contain Bun 1.4.2, Go 1.27.2 and the C compiler needed for Go race
-tests. The default image uses Node 22 for parity with the Actions stack and CLI
+Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
+compiler needed for Go race tests. The default image uses Node 22 for parity with
+the Actions stack and CLI
 jobs. The `node24` image is used only for the required SQLite and notification
 runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
 both the build command and workflows whenever its image changes. Woodpecker
