@@ -1,0 +1,29 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+  - event: manual
+
+labels:
+  platform: darwin/arm64
+  backend: local
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: bash
+    commands:
+      - bun install --frozen-lockfile
+      - bun run unicode:check
+
+  - name: native-sidecar
+    image: bash
+    commands:
+      - zig version
+      - cd impl/zig
+      - zig build sidecar
+      - cd ../..
+      - python3 tools/sidecar/check.py impl/zig/zig-out/bin/messagelayer
