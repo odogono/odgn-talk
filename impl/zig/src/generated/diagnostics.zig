@@ -271,11 +271,13 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not in a join",
-            .raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`",
-            .at = "its first token, or the member's",
+            .raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, a member inside a `try`, or a member with a Result Target",
+            .at = "its first token, the member's, or the Result Target's `into`",
             .sources = &.{
                 "ADR 0026",
                 "#115",
+                "ADR 0112",
+                "#1340",
             },
         },
         .{

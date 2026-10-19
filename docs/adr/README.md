@@ -113,3 +113,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0109: A one-line `wait for` takes a Guard after its timeout](0109-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)
 - [0110: Request and Pump have an optional binary exchange](0110-request-and-pump-have-an-optional-binary-exchange.md)
 - [0111: Snapshot sources may come from the Host](0111-snapshot-sources-may-come-from-the-host.md)
+- [0112: An `ask` may name a Result Target](0112-an-ask-may-name-a-result-target.md)

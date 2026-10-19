@@ -192,7 +192,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 A Join, `wait for all … end` (optionally `end wait`), starts several calls from one Run and suspends once, at its closing `end` ([ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md)).
 
-- **Members:** every `ask … and wait` and `send … and wait` that the Join's body reaches is a Join Member, including inside `if`, `repeat` and `match`. A call inside a Lambda in the body belongs to the Lambda. Each member is started where it stands and isn't waited for, and it leaves `it` unchanged. Plain `send`, `tell` and immediate `ask` run where they stand, as anywhere else.
+- **Members:** every `ask … and wait` and `send … and wait` that the Join's body reaches is a Join Member, including inside `if`, `repeat` and `match`. A call inside a Lambda in the body belongs to the Lambda. Each member is started where it stands and isn't waited for, and it leaves `it` unchanged. A member can't have a Result Target, since its answer is in the Join's list: that is `not in a join` at its `into`. Plain `send`, `tell` and immediate `ask` run where they stand, as anywhere else.
 - **Call ids** are given to members in start order, like any call's.
 - **The result:** when every member has answered, `it` is the list of their answers in start order. Its length is the number of members started, which can vary at run time. Each answer is converted and charged when the Run resumes, in start order. Answers that arrive early count toward Persistent State while the Run waits.
 - **No members:** a Join that starts no member sets `it` to `[]` at once, with no suspension and no Segment boundary.
