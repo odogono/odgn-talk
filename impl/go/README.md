@@ -2046,3 +2046,12 @@ Set `TALK_ZIG_REQUEST_PUMP=map` to measure the other envelope, `fields` to selec
 fields explicitly, or an empty value to keep JSON and test unsupported combined
 calls. `BackendRequestPump` and `BackendCallPump` benchmark the public APIs;
 `BackendRequest` retains the separate-call workload.
+
+Host callbacks negotiate `callbacks-fields-v1` by default as well, so the
+guest's `op`, `prop`, `effect` and `release` needs and the adapter's results
+cross in the fields envelope ([#1311](https://github.com/odogono/odgn-talk/issues/1311)).
+Set `TALK_ZIG_CALLBACKS` to an empty value to keep them JSON. On an Apple M5,
+interleaved over 8 rounds, `Run/host/immediate` fell from 4.03 ms to 2.10 ms
+(5.3× native to 2.8×), `properties` from 2.42 to 1.40 ms, `conversion` from
+7.80 to 5.13 ms and `BackendDeferredCall` from 32.5 to 29.5 µs
+([measurements](../../bench/results/go-zig-adapter/2026-10-19-callbacks-fields-darwin-arm64/paired.txt)).

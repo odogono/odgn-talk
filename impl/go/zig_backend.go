@@ -191,6 +191,14 @@ func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame
 		if err != nil {
 			return zigPacket{}, err
 		}
+		if p := packet.bin; p != nil && p.need != nil {
+			// A binary need is answered in binary (#1311).
+			if first, err = b.callbackBinary(p.need); err != nil {
+				return zigPacket{}, err
+			}
+			fields, m = map[string]any{}, zbCallbacks[p.need.tag].kind+"-result"
+			continue
+		}
 		if packet.bin != nil {
 			return packet, nil
 		}
@@ -272,7 +280,9 @@ func (b *zigGroup) frame(out zigOut) (zigPacket, error) {
 		}
 		b.frameMu.Lock()
 		defer b.frameMu.Unlock()
-		if bin.completion && bin.ok {
+		if bin.need != nil {
+			b.paused = true
+		} else if bin.completion && bin.ok {
 			b.paused = false
 		}
 		return zigPacket{bin: bin}, nil
@@ -1093,9 +1103,16 @@ func (b *zigGroup) checkHello() error {
 	if err != nil {
 		return err
 	}
+	callbacks, err := zigCallbacksWanted()
+	if err != nil {
+		return err
+	}
 	features := append(slices.Clone(zigFeatures), zigOptionalFeatures...)
 	if wanted {
 		features = append(features, binary)
+	}
+	if callbacks {
+		features = append(features, zigCallbacksFeature)
 	}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": features})
 	if err != nil {

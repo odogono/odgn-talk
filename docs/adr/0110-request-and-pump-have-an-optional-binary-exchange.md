@@ -27,3 +27,4 @@ The binary exchange is accepted when it beats the JSON Message Layer by at least
 The ≤3×-native target remains a goal for the Zig guest, tracked in #1267 and not a condition of this transport. Go/Zig was the experiment; the TS, Elixir and C public APIs now follow. Elixir's combined operation requires an explicitly released pending handle with repeatable awaits; releasing it or timing out an await does not cancel execution.
 
 - Amended by #1245: the gate was relative to native, and is now relative to JSON. The ≤3×-native goal moved to #1267.
+- Amended by #1311: the `op`, `prop`, `effect` and `release` needs and their results may also cross in the fields envelope, under a separate `callbacks-fields-v1` feature. Other needs, their answers and inline events stay JSON. A local A/B on Apple Silicon measured `Run/host/immediate` 48% faster.

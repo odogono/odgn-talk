@@ -213,7 +213,7 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 
 // applyReceipt records a completed reply; needs carry none.
 func applyReceipt(packet zigPacket, receipt zigReceipt) error {
-	if receipt == nil || packet.need.present() {
+	if receipt == nil || packet.need.present() || packet.bin != nil && packet.bin.need != nil {
 		return nil
 	}
 	return receipt(packet)

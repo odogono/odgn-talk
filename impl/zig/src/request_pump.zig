@@ -121,6 +121,41 @@ pub const Report = enum(u8) {
     }
 };
 
+/// `callbacks-fields-v1` (#1311): Host callback needs and their results
+/// cross as fields-layout frames, whatever Request/Pump layout was chosen.
+pub const feature_callbacks = "callbacks-fields-v1";
+
+/// A callback need's or result's message tag and positional fields. A need
+/// ends with its notices, so they can be filled in after it is written.
+pub const Callback = enum(u8) {
+    op_result = 0x06,
+    prop_result = 0x07,
+    effect_result = 0x08,
+    release_result = 0x09,
+    op = 0x83,
+    prop = 0x84,
+    effect = 0x85,
+    release = 0x86,
+
+    pub fn fields(c: Callback) []const []const u8 {
+        return switch (c) {
+            .op_result, .prop_result => &.{ "ref", "group", "outcome", "value", "code", "message", "charged" },
+            .effect_result => &.{ "ref", "group", "status" },
+            .release_result => &.{ "ref", "group" },
+            .op => &.{ "ref", "call", "script", "run", "segment", "grant", "capability", "operation", "mode", "now", "args", "scope", "automatic", "fuelLeft", "abandoned", "settled", "trace" },
+            .prop => &.{ "ref", "object", "prop", "set", "value", "op", "selector", "abandoned", "settled", "trace" },
+            .effect => &.{ "ref", "script", "run", "segment", "grant", "grants", "coordinator", "phase", "now", "abandoned", "settled", "trace" },
+            .release => &.{ "ref", "script", "grant", "reason", "now", "abandoned", "settled", "trace" },
+        };
+    }
+
+    /// A result's tag, or null for a need's.
+    pub fn result(t: u8) ?Callback {
+        const c = std.enums.fromInt(Callback, t) orelse return null;
+        return if (t < 0x80) c else null;
+    }
+};
+
 pub const Error = error{ Malformed, OutOfMemory };
 
 /// Field names are usually the same literal as the table's.

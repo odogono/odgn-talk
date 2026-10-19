@@ -1,0 +1,120 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    825738 ns/op	     13518 fuel/op	     16072 logical-B/op	        61.08 ns/fuel	  972644 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    543192 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.23 ns/fuel	  495204 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2640278 ns/op	     25018 fuel/op	    225572 logical-B/op	       105.5 ns/fuel	 4774014 B/op	   72157 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2490 ns/op	         7.000 fuel/op	         0 logical-B/op	       355.8 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8312 ns/op	      6959 p50-ns	     47708 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    741988 ns/op	     13518 fuel/op	     16072 logical-B/op	        54.89 ns/fuel	  972619 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    543472 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.27 ns/fuel	  495198 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2594381 ns/op	     25018 fuel/op	    225572 logical-B/op	       103.7 ns/fuel	 4773961 B/op	   72156 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2582 ns/op	         7.000 fuel/op	         0 logical-B/op	       368.9 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8155 ns/op	      6958 p50-ns	     44666 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    975584 ns/op	     13518 fuel/op	     16072 logical-B/op	        72.17 ns/fuel	  972682 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    636142 ns/op	      9018 fuel/op	     16072 logical-B/op	        70.54 ns/fuel	  495222 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   3984807 ns/op	     25018 fuel/op	    225572 logical-B/op	       159.3 ns/fuel	 4774178 B/op	   72158 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2754 ns/op	         7.000 fuel/op	         0 logical-B/op	       393.5 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8449 ns/op	      7083 p50-ns	     51167 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    748669 ns/op	     13518 fuel/op	     16072 logical-B/op	        55.38 ns/fuel	  972620 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    544828 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.42 ns/fuel	  495199 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2618472 ns/op	     25018 fuel/op	    225572 logical-B/op	       104.7 ns/fuel	 4774093 B/op	   72157 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2607 ns/op	         7.000 fuel/op	         0 logical-B/op	       372.4 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8273 ns/op	      7042 p50-ns	     46209 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    742265 ns/op	     13518 fuel/op	     16072 logical-B/op	        54.91 ns/fuel	  972615 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    541550 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.05 ns/fuel	  495211 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2546052 ns/op	     25018 fuel/op	    225572 logical-B/op	       101.8 ns/fuel	 4773969 B/op	   72156 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2524 ns/op	         7.000 fuel/op	         0 logical-B/op	       360.6 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8122 ns/op	      6959 p50-ns	     47666 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    763245 ns/op	     13518 fuel/op	     16072 logical-B/op	        56.46 ns/fuel	  972617 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    556935 ns/op	      9018 fuel/op	     16072 logical-B/op	        61.76 ns/fuel	  495210 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2698025 ns/op	     25018 fuel/op	    225572 logical-B/op	       107.8 ns/fuel	 4774038 B/op	   72157 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2634 ns/op	         7.000 fuel/op	         0 logical-B/op	       376.3 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8377 ns/op	      6958 p50-ns	     48541 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    742180 ns/op	     13518 fuel/op	     16072 logical-B/op	        54.90 ns/fuel	  972602 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    548370 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.81 ns/fuel	  495214 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   3147443 ns/op	     25018 fuel/op	    225572 logical-B/op	       125.8 ns/fuel	 4774138 B/op	   72158 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2660 ns/op	         7.000 fuel/op	         0 logical-B/op	       379.9 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	     10143 ns/op	      7167 p50-ns	     53416 p99-ns	   13882 B/op	     158 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+cpu: Apple M5
+BenchmarkRun/host/immediate-3         	     100	    749526 ns/op	     13518 fuel/op	     16072 logical-B/op	        55.45 ns/fuel	  972611 B/op	   12252 allocs/op
+BenchmarkRun/host/properties-3        	     100	    544992 ns/op	      9018 fuel/op	     16072 logical-B/op	        60.43 ns/fuel	  495209 B/op	    6920 allocs/op
+BenchmarkRun/host/conversion-3        	     100	   2570384 ns/op	     25018 fuel/op	    225572 logical-B/op	       102.7 ns/fuel	 4773973 B/op	   72156 allocs/op
+BenchmarkRun/host/pump-3              	     100	      2724 ns/op	         7.000 fuel/op	         0 logical-B/op	       389.2 ns/fuel	    6613 B/op	      68 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendDeferredCall/history=0-3         	   10000	      8475 ns/op	      7083 p50-ns	     49292 p99-ns	   13882 B/op	     158 allocs/op
+PASS
