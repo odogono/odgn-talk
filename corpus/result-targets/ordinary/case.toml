@@ -39,6 +39,7 @@ grants = { api = { ops = "all" } }
 
 [[libraries]]
 name = "lib"
+version = "1"
 source = "lib.talk"
 [[scripts]]
 name = "remote"

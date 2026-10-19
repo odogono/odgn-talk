@@ -26,6 +26,8 @@ const member = (id: string): Member => ({
   call: null,
   id,
   ms: 0,
+  // These Wait-table tests never execute the member's instruction.
+  site: { frame: {} as Member['site']['frame'], pc: 0 },
 });
 // A Capability call's member, which a preempted open Join keeps awaited.
 const called = (id: string): Member => ({
