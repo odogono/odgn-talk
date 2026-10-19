@@ -3530,6 +3530,7 @@ pub const Group = struct {
     }
 
     pub fn destroyRun(g: *Group, run: *Run) void {
+        g.waits.closeRun(g.gpa, &g.input_lock, run.id);
         if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
         if (run.returned_prop) |r| g.releasePropResult(r);
         if (g.waits.takeRun(run)) |p| {
@@ -10035,22 +10036,34 @@ pub const Group = struct {
                 return err;
             };
             c.group = g;
-            c.at_unit = try g.keep.allocator().dupe(u8, local.at_unit);
-            g.waits.addCall(gpa, c) catch |err| {
+            // Segment ids are normally instruction scratch. A retained
+            // Call exposes its originating Segment after later Pumps too.
+            // Both are the Call's own, so releasing it frees them (#1320).
+            const at_unit = gpa.dupe(u8, local.at_unit) catch |err| {
                 gpa.free(c.id);
                 gpa.destroy(c);
                 return err;
             };
-            // Segment ids are normally instruction scratch. A retained
-            // Call exposes its originating Segment after later Pumps too.
-            c.segment = try g.keep.allocator().dupe(u8, local.segment);
+            const segment = gpa.dupe(u8, local.segment) catch |err| {
+                gpa.free(at_unit);
+                gpa.free(c.id);
+                gpa.destroy(c);
+                return err;
+            };
+            c.at_unit = at_unit;
+            c.segment = segment;
+            c.owns_place = true;
+            g.waits.addCall(gpa, c) catch |err| {
+                wait_table.destroyCall(gpa, c);
+                return err;
+            };
             // Its arguments, for the answer's check and for a save, which
             // a restore may reissue it with.
             c.args = try gpa.dupe(*Value, args);
             for (c.args) |v| _ = v.retain();
             break :blk c;
         } else &local;
-        try g.waits.registerCall(g.gpa, &g.input_lock, id, suspending and decl.metering == .read_only);
+        try g.waits.registerCallKind(g.gpa, &g.input_lock, id, suspending and decl.metering == .read_only, suspending);
         const returned = run.returned_op;
         run.returned_op = null;
         var outcome = if (returned) |r| blk: {

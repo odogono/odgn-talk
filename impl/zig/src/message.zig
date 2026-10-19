@@ -197,7 +197,10 @@ const GroupEntry = struct {
     }
 
     /// Called only once the complete reply has been serialized successfully.
-    fn forgetAbandoned(e: *GroupEntry) void {
+    /// After a final reply, the Host answers calls by id, so a retired Call
+    /// whose notices have gone out is released; its id stays issued for a
+    /// late answer (#1320). Mid-Pump, its text may still back held Reports.
+    fn forgetAbandoned(e: *GroupEntry, final: bool) void {
         var i: usize = 0;
         while (i < e.started.items.len) {
             const c = e.group.group.callById(e.started.items[i]);
@@ -205,6 +208,9 @@ const GroupEntry = struct {
                 e.gpa.free(e.started.orderedRemove(i));
             } else i += 1;
         }
+        if (!final) return;
+        const g = &e.group.group;
+        g.waits.releaseRetired(g.gpa, e.started.items);
     }
 };
 
@@ -2050,7 +2056,7 @@ fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFiel
     if (isBinNeed(reply)) {
         const emitted = binNoticed(s, entry, reply) catch return oomReply();
         freeReply(s.gpa, reply);
-        entry.forgetAbandoned();
+        entry.forgetAbandoned(false);
         return emitted;
     }
     defer freeReply(s.gpa, reply);
@@ -2064,7 +2070,7 @@ fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFiel
     if (s.crossing_trace) entry.writeSettled(&o) catch return oomReply();
     o.raw(reply[reply.len - closes ..]) catch return oomReply();
     const emitted = o.finish() catch return oomReply();
-    entry.forgetAbandoned();
+    entry.forgetAbandoned(fields == .ok);
     return emitted;
 }
 
@@ -2939,7 +2945,7 @@ fn requestChargeReply(s: *Session, msg: Json, ref: i64) []u8 {
 fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const call_id = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
-    const c = entry.group.group.callById(call_id) orelse return hostError(s.gpa, ref, .unknown_call);
+    const c = entry.group.group.callById(call_id) orelse return lateSettleReply(s, msg, ref, entry, call_id, is_fail);
     const code = if (is_fail) blk: {
         const e = field(msg, "error") orelse break :blk Direct.callFail(c, null);
         const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -2960,6 +2966,52 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         break :blk Direct.callAnswerWithCost(c, v, fuel);
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
+/// An answer or failure for a released Call: its suspending id is still
+/// issued, so it is queued by id, recorded and ignored as a late answer.
+fn lateSettleReply(s: *Session, msg: Json, ref: i64, entry: *GroupEntry, call_id: []const u8, is_fail: bool) []u8 {
+    const g = &entry.group.group;
+    if (!g.waits.issued_calls.suspending(call_id)) return hostError(s.gpa, ref, .unknown_call);
+    const with: machine.Resume = if (is_fail) blk: {
+        const e = field(msg, "error") orelse break :blk .broken;
+        const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
+        const emessage = asText(field(e, "message"));
+        var data: ?*Value = null;
+        if (field(e, "data")) |d| if (d != .null) {
+            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err, entry));
+        };
+        const code = g.gpa.dupe(u8, ecode) catch {
+            if (data) |d| d.release();
+            return oomReply();
+        };
+        const message: ?[]const u8 = if (emessage) |m| g.gpa.dupe(u8, m) catch {
+            g.gpa.free(code);
+            if (data) |d| d.release();
+            return oomReply();
+        } else null;
+        break :blk .{ .failed = .{ .code = code, .message = message, .data = data } };
+    } else blk: {
+        const vj = field(msg, "value") orelse return hostError(s.gpa, ref, .invalid_value);
+        const v = decodeValue(s.gpa, vj, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+        const fuel = if (field(msg, "fuel")) |f| asInt(f) orelse {
+            v.release();
+            return hostError(s.gpa, ref, .invalid_value);
+        } else 0;
+        if (fuel < 0 or fuel > 9_007_199_254_740_991) {
+            v.release();
+            return hostError(s.gpa, ref, .invalid_value);
+        }
+        break :blk .{ .answer = .{ .value = v, .fuel = @intCast(fuel) } };
+    };
+    g.settle(call_id, with) catch {
+        g.releaseResume(with);
+        return oomReply();
+    };
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -5170,7 +5222,7 @@ fn emitFinal(s: *Session, entry: *GroupEntry, ref: i64, fin_in: BinFinal, abando
     var fin = fin_in;
     defer fin.deinit(s.gpa);
     const reply = finalFrame(s, entry, ref, &fin, abandoned) catch return oomReply();
-    if (abandoned) entry.forgetAbandoned();
+    if (abandoned) entry.forgetAbandoned(true);
     endBinary(s);
     return reply;
 }
@@ -6132,6 +6184,10 @@ const Client = struct {
 
 fn okOf(reply: Json) !Json {
     return reply.object.get("ok") orelse unexpected(reply);
+}
+fn errCode(reply: Json) ![]const u8 {
+    const e = reply.object.get("err") orelse return unexpected(reply);
+    return e.object.get("code").?.string;
 }
 fn errKind(reply: Json) ![]const u8 {
     const e = reply.object.get("err") orelse return unexpected(reply);
@@ -8651,4 +8707,45 @@ test "a combined exchange pauses at JSON needs, takes token cancellation and end
         if (std.mem.eql(u8, line.string, "> cancel-delivery d2")) cancelled = true;
     }
     if (!cancelled) return unexpected(next);
+}
+
+test "deferred calls keep no per-call state once their notices go out (#1320)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\",\"function-metadata-v1\",\"core-message-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"suspending\",\"args\":[],\"result\":\"number\"}},{{\"name\":\"now\",\"mode\":\"immediate\",\"args\":[],\"result\":\"number\"}}]}}", .{2}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n ask api to read and wait\\n return it + 1\\nend go\\non tick\\n ask api to now\\nend tick\"}}", .{ 5, grant.object.get("grant").?.integer }));
+    const g = &s.groupNamed("g").?.group.group;
+    var first: []const u8 = "";
+    for (0..1000) |i| {
+        _ = c.arena.reset(.retain_capacity);
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[]}}}}", .{6}));
+        const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{7});
+        const id = try c.arena.allocator().dupe(u8, pumped.object.get("need").?.object.get("call").?.string);
+        if (i == 0) first = try std.testing.allocator.dupe(u8, id);
+        _ = try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"g\",\"started\":true}}", .{7});
+        _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":41}}", .{ 8, id }));
+        _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9}));
+    }
+    defer std.testing.allocator.free(first);
+    try std.testing.expectEqual(@as(usize, 0), g.waits.retired_calls.items.len);
+    try std.testing.expectEqual(@as(usize, 0), g.waits.call_index.count());
+    try std.testing.expectEqual(@as(usize, 0), g.waits.issued_calls.runs.count());
+    try std.testing.expectEqual(@as(usize, 1), g.waits.issued_calls.spans.get("s").?.items.len);
+    // A released call is still issued: a late answer is recorded and ignored.
+    try std.testing.expectEqual(true, g.waits.issued_calls.get(first) != null);
+    _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":1}}", .{ 10, first }));
+    _ = try okOf(try c.send("{{\"m\":\"fail\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"error\":{{\"code\":\"x\"}}}}", .{ 11, first }));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{12}));
+    // A never-issued id, and an immediate call's, are unknown.
+    try std.testing.expectEqualStrings("unknown call", try errCode(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"s/r99999.c1\",\"value\":1}}", .{13})));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"tick\",\"args\":[]}}}}", .{14}));
+    var ticked = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{15});
+    const tick = try c.arena.allocator().dupe(u8, ticked.object.get("need").?.object.get("call").?.string);
+    ticked = try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"g\",\"result\":1}}", .{15});
+    try std.testing.expectEqualStrings("unknown call", try errCode(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":1}}", .{ 16, tick })));
 }

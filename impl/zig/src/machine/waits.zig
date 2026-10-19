@@ -4,6 +4,7 @@
 //! belong to the Group.
 const std = @import("std");
 const sorting = @import("../sort.zig");
+const id_text = @import("../ids.zig");
 const Allocator = std.mem.Allocator;
 const machine = @import("machine.zig");
 const Pending = machine.Pending;
@@ -52,11 +53,7 @@ pub const Waits = struct {
         w.pending.deinit(a);
         w.issued_calls.deinit(a);
         w.call_index.deinit(a);
-        for ([_][]*Call{ w.calls.items, w.retired_calls.items }) |list| for (list) |c| {
-            a.free(c.id);
-            releaseArgs(a, c);
-            a.destroy(c);
-        };
+        for ([_][]*Call{ w.calls.items, w.retired_calls.items }) |list| for (list) |c| destroyCall(a, c);
         w.calls.deinit(a);
         w.retired_calls.deinit(a);
     }
@@ -73,9 +70,44 @@ pub const Waits = struct {
     }
 
     pub fn registerCall(w: *Waits, a: Allocator, input_lock: *Lock, id: []const u8, eligible: bool) !void {
+        return w.registerCallKind(a, input_lock, id, eligible, false);
+    }
+
+    pub fn registerCallKind(w: *Waits, a: Allocator, input_lock: *Lock, id: []const u8, eligible: bool, suspending: bool) !void {
         input_lock.lock();
         defer input_lock.unlock();
-        try w.issued_calls.put(a, id, eligible);
+        try w.issued_calls.putCall(a, id, eligible, suspending);
+    }
+
+    /// Frees retired Calls whose ids `keep` doesn't hold. Only a Host that
+    /// answers by id, never by a retained Call, may ask: a late answer to
+    /// one is then known from its issued id (#1320).
+    pub fn releaseRetired(w: *Waits, a: Allocator, keep: []const []const u8) void {
+        var kept: usize = 0;
+        outer: for (w.retired_calls.items) |c| {
+            for (keep) |id| if (std.mem.eql(u8, id, c.id)) {
+                w.retired_calls.items[kept] = c;
+                kept += 1;
+                continue :outer;
+            };
+            // Its id answers late only if marked; without room, keep it.
+            w.issued_calls.markSuspending(a, c.id) catch {
+                w.retired_calls.items[kept] = c;
+                kept += 1;
+                continue;
+            };
+            _ = w.call_index.remove(c.id);
+            destroyCall(a, c);
+        }
+        w.retired_calls.shrinkRetainingCapacity(kept);
+    }
+
+    /// A finished Run's issued ids fold into its Script's spans.
+    pub fn closeRun(w: *Waits, a: Allocator, input_lock: *Lock, run: []const u8) void {
+        input_lock.lock();
+        defer input_lock.unlock();
+        // Without room to fold, the Run stays open; nothing is lost.
+        w.issued_calls.close(a, run) catch {};
     }
 
     pub fn unissueCall(w: *Waits, a: Allocator, input_lock: *Lock, id: []const u8) void {
@@ -167,22 +199,36 @@ pub const Waits = struct {
         }
 
         /// Issued ranges are written in Run-id order, independent of hashing.
+        /// Folded Runs are written one by one, as they were issued.
         pub fn writeIssued(e: Export, a: Allocator, out: anytype) !void {
-            try out.int(e.table.issued_calls.runs.count());
-            var ids: std.ArrayList([]const u8) = .empty;
-            defer ids.deinit(a);
-            var it = e.table.issued_calls.runs.keyIterator();
-            while (it.next()) |id| try ids.append(a, id.*);
-            sorting.stable([]const u8, ids.items, {}, struct {
-                fn less(_: void, x: []const u8, y: []const u8) bool {
-                    return std.mem.lessThan(u8, x, y);
+            const Entry = struct { id: []const u8, ranges: []const issued.Range, owned: bool };
+            var entries: std.ArrayList(Entry) = .empty;
+            defer {
+                for (entries.items) |x| if (x.owned) a.free(x.id);
+                entries.deinit(a);
+            }
+            const calls = &e.table.issued_calls;
+            var it = calls.runs.iterator();
+            while (it.next()) |x| try entries.append(a, .{ .id = x.key_ptr.*, .ranges = x.value_ptr.items, .owned = false });
+            var scripts = calls.spans.iterator();
+            while (scripts.next()) |x| for (x.value_ptr.items) |span| {
+                var n = span.first;
+                while (true) : (n += 1) {
+                    try entries.ensureUnusedCapacity(a, 1);
+                    entries.appendAssumeCapacity(.{ .id = try id_text.alloc(a, x.key_ptr.*, "/r", n), .ranges = span.ranges, .owned = true });
+                    if (n == span.last) break;
+                }
+            };
+            sorting.stable(Entry, entries.items, {}, struct {
+                fn less(_: void, x: Entry, y: Entry) bool {
+                    return std.mem.lessThan(u8, x.id, y.id);
                 }
             }.less);
-            for (ids.items) |id| {
-                try out.str(id);
-                const ranges = e.table.issued_calls.runs.get(id).?.items;
-                try out.int(ranges.len);
-                for (ranges) |range| {
+            try out.int(entries.items.len);
+            for (entries.items) |x| {
+                try out.str(x.id);
+                try out.int(x.ranges.len);
+                for (x.ranges) |range| {
                     try out.int(range.first);
                     try out.int(range.last);
                     try out.flag(range.eligible);
@@ -223,7 +269,10 @@ pub const Waits = struct {
             const n = try in.count();
             if (n == 0) return error.InvalidSave;
             for (0..n) |_| {
-                const range: issued.Range = .{ .first = try in.int(), .last = try in.int(), .eligible = try in.flag() };
+                // A save doesn't record which calls suspended, and a
+                // restored Group knows released Calls only by id: any
+                // imported id may be answered late (#1320).
+                const range: issued.Range = .{ .first = try in.int(), .last = try in.int(), .eligible = try in.flag(), .suspending = true };
                 issued.IssuedCalls.append(&ranges, a, range) catch |err| return switch (err) {
                     error.InvalidCallId => error.InvalidSave,
                     error.OutOfMemory => error.OutOfMemory,
@@ -418,6 +467,16 @@ pub const Waits = struct {
         return best;
     }
 };
+
+pub fn destroyCall(a: Allocator, c: *Call) void {
+    a.free(c.id);
+    releaseArgs(a, c);
+    if (c.owns_place) {
+        a.free(c.at_unit);
+        a.free(c.segment);
+    }
+    a.destroy(c);
+}
 
 fn releaseArgs(a: Allocator, c: *Call) void {
     for (c.args) |v| v.release();
