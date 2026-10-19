@@ -341,3 +341,44 @@ func TestOneLineWaitForGuardFollowsTimeout(t *testing.T) {
 		}
 	}
 }
+
+func TestAskResultTarget(t *testing.T) {
+	for _, tc := range []struct {
+		line, target string
+		wait         bool
+	}{
+		{"ask g to op x into y", "y", false},
+		{"ask g to op into y", "y", false},
+		{"ask g to op x, z into y and wait", "y", true},
+		{"ask g to op x", "", false},
+	} {
+		tree, err := Parse("on t x\n  " + tc.line + "\nend t\n")
+		if err != nil {
+			t.Fatal(tc.line, err)
+		}
+		n := tree.Declarations[0].Body[0]
+		got := ""
+		if n.Target != nil {
+			got = n.Target.Text
+		}
+		if n.Kind != "ask" || got != tc.target || HasFlag(n, "and") != tc.wait {
+			t.Errorf("%s: got %s target %q", tc.line, n.Kind, got)
+		}
+	}
+	for _, tc := range []struct {
+		source    string
+		line, col int
+	}{
+		{"  ask g to op x into item 1 of xs", 2, 27},
+		{"  ask g to op x and wait into y", 2, 26},
+		{"  ask g to op into it", 2, 20},
+		{"  tell g to op x into y", 2, 18},
+		{"  tell g\n    op x into y\n  end tell", 3, 10},
+	} {
+		_, err := Parse("on t x\n" + tc.source + "\nend t\n")
+		e, ok := err.(*Error)
+		if !ok || e.Code != "unexpected token" || e.Pos != (Position{Line: tc.line, Column: tc.col}) {
+			t.Errorf("%s: %v", tc.source, err)
+		}
+	}
+}

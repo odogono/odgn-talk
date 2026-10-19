@@ -481,12 +481,34 @@ func Root(n *syntax.Node) *syntax.Node {
 	}
 	return nil
 }
+
+// checkWrite reports a write to root that `put` and a Result Target refuse.
+func (u *Unit) checkWrite(root *syntax.Node, b *Body) {
+	s, ok := u.Resolve(b, root.Text)
+	if ok && (s.Kind == "function" || s.Kind == "handler") {
+		u.clash(root)
+	}
+	if ok && s.Kind == "definition" {
+		u.add("can't write", root.Pos())
+	}
+	if b != nil && b.Kind == "lambda" {
+		for _, capture := range b.Captures {
+			if capture.Name == root.Text {
+				u.add("can't write", root.Pos())
+			}
+		}
+	}
+}
 func bindingSites(n *syntax.Node, visit func(*syntax.Node)) {
 	syntax.Walk(n, func(x *syntax.Node) bool {
 		if x != n && x.Kind == "lambda" {
 			return false
 		}
 		switch x.Kind {
+		case "ask":
+			if x.Target != nil {
+				visit(x.Target)
+			}
 		case "put", "add", "subtract":
 			visit(Root(x.Children[1]))
 		case "multiply", "divide", "delete":
@@ -944,21 +966,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		if slices.Contains([]string{"put", "add", "subtract", "replace"}, n.Kind) {
 			index = 1
 		}
-		root := Root(n.Children[index])
-		s, ok := u.Resolve(b, root.Text)
-		if ok && (s.Kind == "function" || s.Kind == "handler") {
-			u.clash(root)
-		}
-		if ok && s.Kind == "definition" {
-			u.add("can't write", root.Pos())
-		}
-		if b != nil && b.Kind == "lambda" {
-			for _, capture := range b.Captures {
-				if capture.Name == root.Text {
-					u.add("can't write", root.Pos())
-				}
-			}
-		}
+		u.checkWrite(Root(n.Children[index]), b)
 	case "set":
 		target := unparen(n.Children[0])
 		if target.Kind != "key" && target.Kind != "key-computed" {
@@ -1151,6 +1159,13 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if n.Kind == "ask" || n.Kind == "tell" {
 		for _, e := range n.Children {
 			u.validate(e, b, ctx)
+		}
+		if n.Target != nil {
+			// A Join Member's result goes nowhere until the Join ends (ADR 0112).
+			if ctx.join > 0 && syntax.HasFlag(n, "and") {
+				u.add("not in a join", n.Target.Flags[0].Pos)
+			}
+			u.checkWrite(n.Target, b)
 		}
 		if syntax.HasFlag(n, "and") && b != nil && ctx.join == 0 {
 			b.MaySuspend = true
