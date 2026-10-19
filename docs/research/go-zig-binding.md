@@ -726,7 +726,7 @@ native Go and the adapter, including matching full restore, rejected
 replacement, RejectMismatch and VariablesOnly. The unchanged
 `save-restore/variables-only-restore` case passes through both backends.
 
-With this follow-up, the full native Corpus passes 446/446 and the full adapter
-Corpus passes 445/446 on Go 1.27.2, `CGO_ENABLED=0`, darwin/arm64. The only
-remaining failure is `builtins/random` (#1285). No expectations changed, and
-#1055's full Corpus gate remains unchecked.
+With this follow-up rebased on the #1285 fix, the full native and adapter
+Corpus runs each pass 446/446 on Go 1.27.2, `CGO_ENABLED=0`, darwin/arm64. No
+expectations changed. This is Corpus evidence for #1055, not retirement or
+performance acceptance.
