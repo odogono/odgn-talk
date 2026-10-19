@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"runtime"
+	"strconv"
 	"sync"
 	"weak"
 
@@ -176,7 +177,12 @@ func (b *zigGroup) join(s *zigShared) error {
 	if s.helloErr != nil {
 		return s.helloErr
 	}
-	if _, err := b.send("new-group", map[string]any{"name": b.group.Name(), "trace": b.group.options.Trace != nil}); err != nil {
+	// The Message Layer carries integers at or above 2^53 as decimal text.
+	var seed any = b.group.options.Seed
+	if b.group.options.Seed >= 1<<53 {
+		seed = strconv.FormatUint(b.group.options.Seed, 10)
+	}
+	if _, err := b.send("new-group", map[string]any{"name": b.group.Name(), "trace": b.group.options.Trace != nil, "seed": seed}); err != nil {
 		return err
 	}
 	b.untouched = true

@@ -233,9 +233,12 @@ adapter, including the unchanged tenants example and the Store and sqlite test
 kits. The Session Host, REPL and every Session Transcript run on the adapter
 ([#1053](https://github.com/odogono/odgn-talk/issues/1053)); CI runs them on
 Linux amd64/arm64 and macOS arm64 and cross-builds each target without cgo.
-Full Corpus acceptance remains separate work. Group initialization currently
-omits `GroupOptions.Seed`, so a nondefault seed does not reproduce native Go's
-random sequence ([#1285](https://github.com/odogono/odgn-talk/issues/1285)).
+Group initialization forwards `GroupOptions.Seed` across its full `uint64`
+range, with 0 as the default; Save/Restore preserves the generator's current
+state. The shared public Go regression checks default and explicit seeds,
+integer-encoding boundaries and restored continuation
+([#1285](https://github.com/odogono/odgn-talk/issues/1285)).
+Full Corpus acceptance remains separate work.
 After Library replacement, Restore may also perform a full restore when the
 supplied Library identities require variables-only restore
 ([#1304](https://github.com/odogono/odgn-talk/issues/1304)).
