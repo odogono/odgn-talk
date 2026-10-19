@@ -4,7 +4,7 @@ The initial Woodpecker workflows supplement GitHub Actions:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
   tests, race tests and Corpus in Linux containers. After the shared workspace
-  bootstrap succeeds, TS and Go run in parallel.
+  bootstrap succeeds, affected TS and Go steps run in parallel.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
   Silicon macOS.
 - `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
@@ -24,6 +24,38 @@ These workflows do not yet cover the complete Actions matrix, including fuzz
 campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
 and the broader Zig and platform matrix. Keep any additional Actions requirements until
 equivalent coverage is available.
+
+## Selecting checks
+
+PRs use their complete changed-file list; pushes to `main` use the files changed
+by that push. The expensive workflows filter those paths before taking a worker
+slot. The Linux core workflow also filters its TS and Go steps independently.
+
+| Change | Selected checks, in addition to Conventions and Spec |
+| --- | --- |
+| Root README, `docs/` or changelog only | None |
+| Go Core | Go core step and Go SQLite |
+| Go SQLite module only | Go SQLite |
+| TS Core | TS core step, package and tooling |
+| `tooling/` or `bench/ts/` only | Tooling |
+| Zig Core or native sidecar checks | macOS sidecar |
+| Spec, dependency lock or shared bootstrap inputs | All consumers |
+| Workflow or worker image | Affected workflows |
+
+Keep Spec on every PR and push to `main`: its lint, generated-file and Markdown
+link checks span the repository. Keep Conventions unfiltered on PR code and
+metadata updates. Spec Markdown remains a Core trigger because tests read prose
+examples directly. Shared Corpus, fixture and reference-tool inputs also select
+their consumers; filters intentionally prefer an extra check over missing one.
+Each workflow includes its own configuration, and Docker consumers include their
+worker image inputs. Tooling includes the whole TS workspace typecheck, including
+`tools/` and `bench/ts/`.
+
+Manual pipelines run every optional workflow and both core steps regardless of
+changed paths. Conventions requires PR metadata and remains a PR-only check.
+Empty or unavailable changed-file lists also run all optional checks
+(`on_empty: true`). Path filters do not remove jobs already queued from older
+revisions: PR branches must include these workflow changes to benefit.
 
 ## Linux worker image
 
