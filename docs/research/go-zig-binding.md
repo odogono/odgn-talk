@@ -674,6 +674,38 @@ for deferred calls. Further work should separate guest callback
 parsing/serialization from execution, and investigate the deferred settlement
 handoff independently. Required-platform acceptance still needs fresh CI evidence.
 
+### Guest memory across deferred calls (#1320), 2026-10-19
+
+Guest linear memory grew by about 0.56 KB per deferred call: 3.2 MB to
+14.4 MB over 20,000 calls on 4c84ef53. Three Core structures kept every call:
+
+- each retired Call, kept so a late answer finds it, with its id, its index
+  entry, and its `at_unit` and `segment` copied into the Group's `keep` arena;
+- the Wait table's per-Run `issued_calls` entry, kept for the Group's lifetime
+  because metering eligibility must survive.
+
+Changes:
+
+- A Message Layer Host answers by id, never through a retained Call. After a
+  Pump's final reply has written a retired Call's notices, the Message Layer
+  releases it, including its place text, which the Call now owns. Its id
+  stays issued and is marked suspending, so a late `answer` or `fail` is still
+  queued by id, recorded and ignored. A never-issued id, or an immediate
+  call's, is still `unknown call`. In-process C Hosts keep their Calls, since
+  they hold `talk_call` pointers.
+- A finished Run's issued ranges fold into its Script's spans, where
+  consecutive Runs that issued the same ranges share one. Saves still write
+  one entry per Run, so the save format is unchanged. Ids a restore imports
+  count as suspending, since a save records no such bit.
+
+`TestZigBackendDeferredCallsKeepGuestMemoryFlat` runs 2,000 deferred calls,
+then 20,000 more, and requires no growth. It fails on 4c84ef53 (3.2 → 14.4 MB).
+A one-off 200,000-call run also stays flat. The Zig test `deferred calls keep
+no per-call state once their notices go out` checks that 1,000 calls leave no
+retired Call, index entry or open Run and one span, and it checks late answers.
+Speed is unchanged: interleaved `BackendDeferredCall/history=0` p50 is
+29.0–29.4 µs on main and 29.3–29.7 µs here.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
