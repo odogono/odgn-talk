@@ -1,17 +1,7 @@
 name: Go Core
 
 on:
-  pull_request:
-    paths:
-      - 'impl/go/**'
-      - 'impl/testdata/**'
-      - 'tools/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/go.yml'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

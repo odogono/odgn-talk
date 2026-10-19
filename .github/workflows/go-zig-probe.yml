@@ -1,14 +1,7 @@
 name: Go Zig callback probe
 
 on:
-  pull_request:
-    paths:
-      - 'spikes/go-zig-binding/**'
-      - 'impl/go/**'
-      - 'impl/zig/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - '.github/workflows/go-zig-probe.yml'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

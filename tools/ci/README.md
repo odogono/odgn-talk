@@ -1,6 +1,7 @@
 # Woodpecker CI
 
-The initial Woodpecker workflows supplement GitHub Actions:
+Woodpecker runs pull-request checks. GitHub Actions runs the broader matrix on
+`main` or manually, without adding duplicate checks to PRs:
 
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
   tests, race tests and Corpus in Linux containers. After the shared workspace
@@ -22,8 +23,13 @@ The initial Woodpecker workflows supplement GitHub Actions:
 
 These workflows do not yet cover the complete Actions matrix, including fuzz
 campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
-and the broader Zig and platform matrix. Keep any additional Actions requirements until
-equivalent coverage is available.
+and the broader Zig and platform matrix. GitHub Actions keeps that coverage on
+`main` and through manual runs. Go/Zig timing measurements run only on demand.
+
+Use **Actions → workflow → Run workflow** to run a retained Actions workflow on
+a selected branch before merging when its additional coverage is needed. Release,
+deployment, issue-graph and nightly-fuzz triggers remain separate. The redundant
+Actions Conventions workflow is removed; Woodpecker supplies the required check.
 
 ## Selecting checks
 
@@ -214,7 +220,9 @@ present in the revision being built. For a PR opened before activation, trigger
 a new event or start a manual pipeline after the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
-reported the expected statuses. Existing Actions requirements remain separate.
+reported the expected statuses. Only `ci/woodpecker/pr/conventions` is currently
+required; the other Woodpecker checks remain optional. Actions workflows do not
+automatically run on PRs.
 
 ### Required Conventions check
 
@@ -242,5 +250,5 @@ posts OAuth commit statuses rather than GitHub Actions checks. Keep any other
 required checks and branch protection settings intact.
 
 PR branches must contain the Conventions workflow and adapter. Update existing
-branches from `main` before requiring the check for them. GitHub's Conventions
-workflow can continue reporting its result as an additional check.
+branches from `main` before requiring the check for them. Existing PR branches
+also need the updated Actions workflow files to stop the old PR-triggered jobs.
