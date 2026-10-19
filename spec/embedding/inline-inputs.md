@@ -34,6 +34,8 @@ while its worker stack remains active. A Host requests it in `hello.features` an
 checks the reply before using it. The WASI reactor implements these inline
 frames over stdin/stdout, each with a four-byte big-endian byte length and a JSON
 body. Its normal `talk_buffer`/`talk_send` request and reply remain unchanged.
+With [`chunked-wasi-v1`](chunked-wasi.md), a logical event or response may span
+several bounded chunks; observation and acknowledgement wait for its final chunk.
 No stdio exchange occurs without opt-in. A native Session may supply the same
 inline transport explicitly; the ordinary sidecar does not advertise it.
 

@@ -236,8 +236,13 @@ Linux amd64/arm64 and macOS arm64 and cross-builds each target without cgo.
 Full Corpus acceptance remains separate work. Group initialization currently
 omits `GroupOptions.Seed`, so a nondefault seed does not reproduce native Go's
 random sequence ([#1285](https://github.com/odogono/odgn-talk/issues/1285)).
-Inspecting the large persistent-state Corpus case also exceeds the transport's
-64 MiB frame limit ([#1286](https://github.com/odogono/odgn-talk/issues/1286)).
+Large inspection Trace records, replies and Save/Restore inputs use negotiated
+[`chunked-wasi-v1`](../../spec/embedding/chunked-wasi.md): each transfer is at
+most 64 MiB, and each logical message is at most 2 GiB minus one byte. Both
+endpoints still assemble complete messages, so memory use exceeds the chunk
+size. The selected acceptance gate includes the unchanged
+`limits/persistent-state-minimum` case through hidden Save/Restore replay
+([#1286](https://github.com/odogono/odgn-talk/issues/1286)).
 
 Store retains `machine.ErrorValue`, `machine.Size` and the `internal/value`
 Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module uses

@@ -113,7 +113,7 @@ type zigGroup struct {
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "function-metadata-v1", "core-message-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1", "queued-inputs-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "function-metadata-v1", "core-message-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1", "queued-inputs-v1", "chunked-wasi-v1"}
 
 // zigOptionalFeatures are used when the guest offers them: Object Collection
 // declarations need object-elements-v1 (#1143).
@@ -1124,6 +1124,9 @@ func (b *zigGroup) checkHello() error {
 				break
 			}
 		}
+	}
+	if err == nil {
+		err = b.reactor.EnableChunking()
 	}
 	return err
 }
