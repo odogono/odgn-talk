@@ -412,6 +412,39 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     },
   );
 
+  both('Host Command Result Targets survive restore rebinding', (core, nt) => {
+    const grant = core
+      .defineCapability('api', {
+        price: {
+          mode: 'immediate',
+          command: true,
+          cost: { fuel: 0 },
+          result: nt.shape.number,
+          do: () => nt.num(7),
+        },
+      })
+      .grant('all', undefined);
+    const group = core.newGroup({ name: 'original' });
+    group
+      .load({
+        name: 's',
+        grants: { api: grant },
+        source:
+          'script variable result\non go\n price into x\n wait 1 ms\n put [x, it] into result\nend go',
+      })
+      .deliver({ name: 'go' });
+    group.pump(0n);
+    const { group: copy } = core.restore(group.save(), {
+      name: 'copy',
+      libraries: [],
+      grants: () => grant,
+      resolve: () => undefined,
+      onMismatch: 'reject',
+    });
+    copy.pump(second);
+    return copy.inspect().scripts[0]!.vars.map(v => [v[0], v[1].toString()]);
+  });
+
   both('Inspect, counters, grants and Reload', (core, nt) => {
     const cap = core.clockCapability({ now: { fuel: 1 } });
     const g = core.newGroup({ name: 'g' });

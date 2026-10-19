@@ -1029,6 +1029,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
                 try o.byte(@backingInt(op.mode));
                 try o.int(op.required());
                 try o.int(op.args.len);
+                try o.flag(op.command);
             };
             try o.flag(sg.revoked);
             try o.flag(sg.disabled);
@@ -1187,7 +1188,7 @@ const SavedGrant = struct {
     disabled: bool,
 };
 
-const SavedOperation = struct { name: []const u8, mode: capabilities.Mode, required: usize, total: usize };
+const SavedOperation = struct { name: []const u8, mode: capabilities.Mode, required: usize, total: usize, command: bool };
 
 const Restoring = struct {
     i: In,
@@ -2003,7 +2004,7 @@ fn placeholder(g: *Group, saved: SavedGrant) !*capabilities.Grant {
             s.* = if (i < o.required) any else try capabilities.Shape.optional(a, any);
         }
         const result: ?*capabilities.Shape = if (o.mode == .fire_and_forget) null else try capabilities.Shape.kind(a, .any);
-        op.* = .{ .name = try a.dupe(u8, o.name), .args = args, .result = result, .mode = o.mode, .host = .{ .call = unbound } };
+        op.* = .{ .name = try a.dupe(u8, o.name), .args = args, .result = result, .mode = o.mode, .command = o.command, .host = .{ .call = unbound } };
     }
     const capability = try a.create(capabilities.Capability);
     capability.* = .{ .name = try a.dupe(u8, saved.capability), .operations = ops };
@@ -2079,7 +2080,7 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
             const json = try r.kept();
             const capability = try r.kept();
             const ops = try k.alloc(SavedOperation, try i.count());
-            for (ops) |*o| o.* = .{ .name = try r.kept(), .mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave, .required = try i.small(usize), .total = try i.small(usize) };
+            for (ops) |*o| o.* = .{ .name = try r.kept(), .mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave, .required = try i.small(usize), .total = try i.small(usize), .command = try i.flag() };
             break :blk .{ .name = name, .json = json, .capability = capability, .ops = ops, .revoked = try i.flag(), .disabled = try i.flag() };
         };
         const rebound: ?*capabilities.Grant = if (r.options.grants) |x| x.call(x.context, out.name, saved.name) else null;

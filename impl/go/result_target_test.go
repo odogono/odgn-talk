@@ -84,3 +84,45 @@ func TestRestoreRejectsInvalidJoinDestinationAssociation(t *testing.T) {
 		})
 	}
 }
+
+func TestHostCommandResultTargetRestore(t *testing.T) {
+	for _, target := range []bool{false, true} {
+		t.Run(map[bool]string{false: "it", true: "target"}[target], func(t *testing.T) {
+			core := New()
+			capability, err := core.DefineCapability("api", Operation{Name: "price", Mode: Immediate, Command: true, Result: NumberShape, Do: func(*Call, []Value) (Value, error) { return Int(7), nil }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			grant := capability.GrantAll(nil)
+			g := core.NewGroup(GroupOptions{})
+			call, answer, want := "price", "it", "7"
+			if target {
+				call, answer, want = "price into x", "[x, it]", "[7, 7]"
+			}
+			script, err := g.Load(LoadOptions{Name: "s", Source: "on go\n " + call + "\n wait 1 ms\n return " + answer + "\nend go", Grants: map[string]*Grant{"api": grant}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			script.Deliver(Message{Name: "go"})
+			joinPump(t, g, 0, PumpOptions{})
+			saved, err := g.Save()
+			if err != nil {
+				t.Fatal(err)
+			}
+			copy, _, err := core.Restore(saved, RestoreOptions{Grants: func(string, string) *Grant { return grant }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			report := joinPump(t, copy, 1, PumpOptions{})
+			var end *RunEnd
+			for _, item := range report.Reports {
+				if r, ok := item.(*RunEnd); ok {
+					end = r
+				}
+			}
+			if end == nil || end.Outcome != Completed || end.Result.String() != want {
+				t.Fatal(end)
+			}
+		})
+	}
+}
