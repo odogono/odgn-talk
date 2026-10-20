@@ -278,7 +278,8 @@ Group has a guest of its own. A new Group initially reserves only a handle.
 With `load-fields-v1`, its first Load sends raw UTF-8 source and the Group's
 name, Trace flag and seed in one binary frame; another first Group operation
 creates guest state with `new-group`. An unused Group needs no `drop-group`.
-Guests without the feature retain JSON Load. Each process
+Guests without the feature retain JSON Load. With `queue-fields-v1`, Deliver, Broadcast and
+Decide cross in binary frames too; guests without it receive JSON. Each process
 compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
 names a directory, where wazero keeps compiled code for later processes,
 keyed by its version and the artifact. `BenchmarkBackendColdStart` measures

@@ -471,6 +471,11 @@ source and optional `newGroup` fields, as the
 describes. JSON Load and `new-group` remain supported. Both paths use the
 same Load validation, worker exclusion and Trace; replies remain JSON.
 
+`queue-fields-v1`, negotiated with `request-pump-fields-v1`, enables binary
+`deliver`, `broadcast` and `decide` inputs with the binary admission reply, as
+the [binary-exchange contract](../../spec/embedding/request-pump-binary.md#queued-deliveries)
+describes. JSON queued inputs remain supported and admit through the same path.
+
 Message Layer frames have no JSON nesting-depth cap. Parsed Value Encodings,
 including Function captures, go directly to the Core's heap-stack Value builder
 without recursive JSON re-encoding. Replies use the iterative Value writer.
