@@ -120,7 +120,7 @@ the Script a **Grant** containing the Operations it may call.
 This complete `main.ts` looks up a customer's name through an app-owned service:
 
 ```ts
-import { defineCapability, ScriptError, shape, text } from '@northtalk/ts';
+import { defineCapability, ScriptError, shape, talk, text } from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
 type CustomerDirectory = {
@@ -165,18 +165,17 @@ const { group, drive } = newDrivenGroup({
 try {
   const script = group.load({
     name: 'welcome',
-    source: `on greet customerId
-  ask customers to lookup customerId and wait
-  return "Hello, " & it & "!"
-end greet`,
+    source: talk`
+      on greet customerId
+        ask customers to lookup customerId and wait
+        return "Hello, " & it & "!"
+      end greet
+    `,
     grants: { customers: customers.grant(['lookup'], directory) },
     limits: { fuelPerRun: 10_000, mailboxDepth: 32, maxWaitMs: 3000 },
   });
 
-  const answer = await script.request({
-    name: 'greet',
-    args: [text('c-1')],
-  }).result;
+  const answer = await script.call('greet', text('c-1'));
   console.log(answer.asText()); // Hello, Ada!
 } finally {
   await drive.close('Application shutdown');
@@ -228,12 +227,16 @@ For a game loop or deterministic test, create a Group with `newGroup` from
 `@northtalk/ts` and pump manually. Requests stay pending until your Host pumps:
 
 ```ts
-import { newGroup, num, parseInstant } from '@northtalk/ts';
+import { newGroup, num, parseInstant, talk } from '@northtalk/ts';
 
 const group = newGroup({ name: 'calculator' });
 const script = group.load({
   name: 'main',
-  source: 'on total a, b\n  return a + b\nend total',
+  source: talk`
+    on total a, b
+      return a + b
+    end total
+  `,
 });
 const reply = script.request({ name: 'total', args: [num(2), num(3)] });
 group.pump(parseInstant('2026-10-20T09:00:00Z'));
