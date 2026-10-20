@@ -16,7 +16,7 @@ import {
   text,
   type Value,
 } from '../src/index';
-import { num } from '../src/values';
+import { map, num } from '../src/values';
 
 const clock = parseInstant('2026-09-30T09:00:00Z');
 const later = (seconds: number) => clock + BigInt(seconds) * 1_000_000n;
@@ -240,6 +240,21 @@ describe('Deliveries and Pumps', () => {
     g.pump(clock);
     expect((await ok.result).toString()).toBe('"fine"');
     expect(bad.result).rejects.toBeInstanceOf(ScriptError);
+    await expect(bad.result).rejects.toMatchObject({
+      code: 'send failed',
+      reason: 'errored',
+    });
+  });
+
+  test('only a `send failed` ScriptError has a reason', () => {
+    expect(new ScriptError('timeout', 'late').reason).toBeUndefined();
+    expect(
+      new ScriptError(
+        'send failed',
+        'gone',
+        map([['reason', text('cancelled')]]),
+      ).reason,
+    ).toBe('cancelled');
   });
 
   test('an error map is written without the message a Core-raised one has', () => {

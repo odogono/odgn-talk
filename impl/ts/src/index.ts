@@ -5,6 +5,7 @@ export {
   ScriptError,
   type HostErrorCode,
   type LoadDiagnostic,
+  type SendFailedReason,
 } from './errors';
 export {
   defineObjectKind,

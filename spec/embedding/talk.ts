@@ -63,7 +63,20 @@ export declare class ScriptError extends Error {
   constructor(code: string, message: string, data?: Value);
   readonly code: string;
   readonly data: Value; // a map, or nothing
+  /** For `send failed`, its data's `reason`; otherwise undefined. */
+  readonly reason: SendFailedReason | undefined;
 }
+
+/** Why a `send failed` came with no answer (ADR 0033). */
+export type SendFailedReason =
+  | "errored"
+  | "limit fault"
+  | "cancelled"
+  | "unhandled"
+  | "dropped"
+  | "stopped"
+  | "function gone"
+  | "effect failed";
 
 /** Thrown by call.charge; let it propagate without doing the work. */
 export declare class LimitReached extends Error {}

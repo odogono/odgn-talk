@@ -302,7 +302,7 @@ request's result rejection:
 | Invalid source or unavailable Operation     | `LoadError`, with `diagnostics` containing code, unit, line and column      |
 | Full receiver mailbox                       | Synchronous `MailboxFull`; the app can apply backpressure                   |
 | Invalid Host input or reentrant worker call | `HostError`, with a stable `code`                                           |
-| Request that cannot complete successfully   | Rejected result with `ScriptError`, code `send failed` and reason in `data` |
+| Request that cannot complete successfully   | Rejected result with `ScriptError`, code `send failed` and a typed `reason` |
 
 A declared `ScriptError` thrown by an Operation is catchable inside the Script.
 For example, replace the greeting Handler with:
