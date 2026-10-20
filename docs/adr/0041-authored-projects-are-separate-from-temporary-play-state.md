@@ -7,4 +7,5 @@ The planned [browser creative tool](https://github.com/odogono/odgn-talk/issues/
 - Autosave and portable Project export preserve authored content and assets, independently of reader input, Script Variables and dynamically created or deleted Elements.
 - Navigating within one Play Session preserves Page visuals but stops outgoing Page/Element Scripts and owned audio; revisiting restarts those Scripts. Project Scripts continue and hold shared story state. Leaving Play discards both kinds of state.
 - A Project file is not a Script Snapshot. The Core's [same-Core save/restore feature](0008-same-core-save-restore.md) remains unchanged; this Host does not offer saved reader sessions in its first version.
+- Narrowed by ADR 0116: a Canvas Element's Drawing is kept on return to Edit and committed into the Project as one undoable edit. All other Play State is still discarded.
 - The product specification and delivery gate live in #154, blocked by [both-Core conformance](https://github.com/odogono/odgn-talk/issues/141). This decision records future Host policy, not implemented behavior or a change to the language Spec.

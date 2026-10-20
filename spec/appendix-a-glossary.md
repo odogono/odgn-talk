@@ -328,11 +328,19 @@ _Avoid_: sample, demo, template
 
 **Page**:
 A scrolling visual surface within a Project, containing freely positioned Elements and optionally its own Owning Script.
-_Avoid_: Card, screen, canvas (for the Page)
+_Avoid_: Card, screen, canvas (for the Page; a Canvas Element is an Element on it)
 
 **Element**:
-A visual item on a Page: rich text, an image, a button, a shape or a Group Element, optionally with its own Owning Script.
+A visual item on a Page: rich text, an image, a button, a shape, a canvas or a Group Element, optionally with its own Owning Script.
 _Avoid_: widget, component, control (for all Element kinds)
+
+**Canvas Element**:
+An Element whose contents are a Drawing made by Scripts or the Message Box.
+_Avoid_: canvas (for the Page), sketch
+
+**Drawing**:
+The commands a Canvas Element has accumulated since its last clear, whether drawn during Play or from the Message Box. It is kept with the Project.
+_Avoid_: picture, image, display list
 
 **Group Element**:
 A named composite Element whose members are Elements on the same Page, including other Group Elements. Its members retain their Page-wide names.
@@ -347,7 +355,7 @@ One interaction with a Project from its authored starting state until the reader
 _Avoid_: Run, Session Script, preview (for the session)
 
 **Play State**:
-The temporary state of a Play Session, including reader input, visual changes, created or deleted Elements and Script Variables.
+The temporary state of a Play Session, including reader input, visual changes, created or deleted Elements and Script Variables, excluding a Canvas Element's Drawing, which is kept on return to Edit.
 _Avoid_: Project, Script Snapshot, saved progress
 
 **Browse**:
