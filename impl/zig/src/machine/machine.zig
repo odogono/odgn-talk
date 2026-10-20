@@ -4750,6 +4750,16 @@ pub const Group = struct {
             g.write("abandon {s}\n", .{waited.id});
             return end;
         }
+        // So does a Join member's reissue (#1068).
+        if (with == .join_failed) {
+            const x = &run.join.?.members.items[with.join_failed];
+            if (x.with != null and x.with.? == .limited) {
+                x.with = null;
+                const end = g.limitFault(run, .fuel, unitName(run, frame), pc, ins);
+                g.write("abandon {s}\n", .{x.waited.id});
+                return end;
+            }
+        }
         const fuel = run.fuel;
         const alloc = run.alloc;
         const raised: ?*Value = g.resumeWith(run, frame, with, waited, pc, ins) catch |err| {
