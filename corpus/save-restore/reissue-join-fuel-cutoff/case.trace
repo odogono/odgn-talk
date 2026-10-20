@@ -1,0 +1,22 @@
+# Unblessed: Join member reissue that can't cover Charge (#1068); first blessing awaits human review.
+# A Run preempted in a Join body faults at its member's saved ask when the
+# reissue can't cover Charge, before the body goes on, and rolls n back.
+> load s identity=74595e5ab6870d75149d56e22a4b0e04ffbd55c2f9b6d8c75c47f059be25fe07
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z fuel-slice=25
+call s/r1.c1 op=api.hold args=[]
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=35 alloc=16
+pumped state=sliced fuel=35
+> save s1
+> restore from=s1 fingerprint=d521dafa632de1e2b9552d0d0b0642aad8d17a27bccad42e0cb2f0499b190593 mode=full pending=[s/r1.c1]
+> stub api.hold charge=1000
+> settle s/r1.c1 how=reissue
+> pump clock=2026-09-30T10:00:01Z
+call s/r1.c1 op=api.hold args=[]
+fault s/r1 limit=fuel at=s:11 pos=5:5 rollback=[n]
+abandon s/r1.c1
+seg s/r1 resume fuel=0 alloc=0 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=35 alloc=16
+pumped state=idle fuel=0
+> vars
+vars s n=0
