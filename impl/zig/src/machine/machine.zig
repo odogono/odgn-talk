@@ -3010,6 +3010,9 @@ pub const Group = struct {
                 };
                 for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
                     try g.cancel(x, r);
+                    // An unknown rollback stops the Group, the cancelled
+                    // Run with it.
+                    if (g.fatal) try g.stopForUncertainty();
                     return;
                 };
             },
@@ -3155,7 +3158,9 @@ pub const Group = struct {
     fn cancelDelivery(g: *Group, id: u64) !void {
         for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) {
             if (sealedDecision(r.delivery) and !r.verdict) return;
-            return g.cancel(x, r);
+            try g.cancel(x, r);
+            if (g.fatal) try g.stopForUncertainty();
+            return;
         };
         for (g.scripts.items) |x| for (x.work.items, 0..) |w, i| switch (w) {
             .message => |d| if (d.id == id and d.from == null and !sealedDecision(d)) {
@@ -4169,7 +4174,9 @@ pub const Group = struct {
                 const resuming_crossing = s.work.items.len > 0 and s.work.items[0] == .run and (s.work.items[0].run.crossed != null or s.work.items[0].run.ending != null);
                 if (g.rewound and !resuming_crossing) break :turns;
                 if (s.work.items.len == 0) continue;
-                if (g.fatal) break :turns;
+                // So does unknown effect state, once a Run paused at a
+                // crossing has ended its Stretch and stopped with the Group.
+                if (g.fatal and !resuming_crossing) break :turns;
                 if (g.cap > 0 and g.pump_fuel >= g.cap) {
                     g.sliced = true;
                     break :turns;
@@ -6030,7 +6037,7 @@ pub const Group = struct {
             if (run.landed) |l| if (l == .stop) {
                 defer g.gpa.free(l.stop);
                 run.landed = null;
-                return g.stopScript(s, l.stop, run, .{});
+                if (!g.fatal) return g.stopScript(s, l.stop, run, .{});
             };
             return g.stopGroup(run);
         }
@@ -6219,8 +6226,7 @@ pub const Group = struct {
         if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
             owned_running = null;
             if (running) |r| return g.stopGroup(r);
-            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
-            return;
+            return g.stopForUncertainty();
         }
         // Once rollback is complete, Stop owns all its Runs, including on
         // allocation refusal. End each once; the tail guard owns the rest.
@@ -6377,6 +6383,24 @@ pub const Group = struct {
 
     /// Stops the Group, for an effect whose state is unknown: every Script,
     /// with the running Run discarded in its own.
+    /// Stops every Script for unknown effect state, in load order, when no
+    /// Run is handed over. A Run whose Host crossing is landing this input
+    /// ends its Stretch instead: its Script, and every one loaded after it,
+    /// stop with it, so its rollback and stop keep their order.
+    fn stopForUncertainty(g: *Group) anyerror!void {
+        const holder = if (g.landing_run) |r| r.script else null;
+        for (g.scripts.items) |x| {
+            if (x == holder) break;
+            try g.stopScript(x, "effect state unknown", null, .{});
+        }
+        const r = g.landing_run orelse return;
+        if (r.landed) |l| switch (l) {
+            .stop => return,
+            else => {},
+        };
+        r.landed = .{ .stop = try g.gpa.dupe(u8, "effect state unknown") };
+    }
+
     fn stopGroup(g: *Group, running: *Run) anyerror!void {
         const owner = running.script;
         var owned_running: ?*Run = running;
