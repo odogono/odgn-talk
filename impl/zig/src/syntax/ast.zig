@@ -18,6 +18,15 @@ pub const Tree = struct {
     declarations: []const Declaration,
     /// Fenced literals' decoded pieces, by opening offset.
     shared: *const lexer.Shared,
+    /// The source's line index, when the caller already built one, so the
+    /// checker and lowering don't build it again.
+    lines: ?*const lexer.Lines = null,
+
+    /// The line index: the caller's, or one built in `a`.
+    pub fn lineIndex(self: *const Tree, a: std.mem.Allocator) std.mem.Allocator.Error!lexer.Lines {
+        if (self.lines) |l| return l.*;
+        return lexer.Lines.init(a, self.source);
+    }
 
     pub fn token(self: *const Tree, t: Tok) lexer.Token {
         return self.tokens[t];

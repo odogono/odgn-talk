@@ -231,8 +231,13 @@ pub const Lexer = struct {
         if (at >= self.limit) return tok(.eof, self.limit, 0, space);
         const c = s[at];
         switch (c) {
-            '\n' => return tok(.newline, at, 1, space),
-            '\r' => return tok(.newline, at, if (at + 1 < self.limit and s[at + 1] == '\n') 2 else 1, space),
+            // A run of line ends is one token, so blank lines cost nothing
+            // per line.
+            '\n', '\r' => {
+                var end = at + 1;
+                while (end < self.limit and (s[end] == '\n' or s[end] == '\r')) end += 1;
+                return tok(.newline, at, end - at, space);
+            },
             '`' => {
                 const f = try self.backtick(at);
                 return tok(if (f.holes.len == 0) .text else .template, at, f.end - at, space);

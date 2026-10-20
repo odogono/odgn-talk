@@ -333,7 +333,7 @@ pub const Result = struct {
 pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocator.Error!Result {
     var c: Checker = .{ .a = arena, .tree = tree, .context = context };
     try c.run();
-    var lines = try lexer.Lines.init(arena, tree.source);
+    var lines = try tree.lineIndex(arena);
     sorting.stable(Diagnostic, c.diagnostics.items, &lines, Diagnostic.lessThan);
     // One per construct: the same code at the same position once.
     var out: std.ArrayList(Diagnostic) = .empty;
@@ -381,8 +381,8 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
         while (lists.next()) |list| list.deinit(scratch);
         vetoes.deinit(scratch);
     }
-    var lines = try lexer.Lines.init(scratch, tree.source);
-    defer lines.deinit(scratch);
+    var lines = try tree.lineIndex(scratch);
+    defer if (tree.lines == null) lines.deinit(scratch);
     for (tree.declarations) |d| if (d.data == .handler) {
         const h = d.data.handler;
         const entry = try vetoes.getOrPut(scratch, tree.text(h.name));

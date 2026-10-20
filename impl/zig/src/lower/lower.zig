@@ -166,7 +166,7 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
         .tree = tree,
         .checked = checked,
         .options = options,
-        .lines = try .init(arena, tree.source),
+        .lines = try tree.lineIndex(arena),
         .declaration_bodies = try arena.alloc(?*const check.Body, tree.declarations.len),
     };
     @memset(l.declaration_bodies, null);
