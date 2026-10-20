@@ -1,4 +1,3 @@
-# Unblessed: Result Targets on failure and abandonment (#1350); first blessing awaits human review.
 > load s identity=1c65905ef940fe529d136a9b1c4013318297ab7d158dba187cefec5c9631307d
 > stub api.price error={code: "unavailable"}
 > deliver d1 to=s message=immediate

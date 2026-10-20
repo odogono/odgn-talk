@@ -1,4 +1,3 @@
-# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
 kind = "disassembly"
 [versions]
 language = "1.0-rc.3"
