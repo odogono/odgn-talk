@@ -172,6 +172,7 @@ disassembly/tell-block
 disassembly/timeout-block
 disassembly/whose
 errors/fail-error-map
+errors/full-mailbox-drop
 errors/handler-backstop
 errors/handler-delivery
 errors/items-delimiter

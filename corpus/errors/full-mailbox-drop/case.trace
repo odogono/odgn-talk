@@ -1,0 +1,18 @@
+# Unblessed: awaiting first review (#1428).
+# The queued next fills the one-message mailbox, so the error is dropped.
+
+> load s identity=07cb7e6d600408edf523df919020b78885d63be664bfd99d5a0d0a5f838e39cd
+> deliver d1 to=s message=fail
+> pump clock=2026-09-30T10:00:00Z
+send s/r1 to=s message=next
+raise s/r1 code="first" at=s:5 pos=3:3
+seg s/r1 start delivery=d1 handler=fail clause=1 fuel=41 alloc=80 state=32 end=error
+run s/r1 outcome=errored delivery=d1 handler=fail error={code: "first", at: {unit: "s", handler: "fail", line: 3, column: 3}} fuel=41 alloc=80
+note s/r1 kind=error-dropped
+seg s/r2 start from=s/r1 handler=next clause=1 fuel=7 alloc=0 state=0 end=return
+run s/r2 outcome=completed handler=next fuel=7 alloc=0
+pumped state=idle fuel=48
+> counters s
+counters s fuel=48 alloc=80 runs=2 faults=0 state=0 mailbox=0
+> vars
+vars s

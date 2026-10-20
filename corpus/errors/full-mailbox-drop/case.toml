@@ -1,0 +1,12 @@
+# A Run's uncaught error finds its Script's mailbox full: the `error` message
+# is dropped with an `error-dropped` note (spec chapter 6, "Nowhere to go").
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { mailboxDepth = 1 }

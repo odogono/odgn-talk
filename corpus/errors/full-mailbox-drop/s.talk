@@ -1,0 +1,11 @@
+on fail
+  send next to me
+  throw "first"
+end fail
+
+on next
+end next
+
+on error e
+  throw "second"
+end error
