@@ -127,6 +127,7 @@ func TestSegmentParticipantSurvivesPreemptionAndCommitsBeforeQueuedStop(t *testi
 }
 
 func TestEffectUncertaintyStopsEveryScriptAndCannotReload(t *testing.T) {
+	requireNativeCore(t)
 	for _, phase := range []string{"begin", "commit", "rollback", "reload", "stop"} {
 		statuses := []EffectStatus{EffectUnknown, "malformed", "panic"}
 		if phase == "rollback" || phase == "reload" || phase == "stop" {
