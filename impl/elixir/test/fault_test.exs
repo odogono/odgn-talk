@@ -166,7 +166,7 @@ defmodule NorthTalk.FaultTest do
              NorthTalk.start_link(transport: Faulty, hello: hello)
 
     assert detail =~ "zig/1"
-    assert Artifact.save_format() == "zig/16"
+    assert Artifact.save_format() == "zig/17"
   end
 
   test "the compiled module is cached once per digest, whatever its path" do

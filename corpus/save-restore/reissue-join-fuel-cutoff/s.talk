@@ -1,0 +1,8 @@
+script variable n = 0
+on go
+  add 1 to n
+  wait for all
+    ask api to hold and wait
+    add 2 to n
+  end wait
+end go

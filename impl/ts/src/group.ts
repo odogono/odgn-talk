@@ -1580,6 +1580,11 @@ export class Group {
     );
     this.writeRecords(pending.running, records);
     this.landUrgentInputs();
+    // A preempted Join body's fault is a Stretch resumed for it, as a
+    // suspended Run's is (#1413).
+    if (failure?.k === 'wake' && !pending.running.run.suspended) {
+      pending.running.resuming = true;
+    }
     if (failure) {
       this.settleReply(id, failure);
     }

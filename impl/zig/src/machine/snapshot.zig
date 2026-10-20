@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 16;
+pub const format_version: u32 = 17;
 
 pub const Error = error{
     InvalidSave,
@@ -1004,6 +1004,11 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.instant(c.now);
         try s.values(c.args);
         try o.int(c.charged);
+        // Its call site, where a refused reissue faults (#1068).
+        try o.str(c.at_unit);
+        try o.int(c.at_pc);
+        try o.int(c.at_line);
+        try o.int(c.at_column);
     }
     // Each Script, in load order.
     try o.int(g.scripts.items.len);
@@ -2368,6 +2373,10 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         if (machine.micros(x.now) > machine.micros(g.clock)) return error.InvalidSave;
         x.args = try r.values();
         x.charged = try i.int();
+        x.at_unit = try r.kept();
+        x.at_pc = try i.small(u32);
+        x.at_line = try i.small(u32);
+        x.at_column = try i.small(u32);
         c.* = x;
     }
     r.calls = calls;

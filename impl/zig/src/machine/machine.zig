@@ -4436,10 +4436,24 @@ pub const Group = struct {
                 var ins: lower.Instruction = undefined;
                 ins.position = .{ .line = c.at_line, .column = c.at_column };
                 if (!run.continuing) g.dropBase(run);
-                _ = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
-                try g.cleanupLifecycle(run, .charge_refused);
-                if (g.fatal) return g.stopGroup(run);
-                try g.endRun(run, .{ .finished = .{ .outcome = .{ .faulted = .fuel }, .segment = g.segmentId(run) } });
+                // The fault is a Stretch of its own, as a resume is, with
+                // nothing charged in it.
+                run.continuing = false;
+                run.segment_fuel = run.fuel;
+                run.segment_alloc = run.alloc;
+                const s = run.script;
+                for (s.live.items, 0..) |r, i| if (r == run) {
+                    _ = s.live.orderedRemove(i);
+                    break;
+                };
+                var i: usize = 0;
+                while (i < s.work.items.len) {
+                    if (s.work.items[i] == .run and s.work.items[i].run == run) {
+                        _ = s.work.orderedRemove(i);
+                    } else i += 1;
+                }
+                const end = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
+                try g.endSegment(s, run, end);
             } else try g.ready(p, .limited),
             else => try g.ready(p, .broken),
         }
