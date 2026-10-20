@@ -682,3 +682,22 @@ test "settled suspending calls leave the live list and keep only their id (#1101
     try g.pump(.{ .seconds = 200, .micros = 0 });
     try t.expect(g.waits.calls.items.len <= 2);
 }
+
+test "Limit Fault location names the function the code is in (#1400)" {
+    for ([_]struct { on: []const u8, line: u32, handler: []const u8 }{
+        .{ .on = "allocate", .line = 2, .handler = "makeList" },
+        .{ .on = "direct", .line = 8, .handler = "direct" },
+    }) |case| {
+        var g: machine.Group = .init(t.allocator, null);
+        defer g.deinit();
+        const s = try g.load("s", "function makeList\n return [1,2,3]\nend makeList\non allocate\n return makeList()\nend allocate\non direct\n return [1,2,3]\nend direct", .{ .limits = .{ .alloc_per_run = 1 } });
+        try t.expect(s == .loaded);
+        _ = try g.deliver("s", case.on, &.{}, false);
+        try g.pump(clock);
+        const end = try endReport(&g);
+        try t.expectEqual(.limit_fault, end.outcome);
+        try t.expectEqualStrings("alloc", end.limit);
+        try t.expectEqual(case.line, end.at.line);
+        try t.expectEqualStrings(case.handler, end.at.handler);
+    }
+}
