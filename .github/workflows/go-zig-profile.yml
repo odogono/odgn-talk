@@ -1,0 +1,70 @@
+name: Go Zig guest profile
+
+# Samples the Zig guest under wazero with perf (#1377). It runs on pushes
+# to profile/** branches only; read the symbol tables, not the timings.
+on:
+  push:
+    branches: ['profile/**']
+
+jobs:
+  profile:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: Install perf
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq linux-tools-common "linux-tools-$(uname -r)" || sudo apt-get install -yq linux-tools-generic linux-tools-azure
+          sudo sysctl -w kernel.perf_event_paranoid=-1 kernel.kptr_restrict=0
+          perf --version
+      # The embedded guest with its name section, so wazero's perf map
+      # names guest functions. Codegen is unchanged.
+      - name: Swap in an unstripped guest
+        run: |
+          (cd impl/zig && zig build -Dtarget=wasm32-wasi -Doptimize=safe -Dstrip=false)
+          cp impl/zig/zig-out/bin/talk.wasm impl/go/internal/zigwasm/talk.wasm
+          sum=$(sha256sum impl/go/internal/zigwasm/talk.wasm | cut -d' ' -f1)
+          python3 - "$sum" <<'PY'
+          import json, sys
+          p = 'impl/go/internal/zigwasm/artifact.json'
+          d = json.load(open(p)); d['sha256'] = sys.argv[1]
+          json.dump(d, open(p, 'w'))
+          PY
+      - name: Build benchmark binaries
+        run: |
+          go -C bench/go test -c -o "$RUNNER_TEMP/native.test" .
+          go -C bench/go test -c -tags 'talk_zig_experimental perfmap' -o "$RUNNER_TEMP/zig.test" .
+      - name: Profile Run/host/pump
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir -p results
+          bench='-test.run=^$ -test.bench=^BenchmarkRun$/host/pump$ -test.benchmem -test.count=5'
+          ./native.test $bench | tee results/native.txt
+          ./zig.test $bench | tee results/zig.txt
+          perf record -F 4999 -g -o results/zig.perf.data -- ./zig.test -test.run='^$' -test.bench='^BenchmarkRun$/host/pump$' -test.benchtime=20s > /dev/null
+          cp /tmp/perf-*.map results/ || true
+          perf report -i results/zig.perf.data --no-children --sort symbol --stdio --percent-limit 0.3 -g none > results/self.txt
+          perf report -i results/zig.perf.data --no-children --sort dso --stdio > results/dso.txt
+          perf report -i results/zig.perf.data --children --sort symbol --stdio --percent-limit 2 -g caller,0.5,callee --max-stack 12 > results/callers.txt
+          { uname -a; lscpu | head -20; perf --version; git -C "$GITHUB_WORKSPACE" rev-parse HEAD; } > results/env.txt
+      - run: head -120 "$RUNNER_TEMP/results/self.txt"; cat "$RUNNER_TEMP/results/dso.txt" | head -30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-zig-profile-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/results/*.txt
+            ${{ runner.temp }}/results/*.map
