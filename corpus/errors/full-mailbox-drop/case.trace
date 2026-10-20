@@ -1,4 +1,4 @@
-# Unblessed: awaiting first review (#1428).
+# First blessing approved by the maintainer on 2026-10-20 for #1428.
 # The queued next fills the one-message mailbox, so the error is dropped.
 
 > load s identity=07cb7e6d600408edf523df919020b78885d63be664bfd99d5a0d0a5f838e39cd

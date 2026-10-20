@@ -1,4 +1,4 @@
-# Unblessed: Join member reissue that can't cover Charge (#1068); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-20 for #1068: a Join member reissue that can't cover its Charge.
 # A Run preempted in a Join body faults at its member's saved ask when the
 # reissue can't cover Charge, before the body goes on, and rolls n back.
 > load s identity=74595e5ab6870d75149d56e22a4b0e04ffbd55c2f9b6d8c75c47f059be25fe07
