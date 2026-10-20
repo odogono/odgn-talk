@@ -156,6 +156,7 @@ func TestErrorMessagesDoNotChainOrReportInternalUnhandled(t *testing.T) {
 }
 
 func TestFullMailboxDropsErrorWithoutReservingCapacity(t *testing.T) {
+	requireSynchronousTrace(t)
 	var trace lines
 	var record func(string)
 	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {

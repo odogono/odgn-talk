@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -296,7 +297,13 @@ end newer
 func TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent(t *testing.T) {
 	for _, matched := range []bool{false, true} {
 		t.Run(map[bool]string{false: "pending", true: "ready"}[matched], func(t *testing.T) {
-			g := New().NewGroup(GroupOptions{})
+			ready := make(chan struct{}, 1)
+			g := New().NewGroup(GroupOptions{OnReady: func() {
+				select {
+				case ready <- struct{}{}:
+				default:
+				}
+			}})
 			s, err := g.Load(LoadOptions{Name: "s", Source: `script variable seen = []
 on watch
  try
@@ -312,7 +319,8 @@ end go
 			if err != nil {
 				t.Fatal(err)
 			}
-			id, p, err := s.Request(nil, Message{Name: "watch"})
+			ctx, cancel := context.WithCancel(context.Background())
+			_, _, err = s.Request(ctx, Message{Name: "watch"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -322,7 +330,18 @@ end go
 				s.Deliver(Message{Name: "go", Args: []Value{Int(1)}})
 				g.Pump(now, PumpOptions{FuelCap: 1})
 			}
-			g.cancelDelivery(delivery{id: id, script: s, pending: p})
+			// Cancel through the public context, waiting for its admission
+			// through OnReady, so either Core sees it.
+			select {
+			case <-ready:
+			default:
+			}
+			cancel()
+			select {
+			case <-ready:
+			case <-time.After(5 * time.Second):
+				t.Fatal("cancellation did not notify OnReady")
+			}
 			r, err := g.Pump(now.Add(time.Second), PumpOptions{})
 			if err != nil || !r.NextDeadline.IsZero() || g.Inspect().Scripts[0].Vars[0].Val.String() != `["cleanup"]` || len(g.Inspect().Scripts[0].Runs) != 0 {
 				t.Fatal(r, err)

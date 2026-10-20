@@ -280,6 +280,7 @@ func TestMalformedRecoverySnapshot(t *testing.T) {
 }
 
 func TestCancelledRecoverySnapshotEveryCleanupBoundary(t *testing.T) {
+	requireNativeCore(t)
 	for _, phase := range []string{"selection", "offer", "catch", "nested"} {
 		t.Run(phase, func(t *testing.T) {
 			saved := recoverySnapshotIn(t, phase)
