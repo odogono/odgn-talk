@@ -140,6 +140,8 @@ export declare function dec(s: string): Value;     // the `as number` grammar
 export declare function quantity(n: Decimal, unit: string): Value;
 export declare function civilDate(f: DateFields | string): Value; // fields, or the `as civil date` grammar
 export declare function instant(epochMicros: bigint): Value;       // JS Date is never accepted
+/** Date.now() as epoch microseconds, for a manual Pump. It does not clamp. */
+export declare function nowMicros(): bigint;
 export declare function bytes(b: Uint8Array): Value;              // copied in
 export declare function list(...vs: Value[]): Value;
 /** Two numbers, or two Quantities of one dimension, kept as given (ADR 0034). */
@@ -634,6 +636,13 @@ export interface Core {
   restore(save: Uint8Array, o: RestoreOptions): { group: Group; result: RestoreResult };
 }
 export declare function createCore(): Core;
+/**
+ * Dedents NorthTalk source written as a template literal. Reads the raw
+ * template: only \` and \$ lose their backslash. Strips the longest exactly
+ * matching whitespace prefix of the non-blank lines, after dropping a blank
+ * first and last line; tabs are never expanded. Any JS interpolation throws.
+ */
+export declare function talk(strings: TemplateStringsArray, ...values: never[]): string;
 
 // ---------------------------------------------------------------------------
 // Group
@@ -796,6 +805,8 @@ export interface Script {
   revoke(grantName: string): void;
   deliver(m: Message): string;
   request(m: Message, o?: { signal?: AbortSignal }): Requested;
+  /** Queued. request({ name, args }).result: the answer only, with no id or signal. */
+  invoke(name: string, ...args: Value[]): Promise<Value>;
   /** Worker. Request this Script and perform exactly one Pump. */
   requestPump(m: Message, now: bigint, o?: PumpOptions & { signal?: AbortSignal }): PumpedRequest;
   decide(m: Message, o?: { signal?: AbortSignal }): Deciding;

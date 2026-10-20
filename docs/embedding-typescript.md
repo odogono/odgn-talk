@@ -63,7 +63,7 @@ const script = group.load({
   `,
 });
 
-const answer = await script.call('total', num(2), num(3));
+const answer = await script.invoke('total', num(2), num(3));
 console.log(answer.asDecimal()!.toString()); // 5
 await drive.close();
 ```
@@ -75,7 +75,7 @@ The `talk` tag strips the common indentation so inline source can follow the
 surrounding code. It rejects JS `${…}` values: write NorthTalk interpolation as
 `\${…}` and its backticks as `` \` ``, and pass values as Request arguments.
 
-`call` queues a Request and resolves with its answer. `request` does the same
+`invoke` queues a Request and resolves with its answer. `request` does the same
 but returns `{ id, result }`, and takes a cancellation signal. `newDrivenGroup` wires
 the Group to an event-loop driver before returning, so you can await Requests
 immediately. This Handler finishes in one Pump. The driver also schedules later
@@ -175,7 +175,7 @@ try {
     limits: { fuelPerRun: 10_000, mailboxDepth: 32, maxWaitMs: 3000 },
   });
 
-  const answer = await script.call('greet', text('c-1'));
+  const answer = await script.invoke('greet', text('c-1'));
   console.log(answer.asText()); // Hello, Ada!
 } finally {
   await drive.close('Application shutdown');

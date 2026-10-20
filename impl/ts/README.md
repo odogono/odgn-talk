@@ -627,7 +627,7 @@ const script = group.load({
   name: 'main',
   source: 'on go\n  return 7\nend go',
 });
-console.log((await script.call('go')).toString()); // 7
+console.log((await script.invoke('go')).toString()); // 7
 await drive.close();
 ```
 
