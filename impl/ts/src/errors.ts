@@ -55,11 +55,24 @@ export class MailboxFull extends Error {
   override name = 'MailboxFull';
 }
 
+/** Why a `send failed` came with no answer (ADR 0033, chapter 9). */
+export type SendFailedReason =
+  | 'errored'
+  | 'limit fault'
+  | 'cancelled'
+  | 'unhandled'
+  | 'dropped'
+  | 'stopped'
+  | 'function gone'
+  | 'effect failed';
+
 /**
  * A Script-level error as the Host sees it, such as a Request's `send failed`
- * or a `run end`'s error. Its `data` is a map, or Nothing.
+ * or a `run end`'s error. Its `data` is a map, or Nothing. A `send failed`
+ * also carries its `reason` from `data`.
  */
 export class ScriptError extends Error {
+  readonly reason: SendFailedReason | undefined;
   constructor(
     readonly code: string,
     message: string,
@@ -67,5 +80,9 @@ export class ScriptError extends Error {
   ) {
     super(message);
     this.name = 'ScriptError';
+    this.reason =
+      code === 'send failed'
+        ? (data.get('reason').asText() as SendFailedReason | undefined)
+        : undefined;
   }
 }
