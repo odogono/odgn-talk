@@ -22,10 +22,10 @@ const script = group.load({
 });
 const reply = script.request({ name: 'total', args: [num(2), num(3)] });
 console.log((await reply.result).toString()); // 5
-drive.stop();
+await drive.close();
 ```
 
-A Host can create a Group ready to pump from the event loop with `newDrivenGroup`, or use `newGroup` and drive it with its own `pump` loop.
+A Host can create a Group ready to pump from the event loop with `newDrivenGroup`, or use `newGroup` and drive it with its own `pump` loop. Before releasing application resources, `await drive.close()` stops Scripts and awaits Promise-backed Operation cleanup. The driver also supports async disposal with `await using`.
 
 ## Subpaths
 

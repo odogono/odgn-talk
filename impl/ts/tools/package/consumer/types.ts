@@ -63,4 +63,9 @@ const drivenOptions: DrivenGroupOptions = {
 const driven = newDrivenGroup(drivenOptions);
 export const drivenGroup: Group = driven.group;
 export const drivenIdle: Promise<void> = driven.drive.idle();
-driven.drive.stop();
+export const drivenClosed: Promise<void> = driven.drive.close();
+
+export const disposeDrivenGroup = async () => {
+  await using drive = newDrivenGroup({ name: 'dispose-types' }).drive;
+  await drive.idle();
+};

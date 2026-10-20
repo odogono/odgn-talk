@@ -94,7 +94,7 @@ export const startServer = (o: { database?: string; port?: number } = {}) => {
     host,
     stop: async () => {
       await server.stop(true);
-      host.close();
+      await host.close();
     },
   };
 };

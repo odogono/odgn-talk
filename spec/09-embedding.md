@@ -41,6 +41,12 @@ The driver schedules one Pump on a later macrotask when input arrives, continues
 
 `autoDrive(group, options)` remains available for a Group whose `onReady` calls `drive.ready()`. Hosts that use `newGroup` directly must supply a Pump loop for queued work to finish. Both drivers are helpers [outside parity](#outside-parity); they change no Core scheduling rules.
 
+`await drive.close(reason)` stops every Script loaded when closing begins, drains their Stop inputs, waits for the Group's outstanding Promise-returning `run` Operations to settle, drains their late answers or failures, then cancels scheduling. The default reason is `Host shutdown`. Stop aborts pending Operations, releases Grants and settles Requests as `send failed`, reason `stopped`; it does not run Script `finally` blocks. An Operation's rejection during shutdown is an ordinary late failure, not a failure of `close`. Promise work already abandoned by a timeout, cancellation or Reload is also awaited. Callback-style `start` Operations receive the aborted signal but have no completion Promise for the driver to await; the Host owns any further cleanup.
+
+Before closing, the Host stops admitting work, including new Scripts and Reloads. Closing is idempotent: repeated calls share one Promise and the first reason. It works after `drive.stop()` too, restarting scheduling only to finish shutdown. Calling `stop()` during a close does not interrupt it. A Clock, Pump or driver callback failure rejects `close` and cancels scheduling; shutdown may be incomplete. A Host `run` Promise that ignores cancellation and never settles keeps `close` pending; the driver imposes no timeout and cannot force Host I/O to finish. `drive.idle()` retains its narrower scheduling-only meaning.
+
+The driver implements `[Symbol.asyncDispose]()` as `close()`, so a Host can use `await using drive = newDrivenGroup(options).drive` to close at scope exit. This syntax requires runtime support for `Symbol.asyncDispose`; the driver declarations reference TypeScript's `ESNext.Disposable` library. Both explicit close and disposal finish before the Host releases resources the Operations use.
+
 ## Time and reports
 
 - **The Clock is an argument:** `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it. A reading earlier than the last Pump's is `clock backwards`. A game pauses by not pumping, and freezes time by passing the same `now`.

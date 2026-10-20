@@ -1,4 +1,5 @@
 import { deferFault, machineDebug } from './debug';
+import { trackOperation } from './operation-promises';
 /* eslint require-yield: "off" */
 // Chapter 8's Abstract Machine over the code units the lowering produces. A
 // Run's frames, slots and operand stacks follow chapter 8's state; each
@@ -4407,7 +4408,7 @@ export class Run {
   // Promise-returning Operations automatically forward their result. A refused
   // answer or failure must settle the wait, rather than reject an unobserved Promise.
   private forwardResult(result: Promise<Value>, call: Call<unknown>) {
-    result
+    const forwarded = result
       .then(
         value => call.answer(value),
         (error: unknown) =>
@@ -4418,6 +4419,7 @@ export class Run {
       .catch((error: unknown) =>
         this.host!.fail(call.id, null, hostDetail(error)),
       );
+    trackOperation(call.group, forwarded);
   }
 
   // A Host Crossing records the call/property and acknowledgement before

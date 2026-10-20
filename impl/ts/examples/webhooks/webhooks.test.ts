@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { hostManifest } from './host';
+import { readDisplay } from '../../src/index';
+import { createWebhookHost, hostManifest } from './host';
 import { startServer } from './main';
 import { caseFiles, runScenario } from './scenario';
 
@@ -12,6 +13,54 @@ test('the committed Host Manifest matches the Host', () => {
     'utf8',
   );
   expect(committed).toBe(hostManifest());
+});
+
+test('closing the Host awaits aborted I/O before closing its database', async () => {
+  let finish!: () => void;
+  const cleanup = new Promise<void>(resolve => {
+    finish = resolve;
+  });
+  let aborted = false;
+  let cleaned = false;
+  const host = createWebhookHost({
+    rules: [{ type: 'test', target: 'example', retries: 0 }],
+    targets: { example: 'http://example.test/hooks' },
+    fetch: async (_url, init) => {
+      await new Promise<void>(resolve =>
+        init.signal?.addEventListener(
+          'abort',
+          () => {
+            aborted = true;
+            resolve();
+          },
+          { once: true },
+        ),
+      );
+      await cleanup;
+      host.db.prepare('SELECT count(*) FROM events').get();
+      cleaned = true;
+      throw new Error('Aborted');
+    },
+  });
+  try {
+    const reply = host.handle(readDisplay('{type: "test", data: {}}'));
+    // The client may leave a failed Request unread.
+    void reply.catch(() => {});
+    await host.drive.idle();
+    const closing = host.close();
+    expect(host.close()).toBe(closing);
+    await host.drive.idle();
+    expect(aborted).toBe(true);
+    expect(cleaned).toBe(false);
+    finish();
+    await closing;
+    expect(cleaned).toBe(true);
+    await expect(reply).rejects.toThrow();
+    expect(() => host.db.prepare('SELECT 1')).toThrow();
+  } finally {
+    finish();
+    await host.close();
+  }
 });
 
 describe('the recorded scenario', () => {

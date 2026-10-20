@@ -64,7 +64,7 @@ end total`,
 const reply = script.request({ name: 'total', args: [num(2), num(3)] });
 const answer = await reply.result;
 console.log(answer.asDecimal()!.toString()); // 5
-drive.stop();
+await drive.close();
 ```
 
 A **Group** owns Script state and schedules its messages. `load` checks and
@@ -173,10 +173,7 @@ end greet`,
   }).result;
   console.log(answer.asText()); // Hello, Ada!
 } finally {
-  // Stop is queued: let the driver apply it before stopping the driver.
-  group.script('welcome')?.stop('Application shutdown');
-  await drive.idle();
-  drive.stop();
+  await drive.close('Application shutdown');
 }
 ```
 
@@ -252,11 +249,39 @@ controller.abort(); // Queues cancellation; the driver applies it.
 await reply.result; // Rejects if cancellation wins the race.
 ```
 
-On shutdown, stop accepting new app requests, queue `script.stop(reason)` for
-each loaded Script, let the driver drain with `await drive.idle()`, then call
-`drive.stop()` and release app-owned resources. `drive.stop()` cancels the
-driver's scheduling; stopping Scripts is a separate step. `drive.idle()` alone
-means no Pump is scheduled or running, and can resolve while I/O is pending.
+On shutdown, stop accepting app work, including new Scripts and Reloads, then
+call `await drive.close('Application shutdown')` before releasing app-owned
+resources. It stops every loaded Script, aborts pending Operations, settles their
+Requests, waits for Promise-backed `run` callbacks to finish, drains late answers
+and failures, and cancels scheduling. Stop releases Grants but does not run
+Script `finally` blocks. Repeated closes share one Promise and the first reason;
+the default reason is `Host shutdown`.
+
+`close()` also waits for `run` Promises already abandoned by cancellation or a
+timeout. Your I/O clients must honor `call.signal`: a Promise that never settles
+keeps close pending, with no automatic timeout. Callback-style `start` Operations
+receive the abort signal, but have no completion Promise to await; the Host must
+finish any further cleanup itself. A Clock, Pump or driver callback failure
+rejects close and stops scheduling; cleanup may be incomplete.
+
+For scope-based lifetime management, the driver also supports async disposal:
+
+```ts
+import { newDrivenGroup } from '@northtalk/ts/driver';
+
+const driven = newDrivenGroup({ name: 'app' });
+await using drive = driven.drive;
+// Load Scripts through driven.group and send requests here.
+// Scope exit awaits drive.close(), even if the scope throws.
+```
+
+The driver declarations reference TypeScript's `ESNext.Disposable` library.
+`await using` also needs runtime support for `Symbol.asyncDispose`; explicit
+`close()` works on older browser runtimes.
+
+`drive.idle()` only means no Pump is scheduled or running; it can resolve while
+I/O is pending. `drive.stop()` only cancels scheduling. Closing works after a
+previous stop, and calling stop during a close does not interrupt shutdown.
 
 Operation and property callbacks run during a Pump. They may enqueue messages,
 but must not call worker methods such as `pump`, `load`, `save` or `inspect` on

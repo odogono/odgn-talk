@@ -51,6 +51,21 @@ export const smoke = async () => {
     'Combined result',
   );
   const driven = driver.newDrivenGroup({ name: 'driven', clock: () => clock });
+  let cleaned = false;
+  const cleanup = talk.defineCapability('cleanup', {
+    fetch: {
+      mode: 'suspending',
+      cost: { fuel: 0 },
+      run: async call => {
+        await new Promise(resolve =>
+          call.signal.addEventListener('abort', resolve, { once: true }),
+        );
+        await new Promise(resolve => setTimeout(resolve, 0));
+        cleaned = true;
+        return talk.nothing;
+      },
+    },
+  });
   try {
     const drivenScript = driven.group.load({
       name: 'main',
@@ -63,8 +78,27 @@ export const smoke = async () => {
       'Driven Group request',
     );
     await driven.drive.idle();
+    const waiting = driven.group
+      .load({
+        name: 'waiting',
+        source: 'on go\n  ask cleanup to fetch and wait\nend go',
+        grants: { cleanup: cleanup.grant('all', undefined) },
+      })
+      .request({ name: 'go', args: [] });
+    await driven.drive.idle();
+    await driven.drive.close();
+    expect(
+      cleaned,
+      'Close awaits Host Promise cleanup across package subpaths',
+    );
+    await waiting.result.then(
+      () => {
+        throw new Error('Close did not stop the Request');
+      },
+      error => expect(error.code === 'send failed', 'Close settles Requests'),
+    );
   } finally {
-    driven.drive.stop();
+    await driven.drive.close();
   }
   const buffer = messageLayer.encodeBinaryValue(talk.dec('0.00'));
   expect(

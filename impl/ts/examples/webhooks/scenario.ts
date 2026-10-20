@@ -173,11 +173,13 @@ export const runScenario = async () => {
   const events = host.db
     .prepare('SELECT type, outcome FROM events ORDER BY id')
     .all() as { outcome: string; type: string }[];
-  host.close();
+  // The Trace Case ends at inspection; Host shutdown is outside the scenario.
+  const lines = [...recorder.lines];
+  await host.close();
   return {
     aborted: upstream.aborted,
     events,
-    lines: recorder.lines,
+    lines,
     results,
     vars,
   };
