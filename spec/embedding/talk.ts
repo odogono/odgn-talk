@@ -136,6 +136,28 @@ export declare function map(m: Map<string, Value> | Iterable<[string, Value]>): 
 /** Literal records in Host code. Throws on integer-like keys, which JS reorders. */
 export declare function record(o: Record<string, Value>): Value;
 
+/**
+ * Plain JS data to a Value by the named constructors (ADR 0119). A Value
+ * passes through; null and undefined are nothing; arrays are lists, holes
+ * nothing; plain objects follow record(); a Map follows map(). A JS number
+ * throws unless numbers is "decimal", which applies num(). Anything else,
+ * including Date, class instances and cyclic data, throws invalid value.
+ */
+export declare function toValue(plain: unknown, options?: { numbers?: "refuse" | "decimal" }): Value;
+export type PlainValue =
+  | null | boolean | string | Decimal | Uint8Array | Value
+  | PlainValue[] | { [key: string]: PlainValue } | Map<string, PlainValue>;
+/**
+ * A Value as plain JS data (ADR 0119): nothing is null; numbers are a Decimal,
+ * or canonical text with numbers "string"; lists are arrays; maps are plain
+ * objects, or a Map in insertion order with maps "map". Every other kind
+ * comes back as the Value itself.
+ */
+export declare function fromValue(
+  v: Value,
+  options?: { numbers?: "decimal" | "string"; maps?: "object" | "map" },
+): PlainValue;
+
 // ---------------------------------------------------------------------------
 // JSON and the Value Encoding (ADRs 0021, 0030)
 // ---------------------------------------------------------------------------

@@ -96,6 +96,13 @@ export {
   range,
   record,
 } from './values';
+export {
+  fromValue,
+  toValue,
+  type FromValueOptions,
+  type PlainValue,
+  type ToValueOptions,
+} from './plain';
 export { encodeValue } from './encoding';
 export { decodeJson, encodeJson } from './json';
 export { coreVersions, type Versions } from './versions';

@@ -94,7 +94,7 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
 - **Text:** text that isn't valid UTF-8 (Go), or a lone surrogate (TS), is refused. Text is normalised to NFC when the `Value` is built, uncharged, and text going out is always NFC.
 - **Maps:** keys are text. Order is the order the Host gives, and `Entries()` returns insertion order. A duplicate key, compared after NFC, is refused. TS's `record(obj)` refuses integer-like keys, since JS reorders them.
 - **The other kinds:**
-  - **Nothing** is `northtalk.Nothing` in Go and the `nothing` constant in TS. `null` and `undefined` are never accepted for it.
+  - **Nothing** is `northtalk.Nothing` in Go and the `nothing` constant in TS. The named constructors never accept `null` or `undefined` for it.
   - **A Quantity** is built from a `Decimal` and a Unit spelled as a Script spells it (`"kg"`), and reads back as its number and its canonical Unit. An unknown Unit is refused.
   - **A Civil Date** is built from fields, or from text in the `as civil date` syntax, and an invalid date is refused. **An Instant** is built from seconds since the Unix epoch and microseconds from 0 to 999999, and anything outside that range is refused. In Go it can also be built from a `time.Time`, dropping its monotonic reading and zone, and truncating toward the past to the microsecond ([ADR 0091](../docs/adr/0091-time-has-microsecond-resolution.md)). No native type is ever read as a Civil Date.
   - **Bytes** are copied in both directions.
@@ -104,6 +104,7 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
   - **A Host Object** is its own handle type, with the Host's id.
 - **The display form:** `String()` and `toString()` give the display form ([chapter 11](11-the-trace-and-conformance.md)).
 - **Adding:** `Add(a, b)` in Go and `add(a, b)` in TS apply the `+` rules of [chapter 3](03-values.md#arithmetic) outside any Run, uncharged. Where `+` would raise, they fail with that error as a `ScriptError`, with its code and fields. A `store` Host applies `increment` deltas with them, so every Store adds as Scripts do ([chapter 7](07-libraries-and-the-standard-library.md#store)).
+- **Plain JS data:** TS also has `toValue` and `fromValue`, which convert between Values and plain JS data by the named constructors and accessors ([ADR 0119](../docs/adr/0119-ts-hosts-may-convert-plain-js-values-by-one-stated-rule.md)). `toValue` reads `null` and `undefined` as Nothing, arrays as lists, plain objects as `record` does, and a `Map` as `map` does. It refuses a JS `number` unless the Host passes `{ numbers: 'decimal' }`. `fromValue` writes Nothing as `null`, a number as a `Decimal`, a list as an array and a map as a plain object, or as a `Map` when asked. Every other kind comes back as the `Value`.
 
 ### JSON and the Value Encoding
 
