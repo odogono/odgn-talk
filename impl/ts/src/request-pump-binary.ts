@@ -16,6 +16,14 @@ import {
 } from './binary-value';
 import { formatInstant, parseInstant } from './dates';
 import {
+  envelopeFeatures,
+  envelopeMessages,
+  envelopeReports,
+  envelopeSettlement,
+  type EnvelopeEntry,
+  type EnvelopeKind,
+} from './generated/envelope';
+import {
   JsonNumber,
   JsonObject,
   fromJson,
@@ -31,80 +39,9 @@ import {
   Value,
 } from './values';
 
-export const requestPumpFeature = 'request-pump-fields-v1';
-export const callbacksFeature = 'callbacks-fields-v1';
+export const requestPumpFeature = envelopeFeatures[0];
+export const callbacksFeature = envelopeFeatures[1];
 const prefix = [0x4e, 0x54, 0x42, 1, 1];
-export const binaryReports: readonly (readonly [string, readonly string[]])[] =
-  [
-    [
-      'run end',
-      [
-        'script',
-        'run',
-        'delivery',
-        'broadcast',
-        'handler',
-        'fallback',
-        'climbed',
-        'outcome',
-        'result',
-        'error',
-        'limit',
-        'effect',
-        'cleanupFailed',
-        'at',
-        'fuel',
-        'alloc',
-      ],
-    ],
-    [
-      'run started',
-      [
-        'script',
-        'run',
-        'args',
-        'rootDelivery',
-        'parentRun',
-        'parentCall',
-        'delivery',
-        'selector',
-        'fn',
-      ],
-    ],
-    [
-      'run discarded',
-      ['script', 'run', 'reason', 'rootDelivery', 'parentRun', 'parentCall'],
-    ],
-    [
-      'run accounting',
-      [
-        'script',
-        'run',
-        'fuel',
-        'state',
-        'rootDelivery',
-        'parentRun',
-        'parentCall',
-      ],
-    ],
-    [
-      'causal work',
-      ['rootDelivery', 'liveRuns', 'queuedMessages', 'discardedMessages'],
-    ],
-    [
-      'stop',
-      ['script', 'reason', 'discardedRuns', 'droppedMessages', 'pendingCalls'],
-    ],
-    ['unhandled', ['delivery', 'message', 'target']],
-    ['call failed', ['script', 'call', 'operation', 'detail']],
-    [
-      'effect failure',
-      ['script', 'run', 'grant', 'segment', 'phase', 'status', 'scope'],
-    ],
-    ['decided', ['delivery', 'broadcast', 'verdict', 'vetoes', 'undecided']],
-    ['host error', ['code', 'detail']],
-    ['charge result', ['request', 'call', 'fuel', 'status']],
-  ];
 const object = (j: Json): JsonObject => (isObject(j) ? j : binaryFailure());
 const field = (j: Json, k: string): Json | undefined =>
   object(j).pairs.find(([key]) => key === k)?.[1];
@@ -441,19 +378,7 @@ const convert = (
 
 // How each field crosses. Protocol kinds are checked as they decode; `value`
 // positions are Values; `record` is nested protocol data, typed by its keys.
-type Kind =
-  | 'int'
-  | 'uint'
-  | 'token'
-  | 'bool'
-  | 'instant'
-  | 'text'
-  | 'texts'
-  | 'value'
-  | 'values'
-  | 'record'
-  | 'settlements'
-  | 'reports';
+type Kind = EnvelopeKind;
 /** A frame member by name: Json, or a Value on the direct callback paths. */
 type Get = (key: string) => unknown;
 type Schema = {
@@ -471,14 +396,8 @@ type Schema = {
   /** The frame's members as the flat wire record, when the two differ. */
   readonly toWire?: (get: Get) => Get;
 };
-type Fields = Readonly<Record<string, Kind>>;
 
 const notices = ['abandoned', 'settled', 'trace'];
-const noticeFields: Fields = {
-  abandoned: 'texts',
-  settled: 'texts',
-  trace: 'texts',
-};
 // A member of a frame's nested record, decoded (Json) or direct (a plain record).
 const member = (x: unknown, k: string): unknown =>
   isObject(x as Json)
@@ -487,61 +406,37 @@ const member = (x: unknown, k: string): unknown =>
       ? (x as Record<string, unknown>)[k]
       : undefined;
 const schema = (
-  tag: number,
-  name: string,
+  entry: EnvelopeEntry,
   family: Schema['family'],
-  fields: Fields,
-  required: readonly string[],
   fromWire: Schema['fromWire'],
   extra: { keys?: readonly string[]; toWire?: Schema['toWire'] } = {},
 ): Schema => ({
-  tag,
-  name,
+  tag: entry.tag,
+  name: entry.name,
   family,
-  fields: Object.entries(fields),
-  keys: new Set(extra.keys ?? Object.keys(fields)),
-  required: ['ref', ...required],
+  fields: entry.fields.map(({ name, kind }) => [name, kind]),
+  keys: new Set(extra.keys ?? entry.fields.map(f => f.name)),
+  required: entry.fields.filter(f => f.required).map(f => f.name),
   fromWire,
   toWire: extra.toWire,
 });
 
-const message = (
-  tag: number,
-  name: string,
-  fields: Fields,
-  required: readonly string[] = ['group'],
-): Schema =>
+const message = (entry: EnvelopeEntry): Schema =>
   schema(
-    tag,
-    name,
-    tag < 6 || tag === 10 || tag === 11 ? 'message' : 'result',
-    fields,
-    required,
-    (_, pairs) => new JsonObject([['m', name], ...pairs]),
+    entry,
+    entry.name.endsWith('-result') ? 'result' : 'message',
+    (_, pairs) => new JsonObject([['m', entry.name], ...pairs]),
   );
 
 // An op or prop result names its outcome as a member; the wire carries the
 // outcome's name, with its Value or failure in shared fields.
-const resultFields: Fields = {
-  ref: 'int',
-  group: 'text',
-  outcome: 'text',
-  value: 'value',
-  code: 'text',
-  message: 'text',
-  charged: 'uint',
-};
 const outcomeResult = (
-  tag: number,
-  name: string,
+  entry: EnvelopeEntry,
   outcomes: readonly string[],
 ): Schema =>
   schema(
-    tag,
-    name,
+    entry,
     'result',
-    resultFields,
-    ['group', 'outcome'],
     (get, pairs) => {
       const outcome = get('outcome') as string;
       if (
@@ -552,7 +447,7 @@ const outcomeResult = (
       }
       const value = (get('value') as Json | undefined) ?? null;
       return new JsonObject([
-        ['m', name],
+        ['m', entry.name],
         ...pairs.filter(
           ([k]) => k === 'ref' || k === 'group' || k === 'charged',
         ),
@@ -608,21 +503,15 @@ const outcomeResult = (
 
 // A need travels inside its packet, beside the notices; on the wire the two are one record.
 const need = (
-  tag: number,
-  name: string,
-  fields: Fields,
-  required: readonly string[],
+  entry: EnvelopeEntry,
   reshape?: {
     fromWire: (get: Get, pairs: [string, Json][]) => [string, Json][];
     toWire: Schema['toWire'];
   },
 ): Schema =>
   schema(
-    tag,
-    name,
+    entry,
     'need',
-    { ref: 'int', ...fields, ...noticeFields },
-    required,
     (get, pairs) => {
       const inner = pairs.filter(([k]) => k !== 'ref' && !notices.includes(k));
       return new JsonObject([
@@ -630,7 +519,7 @@ const need = (
         [
           'need',
           new JsonObject([
-            ['m', name],
+            ['m', entry.name],
             ...(reshape ? reshape.fromWire(get, inner) : inner),
           ]),
         ],
@@ -671,13 +560,11 @@ const property = {
 // A reply's notices and correlation sit beside its `ok` or `err`; the wire
 // carries every member flat.
 const reply = (
-  tag: number,
-  name: string,
-  fields: Fields,
+  entry: EnvelopeEntry,
   outer: readonly string[],
   check: (get: Get, failed: boolean) => boolean,
 ): Schema =>
-  schema(tag, name, 'reply', fields, [], (get, pairs) => {
+  schema(entry, 'reply', (get, pairs) => {
     const err = get('err') as Json | undefined;
     if (!check(get, err !== undefined)) {
       return binaryFailure();
@@ -690,168 +577,44 @@ const reply = (
     ]);
   });
 
-const opNeed: Fields = {
-  call: 'text',
-  script: 'text',
-  run: 'text',
-  segment: 'text',
-  grant: 'text',
-  capability: 'text',
-  operation: 'text',
-  mode: 'text',
-  now: 'instant',
-  args: 'values',
-  scope: 'text',
-  automatic: 'bool',
-  fuelLeft: 'uint',
-};
-const effectNeed: Fields = {
-  script: 'text',
-  run: 'text',
-  segment: 'text',
-  grant: 'text',
-  grants: 'texts',
-  coordinator: 'text',
-  phase: 'text',
-  now: 'instant',
-};
-const pumpFields: Fields = {
-  now: 'instant',
-  fuelSlice: 'record',
-  fuelCap: 'record',
-};
-const schemas: readonly Schema[] = [
-  message(1, 'request', {
-    ref: 'int',
-    group: 'text',
-    to: 'record',
-    message: 'record',
-  }),
-  message(2, 'call', {
-    ref: 'int',
-    group: 'text',
-    fn: 'value',
-    args: 'values',
-    limits: 'record',
-  }),
-  message(3, 'pump', { ref: 'int', group: 'text', ...pumpFields }),
-  message(4, 'request-pump', {
-    ref: 'int',
-    group: 'text',
-    token: 'token',
-    to: 'record',
-    message: 'record',
-    ...pumpFields,
-  }),
-  message(5, 'call-pump', {
-    ref: 'int',
-    group: 'text',
-    token: 'token',
-    fn: 'value',
-    args: 'values',
-    limits: 'record',
-    ...pumpFields,
-  }),
-  outcomeResult(6, 'op-result', [
-    'result',
-    'started',
-    'done',
-    'fail',
-    'limit',
-    'hostError',
-  ]),
-  outcomeResult(7, 'prop-result', ['value', 'ok', 'fail', 'hostError']),
-  message(8, 'effect-result', { ref: 'int', group: 'text', status: 'text' }),
-  message(9, 'release-result', { ref: 'int', group: 'text' }),
-  message(10, 'settle-pump', {
-    ref: 'int',
-    group: 'text',
-    ...pumpFields,
-    settlements: 'settlements',
-  }),
-  message(
-    11,
-    'load',
-    {
-      ref: 'int',
-      group: 'text',
-      name: 'text',
-      source: 'text',
-      grants: 'record',
-      grantsAsUsed: 'bool',
-      owner: 'record',
-      objects: 'record',
-      limits: 'record',
-      newGroup: 'record',
-      refuseWorker: 'bool',
-    },
-    ['group', 'name', 'source'],
-  ),
-  reply(
-    0x81,
-    'admission',
-    { ref: 'int', delivery: 'text', err: 'record', ...noticeFields },
-    ['ref', ...notices],
-    (get, failed) => failed || get('delivery') !== undefined,
-  ),
-  reply(
-    0x82,
-    'completion',
-    {
-      ref: 'int',
-      delivery: 'text',
-      token: 'token',
-      state: 'text',
-      nextDeadline: 'instant',
-      fuelUsed: 'record',
-      reports: 'reports',
-      gone: 'record',
-      err: 'record',
-      ...noticeFields,
-    },
-    ['ref', ...notices, 'delivery', 'token'],
-    (get, failed) =>
-      (get('delivery') === undefined) === (get('token') === undefined) &&
-      (failed ||
-        (get('state') !== undefined &&
-          isNumber(get('fuelUsed') as Json) &&
-          get('reports') !== undefined)),
-  ),
-  need(
-    0x83,
-    'op',
-    opNeed,
-    Object.keys(opNeed).filter(
-      k => !['scope', 'automatic', 'fuelLeft'].includes(k),
-    ),
-  ),
-  need(
-    0x84,
-    'prop',
-    {
-      object: 'texts',
-      prop: 'text',
-      set: 'bool',
-      value: 'value',
-      op: 'text',
-      selector: 'value',
-    },
-    ['object', 'prop'],
-    property,
-  ),
-  need(
-    0x85,
-    'effect',
-    effectNeed,
-    Object.keys(effectNeed).filter(k => k !== 'coordinator'),
-  ),
-  need(
-    0x86,
-    'release',
-    { script: 'text', grant: 'text', reason: 'text', now: 'instant' },
-    ['script', 'grant', 'reason', 'now'],
-  ),
-];
+// The generated catalogue owns tags, direction, field order, kinds and
+// required fields. Only the frame/flat-record reshaping belongs to the codec.
+const schemas: readonly Schema[] = envelopeMessages.map(entry => {
+  switch (entry.name) {
+    case 'op-result':
+      return outcomeResult(entry, [
+        'result',
+        'started',
+        'done',
+        'fail',
+        'limit',
+        'hostError',
+      ]);
+    case 'prop-result':
+      return outcomeResult(entry, ['value', 'ok', 'fail', 'hostError']);
+    case 'admission':
+      return reply(
+        entry,
+        ['ref', ...notices],
+        (get, failed) => failed || get('delivery') !== undefined,
+      );
+    case 'completion':
+      return reply(
+        entry,
+        ['ref', ...notices, 'delivery', 'token'],
+        (get, failed) =>
+          (get('delivery') === undefined) === (get('token') === undefined) &&
+          (failed ||
+            (get('state') !== undefined &&
+              isNumber(get('fuelUsed') as Json) &&
+              get('reports') !== undefined)),
+      );
+    default:
+      return entry.direction === 'guest-to-host'
+        ? need(entry, entry.name === 'prop' ? property : undefined)
+        : message(entry);
+  }
+});
 const byTag = new Map(schemas.map(s => [s.tag, s]));
 const byMethod = new Map(
   schemas
@@ -881,14 +644,9 @@ const valueOf = (x: unknown, o: BinaryValueOptions): BinaryItem =>
 // The settlement record is positional even inside a fields-layout input.
 // Outcome reshaping is deliberately kept here, beside the codec's other
 // nested protocol records, rather than in generated tables.
-const settlementFields = [
-  ['call', 'text'],
-  ['outcome', 'text'],
-  ['value', 'value'],
-  ['fuel', 'int'],
-  ['code', 'text'],
-  ['message', 'text'],
-] as const;
+const settlementFields = envelopeSettlement.map(
+  ({ name, kind }) => [name, kind] as const,
+);
 
 const writeReports = (w: BinaryWriter, j: Json, o: BinaryValueOptions) => {
   if (!Array.isArray(j)) {
@@ -897,20 +655,18 @@ const writeReports = (w: BinaryWriter, j: Json, o: BinaryValueOptions) => {
   w.output.push(6);
   w.uint(BigInt(j.length));
   for (const report of j) {
-    const i = binaryReports.findIndex(
-      ([kind]) => kind === field(report, 'kind'),
-    );
-    if (i < 0) {
+    const entry = envelopeReports.find(e => e.name === field(report, 'kind'));
+    if (!entry) {
       return binaryFailure();
     }
-    const keys = binaryReports[i]![1];
+    const keys = entry.fields.map(f => f.name);
     if (object(report).pairs.some(([k]) => k !== 'kind' && !keys.includes(k))) {
       return binaryFailure();
     }
-    w.output.push(i + 1, 6);
+    w.output.push(entry.tag, 6);
     w.uint(BigInt(keys.length));
-    for (const key of keys) {
-      w.item(jsonItem(field(report, key) ?? null, o, key));
+    for (const { name, kind } of entry.fields) {
+      writeField(w, name, kind, field(report, name), o);
     }
   }
 };
@@ -928,10 +684,9 @@ const writeField = (
   }
   switch (kind) {
     case 'int':
-    case 'uint':
-    case 'token': {
+    case 'uint': {
       const n = integer(x);
-      if ((kind === 'uint' && n < 0n) || (kind === 'token' && n <= 0n)) {
+      if ((kind === 'uint' && n < 0n) || (name === 'token' && n <= 0n)) {
         return binaryFailure();
       }
       return w.item(integerItem(n));
@@ -958,6 +713,10 @@ const writeField = (
         tag: 6,
         data: (Array.isArray(x) ? x : binaryFailure()).map(v => valueOf(v, o)),
       });
+    case 'target':
+    case 'message':
+    case 'limits':
+    case 'err':
     case 'record':
       return w.item(jsonItem(x as Json, o, name));
     case 'settlements': {
@@ -1070,19 +829,26 @@ const readReports = (r: BinaryReader, o: BinaryValueOptions): Json[] => {
   const count = r.count();
   const reports: Json[] = [];
   for (let i = 0; i < count; i++) {
-    const report = binaryReports[r.byte() - 1] ?? binaryFailure();
-    if (r.byte() !== 6 || r.uint() !== BigInt(report[1].length)) {
+    const tag = r.byte();
+    const report = envelopeReports.find(e => e.tag === tag) ?? binaryFailure();
+    if (r.byte() !== 6 || r.uint() !== BigInt(report.fields.length)) {
       return binaryFailure();
     }
-    const ps: [string, Json][] = [['kind', report[0]]];
-    for (const key of report[1]) {
+    const ps: [string, Json][] = [['kind', report.name]];
+    for (const { name, kind } of report.fields) {
       const item = r.item();
       if (item.tag !== 0) {
-        ps.push([key, convert(item, o, key)]);
+        ps.push([
+          name,
+          readField(item, name, kind, o, item => {
+            itemValue(item, metadata(o));
+            return itemJson(item, o, true);
+          }),
+        ]);
       }
     }
     if (
-      report[0] === 'run end' &&
+      report.name === 'run end' &&
       ps.some(([k, v]) => k === 'outcome' && v === 'completed') &&
       !ps.some(([k]) => k === 'result')
     ) {
@@ -1102,10 +868,9 @@ const readField = (
 ): Json => {
   switch (kind) {
     case 'int':
-    case 'uint':
-    case 'token': {
+    case 'uint': {
       const n = itemInteger(item);
-      if ((kind === 'uint' && n < 0n) || (kind === 'token' && n <= 0n)) {
+      if ((kind === 'uint' && n < 0n) || (name === 'token' && n <= 0n)) {
         return binaryFailure();
       }
       return new JsonNumber(n.toString());
