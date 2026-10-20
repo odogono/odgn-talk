@@ -14,7 +14,7 @@ Files, grammar, or lowering.
 
 ## Language, lowering and execution
 
-The Go module runs the embedded Zig Core, with no Go parser, checker, compiler or interpreter (#1055). Lexing, checking, lowering, execution, costs, Built-ins and recovery are the [Zig task map](../zig/NAVIGATION.md)'s. Host-side value helpers: Core error maps, logical size and `Add` in [valueops](internal/valueops/), and Selector and label validation in [syntax](internal/syntax/), which also sizes Text Pattern values.
+The Go module runs the embedded Zig Core, with no Go parser, checker, compiler or interpreter (#1055). Lexing, checking, lowering, execution, costs, Built-ins and recovery are the [Zig task map](../zig/NAVIGATION.md)'s. Host-side value helpers: Core error maps, logical size and `Add` in [valueops](internal/valueops/), and Selector and label validation in [syntax](internal/syntax/), a lexer only. Text Pattern sizes come from [the value reader's tree](internal/value/pattern.go).
 
 ## Values and collections
 

@@ -11,25 +11,56 @@ import (
 type patternNode struct {
 	text            string
 	digits, capture bool
+	tree            *PatternTree
 }
+
+// PatternTree is a Text Pattern's structure, as chapter 8's Text Pattern
+// programs read it. Kind names the form: text-pattern, pattern-text,
+// pattern-or, pattern-convert, pattern-lazy, pattern-fold, pattern-count,
+// capture, pattern-repeat, pattern-typed, pattern-anchor, pattern-class or
+// pattern-keyword. Text is the literal, count, capture name, repetition or
+// keyword phrase.
+type PatternTree struct {
+	Kind, Text string
+	Children   []*PatternTree
+}
+
+func patternTree(kind, text string, children ...*PatternTree) *PatternTree {
+	return &PatternTree{Kind: kind, Text: text, Children: children}
+}
+
 type patternReader struct {
 	r        *Reader
 	captures map[string]bool
 }
 
 func ParsePattern(s string) (Value, error) {
+	node, e := readPattern(s)
+	if e != nil {
+		return Value{}, e
+	}
+	return Fields{Kind: Pattern, Text: node.text}.Value(), nil
+}
+
+// ParsePatternTree reads a Text Pattern's source, as ParsePattern does, and
+// returns its structure.
+func ParsePatternTree(s string) (*PatternTree, error) {
+	node, e := readPattern(s)
+	return node.tree, e
+}
+func readPattern(s string) (patternNode, error) {
 	r := Reader{Text: s}
 	p := patternReader{r: &r, captures: map[string]bool{}}
 	p.space()
 	node, e := p.pattern()
 	if e != nil {
-		return Value{}, e
+		return patternNode{}, e
 	}
 	p.space()
 	if r.At != len(s) {
-		return Value{}, r.Error()
+		return patternNode{}, r.Error()
 	}
-	return Fields{Kind: Pattern, Text: node.text}.Value(), nil
+	return node, nil
 }
 func (p *patternReader) space() {
 	for p.r.At < len(p.r.Text) && strings.ContainsRune(" \t\r\n", rune(p.r.Text[p.r.At])) {
@@ -53,6 +84,7 @@ func (p *patternReader) pattern() (patternNode, error) {
 	var parts []string
 	digits := true
 	capture := false
+	tree := patternTree("text-pattern", "")
 	if !p.r.Take(">") {
 		for {
 			node, e := p.alternation()
@@ -64,6 +96,7 @@ func (p *patternReader) pattern() (patternNode, error) {
 			}
 			digits = digits && node.digits
 			capture = capture || node.capture
+			tree.Children = append(tree.Children, node.tree)
 			p.space()
 			if p.r.Take(">") {
 				break
@@ -78,7 +111,7 @@ func (p *patternReader) pattern() (patternNode, error) {
 	if strings.HasPrefix(text, "<") {
 		text = " " + text
 	}
-	return patternNode{"<" + text + ">", digits, capture}, nil
+	return patternNode{"<" + text + ">", digits, capture, tree}, nil
 }
 func (p *patternReader) alternation() (patternNode, error) {
 	node, e := p.element()
@@ -98,6 +131,7 @@ func (p *patternReader) alternation() (patternNode, error) {
 		node.text += " or " + other.text
 		node.digits = node.digits && other.digits
 		node.capture = node.capture || other.capture
+		node.tree = patternTree("pattern-or", "", node.tree, other.tree)
 	}
 }
 func (p *patternReader) element() (patternNode, error) {
@@ -116,14 +150,17 @@ func (p *patternReader) element() (patternNode, error) {
 				return node, p.r.Error()
 			}
 			suffix = "as number"
+			node.tree = patternTree("pattern-convert", "number", node.tree)
 		case p.word("ignoring"):
 			p.space()
 			if !p.word("case") {
 				return node, p.r.Error()
 			}
 			suffix = "ignoring case"
+			node.tree = patternTree("pattern-fold", "", node.tree)
 		case p.word("lazily"):
 			suffix = "lazily"
+			node.tree = patternTree("pattern-lazy", "", node.tree)
 		default:
 			for _, s := range []string{"as number", "ignoring case", "lazily"} {
 				if seen[s] {
@@ -178,7 +215,7 @@ func (p *patternReader) atom() (patternNode, error) {
 		for _, c := range v.Text() {
 			digits = digits && c >= '0' && c <= '9'
 		}
-		return patternNode{text, digits, false}, nil
+		return patternNode{text, digits, false, patternTree("pattern-text", v.Text())}, nil
 	}
 	if r.At < len(r.Text) && r.Text[r.At] >= '0' && r.Text[r.At] <= '9' {
 		start := r.At
@@ -202,6 +239,7 @@ func (p *patternReader) atom() (patternNode, error) {
 			return node, r.Error()
 		}
 		node.text = n.String() + " " + node.text
+		node.tree = patternTree("pattern-count", n.String(), node.tree)
 		return node, nil
 	}
 	word := r.word()
@@ -218,6 +256,7 @@ func (p *patternReader) atom() (patternNode, error) {
 		node, e := p.alternation()
 		node.text = word + ": " + node.text
 		node.capture = true
+		node.tree = patternTree("capture", word, node.tree)
 		return node, e
 	}
 	if word == "one" || word == "zero" {
@@ -232,6 +271,7 @@ func (p *patternReader) atom() (patternNode, error) {
 			return node, r.Error()
 		}
 		node.text = word + " or more of " + node.text
+		node.tree = patternTree("pattern-repeat", word+" or more of", node.tree)
 		return node, nil
 	}
 	if word == "optional" {
@@ -240,22 +280,27 @@ func (p *patternReader) atom() (patternNode, error) {
 			return node, r.Error()
 		}
 		node.text = "optional " + node.text
+		node.tree = patternTree("pattern-repeat", "optional", node.tree)
 		return node, nil
 	}
 	if word == "a" || word == "an" {
 		if !p.word("number") {
 			return patternNode{}, r.Error()
 		}
-		return patternNode{word + " number", true, false}, nil
+		return patternNode{word + " number", true, false, patternTree("pattern-typed", "number")}, nil
 	}
 	for _, phrase := range append(slices.Clone(generated.Grammar.TextPatterns.Classes), generated.Grammar.TextPatterns.Anchors...) {
 		parts := strings.Split(phrase, " ")
 		if word == parts[0] && p.word(parts[1]) {
-			return patternNode{phrase, false, false}, nil
+			kind := "pattern-class"
+			if slices.Contains(generated.Grammar.TextPatterns.Anchors, phrase) {
+				kind = "pattern-anchor"
+			}
+			return patternNode{phrase, false, false, patternTree(kind, phrase)}, nil
 		}
 	}
 	if slices.Contains(generated.Grammar.TextPatterns.Keywords, word) {
-		return patternNode{word, word == "digit" || word == "digits", false}, nil
+		return patternNode{word, word == "digit" || word == "digits", false, patternTree("pattern-keyword", word)}, nil
 	}
 	return patternNode{}, r.Error()
 }

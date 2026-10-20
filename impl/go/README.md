@@ -462,9 +462,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   Value Encoding and the save format are unchanged.
 - `internal/value/` owns values, Units, comparison, display and strict JSON.
   Containers copy input slices; public accessors return copies.
-- `internal/syntax/` keeps the lexer and parser the Host still needs for
-  Selector and label validation and for sizing Text Pattern values; the Zig
-  Core parses Scripts.
+- `internal/syntax/` keeps only the lexer the Host needs for Selector and
+  label validation; the Zig Core parses Scripts. Text Pattern sizes come from
+  the `internal/value` pattern reader's tree.
 - `internal/valueops/` builds Core error maps, measures a Value's logical size
   and applies `Add` for the Store and Notification Hosts.
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
