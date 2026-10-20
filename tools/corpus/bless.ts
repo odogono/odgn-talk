@@ -5,7 +5,7 @@
 //   bun tools/corpus/bless.ts CASE …   CASE is relative to corpus/
 //
 // The TS runner writes the Disassembly, Trace or Transcript expectations
-// from its own output, in both replays. The TS, Go and Zig runners must then
+// from its own output, in both replays. The TS and Zig runners must then
 // each pass the written files, in both replays. If any step fails, every
 // file in the case's directory is put back as it was and the first
 // divergence is reported. Blessing doesn't approve a first blessing: a
@@ -15,14 +15,12 @@
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '../..');
@@ -107,59 +105,41 @@ const main = (names: string[]): number => {
     console.error('Usage: corpus:bless CASE …');
     return 1;
   }
-  const bin = mkdtempSync(join(tmpdir(), 'northtalk-bless-'));
-  try {
-    const go = join(bin, 'corpus');
-    const build = spawnSync(
-      'go',
-      ['-C', 'impl/go', 'build', '-o', go, './cmd/corpus'],
-      { cwd: ROOT, stdio: 'inherit' },
+  // The Zig runner is built once here, and then by `zig build corpus` for
+  // each case from its cache.
+  const zig = spawnSync('zig', ['build'], {
+    cwd: resolve(ROOT, 'impl/zig'),
+    stdio: 'inherit',
+  });
+  if (zig.status !== 0) {
+    console.error(
+      'bless needs every available Core; the Zig runner did not build',
     );
-    if (build.status !== 0) {
-      console.error(
-        'bless needs every available Core; the Go runner did not build',
-      );
-      return 1;
-    }
-    // The Zig runner is built once here, and then by `zig build corpus` for
-    // each case from its cache.
-    const zig = spawnSync('zig', ['build'], {
-      cwd: resolve(ROOT, 'impl/zig'),
-      stdio: 'inherit',
-    });
-    if (zig.status !== 0) {
-      console.error(
-        'bless needs every available Core; the Zig runner did not build',
-      );
-      return 1;
-    }
-    const ts = ['bun', 'impl/ts/tools/corpus.ts'] as const;
-    const write: Step = { command: [...ts, '--bless'], name: 'TS bless' };
-    const checks: Step[] = [
-      { command: ts, name: 'TS Core' },
-      { command: [go], name: 'Go Core' },
-      {
-        command: ['zig', 'build', 'corpus', '--'],
-        cwd: 'impl/zig',
-        name: 'Zig Core',
-      },
-    ];
-    let failures = 0;
-    for (const name of names) {
-      const outcome = blessCase(resolve(ROOT, 'corpus'), name, write, checks);
-      if (outcome.blessed) {
-        console.log(`BLESSED ${name} (TS, Go and Zig agree)`);
-      } else {
-        failures++;
-        console.error(
-          `NOT BLESSED ${name}: ${outcome.step} failed; the case is unchanged\n${outcome.output.trimEnd()}`,
-        );
-      }
-    }
-    return failures ? 1 : 0;
-  } finally {
-    rmSync(bin, { force: true, recursive: true });
+    return 1;
   }
+  const ts = ['bun', 'impl/ts/tools/corpus.ts'] as const;
+  const write: Step = { command: [...ts, '--bless'], name: 'TS bless' };
+  const checks: Step[] = [
+    { command: ts, name: 'TS Core' },
+    {
+      command: ['zig', 'build', 'corpus', '--'],
+      cwd: 'impl/zig',
+      name: 'Zig Core',
+    },
+  ];
+  let failures = 0;
+  for (const name of names) {
+    const outcome = blessCase(resolve(ROOT, 'corpus'), name, write, checks);
+    if (outcome.blessed) {
+      console.log(`BLESSED ${name} (TS and Zig agree)`);
+    } else {
+      failures++;
+      console.error(
+        `NOT BLESSED ${name}: ${outcome.step} failed; the case is unchanged\n${outcome.output.trimEnd()}`,
+      );
+    }
+  }
+  return failures ? 1 : 0;
 };
 
 if (import.meta.main) {

@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'impl/go/**'
+      - 'impl/zig/**'
       - 'impl/testdata/**'
       - 'tools/**'
       - 'spec/**'
@@ -65,21 +66,39 @@ jobs:
       - run: go vet ./... && go test -v ./... && go test -race ./...
         working-directory: impl/go/sqlite
 
-  corpus:
-    runs-on: ubuntu-latest
+  public-adapter:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
           cache: false
-      # Every case, in ordinary and save/restore replay; a failure names its
-      # first divergence and the command that reproduces it.
-      - name: Run the complete Corpus on the Go Core
-        run: go run ./cmd/corpus --check-passing
-        working-directory: impl/go
+      # The shared public Hosts also execute on the retiring native Core.
+      - run: go -C impl/go test -tags talk_native_go -run '^TestCapabilityBridge' -count=1 .
+        env:
+          CGO_ENABLED: '0'
+      - run: go -C impl/go vet . ./internal/zigwasm
+        env:
+          CGO_ENABLED: '0'
+      # Keep ordinary JSON coverage when the adapter defaults to fields.
+      - run: impl/go/zig-experimental-check.sh -v
+        env:
+          CGO_ENABLED: '0'
+          TALK_ZIG_REQUEST_PUMP: ''
+      - run: impl/go/zig-experimental-check.sh -race
+      # The same suites over the binary Request/Pump exchange (#1245).
+      - run: impl/go/zig-experimental-check.sh
+        env:
+          CGO_ENABLED: '0'
+          TALK_ZIG_REQUEST_PUMP: fields
 
-  fuzz:
+  # Pure-Go builds of every target from one runner; the matrix above runs them.
+  cross-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,16 +106,4 @@ jobs:
         with:
           go-version: '1.27'
           cache: false
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - run: bun install --frozen-lockfile
-      # The TS workflow's deterministic dual-Core smoke, for changes to the Go Core.
-      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
-      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --go-runner .cache/fuzzworker
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-smoke-findings
-          path: fuzz-findings
-          if-no-files-found: ignore
+      - run: impl/go/cross-check.sh
