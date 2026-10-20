@@ -199,6 +199,20 @@ List files with `rg --files tooling/creative` before opening one by name.
   [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts`.
 
+## Performance window
+
+- [performance.ts](src/performance.ts): typed Run accounting, frame counts and
+  recent history; [play.ts](src/play.ts) feeds reports and frame decisions.
+- [play-host.ts](src/play-host.ts) and [play-protocol.ts](src/play-protocol.ts):
+  opt-in capture and independent telemetry; [performance-results.ts](src/performance-results.ts)
+  rejects stale session/capture snapshots.
+- [performance-window.tsx](src/performance-window.tsx): rankings and charts;
+  [play-view.ts](src/play-view.ts) wires capture, shortcuts and retained results.
+- Tests: [performance.test.ts](tests/performance.test.ts),
+  [play-host.test.ts](tests/play-host.test.ts), and the `performance` browser suite
+  on `/performance-test.html`. Run `tetris` for a game integration check.
+- First check: `bun test tooling/creative/tests/performance.test.ts tooling/creative/tests/play-host.test.ts`.
+
 ## User prompts
 
 - [play.ts](src/play.ts): the `user` Grant's prompts and notices on the Play

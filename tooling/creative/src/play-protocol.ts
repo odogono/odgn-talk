@@ -2,6 +2,7 @@
 // requests through the worker supervisor; the worker answers each one, and
 // pushes Play State changes and sound commands unasked. Everything here is
 // plain data, so it crosses `postMessage` as it is.
+import { type PerformanceSnapshot } from './performance';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
@@ -19,6 +20,7 @@ export type PlayRequest =
   | {
       kind: 'open';
       pageIndex: number;
+      performanceEpoch?: number;
       project: Project;
       seed: bigint;
       session: number;
@@ -33,6 +35,7 @@ export type PlayRequest =
       target?: string;
     }
   | { kind: 'frame'; session: number }
+  | { epoch: number; kind: 'performance'; session: number }
   | {
       /** The mirror's count of reader edits, which views echo back. */
       edit: number;
@@ -88,6 +91,7 @@ export type PlayView = {
 };
 
 export type PlayResponse =
+  | { kind: 'performance'; session: number; snapshot: PerformanceSnapshot }
   | ({ kind: 'view' } & PlayView)
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }

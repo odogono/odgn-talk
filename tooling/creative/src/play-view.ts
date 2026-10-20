@@ -8,6 +8,7 @@ import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
 import { scriptNameProblems } from './script-names';
 import { byId, h } from './dom';
 import { ErrorsWindow } from './errors';
+import { PerformanceWindow } from './performance-window';
 import { mountMessageWindow } from './message-window';
 import { type Element, type Project, type TextElement } from './model';
 import { firstView } from './play-host';
@@ -19,7 +20,7 @@ import {
   type ReaderMessage,
 } from './play-protocol';
 import { ReaderTextHistory } from './play-text';
-import { scriptOwners } from './script-manifest';
+import { ownerById, ownerId, scriptOwners } from './script-manifest';
 import { browserSoundBackend } from './sounds';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
@@ -64,6 +65,24 @@ export const mountPlay = (shell: StackShell): void => {
     ),
   );
   const errors = new ErrorsWindow(shell);
+  let captureEpoch: number | undefined;
+  const profiler = new PerformanceWindow(
+    epoch => {
+      if (session && !session.stopped && captureEpoch !== epoch) {
+        captureEpoch = epoch;
+        post({ kind: 'performance', session: sessionId, epoch });
+      }
+    },
+    index => {
+      const owner = owners[index];
+      if (owner && generation === shell.editor.generation) {
+        const current = ownerById(shell.editor.project, ownerId(owner));
+        if (current) {
+          shell.openScript(current);
+        }
+      }
+    },
+  );
   const reader = h('div', {
     id: 'reader',
     role: 'region',
@@ -121,6 +140,7 @@ export const mountPlay = (shell: StackShell): void => {
     // Only Stop is supervised. The ended worker's session is gone with it,
     // so a session started since then ends too; the replacement waits idle.
     onTerminated: () => {
+      profiler.interrupted();
       silence();
       leave();
       errors.add([{ owner: shell.editor.project, message: UNRESPONSIVE }]);
@@ -147,6 +167,10 @@ export const mountPlay = (shell: StackShell): void => {
     });
   };
   const receive = (response: PlayResponse) => {
+    if (response.kind === 'performance') {
+      profiler.receive(response.session, response.snapshot);
+      return;
+    }
     if (response.kind === 'play') {
       const done = (error?: string) => {
         if (voices.delete(response.voice)) {
@@ -500,6 +524,8 @@ export const mountPlay = (shell: StackShell): void => {
     playing = shell.editor.project as Project;
     owners = scriptOwners(shell.editor.project);
     sessionId++;
+    profiler.reset(sessionId);
+    captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
     session = new PlayMirror((element, richText, pageIndex, edit) =>
       post({
         kind: 'text',
@@ -512,6 +538,7 @@ export const mountPlay = (shell: StackShell): void => {
     );
     post({
       kind: 'open',
+      ...(captureEpoch === undefined ? {} : { performanceEpoch: captureEpoch }),
       session: sessionId,
       project: playing,
       pageIndex: shell.editor.pageIndex,
@@ -566,6 +593,22 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   document.addEventListener('keydown', event => {
+    const focused = event.target as HTMLElement;
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.altKey &&
+      event.code === 'KeyP' &&
+      !focused.closest(
+        'input, textarea, select, [contenteditable="true"], .cm-editor',
+      ) &&
+      !session?.prompt
+    ) {
+      event.preventDefault();
+      if (!event.repeat) {
+        profiler.toggle();
+      }
+      return;
+    }
     // A prompt's keys, Escape included, answer the prompt.
     if (!session || prompts.contains(event.target as Node)) {
       return;
@@ -655,6 +698,8 @@ export const mountPlay = (shell: StackShell): void => {
     if (errorsGeneration !== shell.editor.generation) {
       errorsGeneration = shell.editor.generation;
       errors.clear();
+      profiler.reset(sessionId);
+      captureEpoch = undefined;
     }
     if (!session) {
       return;

@@ -963,3 +963,59 @@ button:disabled {
 #message-window .message-log .entry + .entry {
   margin-top: 0.5rem;
 }
+
+/* Diagnostics remain available when presenting. */
+#performance-window {
+  width: min(820px, calc(100vw - 24px));
+  max-height: 80vh;
+}
+#performance-panel {
+  padding: 12px;
+  overflow: auto;
+  max-height: calc(80vh - 32px);
+}
+.performance-charts {
+  display: flex;
+  gap: 12px;
+}
+.performance-charts figure {
+  flex: 1;
+  min-width: 0;
+  margin: 8px 0;
+}
+.performance-charts svg {
+  width: 100%;
+  background: var(--paper, #fff);
+}
+.performance-cap {
+  stroke: currentColor;
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
+}
+.performance-script {
+  border-top: 1px solid #aaa;
+  padding: 8px 0;
+}
+.performance-script summary {
+  cursor: pointer;
+}
+.performance-table {
+  overflow-x: auto;
+}
+.performance-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.performance-table th,
+.performance-table td {
+  text-align: right;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+.performance-table th:first-child {
+  text-align: left;
+}
+body.playing #performance-window {
+  z-index: 100;
+}

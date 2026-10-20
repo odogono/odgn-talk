@@ -1,3 +1,4 @@
+import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
@@ -125,7 +126,7 @@ export type MessageOutcome =
 
 // Construction/disposal consumes a Pump's budget so queued Core parent and
 // disposal inputs land before a Script can use the changed object graph.
-const PUMP_FUEL = 5000;
+export const PUMP_FUEL = 5000;
 const elementShape = shape.oneOf(
   ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
 );
@@ -151,6 +152,7 @@ export class PlaySession {
   /** This session's playing sounds, owned by the Scripts that started them. */
   readonly sounds: SoundBoard;
   readonly group: Group;
+  readonly performance: PerformanceCapture;
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
   #unhandledSender: string | undefined;
@@ -532,6 +534,7 @@ export class PlaySession {
     public pageIndex = 0,
     options: {
       events?: boolean;
+      performanceNow?: () => number;
       /**
        * Seeds the generator `random` draws from, so a test can repeat a
        * game; 0 when absent. Browse and Present pass the clock.
@@ -540,6 +543,7 @@ export class PlaySession {
       soundBackend?: SoundBackend;
     } = {},
   ) {
+    this.performance = new PerformanceCapture(options.performanceNow);
     this.group = newGroup({
       name: 'play',
       trace: line => this.#trace(line),
@@ -863,7 +867,9 @@ export class PlaySession {
         }
         const existing = this.group.script(name);
         if (existing) {
-          existing.reload(owner.script, 'reset variables');
+          this.performance.reports(
+            existing.reload(owner.script, 'reset variables'),
+          );
         } else {
           this.group.load({
             name,
@@ -883,6 +889,7 @@ export class PlaySession {
         });
         if (definesHandler(owner.script, 'frame')) {
           this.#frames.set(name, { busy: false, last: undefined });
+          this.performance.frameScript(name);
         }
       } catch (error) {
         if (!(error instanceof LoadError)) {
@@ -1024,6 +1031,7 @@ export class PlaySession {
       return;
     }
     for (const [name, state] of this.#frames) {
+      this.performance.frame(name, state.busy);
       if (state.busy) {
         continue;
       }
@@ -1055,6 +1063,7 @@ export class PlaySession {
       fuelSlice: 1000,
       fuelCap: PUMP_FUEL,
     });
+    this.performance.reports(result.reports, result.fuelUsed);
     const clones = this.#pendingClones;
     this.#pendingClones = [];
     if (!this.stopped) {
@@ -1161,5 +1170,6 @@ export class PlaySession {
       this.group.script(name)!.stop('Stopped by reader');
     }
     this.pump(now);
+    this.performance.stop();
   }
 }
