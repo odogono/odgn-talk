@@ -2,7 +2,9 @@
 
 Folio gains a `canvas` Element kind, drawn on through a `canvas` Grant, so that a game like Tetris can redraw itself every `frame` instead of recolouring hundreds of pre-placed Elements ([#1144](https://github.com/odogono/odgn-talk/issues/1144)). Each Canvas Element keeps its Drawing: the list of commands made since its last `clear`. The Drawing is one continuous surface. Play starts from what is on it, Scripts and the Message Box add to it in Play and in Edit, and on return to Edit each Canvas's Drawing is committed into the Project as one undoable edit. This is a deliberate exception to [ADR 0041](0041-authored-projects-are-separate-from-temporary-play-state.md). An author thinks of a canvas as a surface that holds what was last drawn on it. What is saved is what they see, and Undo is the way back to the Drawing from before Play.
 
-Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-capability.md)), where the Trace is the record and a lifetime count of 10,000 commands ends drawing until a fresh run, a Folio Drawing is a retained list. `clear` empties it, and the 10,000 cap applies to its length. Folio does not keep a Trace for drawing, and its Play worker has to publish a view to the page, so it needs the list itself.
+Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-capability.md)), where the Trace is the record and a lifetime count of 10,000 commands ends drawing until a fresh run, a Folio Drawing is a retained list, and the 10,000 cap applies to its length. Folio does not keep a Trace for drawing, and its Play worker has to publish a view to the page, so it needs the list itself.
+
+`clear` and `background` reset the list instead of appending to it. `clear` replaces the Drawing with the commands that set the current style (`fill` or `noFill`, `stroke` or `noStroke`, `strokeWidth` and `textSize`). `background` does the same and then adds itself. Style therefore survives a clear, as it does on a live canvas, and a Script that starts every `frame` with `background`, as p5.js sketches do, keeps a Drawing the size of one frame instead of growing towards the cap.
 
 ## Considered Options
 
@@ -11,6 +13,7 @@ Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-c
 - **The last Play frame kept as an unsaved view in Edit.** What the author sees would differ from what is saved, and drawing on it from the Message Box would either silently save the Play frame or draw on content that vanishes on reload.
 - **Saving only what was drawn in Edit.** A reload would show Edit lines without the Play frame they were drawn over.
 - **An authored logical resolution scaled to the frame**, as the Playground's `size`. The Canvas's own width and height are its coordinates instead, one unit to one Page pixel, so there is no `size` Operation and resizing clips or reveals rather than scales.
+- **`clear` empties the list and `background` appends to it**, the plain reading of the Playground's Operations. A Script that sets its style once would lose it at the first `clear`, and one that paints `background` every `frame` without `clear` would reach the cap within minutes.
 - **A Grant bound to the Canvas's Owning Script, or a "current canvas" selector.** Each Operation takes the target Canvas Element as its first argument instead, as `elements` takes Elements, so a Page Script can draw into any Canvas it can name without a message each frame or hidden state.
 
 ## Consequences
@@ -18,6 +21,7 @@ Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-c
 - The Drawing is stored in the Project file as `{op, args}` commands, checked with the same signatures, validation and limits as the Playground's canvas, which move out of `tooling/stack/src/canvas.ts` into shared exports. Folio's Grant does not use `canvasCapabilities()`.
 - Each canvas Operation is `immediate` and costs 1 Fuel. Commands are not Segment-bound, so a Play stopped part-way through a frame commits the half-drawn Drawing as shown.
 - All other Play State is still discarded on return to Edit. Scripts cannot read a Drawing back, and cloning or duplicating a Canvas copies its Drawing.
-- Each Message Box line in Edit that draws is one undoable edit. Only `clear`, or the Info panel's Clear drawing action, removes commands. Nothing marks a Canvas whose Drawing came from Play.
+- Each Message Box line in Edit that draws is one undoable edit. Only `clear`, `background` or the Info panel's Clear drawing action removes commands. Clear drawing empties the Drawing completely, so the next command starts from the default style. Nothing marks a Canvas whose Drawing came from Play.
 - Tests check the retained list from a headless Play Session, not pixels or a Trace.
+- The commands do not depend on a renderer. Their meaning is fixed in the Canvas's own terms: origin at the top-left, one unit to one Page pixel, clipped to the frame. Folio draws them with Canvas 2D. A WebGL renderer was not chosen as the default: browsers cap live WebGL contexts at about 16 per page, text would need bundled fonts and a glyph atlas, and strokes would need hand-built joins, caps and antialiasing. WebGL can be added later as a per-Canvas option, chosen when the Canvas is created, for shaders or 3D, without changing the existing commands.
 - Narrows ADR 0041: a Canvas Element's Drawing is kept on return to Edit, not discarded with Play State.

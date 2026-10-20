@@ -339,7 +339,7 @@ An Element whose contents are a Drawing made by Scripts or the Message Box.
 _Avoid_: canvas (for the Page), sketch
 
 **Drawing**:
-The commands a Canvas Element has accumulated since its last clear, whether drawn during Play or from the Message Box. It is kept with the Project.
+The commands a Canvas Element has accumulated since its last `clear` or `background`, which keep only the current style, whether drawn during Play or from the Message Box. It is kept with the Project.
 _Avoid_: picture, image, display list
 
 **Group Element**:
