@@ -1527,7 +1527,14 @@ export class Run {
       if (suspension) {
         this.segmentBase = [...this.script.variables];
       }
-      this.fault('fuelPerRun', this.frame.code.unit.code[this.frame.pc]!);
+      // It faults at the call: a Join member at its own site (#1413).
+      const site = 'site' in pending ? (pending as Member).site : undefined;
+      this.fault(
+        'fuelPerRun',
+        site
+          ? site.frame.code.unit.code[site.pc]!
+          : this.frame.code.unit.code[this.frame.pc]!,
+      );
       if (suspension?.k === 'ask') {
         abandon(abort, 'limit');
         this.faultAbandons.push(id);
