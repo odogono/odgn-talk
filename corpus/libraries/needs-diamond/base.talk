@@ -1,0 +1,4 @@
+function fetch
+ ask io to read 1
+ return it
+end fetch

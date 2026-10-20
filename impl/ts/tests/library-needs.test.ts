@@ -287,6 +287,79 @@ test('multiple imports report missing needs in source order once per Operation p
   ]);
 });
 
+test('a diamond checks each original call site once per use, keeping equivalent calls at distinct sites', () => {
+  const compile = (
+    name: string,
+    source: string,
+    imports: ReturnType<typeof compileLibrary>[] = [],
+  ) =>
+    compileLibrary({ name, source, version: '1' }, imports, {
+      io: { read: { mode: 'immediate', args: [shape.number] } },
+    });
+  const base = compile(
+    'base',
+    'function fetch\n ask io to read 1\n ask io to read 1\n return it\nend fetch',
+  );
+  const left = compile(
+    'left',
+    'use fetch from base\nfunction l\n return fetch()\nend l',
+    [base],
+  );
+  const right = compile(
+    'right',
+    'use fetch from base\nfunction r\n return fetch()\nend r',
+    [base],
+  );
+  const top = compile(
+    'top',
+    'use l from left\nuse r from right\nprivate function unused\n ask io to read 99\n return it\nend unused\nfunction run\n return [l(),r()]\nend run',
+    [left, right],
+  );
+  expect(top.needs).toEqual([{ capability: 'io', operation: 'read' }]);
+  const cap = defineCapability('host', {
+    read: {
+      mode: 'immediate',
+      args: [shape.text],
+      cost: { fuel: 1 },
+      do: () => num(1),
+    },
+  });
+  const g = newGroup({ name: 'g' });
+  for (const library of [base, left, right, top]) {
+    g.addLibrary(library);
+  }
+  const source = 'use run from top\nuse run from top as again';
+  const missing = diagnostics(() => g.load({ name: 'missing', source }));
+  expect(missing.map(d => [d.code, d.unit, d.line, d.col])).toEqual([
+    ['missing grant', 'missing', 1, 1],
+    ['missing grant', 'missing', 2, 1],
+  ]);
+  for (const d of missing) {
+    expect(d.message).toContain('top:4:2');
+  }
+  const wrong = diagnostics(() =>
+    g.load({
+      name: 'wrong',
+      source,
+      grants: { io: cap.grant('all', undefined) },
+    }),
+  );
+  expect(wrong.map(d => [d.code, d.unit, d.line, d.col])).toEqual([
+    ['wrong argument', 'wrong', 1, 1],
+    ['wrong argument', 'wrong', 1, 1],
+    ['wrong argument', 'wrong', 1, 1],
+    ['wrong argument', 'wrong', 2, 1],
+    ['wrong argument', 'wrong', 2, 1],
+    ['wrong argument', 'wrong', 2, 1],
+  ]);
+  for (const line of [1, 2]) {
+    const sites = wrong.filter(d => d.line === line);
+    for (const [i, site] of ['top:4:2', 'base:2:2', 'base:3:2'].entries()) {
+      expect(sites[i]!.message).toContain(site);
+    }
+  }
+});
+
 test('a nested Lambda reports its own missing need once', () => {
   const library = compileLibrary(
     {

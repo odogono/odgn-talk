@@ -1,0 +1,9 @@
+use l from left
+use r from right
+private function unused
+ ask io to read 99
+ return it
+end unused
+function run
+ return [l(),r()]
+end run

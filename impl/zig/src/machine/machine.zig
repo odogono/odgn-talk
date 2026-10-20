@@ -756,8 +756,11 @@ pub const Library = struct {
     /// Unbound code records held by Constants/defaults, never Group handles.
     constant_functions: std.ArrayList(*FunctionCode) = .empty,
     exports: []const check.Export,
-    /// Every Capability call it makes, through its imports too.
+    /// Every original Capability call it makes, through its imports too,
+    /// once per defining Library identity, in direct-then-import order.
     needs: []const check.Need,
+    /// The prefix of `needs` written in this Library's own source.
+    direct_needs: usize = 0,
     /// Its `needs` as the Host reads them: each Grant name and Operation
     /// once, sorted by both (chapter 7).
     operations: []const OperationRef = &.{},
@@ -883,7 +886,25 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     const exported = try storage.copy(kept, exports_view);
     var needs: std.ArrayList(check.Need) = .empty;
     try needs.appendSlice(a, checked.needs);
-    for (imports) |l| try needs.appendSlice(a, l.needs);
+    // Walk original sites, not each import's already flattened list: two
+    // branches of a diamond share their dependency's calls. Visit each
+    // defining Library once, keeping distinct calls in its own source.
+    var seen: std.AutoHashMap([32]u8, void) = .init(a);
+    var pending: std.ArrayList(*Library) = .empty;
+    var i = imports.len;
+    while (i > 0) {
+        i -= 1;
+        try pending.append(a, imports[i]);
+    }
+    while (pending.pop()) |l| {
+        if ((try seen.getOrPut(l.identity)).found_existing) continue;
+        try needs.appendSlice(a, l.needs[0..l.direct_needs]);
+        i = l.imports.len;
+        while (i > 0) {
+            i -= 1;
+            try pending.append(a, l.imports[i]);
+        }
+    }
     const held_needs = try storage.copy(kept, needs.items);
     const operations = try operationRefs(kept, held_needs);
     const version_label = try kept.dupe(u8, label);
@@ -900,6 +921,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         .imports = imports,
         .exports = exported,
         .needs = held_needs,
+        .direct_needs = checked.needs.len,
         .operations = operations,
         .declarations = grant_declarations,
     };
@@ -11393,6 +11415,34 @@ test "Run end sweep: deferred Call release (#1322, #1331)" {
         .{ .deliver = true }, .{ .pump = .{} }, .{ .answer = "s/r1.c1" }, .{ .pump = .{} },
         .{ .deliver = true }, .{ .pump = .{} }, .{ .answer = "s/r2.c1" }, .{ .pump = .{} },
     }, false);
+}
+
+test "Library diamond needs visit identities once and keep distinct equivalent calls (#1394)" {
+    const testing = std.testing;
+    const Build = struct {
+        fn library(name: []const u8, source: []const u8, imports: []const *Library, shape: *capabilities.Shape) !*Library {
+            const result = try compileLibrary(testing.allocator, name, "1", source, imports, &.{.{ .name = "io", .operations = &.{.{ .name = "read", .mode = .immediate, .args = &.{shape} }} }});
+            try testing.expect(result == .library);
+            return result.library;
+        }
+    };
+    const number = try capabilities.Shape.kind(testing.allocator, .number);
+    defer number.release();
+    const source = "function fetch\n ask io to read 1\n ask io to read 1\n return it\nend fetch\n";
+    const base = try Build.library("base", source, &.{}, number);
+    defer base.destroy();
+    // Separate compiled handles of the same code identity still share sites.
+    const copy = try Build.library("base", source, &.{}, number);
+    defer copy.destroy();
+    const left = try Build.library("left", "use fetch from base\nfunction l\n return fetch()\nend l\n", &.{base}, number);
+    defer left.destroy();
+    const right = try Build.library("right", "use fetch from base\nfunction r\n return fetch()\nend r\n", &.{copy}, number);
+    defer right.destroy();
+    const top = try Build.library("top", "use l from left\nuse r from right\nprivate function unused\n ask io to read 99\n return it\nend unused\nfunction run\n return [l(),r()]\nend run\n", &.{ left, right }, number);
+    defer top.destroy();
+    try testing.expectEqual(@as(usize, 1), top.direct_needs);
+    try testing.expectEqual(@as(usize, 3), top.needs.len);
+    try testing.expectEqual(@as(usize, 1), top.operations.len);
 }
 
 test "bound Library definitions reuse containers without allocating on later reads" {
