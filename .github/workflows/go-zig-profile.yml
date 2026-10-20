@@ -48,14 +48,17 @@ jobs:
         run: |
           go -C bench/go test -c -o "$RUNNER_TEMP/native.test" .
           go -C bench/go test -c -tags 'talk_zig_experimental perfmap' -o "$RUNNER_TEMP/zig.test" .
+      # The binaries read ../scripts/benchmarks.json, so run them from bench/go.
       - name: Profile Run/host/pump
-        working-directory: ${{ runner.temp }}
+        working-directory: bench/go
         run: |
-          mkdir -p results
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/results"
+          ln -s "$RUNNER_TEMP/results" results
           bench='-test.run=^$ -test.bench=^BenchmarkRun$/host/pump$ -test.benchmem -test.count=5'
-          ./native.test $bench | tee results/native.txt
-          ./zig.test $bench | tee results/zig.txt
-          perf record -F 4999 -g -o results/zig.perf.data -- ./zig.test -test.run='^$' -test.bench='^BenchmarkRun$/host/pump$' -test.benchtime=20s > /dev/null
+          "$RUNNER_TEMP/native.test" $bench | tee results/native.txt
+          "$RUNNER_TEMP/zig.test" $bench | tee results/zig.txt
+          perf record -F 4999 -g -o results/zig.perf.data -- "$RUNNER_TEMP/zig.test" -test.run='^$' -test.bench='^BenchmarkRun$/host/pump$' -test.benchtime=20s > /dev/null
           cp /tmp/perf-*.map results/ || true
           perf report -i results/zig.perf.data --no-children --sort symbol --stdio --percent-limit 0.3 -g none > results/self.txt
           perf report -i results/zig.perf.data --no-children --sort dso --stdio > results/dso.txt
