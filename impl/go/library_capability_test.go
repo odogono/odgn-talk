@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 )
@@ -67,14 +66,9 @@ func TestLibraryImportRechecksCallerDeclarationsIncludingCachedCode(t *testing.T
 				t.Fatal(rejected.Diagnostics)
 			}
 			for _, d := range rejected.Diagnostics {
-				// Message wording isn't covered by parity (ADR 0009); only
-				// the native Go Core names the Library site.
-				if d.Code != tc.want || d.Unit != "s" || d.Line != 1 || d.Col != 1 || nativeCore() && !strings.Contains(d.Message, "base:") {
+				if d.Code != tc.want || d.Unit != "s" || d.Line != 1 || d.Col != 1 {
 					t.Fatal(d)
 				}
-			}
-			if tc.missing && nativeCore() && !strings.Contains(rejected.Diagnostics[0].Message, "io.write at base:2:2") {
-				t.Fatal("missing uses did not retain first direct site:", rejected.Diagnostics)
 			}
 		})
 	}
@@ -315,10 +309,6 @@ func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {
 				}
 				if d.Code != name || d.Unit != "s" || d.Line != line || d.Col != 1 {
 					t.Fatal("original sites must be checked once at each use:", d)
-				}
-				// Message wording isn't covered by parity (ADR 0009).
-				if grants == nil && nativeCore() && !strings.Contains(d.Message, "top:4:2") {
-					t.Fatal("first direct site order:", d)
 				}
 			}
 		})

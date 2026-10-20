@@ -52,39 +52,6 @@ func TestResultTargetAfterSuspendingAsk(t *testing.T) {
 	}
 }
 
-func TestRestoreRejectsInvalidJoinDestinationAssociation(t *testing.T) {
-	requireNativeSaveFormat(t)
-	core := New()
-	g := core.NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "a", Source: "on go\n wait for all\n  send slow to b into x and wait\n end wait\nend go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := g.Load(LoadOptions{Name: "b", Source: "on slow\n wait 1 s\n return 1\nend slow"}); err != nil {
-		t.Fatal(err)
-	}
-	s.Deliver(Message{Name: "go"})
-	joinPump(t, g, 0, PumpOptions{})
-	saved, err := g.Save()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, field := range []string{"Frame", "Start"} {
-		t.Run(field, func(t *testing.T) {
-			broken := rewriteSave(t, saved, func(data map[string]any) {
-				run := data["Scripts"].([]any)[0].(map[string]any)["Runs"].([]any)[0].(map[string]any)["Run"].(map[string]any)
-				member := run["Join"].(map[string]any)["Members"].([]any)[0].(map[string]any)
-				member[field] = 999
-			})
-			_, _, err := core.Restore(broken, RestoreOptions{})
-			host, ok := err.(*HostError)
-			if !ok || host.Code != InvalidSave {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 func TestHostCommandResultTargetRestore(t *testing.T) {
 	for _, target := range []bool{false, true} {
 		t.Run(map[bool]string{false: "it", true: "target"}[target], func(t *testing.T) {

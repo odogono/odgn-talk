@@ -3,7 +3,6 @@ package northtalk
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -124,105 +123,6 @@ func TestRestorePreemptedOpenJoin(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRestoreRejectsMalformedFrames(t *testing.T) {
-	requireNativeSaveFormat(t)
-	c := New()
-	g := c.NewGroup(GroupOptions{})
-	s, e := g.Load(LoadOptions{Name: "s", Source: "on spin\n repeat forever\n end repeat\nend spin"})
-	if e != nil {
-		t.Fatal(e)
-	}
-	s.Deliver(Message{Name: "spin"})
-	g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 10})
-	saved, e := g.Save()
-	if e != nil {
-		t.Fatal(e)
-	}
-	for _, name := range []string{"no frames", "missing locals", "past code", "invalid status", "null fuel", "bad value"} {
-		t.Run(name, func(t *testing.T) {
-			broken := rewriteSave(t, saved, func(data map[string]any) {
-				script := data["Scripts"].([]any)[0].(map[string]any)
-				run := script["Runs"].([]any)[0].(map[string]any)["Run"].(map[string]any)
-				frame := run["Frames"].([]any)[0].(map[string]any)
-				switch name {
-				case "no frames":
-					run["Frames"] = nil
-				case "missing locals":
-					frame["Locals"] = nil
-				case "past code":
-					frame["PC"] = len(s.runs[0].run.Frames[0].Code.Unit.Bodies[s.runs[0].run.Frames[0].Body].Code)
-				case "invalid status":
-					run["Status"] = 999
-				case "null fuel":
-					run["Fuel"] = nil
-				case "bad value":
-					run["Result"].(map[string]any)["Kind"] = 999
-				}
-			})
-			_, _, err := c.Restore(broken, RestoreOptions{})
-			host, ok := err.(*HostError)
-			if !ok || host.Code != InvalidSave {
-				t.Fatalf("malformed save accepted: %v", err)
-			}
-		})
-	}
-}
-
-// nativeCore reports whether the Group runs on the native Go Core rather
-// than the Zig adapter.
-func nativeCore() bool {
-	return experimentalGroupFactory == nil
-}
-
-// requireNativeCore skips a test that reads native Go Core internals, which
-// the Zig adapter doesn't have (ADR 0117).
-func requireNativeCore(t *testing.T) {
-	t.Helper()
-	if !nativeCore() {
-		t.Skip("reads native Go Core internals (ADR 0117)")
-	}
-}
-
-// requireSynchronousTrace skips a test that calls the Group from its Trace
-// callback mid-Pump. The Zig adapter replays the Trace after the Pump returns.
-func requireSynchronousTrace(t *testing.T) {
-	t.Helper()
-	if !nativeCore() {
-		t.Skip("needs the Trace callback during the Pump (ADR 0117)")
-	}
-}
-
-func requireNativeSaveFormat(t *testing.T) {
-	t.Helper()
-	if experimentalGroupFactory != nil {
-		t.Skip("mutates the native Go save layout; Zig binary refusal is covered by TestZigBackendRestoreRejectsMalformedSaves")
-	}
-}
-
-func rewriteSave(t *testing.T, save []byte, change func(map[string]any)) []byte {
-	t.Helper()
-	var outer struct{ Hash, Payload string }
-	if err := json.Unmarshal(save, &outer); err != nil {
-		t.Fatal(err)
-	}
-	var data map[string]any
-	if err := json.Unmarshal([]byte(outer.Payload), &data); err != nil {
-		t.Fatal(err)
-	}
-	change(data)
-	b, err := json.Marshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outer.Payload = string(b)
-	outer.Hash = fmt.Sprintf("%x", sha256.Sum256(b))
-	b, err = json.Marshal(outer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }
 
 func TestRestorePendingSettlementsAndObjectIdentity(t *testing.T) {
@@ -396,7 +296,6 @@ func TestFingerprintStringEscapes(t *testing.T) {
 }
 
 func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
-	requireNativeCore(t)
 	c := New()
 	ok := func(SegmentContext) EffectResult { return EffectResult{Status: EffectOK} }
 	def, err := c.DefineSegmentCapability("r", SegmentLifecycle{Begin: ok, Commit: ok, Rollback: func(SegmentContext) EffectResult { return EffectResult{Status: EffectUnknown} }}, Operation{Name: "write", Mode: Immediate, SegmentBound: true, Result: NothingShape, Do: func(*Call, []Value) (Value, error) { return Nothing, nil }})
@@ -421,7 +320,6 @@ func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
 	g.Pump(time.Unix(1, 0), PumpOptions{})
 	b.Deliver(Message{Name: "go"})
 	g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 15})
-	oldA, oldB := a.state, b.state
 	newer, err := c.CompileLibrary(LibrarySource{Name: "lib", Source: "function foo\n return 2\nend foo"}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -431,8 +329,18 @@ func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
 	if !yes || host.Code != EffectStateUnknown {
 		t.Fatalf("fatal replacement: %v", err)
 	}
-	if a.state != oldA || b.state != oldB || g.libraries["lib"] != lib || a.state.Variables[0].Number().String() != "5" {
-		t.Fatal("replacement published before all cleanup succeeded")
+	// The rebuilt Scripts were abandoned, so a keeps its old Variables.
+	found := false
+	for _, script := range g.Inspect().Scripts {
+		if script.Name == "a" {
+			found = true
+			if len(script.Vars) != 1 || script.Vars[0].Val.String() != "5" {
+				t.Fatal("replacement published before all cleanup succeeded", script.Vars)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("replacement removed Script a")
 	}
 }
 
@@ -529,45 +437,6 @@ func TestSettleDuringSaveBeforeFirstRestoredPump(t *testing.T) {
 	}
 	if len(operationalReports(pumped.Reports)) != 1 || operationalReports(pumped.Reports)[0].(*RunEnd).Result.String() != "42" {
 		t.Fatal(operationalReports(pumped.Reports))
-	}
-}
-
-func TestRestoreRejectsMalformedFunctionAndQuantity(t *testing.T) {
-	requireNativeSaveFormat(t)
-	c := New()
-	g := c.NewGroup(GroupOptions{})
-	_, err := g.Load(LoadOptions{Name: "s", Source: "script variable cb = given x: x\nscript variable distance = 3 m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved, err := g.Save()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, what := range []string{"function code", "function body", "function arity", "missing function arity", "quantity unit"} {
-		t.Run(what, func(t *testing.T) {
-			broken := rewriteSave(t, saved, func(data map[string]any) {
-				vars := data["Scripts"].([]any)[0].(map[string]any)["Variables"].([]any)
-				fn := vars[0].(map[string]any)["Function"].(map[string]any)
-				switch what {
-				case "function arity":
-					fn["Required"] = -1
-				case "missing function arity":
-					delete(fn, "Total")
-				case "function code":
-					fn["CodeState"] = map[string]any{"$ref": "group"}
-				case "function body":
-					fn["Body"] = 999999
-				case "quantity unit":
-					vars[1].(map[string]any)["Unit"].(map[string]any)["Slots"].([]any)[0].(map[string]any)["Unit"] = -1
-				}
-			})
-			_, _, err := c.Restore(broken, RestoreOptions{})
-			host, ok := err.(*HostError)
-			if !ok || host.Code != InvalidSave {
-				t.Fatalf("malformed %s accepted: %v", what, err)
-			}
-		})
 	}
 }
 

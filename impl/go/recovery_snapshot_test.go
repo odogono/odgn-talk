@@ -177,164 +177,101 @@ on go
  end try
 end go`
 
-func recoverySnapshotIn(t *testing.T, phase string) []byte {
+// recoverySnapshots saves the Group before every 1-Fuel step of source's go
+// Run, so the saves land on each recovery cleanup boundary: selection, offer,
+// catch and nested.
+func recoverySnapshots(t *testing.T, source string) [][]byte {
 	t.Helper()
-	source := recoveryCleanupSource
-	if phase == "nested" {
-		source = ""
-		for _, f := range recoveryFixtures(t) {
-			if f.Name == "nested recovery: nested policy catch cannot see original offers" {
-				source = f.Source
-			}
-		}
-	}
-	if phase == "catch" {
-		source = strings.Replace(source, "catch \"bad\" before unwind\n  choose offer recover(7)", "catch \"bad\"\n  return 7", 1)
-	}
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: source})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "go"})
+	saves := [][]byte{}
 	for step := range 300 {
-		if _, err := g.Pump(time.Unix(0, int64(step)), PumpOptions{FuelCap: 1}); err != nil {
+		result, err := g.Pump(time.Unix(0, int64(step)), PumpOptions{FuelCap: 1})
+		if err != nil {
 			t.Fatal(err)
 		}
-		if len(s.runs) == 0 || len(s.runs[0].run.Recoveries) == 0 {
-			continue
+		if result.State == Idle {
+			return saves
 		}
-		run := s.runs[0].run
-		c := run.Recoveries[len(run.Recoveries)-1]
-		found := phase == "nested" && len(run.Recoveries) == 2 || phase == "selection" && c.Pending == nil || c.Pending != nil && c.Pending.Kind == phase
-		if found {
-			saved, err := g.Save()
-			if err != nil {
-				t.Fatal(err)
-			}
-			return saved
+		saved, err := g.Save()
+		if err != nil {
+			t.Fatal(err)
 		}
+		saves = append(saves, saved)
 	}
-	t.Fatalf("Missing snapshot phase %s", phase)
+	t.Fatal("go Run did not finish")
 	return nil
-}
-func TestMalformedRecoverySnapshot(t *testing.T) {
-	requireNativeSaveFormat(t)
-	type object = map[string]any
-	cases := []struct {
-		name, phase string
-		change      func(run, c object)
-	}{
-		{"retained code identity", "selection", func(r, c object) { c["Retained"].([]any)[0].(object)["Code"] = object{"$ref": "unknown"} }},
-		{"retained body", "selection", func(r, c object) { c["Retained"].([]any)[0].(object)["Body"] = 999 }},
-		{"retained PC", "selection", func(r, c object) { c["Retained"].([]any)[0].(object)["PC"] = -1 }},
-		{"retained local layout", "selection", func(r, c object) { c["Retained"].([]any)[0].(object)["Locals"] = nil }},
-		{"inconsistent owner locals", "selection", func(r, c object) {
-			locals := c["Retained"].([]any)[0].(object)["Locals"].([]any)
-			locals[0].(object)["Text"] = "forged"
-		}},
-		{"activation PC", "selection", func(r, c object) { c["Activation"].(object)["PC"] = -1 }},
-		{"owner cycle", "selection", func(r, c object) { a := c["Activation"].(object); a["OwnerID"] = a["ID"] }},
-		{"control cycle", "selection", func(r, c object) { a := c["Activation"].(object); a["ControlID"] = a["ID"] }},
-		{"missing owner", "selection", func(r, c object) { c["Activation"].(object)["OwnerID"] = 0 }},
-		{"cancellation phase", "selection", func(r, c object) { r["Cancelling"] = true }},
-		{"cursor", "selection", func(r, c object) { c["Cursor"] = 999 }},
-		{"try table", "selection", func(r, c object) { c["Entry"].(object)["Target"] = 999 }},
-		{"phase", "offer", func(r, c object) { c["Pending"].(object)["Kind"] = "search" }},
-		{"target PC", "offer", func(r, c object) { c["Pending"].(object)["PC"] = 0 }},
-		{"target argument count", "offer", func(r, c object) { c["Pending"].(object)["Args"] = nil }},
-		{"target slot", "offer", func(r, c object) { c["Pending"].(object)["Binds"] = []any{999} }},
-		{"attempt counter rewind", "offer", func(r, c object) { r["OfferAttempt"] = 0 }},
-		{"pending attempt", "offer", func(r, c object) { c["Pending"].(object)["Attempt"] = 99 }},
-		{"frame counter rewind", "offer", func(r, c object) { r["FrameCounter"] = 0 }},
-		{"cleanup reference", "offer", func(r, c object) { c["CleanupEntry"].(object)["Target"] = 999 }},
-		{"cleanup phase", "offer", func(r, c object) { c["CleanupEntry"] = nil }},
-		{"cleanup index", "offer", func(r, c object) { c["Queue"].([]any)[0].(object)["Index"] = 999 }},
-		{"duplicate cleanup", "offer", func(r, c object) { queue := c["Queue"].([]any); c["Queue"] = append(queue, queue[0]) }},
-		{"catch target", "catch", func(r, c object) { c["Pending"].(object)["PC"] = 0 }},
-		{"nested boundary cycle", "nested", func(r, c object) { c["Boundary"].(object)["Outer"].(object)["ID"] = c["ID"] }},
-		{"seen catch", "selection", func(r, c object) {
-			id := fmt.Sprint(c["Retained"].([]any)[0].(object)["ID"])
-			c["Seen"] = object{id: object{"999": true}}
-		}},
-		{"excluded scope", "selection", func(r, c object) {
-			id := fmt.Sprint(c["Retained"].([]any)[0].(object)["ID"])
-			c["Excluded"] = object{id: object{"finally:999": true}}
-		}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			saved := recoverySnapshotIn(t, tc.phase)
-			broken := rewriteSave(t, saved, func(data map[string]any) {
-				run := data["Scripts"].([]any)[0].(object)["Runs"].([]any)[0].(object)["Run"].(object)
-				contexts := run["Recoveries"].([]any)
-				tc.change(run, contexts[len(contexts)-1].(object))
-			})
-			_, _, err := New().Restore(broken, RestoreOptions{})
-			host, ok := err.(*HostError)
-			if !ok || host.Code != InvalidSave {
-				t.Fatalf("malformed snapshot accepted: %v", err)
-			}
-		})
-	}
 }
 
 func TestCancelledRecoverySnapshotEveryCleanupBoundary(t *testing.T) {
-	requireNativeCore(t)
-	for _, phase := range []string{"selection", "offer", "catch", "nested"} {
-		t.Run(phase, func(t *testing.T) {
-			saved := recoverySnapshotIn(t, phase)
-			original, resumed := []string{}, []string{}
-			core := New()
-			settings := RestoreOptions{Trace: traceFunc(func(l string) { original = append(original, l) })}
-			g, _, err := core.Restore(saved, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			settings.Trace = traceFunc(func(l string) { resumed = append(resumed, l) })
-			copy, _, err := core.Restore(saved, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			g.Script("s").CancelRun("s/r1")
-			copy.Script("s").CancelRun("s/r1")
-			for step := range 300 {
-				original, resumed = nil, nil
-				now := time.Unix(0, 10000+int64(step))
-				a, err := g.Pump(now, PumpOptions{FuelSlice: 1})
+	sources := map[string]string{
+		"cleanup": recoveryCleanupSource,
+		"catch":   strings.Replace(recoveryCleanupSource, "catch \"bad\" before unwind\n  choose offer recover(7)", "catch \"bad\"\n  return 7", 1),
+	}
+	for _, f := range recoveryFixtures(t) {
+		if f.Name == "nested recovery: nested policy catch cannot see original offers" {
+			sources["nested"] = f.Source
+		}
+	}
+	for name, source := range sources {
+		for i, saved := range recoverySnapshots(t, source) {
+			t.Run(fmt.Sprint(name, "/", i), func(t *testing.T) {
+				original, resumed := []string{}, []string{}
+				core := New()
+				settings := RestoreOptions{Trace: traceFunc(func(l string) { original = append(original, l) })}
+				g, _, err := core.Restore(saved, settings)
 				if err != nil {
 					t.Fatal(err)
 				}
-				b, err := copy.Pump(now, PumpOptions{FuelSlice: 1})
+				settings.Trace = traceFunc(func(l string) { resumed = append(resumed, l) })
+				copy, _, err := core.Restore(saved, settings)
 				if err != nil {
 					t.Fatal(err)
 				}
-				a.Reports = operationalReports(a.Reports)
-				b.Reports = operationalReports(b.Reports)
-				if !snapshotObservationEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !snapshotObservationEqual(g.Inspect(), copy.Inspect()) {
-					t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
+				g.Script("s").CancelRun("s/r1")
+				copy.Script("s").CancelRun("s/r1")
+				for step := range 300 {
+					original, resumed = nil, nil
+					now := time.Unix(0, 10000+int64(step))
+					a, err := g.Pump(now, PumpOptions{FuelSlice: 1})
+					if err != nil {
+						t.Fatal(err)
+					}
+					b, err := copy.Pump(now, PumpOptions{FuelSlice: 1})
+					if err != nil {
+						t.Fatal(err)
+					}
+					a.Reports = operationalReports(a.Reports)
+					b.Reports = operationalReports(b.Reports)
+					if !snapshotObservationEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !snapshotObservationEqual(g.Inspect(), copy.Inspect()) {
+						t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
+					}
+					saved, err = g.Save()
+					if err != nil {
+						t.Fatal(err)
+					}
+					other, err := copy.Save()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !bytes.Equal(saved, other) {
+						t.Fatalf("step %d snapshot differs", step)
+					}
+					copy, _, err = core.Restore(saved, settings)
+					if err != nil {
+						t.Fatalf("step %d: %v", step, err)
+					}
+					if a.State == Idle {
+						return
+					}
 				}
-				saved, err = g.Save()
-				if err != nil {
-					t.Fatal(err)
-				}
-				other, err := copy.Save()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !bytes.Equal(saved, other) {
-					t.Fatalf("step %d snapshot differs", step)
-				}
-				copy, _, err = core.Restore(saved, settings)
-				if err != nil {
-					t.Fatalf("step %d: %v", step, err)
-				}
-				if a.State == Idle {
-					return
-				}
-			}
-			t.Fatal("Cancellation did not finish")
-		})
+				t.Fatal("Cancellation did not finish")
+			})
+		}
 	}
 }
 
@@ -429,34 +366,4 @@ func TestLibraryRecoverySnapshotEveryBoundary(t *testing.T) {
 		}
 	}
 	t.Fatal("Library recovery did not finish")
-}
-
-func TestRecoverySaveFormatRejectsPriorTransferLayout(t *testing.T) {
-	requireNativeSaveFormat(t)
-	saved, err := New().NewGroup(GroupOptions{}).Save()
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Format"] = "go/1" })
-	_, _, err = New().Restore(saved, RestoreOptions{})
-	host, ok := err.(*HostError)
-	if !ok || host.Code != InvalidSave {
-		t.Fatalf("prior transfer layout accepted: %v", err)
-	}
-}
-
-func TestSaveFormatRejectsPriorFunctionMetadataLayout(t *testing.T) {
-	requireNativeSaveFormat(t)
-	saved, err := New().NewGroup(GroupOptions{}).Save()
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Format"] = "go/4" })
-	for _, policy := range []MismatchPolicy{RejectMismatch, VariablesOnly} {
-		_, _, err = New().Restore(saved, RestoreOptions{Mismatch: policy})
-		host, ok := err.(*HostError)
-		if !ok || host.Code != InvalidSave {
-			t.Fatalf("prior function metadata layout accepted: %v", err)
-		}
-	}
 }

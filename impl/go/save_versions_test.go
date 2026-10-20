@@ -9,21 +9,9 @@ import (
 	"testing"
 )
 
-// Only the version header is shared by these tests. The payload layout belongs
-// to each Core (ADR 0008); native-layout mutations still use rewriteSave.
+// rewriteSaveVersions rewrites a Zig save's version header and re-signs it.
 func rewriteSaveVersions(t *testing.T, saved []byte, versions Versions) []byte {
 	t.Helper()
-	if experimentalGroupFactory == nil {
-		return rewriteSave(t, saved, func(data map[string]any) {
-			v := data["Versions"].(map[string]any)
-			if versions.Language != "" {
-				v["Language"] = versions.Language
-			}
-			if versions.CostModel != "" {
-				v["CostModel"] = versions.CostModel
-			}
-		})
-	}
 	payload := zigSavePayload(t, saved)
 	r := bytes.NewReader(payload[4:])
 	readInt := func() uint64 {
