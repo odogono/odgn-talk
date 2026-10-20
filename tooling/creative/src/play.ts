@@ -1,5 +1,6 @@
 import {
   CANVAS_SIGNATURES,
+  canvasArgumentValues,
   validateCanvasArguments,
   type CanvasCommand,
 } from '@northtalk/tooling/canvas';
@@ -260,16 +261,21 @@ export class PlaySession {
       result: elementShape,
       cost: { fuel: PUMP_FUEL },
       do: (call, kindValue, pageValue, nameValue) => {
-        const kind = kindValue!.asText()! as ElementKind;
+        const kind = kindValue as ElementKind;
         if (!ELEMENT_KINDS.includes(kind) || kind === 'group') {
           throw new ScriptError('out of domain', 'Unknown Element kind');
         }
-        const page = this.#elementPage(pageValue!);
+        const page = this.#elementPage((pageValue as HostObject).value);
         return this.#treeOperation(() => {
-          const element = this.#tree.create(kind, page, nameValue?.asText(), {
-            authorize: fuel => call.charge(fuel),
-            install: (root, parent) => this.#install(root, parent),
-          });
+          const element = this.#tree.create(
+            kind,
+            page,
+            nameValue ?? undefined,
+            {
+              authorize: fuel => call.charge(fuel),
+              install: (root, parent) => this.#install(root, parent),
+            },
+          );
           if (element.kind === 'canvas') {
             this.#changedDrawings.add(element);
           }
@@ -332,8 +338,8 @@ export class PlaySession {
       result: elementShape,
       cost: { fuel: 1 },
       do: (_call, name, value) => {
-        const page = this.#elementPage(value!);
-        const element = this.#tree.find(page, name!.asText()!);
+        const page = this.#elementPage((value as HostObject).value);
+        const element = this.#tree.find(page, name);
         if (!element) {
           throw new ScriptError('out of domain', 'Element not found');
         }
@@ -357,8 +363,9 @@ export class PlaySession {
             { code: 'invalid canvas argument' },
             { code: 'canvas limit' },
           ],
-          do: (_call: Call<unknown>, target?: Value, ...values: Value[]) => {
-            const { element } = this.#element(target!);
+          do: (_call: Call<unknown>, target: unknown, ...args: unknown[]) => {
+            const { element } = this.#element((target as HostObject).value);
+            const values = canvasArgumentValues(args);
             if (element.kind !== 'canvas') {
               throw new ScriptError('out of domain', 'Not a Canvas Element');
             }
@@ -513,7 +520,7 @@ export class PlaySession {
       cost: { fuel: 1 },
       fire: (_call, value) => {
         const index = this.project.pages.findIndex(
-          p => this.#objects.get(p) === value.asObject(),
+          p => this.#objects.get(p) === (value as HostObject).value.asObject(),
         );
         if (index < 0) {
           throw new ScriptError('out of domain', 'Unknown Page');
@@ -526,7 +533,7 @@ export class PlaySession {
   });
   // The release hook stops a Script's sounds whenever the Core stops,
   // reloads or revokes it, so no lifecycle path can leak a voice (#735).
-  #sound = defineCapability<SoundBoard>(
+  #sound = defineCapability<SoundBoard>()(
     'sound',
     {
       play: {
@@ -546,7 +553,7 @@ export class PlaySession {
         args: [shape.optional(shape.text)],
         cost: { fuel: 1 },
         fire: (call, value) =>
-          this.sounds.stop(call.scriptName, value?.asText() ?? undefined),
+          this.sounds.stop(call.scriptName, value ?? undefined),
       },
     },
     undefined,
@@ -628,8 +635,7 @@ export class PlaySession {
     };
   }
 
-  #playSound(owner: string, value: Value, loop: boolean): void {
-    const name = value.asText()!;
+  #playSound(owner: string, name: string, loop: boolean): void {
     const asset = this.project.assets.find(a => a.name === name);
     if (!asset || !isSoundAsset(asset)) {
       throw new ScriptError('out of domain', `No sound named “${name}”`);

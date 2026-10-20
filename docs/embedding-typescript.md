@@ -85,15 +85,15 @@ declarations retain state across Handler calls.
 
 Arguments and results are NorthTalk `Value` instances. Construct them explicitly:
 
-| TypeScript data | NorthTalk constructor | Read the result |
-| --- | --- | --- |
-| Text | `text('Ada')` | `value.asText()` |
-| Boolean | `bool(true)` | `value.asBool()` |
-| Integer | `num(42)` or `num(42n)` | `value.asDecimal()?.toBigInt()` |
-| Exact decimal | `dec('19.95')` | `value.asDecimal()?.toString()` |
-| List | `list(text('a'), text('b'))` | `value.index(1)`, `value.length` |
-| Map | `record({ name: text('Ada') })` | `value.get('name')` |
-| No value | `nothing` | `value.kind === 'nothing'` |
+| TypeScript data | NorthTalk constructor           | Read the result                  |
+| --------------- | ------------------------------- | -------------------------------- |
+| Text            | `text('Ada')`                   | `value.asText()`                 |
+| Boolean         | `bool(true)`                    | `value.asBool()`                 |
+| Integer         | `num(42)` or `num(42n)`         | `value.asDecimal()?.toBigInt()`  |
+| Exact decimal   | `dec('19.95')`                  | `value.asDecimal()?.toString()`  |
+| List            | `list(text('a'), text('b'))`    | `value.index(1)`, `value.length` |
+| Map             | `record({ name: text('Ada') })` | `value.get('name')`              |
+| No value        | `nothing`                       | `value.kind === 'nothing'`       |
 
 Import constructors from `@northtalk/ts`. Plain JS objects, `null` and `undefined`
 cannot be passed as Script values. Accessors such as `asText()` return
@@ -122,8 +122,9 @@ type CustomerDirectory = {
   lookup(id: string, signal: AbortSignal): Promise<string | undefined>;
 };
 
-// Define the API once. Each Grant supplies its own application binding.
-const customers = defineCapability<CustomerDirectory>('customers', {
+// Define the API once. Each Grant supplies its own application binding,
+// whose type the curried call names.
+const customers = defineCapability<CustomerDirectory>()('customers', {
   lookup: {
     mode: 'suspending',
     args: [shape.text],
@@ -132,11 +133,11 @@ const customers = defineCapability<CustomerDirectory>('customers', {
     cost: { fuel: 10 },
     maxPendingMs: 2000,
     run: async (call, id) => {
-      const name = await call.binding.lookup(id.asText()!, call.signal);
+      const name = await call.binding.lookup(id, call.signal);
       if (name === undefined) {
         throw new ScriptError('customer missing', 'No matching customer');
       }
-      return text(name);
+      return name;
     },
   },
 });
@@ -183,8 +184,11 @@ name; the Grant's binding stays in Host code. Bind a tenant-scoped client here
 when the app serves several tenants. Scripts in the same Group can message one
 another, so use separate Groups for tenants that must be isolated.
 
-The declaration checks argument and result Shapes. That makes `id.asText()!`
-safe in the callback: the Core has already checked `shape.text`. The Grant
+The declaration checks argument and result Shapes, and the callback's types
+follow from them: `shape.text` makes `id` a `string`, and the `string` it
+returns becomes the text result. Composite Shapes such as `shape.listOf` still
+arrive as a `Value`. Without a binding, call `defineCapability(name, ops)`
+directly. The Grant
 exposes only `lookup`, under the Script-visible name `customers`. Calls to an
 ungranted Operation are rejected at load.
 
@@ -193,7 +197,7 @@ The Core queues its answer or failure when the Promise settles. `maxPendingMs`
 bounds the pending call; `call.signal` aborts when it is abandoned, including
 cancellation or timeout. The Host's I/O client must honor that signal to stop
 the underlying work. For a short synchronous action, use `mode: 'immediate'`
-with a `do` callback returning a `Value`, and call it with `ask …` without
+with a `do` callback returning its result, and call it with `ask …` without
 `and wait`.
 
 ## Drive execution and manage lifetime
@@ -293,12 +297,12 @@ the driver's `onPump` callback for work that must happen after a Pump returns.
 Catch synchronous failures around `load` and request admission, and catch the
 request's result rejection:
 
-| Failure | What the Host receives |
-| --- | --- |
-| Invalid source or unavailable Operation | `LoadError`, with `diagnostics` containing code, unit, line and column |
-| Full receiver mailbox | Synchronous `MailboxFull`; the app can apply backpressure |
-| Invalid Host input or reentrant worker call | `HostError`, with a stable `code` |
-| Request that cannot complete successfully | Rejected result with `ScriptError`, code `send failed` and reason in `data` |
+| Failure                                     | What the Host receives                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| Invalid source or unavailable Operation     | `LoadError`, with `diagnostics` containing code, unit, line and column      |
+| Full receiver mailbox                       | Synchronous `MailboxFull`; the app can apply backpressure                   |
+| Invalid Host input or reentrant worker call | `HostError`, with a stable `code`                                           |
+| Request that cannot complete successfully   | Rejected result with `ScriptError`, code `send failed` and reason in `data` |
 
 A declared `ScriptError` thrown by an Operation is catchable inside the Script.
 For example, replace the greeting Handler with:

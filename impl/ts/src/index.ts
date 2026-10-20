@@ -39,6 +39,10 @@ export {
   type ImmediateOp,
   type SuspendingOp,
   type FireOp,
+  type CapabilityDefiner,
+  type Operations,
+  type PlainArg,
+  type PlainResult,
 } from './capabilities';
 export {
   codeIdentity,

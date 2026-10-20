@@ -10,6 +10,7 @@ import {
   shape,
   ScriptError,
   type Call,
+  type Grant,
   compileLibrary,
   defineObjectKind,
   type Value,
@@ -443,7 +444,7 @@ describe('restore compatibility and durable values', () => {
   });
 
   test('a changed Operation declaration is a mismatch and bindings are never saved', () => {
-    const capability = defineCapability<string>('log', {
+    const capability = defineCapability<string>()('log', {
       write: { mode: 'fire-and-forget', cost: { fuel: 1 }, fire: () => {} },
     });
     const g = newGroup({ name: 'g' });
@@ -536,9 +537,7 @@ test('variables-only restore reports discarded and queued Decisions with their S
   ]);
 });
 
-const pendingGroup = (
-  grant: ReturnType<ReturnType<typeof defineCapability>['grant']>,
-) => {
+const pendingGroup = (grant: Grant<void>) => {
   const g = newGroup({ name: 'g' });
   g.load({
     name: 's',

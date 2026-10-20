@@ -1,11 +1,11 @@
 // Chapter 7's optional `user` Standard Capability (ADR 0077). The Host shows
 // prompts and answers them; the Core checks arguments and `choose` answers.
 import {
-  defineCapability,
+  defineValueCapability,
   shape,
   type Call,
   type CapabilityDef,
-  type Operation,
+  type ValueOperation,
 } from './capabilities';
 import { HostError } from './errors';
 import { ScriptError } from './operations';
@@ -91,7 +91,7 @@ export const userCapability = (
       throw new HostError('invalid value', `User needs ${name}`);
     }
   }
-  const operations: Record<string, Operation<unknown>> = {
+  const operations: Record<string, ValueOperation<unknown>> = {
     confirm: {
       mode: 'suspending',
       args: [shape.text],
@@ -160,5 +160,5 @@ export const userCapability = (
         : {}),
     });
   }
-  return fixed(defineCapability('user', operations));
+  return fixed(defineValueCapability('user', operations));
 };

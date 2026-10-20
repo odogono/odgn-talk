@@ -70,24 +70,27 @@ export const runShop = async (
 ): Promise<Outcome> => {
   const core = await nt.createCore(options);
   const reserved: string[] = [];
-  const stock: CapabilityDef<string> = core.defineCapability<string>('stock', {
-    price: {
-      mode: 'immediate',
-      args: [nt.shape.text],
-      result: nt.shape.number,
-      cost: { fuel: 1 },
-      do: (_call, sku) => nt.num(sku!.asText()!.length),
-    },
-    reserve: {
-      mode: 'suspending',
-      args: [nt.shape.text, nt.shape.number],
-      result: nt.shape.text,
-      cost: { fuel: 2 },
-      start: call => {
-        reserved.push(call.id);
+  const stock: CapabilityDef<string> = core.defineCapability<string>()(
+    'stock',
+    {
+      price: {
+        mode: 'immediate',
+        args: [nt.shape.text],
+        result: nt.shape.number,
+        cost: { fuel: 1 },
+        do: (_call, sku) => BigInt(sku.length),
+      },
+      reserve: {
+        mode: 'suspending',
+        args: [nt.shape.text, nt.shape.number],
+        result: nt.shape.text,
+        cost: { fuel: 2 },
+        start: call => {
+          reserved.push(call.id);
+        },
       },
     },
-  });
+  );
   const grant = stock.grant('all', 'warehouse');
   const trace: string[] = [];
   const group = core.newGroup({ name: 'shop', trace: l => trace.push(l) });

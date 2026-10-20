@@ -47,7 +47,7 @@ type Outbound = { fetch: Fetch; targets: Record<string, string> };
 
 // Capabilities are defined once per process. Their Host functions read
 // everything else from each Grant's binding.
-const rules = defineCapability<DatabaseSync>('rules', {
+const rules = defineCapability<DatabaseSync>()('rules', {
   match: {
     mode: 'immediate',
     args: [shape.text],
@@ -59,7 +59,7 @@ const rules = defineCapability<DatabaseSync>('rules', {
     do: (call, type) => {
       const row = call.binding
         .prepare('SELECT target, retries FROM rules WHERE type = ?')
-        .get(type.asText()!) as { retries: number; target: string } | undefined;
+        .get(type) as { retries: number; target: string } | undefined;
       const v = row
         ? record({ target: text(row.target), retries: num(row.retries) })
         : nothing;
@@ -75,11 +75,7 @@ const rules = defineCapability<DatabaseSync>('rules', {
     do: (call, type, outcome) => {
       const { lastInsertRowid } = call.binding
         .prepare('INSERT INTO events (type, outcome, at) VALUES (?, ?, ?)')
-        .run(
-          type.asText()!,
-          outcome.asText() ?? outcome.toString(),
-          String(call.now),
-        );
+        .run(type, outcome.asText() ?? outcome.toString(), String(call.now));
       const id = num(Number(lastInsertRowid));
       stub(call.group, `rules.record value=${id}`);
       return id;
@@ -87,7 +83,7 @@ const rules = defineCapability<DatabaseSync>('rules', {
   },
 });
 
-const outbound = defineCapability<Outbound>('outbound', {
+const outbound = defineCapability<Outbound>()('outbound', {
   post: {
     mode: 'suspending',
     args: [shape.text, shape.any],
@@ -103,9 +99,13 @@ const outbound = defineCapability<Outbound>('outbound', {
     // call's signal aborts the fetch when the call is abandoned, by its
     // maxPendingMs or by the Request being cancelled.
     run: async (call, target, body) => {
-      const url = call.binding.targets[target.asText()!];
+      const url = call.binding.targets[target];
       if (url === undefined) {
-        throw new ScriptError('unknown target', '', record({ target }));
+        throw new ScriptError(
+          'unknown target',
+          '',
+          record({ target: text(target) }),
+        );
       }
       let response: Response;
       try {

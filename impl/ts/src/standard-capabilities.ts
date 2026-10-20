@@ -1,11 +1,11 @@
 // Chapter 7's fixed Standard Capability declarations. The Host supplies
 // costs and I/O; clock.now reads only the Pump's Clock.
 import {
-  defineCapability,
+  defineValueCapability,
   type Call,
   type CapabilityDef,
   type Cost,
-  type Operation,
+  type ValueOperation,
   type Shape,
 } from './capabilities';
 import { HostError } from './errors';
@@ -65,7 +65,7 @@ const dataListShape: Shape = Object.freeze({
 /** The Pump's Clock reading; there is no Host clock implementation. */
 export const clockCapability = (costs: Costs): CapabilityDef<void> =>
   fixed(
-    defineCapability('clock', {
+    defineValueCapability('clock', {
       now: {
         mode: 'immediate',
         args: [],
@@ -90,7 +90,7 @@ export const timerCapability = (
     throw new HostError('invalid value', 'Timer needs Schedule and Cancel');
   }
   return fixed(
-    defineCapability<unknown>('timer', {
+    defineValueCapability<unknown>('timer', {
       schedule: {
         mode: 'fire-and-forget',
         args: [textShape, instantShape, textShape, dataListShape],
@@ -123,7 +123,7 @@ export const consoleCapability = (
     throw new HostError('invalid value', 'Console needs Write and Read');
   }
   return fixed(
-    defineCapability<unknown>('console', {
+    defineValueCapability<unknown>('console', {
       write: {
         mode: 'fire-and-forget',
         args: [valueShape],
@@ -210,7 +210,7 @@ export const calendarCapability = (
     }
   }
   const unknownZone = [{ code: 'unknown zone', fields: { zone: textShape } }];
-  const operations: Record<string, Operation<string>> = {
+  const operations: Record<string, ValueOperation<string>> = {
     today: {
       mode: 'immediate',
       args: [optionalTextShape],
@@ -290,5 +290,5 @@ export const calendarCapability = (
         : {}),
     });
   }
-  return fixed(defineCapability('calendar', operations));
+  return fixed(defineValueCapability('calendar', operations));
 };

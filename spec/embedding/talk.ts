@@ -179,22 +179,27 @@ export declare function decodeValue(
 // Shapes (ADRs 0015, 0030)
 // ---------------------------------------------------------------------------
 
-export declare class Shape { private readonly brand: "Shape" }
+/**
+ * T is the JS form a typed Host function receives for this Shape (#1420);
+ * it is compile-time only.
+ */
+export declare class Shape<T = unknown> { private readonly brand: "Shape"; private readonly plain?: T }
 export type FieldShape = Shape | { shape: Shape; optional: true };
 
 export declare const shape: {
-  any: Shape; nothing: Shape; bool: Shape; number: Shape; text: Shape;
-  value: Shape; // every value, including nested Function Values; not a storage encoding
-  bytes: Shape; instant: Shape; civilDate: Shape; range: Shape; pattern: Shape;
-  function: Shape; // a Function Value; any data Shape refuses one with `not encodable`
-  quantityOf(unit: string): Shape;
-  quantityKind(kind: string): Shape;
-  listOf(s: Shape): Shape;
-  map(fields: Record<string, FieldShape>): Shape; // closed
-  openMap(fields: Record<string, FieldShape>): Shape;
-  object(kind: ObjectKind): Shape;
-  oneOf(...ss: Shape[]): Shape;
-  optional(s: Shape): Shape; // Nothing or s; an outer Optional suffix may be omitted
+  any: Shape<Value>; nothing: Shape<null>; bool: Shape<boolean>; number: Shape<Decimal>; text: Shape<string>;
+  value: Shape<Value>; // every value, including nested Function Values; not a storage encoding
+  bytes: Shape<Uint8Array>; instant: Shape<bigint>; civilDate: Shape<Value>; range: Shape<Value>; pattern: Shape<Value>;
+  function: Shape<Value>; // a Function Value; any data Shape refuses one with `not encodable`
+  quantityOf(unit: string): Shape<Value>;
+  quantityKind(kind: string): Shape<Value>;
+  listOf(s: Shape): Shape<Value>;
+  map(fields: Record<string, FieldShape>): Shape<Value>; // closed
+  openMap(fields: Record<string, FieldShape>): Shape<Value>;
+  object<N>(kind: ObjectKind<N>): Shape<HostObject<N>>;
+  oneOf(...ss: Shape[]): Shape<Value>;
+  /** Supplied Nothing arrives as null; an omitted trailing argument as undefined. */
+  optional<T>(s: Shape<T>): Shape<T | null | undefined>; // Nothing or s; an outer Optional suffix may be omitted
 };
 
 // ---------------------------------------------------------------------------
@@ -205,15 +210,15 @@ export interface Cost { fuel: number; alloc?: number }
 /** When an Operation lists any, the Core enforces the list (ADRs 0017, 0033). */
 export interface ErrorDecl { code: string; fields?: Record<string, FieldShape> }
 
-interface OpBase {
+interface OpBase<A extends readonly Shape[], R> {
   /** A trailing Optional suffix may be omitted; Host functions receive only supplied args. */
-  args?: Shape[];
+  args?: A;
   /**
    * Argument Labels, one per argument after the first, that a call may write
    * between its arguments; checked at load only (ADR 0115). Empty is absent.
    */
   labels?: string[];
-  result?: Shape;
+  result?: R;
   cost: Cost;
   errors?: ErrorDecl[];
   /** Also callable as a Host Command by its name alone; refused on a Reserved Word. */
@@ -270,29 +275,60 @@ export interface CoordinatedLifecycle<B> {
   coordinator(binding: B): SegmentCoordinator;
 }
 
-export interface ImmediateOp<B> extends OpBase {
+/**
+ * A Host function's arguments and result in the JS forms of their Shapes
+ * (ADR 0120): a checked argument arrives as the Shape's T, and the Core
+ * converts a returned T back by the named constructors. A number result may
+ * also be a bigint, and any result may be a Value. A Shape whose T was lost
+ * (a `Shape[]` built at run time) types its argument unknown.
+ */
+export type PlainArg<S> = S extends Shape<infer T> ? (unknown extends T ? unknown : T) : unknown;
+export type PlainResult<R> = [R] extends [undefined]
+  ? Value
+  : (R extends Shape<infer T> ? (unknown extends T ? unknown : T extends Decimal ? Decimal | bigint : T) : unknown) | Value;
+type PlainArgs<A extends readonly Shape[]> = { -readonly [K in keyof A]: PlainArg<A[K]> };
+
+export interface ImmediateOp<B, A extends readonly Shape[] = Shape[], R = Shape> extends OpBase<A, R> {
   mode: "immediate";
   scope?: ScopeDecl;
   segmentBound?: boolean; // absent/false: ordinary immediate effects
-  /** Return a Value, or throw ScriptError, LimitReached, or anything else as `host error`. */
-  do(call: Call<B>, ...args: Value[]): Value;
+  /** Return a result, or throw ScriptError, LimitReached, or anything else as `host error`. */
+  do(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): PlainResult<R>;
 }
 /**
  * Exactly one of `start` and `run`. `run` is Promise sugar: the Core answers
  * or fails when it settles. After a restore a `run` call can be answered,
  * failed or reissued, but adopting one throws "not adoptable".
  */
-export interface SuspendingOp<B> extends OpBase {
+export interface SuspendingOp<B, A extends readonly Shape[] = Shape[], R = Shape> extends OpBase<A, R> {
   mode: "suspending";
   maxPendingMs?: number; // whole milliseconds; otherwise the Script's maxWaitMs
-  start?(call: Call<B>, ...args: Value[]): void;
-  run?(call: Call<B>, ...args: Value[]): Promise<Value>;
+  start?(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): void;
+  run?(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): Promise<PlainResult<R>>;
 }
-export interface FireOp<B> extends OpBase {
+export interface FireOp<B, A extends readonly Shape[] = Shape[], R = Shape> extends OpBase<A, R> {
   mode: "fire-and-forget";
-  fire(call: Call<B>, ...args: Value[]): void;
+  fire(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): void;
 }
-export type Operation<B> = ImmediateOp<B> | SuspendingOp<B> | FireOp<B>;
+export type Operation<B, A extends readonly Shape[] = Shape[], R = Shape> =
+  | ImmediateOp<B, A, R> | SuspendingOp<B, A, R> | FireOp<B, A, R>;
+
+/** What `defineCapability` infers each Operation's types from. */
+interface OpDecl { mode: Operation<unknown>["mode"]; args?: readonly Shape[]; result?: Shape }
+type ArgsOf<D> = D extends { args?: infer A extends readonly Shape[] } ? A : [];
+type ResultOf<D> = D extends { result?: infer R } ? R : undefined;
+type ByMode<B, D> = D extends { mode: "immediate" } ? ImmediateOp<B, ArgsOf<D>, ResultOf<D>>
+  : D extends { mode: "suspending" } ? SuspendingOp<B, ArgsOf<D>, ResultOf<D>>
+  : FireOp<B, ArgsOf<D>, ResultOf<D>>;
+/** Each Operation typed from its own literal `args` and `result`. */
+export type Operations<B, O> = { [K in keyof O]: Pick<O[K], keyof OpDecl & keyof O[K]> & ByMode<B, O[K]> };
+/** A Capability definer for binding type B; see Core.defineCapability. */
+export type CapabilityDefiner<B> = <const O extends Record<string, OpDecl>>(
+  name: string,
+  ops: Operations<B, O>,
+  lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
+  release?: ReleaseHook<B>,
+) => CapabilityDef<B>;
 
 /** Declarations are ordered by name, whatever order the record is in. */
 export interface CapabilityDef<B> {
@@ -302,7 +338,7 @@ export interface CapabilityDef<B> {
 }
 export interface Grant<B> { readonly binding: B; readonly capability: CapabilityDef<B> }
 
-export interface Call<B> {
+export interface Call<B, R = Value> {
   readonly group: Group; // worker calls remain forbidden in callbacks
   readonly id: string;         // unique within the Group ("pricing/r1.c1")
   readonly scriptName: string;
@@ -320,7 +356,7 @@ export interface Call<B> {
    * Queued, into the Group that made this Call, never one restored from it.
    * Ignored once the call isn't pending: abandoned, its Run ended, or discarded by a restore.
    */
-  answer(v: Value, lateCost?: { fuel: number }): void;
+  answer(v: R, lateCost?: { fuel: number }): void; // a suspending Operation's result form
   fail(e: ScriptError): void;
 }
 
@@ -561,8 +597,13 @@ export interface Library {
 
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
-  /** A plain lifecycle makes each Grant its own coordinator. */
-  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>, release?: ReleaseHook<B>): CapabilityDef<B>;
+  /**
+   * A plain lifecycle makes each Grant its own coordinator. Host functions
+   * take and return their Shapes' JS forms (ADR 0120). A Capability with a
+   * binding names its type by currying: `defineCapability<Db>()(name, ops)`.
+   */
+  defineCapability<const O extends Record<string, OpDecl>>(name: string, ops: Operations<void, O>, lifecycle?: SegmentLifecycle<void> | CoordinatedLifecycle<void>, release?: ReleaseHook<void>): CapabilityDef<void>;
+  defineCapability<B>(): CapabilityDefiner<B>;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   clockCapability(costs: Costs): CapabilityDef<void>;
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone

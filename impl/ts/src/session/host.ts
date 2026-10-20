@@ -12,11 +12,11 @@ import {
 } from '../setup';
 import { exportManifest } from '../manifest';
 import {
-  defineCapability,
+  defineValueCapability,
   type Call,
   type CapabilityDef,
   type Grant,
-  type Operation,
+  type ValueOperation,
 } from '../capabilities';
 import { checkSource } from '../checker';
 import type { DebugController } from '../debug';
@@ -964,7 +964,10 @@ export class SessionHost {
   // Each mocked Capability: its Operations take up to eight arguments, give
   // any result and cost nothing, and each call prints a `call` line.
   private mockCapabilities(): Map<string, CapabilityDef<unknown>> {
-    const operations = new Map<string, Record<string, Operation<unknown>>>();
+    const operations = new Map<
+      string,
+      Record<string, ValueOperation<unknown>>
+    >();
     for (const spec of this.setup0.operations ?? []) {
       if (this.extensions.has(spec.capability)) {
         continue;
@@ -977,7 +980,7 @@ export class SessionHost {
         ...(spec.command === undefined ? {} : { command: spec.command }),
         ...(spec.labels === undefined ? {} : { labels: spec.labels }),
       };
-      const op: Operation<unknown> =
+      const op: ValueOperation<unknown> =
         mode === 'immediate'
           ? {
               ...base,
@@ -1013,7 +1016,7 @@ export class SessionHost {
     return new Map(
       [...operations].map(([name, ops]) => [
         name,
-        defineCapability<unknown>(name, ops),
+        defineValueCapability<unknown>(name, ops),
       ]),
     );
   }

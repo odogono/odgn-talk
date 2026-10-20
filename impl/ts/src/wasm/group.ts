@@ -7,7 +7,7 @@ import {
   type Call,
   type EffectResult,
   type Grant,
-  type Operation,
+  type ValueOperation,
   type ReleaseReason,
   type SegmentLifecycle,
 } from '../capabilities';
@@ -514,7 +514,7 @@ export class WasmGroup {
     try {
       out.charged = 0;
       const result = this.#invoke(
-        op as Operation<unknown>,
+        op as ValueOperation<unknown>,
         call,
         args,
         pending,
@@ -563,7 +563,7 @@ export class WasmGroup {
   }
 
   #invoke(
-    op: Operation<unknown>,
+    op: ValueOperation<unknown>,
     call: Call<unknown>,
     args: Value[],
     pending: Pending,

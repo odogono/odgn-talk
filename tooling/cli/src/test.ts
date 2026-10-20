@@ -10,6 +10,7 @@ import {
   consoleCapability,
   defineCapability,
   defineObjectKind,
+  instant,
   list,
   LoadError,
   localeCapability,
@@ -35,6 +36,7 @@ import {
   type SyntaxNode,
   type Value,
   newGroup,
+  toValue,
 } from '@northtalk/ts';
 import { sourceForm } from '@northtalk/ts/debug';
 import { calendar, locale } from '@northtalk/tooling/builtins';
@@ -602,19 +604,20 @@ class TestRun {
             ? {
                 ...base,
                 mode: 'immediate',
-                do: (_call, ...args) => this.take(key, args),
+                do: (_call, ...args) => this.take(key, argValues(args)),
               }
             : op.mode === 'suspending'
               ? {
                   ...base,
                   mode: 'suspending',
-                  start: (call, ...args) => this.suspend(key, call, args),
+                  start: (call, ...args) =>
+                    this.suspend(key, call, argValues(args)),
                 }
               : {
                   ...base,
                   mode: 'fire-and-forget',
                   fire: (_call, ...args) => {
-                    this.record(key, args);
+                    this.record(key, argValues(args));
                   },
                 };
       }
@@ -721,13 +724,13 @@ class TestRun {
   // The Test Script's control over everything else in the test.
   private harness(): CapabilityDef<unknown> {
     const manifest = this.manifest;
-    return defineCapability<unknown>('harness', {
+    return defineCapability<unknown>()('harness', {
       stub: {
         mode: 'fire-and-forget',
         args: [shape.text, shape.any],
         cost: { fuel: 0 },
         fire: (_call, op, value) => {
-          this.queue(mockedOperation(manifest, op!), { value: value! });
+          this.queue(mockedOperation(manifest, op), { value });
         },
       },
       stubFail: {
@@ -735,7 +738,7 @@ class TestRun {
         args: [shape.text, shape.openMap({ code: shape.text })],
         cost: { fuel: 0 },
         fire: (_call, op, error) => {
-          this.queue(mockedOperation(manifest, op!), { error: error! });
+          this.queue(mockedOperation(manifest, op), { error });
         },
       },
       set: {
@@ -743,8 +746,8 @@ class TestRun {
         args: [shape.text, shape.any],
         cost: { fuel: 0 },
         fire: (_call, property, value) => {
-          const [object, prop] = this.property(property!);
-          object.native.set(prop, value!);
+          const [object, prop] = this.property(property);
+          object.native.set(prop, value);
         },
       },
       calls: {
@@ -753,7 +756,7 @@ class TestRun {
         result: shape.listOf(shape.listOf(shape.any)),
         cost: { fuel: 0 },
         do: (_call, op) =>
-          list(...(this.calls.get(mockedOperation(manifest, op!)) ?? [])),
+          list(...(this.calls.get(mockedOperation(manifest, op)) ?? [])),
       },
       advance: {
         mode: 'suspending',
@@ -761,12 +764,12 @@ class TestRun {
         maxPendingMs: FOREVER_MS,
         cost: { fuel: 0 },
         start: (call, duration) => {
-          const us = waitUs(duration!);
+          const us = waitUs(duration);
           if (us < 0n) {
             throw new ScriptError(
               'out of domain',
               '',
-              map([['value', duration!]]),
+              map([['value', duration]]),
             );
           }
           this.advances.push({ call, to: this.now + us });
@@ -776,15 +779,14 @@ class TestRun {
   }
 
   // A well-known object's property, named `<object>.<property>`.
-  private property(value: Value): [HostObject<Map<string, Value>>, string] {
-    const key = value.asText()!;
+  private property(key: string): [HostObject<Map<string, Value>>, string] {
     const [name = '', prop = ''] = key.split('.');
     const object = this.objects[name];
     if (!object?.kind.props.has(prop)) {
       throw new ScriptError(
         'no such property',
         `No well-known object has a property ${key}`,
-        map([['name', value]]),
+        map([['name', text(key)]]),
       );
     }
     return [object, prop];
@@ -823,13 +825,25 @@ class TestRun {
   }
 }
 
+// Arguments back as Values: a Host function receives each scalar Shape in
+// its JS form and a Host Object as its handle (#1420), and these are disjoint.
+const argValues = (args: readonly unknown[]): Value[] =>
+  args.map(arg => {
+    if (typeof arg === 'bigint') {
+      return instant(arg);
+    }
+    if (arg === null || typeof arg !== 'object' || !('value' in arg)) {
+      return toValue(arg);
+    }
+    return (arg as HostObject).value;
+  });
+
 // A mocked Operation, `console.read`, or a `timer` Operation, named
 // `<grant>.<operation>`.
 const mockedOperation = (
   manifest: HostManifest | null,
-  value: Value,
+  key: string,
 ): string => {
-  const key = value.asText()!;
   const [grant = '', name = ''] = key.split('.');
   const timer =
     (name === 'schedule' || name === 'cancel') &&
@@ -842,7 +856,7 @@ const mockedOperation = (
     throw new ScriptError(
       'no such operation',
       `No mocked Operation is named ${key}`,
-      map([['name', value]]),
+      map([['name', text(key)]]),
     );
   }
   return key;

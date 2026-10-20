@@ -121,3 +121,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0117: Go Hosts run the Zig Core, and the Go Core is retired](0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)
 - [0118: Folio Projects own their Libraries as independent source copies](0118-folio-projects-own-their-libraries-as-independent-source-copies.md)
 - [0119: TS Hosts may convert plain JS values by one stated rule](0119-ts-hosts-may-convert-plain-js-values-by-one-stated-rule.md)
+- [0120: TS Host functions take the JS forms of their Shapes](0120-ts-host-functions-take-the-js-forms-of-their-shapes.md)

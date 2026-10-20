@@ -64,7 +64,7 @@ const coordinatedHost = (
     },
     ...extra,
   });
-  const cap = defineCapability<string>(
+  const cap = defineCapability<string>()(
     'db',
     {
       change: op('change'),

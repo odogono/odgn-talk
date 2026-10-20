@@ -171,7 +171,7 @@ const restoreOptions = (lines: string[]) => ({
 describe('Function call lifecycle', () => {
   test('a foreign receiver spends its Home Script Grants', async () => {
     const calls: Call<number>[] = [];
-    const cap = defineCapability<number>('stock', {
+    const cap = defineCapability<number>()('stock', {
       get: {
         mode: 'immediate',
         result: shape.number,
@@ -825,7 +825,7 @@ for (const reissue of [false, true]) {
           result: shape.value,
           cost: { fuel: 1 },
           errors: [{ code: 'unavailable' }],
-          run: () =>
+          run: (): Promise<Value> =>
             failure
               ? Promise.reject(
                   new ScriptError(

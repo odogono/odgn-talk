@@ -1,11 +1,11 @@
 // Chapter 7's Locale boundary: syntax and Shapes belong to the Core;
 // collation, case mappings, data and fallback belong to the Host.
 import {
-  defineCapability,
+  defineValueCapability,
   shape,
   type Call,
   type CapabilityDef,
-  type Operation,
+  type ValueOperation,
   type Shape,
 } from './capabilities';
 import { HostError } from './errors';
@@ -198,7 +198,7 @@ export const localeCapability = (
       throw new HostError('invalid value', `Locale needs ${name}`);
     }
   }
-  const operations: Record<string, Operation<string>> = {};
+  const operations: Record<string, ValueOperation<string>> = {};
   const add = (
     name: keyof LocaleImpl,
     args: Shape[],
@@ -215,7 +215,7 @@ export const localeCapability = (
     const required = args.length;
     const optionShape =
       options === collationDefaults ? collationShape : nameShape;
-    const op: Operation<string> = {
+    const op: ValueOperation<string> = {
       mode: 'immediate',
       args: [
         ...args,
@@ -302,5 +302,5 @@ export const localeCapability = (
     undefined,
     value => wellFormedLocale(value.asText()!),
   );
-  return fixed(defineCapability('locale', operations));
+  return fixed(defineValueCapability('locale', operations));
 };

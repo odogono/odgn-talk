@@ -81,7 +81,7 @@ const recordingHost = (
       return nothing;
     },
   };
-  return { cap: defineCapability('resource', ops), calls, live };
+  return { cap: defineCapability<string>()('resource', ops), calls, live };
 };
 const start = (
   body: string,
@@ -397,7 +397,7 @@ describe('Capability Scopes', () => {
   );
   test('successful close followed by conversion exhaustion is not repeated', () => {
     const host = recordingHost();
-    const cap = defineCapability('resource', {
+    const cap = defineCapability<string>()('resource', {
       ...Object.fromEntries(host.cap.operations),
       finish: {
         mode: 'immediate',
@@ -749,7 +749,7 @@ describe('Capability Scopes', () => {
       });
       const { group, script, source, grant } = start('ask r to openfile', host);
       group.pump(now);
-      const altered = defineCapability(
+      const altered = defineCapability<string>()(
         'resource',
         Object.fromEntries(
           [...host.cap.operations].map(([name, op]) => [

@@ -1,5 +1,6 @@
 // Deterministic static graphics shared by browser and headless Session Hosts.
 import {
+  toValue,
   defineCapability,
   shape,
   ScriptError,
@@ -39,6 +40,10 @@ export type CanvasCommand = { args: string[]; op: string };
 const invalid = (message: string): never => {
   throw new ScriptError('invalid canvas argument', message);
 };
+
+/** Drawing arguments as Values: a Host function receives text as a string and a number as a Decimal. */
+export const canvasArgumentValues = (args: readonly unknown[]): Value[] =>
+  args.map(arg => toValue(arg));
 
 /** Throws a catchable `invalid canvas argument` unless `values` suit `op`. */
 export const validateCanvasArguments = (op: string, values: Value[]): void => {
@@ -109,7 +114,7 @@ export const canvasCapabilities = () => {
       cost: { fuel: 1 },
       errors: [{ code: 'invalid canvas argument' }, { code: 'canvas limit' }],
       do: (_call, ...values) => {
-        validateCanvasArguments(op, values);
+        validateCanvasArguments(op, canvasArgumentValues(values));
         if (count >= CANVAS_LIMITS.commands) {
           throw new ScriptError(
             'canvas limit',
@@ -121,7 +126,7 @@ export const canvasCapabilities = () => {
       },
     };
   }
-  return [defineCapability<unknown>('canvas', operations)];
+  return [defineCapability<unknown>()('canvas', operations)];
 };
 
 /** Why stored data is not a valid command, or undefined when it is. */
