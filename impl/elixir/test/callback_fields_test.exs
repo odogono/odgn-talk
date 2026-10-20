@@ -122,7 +122,7 @@ defmodule NorthTalk.CallbackFieldsTest do
       requested = for {frame, _, _, _} <- events, frame["m"] == "hello", frame["features"], do: frame["features"]
       assert [features] = requested
       refute @hidden in features
-      assert length(features) == 1
+      assert length(features -- ["paused-inputs-v1"]) == 1
     end
   end
 

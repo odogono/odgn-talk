@@ -26,6 +26,7 @@ defmodule NorthTalk.Owner do
   }
 
   @protocol 1
+  @paused_inputs "paused-inputs-v1"
   @default_fuel_slice 10_000
 
   defstruct [
@@ -42,6 +43,8 @@ defmodule NorthTalk.Owner do
     # Whether the Session negotiated the binary fields envelope (ADR 0110).
     request_pump: false,
     callbacks: false,
+    # Whether a callback's inputs are admitted before its result (#884).
+    paused_inputs: false,
     ref: 0,
     # The last correlation token sent; tokens are never reused.
     token: 0,
@@ -111,14 +114,18 @@ defmodule NorthTalk.Owner do
     want_callbacks? = Keyword.get(opts, :binary_callbacks, Application.get_env(:north_talk, :binary_callbacks, false))
     pump? = Binary.feature() in offered
     callbacks? = want_callbacks? and Binary.callbacks_feature() in offered
-    features = if(pump?, do: [Binary.feature()], else: []) ++ if(callbacks?, do: [Binary.callbacks_feature()], else: [])
+    paused? = @paused_inputs in offered
+
+    features =
+      if(pump?, do: [Binary.feature()], else: []) ++
+        if(callbacks?, do: [Binary.callbacks_feature()], else: []) ++ if(paused?, do: [@paused_inputs], else: [])
 
     if features == [] do
       {:ok, state}
     else
       case exchange(state, "hello", %{"protocol" => @protocol, "features" => features}) do
         {{:ok, _}, state} ->
-          {:ok, %{state | request_pump: pump?, callbacks: callbacks?}}
+          {:ok, %{state | request_pump: pump?, callbacks: callbacks?, paused_inputs: paused?}}
 
         other ->
           other
@@ -722,7 +729,7 @@ defmodule NorthTalk.Owner do
     bin = Binary.encode(frame)
     state = %{state | ref: ref, token: token}
 
-    case exchange_frame(state, {:binary, bin}, g, false) do
+    case exchange_frame(state, {:binary, bin}, g, ref, false) do
       {{:binary, reply}, state} -> pumped_reply(state, g, token, reply)
       {{:ok, ok}, state} -> lost(state, {:invalid_reply, plain(ok)})
       other -> other
@@ -886,18 +893,18 @@ defmodule NorthTalk.Owner do
   # with, answered under the same ref, until the final reply.
   defp exchange(state, m, fields) do
     state = %{state | ref: state.ref + 1}
-    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}), fields["group"], false)
+    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}), fields["group"], state.ref, false)
   end
 
   # A refused interim answer leaves the Core mid-exchange, so the instance is
-  # lost; a refused opening frame never reached the Core.
-  defp exchange_frame(state, message, g, interim?) do
+  # lost; a refused opening frame never reached the Core. Inputs admitted
+  # while a need is outstanding take later refs, so the exchange keeps its own.
+  defp exchange_frame(state, message, g, ref, interim?) do
     frame = with {:binary, bin} <- message, do: bin, else: (_ -> Jason.encode!(message))
 
     case Transport.exchange(state.transport, frame) do
       {:ok, reply} ->
         {binary?, reply} = read_reply(state, reply)
-        ref = state.ref
 
         cond do
           # A refused binary frame changed nothing, so the instance carries on.
@@ -914,7 +921,7 @@ defmodule NorthTalk.Owner do
           need = reply["need"] ->
             {answer, state} = answer(state, g, plain(need), need["args"])
             answer = if binary?, do: {:binary, Binary.encode_answer(answer, ref, g)}, else: Map.put(answer, "ref", ref)
-            exchange_frame(state, answer, g, true)
+            exchange_frame(state, answer, g, ref, true)
 
           # A final reply in the binary envelope, which the caller reads.
           binary? ->
@@ -958,13 +965,13 @@ defmodule NorthTalk.Owner do
     {Map.merge(%{"m" => "op-result", "charged" => 0}, result), state}
   end
 
-  defp answer(state, g, %{"m" => "effect"} = need, _args),
-    do: {Map.put(effect(state, g, need), "m", "effect-result"), state}
-
-  defp answer(state, g, %{"m" => "release"} = need, _args) do
-    release(state, g, need)
-    {%{"m" => "release-result"}, state}
+  defp answer(state, g, %{"m" => "effect"} = need, _args) do
+    {result, state} = effect(state, g, need)
+    {Map.put(result, "m", "effect-result"), state}
   end
+
+  defp answer(state, g, %{"m" => "release"} = need, _args),
+    do: {%{"m" => "release-result"}, release(state, g, need)}
 
   defp answer(state, g, %{"m" => "resolve"} = need, _args) do
     grants = Enum.map(need["grants"] || [], fn [script, name] -> {script, name, rebind(state, script, name)} end)
@@ -1025,21 +1032,23 @@ defmodule NorthTalk.Owner do
         now: need["now"]
       }
 
-      case hook(state, hook, [effect.phase, effect], capability.timeout) do
+      {result, state} = hook(state, g, hook, [effect.phase, effect], capability.timeout)
+
+      case result do
         {:ok, status} when status in @statuses ->
-          %{"status" => Atom.to_string(status)}
+          {%{"status" => Atom.to_string(status)}, state}
 
         {:ok, {status, detail}} when status in @statuses ->
-          %{"status" => Atom.to_string(status), "detail" => to_string(detail)}
+          {%{"status" => Atom.to_string(status), "detail" => to_string(detail)}, state}
 
         {:ok, other} ->
-          %{"status" => "unknown", "detail" => "unexpected result #{inspect(other)}"}
+          {%{"status" => "unknown", "detail" => "unexpected result #{inspect(other)}"}, state}
 
         {:error, detail} ->
-          %{"status" => "unknown", "detail" => detail}
+          {%{"status" => "unknown", "detail" => detail}, state}
       end
     else
-      _ -> %{"status" => "unknown", "detail" => "no lifecycle hooks for #{need["grant"]}"}
+      _ -> {%{"status" => "unknown", "detail" => "no lifecycle hooks for #{need["grant"]}"}, state}
     end
   end
 
@@ -1058,21 +1067,103 @@ defmodule NorthTalk.Owner do
         now: need["now"]
       }
 
-      hook(state, hook, [release], capability.timeout)
+      {_, state} = hook(state, g, hook, [release], capability.timeout)
+      state
+    else
+      _ -> state
     end
   end
 
   # A lifecycle hook runs in a Task, like a callback, and the owner waits
   # for it.
-  defp hook(state, hook, args, timeout) do
+  defp hook(state, g, hook, args, timeout) do
     task = Task.Supervisor.async_nolink(state.tasks, Capability, :hook, [hook, args])
 
-    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
-      {:ok, result} -> {:ok, result}
-      {:exit, reason} -> {:error, Exception.format_exit(reason)}
-      nil -> {:error, "timed out after #{timeout} ms"}
+    case await_callback(state, g, task, timeout) do
+      {{:ok, result}, state} -> {{:ok, result}, state}
+      {{:exit, reason}, state} -> {{:error, Exception.format_exit(reason)}, state}
+      {nil, state} -> {{:error, "timed out after #{timeout} ms"}, state}
     end
   end
+
+  # Waits for a callback's Task with its need outstanding. With
+  # paused-inputs-v1, the paused Group's queued inputs are admitted in receipt
+  # order meanwhile, each in its own exchange; other work stays in the mailbox
+  # until the exchange ends. The callback's own calls that would wait for it
+  # are refused instead.
+  defp await_callback(state, g, task, timeout) do
+    deadline = if timeout != :infinity, do: System.monotonic_time(:millisecond) + timeout
+    paused(state, g, task, deadline)
+  end
+
+  defp paused(state, g, %Task{pid: pid, ref: ref} = task, deadline) do
+    wait = if deadline, do: max(0, deadline - System.monotonic_time(:millisecond)), else: :infinity
+    mine = if state.paused_inputs, do: Map.filter(state.deferred, &match?({_, {^g, _}}, &1)), else: %{}
+    open? = state.paused_inputs
+
+    receive do
+      {^ref, result} ->
+        Process.demonitor(ref, [:flush])
+        {{:ok, result}, state}
+
+      {:DOWN, ^ref, :process, _, reason} ->
+        {{:exit, reason}, state}
+
+      {:"$gen_call", {^pid, _} = from, message} ->
+        paused(admit(state, g, from, message, true), g, task, deadline)
+
+      {:"$gen_call", from, {:send, _, %Group{name: ^g}, _, _, _} = message} when open? ->
+        paused(admit(state, g, from, message, false), g, task, deadline)
+
+      {:"$gen_call", from, {m, %Group{name: ^g}, _, _} = message}
+      when open? and m in [:call, :stop, :settle_restored] ->
+        paused(admit(state, g, from, message, false), g, task, deadline)
+
+      {:"$gen_call", from, {:settle, r, _} = message} when open? and is_map_key(mine, r) ->
+        paused(admit(state, g, from, message, false), g, task, deadline)
+    after
+      wait ->
+        {Task.shutdown(task, :brutal_kill), state}
+    end
+  end
+
+  @local [:versions, :memory]
+
+  defp admit(state, g, from, message, callback?) do
+    refusal =
+      cond do
+        message in @local or elem(message, 0) in [:release, :await, :release_pending] ->
+          nil
+
+        not state.paused_inputs ->
+          %HostError{code: "reentrant call", detail: "talk.wasm lacks #{@paused_inputs}"}
+
+        callback? and not admissible?(state, g, message) ->
+          %HostError{code: "reentrant call", detail: "Group #{g} is paused in this callback's exchange"}
+
+        true ->
+          nil
+      end
+
+    if refusal do
+      GenServer.reply(from, {:error, refusal})
+      state
+    else
+      case handle_call(message, from, state) do
+        {:reply, reply, state} ->
+          GenServer.reply(from, reply)
+          state
+
+        {:noreply, state} ->
+          state
+      end
+    end
+  end
+
+  defp admissible?(_state, g, {:send, _, %Group{name: g}, _, _, _}), do: true
+  defp admissible?(_state, g, {m, %Group{name: g}, _, _}) when m in [:call, :stop, :settle_restored], do: true
+  defp admissible?(state, g, {:settle, r, _}), do: match?({^g, _}, state.deferred[r])
+  defp admissible?(_state, _g, _message), do: false
 
   # Dispatch is by the Script's Grant, so the call reaches the Capability
   # that Grant is of, with its binding, whatever other Capabilities name
@@ -1120,10 +1211,11 @@ defmodule NorthTalk.Owner do
 
   defp run(state, capability, op, args, call) do
     task = Task.Supervisor.async_nolink(state.tasks, Capability, :invoke, [op, args, call])
+    {outcome, state} = await_callback(state, call.group.name, task, capability.timeout)
 
     result =
       try do
-        case Task.yield(task, capability.timeout) || Task.shutdown(task, :brutal_kill) do
+        case outcome do
           {:ok, {:ok, value}} when op.mode == :immediate -> %{"result" => encode(state, call.group.name, value)}
           {:ok, :noreply} when op.mode == :fire_and_forget -> %{"done" => true}
           {:ok, {:error, failure}} -> %{"fail" => failure(failure)}
