@@ -10,6 +10,10 @@ package northtalk
 
 const zigSettlementsFeature = "settlements-fields-v1"
 
+// zigQueueFeature moves queued Deliveries, Broadcasts and Decisions to the
+// fields envelope (#1374).
+const zigQueueFeature = "queue-fields-v1"
+
 // zigSettlement is one queued answer or fail: its settle-pump list item, and
 // its ordinary input for a flush.
 type zigSettlement struct {

@@ -141,6 +141,59 @@ func (b *zigGroup) queueBinary(s *Script, to *Object, fn *Value, m Message, ctx 
 	return id, pending, nil
 }
 
+// queueFieldsBinary admits a queued Delivery, Broadcast or Decision in a
+// binary frame (#1374). Queued behind another export, it crosses as the
+// JSON input queue would send.
+func (b *zigGroup) queueFieldsBinary(s *Script, to *Object, m Message, ctx context.Context, how string, d *Deciding) (DeliveryID, *Pending, error) {
+	method, fields, _, err := b.queueFields(s, to, nil, m, how)
+	if err != nil {
+		return "", nil, err
+	}
+	var w *zbWriter
+	var split int
+	switch method {
+	case "deliver":
+		w, split = b.zbInput(zbDeliver)
+	case "broadcast":
+		w, split = b.zbInput(zbBroadcast)
+	default:
+		w, split = b.zbInput(zbDecide)
+	}
+	w.key("group")
+	w.ptext(b.groupHandle())
+	if how == "broadcast" || how == "decide-broadcast" {
+		err = b.zbMessage(w, m)
+	} else {
+		err = b.zbAddress(w, s, to, m)
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	if how == "decide-broadcast" {
+		w.key("broadcast")
+		w.bool(true)
+	}
+	frame := w.frame(split, false, func() (map[string]any, error) { return fields, nil })
+	var id DeliveryID
+	var pending *Pending
+	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+		if !p.admission.assigned {
+			return nil
+		}
+		id = p.admission.delivery
+		pending = b.admitted(id, how, ctx, d)
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	if packet.failure != nil {
+		return "", nil, packet.failure
+	}
+	b.ready()
+	return id, pending, nil
+}
+
 // pumpBinary is pump's exchange in a binary frame.
 func (b *zigGroup) pumpBinary(now time.Time, options PumpOptions) (PumpResult, error) {
 	tag := zbPump

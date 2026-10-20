@@ -49,6 +49,9 @@ var (
 	zbCallPump    = zbTagFor("call-pump")
 	zbSettlePump  = zbTagFor("settle-pump")
 	zbLoadTag     = zbTagFor("load")
+	zbDeliver     = zbTagFor("deliver")
+	zbBroadcast   = zbTagFor("broadcast")
+	zbDecide      = zbTagFor("decide")
 	zbAdmission   = zbTagFor("admission")
 	zbCompletion  = zbTagFor("completion")
 )
@@ -162,6 +165,15 @@ func (w *zbWriter) ptext(s string) {
 }
 
 func (w *zbWriter) int(n int64) { w.buf = zbAppendInt(w.buf, n) }
+
+// bool writes a boolean item: 01 false, 02 true.
+func (w *zbWriter) bool(v bool) {
+	if v {
+		w.buf = append(w.buf, 0x02)
+	} else {
+		w.buf = append(w.buf, 0x01)
+	}
+}
 
 func zbAppendInt(out []byte, n int64) []byte {
 	if n < 0 {
@@ -292,6 +304,11 @@ func (b *zigGroup) zbAddress(w *zbWriter, s *Script, to *Object, m Message) erro
 		w.ptext(s.name)
 	}
 	w.end()
+	return b.zbMessage(w, m)
+}
+
+// zbMessage writes a queued input's message.
+func (b *zigGroup) zbMessage(w *zbWriter, m Message) error {
 	w.key("message")
 	w.begin(nil, false)
 	w.key("name")

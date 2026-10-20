@@ -128,8 +128,12 @@ func (r zigReplyReader) readJSON(root zigReply, ref int64, sent string) (zigResp
 	}
 
 	switch sent {
-	case "request", "call", "request-pump", "call-pump":
+	case "request", "call", "request-pump", "call-pump", "deliver", "broadcast", "decide":
+		// A JSON Broadcast's, or Broadcast Decision's, id is its broadcast.
 		id := p.ok.get("delivery")
+		if !id.present() {
+			id = p.ok.get("broadcast")
+		}
 		if !id.present() {
 			id = root.get("delivery")
 		}

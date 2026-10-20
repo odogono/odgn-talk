@@ -748,6 +748,7 @@ const VIEWS: Record<string, View> = {
       'fields',
       'callbacks',
       'settle-pump',
+      'queue',
       'settlement',
       'features',
     ].map(name => [
