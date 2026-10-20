@@ -93,7 +93,11 @@ func (g *Group) settleOperation(d delivery) {
 func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (corevalue.Value, *corevalue.Value) {
 	pending := g.calls[CallID(p.Call)]
 	delete(g.calls, CallID(p.Call))
-	if p.Reason == "call lost" || p.Reason == "capability revoked" {
+	if p.Reason == "call lost" {
+		e := operationError(p.Reason, nil)
+		return corevalue.Value{}, &e
+	}
+	if p.Reason == "capability revoked" {
 		e := operationError(p.Reason, []corevalue.Pair{{Key: "capability", Val: mustText(pending.call.grantName)}, {Key: "operation", Val: mustText(pending.name)}})
 		return corevalue.Value{}, &e
 	}
