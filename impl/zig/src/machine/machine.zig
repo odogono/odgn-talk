@@ -8417,9 +8417,12 @@ pub const Group = struct {
         if (run.cleanup_from != null) {
             return g.cleanupLimit(run, limit);
         }
-        // A Function Value call's Run has no Handler: its fault names the
-        // function's own body, as talk.go's does.
-        const handler = if (run.handler.len == 0 and run.delivery.function != null and run.frames.items.len > 0) unitOf(run, &run.frames.items[0]).bodies[run.frames.items[0].body].name else run.handler;
+        // The fault names the Handler or function the code is in, as
+        // talk.go's does. Unlike a raise, a Lambda keeps its own body name.
+        const handler = if (run.frames.items.len > 0) blk: {
+            const f = &run.frames.items[run.frames.items.len - 1];
+            break :blk unitOf(run, f).bodies[f.body].name;
+        } else run.handler;
         run.end_at = .{ .unit = unit, .line = ins.position.line, .column = ins.position.column, .handler = handler, .pc = pc };
         if (g.trace) |w| {
             w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
