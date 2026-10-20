@@ -1,4 +1,4 @@
-# Unblessed: awaiting first review (#1061).
+# First blessing approved by the maintainer on 2026-10-20 for #1061.
 # Each accepted send costs 48; short's 64-byte result would reach 160.
 
 > load short identity=c911b65be55cf735428fb6a09fbf824d7df8bc50290e380cd027d4c9631f55f8
