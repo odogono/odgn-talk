@@ -1,0 +1,80 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7828 ns/op	      7458 p50-ns	     11583 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12160 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8888 ns/op	      8500 p50-ns	     12375 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7943 ns/op	      7625 p50-ns	     10834 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12343 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8745 ns/op	      8416 p50-ns	     12375 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7868 ns/op	      7542 p50-ns	     11167 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12229 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8941 ns/op	      8542 p50-ns	     12125 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7856 ns/op	      7500 p50-ns	     11334 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12425 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8906 ns/op	      8541 p50-ns	     12500 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      8261 ns/op	      7375 p50-ns	     11333 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12198 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8928 ns/op	      8542 p50-ns	     12792 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7892 ns/op	      7583 p50-ns	     11333 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12250 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8932 ns/op	      8542 p50-ns	     12708 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7723 ns/op	      7375 p50-ns	     10959 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12277 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8829 ns/op	      8459 p50-ns	     11583 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7850 ns/op	      7417 p50-ns	     11583 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12312 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8909 ns/op	      8541 p50-ns	     12250 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7948 ns/op	      7459 p50-ns	     11958 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12332 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8873 ns/op	      8500 p50-ns	     11583 p99-ns	    5788 B/op	      81 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-3   	    5000	      7848 ns/op	      7458 p50-ns	     11542 p99-ns	    4759 B/op	      62 allocs/op
+BenchmarkBackendCallPump-3      	    5000	     12273 ns/op	    6087 B/op	      80 allocs/op
+BenchmarkBackendRequest-3       	    5000	      8927 ns/op	      8542 p50-ns	     12375 p99-ns	    5788 B/op	      81 allocs/op
+PASS

@@ -39,30 +39,16 @@ func zigCallbacksWanted() (bool, error) {
 
 // Callback needs and results: a message tag and its positional fields. A
 // need's notices come last.
-const (
-	zbOpResult      byte = 0x06
-	zbPropResult    byte = 0x07
-	zbEffectResult  byte = 0x08
-	zbReleaseResult byte = 0x09
-	zbOpNeed        byte = 0x83
-	zbPropNeed      byte = 0x84
-	zbEffectNeed    byte = 0x85
-	zbReleaseNeed   byte = 0x86
+var (
+	zbOpResult      = zbTagFor("op-result")
+	zbPropResult    = zbTagFor("prop-result")
+	zbEffectResult  = zbTagFor("effect-result")
+	zbReleaseResult = zbTagFor("release-result")
+	zbOpNeed        = zbTagFor("op")
+	zbPropNeed      = zbTagFor("prop")
+	zbEffectNeed    = zbTagFor("effect")
+	zbReleaseNeed   = zbTagFor("release")
 )
-
-var zbCallbacks = map[byte]struct {
-	kind   string
-	fields []string
-}{
-	zbOpResult:      {"", []string{"ref", "group", "outcome", "value", "code", "message", "charged"}},
-	zbPropResult:    {"", []string{"ref", "group", "outcome", "value", "code", "message", "charged"}},
-	zbEffectResult:  {"", []string{"ref", "group", "status"}},
-	zbReleaseResult: {"", []string{"ref", "group"}},
-	zbOpNeed:        {"op", []string{"ref", "call", "script", "run", "segment", "grant", "capability", "operation", "mode", "now", "args", "scope", "automatic", "fuelLeft", "abandoned", "settled", "trace"}},
-	zbPropNeed:      {"prop", []string{"ref", "object", "prop", "set", "value", "op", "selector", "abandoned", "settled", "trace"}},
-	zbEffectNeed:    {"effect", []string{"ref", "script", "run", "segment", "grant", "grants", "coordinator", "phase", "now", "abandoned", "settled", "trace"}},
-	zbReleaseNeed:   {"release", []string{"ref", "script", "grant", "reason", "now", "abandoned", "settled", "trace"}},
-}
 
 // zigNeed is a callback need read from either envelope. Decoding failures
 // are kept, so each is refused at the point the JSON reader always refused it.
@@ -164,7 +150,7 @@ func (b *zigGroup) zbResult(need byte, r *zigResult) *zbFrame {
 	tag := need - zbOpNeed + zbOpResult
 	w := &zbWriter{buf: make([]byte, 0, 24+len(r.value)+len(r.code)+len(r.message))}
 	w.buf = append(append(w.buf, zbPrefix...), byte(zbFields), tag)
-	w.begin(zbCallbacks[tag].fields, true)
+	w.begin(zbEnvelopes[tag].fields, true)
 	w.key("ref")
 	split := len(w.buf)
 	w.key("group")

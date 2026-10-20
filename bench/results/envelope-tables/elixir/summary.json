@@ -1,0 +1,35 @@
+{
+  "method": "Three repetitions per revision and scheduler setting, with revision order alternating. Each repetition uses the unchanged October 19 measure.exs: eight interleaved fields/JSON rounds, 40 measured Requests of 100 crossings. Median of 24 fields-mode per-round medians; same reactor for both revisions. Initial runs overlapped compiler activity and are excluded.",
+  "base": "e4275bb0",
+  "schedulers": [
+    "default",
+    "+S 2:2"
+  ],
+  "harness": "bench/results/elixir-callbacks/2026-10-19-darwin-arm64/measure.exs",
+  "archivedBaseline": "bench/results/elixir-callbacks/2026-10-19-darwin-arm64-1316-encode/README.md",
+  "reactorSha256": "60a95621dba12f34f2aef7160781bde458eab3ddedbb2fd8743c4c5d7ca958f7",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "results": {
+    "default/calls": {
+      "beforeMedianNs": 57053.4375,
+      "afterMedianNs": 57494.582500000004,
+      "afterBeforeRatio": 1.0077321370863939
+    },
+    "default/properties": {
+      "beforeMedianNs": 53016.665,
+      "afterMedianNs": 52532.917499999996,
+      "afterBeforeRatio": 0.9908755577137867
+    },
+    "s2/calls": {
+      "beforeMedianNs": 57532.395000000004,
+      "afterMedianNs": 57363.4375,
+      "afterBeforeRatio": 0.9970632632276129
+    },
+    "s2/properties": {
+      "beforeMedianNs": 53233.4375,
+      "afterMedianNs": 52531.565,
+      "afterBeforeRatio": 0.9868151948669481
+    }
+  },
+  "elixir": "Erlang/OTP 29 [erts-17.1.1] [source] [64-bit] [smp:10:10] [ds:10:10:10] [async-threads:1] [jit] [dtrace]\n\nElixir 1.20.4 (compiled with Erlang/OTP 29)"
+}

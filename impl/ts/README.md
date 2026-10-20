@@ -215,6 +215,11 @@ JSON hello before sending Request/Pump binary frames. Callback needs/results
 use the independently negotiated `callbacks-fields-v1`; other needs and their
 answers remain JSON.
 
+Frame tags, field order, kinds, required fields and Report schemas come from
+`src/generated/envelope.ts`, written from `spec/data/envelope.toml`. The shared
+[frame vectors](../testdata/envelope-frames.json) check all four codecs against
+reviewed decoded trees and exact re-encoded bytes.
+
 The shared [vectors](../testdata/request-pump-binary.json) run against Go, Zig
 and TS. `bun impl/ts/tools/request-pump-browser.ts` from the repository root
 verifies those vectors in Chromium, transfers buffers both ways to a worker

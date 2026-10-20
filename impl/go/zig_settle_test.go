@@ -39,11 +39,8 @@ func recordFrames(t *testing.T) func() []string {
 }
 
 func zbTagName(tag byte) string {
-	if m, ok := zbMessages[tag]; ok && m.name != "" {
+	if m := zbEnvelopes[tag]; m.name != "" && (tag < zbOpResult || tag > zbReleaseResult) {
 		return m.name
-	}
-	if c, ok := zbCallbacks[tag]; ok && c.kind != "" {
-		return c.kind
 	}
 	return "result"
 }

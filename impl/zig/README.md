@@ -1661,12 +1661,15 @@ error reply itself. Early Load refusals record the attempted input and refusal.
 `src/binary_value.zig` implements the Value items for the
 [Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
 It preserves decimal scale, uses iterative traversal, and resolves Objects and
-Functions through the owning Group's hooks. `src/request_pump.zig` holds both
-candidates' envelope reader and writer. The Session offers both features at
-`hello` and fixes the chosen one for the Session. It then serves binary
-`request`, `call`, `pump`, `request-pump` and `call-pump` frames, keeps each
-Group exchange's layout across JSON needs, and accepts `cancel-correlated` by
-token until the final reply.
-ADR 0110 accepts the fields envelope; map remains available for measurements.
+Functions through the owning Group's hooks. `src/request_pump.zig` holds the
+fields-envelope reader and writer. Tags, feature names, Report names and
+positional fields come from `src/generated/envelope.zig`, written from
+`spec/data/envelope.toml`; field-name projections are computed at compile time.
+The Session negotiates the fields features at `hello`, serves Request/Pump,
+callback, settlement and Load frames, and accepts `cancel-correlated` by token
+until the final reply. The retired map layout is refused. Shared
+[`envelope-frames.json`](../testdata/envelope-frames.json) vectors check decoded
+field meanings and exact re-encoded bytes, including specialized Reports and
+nested Values.
 The [experiment record](../../docs/research/request-pump-binary.md) records the
 transport implementation and the performance evidence.

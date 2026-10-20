@@ -5,6 +5,7 @@ import {
   encodeBinaryFrame,
 } from '../src/request-pump-binary';
 import { readOrderedJSON } from '../src/readers';
+import { plain } from '../src/wasm/wire';
 
 for (const frame of frames) {
   test(`shared fields envelope: ${frame.name}`, () => {
@@ -14,6 +15,9 @@ for (const frame of frames) {
         'hex',
       ),
     ).toBe(frame.hex);
+    expect(plain(decodeBinaryFrame(bytes.buffer))).toEqual(
+      plain(readOrderedJSON(frame.tree)),
+    );
     expect(
       Buffer.from(encodeBinaryFrame(decodeBinaryFrame(bytes.buffer))).toString(
         'hex',

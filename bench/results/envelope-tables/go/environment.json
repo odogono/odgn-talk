@@ -1,0 +1,16 @@
+{
+  "base": "e4275bb0",
+  "go": "go version go1.27.2 darwin/arm64",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "rounds": 10,
+  "requestIterations": 5000,
+  "hostIterations": 100,
+  "GOMAXPROCS": 3,
+  "artifact": {
+    "sourceCommit": "a43dd2bd92c1a2b7cbf02097e5f02de2dee61059",
+    "zig": "0.17.0",
+    "target": "wasm32-wasi",
+    "optimize": "safe",
+    "sha256": "297fa0c1ceff2ca5b91e0f481e803c6d68a80962d2501013dd89427ccc2f68b2"
+  }
+}

@@ -2043,6 +2043,10 @@ Function staleness fails at drain and wrong arity at execution, as with `Call`.
 
 The experimental Zig backend negotiates the accepted fields envelope by default
 for new guests, following the [binary-exchange contract](../../spec/embedding/request-pump-binary.md).
+The codec uses the generated envelope catalogue from `spec/data/envelope.toml`
+for tags, ordered fields, Report names and specialized item kinds. Shared
+[`envelope-frames.json`](../testdata/envelope-frames.json) vectors exercise its
+framing and Value codecs against reviewed trees and exact re-encoded bytes.
 Ordinary Requests, Function calls and Pumps then use binary frames, and the
 combined APIs use the guest's combined messages after ordinary admission checks.
 Their Pending is registered before sending; context cancellation uses the

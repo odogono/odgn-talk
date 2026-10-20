@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -40,51 +41,62 @@ func zigRequestPumpFeature() (string, bool, error) {
 }
 
 // Fields-candidate message tags and positional fields.
-const (
-	zbRequest     byte = 0x01
-	zbCall        byte = 0x02
-	zbPump        byte = 0x03
-	zbRequestPump byte = 0x04
-	zbCallPump    byte = 0x05
-	zbSettlePump  byte = 0x0a
-	zbLoadTag     byte = 0x0b
-	zbAdmission   byte = 0x81
-	zbCompletion  byte = 0x82
+var (
+	zbRequest     = zbTagFor("request")
+	zbCall        = zbTagFor("call")
+	zbPump        = zbTagFor("pump")
+	zbRequestPump = zbTagFor("request-pump")
+	zbCallPump    = zbTagFor("call-pump")
+	zbSettlePump  = zbTagFor("settle-pump")
+	zbLoadTag     = zbTagFor("load")
+	zbAdmission   = zbTagFor("admission")
+	zbCompletion  = zbTagFor("completion")
 )
 
-var zbMessages = map[byte]struct {
-	name   string
-	fields []string
-}{
-	zbRequest:     {"request", []string{"ref", "group", "to", "message"}},
-	zbCall:        {"call", []string{"ref", "group", "fn", "args", "limits"}},
-	zbPump:        {"pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap"}},
-	zbRequestPump: {"request-pump", []string{"ref", "group", "token", "to", "message", "now", "fuelSlice", "fuelCap"}},
-	zbCallPump:    {"call-pump", []string{"ref", "group", "token", "fn", "args", "limits", "now", "fuelSlice", "fuelCap"}},
-	zbLoadTag:     {"load", []string{"ref", "group", "name", "source", "grants", "grantsAsUsed", "owner", "objects", "limits", "newGroup", "refuseWorker"}},
-	zbSettlePump:  {"settle-pump", []string{"ref", "group", "now", "fuelSlice", "fuelCap", "settlements"}},
-	zbAdmission:   {"", []string{"ref", "delivery", "err", "abandoned", "settled", "trace"}},
-	zbCompletion:  {"", []string{"ref", "delivery", "token", "state", "nextDeadline", "fuelUsed", "reports", "gone", "err", "abandoned", "settled", "trace"}},
+func zbTagFor(name string) byte {
+	for _, entry := range generated.EnvelopeMessages {
+		if entry.Name == name {
+			return entry.Tag
+		}
+	}
+	panic("talk: unknown envelope message " + name)
 }
 
-// zbReports are the specialized Reports, by tag − 1, with their JSON kind.
-var zbReports = []struct {
-	kind   string
-	fields []string
-}{
-	{"run end", []string{"script", "run", "delivery", "broadcast", "handler", "fallback", "climbed", "outcome", "result", "error", "limit", "effect", "cleanupFailed", "at", "fuel", "alloc"}},
-	{"run started", []string{"script", "run", "args", "rootDelivery", "parentRun", "parentCall", "delivery", "selector", "fn"}},
-	{"run discarded", []string{"script", "run", "reason", "rootDelivery", "parentRun", "parentCall"}},
-	{"run accounting", []string{"script", "run", "fuel", "state", "rootDelivery", "parentRun", "parentCall"}},
-	{"causal work", []string{"rootDelivery", "liveRuns", "queuedMessages", "discardedMessages"}},
-	{"stop", []string{"script", "reason", "discardedRuns", "droppedMessages", "pendingCalls"}},
-	{"unhandled", []string{"delivery", "message", "target"}},
-	{"call failed", []string{"script", "call", "operation", "detail"}},
-	{"effect failure", []string{"script", "run", "grant", "segment", "phase", "status", "scope"}},
-	{"decided", []string{"delivery", "broadcast", "verdict", "vetoes", "undecided"}},
-	{"host error", []string{"code", "detail"}},
-	{"charge result", []string{"request", "call", "fuel", "status"}},
+// Cache the generated catalogue's field names once. Positional readers and
+// writers share these slices; nested records keep their hand-written codec.
+type zbSchema struct {
+	name      string
+	fields    []string
+	items     []generated.EnvelopeField
+	direction string
+	reports   int
 }
+
+func zbCatalogue(entries []generated.EnvelopeEntry) [256]zbSchema {
+	var out [256]zbSchema
+	for _, entry := range entries {
+		names := make([]string, len(entry.Fields))
+		reports := -1
+		for i, field := range entry.Fields {
+			names[i] = field.Name
+			if field.Kind == "reports" {
+				reports = i
+			}
+		}
+		out[entry.Tag] = zbSchema{name: entry.Name, fields: names, items: entry.Fields, direction: entry.Direction, reports: reports}
+	}
+	return out
+}
+
+var zbEnvelopes = zbCatalogue(generated.EnvelopeMessages)
+var zbReportSchemas = zbCatalogue(generated.EnvelopeReports)
+var zbSettlement = func() []string {
+	names := make([]string, len(generated.EnvelopeSettlement))
+	for i, field := range generated.EnvelopeSettlement {
+		names[i] = field.Name
+	}
+	return names
+}()
 
 // zbWriter writes a frame. A record is a map of its present fields, or a
 // fields-candidate list whose positions are its field names, absent ones
@@ -198,7 +210,7 @@ func (f *zbFrame) bytes(ref int64) []byte {
 func (b *zigGroup) zbInput(m byte) (*zbWriter, int) {
 	w := &zbWriter{buf: make([]byte, 0, 128)}
 	w.buf = append(append(w.buf, zbPrefix...), zbFields, m)
-	w.begin(zbMessages[m].fields, true)
+	w.begin(zbEnvelopes[m].fields, true)
 	w.key("ref")
 	return w, len(w.buf)
 }
@@ -330,7 +342,7 @@ type zbReader struct {
 	want  int
 }
 
-// zbRow is one positional Report: its zbReports index and fields.
+// zbRow is one positional Report: its generated tag and fields.
 type zbRow struct {
 	kind int
 	view zbView
@@ -442,14 +454,14 @@ func (r *zbReader) skipReports() ([]byte, error) {
 		// Reports average under ten fields; one backing usually holds them all.
 		r.want = int(n-i) * 10
 		tag, err := r.byte()
-		if err != nil || tag == 0 || int(tag) > len(zbReports) {
+		if err != nil || tag == 0 || zbReportSchemas[tag].name == "" {
 			return nil, errZigBinary
 		}
-		view, err := r.positional(zbReports[tag-1].fields)
+		view, err := r.positional(&zbReportSchemas[tag])
 		if err != nil {
 			return nil, err
 		}
-		r.rows = append(r.rows, zbRow{kind: int(tag - 1), view: view})
+		r.rows = append(r.rows, zbRow{kind: int(tag), view: view})
 	}
 	return r.d[start:r.at], nil
 }
@@ -507,11 +519,12 @@ func zbMapView(span []byte) (zbView, error) {
 }
 
 // zbPositional reads a fields-candidate record of the given names.
-func zbPositional(r *zbReader, names []string) (zbView, error) {
-	return r.positional(names)
+func zbPositional(r *zbReader, schema *zbSchema) (zbView, error) {
+	return r.positional(schema)
 }
 
-func (r *zbReader) positional(names []string) (zbView, error) {
+func (r *zbReader) positional(schema *zbSchema) (zbView, error) {
+	names := schema.fields
 	if t, err := r.byte(); err != nil || t != 0x06 {
 		return zbView{}, errZigBinary
 	}
@@ -524,9 +537,9 @@ func (r *zbReader) positional(names []string) (zbView, error) {
 	at := len(r.spans)
 	r.spans = r.spans[:at+len(names)]
 	v := zbView{keys: names, vals: r.spans[at : at+len(names) : at+len(names)]}
-	for i, name := range names {
+	for i := range names {
 		skip := r.skip
-		if name == "reports" {
+		if i == schema.reports {
 			skip = r.skipReports
 		}
 		val, err := skip()
@@ -638,8 +651,8 @@ func (b *zigGroup) zbDecodeValue(span []byte) (Value, error) {
 func zbLoad(fields map[string]any) ([]byte, error) {
 	w := &zbWriter{buf: make([]byte, 0, 256)}
 	w.buf = append(append(w.buf, zbPrefix...), zbFields, zbLoadTag)
-	w.begin(zbMessages[zbLoadTag].fields, true)
-	for _, name := range zbMessages[zbLoadTag].fields {
+	w.begin(zbEnvelopes[zbLoadTag].fields, true)
+	for _, name := range zbEnvelopes[zbLoadTag].fields {
 		w.key(name)
 		if err := w.protocol(fields[name]); err != nil {
 			return nil, err

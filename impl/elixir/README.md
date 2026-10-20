@@ -129,7 +129,8 @@ Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process hea
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
 | [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s, and a combined call's `NorthTalk.Pumped` and `NorthTalk.Pending`. |
-| [`lib/north_talk/binary.ex`](lib/north_talk/binary.ex) | The Request/Pump and callback binary fields envelopes, converted to and from the JSON form the owner reads. |
+| [`lib/north_talk/binary.ex`](lib/north_talk/binary.ex) | The Request/Pump, settlement and callback binary fields envelopes, converted to and from the JSON form the owner reads. Tags and fields come from the generated envelope catalogue; reshaping stays in the codec. |
+| [`lib/north_talk/generated/envelope.ex`](lib/north_talk/generated/envelope.ex) | Envelope tags, ordered field kinds, Reports and feature names generated from `spec/data/envelope.toml`. |
 | [`lib/north_talk/value.ex`](lib/north_talk/value.ex) | Value conversion. |
 | [`lib/north_talk/types.ex`](lib/north_talk/types.ex) | The value structs, and `NorthTalk.Function` handles. |
 | [`lib/north_talk/transport.ex`](lib/north_talk/transport.ex) | The transport behaviour: one frame in, one frame out. |

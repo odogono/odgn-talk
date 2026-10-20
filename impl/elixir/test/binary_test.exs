@@ -5,8 +5,7 @@ defmodule NorthTalk.BinaryTest do
   @vectors "../testdata/envelope-frames.json"
            |> File.read!()
            |> Jason.decode!()
-           |> Enum.filter(&(String.starts_with?(&1["name"], "legacy-") or String.starts_with?(&1["name"], "load-")))
-           |> Enum.map(&[&1["tree"], &1["hex"]])
+           |> Enum.map(&[&1["name"], &1["tree"], &1["hex"]])
 
   defp json(text), do: Jason.decode!(text, objects: :ordered_objects, floats: :decimals)
   defp plain(%Jason.OrderedObject{values: values}), do: Map.new(values, fn {k, v} -> {k, plain(v)} end)
@@ -14,14 +13,30 @@ defmodule NorthTalk.BinaryTest do
   defp plain(list) when is_list(list), do: Enum.map(list, &plain/1)
   defp plain(other), do: other
 
-  test "frames encode to the bytes TS writes, and decode back to their JSON form" do
-    for [text, hex] <- @vectors do
-      bytes = Base.decode16!(hex, case: :lower)
+  for [name, text, hex] <- @vectors do
+    test "shared fields envelope: #{name}" do
+      text = unquote(text)
+      bytes = Base.decode16!(unquote(hex), case: :lower)
       assert Binary.encode(json(text)) == bytes
       decoded = Binary.decode(bytes)
       assert Binary.encode(decoded) == bytes
-      # Decoding adds `m` to an input; a value-free completion keeps its shape.
       assert plain(decoded) == plain(json(text))
+    end
+  end
+
+  test "settlement records refuse malformed widths, kinds and outcomes" do
+    prefix = "4e544201010a060603011201670000000601"
+
+    for record <- [
+          "06051201631206616e73776572000000",
+          "0700",
+          "0606001206616e7377657200000000",
+          "0606120163120362616400000000",
+          "0606120163030100000000",
+          "06061201631206616e73776572001201660000"
+        ] do
+      bytes = Base.decode16!(prefix <> record, case: :lower)
+      assert_raise HostError, fn -> Binary.decode(bytes) end
     end
   end
 
@@ -31,7 +46,7 @@ defmodule NorthTalk.BinaryTest do
           {6, "op-result", %{"started" => true}},
           {6, "op-result", %{"done" => true}},
           {6, "op-result", %{"limit" => true}},
-          {6, "op-result", %{"hostError" => true}},
+          {6, "op-result", %{"hostError" => ""}},
           {7, "prop-result", %{"value" => nil}},
           {7, "prop-result", %{"ok" => true}},
           {7, "prop-result",
@@ -53,9 +68,9 @@ defmodule NorthTalk.BinaryTest do
   test "callback needs keep notices outside the need and distinguish a Nothing setter" do
     for need <- [
           %{"m" => "op", "args" => [nil, %{"$function" => ["s", "f", "h"]}], "automatic" => false},
-          %{"m" => "prop", "object" => ["box", "one"], "prop" => "value"},
-          %{"m" => "prop", "object" => ["box", "one"], "prop" => "value", "value" => nil},
-          %{"m" => "prop", "object" => ["box", "one"], "op" => "at", "selector" => 2},
+          %{"m" => "prop", "object" => %{"$object" => ["box", "one"]}, "prop" => "value"},
+          %{"m" => "prop", "object" => %{"$object" => ["box", "one"]}, "prop" => "value", "value" => nil},
+          %{"m" => "prop", "object" => %{"$object" => ["box", "one"]}, "op" => "at", "selector" => 2},
           %{"m" => "effect", "grants" => ["a", "b"], "phase" => "begin"},
           %{"m" => "release", "reason" => "stop", "now" => "2026-10-19T12:00:00Z"}
         ] do
