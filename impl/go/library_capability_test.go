@@ -276,7 +276,7 @@ func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {
 		}
 		return l
 	}
-	base := compile("base", "function fetch\n ask io to read 1\n return it\nend fetch\n")
+	base := compile("base", "function fetch\n ask io to read 1\n ask io to read 1\n return it\nend fetch\n")
 	left := compile("left", "use fetch from base\nfunction l\n return fetch()\nend l\n", base)
 	right := compile("right", "use fetch from base\nfunction r\n return fetch()\nend r\n", base)
 	top := compile("top", "use l from left\nuse r from right\nprivate function unused\n ask io to read 99\n return it\nend unused\nfunction run\n return [l(),r()]\nend run\n", left, right)
@@ -303,15 +303,15 @@ func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {
 			}
 			want := 2
 			if grants != nil {
-				want = 4
+				want = 6
 			}
 			if len(rejected.Diagnostics) != want {
-				t.Fatal("diamond duplicate or per-use diagnostics lost:", rejected.Diagnostics)
+				t.Fatal("diamond duplicate, identical-site or per-use diagnostics lost:", rejected.Diagnostics)
 			}
 			for j, d := range rejected.Diagnostics {
 				line := j + 1
 				if grants != nil {
-					line = j/2 + 1
+					line = j/3 + 1
 				}
 				if d.Code != name || d.Unit != "s" || d.Line != line || d.Col != 1 {
 					t.Fatal("original sites must be checked once at each use:", d)
