@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
@@ -42,13 +41,12 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 	if v.Kind == value.Text {
 		literal(v.Text(), fold)
 	} else {
-		tree, e := syntax.Parse("on pattern\n put " + v.Text() + " into result\nend pattern\n")
+		root, e := value.ParsePatternTree(v.Text())
 		if e != nil {
 			return p, e
 		}
-		root := tree.Declarations[0].Body[0].Children[0]
-		var compile func(*syntax.Node, bool, bool, bool)
-		repeat := func(mode string, n *syntax.Node, f, l bool) {
+		var compile func(*value.PatternTree, bool, bool, bool)
+		repeat := func(mode string, n *value.PatternTree, f, l bool) {
 			start := len(p.Code)
 			split := -1
 			if mode != "one or more of" {
@@ -67,8 +65,8 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 				p.Code[split].A, p.Code[split].B = p.Code[split].B, p.Code[split].A
 			}
 		}
-		var numeric func(*syntax.Node) bool
-		numeric = func(n *syntax.Node) bool {
+		var numeric func(*value.PatternTree) bool
+		numeric = func(n *value.PatternTree) bool {
 			if n.Kind == "pattern-convert" || n.Kind == "pattern-typed" {
 				return true
 			}
@@ -77,7 +75,7 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 			}
 			return false
 		}
-		compile = func(n *syntax.Node, f, l, singular bool) {
+		compile = func(n *value.PatternTree, f, l, singular bool) {
 			if compileError != nil {
 				return
 			}
@@ -92,14 +90,6 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 				}
 			case "pattern-text":
 				literal(n.Text, f)
-			case "splice":
-				source := tree.Source()
-				raw := strings.TrimSpace(source[n.Token.End:n.End.Start])
-				v, e := constant(raw)
-				if e != nil {
-					panic(e)
-				}
-				literal(v.Text(), f)
 			case "pattern-fold":
 				compile(n.Children[0], true, l, singular)
 			case "pattern-lazy":
@@ -125,9 +115,9 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 			case "pattern-repeat":
 				repeat(n.Text, n.Children[0], f, l)
 			case "pattern-typed":
-				repeat("optional", &syntax.Node{Kind: "pattern-text", Text: "-"}, f, l)
-				repeat("one or more of", &syntax.Node{Kind: "pattern-keyword", Text: "digit"}, f, l)
-				sequence := &syntax.Node{Kind: "text-pattern", Children: []*syntax.Node{{Kind: "pattern-text", Text: "."}, {Kind: "pattern-keyword", Text: "digits"}}}
+				repeat("optional", &value.PatternTree{Kind: "pattern-text", Text: "-"}, f, l)
+				repeat("one or more of", &value.PatternTree{Kind: "pattern-keyword", Text: "digit"}, f, l)
+				sequence := &value.PatternTree{Kind: "text-pattern", Children: []*value.PatternTree{{Kind: "pattern-text", Text: "."}, {Kind: "pattern-keyword", Text: "digits"}}}
 				repeat("optional", sequence, f, l)
 			case "pattern-count":
 				count, e := strconv.Atoi(n.Text)
@@ -137,18 +127,18 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 				}
 				for j := 0; j < count && compileError == nil; j++ {
 					if j > 0 && n.Children[0].Kind == "pattern-keyword" && n.Children[0].Text == "words" {
-						repeat("one or more of", &syntax.Node{Kind: "pattern-keyword", Text: "whitespace"}, f, false)
+						repeat("one or more of", &value.PatternTree{Kind: "pattern-keyword", Text: "whitespace"}, f, false)
 					}
 					compile(n.Children[0], f, false, true)
 				}
 			case "pattern-keyword", "pattern-class":
 				k := n.Text
 				if k == "word" || k == "words" {
-					atom := &syntax.Node{Kind: "pattern-keyword", Text: "nonspace"}
+					atom := &value.PatternTree{Kind: "pattern-keyword", Text: "nonspace"}
 					repeat("one or more of", atom, f, l)
 					if k == "words" && !singular {
 						start := emit("split", "", len(p.Code)+1, 0, false)
-						repeat("one or more of", &syntax.Node{Kind: "pattern-keyword", Text: "whitespace"}, f, l)
+						repeat("one or more of", &value.PatternTree{Kind: "pattern-keyword", Text: "whitespace"}, f, l)
 						repeat("one or more of", atom, f, l)
 						emit("jump", "", start, 0, false)
 						p.Code[start].B = len(p.Code)
@@ -159,7 +149,7 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 					break
 				}
 				if k == "text" {
-					repeat("zero or more of", &syntax.Node{Kind: "pattern-keyword", Text: "character"}, f, l)
+					repeat("zero or more of", &value.PatternTree{Kind: "pattern-keyword", Text: "character"}, f, l)
 					break
 				}
 				plural := strings.HasSuffix(k, "s")
