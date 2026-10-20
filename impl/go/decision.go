@@ -3,9 +3,6 @@ package northtalk
 import (
 	"context"
 	"sync"
-
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 type Verdict int
@@ -45,7 +42,6 @@ type Deciding struct {
 	result    *Decided
 	stop      func() bool
 	broadcast *broadcastDecision
-	recipient int
 }
 
 func (d *Deciding) Done() <-chan struct{} { return d.done }
@@ -94,17 +90,6 @@ func (d *Deciding) finish() {
 	}
 }
 
-// sealReport seals one recipient; only the last returns the combined report.
-func (d *Deciding) sealReport(report *Decided) *Decided {
-	if !d.seal(report) {
-		return nil
-	}
-	if d.broadcast == nil {
-		return report
-	}
-	return d.broadcast.collect(d.recipient, report)
-}
-
 func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, error) {
 	return s.group.decide(s, ctx, m)
 }
@@ -118,36 +103,4 @@ func (g *Group) decide(s *Script, ctx context.Context, m Message, objects ...*Ob
 		return "", nil, err
 	}
 	return id, d, nil
-}
-func (x *execution) openVerdict() bool {
-	return x.deciding && x.delivery.decision != nil && !x.delivery.decision.isSealed()
-}
-func (g *Group) recordDecided(d *Decided) {
-	fields := map[string]string{"verdict": []string{"allowed", "vetoed", "undecided"}[d.Verdict]}
-	if len(d.Vetoes) > 0 {
-		var entries []corevalue.Value
-		for _, v := range d.Vetoes {
-			m, _ := corevalue.NewMap([]corevalue.Pair{{Key: "script", Val: mustText(v.Script)}, {Key: "run", Val: mustText(string(v.Run))}, {Key: "reason", Val: v.Reason.inner}})
-			entries = append(entries, m)
-		}
-		fields["vetoes"] = coretrace.Display(corevalue.NewList(entries))
-	}
-	if len(d.Undecided) > 0 {
-		var entries []corevalue.Value
-		for _, v := range d.Undecided {
-			pairs := []corevalue.Pair{{Key: "script", Val: mustText(v.Script)}}
-			if v.Run != "" {
-				pairs = append(pairs, corevalue.Pair{Key: "run", Val: mustText(string(v.Run))})
-			}
-			pairs = append(pairs, corevalue.Pair{Key: "outcome", Val: mustText([]string{"completed", "errored", "limit fault", "cancelled", "unhandled", "dropped", "effect failed"}[v.Outcome])})
-			m, _ := corevalue.NewMap(pairs)
-			entries = append(entries, m)
-		}
-		fields["undecided"] = coretrace.Display(corevalue.NewList(entries))
-	}
-	id := string(d.Delivery)
-	if d.Broadcast != "" {
-		id = string(d.Broadcast)
-	}
-	g.record("decided", false, []string{id}, fields)
 }

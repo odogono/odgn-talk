@@ -1,10 +1,10 @@
 package northtalk
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"slices"
 	"unicode/utf8"
+
+	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 )
 
 const DuplicateObjectID HostErrorCode = "duplicate object id"
@@ -129,18 +129,16 @@ func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
 		return nil, &HostError{InvalidValue, "invalid Object kind or id"}
 	}
 	key := objectKey{kind.name, id}
-	if g.backend != nil {
-		// The guest registers it outside the Group lock; it refuses a
-		// concurrent duplicate itself.
-		g.mu.Lock()
-		duplicate := g.objects[key] != nil
-		g.mu.Unlock()
-		if duplicate {
-			return nil, &HostError{DuplicateObjectID, "Object kind/id already registered"}
-		}
-		if err := g.backend.object(kind, id); err != nil {
-			return nil, err
-		}
+	// The guest registers it outside the Group lock; it refuses a
+	// concurrent duplicate itself.
+	g.mu.Lock()
+	duplicate := g.objects[key] != nil
+	g.mu.Unlock()
+	if duplicate {
+		return nil, &HostError{DuplicateObjectID, "Object kind/id already registered"}
+	}
+	if err := g.backend.object(kind, id); err != nil {
+		return nil, err
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -179,30 +177,7 @@ func (g *Group) Dispose(o *Object) error {
 		g.recordRefusal("dispose", nil, map[string]string{"object": object}, WrongGroup)
 		return &HostError{WrongGroup, "Object does not belong to Group"}
 	}
-	if g.backend != nil {
-		return g.backend.dispose(o)
-	}
-	g.mu.Lock()
-	g.inputs = append(g.inputs, delivery{kind: "dispose", object: o, fields: map[string]string{"object": o.Value().String()}})
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if ready != nil {
-		ready()
-	}
-	return nil
-}
-
-func objectProperties(bindings map[string]corevalue.Value) map[string]map[string]bool {
-	out := map[string]map[string]bool{}
-	for name, v := range bindings {
-		o := v.Object().Handle.(*Object)
-		props := map[string]bool{}
-		for key, prop := range o.kind.props {
-			props[key] = prop.Set != nil
-		}
-		out[name] = props
-	}
-	return out
+	return g.backend.dispose(o)
 }
 
 const ParentCycle HostErrorCode = "parent cycle"
@@ -219,48 +194,10 @@ func (g *Group) SetParent(o, parent *Object) error {
 	if parent != nil {
 		fields["parent"] = parent.Value().String()
 	}
-	if g.backend != nil {
-		// Ownership is the binding's; cycles and disposal are the guest's.
-		if o == nil || o.group != g || parent != nil && parent.group != g {
-			g.recordRefusal("set-parent", nil, fields, WrongGroup)
-			return &HostError{WrongGroup, "invalid parent relationship"}
-		}
-		return g.backend.setParent(o, parent)
-	}
-	g.mu.Lock()
-	code := g.parentError(o, parent)
-	if code != "" {
-		g.mu.Unlock()
-		g.recordRefusal("set-parent", nil, fields, code)
-		return &HostError{code, "invalid parent relationship"}
-	}
-	g.inputs = append(g.inputs, delivery{kind: "set-parent", object: o, parent: parent, fields: fields})
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if ready != nil {
-		ready()
-	}
-	return nil
-}
-
-// Caller holds g.mu, including when applying queued changes.
-func (g *Group) parentError(o, parent *Object) HostErrorCode {
+	// Ownership is the binding's; cycles and disposal are the guest's.
 	if o == nil || o.group != g || parent != nil && parent.group != g {
-		return WrongGroup
+		g.recordRefusal("set-parent", nil, fields, WrongGroup)
+		return &HostError{WrongGroup, "invalid parent relationship"}
 	}
-	if o.disposed.Load() {
-		return InvalidValue
-	}
-	for p := parent; p != nil; p = p.parent {
-		if p == o {
-			return ParentCycle
-		}
-	}
-	return ""
-}
-func ownerProperties(o *Object) map[string]bool {
-	if o == nil {
-		return nil
-	}
-	return objectProperties(map[string]corevalue.Value{"me": o.Value().inner})["me"]
+	return g.backend.setParent(o, parent)
 }

@@ -27,7 +27,7 @@ Answers [#471](https://github.com/odogono/odgn-talk/issues/471), part of [#475](
 ## What Load checks today
 
 - The loader checks each call's argument count, the keys of a literal closed map, and the kind of every literal argument. "There is no inference beyond literals" ([`09-embedding.md`](../../spec/09-embedding.md#shapes), the "At load" rule).
-- The checks run in this order: unknown Grant, then `unknown operation`, then `wrong mode`, then `wrong argument count`, then `wrong argument` once per literal. They are in Go's `checkOperation` ([`operations.go`](../../impl/go/internal/check/operations.go)) and TS's `checkEffectCall` ([`effects.ts`](../../impl/ts/src/effects.ts)).
+- The checks run in this order: unknown Grant, then `unknown operation`, then `wrong mode`, then `wrong argument count`, then `wrong argument` once per literal. They are in Go's `checkOperation` ([`operations.go`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/check/operations.go)) and TS's `checkEffectCall` ([`effects.ts`](../../impl/ts/src/effects.ts)).
 - Declarations reach the checker as only a mode and argument Shapes: Go's `check.OperationCheck{Mode, Args}`, TS's `GrantDecls`.
 - Diagnostics are normative, with their code and position. There is one per construct, ordered by position ([`02-grammar.md`](../../spec/02-grammar.md), the diagnostic table). A diagnostic code is never shared with a Host error.
 - No Host code runs during Load, Reload, Extend or Library compilation today. On the message layer, `load`, `extend` and `compile-library` have no interim `need` replies.

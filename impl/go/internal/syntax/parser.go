@@ -1,9 +1,10 @@
 package syntax
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"slices"
 	"strings"
+
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 )
 
 type parser struct {
@@ -32,13 +33,6 @@ type parser struct {
 // error in the parse (chapter 2).
 func Parse(source string) (tree *Tree, err error) {
 	return parse(source, false)
-}
-
-// ParseCompact keeps source and Declaration Documentation, without the full
-// token tape needed by editor tooling. Compilation doesn't need that tape;
-// retaining a Token for every blank line amplifies hostile source's memory.
-func ParseCompact(source string) (*Tree, error) {
-	return parse(source, true)
 }
 
 func parse(source string, compact bool) (tree *Tree, err error) {
@@ -376,9 +370,6 @@ func (p *parser) declaration() *Node {
 // FallbackName names the Fallback Handler's bodies and its `pass`. It holds a
 // space, so it is never a Selector (ADR 0064).
 const FallbackName = "any message"
-
-// IsFallback reports whether a declaration is a Fallback Handler clause.
-func (n *Node) IsFallback() bool { return n.Kind == "handler" && n.Text == FallbackName }
 
 // atAnyMessage decides `any message` after `on`, `pass` or a Handler's `end`
 // on two tokens; otherwise `any` is a Name (chapter 2, any-message).
@@ -1844,78 +1835,6 @@ func (p *parser) binaryPattern(pattern bool) *Node {
 	n.End = p.expect(">>")
 	p.buildDepth--
 	return n
-}
-
-// Walk visits each syntax node in source order, excluding token trivia.
-func Walk(n *Node, visit func(*Node) bool) {
-	stack := []*Node{n}
-	var children []*Node
-	for len(stack) > 0 {
-		n := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if n == nil || !visit(n) {
-			continue
-		}
-		children = sourceChildren(n, children[:0])
-		for i := len(children) - 1; i >= 0; i-- {
-			stack = append(stack, children[i])
-		}
-	}
-}
-
-func HasFlag(n *Node, flag string) bool {
-	for _, token := range n.Flags {
-		if token.Raw == flag {
-			return true
-		}
-	}
-	return false
-}
-func TextOf(t Token) string {
-	if t.Kind == Text {
-		return t.Value
-	}
-	return strings.TrimSpace(t.Raw)
-}
-
-// SourceChildren gives the immediate syntax regions in source order.
-func SourceChildren(n *Node) []*Node {
-	return sourceChildren(n, nil)
-}
-
-// Walk reuses this scratch slice instead of allocating one for every node.
-func sourceChildren(n *Node, children []*Node) []*Node {
-	count := len(n.Params) + len(n.Children) + len(n.Body) + len(n.Branches)
-	if n.Guard != nil {
-		count++
-	}
-	if n.Collect != nil {
-		count++
-	}
-	if count == 0 {
-		return children
-	}
-	if cap(children) < count {
-		children = make([]*Node, 0, count)
-	}
-	for _, group := range [][]*Node{n.Params, n.Children, n.Body, n.Branches} {
-		children = append(children, group...)
-	}
-	if n.Guard != nil {
-		children = append(children, n.Guard)
-	}
-	if n.Collect != nil {
-		children = append(children, n.Collect)
-	}
-	slices.SortStableFunc(children, func(a, b *Node) int {
-		x, y := a.FirstPos(), b.FirstPos()
-		if x.Line != y.Line {
-			return x.Line - y.Line
-		}
-		return x.Column - y.Column
-	})
-
-	return children
 }
 
 func (p *parser) interpolated(t Token) *Node {

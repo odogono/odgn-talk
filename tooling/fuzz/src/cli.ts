@@ -5,10 +5,10 @@ import { minimize } from './minimize';
 import { features, readCase, type Feature } from './model';
 
 const usage = `Usage:
-  northtalk-fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>] [--go-runner <path>] [--zig-runner <path>]
-  northtalk-fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>] [--go-runner <path>] [--zig-runner <path>]
-  northtalk-fuzz reproduce <case.json> [--go-runner <path>] [--zig-runner <path>]
-  northtalk-fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--go-runner <path>] [--zig-runner <path>]`;
+  northtalk-fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>] [--zig-runner <path>]
+  northtalk-fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>] [--zig-runner <path>]
+  northtalk-fuzz reproduce <case.json> [--zig-runner <path>]
+  northtalk-fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--zig-runner <path>]`;
 
 class UsageError extends Error {}
 
@@ -59,7 +59,6 @@ const main = async (argv: string[]): Promise<number> => {
       'search-ms': { type: 'string' },
       'reduction-ms': { type: 'string' },
       profile: { type: 'string' },
-      'go-runner': { type: 'string' },
       'zig-runner': { type: 'string' },
       help: { type: 'boolean' },
     },
@@ -69,9 +68,8 @@ const main = async (argv: string[]): Promise<number> => {
     console.log(usage);
     return 0;
   }
-  const goRunner = values['go-runner'];
   const zigRunner = values['zig-runner'];
-  const others = () => peersOf({ go: goRunner, zig: zigRunner });
+  const others = () => peersOf({ zig: zigRunner });
   switch (command) {
     case 'smoke':
     case 'campaign': {
@@ -84,7 +82,6 @@ const main = async (argv: string[]): Promise<number> => {
         searchMs: integer(values['search-ms'], 'search-ms'),
         reductionMs: integer(values['reduction-ms'], 'reduction-ms'),
         profile: profile(values.profile),
-        goRunner,
         zigRunner,
         commit: process.env.GITHUB_SHA,
       });

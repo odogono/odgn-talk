@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (
@@ -8,8 +6,6 @@ import (
 	"fmt"
 	"maps"
 )
-
-func init() { experimentalCompileLibrary = zigCompileLibrary }
 
 // zigCompileLibrary checks a Library in a Core-owned guest, so neither the
 // identity nor the diagnostics come from the Go compiler. The Library keeps

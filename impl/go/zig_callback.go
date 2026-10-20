@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (
@@ -47,7 +45,6 @@ var (
 	zbOpNeed        = zbTagFor("op")
 	zbPropNeed      = zbTagFor("prop")
 	zbEffectNeed    = zbTagFor("effect")
-	zbReleaseNeed   = zbTagFor("release")
 )
 
 // zigNeed is a callback need read from either envelope. Decoding failures

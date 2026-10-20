@@ -1,12 +1,13 @@
 package corpus
 
 import (
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 // These are runner-local regressions, not blessings of new Corpus expectations.

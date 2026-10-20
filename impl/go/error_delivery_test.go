@@ -1,10 +1,11 @@
 package northtalk
 
 import (
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"strings"
 	"testing"
 	"time"
+
+	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 func TestUncaughtErrorQueuesASeparateRunBehindExistingMessages(t *testing.T) {

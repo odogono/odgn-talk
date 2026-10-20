@@ -1,4 +1,5 @@
-# Cases the Go Core must continue to pass (issues #132–#136). The gate also
+# Cases the Go embedding must continue to pass through the Zig Core (issues
+# #132–#136, #1055); Disassembly cases are the Zig runner's. The gate also
 # fails on any case missing from this list that does not pass (#141).
 # A new case carries an Unblessed header until its first human review.
 # Recovery Offers: all eight cases approved on 2026-10-07 at 0c3c33f (#392);
@@ -156,21 +157,6 @@ decisions/undecided-on-cancel-delivery
 decisions/undecided-when-dropped
 decisions/verdict-behind-a-fuel-slice
 decisions/veto-ends-the-decision
-disassembly/calls-and-lambdas
-disassembly/collecting
-disassembly/containers
-disassembly/destructuring
-disassembly/english-comparisons
-disassembly/errors-and-loops
-disassembly/expressions
-disassembly/fenced-text
-disassembly/messages-and-waiting
-disassembly/nothing-defaults
-disassembly/object-elements
-disassembly/recovery-offers
-disassembly/tell-block
-disassembly/timeout-block
-disassembly/whose
 errors/fail-error-map
 errors/full-mailbox-drop
 errors/handler-backstop
@@ -460,7 +446,6 @@ stdlib/mappings-restore
 stdlib/mappings-limits
 stdlib/mappings-depth
 builtins/random
-disassembly/result-targets
 capabilities/result-targets-load-checks
 result-targets/completion-fuel
 result-targets/failures

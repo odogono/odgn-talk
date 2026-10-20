@@ -3,13 +3,10 @@ package northtalk
 import (
 	"context"
 	"errors"
-	"fmt"
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
@@ -128,8 +125,6 @@ type Grant struct {
 	// coordinator is compared by identity; nil until Load for a plain
 	// lifecycle, which gives each named Grant its own.
 	coordinator *SegmentLifecycle
-	revoked     bool
-	disabled    bool
 }
 
 func (d *CapabilityDef) Name() string { return d.name }
@@ -381,7 +376,6 @@ type Call struct {
 	scopeName        string
 	automatic        bool
 	invalidAutomatic bool
-	failureDetail    string // validation diagnostic for automatic EffectFailure
 }
 
 func (c *Call) ID() CallID               { return c.id }
@@ -423,50 +417,14 @@ func (c *Call) finish() {
 	c.fuelLeft = nil
 }
 func (s *Script) Grants() map[string][]string {
-	if s.group.backend != nil {
-		return s.group.backend.grantNames(s)
-	}
-	if e := s.group.beginWorker(); e != nil {
-		panic(e)
-	}
-	defer s.group.endWorker()
-	out := map[string][]string{}
-	for name, g := range s.grants {
-		ops := make([]string, 0, len(g.operations))
-		for op := range g.operations {
-			ops = append(ops, op)
-		}
-		slices.Sort(ops)
-		out[name] = ops
-	}
-	return out
+	return s.group.backend.grantNames(s)
 }
 func (s *Script) Revoke(grantName string) {
-	if s.group.backend != nil {
-		s.group.backend.control(s, "revoke", map[string]any{"grant": grantName})
-		return
-	}
-	g := s.group
-	g.mu.Lock()
-	g.inputs = append(g.inputs, delivery{kind: "revoke", script: s, fields: map[string]string{"grant": grantName}})
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if ready != nil {
-		ready()
-	}
+	s.group.backend.control(s, "revoke", map[string]any{"grant": grantName})
+	return
 }
 
 func modeName(m Mode) string { return []string{"immediate", "suspending", "fire-and-forget"}[m] }
-
-// operationCheck is an Operation's mode, argument Shapes, labels and
-// `command` flag, for the load checks and Host Command resolution.
-func operationCheck(d Operation) check.OperationCheck {
-	args := make([]shape.Shape, len(d.Args))
-	for i, s := range d.Args {
-		args[i] = s.inner
-	}
-	return check.OperationCheck{Mode: modeName(d.Mode), Args: args, Command: d.Command, Labels: d.Labels}
-}
 
 // Answer queues a suspending call's settlement for the next Pump.
 // A foreign Group's Value panics with WrongGroup without queuing an input.
@@ -505,29 +463,6 @@ func (c *Call) refuseAutomaticSettlement() {
 }
 func (c *Call) queueSettlement(kind string, v Value, e *ScriptError, fuel int64) {
 	g := c.group
-	if g.backend != nil {
-		g.backend.settleCall(c, kind, v, e, fuel)
-		return
-	}
-	// Check the original Data before building the failure envelope: malformed
-	// Data or a colliding key must not hide a foreign handle from admission.
-	if !validGroup(v.inner, g) || e != nil && !validGroup(e.Data.inner, g) {
-		panic(&HostError{WrongGroup, "settlement contains a foreign Value"})
-	}
-	fields := map[string]string{}
-	if kind == "answer" {
-		fields["value"] = coretrace.Display(v.inner)
-		if fuel != 0 {
-			fields["fuel"] = fmt.Sprint(fuel)
-		}
-	} else {
-		fields["error"] = coretrace.Display(hostFailureValue(e))
-	}
-	g.mu.Lock()
-	g.inputs = append(g.inputs, delivery{kind: kind, reply: c.id, fields: fields, settlement: &operationSettlement{value: v, err: e, fuel: fuel}})
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if ready != nil {
-		ready()
-	}
+	g.backend.settleCall(c, kind, v, e, fuel)
+	return
 }

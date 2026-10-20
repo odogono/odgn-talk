@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"context"
-	"strconv"
 	"time"
 )
 
@@ -43,17 +42,12 @@ type combinedPump struct {
 }
 
 func (g *Group) requestPump(ctx context.Context, s *Script, to *Object, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
-	if g.backend != nil {
-		if b, ok := g.backend.(combinedBackend); ok {
-			return b.pumpCombined("combined Request and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
-				return g.admitWithReady(s, m, ctx, true, nil, delivery{target: to, path: s == nil, combined: c}, false)
-			})
-		}
-		return "", nil, PumpResult{}, backendUnsupported("combined Request and Pump")
+	if b, ok := g.backend.(combinedBackend); ok {
+		return b.pumpCombined("combined Request and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
+			return g.admitWithReady(s, m, ctx, true, nil, delivery{target: to, path: s == nil, combined: c}, false)
+		})
 	}
-	return g.admitPump(now, o, func() (DeliveryID, *Pending, error) {
-		return g.admitWithReady(s, m, ctx, true, nil, delivery{target: to, path: s == nil}, false)
-	})
+	return "", nil, PumpResult{}, backendUnsupported("combined Request and Pump")
 }
 
 // CallPump admits a Function call and performs one ordinary Pump. Staleness
@@ -61,46 +55,10 @@ func (g *Group) requestPump(ctx context.Context, s *Script, to *Object, m Messag
 // worker call; admission and Pump refusals have RequestPump's partial-success
 // contract, and the Pending can remain unsettled after the single Pump.
 func (g *Group) CallPump(ctx context.Context, fn Value, args []Value, limits *LimitOverride, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
-	if g.backend != nil {
-		if b, ok := g.backend.(combinedBackend); ok {
-			return b.pumpCombined("combined Function call and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
-				return g.callWithReady(ctx, fn, args, limits, false, c)
-			})
-		}
-		return "", nil, PumpResult{}, backendUnsupported("combined Function call and Pump")
+	if b, ok := g.backend.(combinedBackend); ok {
+		return b.pumpCombined("combined Function call and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
+			return g.callWithReady(ctx, fn, args, limits, false, c)
+		})
 	}
-	return g.admitPump(now, o, func() (DeliveryID, *Pending, error) {
-		return g.callWithReady(ctx, fn, args, limits, false, nil)
-	})
-}
-
-func (g *Group) admitPump(now time.Time, o PumpOptions, admit func() (DeliveryID, *Pending, error)) (DeliveryID, *Pending, PumpResult, error) {
-	if err := g.beginWorker(); err != nil {
-		fields := map[string]string{"clock": now.Round(0).UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)}
-		if o.FuelSlice > 0 {
-			fields["fuel-slice"] = strconv.FormatInt(o.FuelSlice, 10)
-		}
-		if o.FuelCap > 0 {
-			fields["fuel-cap"] = strconv.FormatInt(o.FuelCap, 10)
-		}
-		g.recordRefusal("pump", nil, fields, ReentrantCall)
-		return "", nil, PumpResult{}, err
-	}
-	notify := false
-	// Notify only after releasing the guard: a scheduled worker may run as
-	// soon as OnReady returns, even before this caller receives its result.
-	defer func() {
-		if notify && g.options.OnReady != nil {
-			g.options.OnReady()
-		}
-	}()
-	// Release even if a Host observation panics, as ordinary Pump does.
-	defer g.endWorker()
-	id, pending, err := admit()
-	if err != nil {
-		return "", nil, PumpResult{}, err
-	}
-	result, err := g.pumpOwned(now, o, true)
-	notify = err != nil
-	return id, pending, result, err
+	return "", nil, PumpResult{}, backendUnsupported("combined Function call and Pump")
 }

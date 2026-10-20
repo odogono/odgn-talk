@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (
@@ -8,8 +6,6 @@ import (
 	"reflect"
 	"time"
 )
-
-func init() { experimentalRestore = zigRestore }
 
 func (b *zigGroup) save() ([]byte, error) {
 	reply, err := b.worker("save", map[string]any{})

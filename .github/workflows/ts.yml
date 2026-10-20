@@ -57,11 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27'
-          cache: false
-      # The fuzz tests build the Zig worker too. Upgrading Zig is its own PR
+      # The fuzz tests build the Zig worker. Upgrading Zig is its own PR
       # (#625).
       - uses: mlugg/setup-zig@v2
         with:

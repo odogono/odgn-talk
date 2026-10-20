@@ -2,9 +2,10 @@ package northtalk
 
 import (
 	"errors"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"strings"
 	"testing"
+
+	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 func TestValueEncodingRoundTrips(t *testing.T) {

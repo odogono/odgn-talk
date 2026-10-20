@@ -243,8 +243,6 @@ type Object struct {
 	native   any
 	group    *Group
 	disposed atomic.Bool
-	parent   *Object // protected by group.mu
-	owner    *Script // protected by group.mu
 }
 
 func (o *Object) ID() string        { return o.id }

@@ -5,14 +5,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // Add applies the Script + rules outside a Run, without charging Fuel or Alloc.
 func Add(a, b Value) (Value, error) {
-	v, failure := machine.Add(a.inner, b.inner)
+	v, failure := valueops.Add(a.inner, b.inner)
 	if failure != nil {
 		return Nothing, scriptError(*failure)
 	}
@@ -119,7 +119,7 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 					}
 				}
 				if field != "" {
-					e := machine.ErrorValue("invalid watch", corevalue.Pair{Key: "field", Val: mustText(field)})
+					e := valueops.ErrorValue("invalid watch", corevalue.Pair{Key: "field", Val: mustText(field)})
 					return &e
 				}
 				return nil
@@ -127,7 +127,7 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 		} else if op.Name != "keys" {
 			checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
 				if a[0].Text() == "" {
-					e := machine.ErrorValue("invalid key")
+					e := valueops.ErrorValue("invalid key")
 					return &e
 				}
 				return nil

@@ -38,6 +38,19 @@ func TestAllCaseSetupsAndTracesRead(t *testing.T) {
 		})
 	}
 }
+
+// TestSelectedCases runs the cases NORTHTALK_CORPUS names, separated by
+// spaces, and reports each one's first divergence.
+func TestSelectedCases(t *testing.T) {
+	names := strings.Fields(os.Getenv("NORTHTALK_CORPUS"))
+	if len(names) == 0 {
+		t.Skip("set NORTHTALK_CORPUS to the cases to run")
+	}
+	r := Runner{Root: filepath.Join(root(t), "corpus"), Output: os.Stdout, Backends: ExecutionBackends()}
+	if e := r.Run(names, false); e != nil {
+		t.Fatal(e)
+	}
+}
 func TestEncodingCasesAndPassingList(t *testing.T) {
 	skipUnderRace(t)
 	var out bytes.Buffer
@@ -173,7 +186,7 @@ func TestTraceBackendAndPassingGate(t *testing.T) {
 	}
 	r.Backends["trace"] = traceFixture{[]string{"> pump clock=2026-09-27T13:30:00Z", "pumped state=idle fuel=1"}}
 	out.Reset()
-	if e := r.CheckPassing(list); e == nil || !strings.Contains(out.String(), "reproduce: go -C impl/go run ./cmd/corpus fixture") {
+	if e := r.CheckPassing(list); e == nil || !strings.Contains(out.String(), "reproduce: NORTHTALK_CORPUS=fixture go -C impl/go test ./internal/corpus -run TestSelectedCases") {
 		t.Fatal("an unlisted failing case must fail the complete gate", e, out.String())
 	}
 	r.Backends["trace"] = traceFixture{}

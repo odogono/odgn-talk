@@ -3,8 +3,8 @@ package northtalk
 import (
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // CalendarImpl supplies zone data and applies gap/overlap rules. An absent zone
@@ -109,6 +109,6 @@ func calendarInstantDomain(args []corevalue.Value, _ any, _ []corevalue.Pair) *c
 	} else {
 		return nil
 	}
-	err := machine.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText("toInstant")}, corevalue.Pair{Key: "value", Val: bad})
+	err := valueops.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText("toInstant")}, corevalue.Pair{Key: "value", Val: bad})
 	return &err
 }

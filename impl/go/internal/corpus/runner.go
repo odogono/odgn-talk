@@ -106,29 +106,7 @@ func (r Runner) execute(c Case) (int, error) {
 	var records []Record
 	var expected []string
 	filename := "case.trace"
-	if c.Kind == "disassembly" {
-		units, ok := c.Setup["disassembly"].([]any)
-		if !ok {
-			return 0, fmt.Errorf("missing disassembly tables")
-		}
-		for _, raw := range units {
-			setup := raw.(Setup)
-			filename := setup["expected"].(string)
-			b, e := os.ReadFile(filepath.Join(c.Dir, filename))
-			if e != nil {
-				return 0, e
-			}
-			expected = append(expected, strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")...)
-		}
-		actual, e := r.Backends[c.Kind].Run(c, nil)
-		if e != nil {
-			return 0, e
-		}
-		if e := Compare(c.Name, expected, actual); e != nil {
-			return 0, e
-		}
-		return len(actual), nil
-	} else if c.Kind == "transcript" {
+	if c.Kind == "transcript" {
 		filename = "session.transcript"
 	}
 	b, e := os.ReadFile(filepath.Join(c.Dir, filename))
@@ -213,7 +191,7 @@ func (r Runner) Run(selection []string, list bool) error {
 
 // fail reports a case's first divergence and the command that reproduces it.
 func (r Runner) fail(e error, name string) {
-	fmt.Fprintf(r.Output, "FAIL %v\n  reproduce: go -C impl/go run ./cmd/corpus %s\n", e, name)
+	fmt.Fprintf(r.Output, "FAIL %v\n  reproduce: NORTHTALK_CORPUS=%s go -C impl/go test ./internal/corpus -run TestSelectedCases\n", e, name)
 }
 
 // CheckPassing is the CI gate, run over the complete Corpus (Appendix B).
@@ -240,6 +218,11 @@ func (r Runner) CheckPassing(path string) error {
 	}
 	failed := false
 	for _, c := range cases {
+		// The Go Host has no compiler to dump: the embedded Core's own
+		// Corpus runner checks Disassembly (#1055).
+		if c.Kind == "disassembly" {
+			continue
+		}
 		must := required[c.Name]
 		delete(required, c.Name)
 		reason := r.support(c)

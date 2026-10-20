@@ -226,7 +226,7 @@ cover its Preact JSX configuration and the app and browser-test bundles.
 
 ## Differential fuzzing
 
-- Implementation: [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts), with the [Go worker](../go/cmd/fuzzworker/)
+- Implementation: [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts), with the [Zig worker](../zig/src/corpus/fuzzworker.zig)
 - Rules: [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [research](../../docs/research/differential-fuzzing.md)
 - Tests and cases: [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts)
 - First check: `bun test tooling/fuzz/tests`

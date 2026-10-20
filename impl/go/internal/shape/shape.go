@@ -3,10 +3,11 @@
 package shape
 
 import (
+	"strings"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
-	"strings"
 )
 
 type Shape struct {
@@ -27,17 +28,6 @@ type Mismatch struct {
 	Unencodable   bool
 }
 
-func Accepts(args []Shape, n int) bool {
-	if n > len(args) {
-		return false
-	}
-	for _, s := range args[n:] {
-		if s.Kind != "optional" {
-			return false
-		}
-	}
-	return true
-}
 func (s Shape) Expected() string {
 	switch s.Kind {
 	case "kind", "object", "quantity", "unitKind":

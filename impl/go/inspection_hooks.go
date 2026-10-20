@@ -2,11 +2,12 @@ package northtalk
 
 import (
 	"fmt"
+	"slices"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	v "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"slices"
 )
 
 func inspectionMap(pairs ...Pair) Value {

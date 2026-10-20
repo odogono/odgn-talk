@@ -3,20 +3,17 @@ package corpus
 import (
 	"context"
 	"fmt"
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/check"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/lower"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
-	"github.com/odogono/odgn-talk/impl/go/internal/replay"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
-	"github.com/odogono/odgn-talk/impl/go/session"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"github.com/odogono/odgn-talk/impl/go/internal/replay"
+	"github.com/odogono/odgn-talk/impl/go/session"
 )
 
 type traceLines []string
@@ -131,7 +128,7 @@ func (r *crossingReplay) Record(line string) {
 type executionBackend struct{}
 
 func ExecutionBackends() map[string]Backend {
-	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}, "transcript": sessionBackend{}}
+	return map[string]Backend{"trace": executionBackend{}, "transcript": sessionBackend{}}
 }
 func (executionBackend) Support(c Case) string {
 	for _, feature := range []string{"factories"} {
@@ -179,39 +176,6 @@ func (executionBackend) Support(c Case) string {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
-	if scripts, ok := c.Setup["scripts"].([]any); ok {
-		for _, raw := range scripts {
-			setup := raw.(Setup)
-			source, e := os.ReadFile(filepath.Join(c.Dir, setup["source"].(string)))
-			if e != nil {
-				return e.Error()
-			}
-			tree, e := syntax.Parse(string(source))
-			if e != nil {
-				continue
-			}
-			options := check.Options{PatternSize: setupLimits(setup["limits"]).PatternSize}
-			bindings, _ := setup["objects"].(Setup)
-			for name := range bindings {
-				options.Objects = append(options.Objects, name)
-			}
-			checked := check.Check(tree, options)
-			if len(checked.Diagnostics) > 0 {
-				continue
-			}
-			unit, e := lower.Compile(checked, setup["name"].(string))
-			if e != nil {
-				return e.Error()
-			}
-			for _, body := range unit.Bodies {
-				for _, i := range body.Code {
-					if !machine.Supported(i) {
-						return i.Name + " execution belongs to step3"
-					}
-				}
-			}
-		}
-	}
 
 	return ""
 }
@@ -232,9 +196,6 @@ func runReplayPair(c Case, records []Record, prepare func(*operationReplay)) ([]
 		return nil, err
 	}
 	return ordinary, nil
-}
-func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
-	return runExecutionWithHost(c, records, roundTrip, nil)
 }
 
 func runExecutionWithHost(c Case, records []Record, roundTrip bool, prepare func(*operationReplay)) ([]string, error) {

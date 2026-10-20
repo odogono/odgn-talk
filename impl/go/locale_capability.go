@@ -3,8 +3,8 @@ package northtalk
 import (
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // LocaleImpl supplies Collation, case mappings, Locale data and tag fallback.
@@ -119,7 +119,7 @@ func localeDefaults(given, defaults Value) Value {
 func localeArguments(name string, required int, options bool) func([]corevalue.Value, any, []corevalue.Pair) *corevalue.Value {
 	return func(args []corevalue.Value, binding any, _ []corevalue.Pair) *corevalue.Value {
 		domain := func(value corevalue.Value) *corevalue.Value {
-			err := machine.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText(name)}, corevalue.Pair{Key: "value", Val: value})
+			err := valueops.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText(name)}, corevalue.Pair{Key: "value", Val: value})
 			return &err
 		}
 		tagIndex := required
@@ -152,7 +152,7 @@ func localeArguments(name string, required int, options bool) func([]corevalue.V
 			tag = args[tagIndex].Text()
 		}
 		if !wellFormedLocale(tag) {
-			err := machine.ErrorValue("bad locale", corevalue.Pair{Key: "locale", Val: mustText(tag)})
+			err := valueops.ErrorValue("bad locale", corevalue.Pair{Key: "locale", Val: mustText(tag)})
 			return &err
 		}
 		return nil

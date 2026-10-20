@@ -286,7 +286,7 @@ do not turn a missed performance limit into an acceptance pass.
 
 [#1054](https://github.com/odogono/odgn-talk/issues/1054) measures the public
 adapter behind `talk_zig_experimental` against native Go through the same
-public API. [`zig-adapter-bench.sh`](../../impl/go/zig-adapter-bench.sh) runs the
+public API. [`zig-adapter-bench.sh`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/zig-adapter-bench.sh) runs the
 Backend benchmarks in [`backend_bench_test.go`](../../impl/go/backend_bench_test.go),
 Group instantiation, and the Benchmark Suite's Load and Run, built once without
 and once with the tag. The [`go-zig-bench` workflow](../../.github/workflows/go-zig-bench.yml)

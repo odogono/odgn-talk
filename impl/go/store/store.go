@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 	"github.com/odogono/odgn-talk/impl/go/notify"
 )
 
@@ -235,7 +235,7 @@ func failure(code string, pairs ...talk.Pair) *talk.ScriptError {
 		v, _ := corevalue.Decode(b, true, nil)
 		fields[i] = corevalue.Pair{Key: p.Key, Val: v}
 	}
-	e := machine.ErrorValue(code, fields...)
+	e := valueops.ErrorValue(code, fields...)
 	return &talk.ScriptError{Code: code, Message: e.Get("message").Text(), Data: data}
 }
 func text(s string) talk.Value { v, _ := talk.Text(s); return v }
@@ -249,7 +249,7 @@ func size(v talk.Value) int64 {
 	if err != nil {
 		panic(err) // size is used only after validating a storable data Value.
 	}
-	return machine.Size(inner)
+	return valueops.Size(inner)
 }
 func entrySize(key string, v talk.Value) int64 { return size(text(key)) + size(v) }
 func objectKind(v talk.Value) (string, bool) {

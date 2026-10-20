@@ -11,9 +11,9 @@ Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and C
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
-The package runs the [embedded Zig Core](#zig-backend) through wazero by default;
-the native Go Core remains behind `-tags talk_native_go` until it is removed
-([#1055](https://github.com/odogono/odgn-talk/issues/1055)). The separate
+The package runs the [embedded Zig Core](#zig-backend) through wazero; the
+native Go Core was removed in
+[#1055](https://github.com/odogono/odgn-talk/issues/1055). The separate
 [comparison probe](../../spikes/go-zig-binding/README.md) retains its native-Go
 baseline and broader callback experiments; the
 [binding investigation](../../docs/research/go-zig-binding.md) records the gates
@@ -23,7 +23,7 @@ A Timeout Block, `with timeout of d … end timeout`, bounds the waits written i
 
 A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). The parser reads `end` as the block's close and any other first word as an Operation name. Each line is an `ask` until the checker resolves it against the unit's Grants: a fire-and-forget Operation's line without `and wait` becomes a `tell`, once, so an importing Script's recheck tests the Library's lines as compiled. Lines then lower, check suspension and join as the one-line calls they stand for, at their Operation names. A Grant the unit doesn't hold is one `unknown operation` at the block's receiver. With no Grants, as in Disassembly Cases, every line lowers as an `ask`. `DefineCapability` refuses `end` as an Operation name.
 
-An Operation with `Command: true` is also a Host Command, called by its name alone ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)). `DefineCapability` refuses the flag on a Reserved Word with `invalid value`. The flag is part of the Operation Data, so the Group Fingerprint and restore's declaration matching carry it, written after `segmentBound` and only as `true`, and saves keep it. `OperationCheck.Command` carries it to the checker, from Load, Extend, Reload, `CompileLibrary` and Library replacement. After declarations are collected, `resolveHostCommands` in [operations.go](internal/check/operations.go) resolves each unlabelled Command Call that names no Handler of the unit, local, imported or from an earlier Extend, to the one Operation its Grants offer as `command`. That runs before validation, so a Library's Host Commands aren't `not in a library`, while `and wait` on one stays `not in a join` and `not in a timeout` as for any Command Call. `checkOperations` then rewrites the node into the one-line call it stands for, a `tell` for a fire-and-forget Operation without `and wait` and otherwise an `ask`, so load checks, lowering, `needs`, GrantsAsUsed and an importer's recheck see an ordinary Operation call, and no instruction is added. `wrong mode`, `wrong argument count` and `wrong argument` are reported at the command's name or argument. Two Grants offering the called command are `name clash` at the call, and an Import named like any offered command is `name clash` at its name in the `use` line. The compile cache key already includes the Grant declarations, `command` included, so resolved calls never share a unit with unresolved ones; the code identity is unchanged. A Library's `needs` and recorded calls are read from its checked tree, which holds the resolved calls even on a cache hit. Go still rejects an unresolved Command Call in a Library with `not in a library`, where TS and Zig accept it. The Session Host's mocked Operations have no `command` flag. Check with `go -C impl/go test ./internal/check . -run HostCommand` and `go -C impl/go run ./cmd/corpus capabilities/host-commands`.
+An Operation with `Command: true` is also a Host Command, called by its name alone ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)). `DefineCapability` refuses the flag on a Reserved Word with `invalid value`. The flag is part of the Operation Data, so the Group Fingerprint and restore's declaration matching carry it, written after `segmentBound` and only as `true`, and saves keep it. `OperationCheck.Command` carries it to the checker, from Load, Extend, Reload, `CompileLibrary` and Library replacement. After declarations are collected, `resolveHostCommands` in [operations.go](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/check/operations.go) resolves each unlabelled Command Call that names no Handler of the unit, local, imported or from an earlier Extend, to the one Operation its Grants offer as `command`. That runs before validation, so a Library's Host Commands aren't `not in a library`, while `and wait` on one stays `not in a join` and `not in a timeout` as for any Command Call. `checkOperations` then rewrites the node into the one-line call it stands for, a `tell` for a fire-and-forget Operation without `and wait` and otherwise an `ask`, so load checks, lowering, `needs`, GrantsAsUsed and an importer's recheck see an ordinary Operation call, and no instruction is added. `wrong mode`, `wrong argument count` and `wrong argument` are reported at the command's name or argument. Two Grants offering the called command are `name clash` at the call, and an Import named like any offered command is `name clash` at its name in the `use` line. The compile cache key already includes the Grant declarations, `command` included, so resolved calls never share a unit with unresolved ones; the code identity is unchanged. A Library's `needs` and recorded calls are read from its checked tree, which holds the resolved calls even on a cache hit. Go still rejects an unresolved Command Call in a Library with `not in a library`, where TS and Zig accept it. The Session Host's mocked Operations have no `command` flag. Check with `go -C impl/go test ./internal/check . -run HostCommand` and `go -C impl/go run ./cmd/corpus capabilities/host-commands`.
 
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
 
@@ -55,7 +55,6 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
 
 With Go 1.27, the root package API runs the embedded Zig Core by default, and
 `CoreVersions` reports Zig's Core/save versions ([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md), [#1055](https://github.com/odogono/odgn-talk/issues/1055)).
-`-tags talk_native_go` selects the retiring native Go Core until it is removed.
 
 Supported: immutable data Values and Value Encoding; Group/Script names and
 lookup; Load and positioned diagnostics; direct Script Deliver/Request; Pump
@@ -299,9 +298,9 @@ declaration descriptions and documentation, Fix/Continue, Built-in and Standard
 Library catalogues, the inspection reader and computed message names. A single
 serialized analysis guest shares the adapter's compiled engine and works before
 a Group starts; analysis exchanges load nothing and produce no Trace. Value
-formatting and pinned Unicode name matching stay with the Host. The
-`talk_native_go` build retains Go analysis until the Go Core is removed. `session`, `driver` and `cmd/northtalk` import no Go parser,
-checker, compiler or generated catalogue packages. Cancelling an unfinished
+formatting and pinned Unicode name matching stay with the Host. `session`,
+`driver` and `cmd/northtalk` import no Go parser, checker, compiler or
+generated catalogue packages. Cancelling an unfinished
 inspection expression prevents its property reader from starting.
 
 Native Session tests and all Session Transcripts pass. The experimental
@@ -324,8 +323,7 @@ per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and
 2.4 MB allocated with a guest per Group and native Go's 4 µs and 6 KB, and a
 held Group retains about 88 KB of heap, against 2.4 MB and native Go's 63 KB
 ([#1103](https://github.com/odogono/odgn-talk/issues/1103)). The performance
-limits are tracked in #1103. To repeat the committed
-benchmark, run with and without `-tags talk_native_go`:
+limits are tracked in #1103. To repeat the committed benchmark:
 
 ```sh
 CGO_ENABLED=0 go -C impl/go test -run '^$' -bench GroupInstantiation -benchtime 200x -count 3 .
@@ -339,13 +337,13 @@ impl/go/zig-experimental-check.sh -race
 go -C impl/go vet . ./internal/zigwasm
 ```
 
-`TestZigBackendCapabilityParity` builds a `talk_native_go` test binary, runs its
-`TestCapabilityBridge` with `TALK_BRIDGE_OBSERVATIONS` set, and diffs that
-native JSON against the Zig adapter's observations. To inspect the native side
-alone:
+`TestZigBackendCapabilityParity` diffs the Zig adapter's `TestCapabilityBridge`
+observations against the native Go Core's, recorded in
+[`testdata/native-bridge-observations.json.gz`](testdata/native-bridge-observations.json.gz)
+before it was removed. To write the Zig side's observations:
 
 ```sh
-TALK_BRIDGE_OBSERVATIONS=/tmp/native.json go -C impl/go test -tags talk_native_go -run '^TestCapabilityBridge$' .
+TALK_BRIDGE_OBSERVATIONS=/tmp/zig.json go -C impl/go test -run '^TestCapabilityBridge$' .
 go -C impl/go test -run '^TestZigBackendCapabilityParity$' .
 ```
 
@@ -479,23 +477,11 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
   Value Encoding and the save format are unchanged.
 - `internal/value/` owns values, Units, comparison, display and strict JSON.
   Containers copy input slices; public accessors return copies.
-- `internal/syntax/` owns lossless UTF-8 lexing and parsing. `Tree.Source()`
-  reconstructs every source byte; only Text literal values are NFC.
-- `internal/check/` resolves declarations, body slots, captures and initializer
-  dependencies. Diagnostics sort by source position, then catalogue order.
-- `internal/lower/` produces canonical instructions, source maps, Unwind Tables
-  and Event Tables. Labels use instruction indices, never byte offsets. Its
-  Go-private byte encoding round-trips each body's instruction stream.
-  Operands, Cost Model keys and suspension flags are resolved after labels
-  receive their final instruction indices; runtime operand views are read-only.
-- `internal/machine/` executes checked code with heap frames, detached operand
-  evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
-  Trial stacks and locals reuse detached buffers within an execution turn;
-  accepted charges copy their results back before effects commit. Returned
-  call frames supply cleared buffers for later calls in that turn. These
-  temporary buffers are discarded on preemption, suspension or completion.
-- `internal/snapshot/` encodes plain heap data and explicitly named Group/code
-  references; Host bindings and futures stay outside snapshots.
+- `internal/syntax/` keeps the lexer and parser the Host still needs for
+  Selector and label validation and for sizing Text Pattern values; the Zig
+  Core parses Scripts.
+- `internal/valueops/` builds Core error maps, measures a Value's logical size
+  and applies `Add` for the Store and Notification Hosts.
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
   Core's non-parity error wording from Trace values, including nested errors,
   while preserving Script and Host data named `message`.
@@ -507,14 +493,11 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
   [Pool](#driver-pool) pumps many Groups on a set of workers.
 - `examples/tenants/` is the [multi-tenant Example Host](examples/tenants/README.md),
   an HTTP server with a Group per tenant, and the recorder of its Trace Cases.
-- `internal/corpus/` reads setups and runs encoding, disassembly, Trace and
-  Session Transcript backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
-- `internal/fuzz/` runs differential fuzz cases through the corpus runner's
-  incremental replay Host, resolving symbolic Host Inputs as the fuzzer's TS
-  runner does. `cmd/fuzzworker/` serves it over the
-  [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
+- `internal/corpus/` reads setups and runs encoding, Trace and Session
+  Transcript cases through the public API, with first-divergence output and
+  the passing gate. `TestSelectedCases` runs the cases `NORTHTALK_CORPUS` names.
 - The [Message Layer](#message-layer), both the native sidecar and WASI
-  reactor, is supplied by the Zig Core. The Go embedding API stays native Go.
+  reactor, is supplied by the Zig Core.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -536,7 +519,6 @@ go -C impl/go build ./...
 go -C impl/go vet ./...
 go -C impl/go test -v ./...
 go -C impl/go test -race ./...    # skips the exhaustive single-goroutine replays
-go -C impl/go run ./cmd/corpus --check-passing
 go -C impl/go/sqlite test ./...  # the sqlite Host, a separate module
 gofmt -l impl/go               # must print no paths
 ```
@@ -581,7 +563,7 @@ From `impl/go/`, run the Go REPL or record/replay a Transcript:
 go run ./cmd/northtalk
 go run ./cmd/northtalk -transcript session.transcript -trace case.trace
 go run ./cmd/northtalk -replay ../../corpus/sessions/save-restore/session.transcript
-go run ./cmd/corpus sessions/save-restore
+NORTHTALK_CORPUS=sessions/save-restore go test ./internal/corpus -run TestSelectedCases
 ```
 
 Enter one declaration, statement or expression. Incomplete Entries continue at
@@ -900,7 +882,7 @@ validation leaves existing execution intact.
 
 ## Text Patterns
 
-`internal/machine/pattern.go` compiles chapter 8's normative Pike VM programs
+The Zig Core compiles chapter 8's normative Pike VM programs
 and matches whole Characters using the pinned Unicode tables. Matching keeps
 threads in priority order and charges every visited list's thread count,
 including discarded empty searches. Boolean searches stop at the first
@@ -1867,16 +1849,16 @@ These figures describe the historical Go artifacts. Current sidecar build and me
 From `impl/go/`:
 
 ```sh
-go run ./cmd/corpus --list
-go run ./cmd/corpus
-go run ./cmd/corpus text-model/chunk-write-padding
-go run ./cmd/corpus --check-passing
+go test ./internal/corpus
+NORTHTALK_CORPUS=text-model/chunk-write-padding go test ./internal/corpus -run TestSelectedCases
 ```
 
-`--check-passing` runs the complete Corpus and fails on any case that does not
-pass, listed or not, and on a listed case that no longer exists. Each failure
-ends with a `reproduce:` command. The list contains 307 cases, including all text-model, load-diagnostic,
-Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
+The package's gate runs the complete Corpus through the embedded Zig Core and
+fails on any case that does not pass, listed or not, and on a listed case that
+no longer exists. Disassembly cases are the Zig Core's own runner's: the Go
+Host has no compiler output to compare. Each failure ends with a `reproduce:`
+command. The list includes all text-model, load-diagnostic and Value Encoding
+acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. All three
 Counters cases are protected in ordinary and save/restore replay.

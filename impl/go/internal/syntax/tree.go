@@ -106,10 +106,3 @@ func (n *Node) cachePositions() {
 		}
 	}
 }
-
-func (n *Node) BindingPos() Position {
-	if n.NameToken != nil && n.NameToken.Kind == Word {
-		return n.NameToken.Pos
-	}
-	return n.Pos()
-}

@@ -104,12 +104,6 @@ func TestHostCommandFlagInFingerprintAndRestore(t *testing.T) {
 	if _, err := g.Load(LoadOptions{Name: "s", Source: hostCommandSource, Grants: map[string]*Grant{"till": commands.GrantAll(nil)}}); err != nil {
 		t.Fatal(err)
 	}
-	if data := string(jsonData(grantData(commands.GrantAll(nil)))); !strings.Contains(data, `"name":"note","mode":"fire-and-forget","args":["any"],"cost":{"fuel":0,"alloc":0},"command":true}`) {
-		t.Fatal(data)
-	}
-	if data := string(jsonData(grantData(plain.GrantAll(nil)))); strings.Contains(data, "command") {
-		t.Fatal(data)
-	}
 	saved, err := g.Save()
 	if err != nil {
 		t.Fatal(err)

@@ -75,10 +75,6 @@ jobs:
         with:
           go-version: '1.27'
           cache: false
-      # The shared public Hosts also execute on the retiring native Core.
-      - run: go -C impl/go test -tags talk_native_go -run '^TestCapabilityBridge' -count=1 .
-        env:
-          CGO_ENABLED: '0'
       - run: go -C impl/go vet . ./internal/zigwasm
         env:
           CGO_ENABLED: '0'

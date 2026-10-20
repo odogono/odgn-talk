@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 // A Core's Groups share a small pool of guests instead of one guest each

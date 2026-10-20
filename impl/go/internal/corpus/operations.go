@@ -2,9 +2,10 @@ package corpus
 
 import (
 	"fmt"
-	talk "github.com/odogono/odgn-talk/impl/go"
 	"strconv"
 	"time"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
 type operationReplay struct {

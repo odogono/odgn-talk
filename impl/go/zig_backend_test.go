@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk_test
 
 import (
@@ -21,7 +19,7 @@ func (s *zigTrace) Record(line string) { *s = append(*s, line) }
 
 func TestZigBackendRequest(t *testing.T) {
 	if !strings.HasPrefix(talk.CoreVersions().Core, "zig/") {
-		t.Fatal("experimental backend did not select Zig", talk.CoreVersions())
+		t.Fatal("the Go API did not select Zig", talk.CoreVersions())
 	}
 	var trace zigTrace
 	g := talk.New().NewGroup(talk.GroupOptions{Name: "test", Trace: &trace})
