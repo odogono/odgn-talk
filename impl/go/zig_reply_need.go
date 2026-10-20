@@ -107,7 +107,7 @@ func (b zigReplyReader) decodeInto(src zigReply) (Value, error) {
 func (b zigReplyReader) zbReadNeed(p *zbNeed) zigNeed {
 	v := p.view
 	text := func(key string) string { s, _ := zbText(v.get(key)); return s }
-	n := zigNeed{kind: zbCallbacks[p.tag].kind, tag: p.tag}
+	n := zigNeed{kind: zbEnvelopes[p.tag].name, tag: p.tag}
 	if p.tag == zbPropNeed {
 		if ref, err := zbTexts(v.get("object")); err == nil && len(ref) == 2 {
 			n.object, n.objectKind, n.objectID = true, ref[0], ref[1]

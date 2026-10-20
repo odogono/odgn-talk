@@ -43,7 +43,7 @@ func zbParse(data []byte, p *zbPacket) error {
 		return errZigBinary
 	}
 	p.completion = tag == zbCompletion
-	top, err := zbPositional(&r, zbMessages[tag].fields)
+	top, err := zbPositional(&r, &zbEnvelopes[tag])
 	if err != nil {
 		return err
 	}
@@ -85,11 +85,11 @@ func zbParseNeed(r *zbReader, p *zbPacket) error {
 	if err != nil {
 		return err
 	}
-	c, ok := zbCallbacks[tag]
-	if !ok || c.kind == "" {
+	c := &zbEnvelopes[tag]
+	if c.name == "" || c.direction != "guest-to-host" || tag < zbOpNeed {
 		return errZigBinary
 	}
-	view, err := r.positional(c.fields)
+	view, err := r.positional(c)
 	if err != nil {
 		return err
 	}

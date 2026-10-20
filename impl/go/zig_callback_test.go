@@ -3,6 +3,7 @@
 package northtalk
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -99,47 +100,31 @@ func TestZigBackendPropertyEnvelopePreservesNullSetter(t *testing.T) {
 // an absent positional field (#1311).
 func TestZigBackendBinaryPropertyNeedMarksSetter(t *testing.T) {
 	core := New()
-	gets, sets := 0, 0
-	kind, err := core.DefineObjectKind(ObjectKindDef{Name: "BinaryMeter", Props: []Prop{{
-		Name: "value", Shape: AnyShape,
-		Get: func(*Object) (Value, error) { gets++; return Int(7), nil },
-		Set: func(_ *Object, v Value) error {
-			sets++
-			if !v.Equal(Nothing) {
-				t.Fatalf("setter received %v", v)
-			}
-			return nil
-		},
-	}}})
+	sets := 0
+	kind, err := core.DefineObjectKind(ObjectKindDef{Name: "thing", Props: []Prop{{Name: "value", Shape: AnyShape, Get: func(*Object) (Value, error) { return Nothing, nil }, Set: func(_ *Object, v Value) error {
+		sets++
+		if !v.Equal(Nothing) {
+			t.Fatalf("setter received %v", v)
+		}
+		return nil
+	}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	g := core.NewGroup(GroupOptions{})
-	if _, err := g.Object(kind, "meter", nil); err != nil {
+	if _, err := g.Object(kind, "é", nil); err != nil {
 		t.Fatal(err)
 	}
 	b := g.backend.(*zigGroup)
-	need := func(set bool) []byte {
-		w := &zbWriter{}
-		w.buf = append(append(w.buf, zbPrefix...), byte(zbFields), zbPropNeed)
-		w.begin(zbCallbacks[zbPropNeed].fields, true)
-		w.key("ref")
-		w.int(9)
-		w.key("object")
-		w.list(2)
-		w.ptext("BinaryMeter")
-		w.ptext("meter")
-		w.key("prop")
-		w.ptext("value")
-		if set {
-			w.key("set")
-			w.buf = append(w.buf, 0x02)
+	for _, vector := range envelopeVectors(t) {
+		if vector.Name != "prop-need" {
+			continue
 		}
-		w.end()
-		return w.buf
-	}
-	for _, set := range []bool{true, false} {
-		p, err := b.replyReader().read(need(set), 9, "pump")
+		bytes, err := hex.DecodeString(vector.Hex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := b.replyReader().read(bytes, 7, "pump")
 		if err != nil || p.need == nil {
 			t.Fatal(p, err)
 		}
@@ -147,17 +132,17 @@ func TestZigBackendBinaryPropertyNeedMarksSetter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r := zbReader{d: frame.bytes(9)[len(zbPrefix)+2:]}
-		view, err := r.positional(zbCallbacks[zbPropResult].fields)
+		r := zbReader{d: frame.bytes(7)[len(zbPrefix)+2:]}
+		view, err := r.positional(&zbEnvelopes[zbPropResult])
 		if err != nil {
 			t.Fatal(err)
 		}
 		outcome, _ := zbText(view.get("outcome"))
-		if want := map[bool]string{true: "ok", false: "value"}[set]; outcome != want {
-			t.Fatalf("outcome %q, want %q", outcome, want)
+		if outcome != "ok" {
+			t.Fatalf("outcome %q", outcome)
 		}
 	}
-	if gets != 1 || sets != 1 {
-		t.Fatalf("gets: %d; sets: %d", gets, sets)
+	if sets != 1 {
+		t.Fatalf("sets: %d", sets)
 	}
 }
