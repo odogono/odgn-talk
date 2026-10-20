@@ -126,6 +126,10 @@ test "Library replacement publishes all code only after deferred cleanup succeed
         const deferred = try replacementTrace(true, status, fail_at, true);
         defer gpa.free(deferred);
         try testing.expectEqualStrings(sync, deferred);
+        // Every rollback precedes any release or stop (#1402).
+        const last_rollback = std.mem.lastIndexOf(u8, sync, "phase=rollback").?;
+        const first_stop = std.mem.indexOf(u8, sync, "\nstopped ").?;
+        try testing.expect(last_rollback < first_stop);
     };
 }
 
