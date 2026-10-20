@@ -37,7 +37,7 @@ import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
-import { byId, h } from './dom';
+import { byId, h, isTyping } from './dom';
 import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
@@ -1122,10 +1122,7 @@ export const mountStack = (
     if (playing.peek()) {
       return;
     }
-    const target = event.target as HTMLElement;
-    const typing = !!target.closest(
-      'input, textarea, select, [contenteditable], [role="textbox"]',
-    );
+    const typing = isTyping(event.target);
     const command = commandForKey(event, typing);
     if (command) {
       event.preventDefault();

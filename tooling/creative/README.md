@@ -4,7 +4,7 @@ Folio is the browser creative tool specified in [#154](https://github.com/odogon
 
 Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio and its tests, see [Running it](#running-it).
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box and Errors, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
 Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
 instances. The tree owns Project mutations, hierarchy, indexed collections,
@@ -603,13 +603,56 @@ The [`projects-window` suite](tests/projects-window.browser.ts) runs on
 keep their rows, and a rename field its focus, caret and typed text, while the
 records, current Project, edit lock and previewed version change.
 
+## Performance window
+
+Open **Window → Performance** to profile Browse or Present, or use
+**Cmd/Ctrl+Alt+P** outside text editors and modal prompts. The shortcut toggles
+only this window; Escape keeps its usual Play behavior. Capture starts on first
+opening during a Play Session and continues when the window is closed. A new
+session clears results and captures immediately only if the window is open.
+Switching Browse to Present starts a new session too. Clear starts a fresh
+measurement interval; Stop freezes the final results for inspection. Forced
+worker termination retains the last received results marked **Incomplete**.
+Opening another Project clears its predecessor's diagnostics.
+
+Script rows expand into **Run origin** rankings, sorted by recent Fuel/second.
+A Run origin is its initiating message selector or function, including internal
+Handler, function and Library calls. Independently spawned Runs get their own
+origins. Repeated Page visits share Script totals; cloned Script instances stay
+separate and link to their authored source. Rows show Fuel, starts, completed
+Runs (including failed endings), failures, discarded Runs, active Runs, and
+last/mean/peak Fuel for finished Runs. Starting capture or clearing mid-Run
+counts only subsequent Fuel and excludes that partial Run from cost samples.
+Active Runs include waiting and preempted work.
+
+Frame statistics count **delivered messages** and **busy-skipped messages** per
+Script, with deliveries/second. They do not measure browser paint FPS or worker
+queue latency. Scripts without frame handlers show frame metrics as unavailable.
+Fuel measures deterministic work, not CPU time. Recent rates use the current and
+previous one-second bucket divided by their elapsed time. Background-tab time
+counts, so throttling lowers rates naturally.
+
+The charts retain 60 one-second buckets: total Fuel/second and the largest Pump's
+Fuel in each bucket, with the configured Pump cap (currently 5,000) marked. A
+Run can span multiple Pumps, so its total Fuel is not compared with that cap.
+Totals and peaks span the whole measurement interval. The current chart bucket
+is partial; its Fuel rate uses elapsed time in that bucket. Rankings and charts
+refresh at 4 Hz, independently of visual changes. This is a live profiler with
+bounded recent history, not a per-Run timeline or function self-time profiler.
+
+The worker consumes typed cumulative Run accounting, including final and reload
+reports, rather than parsing Trace. Only live Run baselines are tracked before
+opt-in. Capture does not change frame delivery or scheduling. Telemetry is
+separate from the Play mirror, allowing final Stop snapshots to arrive after
+Play State is discarded; session and capture epochs reject stale snapshots.
+
 ## Play
 
 There are two ways to run a Project, both on the Page being edited
 ([ADR 0093](../../docs/adr/0093-folio-browses-in-place.md)). **Browse**, at
 the top of the Tools window, plays the Page in place on the desk with the
 Tools, Script and Errors windows still open (the Edit menu offers only Undo and Redo, for Script edits), as HyperCard's browse tool did.
-**Present**, in the header, plays it full-window with the editor hidden. Each session uses a fresh Core
+**Present**, in the header, plays it full-window with the editor hidden; an explicitly opened Performance window remains available. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,

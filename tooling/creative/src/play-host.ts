@@ -8,7 +8,7 @@ import {
   type Reply,
 } from '@northtalk/tooling/worker-supervisor';
 import { type Element, type Project } from './model';
-import { PlaySession, type PendingPrompt } from './play';
+import { PlaySession, PUMP_FUEL, type PendingPrompt } from './play';
 import {
   type PlayRequest,
   type PlayResponse,
@@ -69,6 +69,7 @@ export const firstView = (
 export class PlayHost {
   #session: PlaySession | undefined;
   #id = 0;
+  #performanceTimer: ReturnType<typeof setInterval> | undefined;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #owners = new Map<unknown, number>();
   // What the page last received: each Element's JSON, by name.
@@ -90,6 +91,7 @@ export class PlayHost {
   constructor(
     private readonly post: (reply: Reply<PlayResponse>) => void,
     private readonly now: () => bigint = wallClock,
+    private readonly performanceNow: () => number = () => performance.now(),
   ) {}
 
   receive({ id, request }: Envelope<PlayRequest>): void {
@@ -122,9 +124,15 @@ export class PlayHost {
       return;
     }
     switch (request.kind) {
+      case 'performance': {
+        this.#startPerformance(request.epoch);
+        reply({ kind: 'done' });
+        return;
+      }
       case 'stop': {
         this.#close();
         session.stop(this.now());
+        this.#publishPerformance();
         this.#publish();
         this.#session = undefined;
         reply({ kind: 'done' });
@@ -236,8 +244,12 @@ export class PlayHost {
     this.#session = new PlaySession(request.project, request.pageIndex, {
       // A different game each time (ADR 0096).
       seed: request.seed,
+      performanceNow: this.performanceNow,
       soundBackend: this.#relaySound,
     });
+    if (request.performanceEpoch !== undefined) {
+      this.#startPerformance(request.performanceEpoch);
+    }
     this.#publish();
     this.#schedule();
   }
@@ -256,9 +268,37 @@ export class PlayHost {
     };
   };
 
+  #publishPerformance(): void {
+    const session = this.#session;
+    const snapshot = session?.performance.snapshot(PUMP_FUEL);
+    if (!session || !snapshot) {
+      return;
+    }
+    for (const row of snapshot.scripts) {
+      const owner = session.owners.get(row.script);
+      const index =
+        owner && this.#owners.get(session.authored.get(owner) ?? owner);
+      if (index !== undefined) {
+        row.owner = index;
+      }
+    }
+    this.post({
+      response: { kind: 'performance', session: this.#id, snapshot },
+    });
+  }
+
+  #startPerformance(epoch: number): void {
+    this.#session!.performance.start(epoch);
+    clearInterval(this.#performanceTimer);
+    this.#publishPerformance();
+    this.#performanceTimer = setInterval(() => this.#publishPerformance(), 250);
+  }
+
   #close(): void {
     clearTimeout(this.#timer);
     this.#timer = undefined;
+    clearInterval(this.#performanceTimer);
+    this.#performanceTimer = undefined;
   }
 
   #schedule(delay = 0): void {

@@ -368,8 +368,12 @@ _Avoid_: console, REPL, Message (for the window)
 A window in Folio that, while browsing, shows the Script Variables of the Project's and the showing Page's Scripts with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
 _Avoid_: inspector, debugger, watch window
 
+**Performance window**:
+A window in Folio for inspecting a Play Session's Script workload and frame-message delivery, available in Browse and Present. It keeps the captured results after the session ends.
+_Avoid_: FPS counter, Errors window
+
 **Present**:
-To run a Play Session full-window, with the authoring windows hidden, as a reader would see it.
+To run a Play Session full-window, with the authoring windows hidden except for explicitly opened performance diagnostics, as a reader would see it.
 _Avoid_: publish, preview, fullscreen
 
 ## Syntax
@@ -459,6 +463,10 @@ _Avoid_: filter, predicate
 **Run**:
 One execution of a Handler, from the message that starts it to its end, possibly spanning several Suspension Points. A Script never executes two Runs at the same instant, but a new Run may start while another is suspended.
 _Avoid_: activation, invocation, task, thread, process
+
+**Run origin**:
+The message selector or function that starts a Run. Work performed by internal calls belongs to the same Run origin; a separately started Run has its own origin.
+_Avoid_: Entry, Handler self-time
 
 **Suspension Point**:
 A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, a Function Value called with `and wait`, or the end of a Join. Each is marked by `wait` in the source, with a Join marked by its `wait for all` head. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.

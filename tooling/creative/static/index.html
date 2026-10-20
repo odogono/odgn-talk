@@ -76,6 +76,13 @@
           >
             Errors
           </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="performance-window"
+          >
+            Performance
+          </button>
         </div>
       </details>
       <span id="project-title"></span>
@@ -346,6 +353,25 @@
         </p>
         <ul id="version-list"></ul>
       </div>
+    </section>
+    <section
+      id="performance-window"
+      class="window"
+      aria-label="Performance"
+      data-left="180"
+      data-top="100"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Performance"
+        ></button>
+        <span>Performance</span>
+      </div>
+      <div id="performance-panel"></div>
     </section>
     <section
       id="errors-window"

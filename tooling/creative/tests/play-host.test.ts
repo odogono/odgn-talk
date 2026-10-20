@@ -374,3 +374,120 @@ test('worker targets carry loaded scope, reject stale instances and session ids'
   request({ kind: 'stop', session: 1 });
   expect(mirror.messageTargets).toEqual([]);
 });
+
+test('performance telemetry is opt-in, updates quiet views at 4 Hz and ends with a final snapshot', async () => {
+  const replies: Reply<PlayResponse>[] = [];
+  let clock = 0;
+  const host = new PlayHost(
+    reply => replies.push(structuredClone(reply)),
+    () => 0n,
+    () => clock,
+  );
+  const send = (request: PlayRequest) => host.receive({ id: 1, request });
+  const snapshots = () =>
+    replies.flatMap(reply =>
+      reply.response.kind === 'performance' ? [reply.response] : [],
+    );
+  send({
+    kind: 'open',
+    session: 1,
+    project: createProject('Quiet'),
+    pageIndex: 0,
+    seed: 0n,
+  });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(snapshots()).toHaveLength(0);
+  send({ kind: 'performance', session: 1, epoch: 1 });
+  expect(snapshots()).toHaveLength(1);
+  clock = 250;
+  await until(() => snapshots().length === 2);
+  expect(snapshots()[1]!.snapshot.elapsed).toBe(0.25);
+  send({ kind: 'performance', session: 1, epoch: 2 });
+  expect(snapshots().at(-1)?.snapshot.epoch).toBe(2);
+  clock = 500;
+  send({ kind: 'stop', session: 1 });
+  expect(snapshots().at(-1)?.snapshot).toMatchObject({
+    status: 'stopped',
+    epoch: 2,
+    elapsed: 0.25,
+  });
+  const count = snapshots().length;
+  await new Promise(resolve => setTimeout(resolve, 280));
+  expect(snapshots()).toHaveLength(count);
+});
+
+test('capture requested at open includes startup Runs and source owners', async () => {
+  const replies: Reply<PlayResponse>[] = [];
+  const project = createProject('Startup');
+  project.script = 'on startPlay\n return 1 + 2\nend startPlay';
+  const host = new PlayHost(reply => replies.push(structuredClone(reply)));
+  host.receive({
+    id: 1,
+    request: {
+      kind: 'open',
+      session: 1,
+      project,
+      pageIndex: 0,
+      seed: 0n,
+      performanceEpoch: 7,
+    },
+  });
+  await until(() =>
+    replies.some(
+      reply =>
+        reply.response.kind === 'performance' &&
+        reply.response.snapshot.fuel > 0,
+    ),
+  );
+  host.receive({ id: 2, request: { kind: 'stop', session: 1 } });
+  const last = replies
+    .flatMap(reply =>
+      reply.response.kind === 'performance' ? [reply.response.snapshot] : [],
+    )
+    .at(-1)!;
+  expect(last.epoch).toBe(7);
+  expect(last.scripts.find(row => row.script === 'project')).toMatchObject({
+    owner: 0,
+    active: 0,
+  });
+});
+
+test('clone telemetry keeps instance identity and links to the authored source', async () => {
+  const project = createProject('Clones');
+  const button = createElement('button', 'original');
+  button.script = 'on click\n return 1 + 2\nend click';
+  project.pages[0]!.elements.push(button);
+  project.pages[0]!.script =
+    'on openPage\n ask elements to clone original\n send click to it\nend openPage';
+  const snapshots: Extract<PlayResponse, { kind: 'performance' }>[] = [];
+  const host = new PlayHost(({ response }) => {
+    if (response.kind === 'performance') {
+      snapshots.push(structuredClone(response));
+    }
+  });
+  host.receive({
+    id: 1,
+    request: {
+      kind: 'open',
+      session: 1,
+      project,
+      pageIndex: 0,
+      seed: 0n,
+      performanceEpoch: 1,
+    },
+  });
+  try {
+    await until(() =>
+      snapshots.some(s =>
+        s.snapshot.scripts.some(row => row.script.includes('dynamic:')),
+      ),
+    );
+    const clone = snapshots
+      .at(-1)!
+      .snapshot.scripts.find(row => row.script.includes('dynamic:'))!;
+    expect(clone.owner).toBe(2);
+    expect(clone.origins.map(row => row.origin)).toEqual(['click']);
+  } finally {
+    host.receive({ id: 2, request: { kind: 'stop', session: 1 } });
+  }
+});
