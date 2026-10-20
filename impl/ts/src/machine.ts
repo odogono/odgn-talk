@@ -2809,7 +2809,11 @@ export class Run {
       case 'wake':
         return nothing;
       case 'restore-fail':
-        throw new ScriptError(r.code, call?.named ?? [], true);
+        throw new ScriptError(
+          r.code,
+          r.code === 'call lost' ? [] : (call?.named ?? []),
+          true,
+        );
       case 'reply':
         return r.value;
       case 'send failed':

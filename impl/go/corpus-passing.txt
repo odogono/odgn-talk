@@ -346,6 +346,7 @@ save-restore/send-and-wait-pair-restores
 save-restore/settle-answer-and-fail
 save-restore/settle-reissue-and-adopt
 save-restore/unbound-grant-and-unresolved-object
+save-restore/uncaught-call-lost
 save-restore/unsettled-call-is-lost
 save-restore/variables-only-restore
 save-restore/withheld-library

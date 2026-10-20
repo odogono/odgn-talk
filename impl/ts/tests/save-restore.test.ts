@@ -129,6 +129,55 @@ describe('save and full restore', () => {
 });
 
 describe('pending calls after restore', () => {
+  for (const join of [false, true]) {
+    for (const settlement of ['unsettled', 'unbound', 'reissue'] as const) {
+      test(`${join ? 'Join member' : 'standalone'} ${settlement} restore failure has exact error data`, () => {
+        const calls: Call<void>[] = [];
+        const remote = defineCapability('remote', {
+          get: {
+            mode: 'suspending',
+            result: shape.number,
+            cost: { fuel: 1 },
+            start: call => calls.push(call),
+          },
+        });
+        const grant = remote.grant('all', undefined);
+        const g = newGroup({ name: 'g' });
+        g.load({
+          name: 's',
+          source: join
+            ? 'on go\n  wait for all\n    ask remote to get and wait\n  end wait\nend go'
+            : 'on go\n  ask remote to get and wait\nend go',
+          grants: { remote: grant },
+        }).deliver({ name: 'go' });
+        g.pump(0n);
+        const { group: copy, result } = restore(g.save(), {
+          ...options([]),
+          grants: () => (settlement === 'unsettled' ? grant : undefined),
+        });
+        expect(result.pending.map(call => call.id)).toEqual(['s/r1.c1']);
+        if (settlement === 'reissue') {
+          copy.settle('s/r1.c1', { reissue: true });
+        }
+        const reports = operationalReports(copy.pump(1n).reports);
+        expect(reports).toHaveLength(1);
+        const report = reports.find(report => report.kind === 'run end')!;
+        expect(report.outcome).toBe('errored');
+        const code =
+          settlement === 'reissue' ? 'capability revoked' : 'call lost';
+        expect(report.error?.code).toBe(code);
+        const fields =
+          settlement === 'reissue'
+            ? 'capability: "remote", operation: "get", '
+            : '';
+        expect(report.error?.data.toString()).toBe(
+          `{${fields}at: {unit: "s", handler: "go", line: ${join ? 4 : 2}, column: 3}${join ? ', index: 1' : ''}}`,
+        );
+        expect(calls).toHaveLength(1);
+      });
+    }
+  }
+
   test('answers and failures settle in input order, while an unsettled call is lost before timers', () => {
     const calls: Call<void>[] = [];
     const capability = defineCapability('stock', {
