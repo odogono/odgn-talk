@@ -228,7 +228,7 @@ export class Recorder {
 }
 
 export type WebhookHost = {
-  close(): void;
+  close(): Promise<void>;
   readonly db: DatabaseSync;
   readonly drive: Drive;
   readonly group: Group;
@@ -271,6 +271,7 @@ export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
       }),
     },
   });
+  let closing: Promise<void> | undefined;
   return {
     db,
     drive,
@@ -279,9 +280,7 @@ export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
     script,
     handle: (event, signal) =>
       script.request({ name: 'event', args: [event] }, { signal }).result,
-    close: () => {
-      drive.stop();
-      db.close();
-    },
+    close: () =>
+      (closing ??= drive.close('Webhook Host shutdown').then(() => db.close())),
   };
 };

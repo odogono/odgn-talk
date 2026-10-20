@@ -221,3 +221,288 @@ test('autoDrive still drives a manually wired Group', async () => {
     drive.stop();
   }
 });
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, reject, resolve };
+};
+
+describe('Drive.close', () => {
+  test('stops every Script and queued Request before returning, releasing Grants once', async () => {
+    const released: string[] = [];
+    const api = defineCapability(
+      'api',
+      {
+        touch: {
+          mode: 'immediate',
+          cost: { fuel: 0 },
+          do: () => num(1),
+        },
+      },
+      undefined,
+      call => released.push(call.scriptName),
+    );
+    const lines: string[] = [];
+    const { group, drive } = newDrivenGroup({
+      name: 'g',
+      trace: l => lines.push(l),
+    });
+    const replies = ['a', 'b'].map(
+      name =>
+        group
+          .load({
+            name,
+            source: 'on go\n  ask api to touch\n  return it\nend go',
+            grants: { api: api.grant('all', undefined) },
+          })
+          .request({ name: 'go', args: [] }).result,
+    );
+    const closing = drive.close('Application shutdown');
+    expect(drive.close('Another reason')).toBe(closing);
+    drive.stop(); // An active close owns the shutdown sequence.
+    await closing;
+    for (const reply of replies) {
+      await expect(reply).rejects.toHaveProperty('code', 'send failed');
+    }
+    expect(released).toEqual(['a', 'b']);
+    expect(lines.filter(l => l.startsWith('stopped '))).toHaveLength(2);
+    expect(lines.some(l => l.includes('Another reason'))).toBe(false);
+    expect(lines.some(l => l.includes('Application shutdown'))).toBe(true);
+    const count = lines.length;
+    drive.ready();
+    await drive.idle();
+    await drive.close();
+    expect(lines).toHaveLength(count);
+  });
+
+  test('awaits asynchronous abort cleanup and drains its late failure', async () => {
+    const cleanup = deferred<void>();
+    const events: string[] = [];
+    let signal: AbortSignal | undefined;
+    const api = defineCapability('api', {
+      fetch: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        run: async call => {
+          signal = call.signal;
+          await new Promise<void>(resolve =>
+            call.signal.addEventListener(
+              'abort',
+              () => {
+                events.push('abort');
+                resolve();
+              },
+              { once: true },
+            ),
+          );
+          await cleanup.promise;
+          events.push('cleanup');
+          throw new Error('Aborted');
+        },
+      },
+    });
+    const { drive, script, lines } = driven(
+      'on go\n  ask api to fetch and wait\nend go',
+      {},
+      { api: api.grant('all', undefined) },
+    );
+    const reply = script.request({ name: 'go', args: [] }).result;
+    await drive.idle();
+    expect(signal?.aborted).toBe(false);
+    let closed = false;
+    const closing = drive.close().then(() => {
+      closed = true;
+      events.push('closed');
+    });
+    await drive.idle();
+    expect(signal?.aborted).toBe(true);
+    await expect(reply).rejects.toHaveProperty('code', 'send failed');
+    expect(closed).toBe(false);
+    cleanup.resolve();
+    await closing;
+    expect(events).toEqual(['abort', 'cleanup', 'closed']);
+    expect(lines.some(l => l.includes('kind=late-answer'))).toBe(true);
+  });
+
+  test('awaits previously abandoned Host work but not another Group', async () => {
+    const work = deferred<ReturnType<typeof num>>();
+    const otherWork = deferred<ReturnType<typeof num>>();
+    let signal: AbortSignal | undefined;
+    const api = defineCapability('api', {
+      fetch: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        run: call => {
+          signal = call.signal;
+          return work.promise;
+        },
+      },
+    });
+    const otherApi = defineCapability('other', {
+      fetch: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        run: () => otherWork.promise,
+      },
+    });
+    const a = driven(
+      'on go\n  ask api to fetch and wait\nend go',
+      {},
+      { api: api.grant('all', undefined) },
+    );
+    const b = driven(
+      'on go\n  ask api to fetch and wait\nend go',
+      {},
+      { api: otherApi.grant('all', undefined) },
+    );
+    try {
+      const controller = new AbortController();
+      const reply = a.script.request(
+        { name: 'go', args: [] },
+        { signal: controller.signal },
+      ).result;
+      b.script.request({ name: 'go', args: [] });
+      await Promise.all([a.drive.idle(), b.drive.idle()]);
+      controller.abort();
+      await a.drive.idle();
+      await expect(reply).rejects.toThrow();
+      expect(signal?.aborted).toBe(true);
+      let closed = false;
+      const closing = a.drive.close().then(() => {
+        closed = true;
+      });
+      await a.drive.idle();
+      expect(closed).toBe(false);
+      work.resolve(num(1));
+      await closing;
+      expect(closed).toBe(true);
+    } finally {
+      work.resolve(num(1));
+      otherWork.resolve(num(1));
+      await Promise.all([a.drive.close(), b.drive.close()]);
+    }
+  });
+
+  test('aborts callback-style calls without waiting for an unavailable completion Promise', async () => {
+    let call: Call<void> | undefined;
+    const api = defineCapability('api', {
+      fetch: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        start: c => {
+          call = c;
+        },
+      },
+    });
+    const { drive, script, lines } = driven(
+      'on go\n  ask api to fetch and wait\nend go',
+      {},
+      { api: api.grant('all', undefined) },
+    );
+    const reply = script.request({ name: 'go', args: [] }).result;
+    await drive.idle();
+    await drive.close();
+    expect(call?.signal.aborted).toBe(true);
+    await expect(reply).rejects.toThrow();
+    const pumps = lines.filter(l => l.startsWith('> pump')).length;
+    call!.answer(num(2));
+    await drive.idle();
+    expect(lines.filter(l => l.startsWith('> pump'))).toHaveLength(pumps);
+  });
+
+  test('closes a stopped driver and cancels a pending deadline', async () => {
+    let fire: (() => void) | undefined;
+    const { drive, script } = driven('on go\n  wait 1 s\nend go', {
+      clock: () => 0n,
+      setDeadline: (_at, callback) => {
+        fire = callback;
+        return () => {
+          fire = undefined;
+        };
+      },
+    });
+    const reply = script.request({ name: 'go', args: [] }).result;
+    await drive.idle();
+    expect(fire).toBeDefined();
+    drive.stop();
+    await drive.close();
+    expect(fire).toBeUndefined();
+    await expect(reply).rejects.toThrow();
+  });
+
+  test('can close from onPump without resolving idle inside that callback', async () => {
+    let closing: Promise<void> | undefined;
+    const { group, drive } = newDrivenGroup({
+      name: 'g',
+      onPump: () => {
+        closing ??= drive.close();
+      },
+    });
+    group
+      .load({ name: 's', source: 'on go\nend go' })
+      .deliver({ name: 'go', args: [] });
+    await drive.idle();
+    await closing;
+    expect(group.pump(BigInt(Date.now()) * 1000n).state).toBe('stopped');
+  });
+
+  test('async disposal stops Scripts even when the scope throws', async () => {
+    const { group, drive } = newDrivenGroup({ name: 'g' });
+    const script = group.load({ name: 's', source: 'on go\nend go' });
+    const failure = new Error('Scope failed');
+    await expect(
+      (async () => {
+        await using resource = drive;
+        expect(resource).toBe(drive);
+        throw failure;
+      })(),
+    ).rejects.toBe(failure);
+    expect(group.pump(BigInt(Date.now()) * 1000n).state).toBe('stopped');
+    await drive[Symbol.asyncDispose]();
+    const reply = script.request({ name: 'go', args: [] });
+    group.pump(BigInt(Date.now()) * 1000n);
+    await expect(reply.result).rejects.toThrow();
+  });
+
+  test.each(['clock', 'pump', 'onPump', 'onError'] as const)(
+    'rejects and stops scheduling after a %s failure',
+    async failureAt => {
+      const failure = new Error(failureAt);
+      const errors: unknown[] = [];
+      const { group, drive } = newDrivenGroup({
+        name: 'g',
+        clock: () => {
+          if (failureAt === 'clock') {
+            throw failure;
+          }
+          return 0n;
+        },
+        onPump: () => {
+          if (failureAt === 'onPump') {
+            throw failure;
+          }
+        },
+        onError: error => {
+          errors.push(error);
+          if (failureAt === 'onError') {
+            throw failure;
+          }
+        },
+      });
+      if (failureAt === 'pump' || failureAt === 'onError') {
+        group.pump(1n);
+      }
+      await expect(drive.close()).rejects.toThrow();
+      expect(errors).toHaveLength(1);
+      const count = errors.length;
+      drive.ready();
+      await drive.idle();
+      expect(errors).toHaveLength(count);
+    },
+  );
+});

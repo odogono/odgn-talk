@@ -932,11 +932,15 @@ export interface AutoDriveOptions {
   setDeadline?: (at: bigint, fire: () => void) => () => void;
 }
 export interface Drive {
+  /** Stops all loaded Scripts, drains, waits for run Promises, then stops scheduling. */
+  close(reason?: string): Promise<void>;
+  /** Equivalent to close(), with the default reason "Host shutdown". */
+  [Symbol.asyncDispose](): Promise<void>;
   /** Resolves when no Pump is scheduled or running; a deadline alone counts as idle. */
   idle(): Promise<void>;
   /** Schedules one Pump on a later macrotask. */
   ready(): void;
-  /** Cancels the scheduled Pump and deadline timer; ignores later readiness. */
+  /** Cancels scheduling without stopping Scripts. Does not interrupt an active close. */
   stop(): void;
 }
 export type DrivenGroupOptions = Omit<GroupOptions, "onReady"> & AutoDriveOptions;

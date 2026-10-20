@@ -56,8 +56,5 @@ end greet`,
   }).result;
   console.log(answer.asText()); // Hello, Ada!
 } finally {
-  // Stop is queued: let the driver apply it before stopping the driver.
-  group.script('welcome')?.stop('Application shutdown');
-  await drive.idle();
-  drive.stop();
+  await drive.close('Application shutdown');
 }
