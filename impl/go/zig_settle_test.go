@@ -114,3 +114,53 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+// Queued Deliveries, Broadcasts and Decisions cross in binary, with the ids
+// their JSON forms would return (#1374).
+func TestZigBackendQueuedInputsAreBinary(t *testing.T) {
+	core := New()
+	g := core.NewGroup(GroupOptions{Name: "queued"})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 1\nend ping\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !g.backend.(*zigGroup).reg.queue {
+		t.Skip("the guest did not take queue-fields-v1")
+	}
+	frames := recordFrames(t)
+	delivered, err := s.Deliver(Message{Name: "ping"})
+	if err != nil || delivered == "" {
+		t.Fatal(delivered, err)
+	}
+	broadcast, err := g.Broadcast(Message{Name: "ping"})
+	if err != nil || broadcast == "" {
+		t.Fatal(broadcast, err)
+	}
+	decided, _, err := s.Decide(context.Background(), Message{Name: "ping"})
+	if err != nil || decided == "" {
+		t.Fatal(decided, err)
+	}
+	all, _, err := g.DecideBroadcast(context.Background(), Message{Name: "ping"})
+	if err != nil || all == "" {
+		t.Fatal(all, err)
+	}
+	want := []string{"binary deliver", "binary broadcast", "binary decide", "binary decide"}
+	if got := frames(); !equalStrings(got, want) {
+		t.Fatalf("frames = %q, want %q", got, want)
+	}
+	result, err := g.Pump(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), PumpOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ends := map[DeliveryID]bool{}
+	broadcasts := map[BroadcastID]bool{}
+	for _, r := range result.Reports {
+		if end, ok := r.(*RunEnd); ok {
+			ends[end.Delivery] = true
+			broadcasts[end.Broadcast] = true
+		}
+	}
+	if !ends[delivered] || !broadcasts[broadcast] {
+		t.Fatal(result.Reports, delivered, broadcast)
+	}
+}
