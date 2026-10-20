@@ -2338,9 +2338,12 @@ pub const Group = struct {
     /// for a replacement, the Scripts still to replace from `next`.
     pub const PausedWork = union(enum) {
         reload: struct { script: *Script, fresh: *Script, keep_mailbox: bool },
-        replace: struct { rebuilt: []Rebuilt, next: usize, made: []*Library, libraries: []*Library },
+        replace: struct { rebuilt: []Rebuilt, next: usize, step: ReplaceStep, made: []*Library, libraries: []*Library },
     };
     pub const Rebuilt = struct { script: *Script, fresh: *Script };
+    /// Where a library replacement's terminations are: every rollback
+    /// first, then each Script's release and stop.
+    pub const ReplaceStep = enum { start, rollback, stop };
 
     /// What a paused Reload or library replacement finished with.
     pub const Resumed = union(enum) { reload: ReloadResult, replace: ReplaceResult };
@@ -2359,7 +2362,7 @@ pub const Group = struct {
                 if (result != .paused) g.dropFresh(x.fresh);
                 return .{ .reload = result };
             },
-            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.made, x.libraries) },
+            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.step, x.made, x.libraries) },
         }
     }
 
@@ -2691,14 +2694,14 @@ pub const Group = struct {
             return e;
         };
         owns_given = false;
-        return g.finishReplace(pending, 0, owned_made, given);
+        return g.finishReplace(pending, 0, .start, owned_made, given);
     }
 
     /// A checked library replacement's terminations and replacements, from
     /// the Script at `from`. Paused at a lifecycle crossing, it keeps its
     /// state in `paused_work`; otherwise it frees `rebuilt` and gives
     /// `made` to the caller.
-    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, made: []*Library, libraries: []*Library) !ReplaceResult {
+    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, step: ReplaceStep, made: []*Library, libraries: []*Library) !ReplaceResult {
         g.reworking = true;
         defer g.reworking = false;
         var paused = false;
@@ -2712,13 +2715,35 @@ pub const Group = struct {
             }
         };
         var i = from;
+        // Every affected Script rolls back before any is released or
+        // stopped: success, and so the `reload` reason, is known only once
+        // all have (chapter 9). Every discarded Call is cancelled first.
+        if (step == .start) for (rebuilt) |x| for (x.script.live.items) |r| g.waits.abandonRun(r, .stopped);
+        if (step != .stop) {
+            while (i < rebuilt.len) : (i += 1) {
+                var runs: std.ArrayList(*Run) = .empty;
+                defer runs.deinit(g.gpa);
+                try runs.appendSlice(g.gpa, rebuilt[i].script.live.items);
+                sorting.stable(*Run, runs.items, {}, struct {
+                    fn less(_: void, x: *Run, y: *Run) bool {
+                        return runNumber(x.id) < runNumber(y.id);
+                    }
+                }.less);
+                for (runs.items) |r| g.cleanupLifecycle(r, .stopped) catch {
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .rollback, .made = made, .libraries = libraries } };
+                    paused = true;
+                    return .paused;
+                };
+            }
+            i = 0;
+        }
         while (i < rebuilt.len) : (i += 1) {
             const x = rebuilt[i];
             // Terminate every old Script before publishing any new code.
             // A fatal stop may itself pause while cleaning up other Scripts.
             g.stopScript(x.script, "reload", null, .{ .release = .reload, .discard = "library replacement" }) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
                     paused = true;
                     return .paused;
                 }
@@ -2727,7 +2752,7 @@ pub const Group = struct {
             // A Grant release hook waits for the Host before the next
             // Script stops, and before any code is published.
             if (g.release_pause) {
-                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .made = made, .libraries = libraries } };
+                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .step = .stop, .made = made, .libraries = libraries } };
                 paused = true;
                 return .paused;
             }
@@ -2736,7 +2761,7 @@ pub const Group = struct {
         if (g.fatal) {
             for (g.scripts.items) |s| g.stopScript(s, "effect state unknown", null, .{}) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
                     paused = true;
                     return .paused;
                 }
