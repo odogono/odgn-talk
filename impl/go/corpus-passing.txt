@@ -206,6 +206,7 @@ limits/fuel-exhaustion-point
 limits/host-mailbox-depth
 limits/join-early-answer-retention
 limits/join-pending-retention
+limits/join-result-allocation
 limits/join-retention
 limits/mailbox-depth
 limits/max-join-minimum

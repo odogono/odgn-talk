@@ -1,0 +1,37 @@
+# Unblessed: awaiting first review (#1061).
+# Each accepted send costs 48; short's 64-byte result would reach 160.
+
+> load short identity=c911b65be55cf735428fb6a09fbf824d7df8bc50290e380cd027d4c9631f55f8
+> load exact identity=1642b1cfb59a2bccf38efee3a8f621ad9719eaaca504d58e2c94460a622a433b
+> load b identity=9e93ed55b972d7f06f3a6e777eee4c82135afd77028b9ccc534cc0843f701040
+> load c identity=bb1a66fa85a290b150bd88976aebff3fb8b2dba289d541a7bf7f0ddd0bab957c
+> deliver d1 to=short message=go
+> pump clock=2026-09-30T10:00:00Z
+send short/r1.c1 to=b message=ping args=[7] wait=join
+send short/r1.c2 to=c message=ping args=[9] wait=join
+seg short/r1 start delivery=d1 handler=go clause=1 fuel=72 alloc=96 state=272 end=join-end
+seg b/r1 start from=short/r1.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r1 outcome=completed handler=ping value=7 fuel=7 alloc=0
+seg c/r1 start from=short/r1.c2 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run c/r1 outcome=completed handler=ping value=9 fuel=7 alloc=0
+fault short/r1 limit=alloc at=short:9 pos=5:2
+seg short/r1 resume fuel=0 alloc=0 state=0 end=fault
+run short/r1 outcome=limit-fault delivery=d1 handler=go limit=alloc fuel=72 alloc=96
+pumped state=idle fuel=86
+> deliver d2 to=exact message=go
+> pump clock=2026-09-30T10:00:00Z
+send exact/r1.c1 to=b message=ping args=[7] wait=join
+send exact/r1.c2 to=c message=ping args=[9] wait=join
+seg exact/r1 start delivery=d2 handler=go clause=1 fuel=72 alloc=96 state=272 end=join-end
+seg b/r2 start from=exact/r1.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r2 outcome=completed handler=ping value=7 fuel=7 alloc=0
+seg c/r2 start from=exact/r1.c2 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run c/r2 outcome=completed handler=ping value=9 fuel=7 alloc=0
+seg exact/r1 resume fuel=4 alloc=64 state=0 end=return
+run exact/r1 outcome=completed delivery=d2 handler=go value=[7, 9] fuel=76 alloc=160
+pumped state=idle fuel=90
+> vars
+vars short
+vars exact
+vars b
+vars c

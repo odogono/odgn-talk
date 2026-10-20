@@ -16,8 +16,9 @@ go test -run '^TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent$' -c
 go test -run '^TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse$' -count=1 "$@" .
 # Unknown effect state from another Script's Stop or cancel stops the Group (#1401).
 go test -run '^TestFatalCrossScriptControlStopsCurrentRun$' -count=1 "$@" .
-# A Limit Fault names the function it happens in (#1400).
-go test -run '^TestCancellationCleanupAndNestedFaultLocation$' -count=1 "$@" .
+# A Limit Fault names the function it happens in (#1400), and an unpaid Join
+# result faults at its `end wait` without a charge (#1061).
+go test -run '^(TestCancellationCleanupAndNestedFaultLocation|TestScriptJoinResultAllocationFaultKeepsSettledReceivers)$' -count=1 "$@" .
 # Load memory within the adapter's agreed limits (#1403).
 go test -run '^TestLoadSourceAllocation$' -count=1 "$@" .
 # Library replacement rolls back every Script before releasing any (#1402).

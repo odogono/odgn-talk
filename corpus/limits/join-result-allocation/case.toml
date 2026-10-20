@@ -1,0 +1,26 @@
+# A Join's result List that no longer fits the Allocation Budget faults at the
+# closing `end wait` without charging for it, and the receivers' settled
+# answers stand (spec chapter 8, Charging; #1061).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "short"
+source = "sender.talk"
+limits = { allocPerRun = 159 }
+
+[[scripts]]
+name = "exact"
+source = "sender.talk"
+limits = { allocPerRun = 160 }
+
+[[scripts]]
+name = "b"
+source = "receiver.talk"
+
+[[scripts]]
+name = "c"
+source = "receiver.talk"
