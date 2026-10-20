@@ -1,6 +1,6 @@
 // These tests use docs.Function to inspect native code directly. The Zig
 // Session Host reads defining-source documentation through docs.FunctionUnit.
-//go:build !talk_zig_experimental
+//go:build talk_native_go
 
 package northtalk
 

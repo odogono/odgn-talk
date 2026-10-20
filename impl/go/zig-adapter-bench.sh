@@ -2,7 +2,7 @@
 # Measures native Go against the Zig adapter on this machine (#1054): the
 # Backend benchmarks and Group instantiation in this package, then the
 # Benchmark Suite's Load and Run, each built without and with
-# talk_zig_experimental. Writes raw output, the versions and a benchstat
+# talk_native_go. Writes raw output, the versions and a benchstat
 # comparison to the directory given, or to bench/results/go-zig-adapter/.
 # COUNT sets -count (5 by default).
 set -eu
@@ -26,7 +26,7 @@ mkdir -p "$out"
 
 for backend in native zig; do
 	tags=
-	[ "$backend" = zig ] && tags=talk_zig_experimental
+	[ "$backend" = native ] && tags=talk_native_go
 	file="$out/$backend.txt"
 	: > "$file"
 	# Fixed iteration counts: a deferred call's cost may depend on how many

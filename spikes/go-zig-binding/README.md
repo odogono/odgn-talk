@@ -27,10 +27,9 @@ cancellation before Operation, property, Rollback and Grant release callbacks,
 fatal worker errors and exactly-once notices. Existing Hosts keep final-reply
 timing; request the feature in `hello` and check support before relying on it.
 
-This remains an isolated probe. The [experimental public Go adapter](../../impl/go/README.md#experimental-zig-backend)
+This remains an isolated probe. The [public Go adapter](../../impl/go/README.md#zig-backend)
 covers data/Request, ordinary Broadcasts, ordinary Capability Operations and
-Stop/Revoke Grant release hooks behind
-`talk_zig_experimental`. Its public Host tests independently compare Trace, Fuel
+Stop/Revoke Grant release hooks, now the default backend. Its public Host tests independently compare Trace, Fuel
 and typed Reports against a separately built native-Go test binary. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
 later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
@@ -64,7 +63,7 @@ python3 spikes/go-zig-binding/build-artifact.py
 
 The builder refuses uncommitted Core/spec changes rather than attaching false
 commit provenance. For local iteration on an uncommitted Zig change, follow the
-[hand-built loop](../../impl/go/README.md#experimental-zig-backend) and never
+[hand-built loop](../../impl/go/README.md#zig-backend) and never
 commit its output. Changes to the binary require rerunning the probe and
 measurements. The same command refreshes the identical artifact and manifest in
 `impl/go/internal/zigwasm`. This probe remains an independent module and native-Go
@@ -430,7 +429,7 @@ failures, result refinements, deferred user answers and sqlite row charging.
 The tagged root selection contains 331 of 405 tests, adding 43 unchanged native
 tests for this slice. Its remaining exclusions include Save/Restore and tests
 that inspect native private state; public Hosts cover the fatal-effect behavior
-of the latter. [The Go guide](../../impl/go/README.md#experimental-zig-backend)
+of the latter. [The Go guide](../../impl/go/README.md#zig-backend)
 owns current support and limits. The maintainer retained the three declaration
 limits on #1050: duplicate Object Kind names in a Group, a Kind first defined
 in a Host callback, and Shapes nested beyond 32 levels.

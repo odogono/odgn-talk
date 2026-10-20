@@ -1,4 +1,4 @@
-//go:build !talk_zig_experimental
+//go:build talk_native_go
 
 package analysis
 
