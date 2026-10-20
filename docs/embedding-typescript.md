@@ -50,9 +50,10 @@ to the local TS Core.
 ## Load a Script and call a Handler
 
 ```ts
-import { newGroup, num, parseInstant } from '@northtalk/ts';
+import { num } from '@northtalk/ts';
+import { newDrivenGroup } from '@northtalk/ts/driver';
 
-const group = newGroup({ name: 'calculator' });
+const { group, drive } = newDrivenGroup({ name: 'calculator' });
 const script = group.load({
   name: 'main',
   source: `on total a, b
@@ -61,20 +62,19 @@ end total`,
 });
 
 const reply = script.request({ name: 'total', args: [num(2), num(3)] });
-group.pump(parseInstant('2026-10-20T09:00:00Z'));
 const answer = await reply.result;
 console.log(answer.asDecimal()!.toString()); // 5
+drive.stop();
 ```
 
 A **Group** owns Script state and schedules its messages. `load` checks and
 compiles the source synchronously, then returns a Script handle. Source contains
 declarations; executable statements go inside Handlers such as `on total`.
 
-`request` queues a message and returns `{ id, result }`. Execution happens when
-the Host calls `pump`, so awaiting the result without arranging a Pump leaves
-the request pending. This Handler finishes in one Pump. Longer work can require
-more Pumps, and a suspending Operation needs a later Pump after its answer
-arrives.
+`request` queues a message and returns `{ id, result }`. `newDrivenGroup` wires
+the Group to an event-loop driver before returning, so you can await Requests
+immediately. This Handler finishes in one Pump. The driver also schedules later
+Pumps for longer work and for a suspending Operation after its answer arrives.
 
 Use `request` when the app needs an answer. Use `deliver` for a message whose
 answer the app does not need; it returns a delivery id and still needs pumping.
@@ -115,14 +115,8 @@ the Script a **Grant** containing the Operations it may call.
 This complete `main.ts` looks up a customer's name through an app-owned service:
 
 ```ts
-import {
-  defineCapability,
-  newGroup,
-  ScriptError,
-  shape,
-  text,
-} from '@northtalk/ts';
-import { autoDrive } from '@northtalk/ts/driver';
+import { defineCapability, ScriptError, shape, text } from '@northtalk/ts';
+import { newDrivenGroup } from '@northtalk/ts/driver';
 
 type CustomerDirectory = {
   lookup(id: string, signal: AbortSignal): Promise<string | undefined>;
@@ -156,11 +150,8 @@ const directory: CustomerDirectory = {
   },
 };
 
-const group = newGroup({
+const { group, drive } = newDrivenGroup({
   name: 'greetings',
-  onReady: () => drive.ready(),
-});
-const drive = autoDrive(group, {
   pump: { fuelSlice: 1000, fuelCap: 5000 },
   onError: error => console.error('Pump failed:', error),
 });
@@ -210,11 +201,15 @@ with a `do` callback returning a `Value`, and call it with `ask …` without
 
 ## Drive execution and manage lifetime
 
-`autoDrive` connects a Group to the event loop. Its `onReady` callback schedules
-a later Pump when an input arrives, including an asynchronous Operation answer.
-It also schedules deadlines and continues after Fuel slicing. Create the driver
-before queuing requests. The `onReady` closure above is safe because Group
-creation queues no work.
+`newDrivenGroup` creates a Group connected to an event-loop driver and returns
+`{ group, drive }`. It combines Group options (`name`, optional `seed` and
+`trace`) with driver options (`clock`, `pump`, `setDeadline`, `onPump` and
+`onError`). The factory owns `onReady`: queued inputs, including asynchronous
+Operation answers, schedule a later Pump automatically. The driver also schedules
+deadlines and continues after Fuel slicing.
+
+`autoDrive(group, options)` remains available for Hosts that wire an existing
+Group's `onReady` to `drive.ready()`.
 
 `fuelSlice` lets other event-loop work run between Pumps; `fuelCap` bounds the
 Group's work in each Pump. These scheduling settings are separate from
@@ -223,9 +218,24 @@ accepts allocation, persistent-state, call-depth and other limits; omitted
 fields use `defaultLimits`. A message's `limits` can tighten the permitted
 per-Delivery limits. See [limits](../spec/06-errors-and-limits.md#limits).
 
-For a game loop or deterministic test, pump manually instead. Pass `bigint`
-epoch **microseconds**, such as `BigInt(Date.now()) * 1000n`, with readings
-that never go backwards. Continue when the result is `sliced` or `rewound`,
+For a game loop or deterministic test, create a Group with `newGroup` from
+`@northtalk/ts` and pump manually. Requests stay pending until your Host pumps:
+
+```ts
+import { newGroup, num, parseInstant } from '@northtalk/ts';
+
+const group = newGroup({ name: 'calculator' });
+const script = group.load({
+  name: 'main',
+  source: 'on total a, b\n  return a + b\nend total',
+});
+const reply = script.request({ name: 'total', args: [num(2), num(3)] });
+group.pump(parseInstant('2026-10-20T09:00:00Z'));
+console.log((await reply.result).toString()); // 5
+```
+
+Pass `bigint` epoch **microseconds**, such as `BigInt(Date.now()) * 1000n`, with
+readings that never go backwards. Continue when the result is `sliced` or `rewound`,
 schedule `nextDeadline`, and arrange another Pump when an input becomes ready.
 An `idle` result can still have suspended work waiting for I/O or a deadline.
 Choose one owner of pumping for a Group.
@@ -251,7 +261,7 @@ means no Pump is scheduled or running, and can resolve while I/O is pending.
 Operation and property callbacks run during a Pump. They may enqueue messages,
 but must not call worker methods such as `pump`, `load`, `save` or `inspect` on
 that Group. Those calls raise `HostError` with code `reentrant call`. Use
-`autoDrive`'s `onPump` callback for work that must happen after a Pump returns.
+the driver's `onPump` callback for work that must happen after a Pump returns.
 
 ## Handle failures and observe execution
 
@@ -279,14 +289,14 @@ on greet customerId
 end greet
 ```
 
-Use `autoDrive`'s `onPump` callback, or a manual Pump's return value, to inspect
+Use the driver's `onPump` callback, or a manual Pump's return value, to inspect
 reports such as `run end` and `call failed`. A failed request's `send failed`
 error does not replace those detailed reports. The driver's `onError` handles
 a Pump that throws; it does not handle request result rejections for you.
 
 For a textual execution Trace, pass `trace: line => console.log(line)` to
-`newGroup`. Keep tracing optional in the app: it records input values and
-execution details. See [Trace support](../impl/ts/README.md#the-group-and-trace-cases).
+`newDrivenGroup` or `newGroup`. Keep tracing optional in the app: it records
+input values and execution details. See [Trace support](../impl/ts/README.md#the-group-and-trace-cases).
 
 ## Extend the integration
 
@@ -303,6 +313,6 @@ execution details. See [Trace support](../impl/ts/README.md#the-group-and-trace-
   `store` for keyed values. See [Using SQLite](sqlite.md) and the
   [SQLite Store example](../impl/ts/examples/store-sqlite/README.md).
 - **A fuller server:** the [webhook Example Host](../impl/ts/examples/webhooks/README.md)
-  combines `autoDrive`, Promise-backed I/O, cancellation and an HTTP endpoint.
+  combines `newDrivenGroup`, Promise-backed I/O, cancellation and an HTTP endpoint.
 - **A browser REPL:** use `SessionHost` from `@northtalk/ts/session`. It provides
   interactive Entries and Transcripts; see the [Session Host guide](../impl/ts/README.md#the-session-host).

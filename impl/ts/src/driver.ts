@@ -3,11 +3,14 @@
 // for its next deadline (spec chapter 9, Outside parity). It is built on the
 // public embedding interface alone, so it isn't covered by parity.
 //
-// A Group's onReady is fixed when it is made, so the Host passes the driver's:
-//
-//   const group = newGroup({ name, onReady: () => drive.ready() });
-//   const drive = autoDrive(group);
-import type { Group, PumpOptions, PumpResult } from './group';
+// newDrivenGroup creates a Group with its readiness already wired to a driver.
+import {
+  newGroup,
+  type Group,
+  type GroupOptions,
+  type PumpOptions,
+  type PumpResult,
+} from './group';
 
 export type AutoDriveOptions = {
   /** Epoch microseconds. The default reads `Date.now()`; readings never go backwards. */
@@ -32,6 +35,20 @@ export type Drive = {
   ready(): void;
   /** Cancels the scheduled Pump and the deadline timer; later readiness is ignored. */
   stop(): void;
+};
+
+/** Group and driver options. The factory owns the Group's readiness callback. */
+export type DrivenGroupOptions = Omit<GroupOptions, 'onReady'> &
+  AutoDriveOptions;
+
+/** Creates a Group ready to drive queued Inputs from the Host's event loop. */
+export const newDrivenGroup = (
+  o: DrivenGroupOptions,
+): { drive: Drive; group: Group } => {
+  const { name, seed, trace, ...options } = o;
+  const group = newGroup({ name, seed, trace, onReady: () => drive.ready() });
+  const drive = autoDrive(group, options);
+  return { group, drive };
 };
 
 // setTimeout takes a signed 32-bit millisecond delay.

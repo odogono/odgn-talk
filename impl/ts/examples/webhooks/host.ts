@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { autoDrive, type AutoDriveOptions, type Drive } from '../../src/driver';
+import {
+  newDrivenGroup,
+  type AutoDriveOptions,
+  type Drive,
+} from '../../src/driver';
 import {
   defineCapability,
   encodeJson,
   exportManifest,
-  newGroup,
   nothing,
   num,
   record,
@@ -248,20 +251,15 @@ export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
     insert.run(rule.type, rule.target, rule.retries);
   }
   const recorder = o.record ? new Recorder() : undefined;
-  // The Group's onReady is fixed when it is made, so it calls the driver made
-  // just after it. Loading queues nothing, so it isn't called before then.
-  const group = newGroup({
+  const { group, drive } = newDrivenGroup({
+    ...o.drive,
     name: 'webhooks',
-    onReady: () => drive.ready(),
     trace: recorder?.trace,
+    onPump: () => recorder?.pumped(),
   });
   if (recorder) {
     recorders.set(group, recorder);
   }
-  const drive = autoDrive(group, {
-    ...o.drive,
-    onPump: () => recorder?.pumped(),
-  });
   const script = group.load({
     name: 'rules',
     source: rulesSource,

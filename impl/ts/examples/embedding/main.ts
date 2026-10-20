@@ -1,11 +1,5 @@
-import {
-  defineCapability,
-  newGroup,
-  ScriptError,
-  shape,
-  text,
-} from '@northtalk/ts';
-import { autoDrive } from '@northtalk/ts/driver';
+import { defineCapability, ScriptError, shape, text } from '@northtalk/ts';
+import { newDrivenGroup } from '@northtalk/ts/driver';
 
 type CustomerDirectory = {
   lookup(id: string, signal: AbortSignal): Promise<string | undefined>;
@@ -39,11 +33,8 @@ const directory: CustomerDirectory = {
   },
 };
 
-const group = newGroup({
+const { group, drive } = newDrivenGroup({
   name: 'greetings',
-  onReady: () => drive.ready(),
-});
-const drive = autoDrive(group, {
   pump: { fuelSlice: 1000, fuelCap: 5000 },
   onError: error => console.error('Pump failed:', error),
 });

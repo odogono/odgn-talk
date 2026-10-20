@@ -12,19 +12,20 @@ npm install @northtalk/ts
 ```
 
 ```ts
-import { newGroup, num, parseInstant } from '@northtalk/ts';
+import { num } from '@northtalk/ts';
+import { newDrivenGroup } from '@northtalk/ts/driver';
 
-const group = newGroup({ name: 'example' });
+const { group, drive } = newDrivenGroup({ name: 'example' });
 const script = group.load({
   name: 'main',
   source: 'on total a, b\n  return a + b\nend total',
 });
 const reply = script.request({ name: 'total', args: [num(2), num(3)] });
-group.pump(parseInstant('2026-10-17T09:00:00Z'));
 console.log((await reply.result).toString()); // 5
+drive.stop();
 ```
 
-A Host drives each Group with `pump`. `@northtalk/ts/driver` pumps one from the event loop.
+A Host can create a Group ready to pump from the event loop with `newDrivenGroup`, or use `newGroup` and drive it with its own `pump` loop.
 
 ## Subpaths
 
@@ -32,7 +33,7 @@ A Host drives each Group with `pump`. `@northtalk/ts/driver` pumps one from the 
 | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `@northtalk/ts`         | Values, Groups, Scripts, Libraries, Capabilities, Object Kinds, save and restore, and the parser and checker |
 | `@northtalk/ts/session` | The Session Host, for a REPL or playground, and Session Transcripts                                          |
-| `@northtalk/ts/driver`  | `autoDrive`, which pumps a Group from the event loop                                                         |
+| `@northtalk/ts/driver`  | `newDrivenGroup` and `autoDrive`, which pump a Group from the event loop                                     |
 | `@northtalk/ts/store`   | The Store Standard Capability                                                                                |
 | `@northtalk/ts/notify`  | The Store notification router                                                                                |
 | `@northtalk/ts/sqlite`  | A `sqlite` implementation on `node:sqlite`, for server Hosts                                                 |

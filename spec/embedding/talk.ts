@@ -914,3 +914,33 @@ export interface NotificationRouter {
 export declare function createRouter(o: RouterOptions): NotificationRouter;
 /** Value Encoding comparison; a missing key and Nothing are one state. */
 export declare function changed(before?: Value, after?: Value): boolean;
+
+// ---------------------------------------------------------------------------
+// Driver helper: @northtalk/ts/driver (chapter 9, Outside parity)
+// These declarations belong to the helper module, not the Core package root.
+// ---------------------------------------------------------------------------
+
+export interface AutoDriveOptions {
+  /** Epoch microseconds; defaults to Date.now(). Readings never go backwards. */
+  clock?: () => bigint;
+  /** A Pump that threw. The driver keeps going. */
+  onError?: (error: unknown) => void;
+  /** Called after each Pump returns; may make worker calls. */
+  onPump?: (result: PumpResult) => void;
+  pump?: PumpOptions;
+  /** Calls fire at the deadline; returns a cancel function. Defaults to setTimeout. */
+  setDeadline?: (at: bigint, fire: () => void) => () => void;
+}
+export interface Drive {
+  /** Resolves when no Pump is scheduled or running; a deadline alone counts as idle. */
+  idle(): Promise<void>;
+  /** Schedules one Pump on a later macrotask. */
+  ready(): void;
+  /** Cancels the scheduled Pump and deadline timer; ignores later readiness. */
+  stop(): void;
+}
+export type DrivenGroupOptions = Omit<GroupOptions, "onReady"> & AutoDriveOptions;
+/** Creates a Group with readiness wired before returning. The factory owns onReady. */
+export declare function newDrivenGroup(o: DrivenGroupOptions): { drive: Drive; group: Group };
+/** For an existing Group whose onReady calls the returned driver's ready method. */
+export declare function autoDrive(group: Group, o?: AutoDriveOptions): Drive;
