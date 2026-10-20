@@ -50,19 +50,20 @@ to the local TS Core.
 ## Load a Script and call a Handler
 
 ```ts
-import { num } from '@northtalk/ts';
+import { num, talk } from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
 const { group, drive } = newDrivenGroup({ name: 'calculator' });
 const script = group.load({
   name: 'main',
-  source: `on total a, b
-  return a + b
-end total`,
+  source: talk`
+    on total a, b
+      return a + b
+    end total
+  `,
 });
 
-const reply = script.request({ name: 'total', args: [num(2), num(3)] });
-const answer = await reply.result;
+const answer = await script.call('total', num(2), num(3));
 console.log(answer.asDecimal()!.toString()); // 5
 await drive.close();
 ```
@@ -70,8 +71,12 @@ await drive.close();
 A **Group** owns Script state and schedules its messages. `load` checks and
 compiles the source synchronously, then returns a Script handle. Source contains
 declarations; executable statements go inside Handlers such as `on total`.
+The `talk` tag strips the common indentation so inline source can follow the
+surrounding code. It rejects JS `${…}` values: write NorthTalk interpolation as
+`\${…}` and its backticks as `` \` ``, and pass values as Request arguments.
 
-`request` queues a message and returns `{ id, result }`. `newDrivenGroup` wires
+`call` queues a Request and resolves with its answer. `request` does the same
+but returns `{ id, result }`, and takes a cancellation signal. `newDrivenGroup` wires
 the Group to an event-loop driver before returning, so you can await Requests
 immediately. This Handler finishes in one Pump. The driver also schedules later
 Pumps for longer work and for a suspending Operation after its answer arrives.
@@ -235,7 +240,7 @@ group.pump(parseInstant('2026-10-20T09:00:00Z'));
 console.log((await reply.result).toString()); // 5
 ```
 
-Pass `bigint` epoch **microseconds**, such as `BigInt(Date.now()) * 1000n`, with
+Pass `bigint` epoch **microseconds**, such as `nowMicros()`, with
 readings that never go backwards. Continue when the result is `sliced` or `rewound`,
 schedule `nextDeadline`, and arrange another Pump when an input becomes ready.
 An `idle` result can still have suspended work waiting for I/O or a deadline.

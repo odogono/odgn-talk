@@ -10,6 +10,7 @@ import {
   LoadError,
   MailboxFull,
   newGroup,
+  nowMicros,
   parseInstant,
   restore,
   ScriptError,
@@ -165,6 +166,23 @@ describe('loading', () => {
 });
 
 describe('Deliveries and Pumps', () => {
+  test('call settles with the answer of an equivalent Request', async () => {
+    const { g } = group();
+    const s = g.load({
+      name: 's',
+      source: 'on total a, b\n return a + b\nend total\n',
+    });
+    const answer = s.call('total', num(2), num(3));
+    g.pump(nowMicros());
+    expect((await answer).asDecimal()!.toString()).toBe('5');
+  });
+
+  test('nowMicros reads the wall clock in epoch microseconds', () => {
+    const before = BigInt(Date.now()) * 1000n;
+    const now = nowMicros();
+    expect(now >= before && now <= BigInt(Date.now()) * 1000n).toBe(true);
+  });
+
   test('ordinary Decision dispatch must pay the complete first instruction', () => {
     for (const budget of [4, 5]) {
       const { g } = group();

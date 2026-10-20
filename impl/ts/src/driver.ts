@@ -5,6 +5,7 @@
 // public embedding interface. Closing also waits for TS Host Promises, outside parity.
 //
 // newDrivenGroup creates a Group with its readiness already wired to a driver.
+import { nowMicros } from './dates';
 import {
   newGroup,
   type Group,
@@ -81,7 +82,7 @@ const timeoutDeadline =
   };
 
 export const autoDrive = (group: Group, o: AutoDriveOptions = {}): Drive => {
-  const read = o.clock ?? (() => BigInt(Date.now()) * 1000n);
+  const read = o.clock ?? nowMicros;
   const setDeadline = o.setDeadline ?? timeoutDeadline(read);
   let last = 0n;
   let scheduled: ReturnType<typeof setTimeout> | undefined;

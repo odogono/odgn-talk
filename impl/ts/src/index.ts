@@ -82,7 +82,8 @@ export {
   type Deciding,
   type Verdict,
 } from './group';
-export { formatInstant, parseInstant } from './dates';
+export { formatInstant, nowMicros, parseInstant } from './dates';
+export { talk } from './talk';
 export {
   Value,
   Decimal,

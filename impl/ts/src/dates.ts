@@ -9,6 +9,9 @@ import { invalidValue } from './errors';
 export const US_PER_SECOND = 1_000_000n;
 export const US_PER_DAY = 86_400n * US_PER_SECOND;
 
+/** The current wall-clock time as epoch microseconds, for `pump`. */
+export const nowMicros = (): bigint => BigInt(Date.now()) * 1000n;
+
 /** Whether a mathematical deadline can cross the Host boundary as an Instant. */
 export const isInstant = (us: bigint): boolean =>
   us >= -62_135_596_800_000_000n && us < 253_402_300_800_000_000n;
