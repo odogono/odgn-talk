@@ -1,5 +1,5 @@
 // Package peers holds the Benchmark Suite's native Go ports: idiomatic Go
-// counterparts of the Benchmark Scripts, the ceiling for the Go Core.
+// counterparts of the Benchmark Scripts, the ceiling for the Go embedding.
 package peers
 
 import (

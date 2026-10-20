@@ -309,7 +309,7 @@ features.
 
 Each Zig sample averages calls over at least 50 ms, with `--count` samples and
 one untimed validation Run first. Every timed Run checks its output and accounting;
-Fuel must agree with the TS and Go Cores. Load uses a fresh Script name each time,
+Fuel must agree with the TS Core and the Go embedding. Load uses a fresh Script name each time,
 with Group destruction outside the Load timer. Run includes Delivery, pumping,
 report collection and result display on an already loaded Script. Native memory
 allocation is not measured by the default suite. Smoke timings are not
@@ -389,7 +389,7 @@ Use a category name as the filter, for example `bun run bench --filter numbers`.
 | Path | Contents |
 | --- | --- |
 | [`scripts/`](scripts/) | The Benchmark Scripts, one `.talk` file each, and [`benchmarks.json`](scripts/benchmarks.json), their manifest. |
-| [`go/`](go/) | The Go runner: a separate module, so benchmark dependencies never enter the Go Core's `go.mod`. |
+| [`go/`](go/) | The Go runner: a separate module, so benchmark dependencies never enter the Go embedding's `go.mod`. |
 | [`zig/`](zig/) | The native C Host over the Zig Core, driven by `ts/src/measure-zig.ts`. |
 | [`ts/`](ts/) | The TS runner with [mitata](https://github.com/evanwashere/mitata), and `bun run bench` itself. |
 | [`peers/`](peers/) | Each Benchmark's port in each Peer Language, as `<language>/<category>/<name>.<ext>`, and the CPython runner. |

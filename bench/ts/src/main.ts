@@ -149,7 +149,7 @@ if (runners.includes('applescript')) {
 }
 const goRuns = [
   ...(runners.includes('go')
-    ? [{ label: 'the Go Core', pattern: '^Benchmark(Load|Run)$' }]
+    ? [{ label: 'the Go embedding', pattern: '^Benchmark(Load|Run)$' }]
     : []),
   ...(selectedGoPeers.length
     ? [

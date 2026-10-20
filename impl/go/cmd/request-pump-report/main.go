@@ -1,5 +1,5 @@
 // request-pump-report pairs the chronological rounds written by
-// zig-request-pump-bench.sh. It also accepts archived runs of that script.
+// request-pump-bench.sh. It also accepts archived runs of that script.
 package main
 
 import (

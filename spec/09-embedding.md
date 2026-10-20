@@ -8,7 +8,7 @@ The [Metered Operation target declarations](embedding/metered-operations.md#targ
 
 ## Package names
 
-The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the public package named `northtalk` at the module root ([ADR 0046](../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). The TS Core's package is `@northtalk/ts` ([ADR 0102](../docs/adr/0102-npm-packages-publish-under-the-northtalk-scope.md)).
+The Go embedding's module path is `github.com/odogono/odgn-talk/impl/go`, with the public package named `northtalk` at the module root ([ADR 0046](../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). The TS Core's package is `@northtalk/ts` ([ADR 0102](../docs/adr/0102-npm-packages-publish-under-the-northtalk-scope.md)).
 
 ## The shape
 

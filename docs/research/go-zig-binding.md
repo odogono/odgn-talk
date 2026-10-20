@@ -829,7 +829,7 @@ sidecar messages, retains starting Calls and callback returns, and pauses releas
 continuations before further execution. Native Zig corrections are tracked in
 [#962](https://github.com/odogono/odgn-talk/issues/962).
 
-The rebuilt embedded artifact's [manifest](../../spikes/go-zig-binding/artifact.json)
+The rebuilt embedded artifact's [manifest](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/spikes/go-zig-binding/artifact.json)
 names its source revision and digest. `TestStopAtCrossingParity` now compares
 native Go with that artifact for immediate valid/wrong-Shape returns, Host/Script
 failures and suspending Start, requiring identical Trace and Fuel and `n=0`.

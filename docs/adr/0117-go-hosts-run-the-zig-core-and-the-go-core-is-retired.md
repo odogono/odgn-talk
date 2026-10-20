@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Go Hosts run the Zig Core, and the Go Core is retired
@@ -21,4 +21,6 @@ For [#1055](https://github.com/odogono/odgn-talk/issues/1055), part of [#884](ht
 - **The Go API stays:** the public Go embedding API, garbage-collected Values without a per-value `Release`, and the Go value utilities and Host helpers remain. Pool, Store, sqlite, the Session Host and REPL, and the tenants example keep working. Session language analysis moves to the Zig Core.
 - **Deployment:** Go Hosts build with `CGO_ENABLED=0` and need only Go. The version-matched reactor is embedded, not downloaded. Linux amd64/arm64 and macOS arm64 are required platforms.
 - **Accepted performance:** the Go API is slower than native Go was. The accepted scorecard and the gaps not pursued (deferred calls, AMD EPYC 7763 runners) are recorded on #1103 and [#1377](https://github.com/odogono/odgn-talk/issues/1377).
-- **Public tests:** native Go tests that read Go Core internals are removed with the Go Core. Tests that assert Go behaviour the Zig Core and TS don't share are changed to the Zig behaviour ([#1037](https://github.com/odogono/odgn-talk/issues/1037)). Remaining behaviour differences in the public suite are fixed before the Go Core is removed, or are recorded here as accepted.
+- **Public tests:** native Go tests that read Go Core internals are removed with the Go Core. Tests that assert Go behaviour the Zig Core and TS don't share are changed to the Zig behaviour ([#1037](https://github.com/odogono/odgn-talk/issues/1037)). Behaviour differences the public suite found were fixed in the Zig Core before removal ([#1400](https://github.com/odogono/odgn-talk/issues/1400)–[#1403](https://github.com/odogono/odgn-talk/issues/1403), [#1068](https://github.com/odogono/odgn-talk/issues/1068), [#1428](https://github.com/odogono/odgn-talk/issues/1428)). The capability parity test keeps the native Go Core's recorded observations as its reference.
+- **Accepted adapter cost:** guest memory is Go heap, so load-time memory through the adapter is bounded at 40× the source for blank lines and 320× for Handler-heavy source ([#1403](https://github.com/odogono/odgn-talk/issues/1403)); the checker's per-Handler cost is [#1411](https://github.com/odogono/odgn-talk/issues/1411).
+- **Carried out** in [#1416](https://github.com/odogono/odgn-talk/pull/1416), [#1426](https://github.com/odogono/odgn-talk/pull/1426), [#1433](https://github.com/odogono/odgn-talk/pull/1433) and [#1436](https://github.com/odogono/odgn-talk/pull/1436). The Go module keeps a lexer and parser only for Host-side name validation and Text Pattern sizing, until [#1435](https://github.com/odogono/odgn-talk/issues/1435).

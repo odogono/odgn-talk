@@ -1,7 +1,16 @@
 # Go → Zig Message Layer feasibility probe
 
+> **Archived.** The probe's code, tests and embedded artifact were removed when
+> the Go API moved to the Zig Core and the native Go Core was retired
+> ([#1055](https://github.com/odogono/odgn-talk/issues/1055),
+> [ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)).
+> This README and the `measurements-*.txt` files are kept as the evidence they
+> recorded; the last commit with the probe is
+> [`8df027ac`](https://github.com/odogono/odgn-talk/tree/8df027ac174cc42a47d4ad14725bcaea768ddee7/spikes/go-zig-binding).
+> The embedded reactor is now built by [`impl/go/build-artifact.py`](../../impl/go/build-artifact.py).
+
 Experimental evidence for [#884](https://github.com/odogono/odgn-talk/issues/884),
-not a replacement Go embedding package. The Go Core remains in place.
+not a replacement Go embedding package.
 
 ## Result
 
@@ -110,7 +119,7 @@ and the protocol rejects foreign tokens. Public handle ownership, callback
 registration/lifetimes, all error and metering paths, GC ergonomics, Pool
 integration, the full API/Corpus and Session facilities remain binding work.
 
-The [spike CI](../../.github/workflows/go-zig-probe.yml) executes pure-Go tests,
+The [spike CI](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/.github/workflows/go-zig-probe.yml) executes pure-Go tests,
 vet and race checks on Linux amd64/arm64 and macOS arm64, and the
 [Go workflow](../../.github/workflows/go.yml) cross-compiles. These three targets form the current CI matrix.
 [#971's embedded run](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
@@ -398,7 +407,7 @@ They have not been rerun and must not be attributed to the new artifact.
 [Raw output](measurements.txt) records three repetitions on Darwin/arm64,
 Apple M5, Go 1.27.2, wazero v1.12.0, Zig 0.17.0, safe optimization, with
 `CGO_ENABLED=0`. The historical artifact source is the revision named above; the current artifact
-has separate provenance in [its manifest](artifact.json).
+has separate provenance in [its manifest](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/spikes/go-zig-binding/artifact.json).
 Compilation and loading are outside the immediate-call timing. Both paths request
 and pump the same Script and verify `42`; native Go uses its public API while
 the probe includes map-based JSON encoding, decoding, Reports and test helpers.

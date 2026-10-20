@@ -231,14 +231,14 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 - Implementation: [envelope](src/request_pump.zig), [binary Values](src/binary_value.zig), [binary frames](src/message.zig) (`fn handleBinary`), [exports](src/talk.zig)
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
 - Tests and cases: tests in the modules; the Go adapter's [combined tests](../go/zig_combined_test.go) run the binary exchange with `TALK_ZIG_REQUEST_PUMP=fields`, as the [Go workflow](../../.github/workflows/go.yml) does
-- First check: `cd impl/zig && zig build test`; envelope gates: `impl/go/zig-request-pump-bench.sh`
+- First check: `cd impl/zig && zig build test`; envelope gates: `impl/go/request-pump-bench.sh`
 
 ## After changing the Zig Core
 
 The Go adapter and the Elixir package each run a pinned copy of the WASI reactor, so a Zig change reaches them only through these steps:
 
-1. Try uncommitted Zig in Go with the [hand swap](../go/README.md#zig-backend), then gate it with `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`. Restore with `git checkout -- impl/go/internal/zigwasm`.
-2. Commit the Zig change, then run `python3 spikes/go-zig-binding/build-artifact.py`. It refreshes both embedded copies (`impl/go/internal/zigwasm` and `spikes/go-zig-binding`) with their digests; commit its output. It refuses uncommitted Core or spec changes. After a rebase, rerun it rather than merging those files by hand.
+1. Try uncommitted Zig in Go with the [hand swap](../go/README.md#zig-backend), then gate it with `CGO_ENABLED=0 impl/go/adapter-check.sh`. Restore with `git checkout -- impl/go/internal/zigwasm`.
+2. Commit the Zig change, then run `python3 impl/go/build-artifact.py`. It refreshes the embedded copy in `impl/go/internal/zigwasm` with its digest; commit its output. It refuses uncommitted Core or spec changes. After a rebase, rerun it rather than merging those files by hand.
 3. If `format_version` in [`snapshot.zig`](src/machine/snapshot.zig) changed, set `@save_format` in [`artifact.ex`](../elixir/lib/north_talk/artifact.ex) and the assertion in [`fault_test.exs`](../elixir/test/fault_test.exs), then follow [the pinned reactor release](../elixir/NAVIGATION.md#the-pinned-reactor-release). `bun run check` fails until the two agree.
 
 ## Build, targets and CI

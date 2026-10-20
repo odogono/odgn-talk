@@ -16,3 +16,4 @@ ADR 0071 gated a third Core on the Message Layer falling short for a named Host.
 - **The payload and memory estimates are unmeasured.** The first Zig build that loads a Script records its Brotli payload and memory per instance against the Go reactor's 2.04 MiB and 15.5 MiB.
 - Supersedes in part [ADR 0071](0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md).
 - Superseded in part by [ADR 0097](0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md): a browser Host may run the Zig reactor through the TS embedding API. The TS Core stays the browser's default Core.
+- Superseded in part by [ADR 0117](0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md): the native Go Core is retired, so the Zig Core is no longer a third Core and changes no longer land three times.

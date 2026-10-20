@@ -1,4 +1,4 @@
-// Package bench runs the Benchmark Suite's Scripts on the Go Core. The suite's
+// Package bench runs the Benchmark Suite's Scripts through the Go embedding. The suite's
 // design and its reasons are in ADR 0054; bench/README.md describes how to run it.
 package bench
 

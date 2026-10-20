@@ -40,7 +40,7 @@ slot. The Linux core workflow also filters its TS and Go steps independently.
 | Change | Selected checks, in addition to Conventions and Spec |
 | --- | --- |
 | Root README, `docs/` or changelog only | None |
-| Go Core | Go core step and Go SQLite |
+| Go embedding | Go core step and Go SQLite |
 | Go SQLite module only | Go SQLite |
 | TS Core | TS core step, package and tooling |
 | `tooling/` or `bench/ts/` only | Tooling |

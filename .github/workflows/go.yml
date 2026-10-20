@@ -1,4 +1,4 @@
-name: Go Core
+name: Go
 
 on:
   workflow_dispatch:
@@ -79,13 +79,13 @@ jobs:
         env:
           CGO_ENABLED: '0'
       # Keep ordinary JSON coverage when the adapter defaults to fields.
-      - run: impl/go/zig-experimental-check.sh -v
+      - run: impl/go/adapter-check.sh -v
         env:
           CGO_ENABLED: '0'
           TALK_ZIG_REQUEST_PUMP: ''
-      - run: impl/go/zig-experimental-check.sh -race
+      - run: impl/go/adapter-check.sh -race
       # The same suites over the binary Request/Pump exchange (#1245).
-      - run: impl/go/zig-experimental-check.sh
+      - run: impl/go/adapter-check.sh
         env:
           CGO_ENABLED: '0'
           TALK_ZIG_REQUEST_PUMP: fields
