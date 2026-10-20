@@ -6207,6 +6207,13 @@ pub const Group = struct {
                 // A Run handling an `error` message, the Core's or a Host's,
                 // sends none: there is no chain.
                 if (!d.internal_error and !std.mem.eql(u8, d.message, "error")) {
+                    // A full mailbox, Host inputs already accepted included,
+                    // drops it with a note (chapter 6).
+                    if (g.mailboxFull(s)) {
+                        g.write("note {s} kind=error-dropped\n", .{run.id});
+                        e.release();
+                        return;
+                    }
                     const args = g.gpa.alloc(*Value, 1) catch |err| {
                         e.release();
                         return err;

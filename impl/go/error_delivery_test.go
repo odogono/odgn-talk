@@ -156,17 +156,22 @@ func TestErrorMessagesDoNotChainOrReportInternalUnhandled(t *testing.T) {
 }
 
 func TestFullMailboxDropsErrorWithoutReservingCapacity(t *testing.T) {
-	requireSynchronousTrace(t)
 	var trace lines
-	var record func(string)
-	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
-		if record != nil {
-			record(line)
-		} else {
-			trace.Record(line)
-		}
-	})})
-	s, err := g.Load(LoadOptions{Name: "s", Limits: Limits{MailboxDepth: 1}, Source: `on fail
+	c := New()
+	var s *Script
+	var deliveryError error
+	// This Host input is accepted during the Pump, before the error message
+	// is queued. Reserved input capacity counts toward mailbox depth.
+	def, err := c.DefineCapability("h", Operation{Name: "poke", Mode: Immediate, Result: NothingShape, Do: func(*Call, []Value) (Value, error) {
+		_, deliveryError = s.Deliver(Message{Name: "next"})
+		return Nothing, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c.NewGroup(GroupOptions{Trace: &trace})
+	s, err = g.Load(LoadOptions{Name: "s", Limits: Limits{MailboxDepth: 1}, Grants: map[string]*Grant{"h": def.GrantAll(nil)}, Source: `on fail
+ ask h to poke
  throw "first"
 end fail
 on next
@@ -179,15 +184,6 @@ end error
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "fail"})
-	// This any-goroutine input is accepted during the Pump, before the error
-	// message is queued. Reserved input capacity counts toward mailbox depth.
-	var deliveryError error
-	record = func(line string) {
-		trace.Record(line)
-		if strings.HasPrefix(line, "run s/r1 ") {
-			_, deliveryError = s.Deliver(Message{Name: "next"})
-		}
-	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	if err != nil || deliveryError != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err, deliveryError)
