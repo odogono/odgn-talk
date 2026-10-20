@@ -15,6 +15,8 @@ go test -tags talk_zig_experimental -run '^TestReissueFuelFaultSkipsSiblingHostC
 go test -tags talk_zig_experimental -run '^TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent$' -count=1 "$@" .
 # A diamond checks each original Library site once per use (#1394).
 go test -tags talk_zig_experimental -run '^TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse$' -count=1 "$@" .
+# Unknown effect state from another Script's Stop or cancel stops the Group (#1401).
+go test -tags talk_zig_experimental -run '^TestFatalCrossScriptControlStopsCurrentRun$' -count=1 "$@" .
 # Replay must offer current Library identities to Restore after replacement.
 go test -tags talk_zig_experimental -run '^TestLibraryReplayAfterReplacement$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
