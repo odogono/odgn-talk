@@ -1,0 +1,46 @@
+# argument-labels-library: a labelled call in a Library is checked against
+# its compilation declarations, and checked again at an importer's `use`
+# line against the importer's (ADR 0115; spec chapter 7, Grants and
+# `needs`). The runner compiles a Library with each Capability's
+# declarations under its own name. `s` holds `world` and moves through the
+# Library. `other` names `world` a Capability whose `move` declares the label
+# `toward`, so its load reports `wrong labels` at its `use` line.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "world"
+name = "move"
+mode = "immediate"
+args = ["text", "text"]
+labels = ["to"]
+result = "text"
+cost = { fuel = 10 }
+
+[[operations]]
+capability = "drift"
+name = "move"
+mode = "immediate"
+args = ["text", "text"]
+labels = ["toward"]
+result = "text"
+cost = { fuel = 10 }
+
+[[libraries]]
+name = "router"
+version = "1"
+source = "router.talk"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { world = { ops = "all" } }
+
+[[scripts]]
+name = "other"
+source = "s.talk"
+grants = { world = { capability = "drift", ops = "all" } }

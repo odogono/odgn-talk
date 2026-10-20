@@ -354,6 +354,14 @@ typedef struct talk_operation {
      * refused on a Reserved Word. Last, so positional initialisers that
      * stop before it leave it false. */
     bool command;
+    /* Argument Labels, one per argument after the first, that a call may
+     * write between its arguments (ADR 0115); each an Argument Label word.
+     * labels_len 0 is none; any other length than args_len - 1 is refused.
+     * Copied. Last, so positional initialisers that stop before them leave
+     * none. */
+    const char *const *labels;
+    const size_t *labels_lens;
+    size_t labels_len;
 } talk_operation;
 
 /* A Segment Coordinator's hooks report one of these
@@ -1442,9 +1450,10 @@ typedef struct talk_library_source {
     const char *source;
     size_t source_len;
 } talk_library_source;
-/* An Operation's compile-time mode and argument Shapes, by its name, and
+/* An Operation's compile-time mode and argument Shapes, by its name,
  * whether it is a Host Command, which a Library's Command Calls resolve
- * against. */
+ * against, and its Argument Labels, which its labelled calls are checked
+ * against (ADR 0115), as in talk_operation. */
 typedef struct talk_operation_check {
     const char *name;
     size_t name_len;
@@ -1452,6 +1461,9 @@ typedef struct talk_operation_check {
     const talk_shape *const *args;
     size_t args_len;
     bool command;
+    const char *const *labels;
+    const size_t *labels_lens;
+    size_t labels_len;
 } talk_operation_check;
 /* One Grant's Operation checks, by the name the source uses for the Grant.
  * An array of them is talk.go's GrantDecls. */
@@ -1462,8 +1474,8 @@ typedef struct talk_grant_decls {
     size_t operations_len;
 } talk_grant_decls;
 /* C only: the checks for every Operation of d, in the order the Core keeps
- * them, in out, up to cap of them; it returns how many d has. Names and
- * Shapes are borrowed from d. */
+ * them, in out, up to cap of them; it returns how many d has. Names, Shapes
+ * and labels are borrowed from d. */
 size_t talk_capability_def_checks(const talk_capability_def *d, talk_operation_check *out, size_t cap);
 /* Compiles a Library. imports must hold every Library its `use` lines name,
  * besides the stdlib's. declarations give the modes and Shapes its

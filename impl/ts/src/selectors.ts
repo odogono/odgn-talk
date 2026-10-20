@@ -5,6 +5,11 @@ const allowed = new Set(grammar.labels.reserved);
 const excluded = new Set(grammar.labels.excluded);
 const name = (part: string) =>
   part !== '_' && /^[A-Z_a-z]\w*$/.exec(part)?.[0] === part;
+/** An Argument Label word: any Name, or an allowed Reserved Word, never an excluded one. */
+export const validArgumentLabel = (part: string): boolean =>
+  name(part) &&
+  (!reserved.has(part) || allowed.has(part)) &&
+  !excluded.has(part);
 export const validMessageSelector = (
   message: string,
   arity: number,
@@ -21,12 +26,7 @@ export const validMessageSelector = (
     name(first) &&
     first !== 'all' &&
     !reserved.has(first) &&
-    parts.every(
-      part =>
-        name(part) &&
-        (!reserved.has(part) || allowed.has(part)) &&
-        !excluded.has(part),
-    )
+    parts.every(validArgumentLabel)
   );
 };
 // Chapter 5: a computed message name must be one a static `send` could

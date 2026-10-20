@@ -23,6 +23,7 @@ import {
   nameAt,
   references,
   rename,
+  signatureHelp,
   suspensionHints,
   type ClientFeatures,
 } from './lsp/features';
@@ -171,6 +172,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
           },
           completionProvider: { triggerCharacters: [' ', '.'] },
           hoverProvider: true,
+          signatureHelpProvider: { triggerCharacters: [' ', ','] },
           definitionProvider: true,
           referencesProvider: true,
           implementationProvider: true,
@@ -295,6 +297,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
     const supported = [
       'textDocument/completion',
       'textDocument/hover',
+      'textDocument/signatureHelp',
       'textDocument/definition',
       'textDocument/references',
       'textDocument/implementation',
@@ -328,6 +331,8 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
         return completion(analysis, offset, manifest, analyses, client);
       case 'textDocument/hover':
         return hover(analyses, analysis, offset, manifest, client);
+      case 'textDocument/signatureHelp':
+        return signatureHelp(analysis, offset, manifest);
       case 'textDocument/definition':
         return definition(analyses, analysis, offset);
       case 'textDocument/references': {

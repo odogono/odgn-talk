@@ -33,6 +33,7 @@ pub const Code = enum {
     pattern_too_large,
     wrong_argument_count,
     wrong_argument,
+    wrong_labels,
     unknown_operation,
     wrong_mode,
     missing_and_wait,
@@ -167,6 +168,32 @@ pub const Operation = struct {
     accepts: ?Accepts = null,
     /// Also callable as a Host Command, by its name alone (ADR 0094).
     command: bool = false,
+    /// Its Argument Labels, one for each argument after the first, or none
+    /// (ADR 0115).
+    labels: []const []const u8 = &.{},
+
+    /// Whether a call with `args` arguments and these labels writes the
+    /// declared labels: none, or the declared ones in order, stopping where
+    /// trailing Optional arguments are left off. Null when they match, or
+    /// else the index of the first label that doesn't.
+    pub fn wrongLabel(o: Operation, labels: []const []const u8) ?usize {
+        for (labels, 0..) |l, i| {
+            if (i >= o.labels.len or !std.mem.eql(u8, l, o.labels[i])) return i;
+        }
+        return null;
+    }
+
+    /// Whether it is a Host Command whose spellings include `selector`: its
+    /// name, for a call with no labels, and for each number of arguments n
+    /// from 2 that it takes, its name and its first n − 1 labels as a
+    /// Selector, `move:to:` (ADR 0115).
+    pub fn spells(o: Operation, name: []const u8, labels: []const []const u8) bool {
+        if (!o.command or !std.mem.eql(u8, o.name, name)) return false;
+        if (labels.len == 0) return true;
+        const n = labels.len + 1;
+        if (n < o.required or n > o.total) return false;
+        return o.wrongLabel(labels) == null;
+    }
 };
 
 /// A literal argument, as the loader sees it: its kind, a Quantity's Unit,
@@ -252,6 +279,8 @@ pub const Need = struct {
     waits: bool,
     args: usize,
     literals: []const ?Literal,
+    /// The Argument Labels the call writes, or none (ADR 0115).
+    labels: []const []const u8 = &.{},
 };
 
 /// What a Script's Grants make of one of its Libraries' calls, as the
@@ -264,6 +293,7 @@ pub fn needProblem(n: Need, grants: []const Grant) ?Code {
         if (std.mem.eql(u8, o.name, n.operation)) break o;
     } else return .missing_grant;
     if (n.args < o.required or n.args > o.total) return .wrong_argument_count;
+    if (o.wrongLabel(n.labels) != null) return .wrong_labels;
     if (o.accepts) |accepts| for (n.literals, 0..) |lit, i| {
         const l = lit orelse continue;
         if (!accepts.call(accepts.context, i, l)) return .wrong_argument;
@@ -640,7 +670,7 @@ const Checker = struct {
                         } else entry.value_ptr.* = .{ .decl = index, .name = local, .export_ = ex };
                         // As an Import named like a Handler is, whether or
                         // not it is called.
-                        if (c.offered(c.text(local)) > 0) try c.report(.name_clash, local);
+                        if (c.offered(c.text(local), &.{}) > 0) try c.report(.name_clash, local);
                     }
                 },
             }
@@ -1424,36 +1454,48 @@ const Checker = struct {
             if (waits) try c.report(.needless_and_wait, cmd.name);
             return;
         }
-        // Only an unlabelled call's Selector is a single word.
-        if (cmd.labels.len == 0) try c.hostCommand(cmd);
+        // A Host Command, by its name or one of its labelled Selectors.
+        try c.hostCommand(cmd);
         if (cmd.into != null and !waits and !c.commands.contains(cmd.name)) try c.report(.missing_and_wait, first);
         // Sent up the Message Path, or a suspending Host Command: `and wait`
         // is a Suspension Point.
         if (waits) try c.intrinsic(s, first, w);
     }
 
-    /// How many of the Script's Grants offer `name` as a Host Command.
-    fn offered(c: *Checker, name: []const u8) usize {
+    /// How many of the Script's Grants offer the Selector of `name` and
+    /// `labels` as a Host Command; with no labels, any Host Command named
+    /// `name`.
+    fn offered(c: *Checker, name: []const u8, labels: []const []const u8) usize {
         const grants = c.context.grants orelse return 0;
         var n: usize = 0;
         for (grants) |g| for (g.operations) |o| {
-            if (o.command and std.mem.eql(u8, o.name, name)) n += 1;
+            if (o.spells(name, labels)) n += 1;
         };
         return n;
     }
 
+    /// The texts of label tokens.
+    fn texts(c: *Checker, labels: []const Tok) Allocator.Error![]const []const u8 {
+        if (labels.len == 0) return &.{};
+        const out = try c.a.alloc([]const u8, labels.len);
+        for (labels, out) |l, *x| x.* = c.text(l);
+        return out;
+    }
+
     /// Resolves a Command Call that names no Handler to the one Operation
-    /// its Grants declare `command` (ADR 0094), and checks it as the `tell`
-    /// or `ask` it stands for, as a `tell` block's line is. Two Grants
-    /// offering it are a `name clash` at the call.
+    /// its Grants declare `command` that spells its Selector (ADR 0094, ADR
+    /// 0113), and checks it as the `tell` or `ask` it stands for, as a
+    /// `tell` block's line is. Two Grants offering it are a `name clash` at
+    /// the call. A Selector no Host Command spells stays a message.
     fn hostCommand(c: *Checker, cmd: ast.Command) Allocator.Error!void {
         const name = c.text(cmd.name);
-        const n = c.offered(name);
+        const labels = try c.texts(cmd.labels);
+        const n = c.offered(name, labels);
         if (n == 0) return;
         if (n > 1) return c.report(.name_clash, cmd.name);
         const g, const o = for (c.context.grants.?) |g| {
             const o = for (g.operations) |o| {
-                if (o.command and std.mem.eql(u8, o.name, name)) break o;
+                if (o.spells(name, labels)) break o;
             } else continue;
             break .{ g, o };
         } else unreachable;
@@ -1462,7 +1504,7 @@ const Checker = struct {
         try c.commands.put(c.a, cmd.name, .{ .grant = g.name, .operation = o.name, .told = told });
         const literals = try c.a.alloc(?Literal, cmd.args.len);
         for (cmd.args, literals) |arg, *l| l.* = try c.literal(arg);
-        try c.needs.append(c.a, .{ .grant = g.name, .operation = o.name, .ask = !told, .line = false, .waits = waits, .args = cmd.args.len, .literals = literals });
+        try c.needs.append(c.a, .{ .grant = g.name, .operation = o.name, .ask = !told, .line = false, .waits = waits, .args = cmd.args.len, .literals = literals, .labels = labels });
         if (cmd.args.len < o.required or cmd.args.len > o.total) {
             try c.report(.wrong_argument_count, cmd.name);
         } else if (o.accepts) |accepts| for (cmd.args, literals, 0..) |arg, lit, i| {
@@ -1526,7 +1568,8 @@ const Checker = struct {
         if (target.data != .name) return;
         const literals = try c.a.alloc(?Literal, op.args.len);
         for (op.args, literals) |arg, *l| l.* = try c.literal(arg);
-        var need: Need = .{ .grant = c.text(target.data.name), .operation = c.text(op.operation), .ask = ask, .line = line, .waits = op.wait != null, .args = op.args.len, .literals = literals };
+        const labels = try c.texts(op.labels);
+        var need: Need = .{ .grant = c.text(target.data.name), .operation = c.text(op.operation), .ask = ask, .line = line, .waits = op.wait != null, .args = op.args.len, .literals = literals, .labels = labels };
         // A `tell` block's line is lowered by its declared mode, so a
         // Library's need is the form it was compiled to.
         if (line) if (c.grant(need.grant)) |g| for (g.operations) |o| if (std.mem.eql(u8, o.name, need.operation)) {
@@ -1542,10 +1585,14 @@ const Checker = struct {
         } else return c.report(.unknown_operation, op.operation);
         if (op.args.len < o.required or op.args.len > o.total) {
             try c.report(.wrong_argument_count, op.operation);
-        } else if (o.accepts) |accepts| for (op.args, 0..) |arg, i| {
-            const lit = try c.literal(arg) orelse continue;
-            if (!accepts.call(accepts.context, i, lit)) try c.report(.wrong_argument, arg.pos);
-        };
+        } else {
+            // The count first, then the labels (ADR 0115).
+            if (o.wrongLabel(labels)) |i| try c.report(.wrong_labels, op.labels[i]);
+            if (o.accepts) |accepts| for (op.args, 0..) |arg, i| {
+                const lit = try c.literal(arg) orelse continue;
+                if (!accepts.call(accepts.context, i, lit)) try c.report(.wrong_argument, arg.pos);
+            };
+        }
         const waits = op.wait != null;
         const ok = if (line)
             waits == (o.mode == .suspending)
@@ -2640,6 +2687,117 @@ test "Capability calls against the Script's Grants" {
     , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
 }
 
+test "labelled Capability calls are checked against the declared labels (ADR 0115)" {
+    const grants = [_]Grant{.{ .name = "world", .operations = &.{
+        .{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .labels = &.{"to"} },
+        .{ .name = "mark", .mode = .fire_and_forget, .required = 1, .total = 3, .labels = &.{ "at", "by" } },
+        .{ .name = "fetch", .mode = .suspending, .required = 2, .total = 2, .labels = &.{"toward"} },
+        .{ .name = "swap", .mode = .immediate, .required = 2, .total = 2 },
+    } }};
+    // Declared labels, a prefix where Optional arguments are left off, and
+    // positional calls all load, in every position.
+    try expectDiagnostics(
+        \\on t a, b
+        \\  ask world to move a to b
+        \\  ask world to move a, b
+        \\  tell world to mark a
+        \\  tell world to mark a at b
+        \\  tell world to mark a at b by 2
+        \\  tell world
+        \\    mark a at b
+        \\    fetch a toward b and wait
+        \\  end tell
+        \\  wait for all
+        \\    ask world to fetch a toward b and wait
+        \\  end wait
+        \\end t
+    , .{ .grants = &grants }, "");
+    // The first label that doesn't match; any label on an Operation that
+    // declares none; the count first.
+    try expectDiagnostics(
+        \\on t a, b
+        \\  ask world to move a at b
+        \\  tell world to mark a by b
+        \\  ask world to swap a to b
+        \\  ask world to move a to b to a
+        \\  tell world
+        \\    mark a at b to 2
+        \\  end tell
+        \\  wait for all
+        \\    ask world to fetch a to b and wait
+        \\  end wait
+        \\end t
+    , .{ .grants = &grants }, "wrong labels at 2:23\nwrong labels at 3:24\nwrong labels at 4:23\nwrong argument count at 5:16\nwrong labels at 7:17\nwrong labels at 10:26\n");
+}
+
+test "a Library's labelled call is rechecked against an importer's labels (ADR 0115)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const declared = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .labels = &.{"to"} }};
+    const tree = switch (try parser.parse(a, "on route a, b\n  ask world to move a to b\nend route\n")) {
+        .tree => |t| t,
+        .failure => return error.TestUnexpectedResult,
+    };
+    const result = try check(a, &tree, .{ .library = true, .grants = &.{.{ .name = "world", .operations = &declared }} });
+    try testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    const need = result.needs[0];
+    try testing.expectEqualStrings("to", need.labels[0]);
+    try testing.expect(needProblem(need, &.{.{ .name = "world", .operations = &declared }}) == null);
+    const other = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .labels = &.{"toward"} }};
+    try testing.expectEqual(Code.wrong_labels, needProblem(need, &.{.{ .name = "world", .operations = &other }}).?);
+    const none = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 2, .total = 2 }};
+    try testing.expectEqual(Code.wrong_labels, needProblem(need, &.{.{ .name = "world", .operations = &none }}).?);
+    const three = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 3, .total = 3, .labels = &.{ "to", "by" } }};
+    try testing.expectEqual(Code.wrong_argument_count, needProblem(need, &.{.{ .name = "world", .operations = &three }}).?);
+}
+
+test "a labelled Host Command has a Selector for each labelled spelling (ADR 0115)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const world = [_]Operation{
+        .{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .command = true, .labels = &.{"to"} },
+        .{ .name = "mark", .mode = .fire_and_forget, .required = 1, .total = 3, .command = true, .labels = &.{ "at", "by" } },
+    };
+    const grants = [_]Grant{.{ .name = "world", .operations = &world }};
+    const source =
+        \\on go a, b
+        \\  move a to b
+        \\  move a, b
+        \\  mark a
+        \\  mark a at b
+        \\  mark a at b by 2
+        \\  move a at b
+        \\  mark a by b
+        \\  move a
+        \\  mark a at b by 2 to 3
+        \\end go
+        \\on mark x at y
+        \\  return y
+        \\end mark
+    ;
+    const tree = switch (try parser.parse(a, source)) {
+        .tree => |t| t,
+        .failure => return error.TestUnexpectedResult,
+    };
+    const result = try check(a, &tree, .{ .grants = &grants });
+    // `move a` is the plain spelling with too few arguments.
+    try testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try testing.expectEqual(Code.wrong_argument_count, result.diagnostics[0].code);
+    var lines = try lexer.Lines.init(a, tree.source);
+    var resolved: [11]bool = @splat(false);
+    var it = result.commands.keyIterator();
+    while (it.next()) |t| resolved[lines.position(tree.tokens[t.*].start).line] = true;
+    // By line: the plain and declared spellings resolve; `mark a at b` is
+    // the Handler's; other labels and too many arguments stay messages.
+    try testing.expectEqualSlices(bool, &.{ false, false, true, true, true, false, true, false, false, true, false }, &resolved);
+    // Two Grants spelling one Selector clash at the call; spelling
+    // different ones, they don't.
+    const toward = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .command = true, .labels = &.{"toward"} }};
+    try expectDiagnostics("on go a, b\n  move a to b\n  move a toward b\n  move a, b\nend go\n", .{ .grants = &.{ .{ .name = "world", .operations = world[0..1] }, .{ .name = "other", .operations = &toward } } }, "name clash at 4:3\n");
+}
+
 test "Result Targets write like put, including Join Members (ADR 0114)" {
     try expectDiagnostics(
         \\script variable last
@@ -2859,7 +3017,7 @@ test "every corpus unit gives the diagnostics its case expects" {
             "capabilities/load-checks",                 "capabilities/revoke-in-flight",              "libraries/caller-capabilities",
             "libraries/needs-transitive",               "reload/replacement-transitive",              "tell-block/library",
             "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets", "capabilities/host-commands-library",
-            "capabilities/host-commands-load-checks",
+            "capabilities/host-commands-load-checks",   "capabilities/argument-labels-library",       "capabilities/argument-labels-load-checks",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";

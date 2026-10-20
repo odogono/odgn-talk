@@ -52,6 +52,8 @@ export type OperationSpec = {
     code: string;
     fields?: { key: string; optional?: boolean; shape: ShapeSpec }[];
   }[];
+  /** Argument Labels, one per argument after the first (ADR 0115). */
+  labels?: string[];
   maxPending?: number;
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
   name: string;
@@ -130,7 +132,12 @@ export const operationDeclarations = (
     string,
     Record<
       string,
-      { args: Shape[]; command?: boolean; mode: OperationSpec['mode'] }
+      {
+        args: Shape[];
+        command?: boolean;
+        labels?: string[];
+        mode: OperationSpec['mode'];
+      }
     >
   > = Object.create(null);
   for (const [name, capability] of capabilities) {
@@ -140,6 +147,7 @@ export const operationDeclarations = (
         {
           args: op.args ?? [],
           mode: op.mode,
+          ...(op.labels?.length ? { labels: op.labels } : {}),
           ...(op.command ? { command: true } : {}),
         },
       ]),
@@ -257,6 +265,7 @@ export const capabilityOperations = (
       mode: op.mode,
       args: (op.args ?? []).map(shapeSpec),
       cost: { ...op.cost },
+      ...(op.labels?.length ? { labels: [...op.labels] } : {}),
       ...(op.command ? { command: true } : {}),
       ...(op.result ? { result: shapeSpec(op.result) } : {}),
       ...(op.errors

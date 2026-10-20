@@ -59,18 +59,60 @@ export const shapeText = (shape: Shape): string => {
   }
 };
 
-const argText = (shape: Shape): string =>
-  shape.k === 'optional'
-    ? `[‹${shapeText(shape.of)}›]`
-    : `‹${shapeText(shape)}›`;
+/** A call's text, with the `[start, end)` offsets of each argument slot in
+ * it, a labelled slot taking its label, for signature help. */
+export type CallSignature = { params: [number, number][]; text: string };
+
+/** `name a, b` or, with one label per argument after the first, `name a to
+ * b`, where each slot is an argument's text and whether it is Optional. A
+ * labelled Optional slot leaves off its label with it: `[to ‹text›]`. */
+export const argumentPhrase = (
+  name: string,
+  slots: readonly { optional: boolean; text: string }[],
+  labels: readonly string[] = [],
+): CallSignature => {
+  const labelled = labels.length > 0 && labels.length === slots.length - 1;
+  let text = name;
+  const params: [number, number][] = [];
+  slots.forEach((slot, i) => {
+    const label = labelled && i > 0 ? `${labels[i - 1]} ` : '';
+    const piece = slot.optional ? `[${label}${slot.text}]` : label + slot.text;
+    text += i === 0 || labelled ? ' ' : ', ';
+    params.push([text.length, text.length + piece.length]);
+    text += piece;
+  });
+  return { text, params };
+};
+
+/** Each argument Shape as a placeholder slot, such as `‹text›`. */
+export const shapeSlots = (args: readonly Shape[]) =>
+  args.map(shape =>
+    shape.k === 'optional'
+      ? { optional: true, text: `‹${shapeText(shape.of)}›` }
+      : { optional: false, text: `‹${shapeText(shape)}›` },
+  );
+
+/** `tell g to op …`, `ask g to op …` or `ask g to op … and wait`, labelled
+ * when the Operation declares labels (ADR 0115). */
+export const callSignature = (
+  grant: string,
+  op: ManifestOperation,
+): CallSignature => {
+  const verb = op.mode === 'fire-and-forget' ? 'tell' : 'ask';
+  const prefix = `${verb} ${grant} to `;
+  const phrase = argumentPhrase(op.name, shapeSlots(op.args), op.labels);
+  return {
+    text: `${prefix}${phrase.text}${op.mode === 'suspending' ? ' and wait' : ''}`,
+    params: phrase.params.map(([start, end]) => [
+      start + prefix.length,
+      end + prefix.length,
+    ]),
+  };
+};
 
 /** `tell g to op …`, `ask g to op …` or `ask g to op … and wait`. */
-export const callForm = (grant: string, op: ManifestOperation): string => {
-  const args = op.args.map(argText).join(', ');
-  const verb = op.mode === 'fire-and-forget' ? 'tell' : 'ask';
-  const wait = op.mode === 'suspending' ? ' and wait' : '';
-  return `${verb} ${grant} to ${op.name}${args ? ` ${args}` : ''}${wait}`;
-};
+export const callForm = (grant: string, op: ManifestOperation): string =>
+  callSignature(grant, op).text;
 
 const errorText = (value: unknown): string => {
   const error = value as { code: string; fields?: { key: string }[] };
@@ -111,7 +153,11 @@ const facts = (op: ManifestOperation): string[] => {
     out.push('Segment-bound: commits or rolls back with the Segment');
   }
   if (op.command) {
-    out.push(`Host Command: also callable as \`${op.name}\` alone`);
+    out.push(
+      op.labels
+        ? `Host Command: also callable as \`${op.name}\` alone, or as \`${argumentPhrase(op.name, shapeSlots(op.args), op.labels).text}\``
+        : `Host Command: also callable as \`${op.name}\` alone`,
+    );
   }
   return out;
 };
@@ -165,6 +211,14 @@ export const operationText = (
   return sections.join(md ? '\n\n' : '\n');
 };
 
+/** A manifest message's Command Call, such as `move ‹value› to ‹text›`. */
+export const messageCall = (message: ManifestMessage): CallSignature => {
+  const parts = message.name.includes(':')
+    ? message.name.slice(0, -1).split(':')
+    : [message.name];
+  return argumentPhrase(parts[0]!, shapeSlots(message.args), parts.slice(1));
+};
+
 /** A manifest message as a command, such as `hide ‹page object›` or
  * `move ‹value› to ‹text›`, with its documentation. */
 export const messageText = (
@@ -173,14 +227,7 @@ export const messageText = (
 ): string => {
   const md = format === 'markdown';
   const code = md ? codeBlock : (text: string) => text;
-  const args = message.args.map(argText);
-  const command = message.name.includes(':')
-    ? message.name
-        .slice(0, -1)
-        .split(':')
-        .map((part, i) => `${part} ${args[i]}`)
-        .join(' ')
-    : [message.name, args.join(', ')].filter(Boolean).join(' ');
+  const command = messageCall(message).text;
   const sections = [code(command)];
   if (message.description) {
     sections.push(

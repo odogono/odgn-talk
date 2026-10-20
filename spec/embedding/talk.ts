@@ -186,6 +186,11 @@ export interface ErrorDecl { code: string; fields?: Record<string, FieldShape> }
 interface OpBase {
   /** A trailing Optional suffix may be omitted; Host functions receive only supplied args. */
   args?: Shape[];
+  /**
+   * Argument Labels, one per argument after the first, that a call may write
+   * between its arguments; checked at load only (ADR 0115). Empty is absent.
+   */
+  labels?: string[];
   result?: Shape;
   cost: Cost;
   errors?: ErrorDecl[];
@@ -512,10 +517,12 @@ export interface GroupOptions {
   seed?: bigint;
 }
 
-/** Compile-time Operation modes and argument Shapes, by the Grant name in source. */
+/** Compile-time Operation modes, argument Shapes and labels, by the Grant name in source. */
 export type GrantDecls = Readonly<Record<string, Readonly<Record<string, {
   mode: "immediate" | "suspending" | "fire-and-forget";
   args: readonly Shape[];
+  labels?: readonly string[];
+  command?: boolean;
 }>>>>;
 
 export interface LibrarySource { name: string; version: string; source: string }

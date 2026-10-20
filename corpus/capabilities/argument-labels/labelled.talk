@@ -1,0 +1,25 @@
+-- labelled.talk: the argument-labels case's labelled calls.
+
+script variable total = 0
+script variable spot = ""
+
+on ring a, b
+  ask world to move a to b into spot
+  tell world to place "beacon" at spot
+  tell world
+    place "flag" at b
+  end tell
+  ask world to fetch a toward b and wait
+  add it to total
+  tell world to mark a
+  tell world to mark a at b
+  tell world to mark a at b by 2
+end ring
+
+on gather a, b
+  wait for all
+    ask world to fetch a toward b and wait
+    ask world to fetch b toward a and wait
+  end wait
+  add item 1 of it to total
+end gather

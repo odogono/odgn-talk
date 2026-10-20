@@ -463,9 +463,36 @@ fn reservedWord(word: []const u8) bool {
     return false;
 }
 
+/// Whether `labels` are an Operation's Argument Labels for `args`
+/// arguments (ADR 0115): none, or one for each argument after the first,
+/// each an Argument Label word (chapter 2): a Name, or `to`, but never
+/// `from`, `otherwise` or `with`.
+pub fn validLabels(labels: []const []const u8, args: usize) bool {
+    if (labels.len == 0) return true;
+    if (labels.len + 1 != args) return false;
+    for (labels) |l| if (!labelWord(l)) return false;
+    return true;
+}
+
+fn labelWord(w: []const u8) bool {
+    if (w.len == 0 or !(std.ascii.isAlphabetic(w[0]) or w[0] == '_')) return false;
+    for (w[1..]) |ch| if (!std.ascii.isAlphanumeric(ch) and ch != '_') return false;
+    for (grammar.labels.excluded) |x| if (std.mem.eql(u8, x, w)) return false;
+    for (grammar.labels.reserved) |x| if (std.mem.eql(u8, x, w)) return true;
+    return !reservedWord(w) and !std.mem.eql(u8, w, "_");
+}
+
 pub const Operation = struct {
     name: []const u8,
     args: []*Shape,
+    /// Its Argument Labels, one for each argument after the first, or none
+    /// (ADR 0115). They are checked at load only.
+    labels: []const []const u8 = &.{},
+    /// The labels as `talk_capability_def_checks` lends them to a C Host:
+    /// each one's bytes and length, parallel to `labels`. Empty when the
+    /// Operation came from elsewhere than the C API.
+    c_labels: []const [*]const u8 = &.{},
+    c_label_lens: []const usize = &.{},
     /// Null for a fire-and-forget Operation.
     result: ?*Shape,
     cost: Cost = .{},
@@ -617,6 +644,7 @@ pub const Capability = struct {
     pub fn validScopes(c: *const Capability) bool {
         for (c.operations) |op| {
             if (op.command and reservedWord(op.name)) return false;
+            if (!validLabels(op.labels, op.args.len)) return false;
             if (op.segment_bound and op.mode != .immediate) return false;
             if (op.metering) |metering| switch (metering) {
                 .read_only => if (op.mode == .fire_and_forget or op.segment_bound or op.scope != .none) return false,
@@ -901,14 +929,14 @@ pub fn checkOperations(a: Allocator, g: *const Grant) ![]check.Operation {
     var out: std.ArrayList(check.Operation) = .empty;
     for (g.capability.operations, g.operations, 0..) |op, kept, i| {
         if (!kept) continue;
-        try out.append(a, .{ .name = op.name, .mode = op.mode, .required = op.required(), .total = op.args.len, .accepts = .{ .context = &g.capability.operations[i], .call = acceptsLiteral }, .command = op.command });
+        try out.append(a, .{ .name = op.name, .mode = op.mode, .required = op.required(), .total = op.args.len, .accepts = .{ .context = &g.capability.operations[i], .call = acceptsLiteral }, .command = op.command, .labels = op.labels });
     }
     return out.items;
 }
 
 /// An Operation's compile-time mode and argument Shapes, which a Library's
 /// Capability calls are checked and lowered against.
-pub const OperationCheck = struct { name: []const u8, mode: Mode, args: []const *Shape, command: bool = false };
+pub const OperationCheck = struct { name: []const u8, mode: Mode, args: []const *Shape, command: bool = false, labels: []const []const u8 = &.{} };
 /// A Grant's declarations, by the name the source uses.
 pub const GrantDecls = struct { name: []const u8, operations: []const OperationCheck };
 
@@ -918,7 +946,7 @@ pub fn declaredOperations(a: Allocator, checks: []const OperationCheck) ![]check
     for (checks, out) |*c, *x| {
         var required = c.args.len;
         while (required > 0 and c.args[required - 1].omittable()) required -= 1;
-        x.* = .{ .name = c.name, .mode = c.mode, .required = required, .total = c.args.len, .accepts = .{ .context = c, .call = acceptsDeclared }, .command = c.command };
+        x.* = .{ .name = c.name, .mode = c.mode, .required = required, .total = c.args.len, .accepts = .{ .context = c, .call = acceptsDeclared }, .command = c.command, .labels = c.labels };
     }
     return out;
 }

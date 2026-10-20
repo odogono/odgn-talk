@@ -1222,23 +1222,30 @@ class Parser {
   *commandPhrase(name: string): ParseTask<Node> {
     const args: Node[] = [];
     const labels: string[] = [];
-    if (this.startsExpr(this.peek(0))) {
-      const frame = this.enter('ExpressionList');
-      try {
-        args.push((yield this.expr()) as Node);
-        if (this.isOp(this.peek(0, 'operator'), ',')) {
-          while (this.isOp(this.peek(0, 'operator'), ',')) {
-            this.next('operator');
-            args.push((yield this.expr()) as Node);
-          }
-        } else {
-          yield this.labelled(() => this.expr(), labels, args);
-        }
-      } finally {
-        this.leave(frame);
-      }
-    }
+    yield this.callArgs(args, labels);
     return { k: 'Command', name: this.selector(name, labels), args };
+  }
+
+  // A call's arguments, if any: one argument, then either more after commas
+  // or `label arg` pairs, as a Command Call and an Operation call write them.
+  *callArgs(args: Node[], labels: string[]): ParseTask<void> {
+    if (!this.startsExpr(this.peek(0))) {
+      return;
+    }
+    const frame = this.enter('ExpressionList');
+    try {
+      args.push((yield this.expr()) as Node);
+      if (this.isOp(this.peek(0, 'operator'), ',')) {
+        while (this.isOp(this.peek(0, 'operator'), ',')) {
+          this.next('operator');
+          args.push((yield this.expr()) as Node);
+        }
+      } else {
+        yield this.labelled(() => this.expr(), labels, args);
+      }
+    } finally {
+      this.leave(frame);
+    }
   }
 
   *exprList(): ParseTask<Node[]> {
@@ -1411,17 +1418,18 @@ class Parser {
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its
-  // arguments, a Result Target where `targets` allows it (ADR 0114),
-  // and `and wait` where `waits` allows it.
+  // arguments, a list or one argument and then `label arg` pairs (ADR 0115),
+  // a Result Target where `targets` allows it (ADR 0114), and `and wait`
+  // where `waits` allows it.
   *operation(waits: boolean, targets = false): ParseTask<Node> {
     const t = this.peek(0);
     if (t.t !== 'word' || t.v === '_') {
       this.fail(t, 'an Operation name');
     }
     const op = this.next().v;
-    const args = this.startsExpr(this.peek(0))
-      ? ((yield this.exprList()) as Node[])
-      : [];
+    const args: Node[] = [];
+    const labels: string[] = [];
+    yield this.callArgs(args, labels);
     const into =
       targets && this.atOperatorWord('into')
         ? ((yield this.resultTarget()) as string)
@@ -1430,6 +1438,7 @@ class Parser {
       k: 'Operation',
       op,
       args,
+      ...(labels.length ? { labels } : {}),
       into,
       wait: waits ? ((yield this.andWait()) as boolean) : false,
     };

@@ -1,0 +1,25 @@
+-- positional.talk: the argument-labels case's calls, written with commas.
+
+script variable total = 0
+script variable spot = ""
+
+on ring a, b
+  ask world to move a, b into spot
+  tell world to place "beacon", spot
+  tell world
+    place "flag", b
+  end tell
+  ask world to fetch a, b and wait
+  add it to total
+  tell world to mark a
+  tell world to mark a, b
+  tell world to mark a, b, 2
+end ring
+
+on gather a, b
+  wait for all
+    ask world to fetch a, b and wait
+    ask world to fetch b, a and wait
+  end wait
+  add item 1 of it to total
+end gather

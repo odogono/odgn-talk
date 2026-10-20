@@ -1653,6 +1653,12 @@ key = "command"
 is = "optional boolean, false by default; true also makes the Operation a Host Command, callable by its name alone, and is refused on an Operation named by a Reserved Word"
 kinds = ["trace", "disassembly"]
 
+[[setup]]
+table = "operations"
+key = "labels"
+is = "optional list of Argument Label words, one per argument after the first; a call may write them between its arguments, and they are checked at load (ADR 0115)"
+kinds = ["trace", "disassembly"]
+
 [[record]]
 name = "offer-chosen"
 input = false

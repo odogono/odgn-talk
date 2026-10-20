@@ -27,6 +27,11 @@ defmodule NorthTalk.Capability do
     * `:mode` - `:immediate` (the default), `:suspending` or `:fire_and_forget`.
     * `:args`, `:result` - Shapes, in the Host Manifest's data spelling, such
       as `"text"` or `%{"list" => "number"}`.
+    * `:labels` - Argument Labels, one word for each argument after the
+      first, such as `["to"]` for `args: ["text", "text"]`, so a Script may
+      call `ask world to move a to b` as well as `ask world to move a, b`.
+      The Core checks them at load and refuses a wrong length or a word that
+      can't be a label; the callback still gets positional arguments.
     * `:cost` - Fuel as an integer, or `%{fuel: f, alloc: a}`.
     * `:max_pending` - for a suspending Operation, the wait in milliseconds
       before the Core times the call out.
@@ -190,6 +195,7 @@ defmodule NorthTalk.Capability do
       {"name", name},
       {"mode", @modes[mode]},
       {"args", Keyword.get(decl, :args, [])},
+      {"labels", labels(decl[:labels])},
       {"result", decl[:result]},
       {"cost", cost(Keyword.get(decl, :cost, 0))},
       {"maxPending", decl[:max_pending]},
@@ -202,6 +208,11 @@ defmodule NorthTalk.Capability do
     |> Enum.reject(fn {_, v} -> is_nil(v) end)
     |> Map.new()
   end
+
+  # An empty list is the same as none, so it isn't sent.
+  defp labels(nil), do: nil
+  defp labels([]), do: nil
+  defp labels(labels) when is_list(labels), do: labels
 
   defp cost(fuel) when is_integer(fuel), do: %{"fuel" => fuel}
   defp cost(%{} = c), do: %{"fuel" => c[:fuel] || 0, "alloc" => c[:alloc] || 0}

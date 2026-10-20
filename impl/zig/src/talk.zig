@@ -2530,6 +2530,9 @@ pub const Operation = extern struct {
     examples_lens: ?[*]const usize = null,
     examples_len: usize = 0,
     command: bool = false,
+    labels: ?[*]const ?[*]const u8 = null,
+    labels_lens: ?[*]const usize = null,
+    labels_len: usize = 0,
 };
 
 /// A C Host function and its context, behind the Core's Host function.
@@ -2582,6 +2585,42 @@ fn releaseOperation(gpa: std.mem.Allocator, op: caps.Operation) void {
     gpa.free(op.description);
     for (op.examples) |e| gpa.free(e);
     gpa.free(op.examples);
+    releaseLabels(gpa, op);
+}
+
+fn releaseLabels(gpa: std.mem.Allocator, op: caps.Operation) void {
+    for (op.labels) |l| gpa.free(l);
+    gpa.free(op.labels);
+    gpa.free(op.c_labels);
+    gpa.free(op.c_label_lens);
+}
+
+/// A C Host's labels, copied, with the views `talk_capability_def_checks`
+/// lends back. Validity is the definition's check.
+fn labelsOf(gpa: std.mem.Allocator, texts: ?[*]const ?[*]const u8, lens: ?[*]const usize, n: usize, op: *caps.Operation) !void {
+    if (n == 0) return;
+    const t = texts orelse return error.InvalidValue;
+    const l = lens orelse return error.InvalidValue;
+    const labels = try gpa.alloc([]const u8, n);
+    var made: usize = 0;
+    errdefer {
+        for (labels[0..made]) |x| gpa.free(x);
+        gpa.free(labels);
+    }
+    for (labels, 0..) |*x, i| {
+        x.* = try gpa.dupe(u8, try bytes(t[i], l[i]));
+        made += 1;
+    }
+    const ptrs = try gpa.alloc([*]const u8, n);
+    errdefer gpa.free(ptrs);
+    const sizes = try gpa.alloc(usize, n);
+    for (labels, ptrs, sizes) |x, *p, *z| {
+        p.* = x.ptr;
+        z.* = x.len;
+    }
+    op.labels = labels;
+    op.c_labels = ptrs;
+    op.c_label_lens = sizes;
 }
 
 fn operationOf(c: *Core, o: Operation) !caps.Operation {
@@ -2627,7 +2666,7 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
         const fields: []const Field = if (e.fields_len == 0) &.{} else (e.fields orelse return error.InvalidValue)[0..e.fields_len];
         d.* = .{ .code = try gpa.dupe(u8, try bytes(e.code, e.code_len)), .fields = try fieldsOf(fields) };
     }
-    return .{
+    var op: caps.Operation = .{
         .name = try gpa.dupe(u8, name),
         .args = args,
         .result = if (o.result) |r| retained(r) else null,
@@ -2651,6 +2690,11 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
         .examples = try examples.toOwnedSlice(gpa),
         .host = .{ .call = bridged, .context = bridge },
     };
+    labelsOf(gpa, o.labels, o.labels_lens, o.labels_len, &op) catch |err| {
+        releaseOperation(gpa, op);
+        return err;
+    };
+    return op;
 }
 
 export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
@@ -2863,7 +2907,7 @@ export fn talk_capability_def_checks(d: *const caps.Capability, out: ?[*]Operati
             .immediate => .immediate,
             .suspending => .suspending,
             .fire_and_forget => .fire_and_forget,
-        }, .args = @ptrCast(op.args.ptr), .args_len = op.args.len, .command = op.command };
+        }, .args = @ptrCast(op.args.ptr), .args_len = op.args.len, .command = op.command, .labels = if (op.c_labels.len > 0) @ptrCast(op.c_labels.ptr) else null, .labels_lens = if (op.c_labels.len > 0) op.c_label_lens.ptr else null, .labels_len = op.c_labels.len };
     };
     return d.operations.len;
 }
@@ -3760,7 +3804,7 @@ pub const LibrarySource = extern struct {
 /// Compiles a Library once per process. imports must hold every Library
 /// its `use` lines name, besides the stdlib's; anything that fails to parse
 /// or check is TALK_LOAD_REFUSED. The Library lives as long as the Core.
-pub const OperationCheck = extern struct { name: ?[*]const u8, name_len: usize, mode: Mode, args: ?[*]const *const Shape, args_len: usize, command: bool = false };
+pub const OperationCheck = extern struct { name: ?[*]const u8, name_len: usize, mode: Mode, args: ?[*]const *const Shape, args_len: usize, command: bool = false, labels: ?[*]const ?[*]const u8 = null, labels_lens: ?[*]const usize = null, labels_len: usize = 0 };
 pub const GrantDecls = extern struct { name: ?[*]const u8, name_len: usize, operations: ?[*]const OperationCheck, operations_len: usize };
 
 /// The declarations as the Core reads them, borrowing the caller's bytes and
@@ -3772,11 +3816,18 @@ fn grantDecls(a: std.mem.Allocator, given: []const GrantDecls) ![]caps.GrantDecl
         const ops = try a.alloc(caps.OperationCheck, checks.len);
         for (checks, ops) |o, *y| {
             const args: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
+            const labels = try a.alloc([]const u8, o.labels_len);
+            if (o.labels_len > 0) {
+                const texts = o.labels orelse return error.InvalidValue;
+                const lens = o.labels_lens orelse return error.InvalidValue;
+                for (labels, 0..) |*l, i| l.* = try bytes(texts[i], lens[i]);
+            }
+            if (!caps.validLabels(labels, args.len)) return error.InvalidValue;
             y.* = .{ .name = try bytes(o.name, o.name_len), .mode = switch (o.mode) {
                 .immediate => .immediate,
                 .suspending => .suspending,
                 .fire_and_forget => .fire_and_forget,
-            }, .args = @ptrCast(args), .command = o.command };
+            }, .args = @ptrCast(args), .command = o.command, .labels = labels };
         }
         x.* = .{ .name = try bytes(g.name, g.name_len), .operations = ops };
     }

@@ -284,3 +284,16 @@ test('preserves Result Targets before and wait, with labels, comments and Operat
   );
   expect(formatSource(formatted.source)).toEqual(formatted);
 });
+
+test('keeps the labelled or positional form an Operation call is written in', () => {
+  const source =
+    'on go\n  ask world to move "a" to "b" into x\n  ask world to move "a", "b"\n  tell world to place "a" at 1 facing 2\n  tell world\n    place "a" at 1\n    place "a", 1\n  end tell\nend go';
+  expect(formatSource(source)).toEqual({ source, error: null });
+  expect(
+    formatSource(
+      'on go\nask  world to move "a"  to  "b"\ntell world\nplace "a"   at 1\nend tell\nend go',
+    ).source,
+  ).toBe(
+    'on go\n  ask world to move "a" to "b"\n  tell world\n    place "a" at 1\n  end tell\nend go',
+  );
+});

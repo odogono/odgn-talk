@@ -28,11 +28,20 @@ import {
   type Location,
   type TextEdit,
 } from './protocol';
-import type { HostManifest, ManifestOperation } from './manifest';
+import {
+  commandSelectors,
+  type HostManifest,
+  type ManifestOperation,
+} from './manifest';
 import { collectionHover, objectProperties } from './objects';
 import {
+  argumentPhrase,
+  callSignature,
   dictionaryOf,
   dictionaryOperation,
+  messageCall,
+  shapeSlots,
+  type CallSignature,
   grantText,
   messageText,
   operationText,
@@ -320,10 +329,8 @@ const messagePhrase = (selector: string): string => {
   const parts = selector.slice(0, -1).split(':');
   return parts.map((part, i) => `${part} arg${i + 1}`).join(' ');
 };
-const handlerHead = (
-  analysis: Analysis,
-  selector: string,
-): string | undefined => {
+// A Handler's head in source, up to its line end or `where`, with its syntax.
+const handlerHeadSpan = (analysis: Analysis, selector: string) => {
   const declaration = analysis.names.find(
     n => n.role === 'declaration' && n.text === selector,
   );
@@ -349,24 +356,109 @@ const handlerHead = (
     (e): e is Token =>
       e.kind === 'token' && (e.t === 'nl' || ['where', ','].includes(e.v)),
   );
-  return analysis.document.text
-    .slice(node.span.start, boundary?.pos ?? node.span.end)
-    .trim();
+  return {
+    start: node.span.start,
+    end: boundary?.pos ?? node.span.end,
+    syntax,
+  };
+};
+const handlerHead = (
+  analysis: Analysis,
+  selector: string,
+): string | undefined => {
+  const head = handlerHeadSpan(analysis, selector);
+  return head && analysis.document.text.slice(head.start, head.end).trim();
+};
+// A Handler's head without `on`, as a signature whose slots are its
+// Parameter Patterns, each after its label: `move piece to square`.
+const handlerSignature = (
+  analysis: Analysis,
+  selector: string,
+): CallSignature | undefined => {
+  const head = handlerHeadSpan(analysis, selector);
+  if (!head?.syntax) {
+    return undefined;
+  }
+  const raw = analysis.document.text.slice(head.start, head.end);
+  const text = raw.trim().replace(/^on\s+/i, '');
+  const base = head.start + raw.trimEnd().length - text.length;
+  const children = head.syntax.children;
+  const params = children.flatMap((child, i): [number, number][] => {
+    if (child.kind !== 'node' || child.rule !== 'Pattern') {
+      return [];
+    }
+    const tokens = elements<SyntaxElement>(child).filter(
+      (e): e is Token => e.kind === 'token',
+    );
+    const label = children[i - 1];
+    const first =
+      label?.kind === 'node' && label.rule === 'Label'
+        ? (label.children[0] as Token)
+        : tokens[0];
+    const last = tokens.at(-1);
+    return first && last && last.end <= head.end
+      ? [[first.pos - base, last.end - base]]
+      : [];
+  });
+  return { text, params };
 };
 
-const labelCompletion = (before: string, selectors: string[]) => {
+// The Operation an `ask`, a one-line `tell` or a `tell` block's line calls,
+// by its Grant's and Operation's name tokens, in the syntax tree of `source`.
+const operationCall = (
+  syntax: SyntaxElement[],
+  node: SyntaxNode,
+  source: string,
+): { grant: string; op: Token } | undefined => {
+  let receiver: SyntaxElement | undefined;
+  let op: SyntaxElement | undefined;
+  if (node.rule === 'AskTell') {
+    const to = node.children.findIndex(e => e.kind === 'token' && e.v === 'to');
+    receiver = node.children[to - 1];
+    op = node.children[to + 1];
+  } else {
+    // A `tell` block's line calls an Operation of the block's receiver.
+    receiver = syntax.find(
+      (e): e is SyntaxNode =>
+        e.kind === 'node' &&
+        e.rule === 'TellBlock' &&
+        e.children.includes(node),
+    )?.children[1];
+    op = node.children[0];
+  }
+  const grant =
+    receiver?.kind === 'node'
+      ? source.slice(receiver.start, receiver.end).trim()
+      : '';
+  return op?.kind === 'token' &&
+    op.t === 'word' &&
+    /^[\p{L}\p{N}_]+$/u.test(grant)
+    ? { grant, op }
+    : undefined;
+};
+
+const labelCompletion = (
+  before: string,
+  selectors: string[],
+  operationLabels: (grant: string, op: string) => readonly string[] | undefined,
+) => {
   const syntax = elements<SyntaxElement>(parseSourceRecovering(before).tree);
   const offset = before.length;
   for (const node of syntax
     .filter((e): e is SyntaxNode => e.kind === 'node')
     .reverse()) {
-    if (!['Handler', 'Send', 'SimpleStatement'].includes(node.rule)) {
+    const operation = ['AskTell', 'OperationLine'].includes(node.rule);
+    if (
+      !operation &&
+      !['Handler', 'Send', 'SimpleStatement'].includes(node.rule)
+    ) {
       continue;
     }
     const list = node.children.find(
       (e): e is SyntaxNode => e.kind === 'node' && e.rule === 'ExpressionList',
     );
-    const children = list?.children ?? node.children;
+    // An Operation call's receiver is not one of its arguments.
+    const children = list?.children ?? (operation ? [] : node.children);
     const labels = children
       .filter((e): e is SyntaxNode => e.kind === 'node' && e.rule === 'Label')
       .map(e => e.children[0] as Token);
@@ -388,6 +480,20 @@ const labelCompletion = (before: string, selectors: string[]) => {
       args.length !== prior.length + 1 ||
       (!active && (last.end >= offset || before.slice(last.end).trim()))
     ) {
+      continue;
+    }
+    if (operation) {
+      // The next label the Operation declares, after those already written
+      // (ADR 0115).
+      const call = operationCall(syntax, node, before);
+      const declared = call && operationLabels(call.grant, call.op.v);
+      const next = declared?.[prior.length];
+      if (
+        next?.startsWith(active?.v ?? '') &&
+        prior.every((t, i) => declared![i] === t.v)
+      ) {
+        return [item(next, 14)];
+      }
       continue;
     }
     const message = node.children.find(
@@ -596,12 +702,22 @@ export const completion = (
       ),
     );
   }
-  const labels = labelCompletion(before, [
-    ...(manifest?.messages ?? []),
-    ...(analysis.checked.tree.scopes[0]?.bindings
-      .filter(b => b.kind === 'handler')
-      .map(b => b.name) ?? []),
-  ]);
+  const labels = labelCompletion(
+    before,
+    [
+      ...(manifest?.messages ?? []),
+      ...(analysis.checked.tree.scopes[0]?.bindings
+        .filter(b => b.kind === 'handler')
+        .map(b => b.name) ?? []),
+      // A labelled Host Command's labelled spelling (ADR 0115).
+      ...[...(manifest?.grants.values() ?? [])].flatMap(ops =>
+        [...ops.values()].flatMap(op =>
+          op.command ? commandSelectors(op) : [],
+        ),
+      ),
+    ],
+    (grant, op) => manifest?.grants.get(grant)?.get(op)?.labels,
+  );
   if (labels.length) {
     return labels;
   }
@@ -844,10 +960,14 @@ export const hover = (
   // Operation one of the Script's Grants declares `command` (ADR 0094).
   const command =
     name?.role === 'command' && !resolvedBinding(analysis, name)
-      ? [...(manifest?.grants ?? [])].flatMap(([grant, operations]) => {
-          const op = operations.get(name.text);
-          return op?.command ? [{ grant, op }] : [];
-        })
+      ? [...(manifest?.grants ?? [])].flatMap(([grant, operations]) =>
+          // A labelled call names it by its Selector (ADR 0115).
+          [...operations.values()]
+            .filter(
+              op => op.command && commandSelectors(op).includes(name.text),
+            )
+            .map(op => ({ grant, op })),
+        )
       : [];
   if (name && command.length === 1) {
     const format = client.markdown ? 'markdown' : 'plaintext';
@@ -945,6 +1065,157 @@ export const hover = (
         range: rangeAt(analysis.document.text, name.span.start, name.span.end),
       }
     : null;
+};
+type Signature = {
+  documentation?: string;
+  label: string;
+  parameters: { label: [number, number] }[];
+};
+const signature = (call: CallSignature, documentation?: string): Signature => ({
+  label: call.text,
+  parameters: call.params.map(label => ({ label })),
+  ...(documentation ? { documentation } : {}),
+});
+/** Signature help for the call whose arguments the cursor is in: an
+ * Operation's `ask`, `tell` or `tell` block line, labelled when it declares
+ * labels (ADR 0115), or a Command Call to a Handler, a Host Command or a
+ * message the Host answers. The active parameter counts the commas and
+ * labels before the cursor. */
+export const signatureHelp = (
+  analysis: Analysis,
+  offset: number,
+  manifest: HostManifest | null,
+) => {
+  const before = analysis.document.text.slice(0, offset);
+  const syntax = elements<SyntaxElement>(parseSourceRecovering(before).tree);
+  // The innermost call that runs up to the cursor on its line.
+  const node = syntax
+    .filter(
+      (e): e is SyntaxNode =>
+        e.kind === 'node' &&
+        ['AskTell', 'OperationLine', 'SimpleStatement'].includes(e.rule),
+    )
+    .reverse()
+    .find(
+      n => !before.slice(n.end).trim() && !/[\n\r]/.test(before.slice(n.end)),
+    );
+  if (!node) {
+    return null;
+  }
+  // Past a Result Target or `and wait`, the arguments are over.
+  if (
+    node.children.some(
+      e =>
+        e.kind === 'node' &&
+        ['ResultTarget', 'AndWait'].includes(e.rule) &&
+        elements<SyntaxElement>(e).some(t => t.kind === 'token'),
+    )
+  ) {
+    return null;
+  }
+  const list = node.children.find(
+    (e): e is SyntaxNode => e.kind === 'node' && e.rule === 'ExpressionList',
+  );
+  const separators = (list?.children ?? []).flatMap(e =>
+    e.kind === 'token' && e.v === ','
+      ? [{ comma: true, token: e }]
+      : e.kind === 'node' && e.rule === 'Label'
+        ? [{ comma: false, token: e.children[0] as Token }]
+        : [],
+  );
+  const help = (signatures: Signature[]) =>
+    signatures.length
+      ? {
+          signatures,
+          activeSignature: 0,
+          activeParameter: separators.filter(s => s.token.pos < offset).length,
+        }
+      : null;
+  if (node.rule !== 'SimpleStatement') {
+    const call = operationCall(syntax, node, before);
+    const op = call && manifest?.grants.get(call.grant)?.get(call.op.v);
+    if (!call || !op || offset <= call.op.end) {
+      return null;
+    }
+    return help([
+      signature(
+        node.rule === 'AskTell'
+          ? callSignature(call.grant, op)
+          : argumentPhrase(op.name, shapeSlots(op.args), op.labels),
+        op.description,
+      ),
+    ]);
+  }
+  const head = node.children[0];
+  if (
+    head?.kind !== 'token' ||
+    head.t !== 'word' ||
+    grammar.reserved.includes(head.v) ||
+    offset <= head.end
+  ) {
+    return null;
+  }
+  // The Selectors the call may still be spelling, from its labels so far.
+  const labels = separators.filter(s => !s.comma).map(s => s.token);
+  const commas = separators.some(s => s.comma);
+  const spells = (selector: string) => {
+    const parts = selector.includes(':')
+      ? selector.slice(0, -1).split(':')
+      : [selector];
+    return (
+      parts[0] === head.v &&
+      (!commas || parts.length === 1) &&
+      parts.length > labels.length &&
+      labels.every((t, i) =>
+        t.end >= offset ? parts[i + 1]!.startsWith(t.v) : parts[i + 1] === t.v,
+      )
+    );
+  };
+  // A Script's own Handler takes the call, then a Host Command, and only
+  // then does it climb to a message the Host answers (ADR 0094).
+  const handlers = (
+    analysis.checked.tree.scopes[0]?.bindings.filter(
+      b => b.kind === 'handler',
+    ) ?? []
+  )
+    .map(b => b.name)
+    .filter(spells);
+  const commands = [...(manifest?.grants.values() ?? [])].flatMap(ops =>
+    [...ops.values()].flatMap(op =>
+      op.command
+        ? commandSelectors(op)
+            .filter(s => spells(s) && !handlers.includes(s))
+            .map(selector => ({ op, selector }))
+        : [],
+    ),
+  );
+  const messages = [...(manifest?.messageDecls.values() ?? [])].filter(
+    m =>
+      spells(m.name) &&
+      !handlers.includes(m.name) &&
+      !commands.some(c => c.selector === m.name),
+  );
+  return help([
+    ...handlers.map(selector =>
+      signature(
+        handlerSignature(analysis, selector) ?? {
+          text: messagePhrase(selector),
+          params: [],
+        },
+      ),
+    ),
+    ...commands.map(({ op, selector }) => {
+      const parts = selector.includes(':')
+        ? selector.slice(0, -1).split(':')
+        : [selector];
+      const args = parts.length > 1 ? op.args.slice(0, parts.length) : op.args;
+      return signature(
+        argumentPhrase(op.name, shapeSlots(args), parts.slice(1)),
+        op.description,
+      );
+    }),
+    ...messages.map(m => signature(messageCall(m), m.description)),
+  ]);
 };
 export const suspensionHints = (analysis: Analysis, requested: Range) => {
   const points = analysis.nodes.filter(

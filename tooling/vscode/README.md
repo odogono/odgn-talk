@@ -2,8 +2,8 @@
 
 Editor support for `.talk` files: syntax highlighting, bracket and comment
 handling, and the [NorthTalk language server](../cli/README.md#language-server)
-(diagnostics and Lints, completion, hover, go to definition, references,
-rename, formatting, quick fixes and suspension inlay hints). None of it is
+(diagnostics and Lints, completion, hover, signature help, go to definition,
+references, rename, formatting, quick fixes and suspension inlay hints). None of it is
 normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ## Install

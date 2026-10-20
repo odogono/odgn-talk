@@ -13,12 +13,8 @@ func ValidMessageSelector(message string, arity int) bool {
 		return false
 	}
 	for i, part := range parts[:len(parts)-1] {
-		lx, err := NewLexer(part)
-		if err != nil {
-			return false
-		}
-		token, err := lx.Next(Operand)
-		if err != nil || token.Raw != part || token.Leading != "" {
+		token, ok := oneToken(part)
+		if !ok {
 			return false
 		}
 		if i == 0 {
@@ -30,6 +26,23 @@ func ValidMessageSelector(message string, arity int) bool {
 		}
 	}
 	return true
+}
+
+// IsLabel reports whether word is one Argument Label word, as an Operation
+// Declaration's labels must be (ADR 0115).
+func IsLabel(word string) bool {
+	token, ok := oneToken(word)
+	return ok && isLabel(token)
+}
+
+// oneToken lexes text that must be exactly one operand token.
+func oneToken(text string) (Token, bool) {
+	lx, err := NewLexer(text)
+	if err != nil {
+		return Token{}, false
+	}
+	token, err := lx.Next(Operand)
+	return token, err == nil && token.Raw == text && token.Leading == ""
 }
 
 // ValidComputedMessageName checks chapter 5's rule for a `send`'s computed

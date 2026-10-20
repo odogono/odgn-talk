@@ -642,7 +642,7 @@ on encodeMove id, x, y
 end encodeMove
 -- `byte 1 of b` and `bytes 2..5 of b` are chunks. `b as text` decodes UTF-8.
 
--- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063) -----------------
+-- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0115) -----------
 
 -- Scripts have no ambient I/O. Every effect is an Operation on a Capability
 -- the Host has granted, and the loader checks every call against the Grants.
@@ -669,6 +669,23 @@ on storeTour
     increment "visits", 1
   end tell
 end storeTour
+-- An Operation may declare Argument Labels, written between its arguments
+-- just like a Handler's. They only help it read: the loader checks them
+-- against the Grant, and the call is the same with or without them.
+on operationLabelsTour ship
+  ask world to dock ship at "red hangar"    -- labelled
+  ask world to dock ship, "red hangar"      -- the same call, positional
+  tell world to moor ship at 3 facing "north"
+end operationLabelsTour
+-- If `dock` is also a Host Command, it has two Selectors: `dock` and
+-- `dock:at:`. A Handler declared with the same labels takes the labelled one.
+on dock ship at bay
+  say ship & " docks at " & bay
+end dock
+on hostCommandLabelsTour
+  dock "pass" at "red hangar"       -- `dock:at:`: the Handler above
+  dock "pass", "red hangar"         -- `dock`: still the Host Command
+end hostCommandLabelsTour
 -- Store writes commit or roll back with the current Segment. They are not
 -- one transaction across waits. Optional Grants also include SQLite and
 -- user interaction; a Host must explicitly supply them.

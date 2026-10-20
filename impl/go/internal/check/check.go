@@ -64,8 +64,8 @@ type Unit struct {
 	Bodies                 map[*syntax.Node]*Body
 	Diagnostics            []Diagnostic
 	// hostCommands holds each Command Call resolved to a Host Command, by
-	// its Grant name, until checkOperations makes it that call.
-	hostCommands map[*syntax.Node]string
+	// its Grant and Operation, until checkOperations makes it that call.
+	hostCommands map[*syntax.Node]hostCommand
 }
 
 func Builtin(name string) (generated.BuiltinsTableBuiltinEntry, bool) {

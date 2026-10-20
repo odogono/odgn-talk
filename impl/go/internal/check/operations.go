@@ -7,6 +7,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"slices"
+	"strings"
 )
 
 type OperationCheck struct {
@@ -14,7 +15,26 @@ type OperationCheck struct {
 	Args []shape.Shape
 	// Command also makes the Operation a Host Command (ADR 0094).
 	Command bool `json:",omitempty"`
+	// Labels are the Argument Labels a call may write, one per argument
+	// after the first (ADR 0115). Empty means none.
+	Labels []string `json:",omitempty"`
 }
+
+// Selectors gives each Command Call Selector a Host Command answers: its
+// name, and with labels, its labelled call for each argument count of two or
+// more the Shapes accept, so leaving off trailing Optional arguments leaves
+// off their labels (ADR 0115).
+func (d OperationCheck) Selectors(name string) []string {
+	selectors := []string{name}
+	for n := 2; n <= len(d.Args) && len(d.Labels) > 0; n++ {
+		if shape.Accepts(d.Args, n) {
+			selectors = append(selectors, name+":"+strings.Join(d.Labels[:n-1], ":")+":")
+		}
+	}
+	return selectors
+}
+
+type hostCommand struct{ grant, op string }
 
 // OperationUse keeps the original call for rechecking it against an importing
 // Script's Grant declarations. Identity distinguishes shared diamond imports.
@@ -100,28 +120,31 @@ func (u *Unit) checkOperations() {
 	}
 }
 
-// resolveHostCommands finds each unlabelled Command Call that names no
-// Handler of the unit, local, imported or from an earlier Extend, and that
-// exactly one Grant offers as an Operation declared `command` (ADR 0094). A
-// labelled call's Selector is never a single word, so it never matches. A
-// call two Grants offer is a `name clash` at the call, and so is an Import
-// named like a Host Command, at its name in the `use` line. It runs after the
-// declarations are collected and before validation, so a Library's Host
-// Commands aren't `not in a library`, while the call stays a Command Call
-// for the Join and Timeout Block checks.
+// resolveHostCommands finds each Command Call that names no Handler of the
+// unit, local, imported or from an earlier Extend, and whose Selector exactly
+// one Grant offers as an Operation declared `command` (ADR 0094). An
+// Operation with labels offers its labelled spellings' Selectors too, each
+// resolving on its own, and a Selector it doesn't spell stays a Command Call
+// (ADR 0115). A Selector two Grants offer is a `name clash` at the call, and
+// so is an Import named like a Host Command, at its name in the `use` line.
+// It runs after the declarations are collected and before validation, so a
+// Library's Host Commands aren't `not in a library`, while the call stays a
+// Command Call for the Join and Timeout Block checks.
 func (u *Unit) resolveHostCommands() {
-	offered := map[string][]string{}
+	offered := map[string][]hostCommand{}
 	for grant, ops := range u.Options.Grants {
 		for op, d := range ops {
 			if d.Command {
-				offered[op] = append(offered[op], grant)
+				for _, selector := range d.Selectors(op) {
+					offered[selector] = append(offered[selector], hostCommand{grant, op})
+				}
 			}
 		}
 	}
 	if len(offered) == 0 {
 		return
 	}
-	u.hostCommands = map[*syntax.Node]string{}
+	u.hostCommands = map[*syntax.Node]hostCommand{}
 	for _, decl := range u.Tree.Declarations {
 		if decl.Kind == "use" {
 			library, ok := u.Options.Imports[decl.Text]
@@ -165,11 +188,21 @@ func (u *Unit) resolveHostCommands() {
 // stands for: a `tell` when its Operation is fire-and-forget and it has no
 // `and wait`, and otherwise an `ask` (ADR 0094). It then checks, lowers and
 // counts as that call, for `needs`, GrantsAsUsed and an importer's recheck,
-// whose result never changes it.
+// whose result never changes it. A labelled spelling becomes the labelled
+// call, named by the Operation alone, so the recheck sees its labels
+// (ADR 0115).
 func (u *Unit) lowerHostCommands() {
-	for n, grant := range u.hostCommands {
+	for n, command := range u.hostCommands {
+		grant := command.grant
 		name := n.Token
+		name.Raw = command.op
 		n.NameToken = &name
+		if parts := strings.Split(n.Text, ":"); len(parts) > 1 {
+			for _, label := range parts[1 : len(parts)-1] {
+				n.Labels = append(n.Labels, syntax.Token{Kind: syntax.Word, Raw: label, Pos: n.Token.Pos})
+			}
+		}
+		n.Text = command.op
 		n.Params = []*syntax.Node{{Kind: "name", Text: grant, Token: syntax.Token{Kind: syntax.Word, Raw: grant, Pos: n.Token.Pos}}}
 		n.Kind = "ask"
 		if u.Options.Grants[grant][n.Text].Mode == "fire-and-forget" && !syntax.HasFlag(n, "and") {
@@ -195,7 +228,8 @@ func ResolveLines(tree *syntax.Tree, grants map[string]map[string]OperationCheck
 	}
 }
 
-// Direct and imported calls use the same mode, arity and literal Shape rules.
+// Direct and imported calls use the same mode, arity, label and literal Shape
+// rules.
 func checkOperation(n *syntax.Node, grants map[string]map[string]OperationCheck, report func(string, syntax.Position)) {
 	say := n.Kind == "command"
 	grant, op := OperationNames(n)
@@ -229,7 +263,18 @@ func checkOperation(n *syntax.Node, grants map[string]map[string]OperationCheck,
 		report("wrong argument count", opPos)
 		return
 	}
+	// The count fits, so a labelled call has no more labels than declared.
+	// A wrong label is its own rule, so the arguments are checked too, and
+	// the diagnostics come in source order: label i sits before argument i+1.
+	labelled := false
 	for i, arg := range n.Children {
+		if i > 0 && i <= len(n.Labels) && !labelled {
+			label := n.Labels[i-1]
+			if i > len(d.Labels) || label.Raw != d.Labels[i-1] {
+				report("wrong labels", label.Pos)
+				labelled = true
+			}
+		}
 		if !literalFits(arg, d.Args[i]) {
 			report("wrong argument", arg.FirstPos())
 		}

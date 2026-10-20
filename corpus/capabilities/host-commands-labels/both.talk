@@ -1,0 +1,10 @@
+-- both.talk: the labelled and the positional spelling of one Host Command.
+
+script variable seen = []
+
+on go a, b
+  move a to b
+  put it after seen
+  move a, b
+  put it after seen
+end go

@@ -41,6 +41,15 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		op := talk.Operation{Name: row["name"].(string)}
 		op.SegmentBound, _ = row["segmentBound"].(bool)
 		op.Command, _ = row["command"].(bool)
+		if labels, ok := row["labels"].([]any); ok {
+			for _, label := range labels {
+				text, ok := label.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid labels")
+				}
+				op.Labels = append(op.Labels, text)
+			}
+		}
 		switch row["mode"] {
 		case "immediate":
 			op.Mode = talk.Immediate
@@ -250,7 +259,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 	for name, ops := range byName {
 		out.declarations[name] = map[string]talk.OperationCheck{}
 		for _, op := range ops {
-			out.declarations[name][op.Name] = talk.OperationCheck{Mode: op.Mode, Args: op.Args, Command: op.Command}
+			out.declarations[name][op.Name] = talk.OperationCheck{Mode: op.Mode, Args: op.Args, Command: op.Command, Labels: op.Labels}
 		}
 		var d *talk.CapabilityDef
 		var e error

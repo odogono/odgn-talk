@@ -133,7 +133,7 @@ was already stopped. Function Values made by the old code are stale afterwards.
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
-Saves are opaque `zig/14` bytes; native Go saves remain per-Core and cannot be
+Saves are opaque `zig/15` bytes; native Go saves remain per-Core and cannot be
 read by this backend. Restore compiles the supplied Libraries in its fresh
 guest, rebinds Grants and native Objects through the public callbacks, and
 returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and

@@ -533,7 +533,7 @@ type QueuedInput = {
   urgent?: boolean;
 };
 
-// Each granted Operation's mode, argument Shapes and `command` flag, for the
+// Each granted Operation's mode, argument Shapes, labels and `command` flag, for the
 // load checks and Host Command resolution.
 const declarationsOf = (
   grants: ReadonlyMap<string, Grant<unknown>>,
@@ -549,6 +549,7 @@ const declarationsOf = (
             {
               mode: decl.mode,
               args: decl.args ?? [],
+              ...(decl.labels?.length ? { labels: decl.labels } : {}),
               ...(decl.command ? { command: true } : {}),
             },
           ];

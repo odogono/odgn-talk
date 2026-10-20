@@ -1,0 +1,6 @@
+-- router.talk: a Library making a labelled call.
+
+on route a, b
+  ask world to move a to b
+  return it
+end route

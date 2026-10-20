@@ -167,6 +167,9 @@ pub const Operation = struct {
     target: ?*Expr,
     operation: Tok,
     args: []const *Expr,
+    /// The Argument Labels between the arguments, one before each after the
+    /// first, or none for a positional call (ADR 0115).
+    labels: []const Tok = &.{},
     /// A Result Target, `into name` (ADR 0114).
     into: ?Tok = null,
     wait: ?Tok,

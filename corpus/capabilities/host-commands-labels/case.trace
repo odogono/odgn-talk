@@ -1,0 +1,24 @@
+# Unblessed: Argument Labels on Operations (#1341); first blessing awaits human review.
+# host-commands-labels: both and shadow each go once.
+
+> load both identity=59161164577607ca33b01b2e4401af0775e4f75876660d6b2f688bd09a2e054a
+> load shadow identity=62be5d3edba7d89d6dba68cf74a3c4ca6f0184bcc3f2b365a2e23732fd008b50
+> stub world.move value="moved"
+> stub world.move value="moved"
+> stub world.move value="moved"
+> deliver d1 to=both message=go args=["pass", "red hangar"]
+> deliver d2 to=shadow message=go args=["pass", "red hangar"]
+> pump clock=2026-09-30T09:00:00Z
+call both/r1.c1 op=world.move args=["pass", "red hangar"] result="moved"
+call both/r1.c2 op=world.move args=["pass", "red hangar"] result="moved"
+seg both/r1 start delivery=d1 handler=go clause=1 fuel=73 alloc=100 state=74 end=return
+run both/r1 outcome=completed delivery=d1 handler=go fuel=73 alloc=100
+call shadow/r1.c1 op=world.move args=["pass", "red hangar"] result="moved"
+unhandled message=move:at: args=["pass", "red hangar"]
+seg shadow/r1 start delivery=d2 handler=go clause=1 fuel=98 alloc=204 state=87 end=return
+run shadow/r1 outcome=completed delivery=d2 handler=go fuel=98 alloc=204
+pumped state=idle fuel=171
+
+> vars
+vars both seen=["moved", "moved"]
+vars shadow seen=["handled red hangar", "moved"]

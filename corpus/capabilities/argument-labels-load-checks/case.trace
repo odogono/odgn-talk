@@ -1,0 +1,16 @@
+# Unblessed: Argument Labels on Operations (#1341); first blessing awaits human review.
+# argument-labels-load-checks: checks doesn't load; fine does.
+
+> load checks identity=d840532660d32023b70f49940bef866514ef850feb35e17e20e2b55b0d85d10d
+diag checks code="wrong labels" pos=4:25
+diag checks code="wrong labels" pos=5:38
+diag checks code="wrong labels" pos=6:25
+diag checks code="wrong argument count" pos=7:16
+diag checks code="wrong mode" pos=8:3
+diag checks code="wrong labels" pos=10:15
+diag checks code="wrong argument" pos=12:21
+diag checks code="wrong labels" pos=12:23
+> load fine identity=8976a608408ef78663811d89450fd294604141b6529a78dfcf8b08b018dc68c7
+
+> vars
+vars fine

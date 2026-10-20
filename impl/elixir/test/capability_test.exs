@@ -143,6 +143,43 @@ defmodule NorthTalk.CapabilityTest do
     assert {:ok, %Result{value: "left:1 right:2 right:3"}} = NorthTalk.request(group, "s", "go")
   end
 
+  test "Argument Labels are declared, sent, checked at load and leave the call positional", %{
+    owner: owner,
+    group: group
+  } do
+    move = {[args: ["text", "text"], labels: ["to"], result: "text"], fn [from, to], _ -> {:ok, from <> ">" <> to} end}
+    cap = Capability.from_functions("world", %{"move" => move})
+    assert [%{"labels" => ["to"]}] = Capability.declarations(cap)
+
+    unlabelled =
+      Capability.from_functions("plain", %{"move" => {[args: ["text", "text"], labels: []], fn _, _ -> {:ok, nil} end}})
+
+    refute Map.has_key?(hd(Capability.declarations(unlabelled)), "labels")
+
+    for labels <- [["to", "by"], ["from"], ["with"]] do
+      bad =
+        Capability.from_functions("bad", %{
+          "move" => {[args: ["text", "text"], labels: labels], fn _, _ -> {:ok, nil} end}
+        })
+
+      assert {:error, %NorthTalk.HostError{code: "invalid value"}} = NorthTalk.define_capability(owner, bad)
+    end
+
+    :ok = NorthTalk.define_capability!(owner, cap)
+    grant = NorthTalk.grant!(owner, "world")
+
+    source =
+      "on go a, b\n  ask world to move a to b\n  put it into x\n  ask world to move a, b\n  return x & \" \" & it\nend go\n"
+
+    NorthTalk.load!(group, "s", source, grants: %{"world" => grant})
+    assert {:ok, %Result{value: "pass>hangar pass>hangar"}} = NorthTalk.request(group, "s", "go", ["pass", "hangar"])
+
+    assert {:error, %NorthTalk.LoadError{diagnostics: [%{"code" => "wrong labels", "line" => 2}]}} =
+             NorthTalk.load(group, "t", "on go\n  ask world to move \"a\" at \"b\"\nend go\n",
+               grants: %{"world" => grant}
+             )
+  end
+
   test "a Script can call only the Operations it was granted", %{owner: owner, group: group} do
     grant = NorthTalk.grant!(owner, Inventory, ops: ["count"], binding: 1)
     assert {:error, %NorthTalk.LoadError{}} = NorthTalk.load(group, "s", @source, grants: %{"stock" => grant})

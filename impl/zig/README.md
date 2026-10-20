@@ -202,6 +202,24 @@ the Group Fingerprint and restore matching write `"command":true` after
 resolution never outlives the Grants it was made against; the code identity is
 unchanged.
 
+**Argument Labels** ([ADR 0115](../../docs/adr/0115-operation-declarations-may-declare-argument-labels.md)):
+an Operation Declaration's `labels` (`talk_operation.labels`/`labels_lens`/
+`labels_len` and the same on `talk_operation_check`, the Message Layer's
+`"labels": [...]` on `define-capability` and `compile-library`, `case.toml`'s
+`labels = [...]`) give one word per argument after the first. The parser reads
+`ask`, `tell` and `tell` block line arguments as a Command Call's phrase does,
+into `ast.Operation.labels`. The checker reports `wrong argument count` first,
+then `wrong labels` at the first label that isn't the declared one at its
+position (`check.Operation.wrongLabel`), alongside any `wrong argument`; the
+labels join each `Need`, so an importer's `use` line rechecks them. A `command`
+Operation answers its plain name and, for each argument count from 2 it takes,
+its name and that prefix of its labels as a Selector (`check.Operation.spells`);
+a labelled Command Call no Operation spells stays a message. Lowering, `op`
+frames and the Trace never see labels. `validScopes` refuses a wrong length or
+a word that isn't an Argument Label word; the Fingerprint, saves, restore
+matching and the Host Manifest write `"labels"` after `args`, only when not
+empty.
+
 ## Lowering
 
 `lower.lower` turns a unit that checks clean into a code unit: its constant
@@ -290,12 +308,12 @@ still use. Check names against the installed source, under `lib_dir` from
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
 The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
-uses Zig's opaque `zig/14` saves. Its `restore-bindings-v1` Message Layer feature
+uses Zig's opaque `zig/15` saves. Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
 Script/Object identities and pending Call metadata. Saves retain each
 pending Call's Segment id, including preempted open Joins and suspended waits. Saves retain each pending Call's original Clock for adoption,
-even after later Pumps; Reissue uses the first restored Pump's Clock. `zig/14`
+even after later Pumps; Reissue uses the first restored Pump's Clock. `zig/15`
 rejects earlier save layouts with `invalid save`, including under VariablesOnly;
 Hosts must drain existing Groups on their old runtime or start fresh Groups.
 Rejected mismatches retain their mandatory Trace mode and error-reply records.
@@ -691,7 +709,7 @@ at the originating call, including a Join Member, without a synthetic Segment.
 A preempted Join's open Segment rolls back; a suspended Run keeps its committed
 variables. `talk_save` refuses with `effects pending` for pending metered calls
 or unresolved requests, even after Reload ends their call. Successful saves
-preserve the request counter and issued-call eligibility in save format `zig/14`;
+preserve the request counter and issued-call eligibility in save format `zig/15`;
 older Zig snapshot layouts are refused. Issued ids are kept as consecutive
 per-Run ranges with the same eligibility. Repeated polling through one Operation
 therefore keeps a fixed number of history entries in memory and in saves.
@@ -1100,7 +1118,7 @@ deadlines have no next deadline, while one before the Clock range requests
 another Pump at the current reading. Timer ordering, earlier Timeout Blocks,
 cancellation and save/restore retain the full count
 ([#1064](https://github.com/odogono/odgn-talk/issues/1064)). The private save format
-is `zig/14`, with 256-bit deadline storage; earlier layouts are refused.
+is `zig/15`, with 256-bit deadline storage; earlier layouts are refused.
 
 Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
 heap, its Script goes on to its next work, and each Script's work is one

@@ -57,3 +57,47 @@ test('manifest readers reject malformed Operation documentation', () => {
     expect(readDictionary(manifest(documentation))).toEqual([]);
   }
 });
+
+test('an Operation that declares labels is written as its labelled call', () => {
+  const [move, place] = readDictionary({
+    ...manifest({}),
+    grants: [
+      {
+        name: 'world',
+        capability: 'world',
+        operations: [
+          {
+            name: 'move',
+            mode: 'suspending',
+            args: ['text', 'text'],
+            labels: ['to'],
+            command: true,
+          },
+          {
+            name: 'place',
+            mode: 'fire-and-forget',
+            args: ['text', { optional: 'number' }],
+            labels: ['at'],
+          },
+        ],
+      },
+    ],
+  })[0]!.operations;
+  expect(move!.call).toBe('ask world to move ‹text› to ‹text› and wait');
+  expect(move!.facts).toContain(
+    'Host Command: also callable as `move` alone, or as `move ‹text› to ‹text›`',
+  );
+  expect(place!.call).toBe('tell world to place ‹text› [at ‹number›]');
+  expect(() =>
+    readManifest({
+      ...manifest({}),
+      grants: [
+        {
+          name: 'world',
+          capability: 'world',
+          operations: [{ name: 'move', mode: 'immediate', labels: 'to' }],
+        },
+      ],
+    }),
+  ).toThrow();
+});

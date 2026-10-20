@@ -665,6 +665,7 @@ export const diagnosticCodes = [
   "pattern too large",
   "wrong argument count",
   "wrong argument",
+  "wrong labels",
   "unknown operation",
   "wrong mode",
   "missing and wait",

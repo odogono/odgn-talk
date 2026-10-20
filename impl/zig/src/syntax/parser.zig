@@ -920,26 +920,31 @@ const Parser = struct {
         return p.stmt(first, .{ .send = .{ .name = n, .computed = computed, .labels = &.{}, .args = try p.list(ast.ListItem, &args), .target = target, .target_first = false, .into = try p.resultTarget(), .wait = try p.andWait() } });
     }
 
-    /// An Operation name, any word, then its arguments, an `ask`'s Result
-    /// Target where `targets` allows it (ADR 0112), and `and wait` where
-    /// `waits` allows it.
+    /// A Result Target, `into name` (ADR 0114), or none.
     fn resultTarget(p: *Parser) Error!?Tok {
         if (!try p.atWord("into", .operator)) return null;
         _ = try p.next(.operator);
         return try p.name(.operand);
     }
 
+    /// An Operation name, any word, then its arguments, a comma-separated
+    /// list or one argument and then `label argument` pairs (ADR 0115), a
+    /// Result Target where `targets` allows it (ADR 0114), and `and wait`
+    /// where `waits` allows it. `into` and `and` aren't labels, so they
+    /// still end the arguments.
     fn operation(p: *Parser, waits: bool, targets: bool) Error!ast.Operation {
         const t = try p.peek(.operand);
         if (t.kind != .word or p.isWord(t, "_")) return p.failAt(t);
         const op = try p.next(.operand);
-        const args: []const *Expr = if (p.startsExpr(try p.peek(.operand))) try p.exprList() else &.{};
+        // The same argument shape as a Command Call's phrase.
+        const phrase = try p.commandPhrase(op);
+        const args = phrase.args;
         var into: ?Tok = null;
         if (targets and try p.atWord("into", .operator)) {
             _ = try p.next(.operator);
             into = try p.name(.operand);
         }
-        return .{ .target = null, .operation = op, .args = args, .into = into, .wait = if (waits) try p.andWait() else null };
+        return .{ .target = null, .operation = op, .args = args, .labels = phrase.labels, .into = into, .wait = if (waits) try p.andWait() else null };
     }
 
     fn tell(p: *Parser) Error!*Stmt {
@@ -2514,6 +2519,46 @@ test "an ask may name a Result Target, before and wait (ADR 0112)" {
     try expectOutcome("on t x\n  ask g to op x and wait into y\nend t\n", "unexpected token at 2:26");
     try expectOutcome("on t x\n  ask g to op into it\nend t\n", "unexpected token at 2:20");
     try expectOutcome("on t x\n  tell g to op x into y\nend t\n", "unexpected token at 2:18");
+}
+
+test "Operation calls take Argument Labels between their arguments (ADR 0115)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const parsed = try parse(a,
+        \\on t a, b
+        \\  ask world to move a to b into spot and wait
+        \\  tell world to slide a across b by 2
+        \\  tell world
+        \\    place a at b and wait
+        \\    mark a, b
+        \\  end tell
+        \\  ask world to move a, b
+        \\end t
+        \\
+    );
+    const body = parsed.tree.declarations[0].data.handler.body;
+    const ask = body[0].data.ask;
+    try testing.expectEqual(@as(usize, 2), ask.args.len);
+    try testing.expectEqual(@as(usize, 1), ask.labels.len);
+    try testing.expectEqualStrings("to", parsed.tree.text(ask.labels[0]));
+    try testing.expectEqualStrings("spot", parsed.tree.text(ask.into.?));
+    try testing.expect(ask.wait != null);
+    const tell = body[1].data.tell;
+    try testing.expectEqual(@as(usize, 3), tell.args.len);
+    try testing.expectEqualStrings("across", parsed.tree.text(tell.labels[0]));
+    try testing.expectEqualStrings("by", parsed.tree.text(tell.labels[1]));
+    const lines = body[2].data.tell_block.lines;
+    try testing.expectEqualStrings("at", parsed.tree.text(lines[0].labels[0]));
+    try testing.expect(lines[0].wait != null);
+    try testing.expectEqual(@as(usize, 0), lines[1].labels.len);
+    try testing.expectEqual(@as(usize, 2), lines[1].args.len);
+    try testing.expectEqual(@as(usize, 0), body[3].data.ask.labels.len);
+    // No labels after a comma-separated list, and never `from`, `with` or
+    // `otherwise`.
+    try expectOutcome("on t a, b\n  ask g to op a, b to c\nend t\n", "unexpected token at 2:20");
+    try expectOutcome("on t a, b\n  ask g to op a from b\nend t\n", "unexpected token at 2:17");
+    try expectOutcome("on t a, b\n  tell g to op a with b\nend t\n", "unexpected token at 2:18");
 }
 
 test "a Container never passes through a Built-in property" {

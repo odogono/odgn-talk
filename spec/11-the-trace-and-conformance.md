@@ -633,6 +633,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[operations]` | `scope` | optional {opens, abandon} or {closes}; immediate only, as specified in embedding/scoped-effects.md | trace, disassembly |
 | `[operations]` | `segmentBound` | optional boolean, false by default; true enrolls this named Grant in its Segment's participant and requires immediate mode; the case runner supplies all three lifecycle hooks | trace, disassembly |
 | `[operations]` | `command` | optional boolean, false by default; true also makes the Operation a Host Command, callable by its name alone, and is refused on an Operation named by a Reserved Word | trace, disassembly |
+| `[operations]` | `labels` | optional list of Argument Label words, one per argument after the first; a call may write them between its arguments, and they are checked at load (ADR 0115) | trace, disassembly |
 
 <!-- end -->
 

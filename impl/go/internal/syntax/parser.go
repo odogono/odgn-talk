@@ -448,13 +448,25 @@ func (p *parser) resultTarget(n *Node) {
 }
 
 // operation reads an Operation name, which may be any word, then its
-// arguments, an `ask`'s Result Target where targets allows it (ADR 0112),
-// and `and wait` where waits allows it.
+// arguments, a list or one argument and then `label arg` pairs (ADR 0115),
+// an `ask`'s Result Target where targets allows it (ADR 0112), and `and wait`
+// where waits allows it. Labels stay on the node as tokens for the checker;
+// the Operation's name doesn't change.
 func (p *parser) operation(n *Node, waits, targets bool) {
 	n.NameToken = tokenRef(p.word())
 	n.Text = n.NameToken.Raw
 	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") && !(targets && p.at("into")) {
-		n.Children = p.expressionList()
+		n.Children = []*Node{p.expression()}
+		if p.at(",") {
+			for p.accept(",") {
+				n.Children = append(n.Children, p.expression())
+			}
+		} else {
+			for isLabel(p.peek(Operator)) {
+				n.Labels = append(n.Labels, p.take(Operand))
+				n.Children = append(n.Children, p.expression())
+			}
+		}
 	}
 	if targets {
 		p.resultTarget(n)

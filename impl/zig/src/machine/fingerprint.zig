@@ -100,6 +100,14 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation, docu
         try writeShape(w, a);
     }
     try w.writeByte(']');
+    if (op.labels.len > 0) {
+        try w.writeAll(",\"labels\":[");
+        for (op.labels, 0..) |l, i| {
+            if (i > 0) try w.writeByte(',');
+            try writeString(w, l);
+        }
+        try w.writeByte(']');
+    }
     if (op.result) |r| {
         try w.writeAll(",\"result\":");
         try writeShape(w, r);

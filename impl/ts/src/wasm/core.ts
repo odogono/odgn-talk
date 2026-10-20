@@ -203,6 +203,7 @@ export class WasmCore {
               {
                 mode: d.mode,
                 args: d.args.map(a => shapeData(a) as Frame),
+                ...(d.labels?.length ? { labels: [...d.labels] } : {}),
                 command: d.command,
               },
             ]),

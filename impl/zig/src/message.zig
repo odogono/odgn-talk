@@ -1310,6 +1310,8 @@ fn releaseOp(a: Allocator, op: caps.Operation) void {
     a.free(op.description);
     for (op.examples) |e| a.free(e);
     a.free(op.examples);
+    for (op.labels) |l| a.free(l);
+    a.free(op.labels);
 }
 
 /// One Operation from its declaration JSON, its Host function the
@@ -1439,6 +1441,13 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
             examples_made += 1;
         }
     }
+    // Argument Labels (ADR 0115): a list of text, whose words and length
+    // the Core checks when the Capability is defined.
+    const labels = try labelsOf(a, j.object.get("labels"));
+    errdefer {
+        for (labels) |l| a.free(l);
+        a.free(labels);
+    }
     const oc = try s.gpa.create(OpContext);
     oc.* = .{
         .session = s,
@@ -1466,9 +1475,28 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
         .scope = scope,
         .segment_bound = segment_bound,
         .command = command,
+        .labels = labels,
         .metering = metering,
         .host = .{ .call = opCall, .context = oc },
     };
+}
+
+/// An Operation Declaration's `labels`, copied: absent is none, and
+/// anything but a list of text is refused.
+fn labelsOf(a: Allocator, given: ?Json) (Allocator.Error || Invalid)![]const []const u8 {
+    const j = given orelse return &.{};
+    if (j != .array) return error.InvalidValue;
+    const out = try a.alloc([]const u8, j.array.items.len);
+    var made: usize = 0;
+    errdefer {
+        for (out[0..made]) |l| a.free(l);
+        a.free(out);
+    }
+    for (j.array.items, out) |item, *slot| {
+        slot.* = try a.dupe(u8, asText(item) orelse return error.InvalidValue);
+        made += 1;
+    }
+    return out;
 }
 
 /// Starts an `ok` reply; the caller writes its fields (comma-led), then
@@ -3274,7 +3302,14 @@ fn compileLibraryReply(s: *Session, msg: Json, ref: i64) []u8 {
                     };
                     arg.* = shape;
                 }
-                slot.* = .{ .name = op.ptr, .name_len = op.len, .mode = std.meta.stringToEnum(talk.Mode, @tagName(mode)).?, .args = args.ptr, .args_len = args.len, .command = command };
+                const labels = labelsOf(a, field(decl, "labels")) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+                const label_ptrs = a.alloc(?[*]const u8, labels.len) catch return hostError(s.gpa, ref, .out_of_memory);
+                const label_lens = a.alloc(usize, labels.len) catch return hostError(s.gpa, ref, .out_of_memory);
+                for (labels, label_ptrs, label_lens) |l, *x, *n| {
+                    x.* = l.ptr;
+                    n.* = l.len;
+                }
+                slot.* = .{ .name = op.ptr, .name_len = op.len, .mode = std.meta.stringToEnum(talk.Mode, @tagName(mode)).?, .args = args.ptr, .args_len = args.len, .command = command, .labels = label_ptrs.ptr, .labels_lens = label_lens.ptr, .labels_len = labels.len };
             }
             g.* = .{ .name = grant.ptr, .name_len = grant.len, .operations = ops.ptr, .operations_len = ops.len };
         }
@@ -7470,6 +7505,45 @@ test "a Host Command's `command` flag is declared, validated and called through 
     _ = try okOf(try c.send(frame, .{ 7, "util", "true" }));
     const bad = try c.send(frame, .{ 8, "other", "1" });
     try std.testing.expectEqualStrings("invalid value", bad.object.get("err").?.object.get("code").?.string);
+}
+
+test "Argument Labels are declared, validated and checked through frames (ADR 0115)" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{0}));
+    // Only a list of Argument Label words, one per argument after the first.
+    for ([_][]const u8{ "\"to\"", "[\"to\",\"by\"]", "[\"from\"]", "[\"with\"]", "[\"if\"]", "[1]", "[\"a b\"]" }) |labels| {
+        const refused = try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"bad\",\"ops\":[{{\"name\":\"move\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"result\":\"text\",\"labels\":{s}}}]}}", .{ 1, labels });
+        try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    }
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"none\",\"ops\":[{{\"name\":\"move\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"result\":\"text\",\"labels\":[]}}]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"world\",\"ops\":[{{\"name\":\"move\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"result\":\"text\",\"labels\":[\"to\"]}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"world\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    const broken = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"bad\",\"grants\":{{\"world\":{d}}},\"source\":\"on go\\n  ask world to move 1 at \\\"b\\\"\\nend go\"}}", .{ 4, grant });
+    const diagnostics = broken.object.get("err").?.object.get("diagnostics").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), diagnostics.len);
+    try std.testing.expectEqualStrings("wrong argument", diagnostics[0].object.get("code").?.string);
+    try std.testing.expectEqualStrings("wrong labels", diagnostics[1].object.get("code").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"world\":{d}}},\"source\":\"on go\\n  ask world to move \\\"a\\\" to \\\"b\\\"\\n  return it\\nend go\"}}", .{ 5, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{6}));
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{7});
+    // The op need is positional, as for `move "a", "b"`.
+    const need = pumped.object.get("need") orelse return unexpected(pumped);
+    try std.testing.expectEqual(@as(usize, 2), need.object.get("args").?.array.items.len);
+    const end = try runEnd(try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":7,\"result\":\"moved\"}}", .{}));
+    try std.testing.expectEqualStrings("moved", end.object.get("result").?.string);
+    // A Library is checked against its declarations' labels, and they must
+    // be valid.
+    const frame = "{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"{s}\",\"version\":\"1\",\"source\":\"on route a, b\\n  ask world to move a to b\\n  return it\\nend route\\n\",\"declarations\":{{\"world\":{{\"move\":{{\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"labels\":{s}}}}}}}}}";
+    _ = try okOf(try c.send(frame, .{ 8, "router", "[\"to\"]" }));
+    const refused = try c.send(frame, .{ 9, "other", "[\"toward\"]" });
+    try std.testing.expect(refused.object.get("err").?.object.get("diagnostics").?.array.items.len == 1);
+    const invalid = try c.send(frame, .{ 10, "third", "[\"with\"]" });
+    try std.testing.expectEqualStrings("invalid value", invalid.object.get("err").?.object.get("code").?.string);
 }
 
 test "export-manifest writes the Host Manifest's bytes, the same each time" {
