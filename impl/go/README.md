@@ -162,8 +162,9 @@ The adapter gate exercises language and Cost Model mismatches through each
 Core's own version header, including VariablesOnly accounting, rollback and
 stale Function metadata. Go JSON-layout mutation tests run natively; the
 adapter checks binary integrity, malformed state and prior-format refusal.
-Reissue Fuel faults inside Joins remain [#1068](https://github.com/odogono/odgn-talk/issues/1068),
-and uncaught lost-call error Data differs from native Go ([#1069](https://github.com/odogono/odgn-talk/issues/1069)).
+Reissue Fuel faults inside Joins remain [#1068](https://github.com/odogono/odgn-talk/issues/1068).
+Unsettled restored Calls have exact native-Go/embedded-Zig Trace and typed
+error Data parity, with either rebound or absent Grants.
 Save-record input-generating Trace sinks remain part of [#1051](https://github.com/odogono/odgn-talk/issues/1051).
 
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public

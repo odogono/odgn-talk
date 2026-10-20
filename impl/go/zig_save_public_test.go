@@ -12,7 +12,7 @@ import (
 
 func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 	var observations []bridgeObservation
-	for _, name := range []string{"answer", "fail", "adopt", "reissue", "mismatch", "variables only", "handles", "preempted", "refusals", "reentrant", "unresolved object", "library", "invalid save", "invalid policy", "nil Library"} {
+	for _, name := range []string{"answer", "lost", "unbound", "fail", "adopt", "reissue", "mismatch", "variables only", "handles", "preempted", "refusals", "reentrant", "unresolved object", "library", "invalid save", "invalid policy", "nil Library"} {
 		t.Run("save "+name, func(t *testing.T) {
 			o := bridgeObservation{Name: "save " + name}
 			var trace bridgeTrace
@@ -29,13 +29,14 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				t.Fatal(err)
 			}
 			value := func(v any) { o.Pumps = append(o.Pumps, bridgeCanonical(reflect.ValueOf(v))) }
-			pump := func(g *talk.Group, now time.Time, opts talk.PumpOptions) {
+			pump := func(g *talk.Group, now time.Time, opts talk.PumpOptions) talk.PumpResult {
 				r, err := g.Pump(now, opts)
 				if err != nil {
 					t.Fatal(err)
 				}
 				value(r)
 				value(g.Inspect())
+				return r
 			}
 			var g *talk.Group
 			starts := 0
@@ -126,8 +127,11 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				t.Fatal("Save settled original future")
 			default:
 			}
-			resolve := talk.RestoreOptions{Trace: &trace, Libraries: libraries, Grants: func(script, name string) *talk.Grant {
-				o.Values = append(o.Values, "grant "+script+" "+name)
+			resolve := talk.RestoreOptions{Trace: &trace, Libraries: libraries, Grants: func(script, grantName string) *talk.Grant {
+				o.Values = append(o.Values, "grant "+script+" "+grantName)
+				if name == "unbound" {
+					return nil
+				}
 				return grant
 			}, Resolve: func(kind, id string) (any, bool) {
 				o.Values = append(o.Values, "object "+kind+" "+id)
@@ -198,6 +202,30 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 					t.Fatal(v, e)
 				}
 				value(v)
+			} else if name == "lost" || name == "unbound" {
+				if len(result.Pending) != 1 {
+					t.Fatal(result.Pending)
+				}
+				pumped := pump(restored, bridgeNow.Add(time.Second), talk.PumpOptions{})
+				ends := 0
+				for _, report := range pumped.Reports {
+					if end, ok := report.(*talk.RunEnd); ok {
+						ends++
+						if end.Error == nil || end.Error.Code != "call lost" {
+							t.Fatalf("lost call error: %+v", end.Error)
+						}
+						want, err := talk.DecodeJSON([]byte(`{"at":{"unit":"s","handler":"go","line":3,"column":2}}`))
+						if err != nil {
+							t.Fatal(err)
+						}
+						if end.Outcome != talk.Errored || !end.Error.Data.Equal(want) {
+							t.Fatalf("call lost Data = %s; want %s (outcome %v)", end.Error.Data, want, end.Outcome)
+						}
+					}
+				}
+				if ends != 1 || starts != 1 {
+					t.Fatalf("lost call: %d Run ends, %d Starts", ends, starts)
+				}
 			} else if len(result.Pending) > 0 {
 				id := result.Pending[0].ID
 				answer := talk.Int(42)
