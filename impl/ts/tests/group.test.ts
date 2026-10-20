@@ -166,13 +166,13 @@ describe('loading', () => {
 });
 
 describe('Deliveries and Pumps', () => {
-  test('call settles with the answer of an equivalent Request', async () => {
+  test('invoke settles with the answer of an equivalent Request', async () => {
     const { g } = group();
     const s = g.load({
       name: 's',
       source: 'on total a, b\n return a + b\nend total\n',
     });
-    const answer = s.call('total', num(2), num(3));
+    const answer = s.invoke('total', num(2), num(3));
     g.pump(nowMicros());
     expect((await answer).asDecimal()!.toString()).toBe('5');
   });

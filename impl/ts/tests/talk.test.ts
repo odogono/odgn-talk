@@ -3,7 +3,7 @@ import { newGroup, nowMicros, talk, text } from '../src/index';
 
 const answer = async (source: string, name: string) => {
   const g = newGroup({ name: 'talk' });
-  const reply = g.load({ name: 's', source }).call(name, text('Ada'));
+  const reply = g.load({ name: 's', source }).invoke(name, text('Ada'));
   g.pump(nowMicros());
   return (await reply).asText();
 };

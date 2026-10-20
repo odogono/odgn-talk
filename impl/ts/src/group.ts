@@ -629,7 +629,7 @@ export class Script {
     return { id: delivery.id!, result };
   }
   /** Queued. A Request for the answer only; use `request` for its id or a signal. */
-  call(name: string, ...args: Value[]): Promise<Value> {
+  invoke(name: string, ...args: Value[]): Promise<Value> {
     return this.request({ args, name }).result;
   }
   /** Worker. Request this Script and perform exactly one Pump. */

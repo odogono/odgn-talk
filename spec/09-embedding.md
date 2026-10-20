@@ -49,7 +49,7 @@ The driver implements `[Symbol.asyncDispose]()` as `close()`, so a Host can use 
 
 ## Time and reports
 
-- **The Clock is an argument:** `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it. A reading earlier than the last Pump's is `clock backwards`. A game pauses by not pumping, and freezes time by passing the same `now`.
+- **The Clock is an argument:** `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it. A reading earlier than the last Pump's is `clock backwards`. A game pauses by not pumping, and freezes time by passing the same `now`. TS's `nowMicros()` reads `Date.now()` as epoch microseconds for a manual Pump; unlike the driver's Clock it does not clamp.
 - **Reports are returned, never called back:** a Pump returns its reports as one ordered list, and `Request` and `Call` futures settle as it finishes. Calls that end Runs outside a Pump (`Reload` and `ReplaceLibrary`) return their reports; Restore returns the accounting baseline in `RestoreResult.reports`.
 - **The report kinds:**
   - `charge result`, with `request`, `call`, requested `fuel` and `status` (`accepted`, `limit`, `inactive`), in input-drain order before resulting terminal reports ([metering](embedding/metered-operations.md#asynchronous-authorization))
@@ -279,6 +279,7 @@ An Object Kind may also declare an ordered, named Object Collection, which
 ## Loading and Libraries
 
 - **`Load`** compiles a Script, checks it against its Grants, Libraries and well-known objects, runs its initialiser and adds it to the Group. A rejected Script is a `LoadError`, with its diagnostics ([chapter 2](02-grammar.md#load-time-diagnostics)).
+- **Inline source in TS:** the `talk` template tag dedents source written in Host code. It reads the raw template, so NorthTalk's escapes reach the lexer, and only `` \` `` and `\$` lose their backslash; NorthTalk interpolation is written `\${…}`. It strips the longest exactly matching whitespace prefix of the non-blank lines, never expanding tabs, so fenced text margins survive. Any JS interpolation throws, so values reach a Script as arguments, never as source.
 - **Script naming:** the Host chooses a Script's name; it need not be a language Name. Colons, dots and slashes are allowed, as in `page:page1` and `element:page.one/button:primary`. Loading, linking, Reload and Extend preserve the whole name; punctuation in it does not name a Library or an imported definition.
 - **Libraries:** `CompileLibrary(src, imports, declarations)` checks Capability calls against explicit Operation modes and argument Shapes, and compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
@@ -295,7 +296,7 @@ Ordinary immediate effects remain final. A scope guarantees an abandonment attem
 
 - **Selectors:** a message name that contains `:` is a Selector: two or more Names, each followed by `:`, whose labels are [Argument Label words](02-grammar.md#argument-label-words) (`move:to:`), with one argument per part. A Delivery, Request, Broadcast or Decision whose name contains `:` but isn't such a Selector, or doesn't have one argument per part, is refused at the call as `invalid value` ([ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)).
 - **`Deliver`** routes a message to an object's Owning Script, or the nearest ancestor that has one, and **`Script.Deliver`** addresses a Script directly ([chapter 5](05-handlers-messages-and-scheduling.md)). Each returns a delivery id, which the Run it starts reports.
-- **`Request`** is a `send … and wait` from outside. Its future settles with the Run's result, or rejects with `send failed` and the reason. Cancelling its context or signal queues `cancel-delivery`.
+- **`Request`** is a `send … and wait` from outside. Its future settles with the Run's result, or rejects with `send failed` and the reason. Cancelling its context or signal queues `cancel-delivery`. TS's `Script.invoke(name, ...args)` is a Request that returns only its result promise, with no delivery id or signal. It is not `Call`, which calls a Function Value.
 - **`Broadcast`** reaches every Script that wants the message when the queue is drained. Each recipient's `run end` carries its own delivery id and the broadcast id.
 - **`Call`** calls a Function Value ([Function Values](#function-values)), and **`Decide`** asks for a Verdict ([Decisions](#decisions)).
 - **Broadcast limit overrides:** a Broadcast or Broadcast Decision's override is checked at the call against the Core's default limits. Each recipient runs with the tighter of its own limit and the override, so the Broadcast never loosens a recipient's limits, including a Script loaded after the call.
