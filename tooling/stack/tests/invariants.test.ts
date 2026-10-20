@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { isRejectedSource } from '../../../tools/machine/rejected-sources';
+import { sourceGrants } from '../../../tools/corpus/source-grants';
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
@@ -8,6 +9,8 @@ import {
   disassemble,
   exportsOf,
   parseSource,
+  shape,
+  type CodeUnit,
   type CompileOptions,
   type SyntaxElement,
 } from '@northtalk/ts';
@@ -97,6 +100,12 @@ const optionsFor = (path: string): CompileOptions => {
             : [];
         }),
     );
+  const declarations = sourceGrants(path);
+  const grants = Object.values(declarations ?? {}).some(operations =>
+    Object.values(operations).some(operation => operation.command),
+  )
+    ? declarations
+    : undefined;
   return {
     name: basename(path, '.talk'),
     unit:
@@ -105,6 +114,23 @@ const optionsFor = (path: string): CompileOptions => {
         ? 'library'
         : 'script',
     libraries,
+    // Host Command resolution needs the case's Operation modes and arities.
+    grants:
+      grants &&
+      Object.fromEntries(
+        Object.entries(grants).map(([name, operations]) => [
+          name,
+          Object.fromEntries(
+            Object.entries(operations).map(([operation, declaration]) => [
+              operation,
+              {
+                ...declaration,
+                args: (declaration.args ?? []).map(() => shape.any),
+              },
+            ]),
+          ),
+        ]),
+      ),
   };
 };
 
@@ -128,8 +154,16 @@ const compile = (source: string, options: CompileOptions) => {
   }
 };
 
-const canonical = (text: string) =>
-  text.replaceAll(/^( {2}\d{4,} )\d+:\d+ /gm, '$1');
+const canonical = (unit: CodeUnit) =>
+  disassemble({
+    ...unit,
+    // Lambda names include source positions, which formatting may move.
+    bodies: unit.bodies.map(body =>
+      body.kind === 'lambda'
+        ? { ...body, name: body.name.replaceAll(/:\d+:\d+/g, '') }
+        : body,
+    ),
+  }).replaceAll(/^( {2}\d{4,} )\d+:\d+ /gm, '$1');
 
 const invariant = (
   source: string,
@@ -151,9 +185,7 @@ const invariant = (
   if (mustCompile || before.unit) {
     expect(before.unit).not.toBeNull();
     expect(after.unit).not.toBeNull();
-    expect(canonical(disassemble(after.unit!))).toBe(
-      canonical(disassemble(before.unit!)),
-    );
+    expect(canonical(after.unit!)).toBe(canonical(before.unit!));
   } else {
     // Some Spec snippets deliberately demonstrate load-time errors or refer
     // to missing Host declarations. There is no Disassembly for such a unit.
