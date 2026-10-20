@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 15;
+pub const format_version: u32 = 16;
 
 pub const Error = error{
     InvalidSave,
@@ -909,9 +909,11 @@ const Saving = struct {
             },
             .cancel_delivery, .cancel_broadcast => |id| try s.o.int(id),
             // A settlement is queued only after a restore, before the
-            // first Pump; a save then would hold the restored calls again.
+            // first Pump; a save then holds the restored calls again, and
+            // its settlements with how they settle (#1055).
             .settlement => |st| {
                 try s.o.str(st.id);
+                try s.o.byte(@backingInt(st.how));
                 try s.resumeWith(st.with);
             },
         }
@@ -1968,9 +1970,20 @@ const Restoring = struct {
             },
             .cancel_delivery => .{ .cancel_delivery = try r.i.int() },
             .cancel_broadcast => .{ .cancel_broadcast = try r.i.int() },
-            // A save is taken before any settlement is drained, and a
-            // restored Group's settlements are its own.
-            .settlement => error.InvalidSave,
+            // A save taken before a restored Group's first Pump keeps its
+            // queued settlements; restore checks their calls still pend.
+            .settlement => blk: {
+                const id = try r.owned();
+                errdefer a.free(id);
+                const how = std.enums.fromInt(machine.How, try r.i.byte()) orelse return error.InvalidSave;
+                const with = try r.resumeWith();
+                const valued = how == .answer or how == .fail;
+                if (valued != (with != null)) {
+                    if (with) |w| r.g.releaseResume(w);
+                    return error.InvalidSave;
+                }
+                break :blk .{ .settlement = .{ .id = id, .how = how, .with = with } };
+            },
         };
     }
 
@@ -2506,6 +2519,20 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     var pending_ids = try g.waits.importedPending(a, calls);
     errdefer pending_ids.deinit(a);
     g.restored = .{ .pending = pending_ids, .clock = g.clock };
+    // Settlements queued before the save settle restored calls, once each.
+    // On refusal the pending ids go with errdefer, and nothing else here.
+    errdefer if (g.restored) |*x| {
+        x.settled.deinit(a);
+        g.restored = null;
+    };
+    for (g.inputs.items) |x| if (x == .settlement) {
+        const restored = &g.restored.?;
+        const id = for (restored.pending.items) |p| {
+            if (std.mem.eql(u8, p, x.settlement.id)) break p;
+        } else return error.InvalidSave;
+        for (restored.settled.items) |done| if (std.mem.eql(u8, done, id)) return error.InvalidSave;
+        try restored.settled.append(a, id);
+    };
     // Host Objects: each the Host can't resolve restores disposed.
     var disposed: std.ArrayList(*objects.Object) = .empty;
     errdefer disposed.deinit(a);
