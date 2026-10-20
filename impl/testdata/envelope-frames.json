@@ -243,5 +243,33 @@
     "direction": "host-to-guest",
     "hex": "4e544201010b060b0312120267321201741200000007010507246f626a65637406021204646f6f7212016107010504646f6f7207010507246f626a65637406021204646f6f72120161000002",
     "tree": "{\"group\":\"g2\",\"m\":\"load\",\"name\":\"t\",\"objects\":{\"door\":{\"$object\":[\"door\",\"a\"]}},\"owner\":{\"$object\":[\"door\",\"a\"]},\"ref\":18,\"refuseWorker\":true,\"source\":\"\"}"
+  },
+  {
+    "name": "deliver",
+    "tag": 12,
+    "direction": "host-to-guest",
+    "hex": "4e544201010c0604030112016707010506736372697074120173070205046e616d65120470696e6705046172677306010404312e3530",
+    "tree": "{\"m\":\"deliver\",\"ref\":1,\"group\":\"g\",\"to\":{\"script\":\"s\"},\"message\":{\"name\":\"ping\",\"args\":[{\"$dec\":\"1.50\"}]}}"
+  },
+  {
+    "name": "broadcast",
+    "tag": 13,
+    "direction": "host-to-guest",
+    "hex": "4e544201010d06030302120167070305046e616d6512047469636b050461726773060005066c696d697473070105076d61784a6f696e0303",
+    "tree": "{\"m\":\"broadcast\",\"ref\":2,\"group\":\"g\",\"message\":{\"name\":\"tick\",\"args\":[],\"limits\":{\"maxJoin\":3}}}"
+  },
+  {
+    "name": "decide",
+    "tag": 14,
+    "direction": "host-to-guest",
+    "hex": "4e544201010e06050303120167070105066f626a6563740e05057468696e6705036f6e65070205046e616d6512036d617905046172677306010502c3a900",
+    "tree": "{\"m\":\"decide\",\"ref\":3,\"group\":\"g\",\"to\":{\"object\":{\"$object\":[\"thing\",\"one\"]}},\"message\":{\"name\":\"may\",\"args\":[\"é\"]}}"
+  },
+  {
+    "name": "decide-broadcast",
+    "tag": 14,
+    "direction": "host-to-guest",
+    "hex": "4e544201010e0605030412016700070205046e616d6512036d6179050461726773060002",
+    "tree": "{\"m\":\"decide\",\"ref\":4,\"group\":\"g\",\"message\":{\"name\":\"may\",\"args\":[]},\"broadcast\":true}"
   }
 ]

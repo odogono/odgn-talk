@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -373,6 +372,9 @@ func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx contex
 	if b.reg.binary && (fn != nil || how == "request") {
 		return b.queueBinary(s, to, fn, m, ctx, true)
 	}
+	if b.reg.queue {
+		return b.queueFieldsBinary(s, to, m, ctx, how, d)
+	}
 	method, fields, how, err := b.queueFields(s, to, fn, m, how)
 	if err != nil {
 		return "", nil, err
@@ -386,12 +388,6 @@ func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx contex
 			return nil
 		}
 		id = reply.admission.delivery
-		if how != "request" {
-			id = DeliveryID(zigText(reply.body.get("delivery")))
-		}
-		if strings.HasSuffix(how, "broadcast") {
-			id = DeliveryID(zigText(reply.body.get("broadcast")))
-		}
 		pending = b.admitted(id, how, ctx, d)
 		return nil
 	})
@@ -837,6 +833,7 @@ func (b *zigGroup) checkHello() error {
 		return err
 	}
 	wantedLoad := true
+	wantedQueue := wanted
 	features := append(slices.Clone(zigFeatures), zigOptionalFeatures...)
 	if wanted {
 		features = append(features, binary)
@@ -845,14 +842,16 @@ func (b *zigGroup) checkHello() error {
 		features = append(features, zigCallbacksFeature)
 	}
 	if wanted {
-		features = append(features, zigSettlementsFeature)
+		features = append(features, zigSettlementsFeature, zigQueueFeature)
 	}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": features})
 	if err != nil {
 		// Older guests may support every earlier optional feature but not
-		// Load fields. Keep those negotiations when falling back to JSON Load.
+		// Load or queue fields. Keep those negotiations when falling back to
+		// JSON Load and queued inputs.
 		wantedLoad = false
-		features = slices.DeleteFunc(features, func(feature any) bool { return feature == "load-fields-v1" })
+		wantedQueue = false
+		features = slices.DeleteFunc(features, func(feature any) bool { return feature == "load-fields-v1" || feature == zigQueueFeature })
 		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": features})
 	}
 	wantedElements := true
@@ -877,6 +876,8 @@ func (b *zigGroup) checkHello() error {
 				b.reg.binary = wanted
 			case zigSettlementsFeature:
 				b.reg.settlements = wanted
+			case zigQueueFeature:
+				b.reg.queue = wanted && wantedQueue
 			}
 		}
 		for _, required := range zigFeatures {

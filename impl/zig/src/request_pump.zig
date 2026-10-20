@@ -47,6 +47,11 @@ pub const Message = enum(u8) {
     /// `settlements-fields-v1` (#1320): a Pump preceded by queued settlements.
     settle_pump = messageTag("settle-pump"),
     load = messageTag("load"),
+    /// `queue-fields-v1` (#1374): ordinary queued Deliveries, Broadcasts
+    /// and Decisions, with the admission reply.
+    deliver = messageTag("deliver"),
+    broadcast = messageTag("broadcast"),
+    decide = messageTag("decide"),
     admission = messageTag("admission"),
     completion = messageTag("completion"),
 
@@ -54,7 +59,16 @@ pub const Message = enum(u8) {
     pub fn pumps(m: Message) bool {
         return m == .pump or m == .request_pump or m == .call_pump or m == .settle_pump;
     }
+
+    /// Whether the input is a `queue-fields-v1` queued input.
+    pub fn queued(m: Message) bool {
+        return m == .deliver or m == .broadcast or m == .decide;
+    }
 };
+
+/// `queue-fields-v1` (#1374): queued `deliver`, `broadcast` and `decide`
+/// inputs cross as fields-layout frames.
+pub const feature_queue = envelope.features[4];
 
 /// `settlements-fields-v1` (#1320): a Host's queued `answer` and `fail`
 /// inputs cross inside the `settle-pump` that would drain them.
@@ -412,6 +426,17 @@ pub fn ptextOf(span: []const u8) Error![]const u8 {
     const s = try r.bytes();
     if (!r.done() or !std.unicode.utf8ValidateSlice(s)) return error.Malformed;
     return s;
+}
+
+/// A boolean item, or null for an absent field.
+pub fn boolOf(span: ?[]const u8) Error!?bool {
+    const given = span orelse return null;
+    if (given.len != 1) return error.Malformed;
+    return switch (given[0]) {
+        tag.false_ => false,
+        tag.true_ => true,
+        else => error.Malformed,
+    };
 }
 
 pub fn uintOf(span: []const u8) Error!u64 {

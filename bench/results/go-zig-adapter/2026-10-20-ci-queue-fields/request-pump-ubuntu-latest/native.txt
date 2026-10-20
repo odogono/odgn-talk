@@ -1,0 +1,80 @@
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5899 ns/op	      4567 p50-ns	     36565 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5167 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5933 ns/op	      4708 p50-ns	     35263 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5977 ns/op	      4647 p50-ns	     35723 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5207 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5652 ns/op	      4517 p50-ns	     34462 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5891 ns/op	      4587 p50-ns	     33561 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5315 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5821 ns/op	      4607 p50-ns	     33821 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5829 ns/op	      4577 p50-ns	     34843 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5167 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5716 ns/op	      4537 p50-ns	     34672 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5769 ns/op	      4557 p50-ns	     31157 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5198 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5654 ns/op	      4517 p50-ns	     31167 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5945 ns/op	      4607 p50-ns	     32499 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5208 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5715 ns/op	      4526 p50-ns	     33901 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5876 ns/op	      4567 p50-ns	     36395 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5266 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5712 ns/op	      4517 p50-ns	     33220 p99-ns	    7177 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      6003 ns/op	      4577 p50-ns	     35663 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5199 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5864 ns/op	      4537 p50-ns	     38618 p99-ns	    7178 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      6323 ns/op	      4607 p50-ns	     33180 p99-ns	    7177 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5215 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5749 ns/op	      4536 p50-ns	     34267 p99-ns	    7178 B/op	      89 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkBackendRequestPump-4   	   20000	      5868 ns/op	      4577 p50-ns	     34715 p99-ns	    7178 B/op	      89 allocs/op
+BenchmarkBackendCallPump-4      	   20000	      5264 ns/op	    7497 B/op	      79 allocs/op
+BenchmarkBackendRequest-4       	   20000	      5720 ns/op	      4537 p50-ns	     35684 p99-ns	    7177 B/op	      89 allocs/op
+PASS

@@ -393,6 +393,8 @@ pub const Session = struct {
     /// `settlements-fields-v1` (#1320): `settle-pump` carries queued settlements.
     settlements: bool = false,
     load_fields: bool = false,
+    /// `queue-fields-v1` (#1374): queued Deliveries cross in binary.
+    queue_fields: bool = false,
     /// Combined exchanges' correlation tokens, bound until their final reply.
     bindings: std.ArrayList(Binding) = .empty,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -2303,7 +2305,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
-    o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\",\"" ++ rp.feature_load ++ "\"]") catch return oomReply();
+    o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\",\"" ++ rp.feature_load ++ "\",\"" ++ rp.feature_queue ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -4443,6 +4445,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var callbacks = s.callbacks;
             var settlements = s.settlements;
             var load_fields = s.load_fields;
+            var queue_fields = s.queue_fields;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, rp.feature_fields)) {
@@ -4454,6 +4457,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     callbacks = true;
                 } else if (std.mem.eql(u8, name, rp.feature_settlements)) {
                     settlements = true;
+                } else if (std.mem.eql(u8, name, rp.feature_queue)) {
+                    queue_fields = true;
                 } else if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
                     early = true;
                 } else if (std.mem.eql(u8, name, "crossing-trace-v1")) {
@@ -4483,10 +4488,12 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             if (settlements and !request_pump) return protocolError(s.gpa, ref, "settlements-fields-v1 needs request-pump-fields-v1");
+            if (queue_fields and !request_pump) return protocolError(s.gpa, ref, "queue-fields-v1 needs request-pump-fields-v1");
             s.request_pump = request_pump;
             s.callbacks = callbacks;
             s.settlements = settlements;
             s.load_fields = load_fields;
+            s.queue_fields = queue_fields;
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
             s.climb = climb;
@@ -5473,6 +5480,9 @@ fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
     const entry = in.entry;
     switch (in.m) {
         .request => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
+        .deliver => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .deliver, in.target, in.name, in.args, in.limits)),
+        .broadcast => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .broadcast, .all, in.name, in.args, in.limits)),
+        .decide => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .decide, in.target, in.name, in.args, in.limits)),
         .call => return binAdmissionOwned(s, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
         .pump, .settle_pump => {
             const code = applySettlements(in.settlements);
@@ -5527,6 +5537,7 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
     if (m == .load or m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     r.record(rp.fields(m), true, spans[0..rp.fields(m).len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     if (m == .settle_pump and !s.settlements) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+    if (m.queued() and !s.queue_fields) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     const names = rp.fields(m);
     const Get = struct {
         names: []const []const u8,
@@ -5553,21 +5564,26 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
         in.token = rp.uintOf(g.get("token") orelse return malformedFrame(s, ref)) catch return malformedFrame(s, ref);
         if (in.token == 0) return malformedFrame(s, ref);
     }
-    if (m == .request or m == .request_pump) {
-        const to = g.get("to") orelse return refuse.code(s, &in, .invalid_value);
-        var t: [2]?[]const u8 = undefined;
-        var tr: rp.Reader = .{ .data = to };
-        tr.record(&.{ "script", "object" }, false, &t) catch return malformedFrame(s, ref);
-        if ((t[0] == null) == (t[1] == null)) return refuse.code(s, &in, .invalid_value);
-        if (t[0]) |span| {
-            const name = rp.ptextOf(span) catch return malformedFrame(s, ref);
-            in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, &in, .invalid_value) };
-        } else {
-            entry.wrong_group = false;
-            const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
-            defer v.release();
-            if (v.data != .object) return refuse.code(s, &in, .invalid_value);
-            in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, &in, .invalid_value) };
+    // A Broadcast, or a Broadcast Decision, has no `to`; as in JSON.
+    const to_all = m == .broadcast or (m == .decide and ((rp.boolOf(g.get("broadcast")) catch return malformedFrame(s, ref)) orelse false));
+    if (to_all and m == .decide and g.get("to") != null) return refuse.code(s, &in, .invalid_value);
+    if (m == .request or m == .request_pump or m.queued()) {
+        if (!to_all) {
+            const to = g.get("to") orelse return refuse.code(s, &in, .invalid_value);
+            var t: [2]?[]const u8 = undefined;
+            var tr: rp.Reader = .{ .data = to };
+            tr.record(&.{ "script", "object" }, false, &t) catch return malformedFrame(s, ref);
+            if ((t[0] == null) == (t[1] == null)) return refuse.code(s, &in, .invalid_value);
+            if (t[0]) |span| {
+                const name = rp.ptextOf(span) catch return malformedFrame(s, ref);
+                in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, &in, .invalid_value) };
+            } else {
+                entry.wrong_group = false;
+                const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
+                defer v.release();
+                if (v.data != .object) return refuse.code(s, &in, .invalid_value);
+                in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, &in, .invalid_value) };
+            }
         }
         const message = g.get("message") orelse return refuse.code(s, &in, .invalid_value);
         var mf: [3]?[]const u8 = undefined;
@@ -8681,7 +8697,7 @@ fn binRequestTo(a: Allocator, m: rp.Message, ref: i64, group: []const u8, token:
     try w.list(args.len);
     for (args) |n| try w.int(n);
     try w.end();
-    if (m != .request) {
+    if (m.pumps()) {
         try w.key("now");
         try w.instant(.{ .seconds = now_s, .micros = 0 });
     }
@@ -8810,6 +8826,79 @@ fn binSettlePump(a: Allocator, ref: i64, call: []const u8, outcome: []const u8, 
     try w.end();
     try w.end();
     return w.finish();
+}
+
+/// A `queue-fields-v1` input to `script`, or to all with `script` null.
+fn binQueued(a: Allocator, m: rp.Message, ref: i64, script: ?[]const u8, name: []const u8, broadcast: ?bool) ![]u8 {
+    var w = rp.Writer.init(a);
+    defer w.deinit();
+    try binInput(&w, m, ref, "g");
+    if (script) |sc| {
+        try w.key("to");
+        try w.begin(&.{}, false);
+        try w.key("script");
+        try w.ptext(sc);
+        try w.end();
+    }
+    try w.key("message");
+    try w.begin(&.{}, false);
+    try w.key("name");
+    try w.ptext(name);
+    try w.key("args");
+    try w.list(0);
+    try w.end();
+    if (broadcast) |b| {
+        try w.key("broadcast");
+        try w.byte(if (b) rp.tag.true_ else rp.tag.false_);
+    }
+    try w.end();
+    return w.finish();
+}
+
+test "queue-fields-v1: queued Deliveries, Broadcasts and Decisions admit in binary (#1374)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    // It needs the fields layout, and the inputs need it negotiated.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"queue-fields-v1\"]}}", .{1})));
+    _ = try okOf(try binHello(&c, 2, "request-pump-fields-v1"));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on ping\\n return 1\\nend ping\"}}", .{4}));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binQueued(a, .deliver, 5, "s", "ping", null))));
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\",\"function-metadata-v1\",\"core-message-v1\",\"group-exchanges-v1\",\"request-pump-fields-v1\",\"queue-fields-v1\"]}}", .{6}));
+    try std.testing.expect(s.queue_fields);
+
+    const delivered = try binReply(&c, try binQueued(a, .deliver, 7, "s", "ping", null));
+    errdefer std.debug.print("delivered: {f}\n", .{std.json.fmt(delivered, .{})});
+    try std.testing.expectEqualStrings("admission", delivered.object.get("binary").?.string);
+    const id = delivered.object.get("delivery").?.string;
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8});
+    try std.testing.expectEqualStrings(id, (try reportOf(pumped, "run end")).object.get("delivery").?.string);
+
+    // A Broadcast's admission names the Broadcast id.
+    const broadcast = try binReply(&c, try binQueued(a, .broadcast, 9, null, "ping", null));
+    errdefer std.debug.print("broadcast: {f}\n", .{std.json.fmt(broadcast, .{})});
+    const all = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
+    try std.testing.expectEqualStrings(broadcast.object.get("delivery").?.string, (try reportOf(all, "run end")).object.get("broadcast").?.string);
+
+    // Decisions, to a Script and to all, are admitted with their ids.
+    const decided = try binReply(&c, try binQueued(a, .decide, 11, "s", "ping", null));
+    try std.testing.expect(decided.object.get("delivery") != null);
+    const to_all = try binReply(&c, try binQueued(a, .decide, 12, null, "ping", true));
+    try std.testing.expect(to_all.object.get("delivery") != null);
+
+    // Refusals keep their JSON codes, in the admission reply.
+    for ([_]struct { []const u8, ?[]const u8, ?bool }{
+        .{ "unknown Script", "nobody", null },
+        .{ "a Broadcast Decision with a target", "s", true },
+        .{ "a Decision with no target", null, false },
+    }) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case[0]});
+        const refused = try binReply(&c, try binQueued(a, .decide, 13, case[1], "ping", case[2]));
+        try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    }
 }
 
 test "settlements-fields-v1: a settle-pump applies its settlements, then Pumps (#1320)" {

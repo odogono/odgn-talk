@@ -147,6 +147,10 @@ export const envelopeViews = (data: Catalogue): Record<string, string> => {
       data.messages.filter(e => e.tag === 10),
       'Message',
     ),
+    'envelope.queue': entriesTable(
+      data.messages.filter(e => e.tag >= 0x0c && e.tag <= 0x0e),
+      'Message',
+    ),
     'envelope.reports': entriesTable(data.reports, 'Report'),
     'envelope.fields': table(
       ['Field', 'Kinds by use'],

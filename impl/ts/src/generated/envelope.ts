@@ -31,6 +31,7 @@ export const envelopeFeatures = [
   'callbacks-fields-v1',
   'settlements-fields-v1',
   'load-fields-v1',
+  'queue-fields-v1',
 ] as const;
 export const envelopeMessages: readonly EnvelopeEntry[] = [
   {
@@ -175,6 +176,39 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
       { name: 'limits', kind: 'limits', required: false },
       { name: 'newGroup', kind: 'record', required: false },
       { name: 'refuseWorker', kind: 'bool', required: false },
+    ],
+  },
+  {
+    tag: 12,
+    name: 'deliver',
+    direction: 'host-to-guest',
+    fields: [
+      { name: 'ref', kind: 'int', required: true },
+      { name: 'group', kind: 'text', required: true },
+      { name: 'to', kind: 'target', required: false },
+      { name: 'message', kind: 'message', required: false },
+    ],
+  },
+  {
+    tag: 13,
+    name: 'broadcast',
+    direction: 'host-to-guest',
+    fields: [
+      { name: 'ref', kind: 'int', required: true },
+      { name: 'group', kind: 'text', required: true },
+      { name: 'message', kind: 'message', required: false },
+    ],
+  },
+  {
+    tag: 14,
+    name: 'decide',
+    direction: 'host-to-guest',
+    fields: [
+      { name: 'ref', kind: 'int', required: true },
+      { name: 'group', kind: 'text', required: true },
+      { name: 'to', kind: 'target', required: false },
+      { name: 'message', kind: 'message', required: false },
+      { name: 'broadcast', kind: 'bool', required: false },
     ],
   },
   {

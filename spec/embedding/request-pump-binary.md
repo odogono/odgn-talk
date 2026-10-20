@@ -23,6 +23,7 @@ no wire bytes or negotiated versions.
 | `callbacks-fields-v1` |
 | `settlements-fields-v1` |
 | `load-fields-v1` |
+| `queue-fields-v1` |
 
 <!-- end -->
 
@@ -44,7 +45,8 @@ transport lengths and the frame-size limit remain unchanged. Browser transports
 may send a dedicated ArrayBuffer using transfer ownership; the codec does not
 import WASM or browser transport code.
 
-Only `request`, `call`, `pump`, `request-pump` and `call-pump`, their ordinary
+Only `request`, `call`, `pump`, `request-pump` and `call-pump`, the queued
+inputs [`queue-fields-v1`](#queued-deliveries) adds, their ordinary
 admission replies, and final Pump replies use binary frames. Every interim need,
 its result answer, inline observation/admission and acknowledgement stays JSON,
 except the callback needs and results that
@@ -155,7 +157,7 @@ A Report Value the Core cannot encode is Nothing.
 | `args` | `values` |
 | `at` | `record` |
 | `automatic` | `bool` |
-| `broadcast` | `text` |
+| `broadcast` | `bool` (decide); `text` (run end, decided) |
 | `call` | `text` |
 | `capability` | `text` |
 | `charged` | `uint` |
@@ -187,7 +189,7 @@ A Report Value the Core cannot encode is Nothing.
 | `limit` | `text` |
 | `limits` | `limits` |
 | `liveRuns` | `uint` |
-| `message` | `message` (request, request-pump, unhandled); `text` (op-result, prop-result, settlement) |
+| `message` | `message` (request, request-pump, deliver, broadcast, decide, unhandled); `text` (op-result, prop-result, settlement) |
 | `mode` | `text` |
 | `name` | `text` |
 | `newGroup` | `record` |
@@ -372,6 +374,35 @@ Group operation. A first Load carries `newGroup`; another first operation can
 use the ordinary `new-group` exchange. An unused Group needs no `drop-group`.
 Session declarations and Grant creation do not require guest Group state.
 No Script compilation, Load validation, worker exclusion or Trace rule changes.
+
+## Queued Deliveries
+
+`queue-fields-v1` ([#1374](https://github.com/odogono/odgn-talk/issues/1374))
+moves the ordinary queued `deliver`, `broadcast` and `decide` inputs to the
+fields envelope. It is negotiated at `hello` together with
+`request-pump-fields-v1`; asked for without it, `hello` is a protocol error.
+JSON `deliver`, `broadcast` and `decide` remain available.
+
+<!-- generated: envelope.queue -->
+
+| Tag | Message | Direction | Fields in order |
+| --- | --- | --- | --- |
+| `0c` | deliver | host-to-guest | ref, group, to, message |
+| `0d` | broadcast | host-to-guest | ref, group, message |
+| `0e` | decide | host-to-guest | ref, group, to, message, broadcast |
+
+<!-- end -->
+
+Each input has its JSON fields and meanings, positionally. `to` and `message`
+have the `request` shapes. A `decide` whose `broadcast` is true is a Broadcast
+Decision and has no `to`; otherwise `broadcast` is false or Nothing and `to`
+names a Script or Object. A `broadcast` has no `to` field at all.
+
+The reply is the admission reply (`81`). Its `delivery` is the admitted id:
+the Delivery's, or the Broadcast's for a `broadcast` or a Broadcast Decision,
+where the JSON reply names it `broadcast`. A refused admission carries its
+ordinary error, records and Trace; the binary input changes no admission rule,
+id, Report or `cancel-delivery` behaviour.
 
 ## Combined operations
 

@@ -41,6 +41,9 @@ type zigRegistry struct {
 	settlements bool
 	// load is whether the guest took load-fields-v1 (#1329).
 	load bool
+	// queue is whether the guest took queue-fields-v1 (#1374), so queued
+	// Deliveries, Broadcasts and Decisions are binary.
+	queue bool
 }
 
 func newZigRegistry() *zigRegistry {
