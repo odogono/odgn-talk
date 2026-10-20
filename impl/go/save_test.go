@@ -185,6 +185,15 @@ func requireNativeCore(t *testing.T) {
 	}
 }
 
+// requireSynchronousTrace skips a test that calls the Group from its Trace
+// callback mid-Pump. The Zig adapter replays the Trace after the Pump returns.
+func requireSynchronousTrace(t *testing.T) {
+	t.Helper()
+	if !nativeCore() {
+		t.Skip("needs the Trace callback during the Pump (ADR 0117)")
+	}
+}
+
 func requireNativeSaveFormat(t *testing.T) {
 	t.Helper()
 	if experimentalGroupFactory != nil {

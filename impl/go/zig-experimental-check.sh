@@ -11,6 +11,8 @@ selection='^(TestHostCommandResultTargetRestore|TestGroupRandomSeedAndRestore|Te
 # rollback base and sibling reissues in a preempted Join body remain open.
 go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$' -count=1 "$@" .
 go test -tags talk_zig_experimental -run '^TestReissueFuelFaultSkipsSiblingHostCalls$/^0$' -count=1 "$@" .
+# Cancelling a wait for removes its subscription, timer and ready event.
+go test -tags talk_zig_experimental -run '^TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent$' -count=1 "$@" .
 # A diamond checks each original Library site once per use (#1394).
 go test -tags talk_zig_experimental -run '^TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse$' -count=1 "$@" .
 # Replay must offer current Library identities to Restore after replacement.
