@@ -642,7 +642,7 @@ on encodeMove id, x, y
 end encodeMove
 -- `byte 1 of b` and `bytes 2..5 of b` are chunks. `b as text` decodes UTF-8.
 
--- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063) -----------------
+-- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0115) -----------
 
 -- Scripts have no ambient I/O. Every effect is an Operation on a Capability
 -- the Host has granted, and the loader checks every call against the Grants.
@@ -669,6 +669,14 @@ on storeTour
     increment "visits", 1
   end tell
 end storeTour
+-- An Operation may declare Argument Labels, and a call may write them
+-- between its arguments, like a Handler's. They only help it read: the
+-- call is the same, and the loader checks the labels against the Grant.
+on labelsTour piece
+  ask world to move piece to "red hangar"   -- labelled
+  ask world to move piece, "red hangar"     -- the same call, positional
+  tell world to place piece at 3 facing "north"
+end labelsTour
 -- Store writes commit or roll back with the current Segment. They are not
 -- one transaction across waits. Optional Grants also include SQLite and
 -- user interaction; a Host must explicitly supply them.
