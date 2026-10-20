@@ -118,3 +118,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0114: Result Targets apply to result-producing calls](0114-result-targets-apply-to-result-producing-calls.md)
 - [0115: Operation Declarations may declare Argument Labels](0115-operation-declarations-may-declare-argument-labels.md)
 - [0116: A Canvas Element keeps a retained Drawing across Play and Edit](0116-a-canvas-element-keeps-a-retained-drawing-across-play-and-edit.md)
+- [0117: Go Hosts run the Zig Core, and the Go Core is retired](0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)
