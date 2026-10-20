@@ -4429,7 +4429,18 @@ pub const Group = struct {
             .started => {},
             .value => |v| try g.ready(p, .{ .answer = .{ .value = v, .fuel = 0 } }),
             .failed => |f| try g.ready(p, .{ .failed = .{ .code = f.code, .message = f.message, .data = f.data } }),
-            .limited => try g.ready(p, .limited),
+            // A Join member's refused Charge faults the Run now, as it
+            // would have at the call (chapter 10), before its body goes
+            // on or a sibling is reissued; its Segment rolls back.
+            .limited => if (run.join != null) {
+                var ins: lower.Instruction = undefined;
+                ins.position = .{ .line = c.at_line, .column = c.at_column };
+                if (!run.continuing) g.dropBase(run);
+                _ = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
+                try g.cleanupLifecycle(run, .charge_refused);
+                if (g.fatal) return g.stopGroup(run);
+                try g.endRun(run, .{ .finished = .{ .outcome = .{ .faulted = .fuel }, .segment = g.segmentId(run) } });
+            } else try g.ready(p, .limited),
             else => try g.ready(p, .broken),
         }
     }
