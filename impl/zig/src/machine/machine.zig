@@ -5147,8 +5147,9 @@ pub const Group = struct {
             defer reason.release();
             return g.raise("send failed", &.{.{ .key = "reason", .value = reason }});
         };
-        // A full mailbox refuses the send, which starts no call.
-        if (mailboxLen(dest) >= dest.limits.mailbox_depth) {
+        // A full mailbox, Host inputs already accepted included, refuses
+        // the send, which starts no call.
+        if (g.mailboxFull(dest)) {
             const shown = try model.text(gpa, dest.name);
             defer shown.release();
             return g.raise("mailbox full", &.{.{ .key = "to", .value = shown }});
@@ -7094,7 +7095,7 @@ pub const Group = struct {
             // A stopped Home Script's functions are gone (chapter 9).
             if (home.stopped != null) return g.raise("function gone", &.{});
             // A full Home mailbox refuses the call, as it does a send.
-            if (mailboxLen(home) >= home.limits.mailbox_depth) {
+            if (g.mailboxFull(home)) {
                 const shown = try model.text(g.gpa, home.name);
                 defer shown.release();
                 return g.raise("mailbox full", &.{.{ .key = "to", .value = shown }});
