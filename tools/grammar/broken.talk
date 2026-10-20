@@ -1546,3 +1546,27 @@ end t
 on t
   h into the key of xs
 end t
+
+-- case: misplaced or non-Name Result Target: ask into item 1 of xs
+-- expect: unexpected token at 2:27
+on t x
+  ask g to op x into item 1 of xs
+end t
+
+-- case: misplaced or non-Name Result Target: ask and wait into y
+-- expect: unexpected token at 2:26
+on t x
+  ask g to op x and wait into y
+end t
+
+-- case: misplaced or non-Name Result Target: ask into it
+-- expect: unexpected token at 2:20
+on t x
+  ask g to op into it
+end t
+
+-- case: misplaced or non-Name Result Target: one-line tell keeps its grammar
+-- expect: unexpected token at 2:18
+on t x
+  tell g to op x into y
+end t
