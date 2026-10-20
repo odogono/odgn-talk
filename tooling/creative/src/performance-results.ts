@@ -8,9 +8,7 @@ export class PerformanceResults {
   snapshot: PerformanceSnapshot | undefined;
   reset(session: number): void {
     this.session = session;
-    this.epoch++;
-    this.snapshot = undefined;
-    this.incomplete = false;
+    this.clear();
   }
   clear(): void {
     this.epoch++;

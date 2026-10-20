@@ -49,6 +49,26 @@ type ScriptCounts = {
   frames?: { delivered: number; recent: Map<number, number>; skipped: number };
   origins: Map<string, Counts>;
 };
+const FAILED = new Set(['errored', 'limit fault', 'effect failed']);
+const TOTALS = [
+  'active',
+  'completed',
+  'failed',
+  'discarded',
+  'fuel',
+  'started',
+  'samples',
+  'sampleFuel',
+  'rate',
+] as const;
+/** Drops entries older than the 60-second window ending at `second`. */
+const prune = (map: Map<number, unknown>, second: number): void => {
+  for (const key of map.keys()) {
+    if (key < second - 59) {
+      map.delete(key);
+    }
+  }
+};
 const counts = (): Counts => ({
   active: 0,
   completed: 0,
@@ -105,12 +125,7 @@ export class PerformanceCapture {
   #script(script: string): ScriptCounts {
     let row = this.#scripts.get(script);
     if (!row) {
-      row = {
-        origins: new Map(),
-        ...(this.#frameScripts.has(script)
-          ? { frames: { delivered: 0, skipped: 0, recent: new Map() } }
-          : {}),
-      };
+      row = { origins: new Map() };
       this.#scripts.set(script, row);
     }
     if (this.#frameScripts.has(script) && !row.frames) {
@@ -127,17 +142,16 @@ export class PerformanceCapture {
     }
     return row;
   }
+  #elapsed(): number {
+    return Math.max(0, ((this.#end ?? this.now()) - this.#start!) / 1000);
+  }
   #second(): number {
-    return Math.floor(((this.#end ?? this.now()) - this.#start!) / 1000);
+    return Math.floor(this.#elapsed());
   }
   #add(recent: Map<number, number>, value: number): void {
     const second = this.#second();
     recent.set(second, (recent.get(second) ?? 0) + value);
-    for (const key of recent.keys()) {
-      if (key < second - 59) {
-        recent.delete(key);
-      }
-    }
+    prune(recent, second);
   }
   #bucket(): PerformanceBucket {
     const second = this.#second();
@@ -145,11 +159,7 @@ export class PerformanceCapture {
     if (!bucket) {
       bucket = { second, fuel: 0, pumpPeak: 0 };
       this.#history.set(second, bucket);
-    }
-    for (const key of this.#history.keys()) {
-      if (key < second - 59) {
-        this.#history.delete(key);
-      }
+      prune(this.#history, second);
     }
     return bucket;
   }
@@ -200,11 +210,7 @@ export class PerformanceCapture {
               row.discarded++;
             } else {
               row.completed++;
-              if (
-                ['errored', 'limit fault', 'effect failed'].includes(
-                  run.outcome ?? '',
-                )
-              ) {
+              if (FAILED.has(run.outcome ?? '')) {
                 row.failed++;
               }
               if (!run.partial) {
@@ -246,23 +252,12 @@ export class PerformanceCapture {
     if (!this.enabled) {
       return undefined;
     }
-    const elapsed = Math.max(
-      0,
-      ((this.#end ?? this.now()) - this.#start!) / 1000,
-    );
+    const elapsed = this.#elapsed();
     const second = Math.floor(elapsed);
     // The current and previous bucket give a responsive 1–2 second rate.
     const duration = Math.max(0.001, elapsed - Math.max(0, second - 1));
-    const rate = (recent: Map<number, number>) => {
-      for (const key of recent.keys()) {
-        if (key < second - 59) {
-          recent.delete(key);
-        }
-      }
-      return (
-        ((recent.get(second) ?? 0) + (recent.get(second - 1) ?? 0)) / duration
-      );
-    };
+    const rate = (recent: Map<number, number>) =>
+      ((recent.get(second) ?? 0) + (recent.get(second - 1) ?? 0)) / duration;
     const scripts = [...this.#scripts]
       .map(([script, data]): ScriptPerformance => {
         const total = counts();
@@ -274,17 +269,7 @@ export class PerformanceCapture {
           }))
           .sort((a, b) => b.rate - a.rate || a.origin.localeCompare(b.origin));
         for (const row of origins) {
-          for (const key of [
-            'active',
-            'completed',
-            'failed',
-            'discarded',
-            'fuel',
-            'started',
-            'samples',
-            'sampleFuel',
-            'rate',
-          ] as const) {
+          for (const key of TOTALS) {
             total[key] += row[key];
           }
           if (row.peak !== undefined) {

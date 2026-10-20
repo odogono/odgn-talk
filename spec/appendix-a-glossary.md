@@ -363,7 +363,7 @@ A window in Folio that, while browsing, shows the Script Variables of the Projec
 _Avoid_: inspector, debugger, watch window
 
 **Performance window**:
-A window in Folio for inspecting a Play Session’s Script workload and frame-message delivery, available in Browse and Present. It keeps the captured results after the session ends.
+A window in Folio for inspecting a Play Session's Script workload and frame-message delivery, available in Browse and Present. It keeps the captured results after the session ends.
 _Avoid_: FPS counter, Errors window
 
 **Present**:

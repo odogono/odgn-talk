@@ -6,7 +6,7 @@
 import type { DeepReadonly } from './readonly';
 import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
 import { scriptNameProblems } from './script-names';
-import { byId, h } from './dom';
+import { byId, h, isTyping } from './dom';
 import { ErrorsWindow } from './errors';
 import { PerformanceWindow } from './performance-window';
 import { mountMessageWindow } from './message-window';
@@ -593,14 +593,11 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   document.addEventListener('keydown', event => {
-    const focused = event.target as HTMLElement;
     if (
       (event.metaKey || event.ctrlKey) &&
       event.altKey &&
       event.code === 'KeyP' &&
-      !focused.closest(
-        'input, textarea, select, [contenteditable="true"], .cm-editor',
-      ) &&
+      !isTyping(event.target) &&
       !session?.prompt
     ) {
       event.preventDefault();

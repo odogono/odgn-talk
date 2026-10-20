@@ -5,7 +5,7 @@ import {
   EMPTY_COLOUR,
   ROWS,
 } from '../src/examples/tetris';
-import { PlaySession } from '../src/play';
+import { PlaySession, PUMP_FUEL } from '../src/play';
 import { textOf } from '../src/model';
 import { text } from '@northtalk/ts';
 
@@ -203,4 +203,20 @@ test('every ten lines raises the level and speeds up gravity', async () => {
   expect(Math.min(...rowsOf(game.filled()))).toBe(top);
   await game.frame(1);
   expect(Math.min(...rowsOf(game.filled()))).toBe(top + 1);
+});
+
+test('the Performance window captures Tetris workload without thresholds', async () => {
+  const { play, frame, key } = await start();
+  play.performance.start(1);
+  for (let i = 0; i < 20; i++) {
+    await frame(50);
+  }
+  await key('ArrowLeft');
+  const snapshot = play.performance.snapshot(PUMP_FUEL)!;
+  expect(snapshot.status).toBe('capturing');
+  expect(snapshot.fuel).toBeGreaterThan(0);
+  expect(snapshot.scripts.reduce((sum, s) => sum + s.fuel, 0)).toBe(
+    snapshot.fuel,
+  );
+  expect(snapshot.scripts.some(s => s.frames?.delivered)).toBe(true);
 });

@@ -23,3 +23,9 @@ export const byId = (id: string): HTMLElement => {
   }
   return found;
 };
+
+/** Whether keys aimed at `target` are text entry, which shortcuts leave alone. */
+export const isTyping = (target: EventTarget | null): boolean =>
+  !!(target as HTMLElement | null)?.closest?.(
+    'input, textarea, select, [contenteditable], [role="textbox"]',
+  );

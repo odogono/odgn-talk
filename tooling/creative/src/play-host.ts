@@ -125,8 +125,7 @@ export class PlayHost {
     }
     switch (request.kind) {
       case 'performance': {
-        session.performance.start(request.epoch);
-        this.#startPerformance();
+        this.#startPerformance(request.epoch);
         reply({ kind: 'done' });
         return;
       }
@@ -249,8 +248,7 @@ export class PlayHost {
       soundBackend: this.#relaySound,
     });
     if (request.performanceEpoch !== undefined) {
-      this.#session.performance.start(request.performanceEpoch);
-      this.#startPerformance();
+      this.#startPerformance(request.performanceEpoch);
     }
     this.#publish();
     this.#schedule();
@@ -289,7 +287,8 @@ export class PlayHost {
     });
   }
 
-  #startPerformance(): void {
+  #startPerformance(epoch: number): void {
+    this.#session!.performance.start(epoch);
     clearInterval(this.#performanceTimer);
     this.#publishPerformance();
     this.#performanceTimer = setInterval(() => this.#publishPerformance(), 250);

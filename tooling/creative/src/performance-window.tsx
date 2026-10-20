@@ -3,12 +3,34 @@ import { render } from 'preact';
 import { byId } from './dom';
 import { type PerformanceRow, type PerformanceSnapshot } from './performance';
 import { PerformanceResults } from './performance-results';
-import { bringWindowForward, setWindowOpener } from './windows';
+import {
+  bringWindowForward,
+  hideWindow,
+  setWindowOpener,
+  showWindow,
+} from './windows';
 
+const format = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const number = (value: number | undefined) =>
-  value === undefined
-    ? '—'
-    : value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  value === undefined ? '—' : format.format(value);
+const HEADINGS = [
+  'Run origin',
+  'Fuel',
+  'Fuel/s',
+  'Started',
+  'Completed',
+  'Failed',
+  'Discarded',
+  'Active',
+  'Last',
+  'Mean',
+  'Peak',
+];
+const STATUS = {
+  capturing: 'Capturing',
+  stopped: 'Stopped',
+  incomplete: 'Incomplete — worker interrupted',
+};
 const Figures = ({ row }: { row: PerformanceRow }) => (
   <>
     <td>{number(row.fuel)}</td>
@@ -37,8 +59,9 @@ const Chart = ({
         Math.max(0.001, Math.min(1, snapshot.elapsed - bucket.second)),
   );
   const ceiling = Math.max(1, pump ? snapshot.pumpCap : 0, ...values);
+  const y = (v: number) => 60 - (55 * v) / ceiling;
   const points = values
-    .map((v, i) => `${(60 - values.length + i) * 5},${60 - (55 * v) / ceiling}`)
+    .map((v, i) => `${(60 - values.length + i) * 5},${y(v)}`)
     .join(' ');
   return (
     <figure>
@@ -58,8 +81,8 @@ const Chart = ({
             className="performance-cap"
             x1="0"
             x2="300"
-            y1={60 - (55 * snapshot.pumpCap) / ceiling}
-            y2={60 - (55 * snapshot.pumpCap) / ceiling}
+            y1={y(snapshot.pumpCap)}
+            y2={y(snapshot.pumpCap)}
           />
         )}
         <polyline
@@ -103,31 +126,32 @@ export class PerformanceWindow {
   }
   toggle(): void {
     if (this.visible) {
-      this.#window.hidden = true;
+      hideWindow('performance-window');
     } else {
-      this.open();
+      showWindow('performance-window');
     }
   }
   reset(session: number): void {
     this.results.reset(session);
-    this.#snapshot.value = undefined;
-    this.#incomplete.value = false;
+    this.#sync();
   }
   clear(): void {
     this.results.clear();
-    this.#snapshot.value = undefined;
-    this.#incomplete.value = false;
+    this.#sync();
     this.capture(this.results.epoch);
   }
   receive(session: number, snapshot: PerformanceSnapshot): void {
     if (this.results.receive(session, snapshot)) {
-      this.#snapshot.value = snapshot;
+      this.#sync();
     }
   }
   interrupted(): void {
     this.results.interrupted();
-    this.#incomplete.value = true;
+    this.#sync();
+  }
+  #sync(): void {
     this.#snapshot.value = this.results.snapshot;
+    this.#incomplete.value = this.results.incomplete;
   }
 }
 
@@ -147,7 +171,7 @@ const Panel = ({
     <>
       <p id="performance-status" role="status">
         {data
-          ? `${data.status === 'capturing' ? 'Capturing' : data.status === 'stopped' ? 'Stopped' : 'Incomplete — worker interrupted'} · ${number(data.elapsed)} seconds · ${number(data.fuel)} Fuel · peak Pump ${number(data.pumpPeak)}`
+          ? `${STATUS[data.status]} · ${number(data.elapsed)} seconds · ${number(data.fuel)} Fuel · peak Pump ${number(data.pumpPeak)}`
           : incomplete.value
             ? 'Incomplete — worker interrupted before a snapshot arrived.'
             : 'No capture. Open during Browse or Present to begin.'}
@@ -191,19 +215,7 @@ const Panel = ({
                 <table>
                   <thead>
                     <tr>
-                      {[
-                        'Run origin',
-                        'Fuel',
-                        'Fuel/s',
-                        'Started',
-                        'Completed',
-                        'Failed',
-                        'Discarded',
-                        'Active',
-                        'Last',
-                        'Mean',
-                        'Peak',
-                      ].map(label => (
+                      {HEADINGS.map(label => (
                         <th key={label} scope="col">
                           {label}
                         </th>

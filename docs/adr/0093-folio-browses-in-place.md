@@ -17,7 +17,3 @@ Narrowed by [ADR 0101](0101-folio-editor-state-is-an-immutable-value-observed-th
 Narrowed by [ADR 0104](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md): Play runs on the page thread, with no worker to terminate. Leaving does not wait for a Script to cooperate, but it does rely on Pump slices and Fuel-metered Host Crossings to yield the page thread.
 
 Amended by [ADR 0108](0108-folio-message-box-commands-can-extend-a-chosen-script.md): while browsing, the Message Box can target a loaded Script by extending it with a command Handler. The ownerless context remains the default.
-
-Diagnostic exception ([#1135](https://github.com/odogono/odgn-talk/issues/1135)):
-an explicitly opened Performance window remains available in Present. It
-inspects Play without exposing authored edits; see the [Folio guide](../../tooling/creative/README.md#performance-window).
