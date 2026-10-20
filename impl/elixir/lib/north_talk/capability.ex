@@ -76,16 +76,24 @@ defmodule NorthTalk.Capability do
 
   ## Where callbacks run
 
-  Every callback runs in its own monitored Task, never in the Instance Owner.
-  The owner waits for an immediate or fire-and-forget callback, up to the
-  Capability's `:timeout`, 5 s by default, before the Run carries on, so
-  these must not call their own owner. A suspending callback runs while the
-  owner carries on, with no timeout of its own: the call waits until it is
-  settled, or until the Core abandons it, at its `max_pending`, the Script's
-  wait limit or when its Run ends. Abandoning a call kills its Task or
-  forgets its deferred ref, and so does the owner's shutdown. A suspending
-  callback may call its owner, but must not wait for a Run that needs this
-  call settled to progress.
+  Every callback runs in its own monitored Task, never in the Instance
+  Owner. The owner waits for an immediate or fire-and-forget callback, or a
+  lifecycle hook, up to the Capability's `:timeout`, 5 s by default, before
+  the Run carries on. Meanwhile, when the reactor offers `paused-inputs-v1`,
+  the owner admits inputs for the callback's Group, from the callback or any
+  other process, in the order they arrive: `deliver/4`, `request/5`,
+  `call/4`, `stop/3`, `answer/3`, `fail/3` and `settle/3`. Each is admitted
+  at once, and a Stop lands before the callback's result is used; the rest
+  wait for the next Pump. So a callback must not wait for a Run that needs
+  its own Group, as `request/5` does. Any other call the callback makes to
+  its owner, or without the feature any call but `versions/1`, `memory/1`
+  and `release/1`, is refused with `reentrant call`; other processes' calls
+  wait. A suspending callback runs while the owner carries on, with no
+  timeout of its own: the call waits until it is settled, or until the Core
+  abandons it, at its `max_pending`, the Script's wait limit or when its Run
+  ends. Abandoning a call kills its Task or forgets its deferred ref, and so
+  does the owner's shutdown. A suspending callback may call its owner, but
+  must not wait for a Run that needs this call settled to progress.
   """
 
   @enforce_keys [:name]
