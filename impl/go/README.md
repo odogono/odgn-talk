@@ -11,9 +11,9 @@ Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and C
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
-Native Go remains the default and supported embedding package. An opt-in
-[experimental Zig backend](#experimental-zig-backend) exercises public data/Request and Capability
-embedding slices through wazero. The separate
+The package runs the [embedded Zig Core](#zig-backend) through wazero by default;
+the native Go Core remains behind `-tags talk_native_go` until it is removed
+([#1055](https://github.com/odogono/odgn-talk/issues/1055)). The separate
 [comparison probe](../../spikes/go-zig-binding/README.md) retains its native-Go
 baseline and broader callback experiments; the
 [binding investigation](../../docs/research/go-zig-binding.md) records the gates
@@ -51,12 +51,11 @@ Container mutations. `set` does not modify chunks inside a property's value.
 Direct known-owner read-only properties are checked at load; `it` and Target
 properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
 
-## Experimental Zig backend
+## Zig backend
 
-With Go 1.27, `-tags talk_zig_experimental` selects Zig behind the existing root
-package API. `CoreVersions` then reports Zig's Core/save versions. Ordinary builds
-retain native Go. The tag is a development slice, with no full API compatibility
-or Go Core retirement claim.
+With Go 1.27, the root package API runs the embedded Zig Core by default, and
+`CoreVersions` reports Zig's Core/save versions ([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md), [#1055](https://github.com/odogono/odgn-talk/issues/1055)).
+`-tags talk_native_go` selects the retiring native Go Core until it is removed.
 
 Supported: immutable data Values and Value Encoding; Group/Script names and
 lookup; Load and positioned diagnostics; direct Script Deliver/Request; Pump
@@ -293,16 +292,15 @@ nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
-With `talk_zig_experimental`, the Go Session Host and REPL use the embedded
+The Go Session Host and REPL use the embedded
 Core's negotiated `analysis-v1` exchanges for Entry classification and
 continuation, positioned syntax diagnostics, implicit Script Variables,
 declaration descriptions and documentation, Fix/Continue, Built-in and Standard
 Library catalogues, the inspection reader and computed message names. A single
 serialized analysis guest shares the adapter's compiled engine and works before
 a Group starts; analysis exchanges load nothing and produce no Trace. Value
-formatting and pinned Unicode name matching stay with the Host. The untagged
-build retains Go analysis behind `!talk_zig_experimental` until the Go Core's
-retirement gate. `session`, `driver` and `cmd/northtalk` import no Go parser,
+formatting and pinned Unicode name matching stay with the Host. The
+`talk_native_go` build retains Go analysis until the Go Core is removed. `session`, `driver` and `cmd/northtalk` import no Go parser,
 checker, compiler or generated catalogue packages. Cancelling an unfinished
 inspection expression prevents its property reader from starting.
 
@@ -327,7 +325,7 @@ per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and
 held Group retains about 88 KB of heap, against 2.4 MB and native Go's 63 KB
 ([#1103](https://github.com/odogono/odgn-talk/issues/1103)). The performance
 limits are tracked in #1103. To repeat the committed
-benchmark, run with and without `-tags talk_zig_experimental`:
+benchmark, run with and without `-tags talk_native_go`:
 
 ```sh
 CGO_ENABLED=0 go -C impl/go test -run '^$' -bench GroupInstantiation -benchtime 200x -count 3 .
@@ -338,17 +336,17 @@ Run the focused public slices from the repository root:
 ```sh
 CGO_ENABLED=0 impl/go/zig-experimental-check.sh
 impl/go/zig-experimental-check.sh -race
-go -C impl/go vet -tags talk_zig_experimental . ./internal/zigwasm
+go -C impl/go vet . ./internal/zigwasm
 ```
 
-`TestZigBackendCapabilityParity` builds an untagged test binary, runs its
+`TestZigBackendCapabilityParity` builds a `talk_native_go` test binary, runs its
 `TestCapabilityBridge` with `TALK_BRIDGE_OBSERVATIONS` set, and diffs that
 native JSON against the Zig adapter's observations. To inspect the native side
 alone:
 
 ```sh
-TALK_BRIDGE_OBSERVATIONS=/tmp/native.json go -C impl/go test -run '^TestCapabilityBridge$' .
-go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .
+TALK_BRIDGE_OBSERVATIONS=/tmp/native.json go -C impl/go test -tags talk_native_go -run '^TestCapabilityBridge$' .
+go -C impl/go test -run '^TestZigBackendCapabilityParity$' .
 ```
 
 The shared Hosts include scoped completion/error/Stop/cancellation/Reload,
@@ -374,7 +372,7 @@ Never commit these hand-built files. Restore them with
 `git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
 committed, run `python3 spikes/go-zig-binding/build-artifact.py` and commit its output. If a test panics
 mid-suite, compile once and run tests singly:
-`go -C impl/go test -c -tags talk_zig_experimental -o /tmp/adapter.test .`, then
+`go -C impl/go test -c -o /tmp/adapter.test .`, then
 `(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
 
 The shared public Hosts include callback-generated Broadcasts, cancellation

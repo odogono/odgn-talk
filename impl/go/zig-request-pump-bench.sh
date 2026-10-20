@@ -29,7 +29,7 @@ trap 'git -C "$root" worktree remove --force "$bin/base" 2>/dev/null || true; rm
 git -C "$root" worktree add --detach "$bin/base" "$base" > /dev/null
 go -C "$bin/base/impl/go" test -c -o "$bin/base.test" .
 go -C "$here" test -c -o "$bin/native.test" .
-go -C "$here" test -c -tags talk_zig_experimental -o "$bin/zig.test" .
+go -C "$here" test -c -o "$bin/zig.test" .
 
 {
 	echo "commit $(git -C "$root" rev-parse HEAD)"

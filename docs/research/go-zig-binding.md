@@ -880,7 +880,7 @@ Session language analysis must eventually move to Zig, preserving diagnostics,
 inspection, descriptions and Fix/Continue.
 
 The experimental binding now uses Zig analysis for the Go Session Host and REPL.
-The [Go guide](../../impl/go/README.md#experimental-zig-backend) describes current
+The [Go guide](../../impl/go/README.md#zig-backend) describes current
 support, the native build choice and the remaining Session runtime gaps.
 
 Linux and macOS, each on amd64 and arm64, require execution verification as well
@@ -996,7 +996,7 @@ tail latency and retained memory on matched builds before setting retirement
 limits. Cross-compilation alone must never mark execution coverage complete.
 
 The first experimental public-interface slice now lives behind
-`talk_zig_experimental`; see the [Go guide](../../impl/go/README.md#experimental-zig-backend)
+`talk_zig_experimental`; see the [Go guide](../../impl/go/README.md#zig-backend)
 for its supported operations and limitations. It uses Go-owned data Values and
 one guest per Group with GC cleanup, while the separate probe continues to
 compare native Go against the Message Layer. The public adapter uncovered the

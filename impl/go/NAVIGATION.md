@@ -99,11 +99,11 @@ Files, grammar, or lowering.
 ## Experimental Zig backend
 
 - Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [inline inputs](zig_inline.go), [reply decoding](zig_reply.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](zig-experimental-check.sh)
-- Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#experimental-zig-backend)
+- Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#zig-backend)
 - Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared native/Zig Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against native `TestCapabilityBridge` observations. To add a parity scenario, write a `run<Area>BridgeCases(t) []bridgeObservation` in a `zig_<area>_public_test.go` and append it in `runBridgeCases` ([`zig_capability_public_test.go`](zig_capability_public_test.go))
 - Measurements against native Go: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite, run on both by [zig-adapter-bench.sh](zig-adapter-bench.sh); results in [the binding research](../../docs/research/go-zig-binding.md)
-- First check: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`, the gate CI runs; an unfiltered `go test -tags talk_zig_experimental .` also runs tests outside its selection that the adapter doesn't pass yet, so failures there are expected. One test: `go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
-- After changing the Zig Core: try it with the [hand swap](README.md#experimental-zig-backend), then commit and refresh the embedded copy with `python3 spikes/go-zig-binding/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
+- First check: `CGO_ENABLED=0 go -C impl/go test .`, which runs the Zig backend by default; `-tags talk_native_go` runs the retiring native Core. The focused gate CI also runs: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`. One test: `go -C impl/go test -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
+- After changing the Zig Core: try it with the [hand swap](README.md#zig-backend), then commit and refresh the embedded copy with `python3 spikes/go-zig-binding/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
 
 ## Binary Request/Pump and combined calls
 

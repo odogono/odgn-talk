@@ -8,7 +8,7 @@ import (
 
 // BenchmarkGroupInstantiation measures one Group with one loaded Script, the
 // unit the tenants example creates per tenant. Run it with and without
-// -tags talk_zig_experimental to compare the Zig guest's cost (#1052).
+// -tags talk_native_go to compare it with the retiring native Core (#1052).
 func BenchmarkGroupInstantiation(b *testing.B) {
 	core := talk.New()
 	b.ReportAllocs()

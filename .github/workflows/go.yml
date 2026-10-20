@@ -46,6 +46,9 @@ jobs:
       # Verbose output reports API names not implemented yet, as #132 requires.
       - run: go test -v ./...
         working-directory: impl/go
+      # The retiring native Core, until it is removed (#1055).
+      - run: go test -tags talk_native_go ./...
+        working-directory: impl/go
       # Skips the exhaustive single-goroutine replays, which the run above covers.
       - run: go test -race ./...
         working-directory: impl/go

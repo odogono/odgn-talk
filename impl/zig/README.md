@@ -313,7 +313,7 @@ still use. Check names against the installed source, under `lib_dir` from
 - `std.testing.refAllDeclsRecursive` is gone; use `refAllDecls` per container.
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
-The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
+The [Go adapter](../go/README.md#zig-backend), now the Go default, also
 uses Zig's opaque `zig/17` saves. Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
@@ -431,7 +431,7 @@ complete record is observed synchronously, and input admission checkpoints keep
 the active guest stack without export reentry. It also invokes release hooks
 before their following records, with pending Calls already cancelled. See the
 [inline contract](../../spec/embedding/inline-inputs.md) and the
-[Go adapter guide](../go/README.md#experimental-zig-backend) for acceptance and
+[Go adapter guide](../go/README.md#zig-backend) for acceptance and
 limitations. The ordinary sidecar retains its existing framing and timing.
 Hosts may opt in to `group-exchanges-v1` to host many Groups in one Session:
 the `Exchange` a Pump, Reload or library replacement pauses in is parked on its

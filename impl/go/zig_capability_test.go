@@ -1,4 +1,4 @@
-//go:build talk_zig_experimental
+//go:build !talk_native_go
 
 package northtalk_test
 
@@ -23,7 +23,7 @@ import (
 func TestZigBackendCapabilityParity(t *testing.T) {
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "native.test")
-	build := exec.Command("go", "test", "-c", "-o", binary, ".")
+	build := exec.Command("go", "test", "-c", "-tags", "talk_native_go", "-o", binary, ".")
 	build.Env = append(os.Environ(), "GOFLAGS=", "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("native reference build: %v\n%s", err, out)
