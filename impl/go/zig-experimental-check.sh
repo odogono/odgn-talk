@@ -15,6 +15,8 @@ go test -tags talk_zig_experimental -run '^TestReissueFuelFaultSkipsSiblingHostC
 go test -tags talk_zig_experimental -run '^TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent$' -count=1 "$@" .
 # A diamond checks each original Library site once per use (#1394).
 go test -tags talk_zig_experimental -run '^TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse$' -count=1 "$@" .
+# A Limit Fault names the function it happens in (#1400).
+go test -tags talk_zig_experimental -run '^TestCancellationCleanupAndNestedFaultLocation$' -count=1 "$@" .
 # Replay must offer current Library identities to Restore after replacement.
 go test -tags talk_zig_experimental -run '^TestLibraryReplayAfterReplacement$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
