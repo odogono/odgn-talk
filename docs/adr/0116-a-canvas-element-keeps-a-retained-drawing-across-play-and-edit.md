@@ -6,6 +6,8 @@ Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-c
 
 `clear` and `background` reset the list instead of appending to it. `clear` replaces the Drawing with the commands that set the current style (`fill` or `noFill`, `stroke` or `noStroke`, `strokeWidth` and `textSize`). `background` does the same and then adds itself. Style therefore survives a clear, as it does on a live canvas, and a Script that starts every `frame` with `background`, as p5.js sketches do, keeps a Drawing the size of one frame instead of growing towards the cap.
 
+The transform Operations `push`, `pop`, `translate`, `rotate` and `scale` are ordinary commands in the Drawing ([#1383](https://github.com/odogono/odgn-talk/issues/1383)). `push` saves the current style and transform and `pop` restores them; a `pop` without a matching `push`, or a `push` nested more than 64 deep, is a catchable `invalid canvas argument`. `clear` and `background` also reset the transform and empty the `push` stack, so the reset Drawing is only style commands and replays to the same state. This matches p5.js, which resets the transform at the start of each `draw`, so a Script that starts every `frame` with `background` and then translates still keeps one frame's Drawing. `background` itself fills the whole Canvas, whatever the transform. `rotate` takes radians, clockwise on the Page because the y axis points down, as `arc` angles, p5.js and Canvas 2D do.
+
 ## Considered Options
 
 - **A lifetime count reset by `clear`, with no list**, as in the Playground. A game could redraw forever, but nothing could rebuild the picture for the page, for Edit or for the Project file.
@@ -14,6 +16,8 @@ Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-c
 - **Saving only what was drawn in Edit.** A reload would show Edit lines without the Play frame they were drawn over.
 - **An authored logical resolution scaled to the frame**, as the Playground's `size`. The Canvas's own width and height are its coordinates instead, one unit to one Page pixel, so there is no `size` Operation and resizing clips or reveals rather than scales.
 - **`clear` empties the list and `background` appends to it**, the plain reading of the Playground's Operations. A Script that sets its style once would lose it at the first `clear`, and one that paints `background` every `frame` without `clear` would reach the cap within minutes.
+- **`clear` and `background` keep the transform and `push` stack**, as they keep the style. The reset Drawing would have to carry every `push` and transform still in effect, so a Script that translates each `frame` without `push` would grow towards the cap.
+- **`rotate` in degrees.** `rotate 90` would be an exact Decimal, but `arc` already takes radians, and one Grant should not mix units.
 - **A Grant bound to the Canvas's Owning Script, or a "current canvas" selector.** Each Operation takes the target Canvas Element as its first argument instead, as `elements` takes Elements, so a Page Script can draw into any Canvas it can name without a message each frame or hidden state.
 
 ## Consequences

@@ -194,3 +194,31 @@ test('shapes and stroke styles validate their arguments', () => {
   expect(ok('strokeJoin', '"sharp"')).toContain('joins');
   expect(ok('triangle', '0', '0', '1', '0', '0')).toBeDefined();
 });
+
+test('pop needs a matching push, and clear empties the push stack', () => {
+  const host = new SessionHost({
+    now: () => 0n,
+    capabilities: canvasCapabilities,
+  });
+  host.input(':grant canvas canvas');
+  expect(host.input('ask canvas to pop').join(' ')).toContain(
+    'invalid canvas argument',
+  );
+  expect(
+    host.input(
+      'tell canvas\n  push\n  translate 4, 5\n  rotate 30\n  scale 2, 2\n  pop\nend tell',
+    ),
+  ).toEqual([]);
+  host.input('ask canvas to push');
+  host.input('ask canvas to clear');
+  expect(host.input('ask canvas to pop').join(' ')).toContain(
+    'invalid canvas argument',
+  );
+  for (let i = 0; i < 64; i++) {
+    host.input('ask canvas to push');
+  }
+  expect(host.input('ask canvas to push').join(' ')).toContain(
+    'invalid canvas argument',
+  );
+  expect(host.input('ask canvas to pop')).toEqual([]);
+});

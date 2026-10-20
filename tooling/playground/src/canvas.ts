@@ -18,7 +18,27 @@ export const createCanvasView = (
   let fill = true;
   let stroke = true;
   let strokeWidth = 1;
+  // Flags saved by each open `push`; the context saves the rest.
+  let saved: { fill: boolean; stroke: boolean; strokeWidth: number }[] = [];
+  // `clear` and `background` keep the style but reset the transform and
+  // empty the `push` stack, as in Folio (ADR 0116).
+  const resetTransform = () => {
+    const { fillStyle, strokeStyle, lineWidth, lineCap, lineJoin, font } =
+      context;
+    saved.forEach(() => context.restore());
+    saved = [];
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    Object.assign(context, {
+      fillStyle,
+      strokeStyle,
+      lineWidth,
+      lineCap,
+      lineJoin,
+      font,
+    });
+  };
   const defaults = () => {
+    saved = [];
     fill = stroke = true;
     strokeWidth = 1;
     context.fillStyle = context.strokeStyle = '#000000';
@@ -56,9 +76,11 @@ export const createCanvasView = (
           size(numberAt(args, 0), numberAt(args, 1));
           break;
         case 'clear':
+          resetTransform();
           context.clearRect(0, 0, canvas.width, canvas.height);
           break;
         case 'background':
+          resetTransform();
           context.save();
           context.fillStyle = textAt(args, 0);
           context.clearRect(0, 0, canvas.width, canvas.height);
@@ -90,6 +112,27 @@ export const createCanvasView = (
           break;
         case 'strokeJoin':
           context.lineJoin = textAt(args, 0) as CanvasLineJoin;
+          break;
+        case 'push':
+          saved.push({ fill, stroke, strokeWidth });
+          context.save();
+          break;
+        case 'pop':
+          ({ fill, stroke, strokeWidth } = saved.pop() ?? {
+            fill,
+            stroke,
+            strokeWidth,
+          });
+          context.restore();
+          break;
+        case 'translate':
+          context.translate(numberAt(args, 0), numberAt(args, 1));
+          break;
+        case 'rotate':
+          context.rotate(numberAt(args, 0));
+          break;
+        case 'scale':
+          context.scale(numberAt(args, 0), numberAt(args, 1));
           break;
         case 'textSize':
           context.font = `${numberAt(args, 0)}px sans-serif`;

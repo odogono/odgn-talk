@@ -547,15 +547,19 @@ end frame
 
 `clear`, `background`, `fill`, `noFill`, `stroke`, `noStroke`, `strokeWidth`,
 `strokeCap`, `strokeJoin`, `point`, `line`, `triangle`, `rectangle`,
-`roundedRectangle`, `ellipse`, `circle`, `arc`, `text` and `textSize` each
-cost 1 Fuel; their arguments are those in the
+`roundedRectangle`, `ellipse`, `circle`, `arc`, `text`, `textSize`, `push`,
+`pop`, `translate`, `rotate` and `scale` each cost 1 Fuel; their arguments are those in the
 [Playground's table](../playground/README.md#static-canvas), after the Canvas.
 Coordinates are the Element's own, one unit to one Page pixel, and drawing is
 clipped to its frame; `ellipse`, `circle` and `arc` take their centre, and
 `arc` angles are radians. Colours are `#RRGGBB` or `#RRGGBBAA`. `clear` and
 `background` reset the Drawing to the commands that set the current style
 (fill, stroke, stroke width, cap and join, and text size), so style survives a clear and a `background` every
-`frame` keeps the Drawing one frame long. A Drawing holds at most 10,000
+`frame` keeps the Drawing one frame long. `push` saves the style and
+transform and `pop` restores them; `rotate` takes radians, clockwise.
+`clear` and `background` reset the transform and empty the `push` stack, and
+`background` fills the whole Canvas. A `pop` without a `push`, or a `push`
+nested more than 64 deep, is a catchable `invalid canvas argument`. A Drawing holds at most 10,000
 commands; one more raises a catchable `canvas limit`, and a bad argument a
 catchable `invalid canvas argument`. Scripts cannot read a Drawing back.
 

@@ -17,6 +17,7 @@ export const CANVAS_LIMITS = {
   commands: 10_000,
   text: 4096,
   coordinate: 1_000_000,
+  stack: 64,
 } as const;
 /** Each Operation's arguments, shared by the Playground and Folio. */
 export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
@@ -40,6 +41,11 @@ export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   arc: Array<Shape>(6).fill(shape.number),
   text: [shape.text, shape.number, shape.number],
   textSize: [shape.number],
+  push: [],
+  pop: [],
+  translate: [shape.number, shape.number],
+  rotate: [shape.number],
+  scale: [shape.number, shape.number],
 };
 const signatures = CANVAS_SIGNATURES;
 /** Accepted `strokeCap` and `strokeJoin` values, as Canvas 2D names them. */
@@ -130,9 +136,30 @@ export const validateCanvasArguments = (op: string, values: Value[]): void => {
   }
 };
 
+/**
+ * The `push` depth after `op`, or a catchable `invalid canvas argument` for
+ * an unmatched `pop` or a `push` past the limit. `size`, `clear` and
+ * `background` reset the transform and empty the stack (ADR 0116).
+ */
+export const canvasStackDepth = (op: string, depth: number): number => {
+  if (op === 'size' || op === 'clear' || op === 'background') {
+    return 0;
+  }
+  if (op === 'pop') {
+    return depth > 0 ? depth - 1 : invalid('pop needs a matching push');
+  }
+  if (op === 'push') {
+    return depth < CANVAS_LIMITS.stack
+      ? depth + 1
+      : invalid(`push nests at most ${CANVAS_LIMITS.stack} deep`);
+  }
+  return depth;
+};
+
 /** Each Host receives independent counters. No browser APIs or external effects. */
 export const canvasCapabilities = () => {
   let count = 0;
+  let depth = 0;
   const operations: Record<string, Operation<unknown>> = {};
   for (const [op, args] of Object.entries(signatures)) {
     operations[op] = {
@@ -143,6 +170,7 @@ export const canvasCapabilities = () => {
       errors: [{ code: 'invalid canvas argument' }, { code: 'canvas limit' }],
       do: (_call, ...values) => {
         validateCanvasArguments(op, canvasArgumentValues(values));
+        const next = canvasStackDepth(op, depth);
         if (count >= CANVAS_LIMITS.commands) {
           throw new ScriptError(
             'canvas limit',
@@ -150,6 +178,7 @@ export const canvasCapabilities = () => {
           );
         }
         count++;
+        depth = next;
         return nothing;
       },
     };

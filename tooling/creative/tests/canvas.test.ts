@@ -146,6 +146,76 @@ test('bad shape and stroke style arguments are catchable', async () => {
   expect(drawn(play)).toEqual([]);
 });
 
+test('transforms are retained, and push and pop save the style', async () => {
+  const play = new PlaySession(fixture());
+  await run(
+    play,
+    `tell canvas
+  fill board, "#ff0000"
+  push board
+  translate board, 10, 20.5
+  rotate board, 0.5
+  scale board, 2, -1
+  fill board, "#00ff00"
+  rectangle board, 0, 0, 5, 5
+  pop board
+end tell`,
+  );
+  expect(drawn(play)).toEqual([
+    ['fill', '"#ff0000"'],
+    ['push'],
+    ['translate', '10', '20.5'],
+    ['rotate', '0.5'],
+    ['scale', '2', '-1'],
+    ['fill', '"#00ff00"'],
+    ['rectangle', '0', '0', '5', '5'],
+    ['pop'],
+  ]);
+  // The style pop restored survives a clear.
+  await run(play, 'ask canvas to clear board');
+  expect(drawn(play)).toEqual([['fill', '"#ff0000"']]);
+});
+
+test('clear resets the transform and empties the push stack', async () => {
+  const play = new PlaySession(fixture());
+  await run(
+    play,
+    `tell canvas
+  push board
+  translate board, 5, 5
+  fill board, "#00ff00"
+  background board, "#000000"
+end tell`,
+  );
+  expect(drawn(play)).toEqual([
+    ['fill', '"#00ff00"'],
+    ['background', '"#000000"'],
+  ]);
+  expect((await run(play, 'ask canvas to pop board')).error).toContain(
+    'pop needs a matching push',
+  );
+});
+
+test('an unmatched pop and deep push nesting are catchable', async () => {
+  const play = new PlaySession(fixture());
+  expect(
+    await run(
+      play,
+      `try
+  ask canvas to pop board
+catch {code: "invalid canvas argument"}
+  return "caught"
+end try`,
+    ),
+  ).toEqual({ text: 'caught' });
+  await run(play, 'ask canvas to push board\n'.repeat(64));
+  expect(drawn(play)).toHaveLength(64);
+  expect((await run(play, 'ask canvas to push board')).error).toContain(
+    'push nests at most 64 deep',
+  );
+  expect(drawn(play)).toHaveLength(64);
+});
+
 test('a frame Script painting background keeps one frame of commands', async () => {
   const project = fixture();
   canvasOf(project).script = `on frame elapsed
@@ -353,6 +423,8 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
   canvasOf(project).drawing = [
     { op: 'fill', args: ['"#ff0000"'] },
     { op: 'text', args: ['"Score: 10"', '4', '12.5'] },
+    { op: 'push', args: [] },
+    { op: 'rotate', args: ['-0.5'] },
   ];
   const loaded = await readProjectFile(
     await writeProjectFile(project, new Map()),
@@ -363,6 +435,8 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
     [{ op: 'size', args: ['10', '10'] }],
     [{ op: 'clear', args: [] }],
     [{ op: 'line', args: ['0', '0'] }],
+    [{ op: 'pop', args: [] }],
+    Array.from({ length: 65 }, () => ({ op: 'push', args: [] })),
     Array.from({ length: 10_001 }, () => ({ op: 'noFill', args: [] })),
   ]) {
     canvasOf(project).drawing = drawing;
