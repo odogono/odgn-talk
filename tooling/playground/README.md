@@ -138,9 +138,16 @@ Set Launch to `draw`. Operations are immediate and return Nothing. A `tell canva
 | `fill`, `stroke` | Color; enables and sets that style |
 | `noFill`, `noStroke` | No arguments; disables that style |
 | `strokeWidth` | Nonnegative number; zero suppresses strokes |
+| `strokeCap` | `"butt"` (default), `"round"` or `"square"`; line ends |
+| `strokeJoin` | `"miter"` (default), `"round"` or `"bevel"`; corners |
+| `point` | x, y; a dot in the stroke color, as wide as the stroke |
 | `line` | x1, y1, x2, y2; uses stroke |
+| `triangle` | x1, y1, x2, y2, x3, y3 |
 | `rectangle` | x, y, positive width, positive height; top-left origin |
+| `roundedRectangle` | As `rectangle`, then a nonnegative corner radius |
 | `ellipse` | x, y, positive width, positive height; center origin |
+| `circle` | x, y, positive diameter; center origin |
+| `arc` | x, y, positive width, positive height, start, stop; center origin, angles in radians clockwise from the positive x-axis; fills a pie slice and strokes only the curve |
 | `text` | Text, x, y; left-aligned alphabetic baseline; uses fill/stroke |
 | `textSize` | Positive size in logical pixels; sans-serif |
 

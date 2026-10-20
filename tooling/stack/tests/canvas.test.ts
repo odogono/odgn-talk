@@ -173,3 +173,24 @@ test('stored commands are checked with the same validation as calls', () => {
     );
   }
 });
+
+const ok = (op: string, ...args: string[]) =>
+  canvasCommandProblem({ op, args });
+
+test('shapes and stroke styles validate their arguments', () => {
+  expect(ok('point', '1', '2')).toBeUndefined();
+  expect(ok('circle', '1', '2', '3')).toBeUndefined();
+  expect(ok('triangle', '0', '0', '1', '0', '0', '1')).toBeUndefined();
+  expect(ok('arc', '0', '0', '10', '10', '0', '3.14')).toBeUndefined();
+  expect(ok('roundedRectangle', '0', '0', '10', '10', '0')).toBeUndefined();
+  expect(ok('strokeCap', '"round"')).toBeUndefined();
+  expect(ok('strokeJoin', '"miter"')).toBeUndefined();
+  expect(ok('circle', '1', '2', '0')).toContain('positive');
+  expect(ok('arc', '0', '0', '0', '10', '0', '1')).toContain('positive');
+  expect(ok('roundedRectangle', '0', '0', '10', '10', '-1')).toContain(
+    'radius',
+  );
+  expect(ok('strokeCap', '"project"')).toContain('caps');
+  expect(ok('strokeJoin', '"sharp"')).toContain('joins');
+  expect(ok('triangle', '0', '0', '1', '0', '0')).toBeDefined();
+});

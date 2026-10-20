@@ -1,5 +1,8 @@
 import { readDisplay, type Value } from '@northtalk/ts';
-import type { CanvasCommand } from '@northtalk/tooling/canvas';
+import {
+  paintCanvasShape,
+  type CanvasCommand,
+} from '@northtalk/tooling/canvas';
 
 const numberAt = (args: Value[], i: number) => Number(args[i]!.toString());
 const textAt = (args: Value[], i: number) => args[i]!.asText()!;
@@ -20,6 +23,8 @@ export const createCanvasView = (
     strokeWidth = 1;
     context.fillStyle = context.strokeStyle = '#000000';
     context.lineWidth = 1;
+    context.lineCap = 'butt';
+    context.lineJoin = 'miter';
     context.font = '12px sans-serif';
     context.textAlign = 'left';
     context.textBaseline = 'alphabetic';
@@ -80,6 +85,12 @@ export const createCanvasView = (
             context.lineWidth = strokeWidth;
           }
           break;
+        case 'strokeCap':
+          context.lineCap = textAt(args, 0) as CanvasLineCap;
+          break;
+        case 'strokeJoin':
+          context.lineJoin = textAt(args, 0) as CanvasLineJoin;
+          break;
         case 'textSize':
           context.font = `${numberAt(args, 0)}px sans-serif`;
           break;
@@ -100,36 +111,13 @@ export const createCanvasView = (
           }
           break;
         default:
-          context.beginPath();
-          if (command.op === 'line') {
-            context.moveTo(numberAt(args, 0), numberAt(args, 1));
-            context.lineTo(numberAt(args, 2), numberAt(args, 3));
-          }
-          if (command.op === 'rectangle') {
-            context.rect(
-              numberAt(args, 0),
-              numberAt(args, 1),
-              numberAt(args, 2),
-              numberAt(args, 3),
-            );
-          }
-          if (command.op === 'ellipse') {
-            context.ellipse(
-              numberAt(args, 0),
-              numberAt(args, 1),
-              numberAt(args, 2) / 2,
-              numberAt(args, 3) / 2,
-              0,
-              0,
-              2 * Math.PI,
-            );
-          }
-          if (fill && command.op !== 'line') {
-            context.fill();
-          }
-          if (stroke && strokeWidth > 0) {
-            context.stroke();
-          }
+          paintCanvasShape(
+            context,
+            command.op,
+            i => numberAt(args, i),
+            fill,
+            stroke && strokeWidth > 0,
+          );
       }
     }
     previous = encoded;
