@@ -75,7 +75,7 @@ export const runBrowserTests = async () => {
     assert(
       buttons().every(
         b =>
-          !b.disabled && b.title === 'Open this Script' && b.type === 'button',
+          !b.disabled && b.title === 'Open this source' && b.type === 'button',
       ),
       'A reported problem starts disabled or untitled',
     );
@@ -106,7 +106,7 @@ export const runBrowserTests = async () => {
       `title is ${JSON.stringify(gone.title)}`,
     );
     assert(
-      buttons()[0]!.title === 'Open this Script' && !buttons()[0]!.disabled,
+      buttons()[0]!.title === 'Open this source' && !buttons()[0]!.disabled,
       'Another problem changed with the vanished one',
     );
   });
@@ -129,5 +129,43 @@ export const runBrowserTests = async () => {
     await until(() => !items().length, 'clear() left problems listed');
   });
 
+  await test('Library problems follow identity through rename and refuse a same-name replacement', async () => {
+    let id = 0;
+    shell.editor.edit(({ tree }) => {
+      id = tree.addLibrary(
+        'helpers',
+        'function failure\n return 1 div 0\nend failure',
+      ).id!;
+    });
+    const library = shell.editor.project.libraries[0]!;
+    errors.add([
+      {
+        owner: shell.editor.project,
+        line: 2,
+        message: 'Library problem',
+        target: { kind: 'library', library },
+      },
+    ]);
+    await until(() => buttons().length === 1, 'Library problem not listed');
+    shell.editor.edit(({ tree }) => tree.renameLibrary(id, 'renamedHelpers'));
+    shell.redraw();
+    buttons()[0]!.click();
+    assert(
+      document
+        .querySelector('.code-source-title')!
+        .textContent!.includes('renamedHelpers'),
+      'Library identity lost after rename',
+    );
+    shell.editor.edit(({ tree }) => {
+      tree.removeLibrary(id);
+      tree.addLibrary('helpers');
+    });
+    shell.redraw();
+    buttons()[0]!.click();
+    await until(
+      () => buttons()[0]!.disabled,
+      'Deleted Library opened its replacement',
+    );
+  });
   return results;
 };

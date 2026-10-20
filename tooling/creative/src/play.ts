@@ -4,6 +4,7 @@ import {
   type CanvasCommand,
 } from '@northtalk/tooling/canvas';
 import { Drawing, DRAWING_OPERATIONS } from './drawing';
+import { compileProjectLibraries } from './libraries';
 import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
@@ -42,11 +43,13 @@ import {
   type ElementKind,
   type Page,
   type Project,
+  type ProjectLibrary,
   type RichText,
   type TextElement,
 } from './model';
 import {
   FOLIO_COMMANDS,
+  ownerId,
   scriptManifest,
   scriptOwners,
   scriptPage,
@@ -63,10 +66,24 @@ import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
 type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
+// The Project Script's unit name; prefixed so it cannot collide with a
+// Library name.
+const PROJECT_UNIT = 'script:project';
+
+// The author-facing name for a Script unit.
+export const unitLabel = (name: string): string =>
+  name === PROJECT_UNIT ? 'project' : name;
+
+export type SourceTarget =
+  | { kind: 'script'; owner: AuthoredOwner }
+  | { kind: 'library'; library: DeepReadonly<ProjectLibrary> };
+
 export type PlayProblem = {
   line: number;
   message: string;
   owner: AuthoredOwner;
+  /** Absent for legacy Script-only callers. */
+  target?: SourceTarget;
 };
 export type PlayMessage =
   | 'startPlay'
@@ -753,6 +770,40 @@ export class PlaySession {
         );
       }
     }
+    const declarations = Object.fromEntries(
+      Object.entries(this.#grants()).map(([name, grant]) => [
+        name,
+        Object.fromEntries(
+          [...grant.ops].map(op => {
+            const declaration = grant.capability.operations.get(op)!;
+            return [
+              op,
+              {
+                mode: declaration.mode,
+                args: declaration.args ?? [],
+                ...(declaration.labels ? { labels: declaration.labels } : {}),
+                ...(declaration.command ? { command: true } : {}),
+              },
+            ];
+          }),
+        ),
+      ]),
+    );
+    const compiled = compileProjectLibraries(project.libraries, declarations);
+    for (const library of compiled.libraries) {
+      this.group.addLibrary(library);
+    }
+    for (const problem of compiled.problems) {
+      this.problems.push({
+        owner: project,
+        line: problem.line,
+        message: problem.message,
+        target: { kind: 'library', library: problem.library },
+      });
+    }
+    this.#librarySources = new Map(
+      project.libraries.map(library => [library.name, library]),
+    );
     this.#load([this.project, this.page, ...allElements(this.page.elements)]);
     // A session that only runs Message Box commands sends no events.
     if (options.events !== false) {
@@ -846,6 +897,17 @@ export class PlaySession {
         }));
   }
 
+  /** The loaded instance corresponding to one authored editor identity. */
+  messageTargetForOwner(id: number): number | undefined {
+    for (const [name, target] of this.#targets) {
+      const owner = this.#owners.get(name);
+      if (owner && ownerId(this.#authored.get(owner) ?? owner) === id) {
+        return target.id;
+      }
+    }
+    return undefined;
+  }
+
   #runTargetedMessage(command: string, id: number): MessageOutcome {
     const entry = [...this.#targets.entries()].find(
       ([, target]) => target.id === id,
@@ -932,6 +994,7 @@ export class PlaySession {
   }
 
   #messages = 0;
+  #librarySources = new Map<string, DeepReadonly<ProjectLibrary>>();
   #messageErrors = new Map<string, string>();
 
   #load(owners: ScriptOwner[]): void {
@@ -957,7 +1020,7 @@ export class PlaySession {
       const suffix = id.startsWith('dynamic:') ? `:${id}` : '';
       const name =
         owner === this.project
-          ? 'project'
+          ? PROJECT_UNIT
           : owner === this.page
             ? `page:${this.page.name}`
             : `element:${this.page.name}/${owner.name}${suffix}`;
@@ -988,7 +1051,7 @@ export class PlaySession {
         }
         this.#targets.set(name, {
           id: ++this.#nextTarget,
-          label: name,
+          label: unitLabel(name),
           source: owner.script,
           manifest: scriptManifest(this.project, owner),
           commands: new Map(),
@@ -1207,10 +1270,16 @@ export class PlaySession {
       if (!ownerless && !generated) {
         const owner = this.#owners.get(report.script);
         if (owner) {
+          const library = report.at
+            ? this.#librarySources.get(report.at.unit)
+            : undefined;
           this.problems.push({
             owner: this.#authored.get(owner) ?? owner,
             line,
             message: error,
+            ...(library
+              ? { target: { kind: 'library' as const, library } }
+              : {}),
           });
         }
       }

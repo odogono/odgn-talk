@@ -1,6 +1,6 @@
 // The creative tool's page (#154): the Stack editor shell (#749) on the
 // last Project used, autosaved in the browser with its Project list and
-// earlier versions (#752), and authored Script windows (#784).
+// earlier versions (#752), and the Code Browser.
 import { coreVersions } from '@northtalk/ts';
 import { browserChannel, browserLocks, EditLock } from './edit-lock';
 import {

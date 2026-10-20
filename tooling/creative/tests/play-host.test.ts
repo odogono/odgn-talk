@@ -491,3 +491,35 @@ test('clone telemetry keeps instance identity and links to the authored source',
     host.receive({ id: 2, request: { kind: 'stop', session: 1 } });
   }
 });
+
+test('Library diagnostics retain source targets through the worker protocol', async () => {
+  const project = createProject('Library problems');
+  project.libraries = [
+    { name: 'broken', source: 'function' },
+    {
+      name: 'helpers',
+      source: 'function failNow\n return 1 div 0\nend failNow',
+    },
+  ];
+  project.script =
+    'use failNow from helpers\non startPlay\n put failNow() into result\nend startPlay';
+  const { views, request } = hosted(project);
+  await until(() =>
+    views
+      .flatMap(view => view.problems)
+      .some(
+        problem =>
+          problem.target?.kind === 'library' && problem.target.index === 1,
+      ),
+  );
+  expect(views.flatMap(view => view.problems)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ target: { kind: 'library', index: 0 } }),
+      expect.objectContaining({
+        line: 2,
+        target: { kind: 'library', index: 1 },
+      }),
+    ]),
+  );
+  request({ kind: 'stop', session: 1 });
+});

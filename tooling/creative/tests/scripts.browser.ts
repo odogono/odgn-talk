@@ -76,14 +76,15 @@ export const runBrowserTests = async () => {
       '.message-path button',
     );
     assert(path.length === 3, 'Element → Page → Project');
-    path[1]!.click();
-    path[2]!.click();
-    assert(windows().length === 3, 'Page and Project Scripts open');
-    for (const [index, other] of windows().slice(1).entries()) {
-      viewOf(other).dispatch({
-        changes: { from: 0, insert: `-- Script ${index}` },
-      });
+    for (const [index, owner] of [
+      shell.editor.page,
+      shell.editor.project,
+    ].entries()) {
+      shell.openScript(owner);
+      assert(windows().length === 1, 'All sources share one Code Browser');
+      view.dispatch({ changes: { from: 0, insert: `-- Script ${index}` } });
     }
+    shell.openScript(shell.editor.element('button1')!);
     assert(
       shell.editor.project.script === '-- Script 1' &&
         shell.editor.project.pages[0]!.script === '-- Script 0',
@@ -136,7 +137,9 @@ export const runBrowserTests = async () => {
         .textContent!.includes('unknown name'),
     );
     assert(
-      win.getAttribute('aria-label')!.includes('newButton'),
+      win
+        .querySelector('.code-source-title')!
+        .textContent!.includes('newButton'),
       'Window follows rename',
     );
     shell.editor.undo();
@@ -146,7 +149,7 @@ export const runBrowserTests = async () => {
         win.querySelector('.script-problems')!.textContent === '✓ No problems',
     );
     assert(
-      win.getAttribute('aria-label')!.includes('button1'),
+      win.querySelector('.code-source-title')!.textContent!.includes('button1'),
       'Window follows undo',
     );
     const view = viewOf(win);
@@ -186,7 +189,8 @@ export const runBrowserTests = async () => {
     );
   });
   await test('custom Handler edits refresh diagnostics without hiding name errors', async () => {
-    const win = windows()[2]!;
+    shell.openScript(shell.editor.project);
+    const win = windows()[0]!;
     const view = viewOf(win);
     const original = view.state.doc.toString();
     const script =
@@ -276,11 +280,129 @@ export const runBrowserTests = async () => {
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
   });
+  await test('source selection preserves cursor and canvas selection', () => {
+    const canvasPage = shell.editor.pageIndex;
+    shell.openScript(shell.editor.project);
+    const view = viewOf(windows()[0]!);
+    view.dispatch({ selection: { anchor: 3 } });
+    shell.openScript(shell.editor.page);
+    shell.openScript(shell.editor.project);
+    assert(
+      view.state.selection.main.head === 3,
+      'Cursor survives source switching',
+    );
+    assert(
+      shell.editor.pageIndex === canvasPage,
+      'Code selection leaves the canvas unchanged',
+    );
+  });
+  await test('long source restores its scroll position when switching sources', async () => {
+    shell.openScript(shell.editor.project);
+    const view = viewOf(windows()[0]!);
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: Array(200).fill('-- A source line').join('\n'),
+      },
+    });
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    view.scrollDOM.scrollTop = 400;
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const before = view.scrollDOM.scrollTop;
+    shell.openScript(shell.editor.page);
+    shell.openScript(shell.editor.project);
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    assert(
+      Math.abs(view.scrollDOM.scrollTop - before) < 2,
+      'Source scroll position survives switching',
+    );
+  });
+  await test('Libraries create, edit, rename, diagnose imports and undo deletion', async () => {
+    const win = windows()[0]!;
+    [...win.querySelectorAll<HTMLButtonElement>('button')]
+      .find(b => b.textContent === 'New Library')!
+      .click();
+    const view = viewOf(win);
+    view.dispatch({
+      changes: { from: 0, insert: 'function answer\n return 42\nend answer' },
+    });
+    const id = shell.editor.project.libraries[0]!.id!;
+    const nameInput = win.querySelector<HTMLInputElement>(
+      '[aria-label="Library name"]',
+    )!;
+    nameInput.focus();
+    nameInput.value = 'answers';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(requestAnimationFrame);
+    nameInput.blur();
+    await until(() => shell.editor.project.libraries[0]!.name === 'answers');
+    await until(
+      () =>
+        win.querySelector('.script-problems')!.textContent === '✓ No problems',
+    );
+    shell.openScript(shell.editor.project);
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert:
+          'use answer from answers\non startPlay\n put answer() into n\nend startPlay',
+      },
+    });
+    await until(
+      () =>
+        win.querySelector('.script-problems')!.textContent === '✓ No problems',
+    );
+    shell.editor.edit(({ tree }) => tree.renameLibrary(id, 'renamedAnswers'));
+    shell.redraw();
+    await until(() =>
+      win
+        .querySelector('.script-problems')!
+        .textContent!.includes('unknown import'),
+    );
+    shell.editor.undo();
+    shell.redraw();
+    await until(
+      () =>
+        win.querySelector('.script-problems')!.textContent === '✓ No problems',
+    );
+    shell.openLibrary(id);
+    [...win.querySelectorAll<HTMLButtonElement>('button')]
+      .find(b => b.textContent === 'Delete Library')!
+      .click();
+    assert(shell.editor.project.libraries.length === 0, 'Library deleted');
+    shell.editor.undo();
+    shell.redraw();
+    assert(
+      shell.editor.project.libraries[0]!.id === id,
+      'Undo restores Library identity',
+    );
+    shell.openLibrary(id);
+    assert(
+      view.state.doc.toString().includes('return 42'),
+      'Undo restores Library source',
+    );
+    shell.setReadOnly(true);
+    assert(
+      [
+        ...win.querySelectorAll<HTMLButtonElement>('.library-actions button'),
+      ].every(b => b.disabled),
+      'Library management is read-only',
+    );
+    shell.setReadOnly(false);
+  });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);
-    assert(windows().length === 4, 'Shift-double-click opens text Script');
+    assert(windows().length === 1, 'Shift-double-click selects text Script');
     windows().at(-1)!.querySelector<HTMLButtonElement>('.close')!.click();
-    assert(windows().length === 3, 'Close destroys window');
+    assert(
+      windows().length === 1 && windows()[0]!.hidden,
+      'Close hides the browser',
+    );
     document.querySelector('#page [data-element="text1"]')!.dispatchEvent(
       new PointerEvent('pointerdown', {
         bubbles: true,
@@ -288,7 +410,10 @@ export const runBrowserTests = async () => {
         altKey: true,
       }),
     );
-    assert(windows().length === 4, 'Command-option-click opens text Script');
+    assert(
+      windows().length === 1 && !windows()[0]!.hidden,
+      'Command-option-click reopens the browser',
+    );
     shell.setReadOnly(true);
     assert(
       windows().every(win => viewOf(win).state.readOnly),

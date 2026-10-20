@@ -319,8 +319,12 @@ The browser application for authoring and playing Projects.
 _Avoid_: creative tool, Studio, editor (for the application)
 
 **Project**:
-An authored collection of Pages, assets and Scripts that forms one interactive creation.
+An authored collection of Pages, assets, Scripts and Libraries that forms one interactive creation.
 _Avoid_: Stack, Book, application, folio (for the authored creation or its file)
+
+**Code Browser**:
+Folio’s view for selecting and editing the Scripts and Libraries belonging to a Project.
+_Avoid_: Script windows, code workspace
 
 **Example Project**:
 A Project that ships with Folio and that an author can open and change as a copy, to learn how to build something.

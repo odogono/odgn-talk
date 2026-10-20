@@ -533,6 +533,74 @@ button:disabled {
   min-height: 0;
   overflow: hidden;
 }
+.code-browser {
+  width: min(54rem, 100vw);
+  height: 34rem;
+}
+.code-browser > .code-browser-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-shrink: 1;
+}
+.code-browser-outline {
+  width: 15rem;
+  flex-shrink: 0;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  padding: 0.5rem;
+}
+.code-browser-outline ul {
+  list-style: none;
+  padding-left: 0.6rem;
+}
+.code-browser-outline button[aria-current='true'] {
+  background: var(--line);
+  color: var(--panel);
+  font-weight: bold;
+}
+.code-browser-outline button {
+  max-width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.code-browser-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.code-source-title {
+  font-size: 0.9rem;
+  margin: 0.5rem;
+}
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.library-name input {
+  box-sizing: border-box;
+  width: 100%;
+}
+.library-name [role='status'] {
+  color: var(--error);
+}
+@media (max-width: 640px) {
+  .code-browser > .code-browser-content {
+    flex-direction: column;
+  }
+  .code-browser-outline {
+    box-sizing: border-box;
+    width: 100%;
+    max-height: 10rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .code-browser-body {
+    min-height: 10rem;
+  }
+}
 .code-editor .cm-editor {
   height: 100%;
   font-size: 13px;

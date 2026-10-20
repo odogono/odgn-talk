@@ -14,10 +14,11 @@ import {
   type GroupElement,
   type Page,
   type Project,
+  type ProjectLibrary,
   type RichText,
   type TextElement,
 } from '../model';
-import { reservedScriptNames } from '../script-names';
+import { libraryNameProblem, reservedScriptNames } from '../script-names';
 import {
   allElements,
   checkHierarchy,
@@ -184,6 +185,9 @@ export class ProjectTree {
     checkHierarchy(project.pages.flatMap(page => page.elements));
     this.#project = detached(project) as Project;
     this.#allocateId = allocateId;
+    for (const library of this.#project.libraries) {
+      library.id ??= this.#allocateId?.();
+    }
     for (const page of this.#project.pages) {
       refreshBounds(page.elements);
     }
@@ -818,6 +822,59 @@ export class ProjectTree {
         text: next => this.replaceText(node as TextElement, next),
       });
     });
+  }
+  addLibrary(name: string, source = ''): DeepReadonly<ProjectLibrary> {
+    return this.transaction(() => {
+      this.#checkLibraryName(name);
+      const id =
+        this.#allocateId?.() ??
+        Math.max(0, ...this.#project.libraries.map(l => l.id ?? 0)) + 1;
+      this.#field(this.#project, 'libraries', [
+        ...this.#project.libraries,
+        { id, name, source },
+      ]);
+      return this.#project.libraries.at(-1)!;
+    });
+  }
+  #checkLibraryName(name: string, id?: number): void {
+    const problem = libraryNameProblem(name);
+    if (
+      problem ||
+      this.#project.libraries.some(
+        l => l.name === name && (id === undefined || l.id !== id),
+      )
+    ) {
+      throw new TreeError(problem ?? 'Another Library already has that name.');
+    }
+  }
+  #changeLibrary(
+    id: number,
+    change: Partial<Pick<ProjectLibrary, 'name' | 'source'>> | undefined,
+  ): void {
+    this.transaction(() => {
+      if (!this.#project.libraries.some(l => l.id === id)) {
+        throw new TreeError('Unknown Library');
+      }
+      if (change?.name !== undefined) {
+        this.#checkLibraryName(change.name, id);
+      }
+      this.#field(
+        this.#project,
+        'libraries',
+        this.#project.libraries.flatMap(l =>
+          l.id !== id ? [l] : change ? [{ ...l, ...change }] : [],
+        ),
+      );
+    });
+  }
+  setLibrarySource(id: number, source: string): void {
+    this.#changeLibrary(id, { source });
+  }
+  renameLibrary(id: number, name: string): void {
+    this.#changeLibrary(id, { name });
+  }
+  removeLibrary(id: number): void {
+    this.#changeLibrary(id, undefined);
   }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));

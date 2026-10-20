@@ -1,6 +1,6 @@
 // Browser driving and reader input stay outside the testable Play Session.
 // Browsing plays the Project in place on the desk, beside the Tools and
-// Script windows; presenting plays it full-window with the editor hidden.
+// Code Browser; presenting plays it full-window with the editor hidden.
 // The session runs in the Play worker (#1225); the page draws from its
 // mirror of Play State and posts reader input to the worker.
 import type { DeepReadonly } from './readonly';
@@ -115,6 +115,7 @@ export const mountPlay = (shell: StackShell): void => {
   let playing: Project | undefined;
   // Problem owners by the place the worker names, in the authored Project.
   let owners: ReturnType<typeof scriptOwners<DeepReadonly<Project>>> = [];
+  let libraries: DeepReadonly<Project['libraries']> = [];
   let mode: PlayMode | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
@@ -221,6 +222,15 @@ export const mountPlay = (shell: StackShell): void => {
         line: problem.line,
         message: problem.message,
         owner: owners[problem.owner] ?? shell.editor.project,
+        ...(problem.target?.kind === 'library' &&
+        libraries[problem.target.index]
+          ? {
+              target: {
+                kind: 'library' as const,
+                library: libraries[problem.target.index]!,
+              },
+            }
+          : {}),
       })),
     );
     requestFrame();
@@ -537,6 +547,7 @@ export const mountPlay = (shell: StackShell): void => {
     generation = shell.editor.generation;
     playing = shell.editor.project as Project;
     owners = scriptOwners(shell.editor.project);
+    libraries = [...shell.editor.project.libraries];
     sessionId++;
     profiler.reset(sessionId);
     captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
@@ -561,6 +572,7 @@ export const mountPlay = (shell: StackShell): void => {
     });
     // Draw the authored Page at once, as the worker starts its session.
     session.apply(firstView(playing, shell.editor.pageIndex, sessionId));
+    syncMessage();
     histories.clear();
     if (mode === 'browse') {
       byId('desk').append(toolbar, reader);
@@ -624,7 +636,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session || prompts.contains(event.target as Node)) {
       return;
     }
-    // While browsing, Esc in a Script window or menu stays with it.
+    // While browsing, Esc in the Code Browser or a menu stays with it.
     if (
       event.key === 'Escape' &&
       (mode === 'present' ||
@@ -696,7 +708,7 @@ export const mountPlay = (shell: StackShell): void => {
     sendTo(held.target, 'keyUp', [held.key], held.pageIndex);
   });
   // Release to the original recipient before focus moves to another field,
-  // a Script window or a prompt. The later physical keyup is ignored.
+  // the Code Browser or a prompt. The later physical keyup is ignored.
   reader.addEventListener('focusout', releaseKeys);
   window.addEventListener('blur', releaseKeys);
   document.addEventListener('visibilitychange', () => {

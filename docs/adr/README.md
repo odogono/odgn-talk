@@ -119,3 +119,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0115: Operation Declarations may declare Argument Labels](0115-operation-declarations-may-declare-argument-labels.md)
 - [0116: A Canvas Element keeps a retained Drawing across Play and Edit](0116-a-canvas-element-keeps-a-retained-drawing-across-play-and-edit.md)
 - [0117: Go Hosts run the Zig Core, and the Go Core is retired](0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)
+- [0118: Folio Projects own their Libraries as independent source copies](0118-folio-projects-own-their-libraries-as-independent-source-copies.md)

@@ -9,11 +9,13 @@ import { type Page, type Project } from './model';
 import { ownerById, scriptPage, type ScriptOwner } from './script-manifest';
 import { bringWindowForward } from './windows';
 import { type StackShell } from './stack';
+import type { SourceTarget } from './play';
 
 export type ScriptProblem = {
   line?: number;
   message: string;
   owner: ScriptOwner;
+  target?: SourceTarget;
 };
 
 /** Where an owner was when its problem was reported, to find it after undo. */
@@ -57,7 +59,7 @@ const ErrorsPanel = ({
               title={
                 problem.vanished
                   ? 'This is no longer in the Project'
-                  : 'Open this Script'
+                  : 'Open this source'
               }
               type="button"
             >
@@ -114,6 +116,16 @@ export class ErrorsWindow {
     this.#problems.value = [
       ...this.#problems.value,
       ...problems.map(problem => {
+        if (problem.target?.kind === 'library') {
+          const library = problem.target.library;
+          return {
+            ...problem,
+            key: this.#nextKey++,
+            label: `Library “${library.name}”${problem.line === undefined ? '' : `, line ${problem.line}`}`,
+            vanished: false,
+            where: { name: library.name },
+          };
+        }
         const page = scriptPage(project, problem.owner);
         const where: Location = {
           name: problem.owner.name,
@@ -145,6 +157,20 @@ export class ErrorsWindow {
 
   /** Opens the problem's Script, or disables it once its owner has gone. */
   #open(problem: ReportedProblem): void {
+    if (problem.target?.kind === 'library') {
+      const id = problem.target.library.id;
+      if (
+        id !== undefined &&
+        this.shell.editor.project.libraries.some(library => library.id === id)
+      ) {
+        this.shell.openLibrary(id, problem.line);
+        return;
+      }
+      this.#problems.value = this.#problems.value.map(p =>
+        p.key === problem.key ? { ...p, vanished: true } : p,
+      );
+      return;
+    }
     const owner = this.#find(problem.owner, problem.where);
     if (owner) {
       this.shell.openScript(owner, problem.line);

@@ -162,10 +162,19 @@ export type Asset = {
   size: number;
 };
 
+/** Authored stateless code, imported by name within its Project. */
+export type ProjectLibrary = {
+  /** Session-local editor identity; omitted from files and storage. */
+  id?: number;
+  name: string;
+  source: string;
+};
+
 export type Project = {
   assets: Asset[];
   /** The Project-wide width every Page is laid out against, in pixels. */
   designWidth: number;
+  libraries: ProjectLibrary[];
   name: string;
   pages: Page[];
   /** The Project Script source. */
@@ -346,6 +355,7 @@ export const createProject = (name: string): Project => ({
   script: '',
   pages: [createPage('page1')],
   assets: [],
+  libraries: [],
 });
 
 /** A detached copy of a Page or Element without session ids. */
@@ -368,6 +378,9 @@ const withoutIds = <T extends Page | Element>(owner: DeepReadonly<T>): T => {
 /** An independent copy of a Project without the editor's session ids. */
 export const projectWithoutIds = (project: DeepReadonly<Project>): Project => {
   const copy = thaw<Project>(project);
+  for (const library of copy.libraries) {
+    delete library.id;
+  }
   for (const page of copy.pages) {
     delete page.id;
     for (const element of allElements(page.elements)) {
