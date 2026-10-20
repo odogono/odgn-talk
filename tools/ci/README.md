@@ -83,6 +83,12 @@ uses existing local images by default.
 The TS and tooling suites have a 30-second default per-test timeout to
 accommodate the slower shared VPS CPUs; their assertions are unchanged.
 
+The Go core step runs test packages one at a time (`-p 1`) and sets
+`GOMEMLIMIT=1GiB` so the Zig Corpus's large Trace and Save/Restore buffers are
+collected earlier. This is a soft Go memory target, not a process memory cap;
+the complete replay can still use several GiB. The default Zig, retiring
+native Go and race suites, and the complete Corpus all remain covered.
+
 The Spec and tooling workflows each report a separate status, and can run
 alongside the core workflow as agent capacity permits. Tooling steps run
 sequentially in their shared workspace to keep their generated builds ordered.
