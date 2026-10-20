@@ -65,7 +65,7 @@ import {
 import {
   type Grant,
   type Call,
-  type Operation,
+  type ValueOperation,
   type ReleaseReason,
 } from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
@@ -5293,7 +5293,7 @@ const endReason = (outcome: Outcome): string => {
 type SavedGrant = {
   capability: string;
   name: string;
-  operations: { declaration: Operation<unknown>; name: string }[];
+  operations: { declaration: ValueOperation<unknown>; name: string }[];
 };
 type SavedGroup = {
   costModel: number;
@@ -5450,10 +5450,10 @@ const unsavedOperationKeys = new Set([
   'description',
   'examples',
 ]);
-const savedOperation = (op: Operation<unknown>): Operation<unknown> =>
+const savedOperation = (op: ValueOperation<unknown>): ValueOperation<unknown> =>
   Object.fromEntries(
     Object.entries(op).filter(([key]) => !unsavedOperationKeys.has(key)),
-  ) as Operation<unknown>;
+  ) as ValueOperation<unknown>;
 type SavedWire = Omit<SavedGroup, 'graph' | 'scripts'> & {
   declarations: Omit<SavedGrant, 'name'>[];
   graph: PackedGraph;

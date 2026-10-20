@@ -7,22 +7,34 @@ import {
   invalidValue,
   type ScriptError as HostScriptError,
 } from './errors';
-import type { ObjectKind } from './objects';
+import type { HostObject, ObjectKind } from './objects';
 import { parseUnit, unitEntry, unitText } from './units';
 import {
+  bool,
+  bytes,
   dec,
+  instant,
+  isDecimal,
   listValues,
   map as mapValue,
   nothing,
+  num,
   text,
-  type Value,
+  Value,
+  type Decimal,
 } from './values';
 import { unitKinds } from './generated/syntax';
 import type { Group } from './group';
 import { RESERVED } from './lexer';
 import { validArgumentLabel } from './selectors';
 
-export type Shape =
+declare const plainForm: unique symbol;
+/**
+ * A Shape, carrying the JS type a typed Host function receives for it
+ * (#1420). The type is compile-time only.
+ */
+export type Shape<T = unknown> = ShapeNode & { readonly [plainForm]?: T };
+type ShapeNode =
   | { k: 'any' }
   | { k: 'value' }
   | { k: 'kind'; kind: string }
@@ -55,43 +67,47 @@ const fieldsOf = (fields: Record<string, FieldShape>) =>
   );
 /** The Shape constructors of `talk.ts`. */
 export const shape = {
-  any: { k: 'any' } as Shape,
-  value: { k: 'value' } as Shape,
-  nothing: kind('nothing'),
-  bool: kind('boolean'),
-  number: kind('number'),
-  text: kind('text'),
-  bytes: kind('bytes'),
-  instant: kind('instant'),
-  civilDate: kind('civil date'),
-  range: kind('range'),
-  pattern: kind('pattern'),
-  function: kind('function'),
-  object: <N>(kind: ObjectKind<N>): Shape => ({
+  any: { k: 'any' } as Shape<Value>,
+  value: { k: 'value' } as Shape<Value>,
+  nothing: kind('nothing') as Shape<null>,
+  bool: kind('boolean') as Shape<boolean>,
+  number: kind('number') as Shape<Decimal>,
+  text: kind('text') as Shape<string>,
+  bytes: kind('bytes') as Shape<Uint8Array>,
+  instant: kind('instant') as Shape<bigint>,
+  civilDate: kind('civil date') as Shape<Value>,
+  range: kind('range') as Shape<Value>,
+  pattern: kind('pattern') as Shape<Value>,
+  function: kind('function') as Shape<Value>,
+  object: <N>(kind: ObjectKind<N>): Shape<HostObject<N>> => ({
     k: 'object',
     kind: kind.name,
   }),
-  quantityOf: (unit: string): Shape => ({
+  quantityOf: (unit: string): Shape<Value> => ({
     k: 'quantity',
     unit: unitText(parseUnit(unit)),
   }),
-  quantityKind: (unitKind: string): Shape => ({
+  quantityKind: (unitKind: string): Shape<Value> => ({
     k: 'unitKind',
     kind: unitKind,
   }),
-  listOf: (of: Shape): Shape => ({ k: 'list', of }),
-  map: (fields: Record<string, FieldShape>): Shape => ({
+  listOf: (of: Shape): Shape<Value> => ({ k: 'list', of }),
+  map: (fields: Record<string, FieldShape>): Shape<Value> => ({
     k: 'map',
     fields: fieldsOf(fields),
     open: false,
   }),
-  openMap: (fields: Record<string, FieldShape>): Shape => ({
+  openMap: (fields: Record<string, FieldShape>): Shape<Value> => ({
     k: 'map',
     fields: fieldsOf(fields),
     open: true,
   }),
-  oneOf: (...of: Shape[]): Shape => ({ k: 'oneOf', of }),
-  optional: (of: Shape): Shape => ({ k: 'optional', of }),
+  oneOf: (...of: Shape[]): Shape<Value> => ({ k: 'oneOf', of }),
+  /** Supplied Nothing is null; an omitted trailing argument is undefined. */
+  optional: <T>(of: Shape<T>): Shape<T | null | undefined> => ({
+    k: 'optional',
+    of,
+  }),
 };
 
 /** What a Shape expects, as `wrong kind` writes it. */
@@ -1009,8 +1025,8 @@ export type CoordinatedLifecycle<B> = {
 
 export type Cost = { alloc?: number; fuel: number };
 export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
-type OpBase = {
-  args?: Shape[];
+type OpBase<A extends readonly Shape[] = Shape[], R = Shape> = {
+  args?: A;
   /** Also callable as a Host Command, by its name alone (ADR 0094). */
   command?: boolean;
   cost: Cost;
@@ -1023,12 +1039,12 @@ type OpBase = {
    * between its arguments; checked at load only (ADR 0115). Empty is absent.
    */
   labels?: string[];
-  result?: Shape;
+  result?: R;
 };
 /** What the Core gives a Host function at each call (chapter 9, The call). */
-export type Call<B> = {
+export type Call<B, R = Value> = {
   /** Queued, for a suspending call; ignored once the call isn't pending. */
-  answer(v: Value, lateCost?: { fuel: number }): void;
+  answer(v: R, lateCost?: { fuel: number }): void;
   readonly automatic: boolean;
   readonly binding: B;
   /** Draws more Fuel, before the work. Throws LimitReached. */
@@ -1044,23 +1060,110 @@ export type Call<B> = {
   readonly segmentId: string;
   readonly signal: AbortSignal;
 };
-export type ImmediateOp<B> = OpBase & {
+
+/**
+ * The JS type a Host function receives for an argument of Shape S (#1420):
+ * scalars as their JS forms, Nothing as null, a Host Object as its handle,
+ * and every other Shape as the Value. A Shape whose type was lost is unknown.
+ */
+export type PlainArg<S> =
+  S extends Shape<infer T> ? (unknown extends T ? unknown : T) : unknown;
+/** What a Host function may return for a result of Shape R: its JS form, a bigint for a number, or any Value. */
+export type PlainResult<R> = [R] extends [undefined]
+  ? Value
+  : | (R extends Shape<infer T>
+        ? unknown extends T
+          ? unknown
+          : T extends Decimal
+            ? Decimal | bigint
+            : T
+        : unknown)
+    | Value;
+type PlainArgs<A extends readonly Shape[]> = {
+  -readonly [K in keyof A]: PlainArg<A[K]>;
+};
+
+export type ImmediateOp<
+  B,
+  A extends readonly Shape[] = Shape[],
+  R = Shape,
+> = OpBase<A, R> & {
+  do(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): PlainResult<R>;
+  mode: 'immediate';
+  scope?: ScopeDecl;
+  segmentBound?: boolean;
+};
+export type SuspendingOp<
+  B,
+  A extends readonly Shape[] = Shape[],
+  R = Shape,
+> = OpBase<A, R> & {
+  maxPendingMs?: number;
+  mode: 'suspending';
+  run?(
+    call: Call<B, PlainResult<R>>,
+    ...args: PlainArgs<A>
+  ): Promise<PlainResult<R>>;
+  start?(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): void;
+};
+export type FireOp<B, A extends readonly Shape[] = Shape[], R = Shape> = OpBase<
+  A,
+  R
+> & {
+  fire(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): void;
+  mode: 'fire-and-forget';
+};
+/** An Operation whose Host function takes the JS forms of its Shapes (#1420). */
+export type Operation<B, A extends readonly Shape[] = Shape[], R = Shape> =
+  ImmediateOp<B, A, R> | SuspendingOp<B, A, R> | FireOp<B, A, R>;
+
+/** The Core's own form: every argument and result is a Value. */
+export type ValueImmediateOp<B> = OpBase & {
   do(call: Call<B>, ...args: Value[]): Value;
   mode: 'immediate';
   scope?: ScopeDecl;
   segmentBound?: boolean;
 };
-export type SuspendingOp<B> = OpBase & {
+export type ValueSuspendingOp<B> = OpBase & {
   maxPendingMs?: number;
   mode: 'suspending';
   run?(call: Call<B>, ...args: Value[]): Promise<Value>;
   start?(call: Call<B>, ...args: Value[]): void;
 };
-export type FireOp<B> = OpBase & {
+export type ValueFireOp<B> = OpBase & {
   fire(call: Call<B>, ...args: Value[]): void;
   mode: 'fire-and-forget';
 };
-export type Operation<B> = ImmediateOp<B> | SuspendingOp<B> | FireOp<B>;
+export type ValueOperation<B> =
+  ValueImmediateOp<B> | ValueSuspendingOp<B> | ValueFireOp<B>;
+
+type OpDecl = {
+  args?: readonly Shape[];
+  mode: Operation<unknown>['mode'];
+  result?: Shape;
+};
+type ArgsOf<D> = D extends { args: infer A extends readonly Shape[] }
+  ? A
+  : D extends { args?: infer A extends readonly Shape[] }
+    ? A
+    : [];
+type ResultOf<D> = D extends { result: infer R }
+  ? R
+  : D extends { result?: infer R }
+    ? R
+    : undefined;
+type ByMode<B, D> = D extends { mode: 'immediate' }
+  ? ImmediateOp<B, ArgsOf<D>, ResultOf<D>>
+  : D extends { mode: 'suspending' }
+    ? SuspendingOp<B, ArgsOf<D>, ResultOf<D>>
+    : FireOp<B, ArgsOf<D>, ResultOf<D>>;
+/**
+ * Each Operation typed from its own `args` and `result`: the Pick lets
+ * TypeScript infer them from the literal before it types the callbacks.
+ */
+export type Operations<B, O> = {
+  [K in keyof O]: Pick<O[K], keyof OpDecl & keyof O[K]> & ByMode<B, O[K]>;
+};
 
 /** Thrown by `call.charge` when the Run's Fuel can't cover it. */
 export class LimitReached extends Error {
@@ -1089,7 +1192,7 @@ export type CapabilityDef<B> = {
   readonly lifecycle?: SegmentLifecycle<B>;
   readonly name: string;
   /** Its Operations, ordered by name. */
-  readonly operations: ReadonlyMap<string, Operation<B>>;
+  readonly operations: ReadonlyMap<string, ValueOperation<B>>;
   release?(context: GrantContext<B>): void;
 };
 export type Grant<B> = {
@@ -1111,10 +1214,13 @@ const hasHooks = (lifecycle: unknown): lifecycle is SegmentLifecycle<never> =>
       typeof (lifecycle as Record<string, unknown>)[phase] === 'function',
   );
 
-/** Define a Capability, once per process (chapter 9, Capabilities). */
-export const defineCapability = <B = void>(
+/**
+ * Define a Capability whose Host functions take and return Values. The
+ * standard Capabilities and replay Stubs use this form.
+ */
+export const defineValueCapability = <B = void>(
   name: string,
-  ops: Record<string, Operation<B>>,
+  ops: Record<string, ValueOperation<B>>,
   lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
   release?: ReleaseHook<B>,
 ): CapabilityDef<B> => {
@@ -1173,7 +1279,7 @@ export const defineCapability = <B = void>(
     ) {
       invalidValue('examples must be a list of text');
     }
-    const metadata = op as Operation<B> & {
+    const metadata = op as ValueOperation<B> & {
       scope?: ScopeDecl;
       segmentBound?: boolean;
     };
@@ -1253,18 +1359,22 @@ export const defineCapability = <B = void>(
       .sort()
       .map(op => {
         const declaration = ops[op]!;
-        return [
-          op,
-          declaration.mode === 'immediate' &&
-          (declaration.scope || declaration.segmentBound !== undefined)
+        const stored =
+          declaration.mode === 'immediate' && declaration.scope
             ? {
                 ...declaration,
-                ...(declaration.scope
-                  ? { scope: Object.freeze({ ...declaration.scope }) }
-                  : {}),
+                scope: Object.freeze({ ...declaration.scope }),
               }
-            : declaration,
-        ] as const;
+            : Object.isExtensible(declaration)
+              ? declaration
+              : { ...declaration };
+        if (!(valueForm in stored)) {
+          Object.defineProperty(stored, valueForm, {
+            value: true,
+            enumerable: true,
+          });
+        }
+        return [op, stored as ValueOperation<B>] as const;
       }),
   );
   const def: CapabilityDef<B> = {
@@ -1325,3 +1435,168 @@ export const defineCapability = <B = void>(
   };
   return def;
 };
+
+/** A checked argument as the JS form its Shape names (#1420). */
+const plainArg = (s: Shape | undefined, v: Value): unknown => {
+  switch (s?.k) {
+    case 'kind':
+      switch (s.kind) {
+        case 'nothing':
+          return null;
+        case 'boolean':
+          return v.asBool();
+        case 'number':
+          return v.asDecimal();
+        case 'text':
+          return v.asText();
+        case 'bytes':
+          return v.asBytes();
+        case 'instant':
+          return v.asInstant();
+      }
+      return v;
+    case 'object': {
+      const ref = v.asObjectRef()!;
+      return (
+        v.asObject() ?? invalidValue(`No Host Object ${ref.kind} ${ref.id}`)
+      );
+    }
+    case 'optional':
+      return v.kind === 'nothing' ? null : plainArg(s.of, v);
+  }
+  return v;
+};
+
+const isHostObject = (r: object): r is HostObject =>
+  'value' in r && Value.isValue(r.value) && r.value.kind === 'object';
+
+/**
+ * A Host function's result as a Value. A JS form that doesn't match the
+ * Shape is passed on unchanged, so the Core's result check refuses it.
+ */
+const resultValue = (s: Shape | undefined, r: unknown): unknown => {
+  if (s === undefined || Value.isValue(r)) {
+    return r;
+  }
+  switch (s.k) {
+    case 'kind':
+      switch (s.kind) {
+        case 'nothing':
+          return r === null || r === undefined ? nothing : r;
+        case 'boolean':
+          return typeof r === 'boolean' ? bool(r) : r;
+        case 'number':
+          return isDecimal(r)
+            ? dec(r.toString())
+            : typeof r === 'bigint'
+              ? num(r)
+              : r;
+        case 'text':
+          return typeof r === 'string' ? text(r) : r;
+        case 'bytes':
+          return Object.prototype.toString.call(r) === '[object Uint8Array]'
+            ? bytes(r as Uint8Array)
+            : r;
+        case 'instant':
+          return typeof r === 'bigint' ? instant(r) : r;
+      }
+      return r;
+    case 'object':
+      return r && typeof r === 'object' && isHostObject(r) ? r.value : r;
+    case 'optional':
+      return r === null || r === undefined ? nothing : resultValue(s.of, r);
+  }
+  return r;
+};
+
+/**
+ * Marks a defined Capability's Operations as already in Value form. It is an
+ * enumerable symbol, so it survives `{ ...op }` when a Host reuses one.
+ */
+const valueForm = Symbol('value form');
+
+/** The Core's Value form of an Operation whose Host function is typed. */
+const valueOperation = <B>(op: Operation<B>): ValueOperation<B> => {
+  if (!op || typeof op !== 'object' || valueForm in op) {
+    return op as ValueOperation<B>;
+  }
+  const { args = [], result } = op as OpBase;
+  const plain = (vs: Value[]) => vs.map((v, i) => plainArg(args[i], v));
+  // The wasm Core freezes its calls, so the override is defined, not assigned.
+  const answering = (call: Call<B>): Call<B, unknown> =>
+    Object.create(call, {
+      answer: {
+        value: (r: unknown, lateCost?: { fuel: number }) =>
+          call.answer(resultValue(result, r) as Value, lateCost),
+      },
+    }) as Call<B, unknown>;
+  const fn = op as unknown as Record<
+    'do' | 'fire' | 'run' | 'start',
+    ((call: Call<B, unknown>, ...args: unknown[]) => unknown) | undefined
+  >;
+  const adapted: Record<string, unknown> = { ...op };
+  if (typeof fn.do === 'function') {
+    const run = fn.do;
+    adapted.do = (call: Call<B>, ...vs: Value[]) =>
+      resultValue(result, run.call(op, call, ...plain(vs)));
+  }
+  if (typeof fn.fire === 'function') {
+    const run = fn.fire;
+    adapted.fire = (call: Call<B>, ...vs: Value[]) =>
+      run.call(op, call, ...plain(vs));
+  }
+  if (typeof fn.run === 'function') {
+    const run = fn.run;
+    adapted.run = async (call: Call<B>, ...vs: Value[]) =>
+      resultValue(result, await run.call(op, call, ...plain(vs)));
+  }
+  if (typeof fn.start === 'function') {
+    const run = fn.start;
+    adapted.start = (call: Call<B>, ...vs: Value[]) =>
+      run.call(op, answering(call), ...plain(vs));
+  }
+  return adapted as ValueOperation<B>;
+};
+
+export type CapabilityDefiner<B> = <const O extends Record<string, OpDecl>>(
+  name: string,
+  ops: Operations<B, O>,
+  lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
+  release?: ReleaseHook<B>,
+) => CapabilityDef<B>;
+
+const defineTyped: CapabilityDefiner<unknown> = (
+  name,
+  ops,
+  lifecycle,
+  release,
+) =>
+  defineValueCapability(
+    name,
+    Object.fromEntries(
+      Object.entries(ops as Record<string, Operation<unknown>>).map(
+        ([op, declaration]) => [op, valueOperation(declaration)],
+      ),
+    ),
+    lifecycle,
+    release,
+  );
+
+/**
+ * Define a Capability, once per process (chapter 9, Capabilities). Each Host
+ * function takes the JS forms of its argument Shapes and may return its
+ * result's JS form (#1420). With a binding, name its type by currying:
+ * `defineCapability<Db>()(name, ops)`.
+ */
+export function defineCapability<const O extends Record<string, OpDecl>>(
+  name: string,
+  ops: Operations<void, O>,
+  lifecycle?: SegmentLifecycle<void> | CoordinatedLifecycle<void>,
+  release?: ReleaseHook<void>,
+): CapabilityDef<void>;
+export function defineCapability<B>(): CapabilityDefiner<B>;
+export function defineCapability(...input: unknown[]): unknown {
+  return input.length === 0
+    ? defineTyped
+    : defineTyped(...(input as Parameters<CapabilityDefiner<unknown>>));
+}

@@ -125,7 +125,7 @@ describe('Library needs', () => {
   });
 
   test('uses caller binding and validates imported calls against kept Operations and Shapes', () => {
-    const cap = defineCapability<number>('store', {
+    const cap = defineCapability<number>()('store', {
       read: {
         mode: 'immediate',
         args: [shape.text],
@@ -464,7 +464,7 @@ test('dependent recompilation retains declarations for its own Capability calls'
       args: [shape.text],
       cost: { fuel: 1 },
       fire: (_c, value) => {
-        writes.push(value.toString());
+        writes.push(value);
       },
     },
   });
@@ -483,7 +483,7 @@ test('dependent recompilation retains declarations for its own Capability calls'
   g.script('s')!.deliver({ name: 'go' });
   const report = operationalReports(g.pump(0n).reports)[0]!;
   expect('result' in report && report.result!.toString()).toBe('2');
-  expect(writes).toEqual(['"x"']);
+  expect(writes).toEqual(['x']);
 });
 
 test('restore keeps a Library import valid when its saved Grant is rebound as revoked', () => {

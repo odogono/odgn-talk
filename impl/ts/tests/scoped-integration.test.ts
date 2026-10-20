@@ -36,7 +36,7 @@ const capability = (
     segmentBound,
     do: () => nothing,
   };
-  return defineCapability<unknown>(
+  return defineCapability<unknown>()(
     'resource',
     {
       open: { ...op, scope: { opens: scope, abandon } },
@@ -105,7 +105,7 @@ test('canonical metadata changes identity, while bindings, hooks and disabled st
 
 test('the public API keeps shared Grant templates distinct across Scripts and same-named Groups', () => {
   const calls: Call<string>[] = [];
-  const cap = defineCapability<string>('resource', {
+  const cap = defineCapability<string>()('resource', {
     open: {
       mode: 'immediate',
       result: shape.nothing,

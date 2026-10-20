@@ -6,7 +6,7 @@ type CustomerDirectory = {
 };
 
 // Define the API once. Each Grant supplies its own application binding.
-const customers = defineCapability<CustomerDirectory>('customers', {
+const customers = defineCapability<CustomerDirectory>()('customers', {
   lookup: {
     mode: 'suspending',
     args: [shape.text],
@@ -15,11 +15,11 @@ const customers = defineCapability<CustomerDirectory>('customers', {
     cost: { fuel: 10 },
     maxPendingMs: 2000,
     run: async (call, id) => {
-      const name = await call.binding.lookup(id.asText()!, call.signal);
+      const name = await call.binding.lookup(id, call.signal);
       if (name === undefined) {
         throw new ScriptError('customer missing', 'No matching customer');
       }
-      return text(name);
+      return name;
     },
   },
 });

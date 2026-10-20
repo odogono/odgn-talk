@@ -23,7 +23,7 @@ const roomy: WatchLimits = {
 };
 const setup = (revision = () => 'r0', admitted?: (group: Group) => void) => {
   const router = createRouter({ admitted, limits: () => roomy, revision });
-  const def = defineCapability<string>(
+  const def = defineCapability<string>()(
     'store',
     {
       watch: {
@@ -32,12 +32,7 @@ const setup = (revision = () => 'r0', admitted?: (group: Group) => void) => {
         result: shape.nothing,
         cost: { fuel: 0 },
         do: (call, name, prefix, message) => {
-          router.watch(
-            call,
-            name!.asText()!,
-            prefix!.asText()!,
-            message!.asText()!,
-          );
+          router.watch(call, name, prefix, message);
           return nothing;
         },
       },

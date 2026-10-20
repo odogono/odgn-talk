@@ -110,14 +110,14 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
           args: [nt.shape.text],
           result: nt.shape.number,
           cost: { fuel: 3 },
-          do: (_c, s) => nt.num(s!.asText()!.length),
+          do: (_c, s) => BigInt(s.length),
         },
         note: {
           mode: 'fire-and-forget',
           args: [nt.shape.text],
           cost: { fuel: 1 },
           fire: (c, s) => {
-            fired.push(`${c.scriptName} ${c.grantName} ${s!.asText()}`);
+            fired.push(`${c.scriptName} ${c.grantName} ${s}`);
           },
         },
         refuse: {

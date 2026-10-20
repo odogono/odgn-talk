@@ -62,7 +62,7 @@ test('Host Manifests sort declarations, preserve Shape order and omit executable
     },
   });
   const zone = defineObjectKind({ name: 'zone', props: {} });
-  const capability = defineCapability<{ secret: string }>('service', {
+  const capability = defineCapability<{ secret: string }>()('service', {
     z: {
       mode: 'suspending',
       args: [shape.optional(shape.object(actor))],

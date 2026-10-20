@@ -1,6 +1,6 @@
 // Operation Declarations in the Host Manifest's data model, shared by saves
 // and Group Fingerprints. Bindings and executable Host functions stay out.
-import type { Grant, Operation, Shape } from './capabilities';
+import type { Grant, ValueOperation, Shape } from './capabilities';
 import { quoteJSON } from './encoding';
 import type { Library, OperationRef } from './library';
 import type { ObjectKind } from './objects';
@@ -57,7 +57,7 @@ export const shapeData = (shape: Shape): unknown => {
       };
   }
 };
-export const operationData = (name: string, op: Operation<unknown>) => ({
+export const operationData = (name: string, op: ValueOperation<unknown>) => ({
   name,
   mode: op.mode,
   args: (op.args ?? []).map(shapeData),
@@ -94,7 +94,10 @@ export const operationData = (name: string, op: Operation<unknown>) => ({
 });
 export const grantData = (
   grant: Grant<unknown>,
-  operation: (name: string, op: Operation<unknown>) => object = operationData,
+  operation: (
+    name: string,
+    op: ValueOperation<unknown>,
+  ) => object = operationData,
 ) => ({
   capability: grant.capability.name,
   operations: [...grant.ops]
@@ -102,7 +105,7 @@ export const grantData = (
     .map(name => operation(name, grant.capability.operations.get(name)!)),
 });
 /** Operation Data plus the manifest-only documentation fields. */
-const documentedOperation = (name: string, op: Operation<unknown>) => ({
+const documentedOperation = (name: string, op: ValueOperation<unknown>) => ({
   ...operationData(name, op),
   ...(op.description ? { description: op.description } : {}),
   ...(op.examples?.length ? { examples: op.examples } : {}),

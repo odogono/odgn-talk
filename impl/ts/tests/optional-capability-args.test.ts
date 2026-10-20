@@ -12,8 +12,10 @@ import {
   shape,
   text,
   type Call,
-  type Value,
+  type Operation,
 } from '../src/index';
+
+const show = (v: unknown) => (v === null ? 'null' : String(v));
 
 const now = parseInstant('2026-10-02T14:00:00Z');
 const codes = (work: () => unknown) => {
@@ -34,7 +36,7 @@ const variable = (
 ) => new Map(g.inspect().scripts.find(s => s.name === script)!.vars).get(name)!;
 
 test('immediate calls omit a trailing Optional suffix without padding Host arguments or Trace records', () => {
-  const received: Value[][] = [];
+  const received: unknown[][] = [];
   const lines: string[] = [];
   const api = defineCapability('api', {
     count: {
@@ -64,10 +66,10 @@ test('immediate calls omit a trailing Optional suffix without padding Host argum
       .outcome,
   ).toBe('completed');
   expect(variable(g, 's', 'counts').toString()).toBe('[1, 2, 3]');
-  expect(received.map(args => args.map(v => v.toString()))).toEqual([
+  expect(received.map(args => args.map(show))).toEqual([
     ['1'],
-    ['1', '"zone"'],
-    ['1', 'nothing', '3'],
+    ['1', 'zone'],
+    ['1', 'null', '3'],
   ]);
   expect(lines.filter(line => line.startsWith('call '))).toEqual([
     'call s/r1.c1 op=api.count args=[1] result=1',
@@ -138,7 +140,7 @@ test('only directly Optional trailing positions can be omitted and supplied lite
 });
 
 test('all-Optional fire-and-forget Operations accept zero arguments and charge the ordinary call cost', () => {
-  const received: Value[][] = [];
+  const received: unknown[][] = [];
   const api = defineCapability('api', {
     note: {
       mode: 'fire-and-forget',
@@ -161,10 +163,10 @@ test('all-Optional fire-and-forget Operations accept zero arguments and charge t
     r => r.kind === 'run end',
   )!;
   expect(expensive.outcome).toBe('completed');
-  expect(received.map(args => args.map(v => v.toString()))).toEqual([
+  expect(received.map(args => args.map(show))).toEqual([
     [],
-    ['nothing'],
-    ['"hello"'],
+    ['null'],
+    ['hello'],
   ]);
   const cheap = newGroup({ name: 'cheap' });
   cheap
@@ -276,7 +278,7 @@ test('an omitted Optional argument still pays declared Fuel before a Host call a
 });
 
 test('suspending Operations retain supplied argument counts across queued answers and cancellation', () => {
-  const received: { args: Value[]; call: Call<void> }[] = [];
+  const received: { args: unknown[]; call: Call<void> }[] = [];
   const api = defineCapability('api', {
     read: {
       mode: 'suspending',
@@ -300,7 +302,7 @@ test('suspending Operations retain supplied argument counts across queued answer
   expect(received[0]!.args).toEqual([]);
   received[0]!.call.answer(text('first'));
   g.pump(now + 1n);
-  expect(received[1]!.args.map(v => v.toString())).toEqual(['nothing']);
+  expect(received[1]!.args).toEqual([null]);
   s.cancelRun('s/r1');
   g.pump(now + 2n);
   expect(received[1]!.call.signal.aborted).toBe(true);
@@ -308,7 +310,7 @@ test('suspending Operations retain supplied argument counts across queued answer
 });
 
 test('Join members can call the same Operation with omitted, Nothing and supplied Optional arguments', () => {
-  const received: { args: Value[]; call: Call<void> }[] = [];
+  const received: { args: unknown[]; call: Call<void> }[] = [];
   const api = defineCapability('api', {
     read: {
       mode: 'suspending',
@@ -328,11 +330,7 @@ test('Join members can call the same Operation with omitted, Nothing and supplie
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
   g.pump(now);
-  expect(received.map(r => r.args.map(v => v.toString()))).toEqual([
-    [],
-    ['nothing'],
-    ['"x"'],
-  ]);
+  expect(received.map(r => r.args)).toEqual([[], [null], ['x']]);
   received.forEach((r, i) => r.call.answer(text(String(i))));
   expect(
     operationalReports(g.pump(now + 1n).reports).find(
@@ -343,7 +341,7 @@ test('Join members can call the same Operation with omitted, Nothing and supplie
 });
 
 test('Promise-based suspending Operations receive only supplied Optional arguments', async () => {
-  const received: Value[][] = [];
+  const received: unknown[][] = [];
   const api = defineCapability('api', {
     read: {
       mode: 'suspending',
@@ -363,6 +361,7 @@ test('Promise-based suspending Operations receive only supplied Optional argumen
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
   g.pump(now);
+  await Promise.resolve();
   await Promise.resolve();
   expect(received).toEqual([[]]);
   expect(
@@ -416,7 +415,10 @@ test('Library calls validate omitted Optional arguments on compilation and each 
       .result?.toString(),
   ).toBe('0');
   const strict = defineCapability('api', {
-    read: { ...api.operations.get('read')!, args: [shape.text] },
+    read: {
+      ...api.operations.get('read')!,
+      args: [shape.text],
+    } as Operation<void>,
   });
   expect(
     codes(() =>
@@ -494,7 +496,7 @@ test('Reload, Extend and Library replacement reuse the same Optional arity check
 });
 
 test('Save/Restore Reissue and Adopt preserve omitted arguments and distinguish Optional declarations', () => {
-  const received: { args: Value[]; call: Call<void> }[] = [];
+  const received: { args: unknown[]; call: Call<void> }[] = [];
   const api = defineCapability('api', {
     read: {
       mode: 'suspending',
@@ -530,13 +532,16 @@ test('Save/Restore Reissue and Adopt preserve omitted arguments and distinguish 
   restored.group.settle('s/r1.c1', { reissue: true });
   const adopted = restored.group.settle('s/r2.c1', { adopt: true })!;
   restored.group.pump(now + 1n);
-  expect(received[2]!.args.map(v => v.toString())).toEqual(['1']);
+  expect(received[2]!.args.map(show)).toEqual(['1']);
   received[2]!.call.answer(num(10));
   adopted.answer(num(20));
   restored.group.pump(now + 2n);
   expect(variable(restored.group, 's', 'seen').toString()).toBe('[10, 20]');
   const strict = defineCapability('api', {
-    read: { ...api.operations.get('read')!, args: [shape.number, shape.text] },
+    read: {
+      ...api.operations.get('read')!,
+      args: [shape.number, shape.text],
+    } as Operation<void>,
   });
   expect(() =>
     restore(bytes, {

@@ -19,7 +19,7 @@ import {
 const now = parseInstant('2026-10-11T12:00:00Z');
 const source = 'on go\n  ask api to touch\nend go';
 const capability = (release?: ReleaseHook<string>) =>
-  defineCapability<string>(
+  defineCapability<string>()(
     'resource',
     {
       touch: {
@@ -123,7 +123,7 @@ test('Stop abandons scopes and rolls back before release, then publishes stopped
       return { status: 'ok' };
     },
   };
-  const def = defineCapability<string>(
+  const def = defineCapability<string>()(
     'resource',
     {
       open: {
@@ -174,7 +174,7 @@ test('Stop abandons scopes and rolls back before release, then publishes stopped
 
 test('disable release follows each abandonment failure before the next cleanup', () => {
   const events: string[] = [];
-  const def = defineCapability<string>(
+  const def = defineCapability<string>()(
     'resource',
     {
       open: {
@@ -233,7 +233,7 @@ test('disable release follows each abandonment failure before the next cleanup',
 
 test('fatal effect uncertainty releases every Script in load order after rollback', () => {
   const events: string[] = [];
-  const def = defineCapability<string>(
+  const def = defineCapability<string>()(
     'resource',
     {
       touch: {
@@ -381,7 +381,7 @@ test.each(['ok', 'failed', 'unknown'] as const)(
   status => {
     const events: string[] = [];
     const trace: string[] = [];
-    const def = defineCapability<string>(
+    const def = defineCapability<string>()(
       'resource',
       {
         touch: {

@@ -43,7 +43,7 @@ describe('process-wide Core', () => {
 
   test('checks Grants again on a cache hit and binds each Group to its own Host', () => {
     const core = createCore();
-    const capability = core.defineCapability<number>('cache-test', {
+    const capability = core.defineCapability<number>()('cache-test', {
       read: {
         mode: 'immediate',
         args: [],

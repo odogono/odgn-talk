@@ -10,11 +10,12 @@ import {
   restore,
   shape,
   type Call,
+  type Operation,
 } from '../src/index';
 
 const source = 'on go\n  ask io to read\n  return it\nend go';
 const capability = () =>
-  defineCapability<string>('store', {
+  defineCapability<string>()('store', {
     read: {
       mode: 'immediate',
       result: shape.number,
@@ -153,8 +154,8 @@ test('restoring a trimmed Grant ignores additional rebound Operations and their 
     grants: { io: store.grant('all', '') },
     grantsAsUsed: true,
   });
-  const changed = defineCapability('store', {
-    read: store.operations.get('read')!,
+  const changed = defineCapability<string>()('store', {
+    read: store.operations.get('read')! as Operation<string>,
     write: { mode: 'fire-and-forget', cost: { fuel: 999 }, fire: () => {} },
   });
   const { group: copy, result } = restore(g.save(), {

@@ -138,7 +138,7 @@ export const createFileHost = (
     }
     participants.get(context.group)!.delete(participantKey(context));
   };
-  const capability = defineCapability<undefined>(
+  const capability = defineCapability<undefined>()(
     'fileOutput',
     {
       open: {
@@ -153,11 +153,10 @@ export const createFileHost = (
           { code: 'destination conflict' },
           { code: 'destination busy' },
         ],
-        do: (call, name) => {
+        do: (call, destination) => {
           if (disposed) {
             throw new Error('File Host disposed');
           }
-          const destination = name.asText()!;
           // Only plain filenames. Scripts cannot name staging files, directories,
           // absolute paths or parent paths; no untrusted directory entries exist.
           if (!/^[\dA-Za-z][\w.-]*$/.test(destination)) {
@@ -218,7 +217,7 @@ export const createFileHost = (
         errors: [{ code: 'file not open' }],
         do: (call, content) => {
           const file = fileFor(call);
-          const bytes = Buffer.from(content.asText()!, 'utf8');
+          const bytes = Buffer.from(content, 'utf8');
           let offset = 0;
           while (offset < bytes.length) {
             const written = writeSync(

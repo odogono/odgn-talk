@@ -16,8 +16,8 @@ import { Stubs, hostFailure, type Stub } from './session/stubs';
 import type { DebugPause } from './debug';
 import type { PumpResult } from './group';
 import corpus from '../../../spec/data/corpus.toml';
+import { defineValueCapability, type ValueOperation } from './capabilities';
 import {
-  defineCapability,
   clockCapability,
   consoleCapability,
   calendarCapability,
@@ -30,7 +30,6 @@ import {
   ScriptError,
   type Call,
   type CapabilityDef,
-  type Operation,
   type SegmentContext,
   type SegmentCoordinator,
   type SqlRows,
@@ -237,7 +236,7 @@ const capabilitiesOf = (
     phase: 'begin' | 'commit' | 'rollback',
   ) => EffectResult,
   coordinator: () => SegmentCoordinator,
-): Map<string, ReturnType<typeof defineCapability>> => {
+): Map<string, ReturnType<typeof defineValueCapability>> => {
   // A Capability one of whose Grants names a coordinator maps every binding
   // to one; the others keep a plain lifecycle (ADR 0069).
   const coordinated = new Set(
@@ -254,9 +253,9 @@ const capabilitiesOf = (
       op,
     ]);
   }
-  const out = new Map<string, ReturnType<typeof defineCapability>>();
+  const out = new Map<string, ReturnType<typeof defineValueCapability>>();
   for (const [name, ops] of byCapability) {
-    const operations: Record<string, Operation<unknown>> = {};
+    const operations: Record<string, ValueOperation<unknown>> = {};
     for (const op of ops) {
       const key = `${name}.${op.name}`;
       const base = {
@@ -330,7 +329,7 @@ const capabilitiesOf = (
     }
     out.set(
       name,
-      defineCapability(
+      defineValueCapability(
         name,
         operations,
         coordinated.has(name)
@@ -368,7 +367,7 @@ const capabilitiesOf = (
       if (op.mode === 'immediate') {
         out.set(
           capability,
-          defineCapability('clock', {
+          defineValueCapability('clock', {
             now: {
               ...op,
               do: call => {

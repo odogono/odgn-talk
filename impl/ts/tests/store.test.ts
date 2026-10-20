@@ -1,4 +1,5 @@
 import { operationalReports } from './operational-reports';
+import { defineValueCapability } from '../src/capabilities';
 import { expect, test } from 'bun:test';
 import {
   add,
@@ -909,7 +910,7 @@ test('disabled and revoked watch Grants refuse before Shapes and domain validati
   const watched = store.operations.get('watch')!;
   // A Standard Store has no scopes, so an embedding fixture adds one to
   // reach disablement through real failed automatic abandonment.
-  const def = defineCapability<string>('scoped-watch', {
+  const def = defineValueCapability<string>('scoped-watch', {
     watch: watched,
     unwatch: store.operations.get('unwatch')!,
     open: {

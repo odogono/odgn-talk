@@ -88,8 +88,8 @@ import {
   mismatch,
   type Call,
   type Grant,
-  type Operation,
-  type ImmediateOp,
+  type ValueOperation,
+  type ValueImmediateOp,
   type EffectResult,
   type SegmentContext,
   type SegmentCoordinator,
@@ -714,7 +714,7 @@ type CallContext = {
   declared: number;
   id: string;
   named: [string, Value][];
-  op: Operation<unknown>;
+  op: ValueOperation<unknown>;
   /** As the Trace names it, `<granted name>.<operation>`. */
   opName: string;
   /** The rate the call is charged by. */
@@ -1038,7 +1038,7 @@ export class Run {
     grant: Grant<unknown>;
     grantName: string;
     name: string;
-    op: ImmediateOp<unknown>;
+    op: ValueImmediateOp<unknown>;
   }[] = [];
 
   // The Segment's Segment Coordinator and the Grants enrolled in it, in
@@ -4341,7 +4341,7 @@ export class Run {
           abandonName: scope.abandon,
           op: grant.capability.operations.get(
             scope.abandon,
-          )! as ImmediateOp<unknown>,
+          )! as ValueImmediateOp<unknown>,
         });
       } else {
         this.scopes.splice(slot!, 1);

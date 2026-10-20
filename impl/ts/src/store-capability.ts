@@ -2,11 +2,11 @@
 // Shapes, domain validation and result kinds; keeping the Store, with its
 // reservations and quotas, is the Host implementation's obligation.
 import {
-  defineCapability,
+  defineValueCapability,
   shape,
   type Call,
   type CapabilityDef,
-  type ImmediateOp,
+  type ValueImmediateOp,
   type GrantContext,
   type SegmentCoordinator,
   type SegmentLifecycle,
@@ -155,7 +155,7 @@ export const storeCapability = (
       throw new HostError('invalid value', `Store needs ${name}`);
     }
   }
-  const operations: Record<string, ImmediateOp<string>> = {
+  const operations: Record<string, ValueImmediateOp<string>> = {
     watch: {
       mode: 'immediate',
       args: [textShape, textShape, shape.optional(textShape)],
@@ -247,7 +247,7 @@ export const storeCapability = (
   // One coordinator for every binding, compared by identity, so writes to
   // several of its Stores in one Segment share a participant (ADR 0069).
   const coordinator = impl as SegmentCoordinator;
-  const capability = defineCapability<string>(
+  const capability = defineValueCapability<string>(
     'store',
     operations,
     {

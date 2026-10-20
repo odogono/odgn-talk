@@ -3,12 +3,12 @@
 // keeps the `transaction` scope; running SQL, with the database's
 // transactions and the authorizer, is the Host implementation's obligation.
 import {
-  defineCapability,
+  defineValueCapability,
   expectedOf,
   shape,
   type Call,
   type CapabilityDef,
-  type ImmediateOp,
+  type ValueImmediateOp,
   type SegmentCoordinator,
   type Shape,
 } from './capabilities';
@@ -351,9 +351,9 @@ export const sqliteCapability = (
   const statementArgs = [shape.text, paramsShape, maxShape];
   const scoped = (
     name: 'begin' | 'commit' | 'rollback',
-    scope: ImmediateOp<SqliteBinding>['scope'],
+    scope: ValueImmediateOp<SqliteBinding>['scope'],
     codes: string[],
-  ): ImmediateOp<SqliteBinding> => ({
+  ): ValueImmediateOp<SqliteBinding> => ({
     mode: 'immediate',
     args: [],
     result: shape.nothing,
@@ -366,7 +366,7 @@ export const sqliteCapability = (
       return nothing;
     },
   });
-  const operations: Record<string, ImmediateOp<SqliteBinding>> = {
+  const operations: Record<string, ValueImmediateOp<SqliteBinding>> = {
     query: {
       mode: 'immediate',
       args: statementArgs,
@@ -418,12 +418,16 @@ export const sqliteCapability = (
   };
   // Every Grant on one database shares its coordinator (ADR 0069), mapped
   // once, when the Grant is created, which is where a bad binding fails.
-  const capability = defineCapability<SqliteBinding>('sqlite', operations, {
-    coordinator: binding => {
-      checkBinding(binding);
-      return impl.coordinator(binding.database);
+  const capability = defineValueCapability<SqliteBinding>(
+    'sqlite',
+    operations,
+    {
+      coordinator: binding => {
+        checkBinding(binding);
+        return impl.coordinator(binding.database);
+      },
     },
-  });
+  );
   for (const [name, op] of capability.operations) {
     registerStandardChecks(op, {
       error: (code, data) =>

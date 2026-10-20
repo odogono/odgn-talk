@@ -259,8 +259,11 @@ describe('suspending Operations from the Host', () => {
     ]);
     started[0]!.answer(text('given'));
     group.pump(at(1));
+    // Converting a `run` result settles it one microtask later (ADR 0120).
+    await Promise.resolve();
     await Promise.resolve();
     group.pump(at(2));
+    await Promise.resolve();
     await Promise.resolve();
     group.pump(at(3));
     group.inspect();

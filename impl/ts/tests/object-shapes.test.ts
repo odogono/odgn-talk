@@ -1,6 +1,6 @@
 import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
-import { mismatch } from '../src/capabilities';
+import { defineValueCapability, mismatch } from '../src/capabilities';
 import { canonicalJSON, operationData, shapeData } from '../src/manifest';
 import {
   compileLibrary,
@@ -153,7 +153,7 @@ test.each(['immediate', 'suspending', 'fire-and-forget'] as const)(
       reached = true;
       return nothing;
     };
-    const api = defineCapability('api', {
+    const api = defineValueCapability('api', {
       use: {
         mode,
         args: [shape.map({ doors: shape.listOf(shape.object(door)) })],
@@ -193,7 +193,7 @@ test.each(['immediate', 'suspending'] as const)(
     const a = g.object(door, 'a', { open: false });
     const b = g.object(room, 'b', null);
     const pending: Call<void>[] = [];
-    const api = defineCapability('api', {
+    const api = defineValueCapability('api', {
       read: {
         mode,
         args: [shape.value],
@@ -316,7 +316,7 @@ test('object Shapes use the Host Manifest data model in nested declarations and 
   ).toContain('"shape":{"object":"shape-door"}');
   const fingerprint = (s: ReturnType<typeof shape.object>) => {
     const g = newGroup({ name: 'g' });
-    const cap = defineCapability('api', {
+    const cap = defineValueCapability('api', {
       read: { ...api.operations.get('read')!, args: [s] },
     });
     g.load({
@@ -388,7 +388,7 @@ test('saved object declarations survive unbound restore and distinguish argument
     { args: [shape.object(room)] },
     { result: shape.object(room) },
   ]) {
-    const different = defineCapability('api', {
+    const different = defineValueCapability('api', {
       read: { ...api.operations.get('read')!, ...changed },
     });
     expect(() =>

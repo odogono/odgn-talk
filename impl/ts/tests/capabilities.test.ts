@@ -104,7 +104,7 @@ describe('defining and granting', () => {
 
   test('a Host function gets the call id, Script, binding and Clock', () => {
     const calls: Call<string>[] = [];
-    const stamp = defineCapability<string>('stamp', {
+    const stamp = defineCapability<string>()('stamp', {
       now: {
         mode: 'immediate',
         result: shape.text,

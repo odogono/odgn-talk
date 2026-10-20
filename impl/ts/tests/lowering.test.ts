@@ -4,7 +4,6 @@ import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import {
-  bool,
   checkSource,
   compileSource,
   defineCapability,
@@ -821,9 +820,9 @@ describe('running Result Targets', () => {
       result: shape.text,
       cost: { fuel: 0 },
       start: (call, key) =>
-        key!.asText() === 'gone'
+        key === 'gone'
           ? call.fail(new ScriptError('missing', 'no such key'))
-          : call.answer(text('page')),
+          : call.answer('page'),
     },
   });
   const pieces: Record<string, [boolean, string]> = {
@@ -837,14 +836,14 @@ describe('running Result Targets', () => {
       args: [shape.text],
       result: shape.bool,
       cost: { fuel: 0 },
-      do: (_, item) => bool(pieces[item!.asText()!]![0]),
+      do: (_, item) => pieces[item]![0],
     },
     lies: {
       mode: 'immediate',
       args: [shape.text],
       result: shape.text,
       cost: { fuel: 0 },
-      do: (_, item) => text(pieces[item!.asText()!]![1]),
+      do: (_, item) => pieces[item]![1],
     },
   });
   const run = (source: string, message: string, args: Value[] = []) => {
