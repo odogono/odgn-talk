@@ -134,6 +134,7 @@ export let decimalParts: (decimal: Decimal) => Dec;
  * written with exponent 0, or NaN. The fast paths compute on it directly.
  */
 export let smallInteger: (decimal: Decimal) => number;
+export let isDecimal: (input: unknown) => input is Decimal;
 
 export class Decimal {
   // A small integer keeps its JS number and makes its text and parts on
@@ -156,6 +157,8 @@ export class Decimal {
     Object.freeze(this);
   }
   static {
+    isDecimal = (input): input is Decimal =>
+      typeof input === 'object' && input !== null && #small in input;
     makeDecimal = (canonical, parts) =>
       new Decimal(
         decimalToken,
