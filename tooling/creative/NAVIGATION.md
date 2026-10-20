@@ -165,7 +165,7 @@ List files with `rg --files tooling/creative` before opening one by name.
   positions are in [stack.ts](src/stack.ts).
 - [code-window.ts](src/code-window.ts): the resizable NorthTalk editor window,
   its language-server worker and the [shared editor](../editor/src/editor.ts).
-  Script windows ([scripts.ts](src/scripts.ts)) and the Message Box are both
+  The Code Browser ([scripts.ts](src/scripts.ts)) and the Message Box are both
   built from it, so a change here reaches every code window.
 - No unit tests; [scripts.browser.ts](tests/scripts.browser.ts) and
   [play.browser.ts](tests/play.browser.ts) drive real windows.
@@ -237,19 +237,25 @@ List files with `rg --files tooling/creative` before opening one by name.
   `runUserBrowserTests` in [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts -t user`.
 
-## Host Manifests and Script windows
+## Host Manifests, Code Browser and Libraries
 
 - [script-manifest.ts](src/script-manifest.ts): each Script owner's Host
   Manifest for its language-server workspace (ADR 0084), data only.
 - [script-names.ts](src/script-names.ts): binding and name checks.
-- [scripts.ts](src/scripts.ts): one editor and workspace per Script.
+- [scripts.ts](src/scripts.ts): the single Code Browser, per-source editor
+  states and selected owner-scoped workspace; [code-browser-panel.tsx](src/code-browser-panel.tsx)
+  renders its Project hierarchy and Library controls.
+- [libraries.ts](src/libraries.ts): dependency-ordered Library compilation and
+  isolated diagnostics; [play.ts](src/play.ts) registers the graph before Scripts.
+  Library edits use root transactions in [tree/project-tree.ts](src/tree/project-tree.ts).
+  [project-file.ts](src/project-file.ts) saves format 3 and migrates older Projects.
 - [recipes.ts](src/recipes.ts): Script Recipe targets, source and placement.
   [recipe-picker.tsx](src/recipe-picker.tsx): the Preact Recipe picker, with
   its choices, preview and status as component state; it reads the CodeMirror
   view and inserts through `view.dispatch`.
 - The Core's Manifest export is [manifest.ts](../../impl/ts/src/manifest.ts);
   the format is [the Host Manifest](../../spec/09-embedding.md#the-host-manifest-format).
-- Tests: [scripts.test.ts](tests/scripts.test.ts),
+- Tests: [libraries.test.ts](tests/libraries.test.ts), [scripts.test.ts](tests/scripts.test.ts),
   [recipes.test.ts](tests/recipes.test.ts),
   [scripts.browser.ts](tests/scripts.browser.ts),
   [recipes.browser.ts](tests/recipes.browser.ts).

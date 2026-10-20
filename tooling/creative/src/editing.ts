@@ -319,6 +319,9 @@ export class StackEditor {
     this.#observeTree();
   }
   #reserveIds(project: DeepReadonly<Project>): void {
+    for (const library of project.libraries) {
+      this.#nextId = Math.max(this.#nextId, library.id ?? 0);
+    }
     for (const page of project.pages) {
       this.#nextId = Math.max(this.#nextId, page.id ?? 0);
       for (const element of allElements(page.elements)) {

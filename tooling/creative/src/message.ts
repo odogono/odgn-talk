@@ -43,6 +43,7 @@ export const settle = async (
 export const runInEdit = async (
   editor: StackEditor,
   command: string,
+  target?: number,
 ): Promise<MessageReply> => {
   if (editor.readOnly) {
     return { error: 'This Project is read-only here.' };
@@ -52,7 +53,16 @@ export const runInEdit = async (
   const play = new PlaySession(editor.project, editor.pageIndex, {
     events: false,
   });
-  const started = play.runMessage(command);
+  const loadedTarget =
+    target === undefined ? undefined : play.messageTargetForOwner(target);
+  if (target !== undefined && loadedTarget === undefined) {
+    play.stop(0n);
+    return {
+      error:
+        'That Script could not load; fix its problems before running a command.',
+    };
+  }
+  const started = play.runMessage(command, loadedTarget);
   if (!started.ok) {
     play.stop(0n);
     return { error: started.error };

@@ -61,7 +61,13 @@ export type PlayRequest =
 export type PromptView = UserPrompt & { id: number };
 
 /** A Script problem, its owner given by place in `scriptOwners(project)`. */
-export type ProblemView = { line: number; message: string; owner: number };
+export type ProblemView = {
+  line: number;
+  message: string;
+  owner: number;
+  target?:
+    { index: number; kind: 'library' } | { kind: 'script'; owner: number };
+};
 
 /**
  * A Drawing's change: its whole list after a reset, else the commands added

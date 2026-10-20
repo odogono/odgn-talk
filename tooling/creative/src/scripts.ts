@@ -1,46 +1,56 @@
-import { containingGroups } from './tree/rules';
-// One floating editor and LSP workspace per authored Script. Each workspace
-// has its owner's Host Manifest, so unrelated Pages never leak names.
+// One Code Browser for the Project's Scripts and Libraries. Source selection
+// never navigates the canvas; each source retains its own editor state.
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { diagnosticsSpec } from '@northtalk/editor/editor';
+import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
+import { libraryUri } from '@northtalk/tooling/lsp';
 import {
-  codeEditor,
   codeWindow,
   languageServer,
   showCodeWindow,
   type LanguageServer,
 } from './code-window';
+import {
+  renderCodeOutline,
+  sourceKey,
+  type CodeSelection,
+} from './code-browser-panel';
 import { h } from './dom';
-import { bringWindowForward } from './windows';
-import { closeRecipePicker, openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
+import { freshName } from './model';
+import { closeRecipePicker, openRecipePicker } from './recipe-picker';
 import {
   ownerById,
   ownerId,
   scriptManifest,
-  scriptOwners,
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
+import { containingGroups } from './tree/rules';
+import { bringWindowForward, setWindowOpener } from './windows';
 
-type OpenScript = {
+type SavedEditor = {
+  scroll: ReturnType<EditorView['scrollSnapshot']>;
+  state: EditorState;
+};
+type BrowserWindow = {
   addAction: HTMLButtonElement;
-  editing: Compartment;
-  manifest: string;
   node: HTMLElement;
-  owner: ScriptOwner;
+  outline: HTMLElement;
   path: HTMLElement;
+  problems: HTMLElement;
   recipes: HTMLElement;
   server: LanguageServer;
-  title: HTMLElement;
-  uri: string;
+  sourceTitle: HTMLElement;
   view: EditorView;
 };
 
-export class ScriptWindows {
-  #windows = new Map<number, OpenScript>();
+export class CodeBrowser {
+  #window: BrowserWindow | undefined;
   #generation: number;
+  #selected: CodeSelection = { kind: 'script', id: 0 };
+  #states = new Map<string, SavedEditor>();
+  #editing = new Compartment();
   #syncing = false;
 
   constructor(
@@ -48,35 +58,78 @@ export class ScriptWindows {
     readonly redraw: () => void,
   ) {
     this.#generation = editor.generation;
+    setWindowOpener('code-browser', () => this.#show(this.#selected));
   }
 
-  #owners(): Map<number, ScriptOwner> {
-    return new Map(
-      scriptOwners(this.editor.project).map(owner => [ownerId(owner), owner]),
-    );
+  #uri(source = this.#selected): string {
+    return `creative:///${source.kind}-${source.id}.talk`;
+  }
+  #library() {
+    return this.#selected.kind === 'library'
+      ? this.editor.project.libraries.find(l => l.id === this.#selected.id)
+      : undefined;
+  }
+  #owner() {
+    return this.#selected.kind === 'script'
+      ? ownerById(this.editor.project, this.#selected.id)
+      : undefined;
+  }
+  #text(): string {
+    return this.#library()?.source ?? this.#owner()?.script ?? '';
   }
 
-  /** Windows belong to one Project; a replaced Project closes them all. */
-  #dropStale(): void {
-    if (this.#generation !== this.editor.generation) {
-      for (const id of this.#windows.keys()) {
-        this.close(id);
-      }
-      this.#generation = this.editor.generation;
-    }
-  }
-
-  close(id: number): void {
-    const win = this.#windows.get(id);
-    if (!win) {
-      return;
-    }
-    this.#windows.delete(id);
-    closeRecipePicker(win.recipes);
-    win.server.lsp.close(win.uri);
-    win.server.dispose();
-    win.view.destroy();
-    win.node.remove();
+  #state(server: LanguageServer): EditorState {
+    return EditorState.create({
+      doc: this.#text(),
+      extensions: [
+        lineNumbers(),
+        this.#editing.of(EditorState.readOnly.of(this.editor.readOnly)),
+        northtalkEditor(
+          this.#uri(),
+          server.lsp,
+          {
+            changed: text => {
+              if (this.#syncing || this.editor.readOnly) {
+                return;
+              }
+              const source = this.#selected;
+              this.editor.edit(({ project, tree }) => {
+                if (source.kind === 'library') {
+                  tree.setLibrarySource(source.id, text);
+                } else {
+                  const owner = ownerById(project, source.id);
+                  if (owner) {
+                    tree.setScript(owner, text);
+                  }
+                }
+              });
+              this.redraw();
+              server.lsp.change(this.#uri(source), text);
+            },
+            goTo: (uri, line) => {
+              const library = this.editor.project.libraries.find(
+                l =>
+                  uri === libraryUri(l.name) ||
+                  uri === this.#uri({ kind: 'library', id: l.id! }),
+              );
+              if (library) {
+                this.openLibrary(library.id!, line + 1);
+              }
+            },
+            references: lines => {
+              if (this.#window) {
+                this.#window.problems.textContent = lines.join('\n');
+              }
+            },
+          },
+          [
+            { key: 'Mod-z', run: () => this.#history() },
+            { key: 'Mod-Shift-z', run: () => this.#history(true) },
+            { key: 'Mod-y', run: () => this.#history(true) },
+          ],
+        ),
+      ],
+    });
   }
 
   #history(redo = false): boolean {
@@ -89,40 +142,22 @@ export class ScriptWindows {
     return true;
   }
 
-  open(owner: ScriptOwner, line?: number): void {
-    this.#dropStale();
-    const id = ownerId(owner);
-    const current = this.#owners().get(id);
-    if (!current) {
-      return;
-    }
-    owner = current;
-    const existing = this.#windows.get(id);
-    if (existing) {
-      bringWindowForward(existing.node);
-      if (line === undefined) {
-        existing.view.focus();
-      } else {
-        this.#goTo(existing.view, line);
-      }
-      return;
-    }
-    const uri = `creative:///script-${id}.talk`;
-    const server = languageServer();
-    const { lsp } = server;
-    const { node, title, close } = codeWindow({
-      id: `script-window-${id}`,
-      className: 'script-window',
-      closeLabel: 'Close Script',
-      label: 'Script',
-      left: 140 + this.#windows.size * 24,
-      top: 140 + this.#windows.size * 24,
+  #mount(): BrowserWindow {
+    const win = codeWindow({
+      id: 'code-browser',
+      className: 'script-window code-browser',
+      closeLabel: 'Close Code Browser',
+      label: 'Code Browser',
+      left: 140,
+      top: 140,
     });
+    const outline = h('aside', { class: 'code-browser-outline' });
+    const body = h('div', { class: 'code-browser-body' });
+    const sourceTitle = h('h2', { class: 'code-source-title' });
     const path = h('nav', {
       class: 'message-path',
       'aria-label': 'Message Path',
     });
-    const parent = h('div', { class: 'code-editor script-editor' });
     const recipes = h('div');
     const addAction = h(
       'button',
@@ -130,9 +165,9 @@ export class ScriptWindows {
       'Add action…',
     );
     addAction.addEventListener('click', () => {
-      const current = this.#owners().get(id);
-      if (current) {
-        this.addAction(current);
+      const owner = this.#owner();
+      if (owner) {
+        this.addAction(owner);
       }
     });
     const problems = h(
@@ -140,50 +175,25 @@ export class ScriptWindows {
       { class: 'script-problems', role: 'status' },
       'Checking…',
     );
-    node.append(path, addAction, recipes, parent, problems);
-    const editing = new Compartment();
-    const view = codeEditor({
-      parent,
-      doc: owner.script ?? '',
-      uri,
-      lsp,
-      extensions: [
-        lineNumbers(),
-        editing.of(EditorState.readOnly.of(this.editor.readOnly)),
-      ],
-      hooks: {
-        changed: text => {
-          if (this.#syncing || this.editor.readOnly) {
-            return;
-          }
-          const current = this.#owners().get(id);
-          if (!current) {
-            return;
-          }
-          this.editor.edit(({ project, tree }) => {
-            const owner = ownerById(project, id);
-            if (owner) {
-              tree.setScript(owner, text);
-            }
-          });
-          // Redraw first: it sends the Manifest with any new Handlers, so
-          // the diagnostics for this text already know them.
-          this.redraw();
-          lsp.change(uri, text);
-        },
-        goTo() {},
-        references(lines) {
-          problems.textContent = lines.join('\n');
-        },
-      },
-      bindings: [
-        { key: 'Mod-z', run: () => this.#history() },
-        { key: 'Mod-Shift-z', run: () => this.#history(true) },
-        { key: 'Mod-y', run: () => this.#history(true) },
-      ],
-    });
-    lsp.onDiagnostics = (target, diagnostics) => {
-      if (target !== uri || !this.#windows.has(id)) {
+    const parent = h('div', { class: 'code-editor script-editor' });
+    body.append(sourceTitle, path, addAction, recipes, parent, problems);
+    win.node.append(h('div', { class: 'code-browser-content' }, outline, body));
+    const server = languageServer();
+    const view = new EditorView({ parent, state: this.#state(server) });
+    const browser = {
+      ...win,
+      outline,
+      sourceTitle,
+      path,
+      addAction,
+      recipes,
+      problems,
+      server,
+      view,
+    };
+    this.#window = browser;
+    server.lsp.onDiagnostics = (uri, diagnostics) => {
+      if (uri !== this.#uri()) {
         return;
       }
       view.dispatch(diagnosticsSpec(view.state, diagnostics));
@@ -197,24 +207,65 @@ export class ScriptWindows {
             .join('\n')
         : '✓ No problems';
     };
-    this.#windows.set(id, {
-      manifest: '',
-      owner,
-      recipes,
-      addAction,
-      editing,
-      server,
-      node,
-      path,
-      title,
-      uri,
-      view,
+    win.close.addEventListener('click', () => {
+      closeRecipePicker(recipes);
+      win.node.hidden = true;
     });
-    close.addEventListener('click', () => this.close(id));
-    showCodeWindow({ node, title, close });
+    showCodeWindow(win);
     this.sync();
-    lsp.open(uri, owner.script ?? '');
-    this.#goTo(view, line ?? 1);
+    server.lsp.open(this.#uri(), this.#text());
+    return browser;
+  }
+
+  open(owner: ScriptOwner, line?: number): void {
+    this.#show({ kind: 'script', id: ownerId(owner) }, line);
+  }
+  openLibrary(id: number, line?: number): void {
+    this.#show({ kind: 'library', id }, line);
+  }
+
+  #show(source: CodeSelection, line?: number): void {
+    this.sync();
+    if (
+      source.kind === 'script'
+        ? !ownerById(this.editor.project, source.id)
+        : !this.editor.project.libraries.some(l => l.id === source.id)
+    ) {
+      return;
+    }
+    const existing = this.#window;
+    if (!existing) {
+      this.#selected = source;
+    }
+    const win = existing ?? this.#mount();
+    if (sourceKey(source) !== sourceKey(this.#selected)) {
+      closeRecipePicker(win.recipes);
+      this.#states.set(sourceKey(this.#selected), {
+        state: win.view.state,
+        scroll: win.view.scrollSnapshot(),
+      });
+      win.server.lsp.close(this.#uri());
+      this.#selected = source;
+      const saved = this.#states.get(sourceKey(source));
+      win.view.setState(saved?.state ?? this.#state(win.server));
+      if (saved && line === undefined) {
+        win.view.dispatch({ effects: saved.scroll });
+      }
+      this.sync();
+      win.server.lsp.open(this.#uri(), this.#text());
+    }
+    win.node.hidden = false;
+    bringWindowForward(win.node);
+    if (line !== undefined) {
+      const pos = win.view.state.doc.line(
+        Math.max(1, Math.min(line, win.view.state.doc.lines)),
+      ).from;
+      win.view.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos),
+      });
+    }
+    win.view.focus();
   }
 
   addAction(owner: ScriptOwner): void {
@@ -222,50 +273,96 @@ export class ScriptWindows {
       return;
     }
     this.open(owner);
-    const win = this.#windows.get(ownerId(owner))!;
+    const win = this.#window!;
     openRecipePicker(
       win.recipes,
       win.view,
       this.editor.project,
-      owner,
+      this.#owner()!,
       () => this.editor.readOnly,
     );
   }
 
-  #goTo(view: EditorView, line: number): void {
-    const pos = view.state.doc.line(
-      Math.max(1, Math.min(line, view.state.doc.lines)),
-    ).from;
-    view.dispatch({
-      selection: { anchor: pos },
-      effects: EditorView.scrollIntoView(pos),
-    });
-    view.focus();
-  }
-
-  /** Reconcile after edits, history, read-only changes and Project replacement. */
   sync(): void {
-    this.#dropStale();
-    const all = this.#owners();
+    if (this.#generation !== this.editor.generation) {
+      const win = this.#window;
+      if (win) {
+        closeRecipePicker(win.recipes);
+        win.server.dispose();
+        win.view.destroy();
+        win.node.remove();
+      }
+      this.#window = undefined;
+      this.#states.clear();
+      this.#selected = { kind: 'script', id: 0 };
+      this.#generation = this.editor.generation;
+    }
+    const win = this.#window;
+    if (!win || this.#syncing) {
+      return;
+    }
+    if (!this.#owner() && !this.#library()) {
+      win.server.lsp.close(this.#uri());
+      closeRecipePicker(win.recipes);
+      this.#selected = { kind: 'script', id: 0 };
+      win.view.setState(this.#state(win.server));
+      win.server.lsp.open(this.#uri(), this.#text());
+    }
     this.#syncing = true;
     try {
-      for (const [id, win] of this.#windows) {
-        const owner = all.get(id);
-        if (!owner) {
-          this.close(id);
-          continue;
-        }
-        if (owner.name !== win.owner.name) {
-          closeRecipePicker(win.recipes);
-        }
-        win.owner = owner;
-        win.addAction.disabled = this.editor.readOnly;
-        if (this.editor.readOnly) {
-          closeRecipePicker(win.recipes);
-        }
-        const project = this.editor.project;
+      const project = this.editor.project;
+      const owner = this.#owner();
+      const library = this.#library();
+      renderCodeOutline(win.outline, {
+        project,
+        library,
+        selected: this.#selected,
+        readOnly: this.editor.readOnly,
+        onSelect: source => this.#show(source),
+        onNew: () => {
+          let id = 0;
+          this.editor.edit(({ tree }) => {
+            id = tree.addLibrary(
+              freshName(
+                'library1',
+                new Set(project.libraries.map(l => l.name)),
+              ),
+            ).id!;
+          });
+          this.redraw();
+          this.openLibrary(id);
+        },
+        onRename: name => {
+          if (!library || this.editor.readOnly) {
+            return undefined;
+          }
+          try {
+            this.editor.edit(({ tree }) =>
+              tree.renameLibrary(library.id!, name),
+            );
+            this.redraw();
+            return undefined;
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        },
+        onDelete: () => {
+          if (library && !this.editor.readOnly) {
+            this.editor.edit(({ tree }) => tree.removeLibrary(library.id!));
+            this.redraw();
+          }
+        },
+      });
+      win.sourceTitle.textContent = library
+        ? `Library “${library.name}”`
+        : `Script of ${owner === project ? 'Project' : 'elements' in owner! ? 'Page' : 'Element'} “${owner!.name}”`;
+      win.addAction.hidden = !owner;
+      win.addAction.disabled = this.editor.readOnly;
+      win.path.hidden = !owner;
+      win.path.replaceChildren();
+      if (owner) {
         const page = scriptPage(project, owner);
-        const owners =
+        const path =
           owner === project
             ? [project]
             : owner === page
@@ -276,13 +373,7 @@ export class ScriptWindows {
                   page!,
                   project,
                 ];
-        const kind =
-          owner === project ? 'Project' : owner === page ? 'Page' : 'Element';
-        const label = `Script of ${kind} “${owner.name}”`;
-        win.title.textContent = label;
-        win.node.setAttribute('aria-label', label);
-        win.path.replaceChildren();
-        for (const [index, step] of owners.entries()) {
+        path.forEach((step, index) => {
           if (index) {
             win.path.append(' → ');
           }
@@ -296,28 +387,34 @@ export class ScriptWindows {
           );
           button.addEventListener('click', () => this.open(step));
           win.path.append(button);
-        }
-        const manifest = scriptManifest(project, owner);
-        const configure = JSON.stringify(manifest);
-        if (configure !== win.manifest) {
-          closeRecipePicker(win.recipes);
-          win.manifest = configure;
-          win.server.configure(manifest);
-        }
-        if (win.view.state.readOnly !== this.editor.readOnly) {
-          win.view.dispatch({
-            effects: win.editing.reconfigure(
-              EditorState.readOnly.of(this.editor.readOnly),
-            ),
-          });
-        }
-        const text = owner.script ?? '';
-        if (text !== win.view.state.doc.toString()) {
-          win.view.dispatch({
-            changes: { from: 0, to: win.view.state.doc.length, insert: text },
-          });
-          win.server.lsp.change(win.uri, text);
-        }
+        });
+      }
+      if (this.editor.readOnly || !owner) {
+        closeRecipePicker(win.recipes);
+      }
+      const manifest = scriptManifest(project, owner ?? project);
+      const sources = project.libraries.map(l => ({
+        uri: this.#uri({ kind: 'library', id: l.id! }),
+        text: l.source,
+        library: l.name,
+      }));
+      win.server.configure(
+        library ? { ...manifest, objects: [], messages: [] } : manifest,
+        sources,
+      );
+      if (win.view.state.readOnly !== this.editor.readOnly) {
+        win.view.dispatch({
+          effects: this.#editing.reconfigure(
+            EditorState.readOnly.of(this.editor.readOnly),
+          ),
+        });
+      }
+      const text = this.#text();
+      if (text !== win.view.state.doc.toString()) {
+        win.view.dispatch({
+          changes: { from: 0, to: win.view.state.doc.length, insert: text },
+        });
+        win.server.lsp.change(this.#uri(), text);
       }
     } finally {
       this.#syncing = false;

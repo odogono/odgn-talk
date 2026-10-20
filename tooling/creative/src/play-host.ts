@@ -9,7 +9,7 @@ import {
 } from '@northtalk/tooling/worker-supervisor';
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { type CanvasElement, type Element, type Project } from './model';
-import { PlaySession, PUMP_FUEL, type PendingPrompt } from './play';
+import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
   type DrawingView,
   type PlayRequest,
@@ -330,6 +330,7 @@ export class PlayHost {
       if (index !== undefined) {
         row.owner = index;
       }
+      row.script = unitLabel(row.script);
     }
     this.post({
       response: { kind: 'performance', session: this.#id, snapshot },
@@ -439,11 +440,24 @@ export class PlayHost {
       prompt = { ...shown, id: this.#prompts.get(first)! } as PromptView;
     }
     const notices = session.notices.splice(0);
-    const problems = session.problems.slice(this.#problems).map(problem => ({
-      line: problem.line,
-      message: problem.message,
-      owner: this.#owners.get(problem.owner) ?? 0,
-    }));
+    const problems = session.problems.slice(this.#problems).map(problem => {
+      const target = problem.target;
+      return {
+        line: problem.line,
+        message: problem.message,
+        owner: this.#owners.get(problem.owner) ?? 0,
+        ...(target?.kind === 'library'
+          ? {
+              target: {
+                kind: 'library' as const,
+                index: session.project.libraries.findIndex(
+                  library => library.name === target.library.name,
+                ),
+              },
+            }
+          : {}),
+      };
+    });
     this.#problems = session.problems.length;
     const targets = session.messageTargets;
     const targetKey = targets.map(target => target.id).join(',');

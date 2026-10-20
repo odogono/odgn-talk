@@ -170,7 +170,7 @@ test('real Core accounting attributes internal calls to their Run origin and cap
   const first = play.pump(0n);
   play.frame(1000n);
   const snapshot = play.performance.snapshot(PUMP_FUEL)!;
-  const row = snapshot.scripts.find(s => s.script === 'project')!;
+  const row = snapshot.scripts.find(s => s.script === 'script:project')!;
   expect(row.frames).toMatchObject({ delivered: 1, skipped: 1 });
   expect(row.origins.map(o => o.origin)).toEqual(['frame']);
   expect(row.fuel).toBe(first.fuelUsed);
@@ -209,7 +209,7 @@ test('reload accounting removes discarded live Runs and preserves interval total
   play.pump(0n);
   expect(play.performance.snapshot(PUMP_FUEL)!.scripts[0]!.active).toBe(1);
   const reports = play.group
-    .script('project')!
+    .script('script:project')!
     .reload(project.script, 'reset variables');
   play.performance.reports(reports);
   expect(play.performance.snapshot(PUMP_FUEL)!.scripts[0]).toMatchObject({

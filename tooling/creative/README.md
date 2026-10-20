@@ -4,7 +4,7 @@ Folio is the browser creative tool specified in [#154](https://github.com/odogon
 
 Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio and its tests, see [Running it](#running-it).
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse, line and canvas Elements (see [Canvas](#canvas)); Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse, line and canvas Elements (see [Canvas](#canvas)); Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, the Code Browser and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Code Browser, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). The Code Browser selects and edits every authored Script and Library on the [shared editor](../editor/); see [Scripts](#scripts).
 
 Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
 instances. The tree owns Project mutations, hierarchy, indexed collections,
@@ -52,7 +52,7 @@ direct DOM: each sets its text and toggles `hidden`, with nothing to rebuild.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
-- The editor layout and Script windows: the [UI prototype's verdict](https://github.com/odogono/odgn-talk/issues/154#issuecomment-6141500821).
+- The original editor layout: the [UI prototype's verdict](https://github.com/odogono/odgn-talk/issues/154#issuecomment-6141500821).
 - How Scripts reach Projects, Pages and Elements: [#735](https://github.com/odogono/odgn-talk/issues/735).
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
@@ -149,11 +149,12 @@ size-dependent Fuel before effects, including copied content. Invalid or
 unaffordable moves, clones and deletes leave the operation unapplied. Collection
 callbacks use maintained indexes, each costing 1 Fuel and 0 allocation.
 
-Projects save as `.folio` format 2, with ordered nested members, Page-relative
-leaf coordinates and retained empty-group positions. Bounds, lookup indexes and
-session ids are derived rather than saved. Existing format-1 Projects migrate
-without changing their content. Browser storage and earlier versions use the
-same representation. Older Folio versions refuse format 2.
+Projects save as `.folio` format 3, with ordered nested members, Page-relative
+leaf coordinates, retained empty-group positions and Project Library source.
+Bounds, lookup indexes and session ids are derived rather than saved. Existing
+format-1 and format-2 Projects migrate with an empty Library collection. Browser
+storage and earlier versions use the same representation. Older Folio readers
+refuse format 3 instead of silently dropping Libraries.
 
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.
@@ -188,24 +189,26 @@ Double-click an Element to open its Script. For text, Shift-double-click opens
 its Script and plain double-click edits the text. ⌘⌥-click opens any Element's
 Script, including text being edited. Info also offers **Edit Script**, or
 **Edit Page Script** and **Edit Project Script** when nothing is selected.
-Opening a Script already on the desk brings its window forward. Each window's
-Message Path links through its containing groups to its Page and Project Scripts.
-Drag the bottom-right corner to resize a Script window; the editor grows and
-shrinks with it and scrolls long Scripts within the window.
+The **Code Browser** in the Window menu has one source editor and an outline of
+all Project, Page and Element Scripts, including nested groups, plus Libraries.
+Existing Script actions select the corresponding source. Selecting code leaves
+the canvas’s Page and Element selection unchanged. Script sources retain their
+Message Path links, Add action, diagnostics and recipes. Each source keeps its
+cursor and scroll position when another source is selected. Resize the browser
+from its bottom-right corner.
 
-Edits change the authored Project immediately and share its undo/redo,
-autosave and portable export/import. The Script editor's ⌘/Ctrl-Z and redo
-shortcuts use the same history as the Edit menu. Closing a window keeps its
-Script. Renaming or reordering an owner keeps its window attached, including
-through undo; deleting the owner closes its window. Opening another Project
-or a stored version closes the previous Script windows. Read-only Projects
-also have read-only Script editors.
+Edits change the authored Project immediately and share its undo/redo, autosave
+and portable export/import. The editor’s ⌘/Ctrl-Z and redo shortcuts use the
+same history as the Edit menu. Closing the browser keeps its source and editor
+state. Renames and undo retain source identities; deleting the selected source
+selects the Project Script. Opening another Project closes the browser and drops
+its previous source states. Read-only Projects have read-only source editors.
 
-Each window has a separate language-server workspace with a live Host Manifest
+The selected Script has an owner-scoped language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
 also binds every Page name. The Manifests describe the `pages`, `elements` and `sound` Grants
-from ADR 0084, the `user` Standard Capability, the `folio` Grant of `hide` and `show` (see [Play](#play)), and the `canvas` Grant; all six are available during Play (see [Sounds](#sounds), [Canvas](#canvas) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
+from ADR 0084, the `user` Standard Capability, the `folio` Grant of `hide` and `show` (see [Play](#play)), and the `canvas` Grant; all six are available during Play (see [Sounds](#sounds), [Canvas](#canvas) and [Asking the reader](#asking-the-reader)). Renames and Library edits refresh the selected source’s Manifest and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -214,9 +217,33 @@ The Manifests include built-in events and each Script's authored message
 handlers, so custom messages between Scripts do not produce unknown-message
 hints. Editing handlers refreshes the Manifest alongside the source.
 
+### Project Libraries
+
+Choose **New Library** in the Code Browser, give it a name in **Library name**,
+and write Handlers, functions and Constants in its source editor. Library names
+are NorthTalk identifiers, unique among the Project’s Libraries; Standard
+Library names are reserved. Object and Grant names are a separate namespace.
+A Library has no Script Variables, owner or mailbox. Pass caller-specific state
+and objects as arguments; its code runs with its caller’s Grants.
+
+Import definitions explicitly, for example `use fits from tetrisRules`. Libraries
+may import other Libraries. The browser checks Library sources in Library mode
+and refreshes importers’ diagnostics as dependencies change. Rename and
+**Delete Library** are undoable and leave `use` lines untouched for manual repair.
+Broken drafts can still be saved. Play reports Library errors and failed
+importers while independent code continues; Errors links to the Library’s own
+source and line, including after a rename. Deleted source targets become
+unavailable rather than opening a different Library of the same name.
+
+Every Library is embedded in the Project’s file and browser versions. To reuse
+one in another Project, create a Library there and paste its source, doing the
+same for any custom dependencies. These are independent copies; there are no
+external dependencies, automatic updates or author-managed Library versions.
+The ownership rationale is in the [Project Libraries ADR](../../docs/adr/0118-folio-projects-own-their-libraries-as-independent-source-copies.md).
+
 ### Script Recipes
 
-Choose **Add action…** in a Script window or Info to insert a click action:
+Choose **Add action…** in the Code Browser or Info to insert a click action:
 **Go to a Page**, **Show an Element**, **Hide an Element**, **Change text**,
 **Play a sound**, **Loop a sound** or **Stop a sound**.
 Navigation offers every Page. Element actions offer only the Script's own
@@ -755,10 +782,10 @@ its mirror of the showing Page and posts reader input to the worker. Stop
 returns to Edit at once. If the worker hasn't acknowledged Stop within 500 ms
 it is ended, and Errors reports that a Script did not respond.
 
-Script windows stay editable while browsing. An edit changes the authored
-Project immediately and applies from the next session; the running session
-keeps the Scripts it loaded. Escape inside a Script window stays with the
-editor. Script windows are read-only while presenting.
+The Code Browser stays editable while browsing. Script and Library edits change
+the authored Project immediately and apply from the next session; the running
+session keeps its loaded source. Escape inside the browser stays with the editor.
+The Code Browser is read-only while presenting.
 
 Problems go to the **Errors** window, which opens when the first one arrives.
 Each names its owner and line and opens that authored Script; other handlers
@@ -775,9 +802,11 @@ lines. While browsing, the default context runs in the Play Session with the
 showing Page's names and every Grant, and its effects are Play State. The
 context selector also offers the currently loaded Scripts: a targeted command
 can read and change that Script's Script Variables using its Grants, object
-bindings and owner. In Edit, the
+bindings, Library imports and owner. In Edit, the selector offers the authored
+Project and showing Page’s Scripts, with their Library imports; commands use
+fresh Script Variables because no events have run. The
 command runs in a session copied from the Project that sends no events; when
-it finishes, its changes become one undoable authored edit, Script windows
+it finishes, its changes become one undoable authored edit, source editors
 stay attached, and a navigation moves the editor to that Page. A failing
 Edit command changes nothing and prints its error and line. If another authored
 edit occurs while the command runs, its result is refused with a retry message
@@ -787,9 +816,8 @@ DOM.
 
 The Message Box is a code window like a Script's, built from the same parts in
 [`src/code-window.ts`](src/code-window.ts): it resizes from its corner, and its
-editor has the same completion (⌃Space), hover and diagnostics. A selected
-Script supplies its loaded source and bindings, even after its authored source
-is edited. The editor keeps that context and the command's wrapper hidden
+editor has the same completion (⌃Space), hover and diagnostics. While browsing, a selected Script supplies its loaded source, Library sources
+and bindings, even after its authored source or Libraries are edited. The editor keeps that context and the command's wrapper hidden
 and protected.
 
 Targeted commands use Extend ([ADR 0108](../../docs/adr/0108-folio-message-box-commands-can-extend-a-chosen-script.md));
@@ -1082,9 +1110,11 @@ rectangles whose colour differs from what they show.
 drawn through the `canvas` Grant instead of pre-placed cells
 ([#1379](https://github.com/odogono/odgn-talk/issues/1379)), built from
 [`src/examples/tetris-canvas.ts`](src/examples/tetris-canvas.ts). Both builders
-assemble their Page Scripts from the rules in
-[`src/examples/tetris-rules.ts`](src/examples/tetris-rules.ts) and their own
-painting Handlers, and share the layout in
+embed the same `tetrisRules` Library from
+[`src/examples/tetris-rules.ts`](src/examples/tetris-rules.ts). The Library holds
+Constants, grid creation, collision checks, rotation calculations, full-row
+detection, colour lookup and drop timing. Page Scripts import these helpers,
+keep game state and events, and call their own painting Handlers. They share the layout in
 [`src/examples/tetris-layout.ts`](src/examples/tetris-layout.ts). The Canvas
 version ships with empty Drawings. `openPage` clears both surfaces before
 starting a new game, including on a second Browse after the previous game's

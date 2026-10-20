@@ -114,7 +114,7 @@ export const mountWindows = (): void => {
   } catch {
     /* Optional. */
   }
-  // Script windows remove themselves; every other close box hides.
+  // The Code Browser handles its own close; other close boxes hide windows.
   document.addEventListener('click', event => {
     const close = (event.target as HTMLElement).closest(
       '.window > .bar > .close',

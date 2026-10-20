@@ -29,7 +29,12 @@ import {
   type LoadedMessageTarget,
 } from './message-script';
 import { runInEdit, type MessageReply } from './message';
-import { scriptManifest } from './script-manifest';
+import {
+  ownerId,
+  scriptManifest,
+  scriptOwners,
+  scriptPage,
+} from './script-manifest';
 import { bringWindowForward, setWindowOpener } from './windows';
 import { type StackShell } from './stack';
 
@@ -123,6 +128,7 @@ export const mountMessageWindow = (
   let generation = shell.editor.generation;
   let recalled = 0;
   let choicesKey = '';
+  let availableScripts: LoadedMessageTarget[] = [];
 
   const print = (className: string, text: string) => {
     log.append(h('li', { class: className }, text));
@@ -170,7 +176,27 @@ export const mountMessageWindow = (
     const project = shell.editor.project;
     const showing = page();
     const session = target.session();
-    const scripts = target.scripts();
+    const scripts =
+      session === undefined
+        ? scriptOwners(project)
+            .filter(
+              owner =>
+                owner.script?.trim() &&
+                (owner === project || scriptPage(project, owner) === showing),
+            )
+            .map(owner => ({
+              id: ownerId(owner),
+              label:
+                owner === project
+                  ? 'project'
+                  : owner === showing
+                    ? `page:${showing.name}`
+                    : `element:${showing.name}/${owner.name}`,
+              source: owner.script!,
+              manifest: scriptManifest(project, owner),
+            }))
+        : target.scripts();
+    availableScripts = scripts;
     const loaded =
       selected?.session === session && selected?.id !== undefined
         ? scripts.find(script => script.id === selected!.id)
@@ -245,7 +271,7 @@ export const mountMessageWindow = (
 
   const run = async (text: string, context: Context): Promise<MessageReply> => {
     if (context.session === undefined) {
-      const reply = await runInEdit(shell.editor, text);
+      const reply = await runInEdit(shell.editor, text, context.id);
       shell.redraw();
       return reply;
     }
@@ -302,9 +328,9 @@ export const mountMessageWindow = (
     if (selector.value === 'unavailable') {
       return;
     }
-    const script = target
-      .scripts()
-      .find(script => String(script.id) === selector.value);
+    const script = availableScripts.find(
+      script => String(script.id) === selector.value,
+    );
     selected = script
       ? { session: target.session(), id: script.id, label: script.label }
       : undefined;

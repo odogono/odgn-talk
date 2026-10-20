@@ -1,8 +1,23 @@
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
-import { grammar } from '@northtalk/ts';
+import { grammar, stdlibSources } from '@northtalk/ts';
 import { isIdentifierName, type Page, type Project } from './model';
 import type { ScriptOwner } from './script-manifest';
+
+/** Libraries have their own namespace, independent of object bindings. */
+export const libraryNameProblem = (name: string): string | undefined => {
+  if (
+    !isIdentifierName(name) ||
+    name === '_' ||
+    grammar.reserved.includes(name)
+  ) {
+    return 'Use a NorthTalk identifier for the Library name.';
+  }
+  if (Object.hasOwn(stdlibSources, name)) {
+    return 'That name belongs to a Standard Library.';
+  }
+  return undefined;
+};
 
 export const reservedScriptNames: ReadonlySet<string> = new Set([
   ...grammar.reserved,

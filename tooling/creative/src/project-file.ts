@@ -28,7 +28,7 @@ import { drawingProblem } from './drawing';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 2;
+export const CURRENT_FORMAT = 3;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -446,12 +446,20 @@ export const validateProjectJson = (
     checkAsset(c, raw, `assets[${i}]`),
   );
   c.unique(assets, i => `assets[${i}]`, 'asset');
+  const libraries = (c.arr(root.libraries, 'libraries') ?? []).map((raw, i) => {
+    const path = `libraries[${i}]`;
+    const library = c.obj(raw, path) ?? {};
+    const name = c.str(library.name, `${path}.name`) ?? '';
+    return { name, source: c.str(library.source, `${path}.source`) ?? '' };
+  });
+  c.unique(libraries, i => `libraries[${i}]`, 'Library');
   const project: Project = {
     name: c.str(root.name, 'name') ?? '',
     designWidth: c.num(root.designWidth, 'designWidth', 'positive') ?? 1,
     script: c.str(root.script, 'script') ?? '',
     pages,
     assets,
+    libraries,
   };
   if (project.name === '' && typeof root.name === 'string') {
     c.fail('name', 'the Project needs a name');
@@ -518,6 +526,7 @@ export type Migration = (data: Obj) => Obj;
 /** Format 1 is already a membership tree with only leaf roots. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   1: data => ({ ...data }),
+  2: data => ({ ...data, libraries: [] }),
 };
 
 /**

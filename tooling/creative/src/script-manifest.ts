@@ -277,7 +277,7 @@ export const scriptManifest = (
     kind: 'kind' in owner ? owner.kind : owner === project ? 'project' : 'page',
     version: '1',
     language: coreVersions.language,
-    libraries: [],
+    libraries: project.libraries.map(({ name, source }) => ({ name, source })),
     objects: [
       ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
       ...(page

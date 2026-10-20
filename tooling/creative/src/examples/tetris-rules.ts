@@ -5,11 +5,7 @@ export const ROWS = 20;
 export const COLUMNS = 10;
 export const EMPTY_COLOUR = '#ffffff';
 
-export const TETRIS_RULES = `-- Tetris. The board is a list of ${ROWS} rows, each a list of ${COLUMNS}
--- numbers: 0 for an empty square, or the number of the piece that filled
--- it. The falling piece is its kind, its squares inside a small box, and
--- where that box sits on the board.
-
+export const TETRIS_LIBRARY = `-- Stateless Tetris calculations shared by both Example Projects.
 constant rows = ${ROWS}
 constant columns = ${COLUMNS}
 constant emptyColour = "${EMPTY_COLOUR}"
@@ -22,6 +18,70 @@ constant shapes = [[[2, 1], [2, 2], [2, 3], [2, 4]], [[1, 1], [1, 2], [2, 1], [2
 constant boxSizes = [4, 2, 3, 3, 3, 3, 3]
 -- Points for clearing one, two, three or four lines, times the level.
 constant linePoints = [100, 300, 500, 800]
+
+on grid height, width, value
+  put [] into result
+  repeat for each r in 1..height
+    put [] into row
+    repeat for each c in 1..width
+      put value into item c of row
+    end repeat
+    put row into item r of result
+  end repeat
+  return result
+end grid
+
+on fits board, shape, atTop, atLeft
+  repeat for each [r, c] in shape
+    put atTop + r into boardRow
+    put atLeft + c into boardColumn
+    if boardRow < 1 or boardRow > rows then
+      return false
+    end if
+    if boardColumn < 1 or boardColumn > columns then
+      return false
+    end if
+    if item boardColumn of item boardRow of board is not 0 then
+      return false
+    end if
+  end repeat
+  return true
+end fits
+
+on isFull row
+  repeat for each square in row
+    if square = 0 then
+      return false
+    end if
+  end repeat
+  return true
+end isFull
+
+on dropInterval level
+  return max(100, 1000 - 75 * (level - 1))
+end dropInterval
+
+on colourOf piece
+  if piece = 0 then
+    return emptyColour
+  end if
+  return item piece of colours
+end colourOf
+
+on turnedSquares squares, size, clockwise
+  put [] into turned
+  repeat for each [r, c] in squares
+    if clockwise then
+      put [c, size + 1 - r] into item (the length of turned + 1) of turned
+    else
+      put [size + 1 - c, r] into item (the length of turned + 1) of turned
+    end if
+  end repeat
+  return turned
+end turnedSquares
+`;
+
+export const TETRIS_RULES = `use rows, columns, emptyColour, colours, shapes, boxSizes, linePoints, grid, fits, isFull, dropInterval, colourOf, turnedSquares from tetrisRules
 
 script variable board = []
 script variable kind = 0
@@ -40,19 +100,6 @@ script variable changed = false
 on openPage
   restart
 end openPage
-
--- A list of lists, height rows by width columns, all holding value.
-on grid height, width, value
-  put [] into result
-  repeat for each r in 1..height
-    put [] into row
-    repeat for each c in 1..width
-      put value into item c of row
-    end repeat
-    put row into item r of result
-  end repeat
-  return result
-end grid
 
 on restart
   put grid(rows, columns, 0) into board
@@ -95,32 +142,13 @@ on spawnPiece
   put 0 into sinceDrop
   put true into changed
   showPreview
-  if not fits(squares, pieceTop, pieceLeft) then
+  if not fits(board, squares, pieceTop, pieceLeft) then
     endGame
   end if
 end spawnPiece
 
--- Whether these squares, with their box at atTop and atLeft, are all on
--- the board and on empty squares.
-on fits shape, atTop, atLeft
-  repeat for each [r, c] in shape
-    put atTop + r into boardRow
-    put atLeft + c into boardColumn
-    if boardRow < 1 or boardRow > rows then
-      return false
-    end if
-    if boardColumn < 1 or boardColumn > columns then
-      return false
-    end if
-    if item boardColumn of item boardRow of board is not 0 then
-      return false
-    end if
-  end repeat
-  return true
-end fits
-
 on tryMove down, across
-  if fits(squares, pieceTop + down, pieceLeft + across) then
+  if fits(board, squares, pieceTop + down, pieceLeft + across) then
     add down to pieceTop
     add across to pieceLeft
     put true into changed
@@ -137,15 +165,8 @@ on rotate clockwise
     return false
   end if
   put item kind of boxSizes into size
-  put [] into turned
-  repeat for each [r, c] in squares
-    if clockwise then
-      put [c, size + 1 - r] into item (the length of turned + 1) of turned
-    else
-      put [size + 1 - c, r] into item (the length of turned + 1) of turned
-    end if
-  end repeat
-  if fits(turned, pieceTop, pieceLeft) then
+  put turnedSquares(squares, size, clockwise) into turned
+  if fits(board, turned, pieceTop, pieceLeft) then
     put turned into squares
     put true into changed
     return true
@@ -161,14 +182,7 @@ on lockPiece
   spawnPiece
 end lockPiece
 
-on isFull row
-  repeat for each square in row
-    if square = 0 then
-      return false
-    end if
-  end repeat
-  return true
-end isFull
+
 
 -- Keep the rows that aren't full, and put empty rows on top for the rest.
 on clearLines
@@ -206,17 +220,12 @@ on endGame
   show gameOverAlert
 end endGame
 
--- Milliseconds between drops: a second at level 1, faster each level.
-on dropInterval
-  return max(100, 1000 - 75 * (level - 1))
-end dropInterval
-
 on frame elapsed
   if not playing then
     return
   end if
   add elapsed to sinceDrop
-  if sinceDrop >= dropInterval() then
+  if sinceDrop >= dropInterval(level) then
     put 0 into sinceDrop
     if not tryMove(1, 0) then
       lockPiece
@@ -249,12 +258,7 @@ on keyDown key
   paint
 end keyDown
 
-on colourOf piece
-  if piece = 0 then
-    return emptyColour
-  end if
-  return item piece of colours
-end colourOf
+
 
 -- Lay the falling piece over the board. The renderer paints that view.
 on paint

@@ -1,7 +1,7 @@
 import { createProject } from '../model';
 import { type ExampleContent } from './index';
 import { createTetrisPage } from './tetris-layout';
-import { TETRIS_RULES } from './tetris-rules';
+import { TETRIS_LIBRARY, TETRIS_RULES } from './tetris-rules';
 
 export const TETRIS_PROJECT_NAME = 'Tetris';
 
@@ -40,6 +40,7 @@ end previewCell
 /** Builds Tetris with 200 pre-placed board cells and a 4x4 preview. */
 export const createTetrisProject = async (): Promise<ExampleContent> => {
   const project = createProject(TETRIS_PROJECT_NAME);
+  project.libraries = [{ name: 'tetrisRules', source: TETRIS_LIBRARY }];
   project.pages = [
     createTetrisPage(TETRIS_RULES + ELEMENT_PAINTING, 'elements'),
   ];

@@ -32,7 +32,7 @@ import {
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { importSound, SOUND_ACCEPT } from './sounds';
-import { ScriptWindows } from './scripts';
+import { CodeBrowser } from './scripts';
 import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
@@ -295,6 +295,7 @@ export type StackShell = {
   editor: StackEditor;
   images: ImageAssets;
   onRedraw(listener: () => void): void;
+  openLibrary(id: number, line?: number): void;
   openScript(owner: ScriptOwner, line?: number): void;
   readOnly: boolean;
   redraw(): void;
@@ -322,7 +323,7 @@ export const mountStack = (
   const redrawVersion = signal(0);
   const redrawListeners = new Set<() => void>();
   const images = new ImageAssets();
-  const scripts = new ScriptWindows(editor, () => draw());
+  const scripts = new CodeBrowser(editor, () => draw());
   window.addEventListener('pagehide', event => {
     stopPreview();
     if (!event.persisted) {
@@ -1195,6 +1196,7 @@ export const mountStack = (
       redrawListeners.add(listener);
     },
     openScript: (owner, line) => scripts.open(owner, line),
+    openLibrary: (id, line) => scripts.openLibrary(id, line),
     setPlaying(mode) {
       finishFieldEdit();
       stopPreview();

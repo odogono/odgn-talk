@@ -1,12 +1,13 @@
 // What every NorthTalk editing window shares: a floating, resizable window,
 // a language-server worker configured with the Host Manifest, and the shared
-// editor. Script windows and the Message Box are both built from these.
+// editor. The Code Browser and Message Box are both built from these.
 import { type Extension } from '@codemirror/state';
 import { EditorView, type KeyBinding } from '@codemirror/view';
 import { northtalkEditor, type LanguageHooks } from '@northtalk/editor/editor';
 import { LspClient } from '@northtalk/editor/lsp-client';
 import { floatingWindow, type FloatingWindow } from './windows';
 import { type scriptManifest } from './script-manifest';
+import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 
 type HostManifest = ReturnType<typeof scriptManifest>;
 
@@ -31,7 +32,10 @@ export const showCodeWindow = (win: CodeWindow): void => {
 
 /** A language-server worker for one editor. */
 export type LanguageServer = {
-  configure(manifest: HostManifest): void;
+  configure(
+    manifest: HostManifest,
+    sources?: WorkspaceConfiguration['sources'],
+  ): void;
   dispose(): void;
   lsp: LspClient;
 };
@@ -42,11 +46,12 @@ export const languageServer = (): LanguageServer => {
   let configured = '';
   return {
     lsp,
-    configure(manifest) {
-      const key = JSON.stringify(manifest);
+    configure(manifest, sources) {
+      const configuration = { manifest, sources };
+      const key = JSON.stringify(configuration);
       if (key !== configured) {
         configured = key;
-        lsp.configure({ manifest });
+        lsp.configure(configuration);
       }
     },
     dispose() {

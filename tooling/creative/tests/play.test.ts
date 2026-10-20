@@ -690,7 +690,7 @@ end click`;
   await advance(play);
   expect(play.page.name).toBe('page2');
   expect(play.sounds.playing()).toEqual([
-    { owner: 'project', name: 'rain', loop: true },
+    { owner: 'script:project', name: 'rain', loop: true },
   ]);
   expect(play.problems).toEqual([]);
   // Stop silences the rest.
