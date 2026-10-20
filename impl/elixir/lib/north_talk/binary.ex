@@ -9,9 +9,10 @@ defmodule NorthTalk.Binary do
   # their tags are refused.
 
   alias Jason.OrderedObject
+  alias NorthTalk.Generated.Envelope
 
-  @feature "request-pump-fields-v1"
-  @callbacks_feature "callbacks-fields-v1"
+  @feature Enum.at(Envelope.features(), 0)
+  @callbacks_feature Enum.at(Envelope.features(), 1)
   @prefix <<0x4E, 0x54, 0x42, 1, 1>>
   @max 18_446_744_073_709_551_616
   @max_plain 9_007_199_254_740_992
@@ -25,88 +26,56 @@ defmodule NorthTalk.Binary do
   # `{:list, kind}` the kind of each element.
   @target {:map, %{"object" => :value}}
   @message {:map, %{"args" => :args}}
-  @base [{"ref", :protocol}, {"group", :text}]
-  @notices [{"abandoned", :protocol}, {"settled", :protocol}, {"trace", :protocol}]
-  @pump [{"now", :instant}, {"fuelSlice", :protocol}, {"fuelCap", :protocol}]
-  @result [
-    {"outcome", :protocol},
-    {"value", :value},
-    {"code", :protocol},
-    {"message", :protocol},
-    {"charged", :protocol}
-  ]
+  # Generated kinds select the codec's nested protocol interpretation once,
+  # at compile time. The catalogue owns all tags and positional fields.
+  @schemas Map.new(Envelope.messages(), fn entry ->
+             {entry.tag,
+              Enum.map(entry.fields, fn field ->
+                kind =
+                  case field.kind do
+                    :target -> @target
+                    :message -> @message
+                    :values -> :args
+                    :uint when field.name == "token" -> :token
+                    kind when kind in [:value, :instant, :text, :reports, :settlements] -> kind
+                    _ -> :protocol
+                  end
 
-  @messages %{
-    0x01 => {"request", @base ++ [{"to", @target}, {"message", @message}]},
-    0x02 => {"call", @base ++ [{"fn", :value}, {"args", :args}, {"limits", :protocol}]},
-    0x03 => {"pump", @base ++ @pump},
-    0x04 => {"request-pump", @base ++ [{"token", :token}, {"to", @target}, {"message", @message}] ++ @pump},
-    0x05 =>
-      {"call-pump", @base ++ [{"token", :token}, {"fn", :value}, {"args", :args}, {"limits", :protocol}] ++ @pump},
-    0x06 => {"op-result", @base ++ @result},
-    0x07 => {"prop-result", @base ++ @result},
-    0x08 => {"effect-result", @base ++ [{"status", :protocol}]},
-    0x09 => {"release-result", @base},
-    0x0B =>
-      {"load",
-       @base ++
-         Enum.map(~w(name source grants grantsAsUsed owner objects limits newGroup refuseWorker), &{&1, :protocol})}
-  }
-  @needs %{
-    0x83 =>
-      {"op",
-       [{"ref", :protocol}] ++
-         Enum.map(~w(call script run segment grant capability operation mode), &{&1, :protocol}) ++
-         [{"now", :instant}, {"args", :args}, {"scope", :protocol}, {"automatic", :protocol}, {"fuelLeft", :protocol}] ++
-         @notices},
-    @prop_need =>
-      {"prop",
-       [{"ref", :protocol}, {"object", :protocol}, {"prop", :protocol}, {"set", :protocol}, {"value", :value}] ++
-         [{"op", :protocol}, {"selector", :value}] ++ @notices},
-    0x85 =>
-      {"effect",
-       [{"ref", :protocol}] ++
-         Enum.map(~w(script run segment grant grants coordinator phase), &{&1, :protocol}) ++
-         [{"now", :instant}] ++ @notices},
-    0x86 =>
-      {"release",
-       [{"ref", :protocol}, {"script", :protocol}, {"grant", :protocol}, {"reason", :protocol}, {"now", :instant}] ++
-         @notices}
-  }
-  @need_tags Map.new(@needs, fn {tag, {m, _}} -> {m, tag} end)
-  @tags Map.new(@messages, fn {tag, {m, _}} -> {m, tag} end)
-  @admission [{"ref", :protocol}, {"delivery", :text}, {"err", :protocol}] ++ @notices
-  @completion [{"ref", :protocol}, {"delivery", :text}, {"token", :token}, {"state", :protocol}] ++
-                [{"nextDeadline", :instant}, {"fuelUsed", :protocol}, {"reports", :reports}, {"gone", :protocol}] ++
-                [{"err", :protocol}] ++ @notices
-  @schemas Map.merge(
-             Map.merge(Map.new(@messages, fn {t, {_, f}} -> {t, f} end), Map.new(@needs, fn {t, {_, f}} -> {t, f} end)),
-             %{0x81 => @admission, 0x82 => @completion}
-           )
+                {field.name, kind}
+              end)}
+           end)
+  @inputs Map.new(Enum.filter(Envelope.messages(), &(&1.direction == :host_to_guest)), fn entry ->
+            {entry.tag, {entry.name, @schemas[entry.tag]}}
+          end)
+  @callback_needs Map.new(
+                    Enum.filter(
+                      Envelope.messages(),
+                      &(&1.direction == :guest_to_host and &1.name not in ~w(admission completion))
+                    ),
+                    fn entry ->
+                      {entry.tag, {entry.name, @schemas[entry.tag]}}
+                    end
+                  )
+  @need_tags Map.new(@callback_needs, fn {tag, {m, _}} -> {m, tag} end)
+  @tags Map.new(@inputs, fn {tag, {m, _}} -> {m, tag} end)
   @outer ~w(ref abandoned settled trace)
+  @settlement Enum.map(Envelope.settlement(), fn f -> {f.name, f.kind} end)
+  @report_tags Map.new(Envelope.reports(), fn entry ->
+                 fields =
+                   Enum.map(entry.fields, fn field ->
+                     kind =
+                       case {field.name, field.kind} do
+                         {_, :value} -> :value
+                         {_, :values} -> :args
+                         {_, :message} -> @message
+                         {"vetoes", :record} -> {:list, {:map, %{"reason" => :value}}}
+                         _ -> :protocol
+                       end
 
-  # Each Report's fields in order, as for frames; unlisted kinds are protocol.
-  @reports [
-    {"run end",
-     ~w(script run delivery broadcast handler fallback climbed outcome result error limit effect cleanupFailed at fuel alloc),
-     %{"result" => :value, "error" => :value}},
-    {"run started", ~w(script run args rootDelivery parentRun parentCall delivery selector fn),
-     %{"args" => :args, "fn" => :value}},
-    {"run discarded", ~w(script run reason rootDelivery parentRun parentCall), %{}},
-    {"run accounting", ~w(script run fuel state rootDelivery parentRun parentCall), %{}},
-    {"causal work", ~w(rootDelivery liveRuns queuedMessages discardedMessages), %{}},
-    {"stop", ~w(script reason discardedRuns droppedMessages pendingCalls), %{}},
-    {"unhandled", ~w(delivery message target), %{"message" => @message, "target" => :value}},
-    {"call failed", ~w(script call operation detail), %{}},
-    {"effect failure", ~w(script run grant segment phase status scope), %{}},
-    {"decided", ~w(delivery broadcast verdict vetoes undecided), %{"vetoes" => {:list, {:map, %{"reason" => :value}}}}},
-    {"host error", ~w(code detail), %{}},
-    {"charge result", ~w(request call fuel status), %{}}
-  ]
-  @report_tags @reports
-               |> Enum.with_index(1)
-               |> Map.new(fn {{kind, keys, kinds}, tag} ->
-                 {kind, {tag, Enum.map(keys, &{&1, Map.get(kinds, &1, :protocol)})}}
+                     {field.name, kind}
+                   end)
+
+                 {entry.name, {entry.tag, fields}}
                end)
   @report_kinds Map.new(@report_tags, fn {kind, {tag, keys}} -> {tag, {kind, keys}} end)
 
@@ -151,7 +120,7 @@ defmodule NorthTalk.Binary do
   """
   def encode_answer(%{"m" => m} = answer, ref, group) do
     tag = @tags[m] || invalid("#{inspect(m)} has no binary form")
-    {_, [_ref, _group | schema]} = @messages[tag]
+    {_, [_ref, _group | schema]} = @inputs[tag]
     wire = answer_wire(tag, Map.delete(answer, "m"))
     Enum.each(wire, fn {k, _} -> List.keymember?(schema, k, 0) or invalid("#{k} is not a field of this frame") end)
     items = Enum.map(schema, fn {name, kind} -> field_item(kind, Map.get(wire, name)) end)
@@ -209,8 +178,8 @@ defmodule NorthTalk.Binary do
   ready to answer, and any other frame as ordered JSON. Raises
   `NorthTalk.HostError` with code `invalid value` for a malformed one.
   """
-  def decode(<<@prefix, tag, 6, rest::binary>>) when is_map_key(@needs, tag) do
-    {m, [ref | schema]} = @needs[tag]
+  def decode(<<@prefix, tag, 6, rest::binary>>) when is_map_key(@callback_needs, tag) do
+    {m, [ref | schema]} = @callback_needs[tag]
     {ref, rest} = read_kind(read_length(rest, length(schema) + 1), elem(ref, 1))
     if not is_integer(ref), do: malformed()
     {notices, need} = notices(read_fields(rest, schema, []), [{"ref", ref}])
@@ -280,19 +249,22 @@ defmodule NorthTalk.Binary do
             )
           )
 
-        # The other outcomes are flags: started, done, limit, ok, hostError.
+        "hostError" ->
+          ""
+
+        # The other outcomes are flags: started, done, limit, ok.
         _ ->
           true
       end
 
     fields = Enum.filter(pairs, fn {k, _} -> k in ~w(ref group charged) end)
-    OrderedObject.new([{"m", elem(@messages[tag], 0)} | fields ++ [{outcome, result}]])
+    OrderedObject.new([{"m", elem(@inputs[tag], 0)} | fields ++ [{outcome, result}]])
   end
 
-  defp shape(tag, pairs) when is_map_key(@messages, tag) do
+  defp shape(tag, pairs) when is_map_key(@inputs, tag) do
     if not is_binary(get(pairs, "group")), do: malformed()
     if tag == 0x0B and not (is_binary(get(pairs, "name")) and is_binary(get(pairs, "source"))), do: malformed()
-    OrderedObject.new([{"m", elem(@messages[tag], 0)} | pairs])
+    OrderedObject.new([{"m", elem(@inputs[tag], 0)} | pairs])
   end
 
   defp shape(tag, pairs) do
@@ -342,12 +314,22 @@ defmodule NorthTalk.Binary do
 
   # Hook details stay on the Host side of the binary protocol.
   defp to_wire(8, fields), do: List.keydelete(fields, "detail", 0)
-  defp to_wire(@prop_need, fields), do: [{"set", List.keymember?(fields, "value", 0)} | fields]
+
+  defp to_wire(@prop_need, fields) do
+    object = get(fields, "object")
+    object = if is_list(object), do: object, else: get(pairs(object), "$object")
+    [{"set", List.keymember?(fields, "value", 0)} | List.keystore(fields, "object", 0, {"object", object})]
+  end
+
   defp to_wire(_, fields), do: fields
 
   # A setter's value stays present, even when it is Nothing.
   defp from_wire(@prop_need, fields) do
     {set, fields} = List.keytake(fields, "set", 0) || {{"set", false}, fields}
+
+    object = get(fields, "object")
+    if not (is_list(object) and length(object) == 2), do: malformed()
+    fields = List.keystore(fields, "object", 0, {"object", %{"$object" => object}})
 
     case {set, List.keymember?(fields, "value", 0)} do
       {{_, true}, false} -> [{"value", nil} | fields]
@@ -374,6 +356,26 @@ defmodule NorthTalk.Binary do
     ]
   end
 
+  defp field_item(:settlements, settlements) when is_list(settlements) do
+    [
+      6,
+      uint(length(settlements)),
+      Enum.map(settlements, fn settlement ->
+        ps = pairs(settlement)
+
+        if not is_binary(get(ps, "call")) or get(ps, "outcome") not in ~w(answer fail),
+          do: invalid("invalid settlement")
+
+        for {key, _} <- ps, not List.keymember?(@settlement, key, 0), do: invalid("unknown settlement field")
+        [6, uint(length(@settlement)), Enum.map(@settlement, fn {key, kind} -> field_item(kind, get(ps, key)) end)]
+      end)
+    ]
+  end
+
+  defp field_item(:settlements, _), do: invalid("settlements must be a list")
+  defp field_item(:int, v) when is_integer(v), do: integer_item(v)
+  defp field_item(:int, _), do: invalid("expected integer")
+
   defp field_item(:reports, v), do: reports_item(v)
 
   defp field_item(:instant, v) when is_binary(v) do
@@ -391,10 +393,40 @@ defmodule NorthTalk.Binary do
   defp read_kind(bin, :value), do: read_value(bin)
   defp read_kind(<<6, rest::binary>>, :args), do: read_list(rest, &read_value/1)
   defp read_kind(_, :args), do: malformed()
+
+  defp read_kind(<<6, rest::binary>>, :settlements) do
+    read_list(rest, fn
+      <<6, rest::binary>> ->
+        rest = read_length(rest, length(@settlement))
+
+        {ps, rest} =
+          Enum.reduce(@settlement, {[], rest}, fn {key, kind}, {ps, rest} ->
+            {value, rest} =
+              case rest do
+                <<0, tail::binary>> -> {nil, tail}
+                _ -> read_kind(rest, kind)
+              end
+
+            {if(value == nil and key != "value", do: ps, else: [{key, value} | ps]), rest}
+          end)
+
+        if not is_binary(get(ps, "call")) or get(ps, "outcome") not in ~w(answer fail), do: malformed()
+        {OrderedObject.new(Enum.reverse(ps)), rest}
+
+      _ ->
+        malformed()
+    end)
+  end
+
+  defp read_kind(_, :settlements), do: malformed()
   defp read_kind(bin, :reports), do: read_reports(bin)
 
   defp read_kind(bin, :text) do
     with {v, _} = read when is_binary(v) <- read_protocol(bin), do: read, else: (_ -> malformed())
+  end
+
+  defp read_kind(bin, :int) do
+    with {v, _} = read when is_integer(v) <- read_protocol(bin), do: read, else: (_ -> malformed())
   end
 
   defp read_kind(bin, :token) do
