@@ -1,0 +1,24 @@
+# Unblessed: exact restored call lost error data (#1407); first blessing awaits human review.
+# Both errors retain their source at; only the Join error adds index.
+# Neither error carries capability or operation, even after its deadline.
+> load s identity=c832df9d54af2504fb0b0c67d6bf15ae442579e74d10c376b57fe91a7de84eae
+> deliver d1 to=s message=single
+> deliver d2 to=s message=gather
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=remote.get args=[]
+seg s/r1 start delivery=d1 handler=single clause=1 fuel=15 alloc=0 state=256 end=ask-wait
+call s/r2.c1 op=remote.get args=[]
+seg s/r2 start delivery=d2 handler=gather clause=1 fuel=35 alloc=0 state=448 end=join-end
+pumped state=idle fuel=50 next=2026-10-02T00:00:01Z
+> save s1
+> restore from=s1 fingerprint=6359045234f0c99cb3c2ec008546c69125bcfe5ee19f35ee2b006de9ce2566ac mode=full pending=[s/r1.c1, s/r2.c1]
+> pump clock=2026-10-02T00:00:02Z
+raise s/r1 code="call lost" at=s:2 pos=2:3
+seg s/r1 resume fuel=4 alloc=0 state=176 end=error
+run s/r1 outcome=errored delivery=d1 handler=single error={code: "call lost", at: {unit: "s", handler: "single", line: 2, column: 3}} fuel=19 alloc=0
+raise s/r2 code="call lost" at=s:9 pos=8:3
+seg s/r2 resume fuel=4 alloc=0 state=408 end=error
+run s/r2 outcome=errored delivery=d2 handler=gather error={code: "call lost", at: {unit: "s", handler: "gather", line: 8, column: 3}, index: 1} fuel=39 alloc=0
+pumped state=idle fuel=8
+> vars
+vars s

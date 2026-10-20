@@ -2339,9 +2339,12 @@ pub const Group = struct {
     /// for a replacement, the Scripts still to replace from `next`.
     pub const PausedWork = union(enum) {
         reload: struct { script: *Script, fresh: *Script, keep_mailbox: bool },
-        replace: struct { rebuilt: []Rebuilt, next: usize, made: []*Library, libraries: []*Library },
+        replace: struct { rebuilt: []Rebuilt, next: usize, step: ReplaceStep, made: []*Library, libraries: []*Library },
     };
     pub const Rebuilt = struct { script: *Script, fresh: *Script };
+    /// Where a library replacement's terminations are: every rollback
+    /// first, then each Script's release and stop.
+    pub const ReplaceStep = enum { start, rollback, stop };
 
     /// What a paused Reload or library replacement finished with.
     pub const Resumed = union(enum) { reload: ReloadResult, replace: ReplaceResult };
@@ -2360,7 +2363,7 @@ pub const Group = struct {
                 if (result != .paused) g.dropFresh(x.fresh);
                 return .{ .reload = result };
             },
-            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.made, x.libraries) },
+            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.step, x.made, x.libraries) },
         }
     }
 
@@ -2692,14 +2695,14 @@ pub const Group = struct {
             return e;
         };
         owns_given = false;
-        return g.finishReplace(pending, 0, owned_made, given);
+        return g.finishReplace(pending, 0, .start, owned_made, given);
     }
 
     /// A checked library replacement's terminations and replacements, from
     /// the Script at `from`. Paused at a lifecycle crossing, it keeps its
     /// state in `paused_work`; otherwise it frees `rebuilt` and gives
     /// `made` to the caller.
-    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, made: []*Library, libraries: []*Library) !ReplaceResult {
+    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, step: ReplaceStep, made: []*Library, libraries: []*Library) !ReplaceResult {
         g.reworking = true;
         defer g.reworking = false;
         var paused = false;
@@ -2713,13 +2716,35 @@ pub const Group = struct {
             }
         };
         var i = from;
+        // Every affected Script rolls back before any is released or
+        // stopped: success, and so the `reload` reason, is known only once
+        // all have (chapter 9). Every discarded Call is cancelled first.
+        if (step == .start) for (rebuilt) |x| for (x.script.live.items) |r| g.waits.abandonRun(r, .stopped);
+        if (step != .stop) {
+            while (i < rebuilt.len) : (i += 1) {
+                var runs: std.ArrayList(*Run) = .empty;
+                defer runs.deinit(g.gpa);
+                try runs.appendSlice(g.gpa, rebuilt[i].script.live.items);
+                sorting.stable(*Run, runs.items, {}, struct {
+                    fn less(_: void, x: *Run, y: *Run) bool {
+                        return runNumber(x.id) < runNumber(y.id);
+                    }
+                }.less);
+                for (runs.items) |r| g.cleanupLifecycle(r, .stopped) catch {
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .rollback, .made = made, .libraries = libraries } };
+                    paused = true;
+                    return .paused;
+                };
+            }
+            i = 0;
+        }
         while (i < rebuilt.len) : (i += 1) {
             const x = rebuilt[i];
             // Terminate every old Script before publishing any new code.
             // A fatal stop may itself pause while cleaning up other Scripts.
             g.stopScript(x.script, "reload", null, .{ .release = .reload, .discard = "library replacement" }) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
                     paused = true;
                     return .paused;
                 }
@@ -2728,7 +2753,7 @@ pub const Group = struct {
             // A Grant release hook waits for the Host before the next
             // Script stops, and before any code is published.
             if (g.release_pause) {
-                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .made = made, .libraries = libraries } };
+                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .step = .stop, .made = made, .libraries = libraries } };
                 paused = true;
                 return .paused;
             }
@@ -2737,7 +2762,7 @@ pub const Group = struct {
         if (g.fatal) {
             for (g.scripts.items) |s| g.stopScript(s, "effect state unknown", null, .{}) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
                     paused = true;
                     return .paused;
                 }
@@ -3011,6 +3036,9 @@ pub const Group = struct {
                 };
                 for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
                     try g.cancel(x, r);
+                    // An unknown rollback stops the Group, the cancelled
+                    // Run with it.
+                    if (g.fatal) try g.stopForUncertainty();
                     return;
                 };
             },
@@ -3156,7 +3184,9 @@ pub const Group = struct {
     fn cancelDelivery(g: *Group, id: u64) !void {
         for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) {
             if (sealedDecision(r.delivery) and !r.verdict) return;
-            return g.cancel(x, r);
+            try g.cancel(x, r);
+            if (g.fatal) try g.stopForUncertainty();
+            return;
         };
         for (g.scripts.items) |x| for (x.work.items, 0..) |w, i| switch (w) {
             .message => |d| if (d.id == id and d.from == null and !sealedDecision(d)) {
@@ -4170,7 +4200,9 @@ pub const Group = struct {
                 const resuming_crossing = s.work.items.len > 0 and s.work.items[0] == .run and (s.work.items[0].run.crossed != null or s.work.items[0].run.ending != null);
                 if (g.rewound and !resuming_crossing) break :turns;
                 if (s.work.items.len == 0) continue;
-                if (g.fatal) break :turns;
+                // So does unknown effect state, once a Run paused at a
+                // crossing has ended its Stretch and stopped with the Group.
+                if (g.fatal and !resuming_crossing) break :turns;
                 if (g.cap > 0 and g.pump_fuel >= g.cap) {
                     g.sliced = true;
                     break :turns;
@@ -6031,7 +6063,7 @@ pub const Group = struct {
             if (run.landed) |l| if (l == .stop) {
                 defer g.gpa.free(l.stop);
                 run.landed = null;
-                return g.stopScript(s, l.stop, run, .{});
+                if (!g.fatal) return g.stopScript(s, l.stop, run, .{});
             };
             return g.stopGroup(run);
         }
@@ -6220,8 +6252,7 @@ pub const Group = struct {
         if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
             owned_running = null;
             if (running) |r| return g.stopGroup(r);
-            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
-            return;
+            return g.stopForUncertainty();
         }
         // Once rollback is complete, Stop owns all its Runs, including on
         // allocation refusal. End each once; the tail guard owns the rest.
@@ -6378,6 +6409,24 @@ pub const Group = struct {
 
     /// Stops the Group, for an effect whose state is unknown: every Script,
     /// with the running Run discarded in its own.
+    /// Stops every Script for unknown effect state, in load order, when no
+    /// Run is handed over. A Run whose Host crossing is landing this input
+    /// ends its Stretch instead: its Script, and every one loaded after it,
+    /// stop with it, so its rollback and stop keep their order.
+    fn stopForUncertainty(g: *Group) anyerror!void {
+        const holder = if (g.landing_run) |r| r.script else null;
+        for (g.scripts.items) |x| {
+            if (x == holder) break;
+            try g.stopScript(x, "effect state unknown", null, .{});
+        }
+        const r = g.landing_run orelse return;
+        if (r.landed) |l| switch (l) {
+            .stop => return,
+            else => {},
+        };
+        r.landed = .{ .stop = try g.gpa.dupe(u8, "effect state unknown") };
+    }
+
     fn stopGroup(g: *Group, running: *Run) anyerror!void {
         const owner = running.script;
         var owned_running: ?*Run = running;

@@ -1,0 +1,20 @@
+# Restored standalone and Join member failures expose the complete error data.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "remote"
+name = "get"
+mode = "suspending"
+args = []
+result = "number"
+cost = { fuel = 1 }
+maxPending = 1000
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { remote = { ops = ["get"] } }

@@ -126,6 +126,10 @@ test "Library replacement publishes all code only after deferred cleanup succeed
         const deferred = try replacementTrace(true, status, fail_at, true);
         defer gpa.free(deferred);
         try testing.expectEqualStrings(sync, deferred);
+        // Every rollback precedes any release or stop (#1402).
+        const last_rollback = std.mem.lastIndexOf(u8, sync, "phase=rollback").?;
+        const first_stop = std.mem.indexOf(u8, sync, "\nstopped ").?;
+        try testing.expect(last_rollback < first_stop);
     };
 }
 
@@ -351,4 +355,74 @@ test "cancelling a parked queued Run cleans up without releasing the active Run 
     try testing.expect(!script.live.items[0].parked);
     try g.pump(.{ .seconds = 2, .micros = 0 });
     try testing.expectEqual(@as(usize, 0), script.live.items.len);
+}
+
+test "unknown rollback from another Script's Stop or cancel stops every Script with the controlling Run (#1401)" {
+    const a = testing.allocator;
+    const nothing = try caps.Shape.kind(a, .nothing);
+    defer nothing.release();
+    for ([_][]const u8{ "stop", "stop-two", "cancel" }) |control| {
+        const Control = struct {
+            var kind: []const u8 = "";
+            var rollbacks: [3]usize = .{ 0, 0, 0 };
+            fn hook(_: ?*anyopaque, phase: caps.Phase, segment: *const caps.SegmentContext) caps.EffectStatus {
+                if (phase != .rollback) return .ok;
+                for ([_][]const u8{ "earlier", "a", "b" }, 0..) |name, i| if (std.mem.eql(u8, segment.script, name)) {
+                    rollbacks[i] += 1;
+                };
+                return if (std.mem.eql(u8, segment.script, "a")) .unknown else .ok;
+            }
+            fn stop(_: ?*anyopaque, c: *caps.Call, _: []const *model.Value) caps.Outcome {
+                const g: *machine.Group = @ptrCast(@alignCast(c.owner.?));
+                if (std.mem.eql(u8, kind, "cancel")) {
+                    g.cancelRunInput("a/r1") catch return .broken;
+                } else {
+                    g.stopInput("a", "requested") catch return .broken;
+                    if (std.mem.eql(u8, kind, "stop-two")) g.stopInput("earlier", "second") catch return .broken;
+                }
+                return .{ .value = model.scalar(c.gpa, .nothing) catch return .broken };
+            }
+        };
+        Control.kind = control;
+        Control.rollbacks = .{ 0, 0, 0 };
+        var write = [_]caps.Operation{.{ .name = "write", .args = &.{}, .result = nothing, .mode = .immediate, .segment_bound = true, .host = .{ .call = ScopeHost.open } }};
+        var resource: caps.Capability = .{ .name = "resource", .operations = &write };
+        var allowed = [_]bool{true};
+        var r: caps.Grant = .{ .capability = &resource, .operations = &allowed, .coordinator = .{ .identity = 1, .hook = Control.hook, .context = null } };
+        var ctrl_ops = [_]caps.Operation{
+            .{ .name = "stop", .args = &.{}, .result = nothing, .mode = .immediate, .host = .{ .call = Control.stop } },
+            .{ .name = "mark", .args = &.{}, .result = nothing, .mode = .immediate, .host = .{ .call = ScopeHost.open } },
+        };
+        var ctrl_cap: caps.Capability = .{ .name = "ctrl", .operations = &ctrl_ops };
+        var ctrl_allowed = [_]bool{ true, true };
+        var ctrl: caps.Grant = .{ .capability = &ctrl_cap, .operations = &ctrl_allowed };
+        var out: std.Io.Writer.Allocating = .init(a);
+        defer out.deinit();
+        var g: machine.Group = .init(a, &out.writer);
+        defer g.deinit();
+        const busy = "on go\nask r to write\nrepeat forever\nend repeat\nend go";
+        try testing.expect((try g.load("earlier", busy, .{ .grants = &.{.{ .name = "r", .grant = &r }} })) == .loaded);
+        try testing.expect((try g.load("a", busy, .{ .grants = &.{.{ .name = "r", .grant = &r }} })) == .loaded);
+        try testing.expect((try g.load("b", "on go\nask r to write\nask ctrl to stop\nask ctrl to mark\nend go", .{ .grants = &.{ .{ .name = "ctrl", .grant = &ctrl }, .{ .name = "r", .grant = &r } } })) == .loaded);
+        for ([_][]const u8{ "earlier", "a", "b" }) |name| _ = try g.deliver(name, "go", &.{}, true);
+        try g.pumpWith(.{ .seconds = 0, .micros = 0 }, 100, 0);
+        const trace = out.written();
+        var stopped: std.ArrayList(u8) = .empty;
+        defer stopped.deinit(a);
+        var lines = std.mem.splitScalar(u8, trace, '\n');
+        while (lines.next()) |line| if (std.mem.startsWith(u8, line, "stopped ")) {
+            try testing.expect(std.mem.indexOf(u8, line, "reason=\"effect state unknown\"") != null);
+            var fields = std.mem.splitScalar(u8, line, ' ');
+            _ = fields.next();
+            try stopped.appendSlice(a, fields.next().?);
+            try stopped.append(a, ',');
+        };
+        testing.expectEqualStrings("earlier,a,b,", stopped.items) catch |e| {
+            std.debug.print("{s}: {s}\n", .{ control, trace });
+            return e;
+        };
+        try testing.expectEqual([3]usize{ 1, 1, 1 }, Control.rollbacks);
+        try testing.expect(std.mem.indexOf(u8, trace, "ctrl.mark") == null);
+        try testing.expect(g.stoppedState());
+    }
 }

@@ -15,10 +15,14 @@ go test -tags talk_zig_experimental -run '^TestReissueFuelFaultSkipsSiblingHostC
 go test -tags talk_zig_experimental -run '^TestWaitForCancellationRemovesSubscriptionTimerAndReadyEvent$' -count=1 "$@" .
 # A diamond checks each original Library site once per use (#1394).
 go test -tags talk_zig_experimental -run '^TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse$' -count=1 "$@" .
+# Unknown effect state from another Script's Stop or cancel stops the Group (#1401).
+go test -tags talk_zig_experimental -run '^TestFatalCrossScriptControlStopsCurrentRun$' -count=1 "$@" .
 # A Limit Fault names the function it happens in (#1400).
 go test -tags talk_zig_experimental -run '^TestCancellationCleanupAndNestedFaultLocation$' -count=1 "$@" .
 # Load memory within the adapter's agreed limits (#1403).
 go test -tags talk_zig_experimental -run '^TestLoadSourceAllocation$' -count=1 "$@" .
+# Library replacement rolls back every Script before releasing any (#1402).
+go test -tags talk_zig_experimental -run '^TestGrantReleaseLibraryReplacementCleanup$' -count=1 "$@" .
 # Replay must offer current Library identities to Restore after replacement.
 go test -tags talk_zig_experimental -run '^TestLibraryReplayAfterReplacement$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
