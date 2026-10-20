@@ -238,6 +238,8 @@ const Need = struct {
     kind: enum { op, prop, effect },
     /// The paused Pump's Group.
     entry: *GroupEntry,
+    /// When not empty, the one allocation an op's texts are slices of.
+    packed_texts: []u8 = &.{},
     // An op's fields.
     call: []u8,
     script: []u8,
@@ -270,7 +272,10 @@ const Need = struct {
     phase: caps.Phase = .begin,
 
     fn release(n: *Need, gpa: Allocator) void {
-        for ([_][]u8{ n.call, n.script, n.run, n.segment, n.grant, n.capability, n.operation, n.scope, n.object_kind, n.object_id, n.prop }) |s| gpa.free(s);
+        if (n.packed_texts.len != 0) {
+            gpa.free(n.packed_texts);
+        } else for ([_][]u8{ n.call, n.script, n.run, n.segment, n.grant, n.capability, n.operation, n.scope }) |s| gpa.free(s);
+        for ([_][]u8{ n.object_kind, n.object_id, n.prop }) |s| gpa.free(s);
         for (n.grants) |g| gpa.free(g);
         gpa.free(n.grants);
         if (n.coordinator) |c| gpa.free(c);
@@ -1030,34 +1035,43 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
     if (!(s.x.in_pump or s.x.in_work) or !call.deferrable) return .broken;
     s.x.need = need: {
         const gpa = s.gpa;
+        // One allocation holds every text the need carries (#1103).
+        const texts = [_][]const u8{ call.id, call.script, call.run, call.segment, call.grant, oc.capability, oc.operation, call.scope };
+        var total: usize = 0;
+        for (texts) |t| total += t.len;
+        const packed_texts = gpa.alloc(u8, total) catch return .broken;
+        var slices: [texts.len][]u8 = undefined;
+        var at: usize = 0;
+        for (texts, &slices) |t, *slot| {
+            slot.* = packed_texts[at..][0..t.len];
+            @memcpy(slot.*, t);
+            at += t.len;
+        }
         var n: Need = .{
             .kind = .op,
             .entry = s.x.pumping_entry.?,
-            .call = gpa.dupe(u8, call.id) catch return .broken,
-            .script = undefined,
-            .run = undefined,
-            .segment = undefined,
-            .grant = undefined,
-            .capability = undefined,
-            .operation = undefined,
-            .scope = undefined,
+            .packed_texts = packed_texts,
+            .call = slices[0],
+            .script = slices[1],
+            .run = slices[2],
+            .segment = slices[3],
+            .grant = slices[4],
+            .capability = slices[5],
+            .operation = slices[6],
+            .scope = slices[7],
             .now = call.now,
             .args = &.{},
             .object_kind = &.{},
             .object_id = &.{},
             .prop = &.{},
         };
-        n.script = gpa.dupe(u8, call.script) catch return .broken;
-        n.run = gpa.dupe(u8, call.run) catch return .broken;
-        n.segment = gpa.dupe(u8, call.segment) catch return .broken;
-        n.grant = gpa.dupe(u8, call.grant) catch return .broken;
-        n.capability = gpa.dupe(u8, oc.capability) catch return .broken;
-        n.operation = gpa.dupe(u8, oc.operation) catch return .broken;
-        n.scope = gpa.dupe(u8, call.scope) catch return .broken;
         n.mode = oc.mode;
         n.automatic = call.automatic;
         n.fuel_left = if (call.automatic) null else call.left;
-        const kept = gpa.alloc(*Value, args.len) catch return .broken;
+        const kept = gpa.alloc(*Value, args.len) catch {
+            gpa.free(packed_texts);
+            return .broken;
+        };
         for (args, kept) |v, *slot| slot.* = v.retain();
         n.args = kept;
         break :need n;
