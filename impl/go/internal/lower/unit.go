@@ -212,7 +212,21 @@ func (u *Unit) value(pos syntax.Position, value string) { u.emit(pos, "const", u
 func (u *Unit) load(pos syntax.Position, slot int)      { u.emit(pos, "load", ref("local", slot)) }
 func (u *Unit) store(pos syntax.Position, slot int)     { u.emit(pos, "store", ref("local", slot)) }
 
-// resultTarget writes `it` to an `ask`'s Result Target (ADR 0112): a move
+func (u *Unit) member(n *syntax.Node, op string, operands ...operand) {
+	if n.Target != nil {
+		s, _ := u.checked.Resolve(u.state.body.Checked, n.Target.Text)
+		kind, slot := "local", s.Index
+		if override, ok := u.state.overrides[n.Target.Text]; ok {
+			slot = override
+		} else if s.Kind == "variable" {
+			kind = "variable"
+		}
+		operands = append(operands, text(kind), number(slot))
+	}
+	u.emit(n.Pos(), op, operands...)
+}
+
+// resultTarget writes `it` to a Result Target (ADR 0114): a move
 // for a local, otherwise the write `put it into name` makes.
 func (u *Unit) resultTarget(n *syntax.Node) {
 	pos := n.Pos()

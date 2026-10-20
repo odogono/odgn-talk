@@ -31,6 +31,8 @@ type MachineTableOperand struct {
 	Field      string
 	Event      string
 	Code       string
+	TargetKind string
+	Target     string
 }
 
 type MachineTableInstructionEntry struct {
@@ -72,6 +74,8 @@ var Machine = MachineTable{
 		Field:      "a Binary Pattern field type: an integer type with its byte order, or a size unit",
 		Event:      "an entry of the code unit's event table",
 		Code:       "an Error Code from errors.toml",
+		TargetKind: "local or variable; present together with target",
+		Target:     "a non-negative writable slot in the member start frame/body or its Script Variables; present together with target-kind",
 	},
 	Instruction: []MachineTableInstructionEntry{
 		MachineTableInstructionEntry{
@@ -1943,7 +1947,7 @@ var Machine = MachineTable{
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "send",
-			Does:     "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does",
+			Does:     "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does, and recording its optional Result Target for whole-Join success",
 			Errors: []string{
 				"bad message name",
 				"mailbox full",
@@ -2079,12 +2083,14 @@ var Machine = MachineTable{
 				"grant",
 				"operation",
 				"count",
+				"target-kind?",
+				"target?",
 			},
 			Pops:     "count",
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "capability",
-			Does:     "Starts a suspending Operation as a Join Member",
+			Does:     "Starts a suspending Operation as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write",
 			Errors: []string{
 				"wrong kind",
 				"capability revoked",
@@ -2098,12 +2104,14 @@ var Machine = MachineTable{
 			Operands: []string{
 				"message",
 				"count",
+				"target-kind?",
+				"target?",
 			},
 			Pops:     "count + 1",
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "send",
-			Does:     "Starts a `send … and wait` as a Join Member",
+			Does:     "Starts a `send … and wait` as a Join Member, recording its optional Result Target for whole-Join success without a registration charge or write",
 			Errors: []string{
 				"mailbox full",
 				"object gone",
@@ -2116,12 +2124,14 @@ var Machine = MachineTable{
 			Group: "effects",
 			Operands: []string{
 				"count",
+				"target-kind?",
+				"target?",
 			},
 			Pops:     "count + 2",
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "send",
-			Does:     "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does",
+			Does:     "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does, and recording its optional Result Target for whole-Join success",
 			Errors: []string{
 				"bad message name",
 				"mailbox full",
@@ -2131,14 +2141,17 @@ var Machine = MachineTable{
 			},
 		},
 		MachineTableInstructionEntry{
-			Name:     "join-send-spread",
-			Group:    "effects",
-			Operands: []string{},
+			Name:  "join-send-spread",
+			Group: "effects",
+			Operands: []string{
+				"target-kind?",
+				"target?",
+			},
 			Pops:     3,
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "send",
-			Does:     "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does",
+			Does:     "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does, and recording its optional Result Target for whole-Join success",
 			Errors: []string{
 				"bad message name",
 				"mailbox full",

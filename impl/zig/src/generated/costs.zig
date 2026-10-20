@@ -107,6 +107,10 @@ pub const costs: CostsTable = .{
             .issue = "#1143",
             .change = "Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional.",
         },
+        .{
+            .issue = "#1350",
+            .change = "Joins reserve 1 Fuel per started local Result Target and 3 per started Script Variable Result Target at successful completion, after answer conversion and charging and before any target write; no registration charge, extra allocation or descriptor logical size; Cost Model 0 remains provisional",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
@@ -119,7 +123,7 @@ pub const costs: CostsTable = .{
         .entries = "the number of keys, for a map; 0 for any other value",
         .digits = "the number of digits in the coefficient, 1 for a zero, for a number or the number of a Quantity; 0 for any other value",
         .scanned = "what the instruction examines, as its rate's `input` says",
-        .steps = "the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)",
+        .steps = "at Join completion, the target-write Fuel defined by the join rate input; otherwise the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)",
         .program = "the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling)",
         .frames = "the number of frames a catch search leaves or an offer lookup examines",
         .clauses = "the number of Handler Clauses a dispatch tries",
@@ -444,8 +448,9 @@ pub const costs: CostsTable = .{
         },
         .{
             .key = "join",
-            .fuel = "10",
+            .fuel = "10 + steps",
             .alloc = "size(result)",
+            .input = "completion only: steps is 1 per started local Result Target plus 3 per started Script Variable Result Target, including duplicates; reserve after all answers convert and are charged, before any target write; no charge on failed or abandoned Joins, no registration charge, allocation or descriptor size",
         },
         .{
             .key = "timeout",

@@ -184,3 +184,9 @@ trace stdlib/mappings-restricted
 trace stdlib/mappings-restore
 trace stdlib/mappings-limits
 trace stdlib/mappings-depth
+disassembly disassembly/result-targets
+trace capabilities/result-targets-load-checks
+trace result-targets/completion-fuel
+trace result-targets/failures
+trace result-targets/join
+trace result-targets/ordinary

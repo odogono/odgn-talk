@@ -1,0 +1,61 @@
+# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
+
+> add-library lib identity=12d3cd3ff320163f5837211a9382421e06f014d04b04c6949a7440b5ff3a9f22
+> load remote identity=c57ba80e10629541ea6fe19dff87624add6c5a2d94cca492ddd5fe7101478ed8
+> load s identity=84d5d886f3b9edab017dcd2197977a0da0089b3e6203afba1951fc7751739746
+> stub api.price value=1
+> stub api.price value=2
+> stub api.price value=3
+> deliver d1 to=s message=go args=[0]
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=api.price args=[] result=1
+call s/r1.c2 op=api.price args=[] result=2
+call s/r1.c3 op=api.price args=[] result=3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=240 alloc=112 state=712 end=wait until=2026-09-30T09:00:00.001Z
+pumped state=idle fuel=240 next=2026-09-30T09:00:00.001Z
+> pump clock=2026-09-30T09:00:01Z
+send s/r1.c4 to=s message=echo args=[10] wait=yes
+seg s/r1 resume fuel=29 alloc=48 state=712 end=send-wait
+seg s/r2 start from=s/r1.c4 handler=echo clause=1 fuel=7 alloc=0 state=664 end=return
+run s/r2 outcome=completed handler=echo value=10 fuel=7 alloc=0
+send s/r1.c5 to=s message=move:to: args=[1, 11] wait=yes
+seg s/r1 resume fuel=27 alloc=64 state=736 end=send-wait
+seg s/r3 start from=s/r1.c5 handler=move:to: clause=1 fuel=7 alloc=0 state=672 end=return
+run s/r3 outcome=completed handler=move:to: value=11 fuel=7 alloc=0
+send s/r1.c6 to=s message=echo args=[12] wait=yes
+seg s/r1 resume fuel=27 alloc=48 state=728 end=send-wait
+seg s/r4 start from=s/r1.c6 handler=echo clause=1 fuel=7 alloc=0 state=680 end=return
+run s/r4 outcome=completed handler=echo value=12 fuel=7 alloc=0
+send s/r1.c7 to=s message=echo args=[13] wait=yes
+seg s/r1 resume fuel=36 alloc=144 state=736 end=send-wait
+seg s/r5 start from=s/r1.c7 handler=echo clause=1 fuel=7 alloc=0 state=688 end=return
+run s/r5 outcome=completed handler=echo value=13 fuel=7 alloc=0
+send s/r1.c8 to=remote message=getFunction wait=yes
+seg s/r1 resume fuel=72 alloc=32 state=696 end=send-wait
+seg remote/r1 start from=s/r1.c8 handler=getFunction clause=1 fuel=10 alloc=32 state=0 end=return
+run remote/r1 outcome=completed handler=getFunction value=<function remote:2:9> fuel=10 alloc=32
+send s/r1.c9 to=remote fn=<function remote:2:9> args=[23] wait=yes
+seg s/r1 resume fuel=12 alloc=0 state=744 end=call-value-wait
+seg remote/r2 start from=s/r1.c9 fn=<function remote:2:9> fuel=8 alloc=16 state=0 end=return
+run remote/r2 outcome=completed fn=<function remote:2:9> value=24 fuel=8 alloc=16
+seg s/r1 resume fuel=49 alloc=464 state=480 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=492 alloc=912
+pumped state=idle fuel=298
+> vars
+vars remote
+vars s result=[2, 3, 8, 2, 6, 4, 5, 6, 7, 9, 10, 11, 12, 13, 21, 22, nothing, 24, 24] last=3
+> deliver d2 to=s message=pending
+> pump clock=2026-09-30T09:00:02Z
+call s/r6.c1 op=api.hold args=[]
+seg s/r6 start delivery=d2 handler=pending clause=1 fuel=14 alloc=0 state=704 end=ask-wait
+pumped state=idle fuel=14 next=2026-09-30T09:00:32Z
+> save s1
+> restore from=s1 fingerprint=7208968a3e54d8b3b601e9b82be454fb76ec4ef908f2f1131a8cae10910da916 mode=full pending=[s/r6.c1]
+> settle s/r6.c1 how=answer value=14
+> pump clock=2026-09-30T09:00:03Z
+seg s/r6 resume fuel=11 alloc=16 state=32 end=return
+run s/r6 outcome=completed delivery=d2 handler=pending fuel=25 alloc=16
+pumped state=idle fuel=11
+> vars
+vars remote
+vars s result=14 last=14

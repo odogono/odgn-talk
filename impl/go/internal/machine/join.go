@@ -19,7 +19,8 @@ type Join struct {
 	Early          []JoinReply
 }
 type JoinMember struct {
-	WaitMS int64
+	Frame, Start int
+	WaitMS       int64
 	// Deadline is the Clock of the Pump that started it, in nanoseconds,
 	// plus WaitMS.
 	Deadline *big.Int
@@ -31,7 +32,29 @@ type JoinReply struct {
 	Reply SendResume
 }
 
-func (r *Run) AddJoinMember(id string) { r.Join.Members = append(r.Join.Members, JoinMember{ID: id}) }
+func (r *Run) AddJoinMember(id string) {
+	frame := len(r.Frames) - 1
+	r.Join.Members = append(r.Join.Members, JoinMember{ID: id, Frame: frame, Start: r.Frames[frame].PC})
+}
+
+func (r *Run) memberTarget(m JoinMember) (string, int) {
+	f := &r.Frames[m.Frame]
+	i := f.Code.Unit.Bodies[f.Body].Code[m.Start]
+	offset := 0
+	switch i.Op {
+	case generated.OpJoinAsk:
+		offset = 3
+	case generated.OpJoinSend:
+		offset = 2
+	case generated.OpJoinSendNamed:
+		offset = 1
+	}
+	args := i.Operands()
+	if len(args) == offset {
+		return "", 0
+	}
+	return args[offset].Text, args[offset+1].Index
+}
 
 // SettleJoin records a reply without executing the sender. Its result says
 // whether a suspended sender just became ready for a new turn.
@@ -141,8 +164,28 @@ func (r *Run) ResumeJoinOperation(resume ResumeOperationFunc) {
 	}
 	result := value.NewList(answers)
 	// The Join's base rate was paid at its closing end. Script replies have
-	// no conversion charge; only the assembled list's allocation remains.
-	if r.pay(0, Size(result)) {
+	// no conversion charge; reserve the list allocation and every target write
+	// together before assigning any member destination.
+	var fuel int64
+	for _, m := range j.Members {
+		kind, _ := r.memberTarget(m)
+		if kind == "local" {
+			fuel++
+		} else if kind == "variable" {
+			fuel += 3
+		}
+	}
+	total, alloc := Charge("join", Measures{Steps: fuel, Result: result, ResultPresent: true})
+	before, _ := Charge("join", Measures{})
+	if r.pay(total-before, alloc) {
+		for n, m := range j.Members {
+			kind, index := r.memberTarget(m)
+			if kind == "local" {
+				r.Frames[m.Frame].Locals[index] = answers[n]
+			} else if kind == "variable" {
+				r.State.Variables[index] = answers[n]
+			}
+		}
 		f.Stack = append(f.Stack, result)
 	}
 }

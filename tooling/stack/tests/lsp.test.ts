@@ -1468,3 +1468,22 @@ test('a Host Command is completed, documented, checked at load and Linted when s
     'Hides a part.',
   );
 });
+
+test('Result Targets define, reference and rename the same put binding across call forms', () => {
+  const source =
+    'on go\n sqrt(4) into answer\n tell http\n  fetch "a" into answer and wait\n end tell\n send echo to me into answer and wait\n return answer\nend go\n';
+  const { request } = setup(source);
+  const position = at(6, 9);
+  const definition = request('textDocument/definition', position);
+  expect(definition.range.start).toEqual({ line: 1, character: 14 });
+  const rename = request('textDocument/rename', {
+    ...position,
+    newName: 'saved',
+  });
+  expect(rename.changes[uri]!.map(edit => edit.range.start)).toEqual([
+    { line: 1, character: 14 },
+    { line: 3, character: 17 },
+    { line: 5, character: 22 },
+    { line: 6, character: 8 },
+  ]);
+});

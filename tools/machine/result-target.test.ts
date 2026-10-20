@@ -1,5 +1,5 @@
-// Result Targets (ADRs 0112/0114, #1340/#1350). New forms stay outside
-// shared fixtures until every Core supports them; see the #1350 handoff.
+// Reference checks for Result Targets (ADRs 0112/0114, #1340/#1350).
+// Shared sketches and Corpus cases exercise the same forms across all Cores.
 import { expect, test } from 'bun:test';
 import { newStats, parse } from '../grammar/parser';
 import { CompileError, compileSource, type Options } from './compile';

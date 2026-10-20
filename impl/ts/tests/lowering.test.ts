@@ -1,3 +1,4 @@
+import { sourceGrants } from '../../../tools/corpus/source-grants';
 import { describe, expect, test } from 'bun:test';
 import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -215,6 +216,7 @@ const compileFile = (path: string): CodeUnit => {
       libraries[basename(sibling, '.talk')] = exportsOf(checked.tree);
     }
   }
+  let grants: Parameters<typeof compileSource>[1]['grants'];
   let objects: string[] = [];
   for (;;) {
     const result = compileSource(source, {
@@ -222,9 +224,31 @@ const compileFile = (path: string): CodeUnit => {
       unit,
       objects,
       libraries,
+      grants,
     });
     if (result.unit) {
       return result.unit;
+    }
+    // Targets on immediate Host Commands need the case's declaration modes.
+    if (
+      !grants &&
+      result.diagnostics.some(d => d.code === 'missing and wait')
+    ) {
+      const modes = sourceGrants(path);
+      if (modes) {
+        grants = Object.fromEntries(
+          Object.entries(modes).map(([name, ops]) => [
+            name,
+            Object.fromEntries(
+              Object.entries(ops).map(([op, decl]) => [
+                op,
+                { ...decl, args: (decl.args ?? []).map(() => shape.any) },
+              ]),
+            ),
+          ]),
+        );
+        continue;
+      }
     }
     const unknown = result.diagnostics
       .filter(d => d.code === 'unknown name')
@@ -773,15 +797,18 @@ describe('Result Targets', () => {
     );
   });
 
-  test('a Join Member with a target is not in a join', () => {
-    const result = compileSource(
+  test('a Join Member registers its target without an immediate write', () => {
+    const unit = compile(
       'on t\n  wait for all\n    ask g to op into y and wait\n  end wait\nend t\n',
-      { name: 'test' },
     );
-    expect(result.unit).toBeFalsy();
-    expect(
-      result.diagnostics.map(d => [d.code, d.span.line, d.span.col]),
-    ).toEqual([['not in a join', 3, 17]]);
+    expect(unit.code.find(i => i.op === 'join-ask')?.operands).toEqual([
+      'g',
+      'op',
+      0,
+      'local',
+      1,
+    ]);
+    expect(unit.code.some(i => i.op === 'move')).toBe(false);
   });
 });
 

@@ -439,6 +439,14 @@ func (p *parser) andWait(n *Node) {
 	}
 }
 
+func (p *parser) resultTarget(n *Node) {
+	if p.at("into") {
+		into := p.take(Operator)
+		n.Target = node("name", p.name())
+		n.Target.Flags = []Token{into}
+	}
+}
+
 // operation reads an Operation name, which may be any word, then its
 // arguments, an `ask`'s Result Target where targets allows it (ADR 0112),
 // and `and wait` where waits allows it.
@@ -448,10 +456,8 @@ func (p *parser) operation(n *Node, waits, targets bool) {
 	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") && !(targets && p.at("into")) {
 		n.Children = p.expressionList()
 	}
-	if targets && p.at("into") {
-		into := p.take(Operator)
-		n.Target = node("name", p.name())
-		n.Target.Flags = []Token{into}
+	if targets {
+		p.resultTarget(n)
 	}
 	if waits {
 		p.andWait(n)
@@ -475,7 +481,7 @@ func (p *parser) operationLines(receiver *Node) []*Node {
 		line := node("ask", t)
 		line.Params = []*Node{receiver}
 		line.Flags = append(line.Flags, Token{Raw: "line"})
-		p.operation(line, true, false)
+		p.operation(line, true, true)
 		lines = append(lines, line)
 		p.nl()
 	}
@@ -585,6 +591,7 @@ func (p *parser) statement(inline bool) *Node {
 			}
 			n.Text = n.NameToken.Raw
 			p.commandPhrase(n)
+			p.resultTarget(n)
 			p.andWait(n)
 			break
 		}
@@ -610,6 +617,7 @@ func (p *parser) statement(inline bool) *Node {
 		if computed != nil {
 			n.Params = append(n.Params, computed)
 		}
+		p.resultTarget(n)
 		p.andWait(n)
 	case "ask", "tell":
 		n.Params = []*Node{p.expression()}
@@ -664,6 +672,7 @@ func (p *parser) statement(inline bool) *Node {
 			n.Kind = "command"
 			p.commandPhrase(n)
 		}
+		p.resultTarget(n)
 		p.andWait(n)
 	}
 	return n

@@ -1,0 +1,41 @@
+# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "price"
+mode = "immediate"
+args = []
+result = "number"
+cost = { fuel = 0 }
+command = true
+errors = [{ code = "unavailable" }]
+
+[[operations]]
+capability = "api"
+name = "hold"
+mode = "suspending"
+args = []
+result = "number"
+cost = { fuel = 0 }
+command = true
+errors = [{ code = "unavailable" }]
+
+[[operations]]
+capability = "api"
+name = "note"
+mode = "fire-and-forget"
+args = []
+cost = { fuel = 0 }
+command = true
+
+[[scripts]]
+name = "b"
+source = "b.talk"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = "all" } }

@@ -1482,17 +1482,17 @@ describe('Result Targets (ADR 0112)', () => {
     ).toEqual([["can't write", 3, 25]]);
   });
 
-  test('a Join Member is `not in a join` at its `into`', () => {
+  test('a Join Member may register a target', () => {
     expect(
       diagnostics(
         'on t\n  wait for all\n    ask g to op into y and wait\n  end wait\nend t',
       ),
-    ).toEqual([['not in a join', 3, 17]]);
+    ).toEqual([]);
     expect(
       diagnostics(
         'on t\n  wait for all\n    if true then\n      ask g to op into y and wait\n    end if\n  end wait\nend t',
       ),
-    ).toEqual([['not in a join', 4, 19]]);
+    ).toEqual([]);
   });
 
   test('an immediate `ask` in a Join may have one', () => {

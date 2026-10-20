@@ -1,0 +1,57 @@
+# Unblessed: Result Targets on failure and abandonment (#1350); first blessing awaits human review.
+> load s identity=1c65905ef940fe529d136a9b1c4013318297ab7d158dba187cefec5c9631307d
+> stub api.price error={code: "unavailable"}
+> deliver d1 to=s message=immediate
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=api.price args=[] error={code: "unavailable"}
+raise s/r1 code="unavailable" at=s:8 pos=7:4
+seg s/r1 start delivery=d1 handler=immediate clause=1 fuel=41 alloc=152 state=104 end=return
+run s/r1 outcome=completed delivery=d1 handler=immediate fuel=41 alloc=152
+pumped state=idle fuel=41
+> deliver d2 to=s message=pending
+> pump clock=2026-09-30T09:00:01Z
+call s/r2.c1 op=api.hold args=[]
+seg s/r2 start delivery=d2 handler=pending clause=1 fuel=16 alloc=0 state=400 end=ask-wait
+pumped state=idle fuel=16 next=2026-09-30T09:00:31Z
+> answer s/r2.c1 value="bad"
+> pump clock=2026-09-30T09:00:02Z
+call-failed s/r2.c1 op=api.hold
+raise s/r2 code="host error" at=s:32 pos=16:3
+seg s/r2 resume fuel=24 alloc=136 state=176 end=return
+run s/r2 outcome=completed delivery=d2 handler=pending fuel=40 alloc=136
+pumped state=idle fuel=24
+> deliver d3 to=s message=timed
+> pump clock=2026-09-30T09:00:03Z
+call s/r3.c1 op=api.hold args=[]
+seg s/r3 start delivery=d3 handler=timed clause=1 fuel=17 alloc=40 state=488 end=ask-wait until=2026-09-30T09:00:03.001Z
+pumped state=idle fuel=17 next=2026-09-30T09:00:03.001Z
+> pump clock=2026-09-30T09:00:04Z
+raise s/r3 code="timeout" at=s:56 pos=25:5
+abandon s/r3.c1
+seg s/r3 resume fuel=18 alloc=24 state=200 end=return
+run s/r3 outcome=completed delivery=d3 handler=timed fuel=35 alloc=64
+pumped state=idle fuel=18
+> deliver d4 to=s message=joined
+> pump clock=2026-09-30T09:00:05Z
+call s/r4.c1 op=api.hold args=[]
+call s/r4.c2 op=api.hold args=[]
+seg s/r4 start delivery=d4 handler=joined clause=1 fuel=46 alloc=0 state=544 end=join-end
+pumped state=idle fuel=46 next=2026-09-30T09:00:35Z
+> answer s/r4.c1 value=20
+> answer s/r4.c2 value="bad"
+> pump clock=2026-09-30T09:00:06Z
+call-failed s/r4.c2 op=api.hold
+raise s/r4 code="host error" at=s:83 pos=38:3
+seg s/r4 resume fuel=25 alloc=152 state=272 end=return
+run s/r4 outcome=completed delivery=d4 handler=joined fuel=71 alloc=152
+pumped state=idle fuel=25
+> deliver d5 to=s message=body
+> pump clock=2026-09-30T09:00:07Z
+call s/r5.c1 op=api.hold args=[]
+raise s/r5 code="body" at=s:109 pos=48:4
+abandon s/r5.c1
+seg s/r5 start delivery=d5 handler=body clause=1 fuel=61 alloc=184 state=344 end=return
+run s/r5 outcome=completed delivery=d5 handler=body fuel=61 alloc=184
+pumped state=idle fuel=61
+> vars
+vars s last=5 result=[[9, 5], [9, 5], 5, [9, 5], [9, 5]]

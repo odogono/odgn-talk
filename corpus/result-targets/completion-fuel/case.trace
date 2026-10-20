@@ -1,0 +1,27 @@
+# Unblessed: Join Result Target completion Fuel (#1350); first blessing awaits human review.
+> load exact identity=c6450ab2a2ce7c0f3c6aa3ab5b75913cd735074a738354db0b7f77c98ec58abc
+> load short identity=677507b43b45544646a924aa47aa64449fbc56a3b4879c9831d69b3ad5f011b2
+> deliver d1 to=exact message=go
+> deliver d2 to=short message=go
+> pump clock=2026-09-30T09:00:00Z
+call exact/r1.c1 op=api.hold args=[]
+call exact/r1.c2 op=api.hold args=[]
+seg exact/r1 start delivery=d1 handler=go clause=1 fuel=44 alloc=0 state=288 end=join-end
+call short/r1.c1 op=api.hold args=[]
+call short/r1.c2 op=api.hold args=[]
+seg short/r1 start delivery=d2 handler=go clause=1 fuel=44 alloc=0 state=288 end=join-end
+pumped state=idle fuel=88 next=2026-09-30T09:00:30Z
+> answer exact/r1.c2 value=2
+> answer short/r1.c2 value=2
+> answer exact/r1.c1 value=1
+> answer short/r1.c1 value=1
+> pump clock=2026-09-30T09:00:01Z
+seg exact/r1 resume fuel=12 alloc=96 state=16 end=return
+run exact/r1 outcome=completed delivery=d1 handler=go fuel=56 alloc=96
+fault short/r1 limit=fuel at=short:7 pos=6:2
+seg short/r1 resume fuel=2 alloc=32 state=16 end=fault
+run short/r1 outcome=limit-fault delivery=d2 handler=go limit=fuel fuel=46 alloc=32
+pumped state=idle fuel=14
+> vars
+vars exact x=2
+vars short x=0

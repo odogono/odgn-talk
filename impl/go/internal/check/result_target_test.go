@@ -11,7 +11,7 @@ func TestResultTargetDiagnostics(t *testing.T) {
 		name, source, code string
 		pos                syntax.Position
 	}{
-		{"Join Member", "on t\n wait for all\n  ask g to op into y and wait\n end wait\nend t\n", "not in a join", syntax.Position{Line: 3, Column: 15}},
+		{"captured local", "on t\n put 1 into locked\n put given\n  ask g to op into locked\n end given into f\nend t\n", "can't write", syntax.Position{Line: 4, Column: 20}},
 		{"constant", "constant k = 1\non t\n ask g to op into k\nend t\n", "can't write", syntax.Position{Line: 3, Column: 19}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

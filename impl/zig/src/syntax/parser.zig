@@ -799,9 +799,10 @@ const Parser = struct {
         const open = try p.peek(.operand);
         if (open.kind == .left_paren and !open.space_before) {
             const c = try p.call(n);
-            return p.stmt(n, .{ .call = .{ .call = c, .wait = try p.andWait() } });
+            return p.stmt(n, .{ .call = .{ .call = c, .into = try p.resultTarget(), .wait = try p.andWait() } });
         }
         var command = try p.commandPhrase(n);
+        command.into = try p.resultTarget();
         command.wait = try p.andWait();
         return p.stmt(n, .{ .command = command });
     }
@@ -894,7 +895,7 @@ const Parser = struct {
             const phrase = try p.commandPhrase(try p.messageName());
             const args = try p.a.alloc(ast.ListItem, phrase.args.len);
             for (phrase.args, args) |arg, *item| item.* = .{ .spread = null, .value = arg };
-            return p.stmt(first, .{ .send = .{ .name = phrase.name, .computed = null, .labels = phrase.labels, .args = args, .target = target, .target_first = true, .wait = try p.andWait() } });
+            return p.stmt(first, .{ .send = .{ .name = phrase.name, .computed = null, .labels = phrase.labels, .args = args, .target = target, .target_first = true, .into = try p.resultTarget(), .wait = try p.andWait() } });
         }
         var n: ?Tok = null;
         var computed: ?*Expr = null;
@@ -916,12 +917,18 @@ const Parser = struct {
         }
         _ = try p.expectWord("to", .operator);
         const target = try p.expr();
-        return p.stmt(first, .{ .send = .{ .name = n, .computed = computed, .labels = &.{}, .args = try p.list(ast.ListItem, &args), .target = target, .target_first = false, .wait = try p.andWait() } });
+        return p.stmt(first, .{ .send = .{ .name = n, .computed = computed, .labels = &.{}, .args = try p.list(ast.ListItem, &args), .target = target, .target_first = false, .into = try p.resultTarget(), .wait = try p.andWait() } });
     }
 
     /// An Operation name, any word, then its arguments, an `ask`'s Result
     /// Target where `targets` allows it (ADR 0112), and `and wait` where
     /// `waits` allows it.
+    fn resultTarget(p: *Parser) Error!?Tok {
+        if (!try p.atWord("into", .operator)) return null;
+        _ = try p.next(.operator);
+        return try p.name(.operand);
+    }
+
     fn operation(p: *Parser, waits: bool, targets: bool) Error!ast.Operation {
         const t = try p.peek(.operand);
         if (t.kind != .word or p.isWord(t, "_")) return p.failAt(t);
@@ -951,7 +958,7 @@ const Parser = struct {
             const t = try p.peek(.operand);
             if (t.kind == .eof) return p.failAt(t);
             if (p.isWord(t, "end")) break;
-            try lines.append(p.a, try p.operation(true, false));
+            try lines.append(p.a, try p.operation(true, true));
             try p.endOfStatement();
         }
         const end = try p.next(.operand);
@@ -2507,7 +2514,6 @@ test "an ask may name a Result Target, before and wait (ADR 0112)" {
     try expectOutcome("on t x\n  ask g to op x and wait into y\nend t\n", "unexpected token at 2:26");
     try expectOutcome("on t x\n  ask g to op into it\nend t\n", "unexpected token at 2:20");
     try expectOutcome("on t x\n  tell g to op x into y\nend t\n", "unexpected token at 2:18");
-    try expectOutcome("on t x\n  tell g\n    op x into y\n  end tell\nend t\n", "unexpected token at 3:10");
 }
 
 test "a Container never passes through a Built-in property" {

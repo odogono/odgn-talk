@@ -1496,3 +1496,53 @@ end t
 on t
   put element - 1 into n
 end t
+
+-- case: misplaced or non-Name Result Target: tell g
+-- expect: unexpected token at 3:18
+on t
+  tell g
+    op into item 1 of xs
+  end tell
+end t
+
+-- case: misplaced or non-Name Result Target: h into it
+-- expect: unexpected token at 2:10
+on t
+  h into it
+end t
+
+-- case: misplaced or non-Name Result Target: h into me
+-- expect: unexpected token at 2:10
+on t
+  h into me
+end t
+
+-- case: misplaced or non-Name Result Target: h into x and wait into y
+-- expect: unexpected token at 2:21
+on t
+  h into x and wait into y
+end t
+
+-- case: misplaced or non-Name Result Target: f(1) and wait into x
+-- expect: unexpected token at 2:17
+on t
+  f(1) and wait into x
+end t
+
+-- case: misplaced or non-Name Result Target: send m to me and wait into x
+-- expect: unexpected token at 2:25
+on t
+  send m to me and wait into x
+end t
+
+-- case: misplaced or non-Name Result Target: send to me: m into x and wait into y
+-- expect: unexpected token at 2:33
+on t
+  send to me: m into x and wait into y
+end t
+
+-- case: misplaced or non-Name Result Target: h into the key of xs
+-- expect: unexpected token at 2:10
+on t
+  h into the key of xs
+end t

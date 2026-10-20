@@ -130,10 +130,16 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.emit(pos, op, text(name), number(len(n.Children)))
 		if known && s.Kind == "handler" || wait {
 			u.store(pos, 0)
+			if n.Target != nil {
+				u.resultTarget(n.Target)
+			}
 		}
 	case "call-statement":
 		u.call(n.Children[0], syntax.HasFlag(n, "and"))
 		u.store(pos, 0)
+		if n.Target != nil {
+			u.resultTarget(n.Target)
+		}
 	case "tell-block":
 		// Each line is the one-line call the checker chose for it (ADR 0063).
 		u.statements(n.Body)
@@ -150,7 +156,11 @@ func (u *Unit) statement(n *syntax.Node) {
 				op = "ask-wait"
 			}
 		}
-		u.emit(pos, op, text(n.Params[0].Text), text(n.Text), number(len(n.Children)))
+		if op == "join-ask" {
+			u.member(n, op, text(n.Params[0].Text), text(n.Text), number(len(n.Children)))
+		} else {
+			u.emit(pos, op, text(n.Params[0].Text), text(n.Text), number(len(n.Children)))
+		}
 		if n.Kind == "ask" && op != "join-ask" {
 			u.store(pos, 0)
 			if n.Target != nil {
@@ -181,12 +191,23 @@ func (u *Unit) statement(n *syntax.Node) {
 		}
 		if named {
 			op = map[string]string{"send": "send-named", "send-wait": "send-named-wait", "join-send": "join-send-named"}[op]
-			u.emit(pos, op, number(len(n.Children)))
+			if op == "join-send-named" {
+				u.member(n, op, number(len(n.Children)))
+			} else {
+				u.emit(pos, op, number(len(n.Children)))
+			}
 		} else {
-			u.emit(pos, op, text(n.Text), number(len(n.Children)))
+			if op == "join-send" {
+				u.member(n, op, text(n.Text), number(len(n.Children)))
+			} else {
+				u.emit(pos, op, text(n.Text), number(len(n.Children)))
+			}
 		}
 		if op == "send-wait" || op == "send-named-wait" {
 			u.store(pos, 0)
+			if n.Target != nil {
+				u.resultTarget(n.Target)
+			}
 		}
 	case "wait":
 		u.expression(n.Children[0])
@@ -242,10 +263,13 @@ func (u *Unit) spreadSend(n *syntax.Node) {
 	case !syntax.HasFlag(n, "and"):
 		u.emit(pos, "send-spread")
 	case u.state.join > 0:
-		u.emit(pos, "join-send-spread")
+		u.member(n, "join-send-spread")
 	default:
 		u.emit(pos, "send-spread-wait")
 		u.store(pos, 0)
+		if n.Target != nil {
+			u.resultTarget(n.Target)
+		}
 	}
 }
 func (u *Unit) repeat(n *syntax.Node) {

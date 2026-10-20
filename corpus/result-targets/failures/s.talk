@@ -1,0 +1,53 @@
+script variable last = 5
+script variable result = []
+on immediate
+ put 9 into x
+ try
+  tell api
+   price into x
+  end tell
+ catch e
+  put [x, last] after result
+ end try
+end immediate
+on pending
+ put 9 into x
+ try
+  hold into x and wait
+ catch e
+  put [x, last] after result
+ end try
+end pending
+on timed
+ try
+  with timeout of 1 ms
+   tell api
+    hold into last and wait
+   end tell
+  end timeout
+ catch e
+  put last after result
+ end try
+end timed
+on joined
+ put 9 into x
+ try
+  wait for all
+   ask api to hold into x and wait
+   ask api to hold into last and wait
+  end wait
+ catch e
+  put [x, last] after result
+ end try
+end joined
+on body
+ put 9 into x
+ try
+  wait for all
+   ask api to hold into x and wait
+   throw "body"
+  end wait
+ catch e
+  put [x, last] after result
+ end try
+end body

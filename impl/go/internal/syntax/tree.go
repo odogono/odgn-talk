@@ -13,7 +13,7 @@ type Node struct {
 	Token, End                       Token
 	Children, Params, Body, Branches []*Node
 	Guard, Collect                   *Node
-	// Target is an `ask`'s Result Target Name (ADR 0112). Walk skips it: it
+	// Target is a result-producing statement's Result Target Name (ADR 0114). Walk skips it: it
 	// is a write, which binding passes read explicitly. Its one Flag is the
 	// `into` token.
 	Target  *Node

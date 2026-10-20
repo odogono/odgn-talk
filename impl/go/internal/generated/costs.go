@@ -108,6 +108,10 @@ var Costs = CostsTable{
 			Issue:  "#1143",
 			Change: "Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional.",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#1350",
+			Change: "Joins reserve 1 Fuel per started local Result Target and 3 per started Script Variable Result Target at successful completion, after answer conversion and charging and before any target write; no registration charge, extra allocation or descriptor logical size; Cost Model 0 remains provisional",
+		},
 	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
@@ -120,7 +124,7 @@ var Costs = CostsTable{
 		Entries:    "the number of keys, for a map; 0 for any other value",
 		Digits:     "the number of digits in the coefficient, 1 for a zero, for a number or the number of a Quantity; 0 for any other value",
 		Scanned:    "what the instruction examines, as its rate's `input` says",
-		Steps:      "the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)",
+		Steps:      "at Join completion, the target-write Fuel defined by the join rate input; otherwise the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)",
 		Program:    "the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling)",
 		Frames:     "the number of frames a catch search leaves or an offer lookup examines",
 		Clauses:    "the number of Handler Clauses a dispatch tries",
@@ -445,8 +449,9 @@ var Costs = CostsTable{
 		},
 		CostsTableRateEntry{
 			Key:   "join",
-			Fuel:  "10",
+			Fuel:  "10 + steps",
 			Alloc: "size(result)",
+			Input: "completion only: steps is 1 per started local Result Target plus 3 per started Script Variable Result Target, including duplicates; reserve after all answers convert and are charged, before any target write; no charge on failed or abandoned Joins, no registration charge, allocation or descriptor size",
 		},
 		CostsTableRateEntry{
 			Key:   "timeout",

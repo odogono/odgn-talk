@@ -2308,7 +2308,7 @@ export class BodyCompiler {
     }
   }
 
-  // Staged optional operands; machine.toml adopts these with the Cores.
+  // The optional paired destination operands declared by machine.toml.
   joinTarget(n?: Node): Arg[] {
     if (!n) {
       return [];

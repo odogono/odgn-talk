@@ -603,6 +603,16 @@ class BodyLowering {
 
   // A Result Target is `put it into x`, with nothing between that can
   // suspend or raise; its instructions are the target Name's (ADR 0112).
+  joinTarget(name: SemanticName | undefined): (string | number)[] {
+    if (!name) {
+      return [];
+    }
+    const slot = this.slotOf(name.binding!);
+    return slot !== undefined
+      ? ['local', slot]
+      : ['variable', this.u.variableOf.get(name.binding!)!];
+  }
+
   resultTarget(name: SemanticName) {
     const at = { line: name.span.line, col: name.span.col };
     const slot = this.slotOf(name.binding!);
@@ -832,7 +842,11 @@ class BodyLowering {
         return yield* this.command(s);
       case 'call':
         yield this.call(s.call, s.wait);
-        return void this.emit(at, 'store', 0);
+        this.emit(at, 'store', 0);
+        if (s.into) {
+          this.resultTarget(s.into);
+        }
+        return;
       case 'tell-block':
         // Each line is the one-line call the checker chose for it (ADR 0063).
         return yield* this.block(s.lines);
@@ -846,7 +860,14 @@ class BodyLowering {
           return void this.emit(at, 'tell', s.grant, s.operation, n);
         }
         if (s.wait && this.join) {
-          return void this.emit(at, 'join-ask', s.grant, s.operation, n);
+          return void this.emit(
+            at,
+            'join-ask',
+            s.grant,
+            s.operation,
+            n,
+            ...this.joinTarget(s.into),
+          );
         }
         this.emit(at, s.wait ? 'ask-wait' : 'ask', s.grant, s.operation, n);
         this.emit(at, 'store', 0);
@@ -875,11 +896,18 @@ class BodyLowering {
           }
           yield this.expr(s.target);
           if (s.wait && this.join) {
-            return void this.emit(at, 'join-send-spread');
+            return void this.emit(
+              at,
+              'join-send-spread',
+              ...this.joinTarget(s.into),
+            );
           }
           this.emit(at, s.wait ? 'send-spread-wait' : 'send-spread');
           if (s.wait) {
             this.emit(at, 'store', 0);
+            if (s.into) {
+              this.resultTarget(s.into);
+            }
           }
           return;
         }
@@ -893,16 +921,30 @@ class BodyLowering {
         const n = s.args.length;
         if (typeof message !== 'string') {
           if (s.wait && this.join) {
-            return void this.emit(at, 'join-send-named', n);
+            return void this.emit(
+              at,
+              'join-send-named',
+              n,
+              ...this.joinTarget(s.into),
+            );
           }
           this.emit(at, s.wait ? 'send-named-wait' : 'send-named', n);
         } else if (s.wait && this.join) {
-          return void this.emit(at, 'join-send', message, n);
+          return void this.emit(
+            at,
+            'join-send',
+            message,
+            n,
+            ...this.joinTarget(s.into),
+          );
         } else {
           this.emit(at, s.wait ? 'send-wait' : 'send', message, n);
         }
         if (s.wait) {
           this.emit(at, 'store', 0);
+          if (s.into) {
+            this.resultTarget(s.into);
+          }
         }
         return;
       }
@@ -947,11 +989,19 @@ class BodyLowering {
     if (binding?.kind === 'handler') {
       const name = binding.importedFrom ? importName(binding) : binding.name;
       this.emit(at, s.wait ? 'call-handler-wait' : 'call-handler', name, n);
-      return void this.emit(at, 'store', 0);
+      this.emit(at, 'store', 0);
+      if (s.into) {
+        this.resultTarget(s.into);
+      }
+      return;
     }
     if (s.wait) {
       this.emit(at, 'send-up-wait', s.name.text, n);
-      return void this.emit(at, 'store', 0);
+      this.emit(at, 'store', 0);
+      if (s.into) {
+        this.resultTarget(s.into);
+      }
+      return;
     }
     this.emit(at, 'send-up', s.name.text, n);
   }

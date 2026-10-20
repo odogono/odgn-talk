@@ -1,0 +1,52 @@
+script variable result
+script variable last
+on echo n
+ return n
+end echo
+on move n to p
+ return p
+end move
+function twice n = 3
+ return n * 2
+end twice
+on slow n
+ wait 1 ms
+ return n
+end slow
+on go p
+ tell api
+  price into p
+  price into fresh
+ end tell
+ ask api to price into last
+ echo 8 into a
+ move 1 to 2 into b
+ twice() into c
+ sqrt(16) into d
+ echo(5) into e
+ put given n: n into f
+ f(6) into g
+ f(7) into h and wait
+ slow 9 into i and wait
+ send echo with 10 to me into j and wait
+ send to me: move 1 to 11 into k and wait
+ send ("echo") with 12 to me into l and wait
+ send echo with ...[13] to me into m and wait
+ put [p, fresh, last, a, b, c, d, e, g, h, i, j, k, l, m, it] into result
+end go
+on pending
+ ask api to hold into last and wait
+ put it into result
+end pending
+on joined
+ wait for all
+  ask api to hold into local and wait
+  ask api to hold into last and wait
+  send echo to me into local and wait
+  send echo to me into last and wait
+  send ("echo") to me into local and wait
+  send ("echo") to me into last and wait
+  send echo with ...[] to me into local and wait
+  send echo with ...[] to me into last and wait
+ end wait
+end joined

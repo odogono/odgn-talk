@@ -1,0 +1,195 @@
+unit s script
+constants
+  0 3
+  1 nothing
+  2 2
+  3 1 ms
+  4 8
+  5 1
+  6 16
+  7 5
+  8 6
+  9 7
+  10 9
+  11 10
+  12 11
+  13 "echo"
+  14 12
+  15 13
+definitions
+  0 twice.n
+variables
+  0 result
+  1 last
+bodies
+  0 init initialiser () locals 1 0000..0003
+  1 handler echo clause 1 (n) locals 2 0004..0008
+  2 handler move:to: clause 1 (n, p) locals 3 0009..0013
+  3 function twice (n = 0) locals 2 0014..0019
+  4 handler slow clause 1 (n) locals 2 may suspend 0020..0026
+  5 handler go clause 1 (p) locals 16 may suspend 0027..0119
+  6 handler pending clause 1 () locals 1 may suspend 0120..0128
+  7 handler joined clause 1 () locals 2 may suspend 0129..0158
+  8 lambda go:27:6 (n) locals 2 0159..0160
+code
+  0000 9:20 const 0 ; 3
+  0001 9:16 store-definition twice.n
+  0002 1:1 const 1 ; nothing
+  0003 1:1 return
+  0004 4:9 load 1 ; n
+  0005 4:2 return
+  0006 5:1 const 1 ; nothing
+  0007 5:1 return
+  0008 5:1 clause-fail
+  0009 7:9 load 2 ; p
+  0010 7:2 return
+  0011 8:1 const 1 ; nothing
+  0012 8:1 return
+  0013 8:1 clause-fail
+  0014 10:9 load 1 ; n
+  0015 10:13 const 2 ; 2
+  0016 10:11 multiply
+  0017 10:2 return
+  0018 11:1 const 1 ; nothing
+  0019 11:1 return
+  0020 13:7 const 3 ; 1 ms
+  0021 13:2 wait
+  0022 14:9 load 1 ; n
+  0023 14:2 return
+  0024 15:1 const 1 ; nothing
+  0025 15:1 return
+  0026 15:1 clause-fail
+  0027 18:3 ask api price 0
+  0028 18:3 store 0 ; it
+  0029 18:14 move 0 1 ; it, p
+  0030 19:3 ask api price 0
+  0031 19:3 store 0 ; it
+  0032 19:14 move 0 2 ; it, fresh
+  0033 21:2 ask api price 0
+  0034 21:2 store 0 ; it
+  0035 21:24 load 0 ; it
+  0036 21:24 store-var 1 ; last
+  0037 22:7 const 4 ; 8
+  0038 22:2 call-handler echo 1
+  0039 22:2 store 0 ; it
+  0040 22:14 move 0 3 ; it, a
+  0041 23:7 const 5 ; 1
+  0042 23:12 const 2 ; 2
+  0043 23:2 call-handler move:to: 2
+  0044 23:2 store 0 ; it
+  0045 23:19 move 0 4 ; it, b
+  0046 24:2 call 3 0 ; twice
+  0047 24:2 store 0 ; it
+  0048 24:15 move 0 5 ; it, c
+  0049 25:7 const 6 ; 16
+  0050 25:2 call-builtin sqrt 1
+  0051 25:2 store 0 ; it
+  0052 25:16 move 0 6 ; it, d
+  0053 26:7 const 7 ; 5
+  0054 26:2 call-handler echo 1
+  0055 26:2 store 0 ; it
+  0056 26:15 move 0 7 ; it, e
+  0057 27:6 make-closure 8 0 ; go:27:6
+  0058 27:2 store 8 ; f
+  0059 28:2 load 8 ; f
+  0060 28:4 const 8 ; 6
+  0061 28:2 call-value 1
+  0062 28:2 store 0 ; it
+  0063 28:12 move 0 9 ; it, g
+  0064 29:2 load 8 ; f
+  0065 29:4 const 9 ; 7
+  0066 29:2 call-value-wait 1
+  0067 29:2 store 0 ; it
+  0068 29:12 move 0 10 ; it, h
+  0069 30:7 const 10 ; 9
+  0070 30:2 call-handler-wait slow 1
+  0071 30:2 store 0 ; it
+  0072 30:14 move 0 11 ; it, i
+  0073 31:17 const 11 ; 10
+  0074 31:23 me
+  0075 31:2 send-wait echo 1
+  0076 31:2 store 0 ; it
+  0077 31:31 move 0 12 ; it, j
+  0078 32:19 const 5 ; 1
+  0079 32:24 const 12 ; 11
+  0080 32:10 me
+  0081 32:2 send-wait move:to: 2
+  0082 32:2 store 0 ; it
+  0083 32:32 move 0 13 ; it, k
+  0084 33:8 const 13 ; "echo"
+  0085 33:21 const 14 ; 12
+  0086 33:27 me
+  0087 33:2 send-named-wait 1
+  0088 33:2 store 0 ; it
+  0089 33:35 move 0 14 ; it, l
+  0090 34:2 const 13 ; "echo"
+  0091 34:2 list 0
+  0092 34:21 const 15 ; 13
+  0093 34:20 list 1
+  0094 34:2 list-extend
+  0095 34:28 me
+  0096 34:2 send-spread-wait
+  0097 34:2 store 0 ; it
+  0098 34:36 move 0 15 ; it, m
+  0099 35:7 load 1 ; p
+  0100 35:10 load 2 ; fresh
+  0101 35:17 load-var 1 ; last
+  0102 35:23 load 3 ; a
+  0103 35:26 load 4 ; b
+  0104 35:29 load 5 ; c
+  0105 35:32 load 6 ; d
+  0106 35:35 load 7 ; e
+  0107 35:38 load 9 ; g
+  0108 35:41 load 10 ; h
+  0109 35:44 load 11 ; i
+  0110 35:47 load 12 ; j
+  0111 35:50 load 13 ; k
+  0112 35:53 load 14 ; l
+  0113 35:56 load 15 ; m
+  0114 35:59 load 0 ; it
+  0115 35:6 list 16
+  0116 35:2 store-var 0 ; result
+  0117 36:1 const 1 ; nothing
+  0118 36:1 return
+  0119 36:1 clause-fail
+  0120 38:2 ask-wait api hold 0
+  0121 38:2 store 0 ; it
+  0122 38:23 load 0 ; it
+  0123 38:23 store-var 1 ; last
+  0124 39:6 load 0 ; it
+  0125 39:2 store-var 0 ; result
+  0126 40:1 const 1 ; nothing
+  0127 40:1 return
+  0128 40:1 clause-fail
+  0129 42:2 join-start
+  0130 43:3 join-ask api hold 0 local 1
+  0131 44:3 join-ask api hold 0 variable 1
+  0132 45:16 me
+  0133 45:3 join-send echo 0 local 1
+  0134 46:16 me
+  0135 46:3 join-send echo 0 variable 1
+  0136 47:9 const 13 ; "echo"
+  0137 47:20 me
+  0138 47:3 join-send-named 0 local 1
+  0139 48:9 const 13 ; "echo"
+  0140 48:20 me
+  0141 48:3 join-send-named 0 variable 1
+  0142 49:3 const 13 ; "echo"
+  0143 49:3 list 0
+  0144 49:21 list 0
+  0145 49:3 list-extend
+  0146 49:27 me
+  0147 49:3 join-send-spread local 1
+  0148 50:3 const 13 ; "echo"
+  0149 50:3 list 0
+  0150 50:21 list 0
+  0151 50:3 list-extend
+  0152 50:27 me
+  0153 50:3 join-send-spread variable 1
+  0154 51:2 join-end
+  0155 42:2 store 0 ; it
+  0156 52:1 const 1 ; nothing
+  0157 52:1 return
+  0158 52:1 clause-fail
+  0159 27:15 load 1 ; n
+  0160 27:6 return

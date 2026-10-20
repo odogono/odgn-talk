@@ -452,3 +452,9 @@ stdlib/mappings-restore
 stdlib/mappings-limits
 stdlib/mappings-depth
 builtins/random
+disassembly/result-targets
+capabilities/result-targets-load-checks
+result-targets/completion-fuel
+result-targets/failures
+result-targets/join
+result-targets/ordinary

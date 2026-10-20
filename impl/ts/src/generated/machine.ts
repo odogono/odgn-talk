@@ -1336,7 +1336,9 @@ export const instructions = [
     "operands": [
       "grant",
       "operation",
-      "count"
+      "count",
+      "target-kind?",
+      "target?"
     ],
     "pops": "count",
     "pushes": 0,
@@ -1347,7 +1349,9 @@ export const instructions = [
     "cost": "send",
     "operands": [
       "message",
-      "count"
+      "count",
+      "target-kind?",
+      "target?"
     ],
     "pops": "count + 1",
     "pushes": 0,
@@ -1357,7 +1361,9 @@ export const instructions = [
     "name": "join-send-named",
     "cost": "send",
     "operands": [
-      "count"
+      "count",
+      "target-kind?",
+      "target?"
     ],
     "pops": "count + 2",
     "pushes": 0,
@@ -1366,7 +1372,10 @@ export const instructions = [
   {
     "name": "join-send-spread",
     "cost": "send",
-    "operands": [],
+    "operands": [
+      "target-kind?",
+      "target?"
+    ],
     "pops": 3,
     "pushes": 0,
     "suspends": false
@@ -1947,7 +1956,8 @@ export const costModel = {
     {
       "key": "join",
       "fuel": [
-        [0, 0, 10, 1]
+        [0, 0, 10, 1],
+        [11, 0, 1, 1]
       ],
       "alloc": [
         [1, 2, 1, 1]
