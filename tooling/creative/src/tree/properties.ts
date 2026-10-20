@@ -146,6 +146,8 @@ const fields: Record<PropertyKind, Record<string, PropertyDescriptor>> = {
   rectangle: { ...common, fill, stroke, thickness },
   ellipse: { ...common, fill, stroke, thickness },
   line: { ...common, stroke, thickness },
+  // Scripts draw through the `canvas` Grant and never read the Drawing.
+  canvas: { ...common, fill },
   group: {
     ...common,
     width: readOnly(common.width),

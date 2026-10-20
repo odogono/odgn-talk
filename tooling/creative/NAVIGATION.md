@@ -213,6 +213,19 @@ List files with `rg --files tooling/creative` before opening one by name.
   on `/performance-test.html`. Run `tetris` for a game integration check.
 - First check: `bun test tooling/creative/tests/performance.test.ts tooling/creative/tests/play-host.test.ts`.
 
+## Canvas Elements and the canvas Grant
+
+- [drawing.ts](src/drawing.ts): the retained Drawing, its `clear`/`background`
+  reset and limit, and project-file checks over the shared
+  [canvas validation](../stack/src/canvas.ts) (ADR 0116).
+- [play.ts](src/play.ts): the `canvas` Grant and each session's Drawings;
+  [play-host.ts](src/play-host.ts) sends their changes as `DrawingView`s and
+  [play-mirror.ts](src/play-mirror.ts) keeps and commits them.
+- [canvas-view.ts](src/canvas-view.ts): Canvas 2D painting shared by Edit and
+  Play; [script-manifest.ts](src/script-manifest.ts) declares the Grant.
+- Tests: [canvas.test.ts](tests/canvas.test.ts).
+- First check: `bun test tooling/creative/tests/canvas.test.ts`.
+
 ## User prompts
 
 - [play.ts](src/play.ts): the `user` Grant's prompts and notices on the Play

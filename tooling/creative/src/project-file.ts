@@ -15,6 +15,7 @@ import {
   isTextAlign,
   projectWithoutIds,
   type Asset,
+  type CanvasElement,
   type Element,
   type ElementKind,
   type Page,
@@ -23,6 +24,7 @@ import {
   type RichText,
   type TextRun,
 } from './model';
+import { drawingProblem } from './drawing';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
@@ -367,6 +369,18 @@ const checkElement = (
         stroke: c.str(e.stroke, `${path}.stroke`) ?? '',
         thickness: c.num(e.thickness, `${path}.thickness`, 'positive') ?? 1,
       };
+    case 'canvas': {
+      const problem = drawingProblem(e.drawing);
+      if (problem) {
+        c.fail(`${path}.drawing`, problem);
+      }
+      return {
+        ...base,
+        kind: k,
+        fill: c.str(e.fill, `${path}.fill`) ?? '',
+        drawing: problem ? [] : (e.drawing as CanvasElement['drawing']),
+      };
+    }
   }
 };
 

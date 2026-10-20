@@ -27,7 +27,7 @@ const fixture = () => {
   return { project, page, other };
 };
 
-test('each owner gets its scoped names, typed properties and five Grants', () => {
+test('each owner gets its scoped names, typed properties and six Grants', () => {
   const { project, page } = fixture();
   for (const owner of [project, page, ...page.elements]) {
     const manifest = readManifest(scriptManifest(project, owner));
@@ -47,6 +47,21 @@ test('each owner gets its scoped names, typed properties and five Grants', () =>
       'sound',
       'user',
       'folio',
+      'canvas',
+    ]);
+    expect([...manifest.grants.get('canvas')!.keys()]).toEqual([
+      'clear',
+      'background',
+      'fill',
+      'noFill',
+      'stroke',
+      'noStroke',
+      'strokeWidth',
+      'line',
+      'rectangle',
+      'ellipse',
+      'text',
+      'textSize',
     ]);
     const folio = manifest.grants.get('folio')!;
     expect([...folio.values()].map(op => [op.name, op.command])).toEqual([

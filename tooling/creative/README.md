@@ -4,7 +4,7 @@ Folio is the browser creative tool specified in [#154](https://github.com/odogon
 
 Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio and its tests, see [Running it](#running-it).
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse, line and canvas Elements (see [Canvas](#canvas)); Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
 Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
 instances. The tree owns Project mutations, hierarchy, indexed collections,
@@ -205,7 +205,7 @@ Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
 also binds every Page name. The Manifests describe the `pages`, `elements` and `sound` Grants
-from ADR 0084, the `user` Standard Capability, and the `folio` Grant of `hide` and `show` (see [Play](#play)); all five are available during Play (see [Sounds](#sounds) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
+from ADR 0084, the `user` Standard Capability, the `folio` Grant of `hide` and `show` (see [Play](#play)), and the `canvas` Grant; all six are available during Play (see [Sounds](#sounds), [Canvas](#canvas) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -495,6 +495,57 @@ Every result must have `passed: true`. Reload before repeating, and rebuild
 both files after an app rebuild. Which browsers play WAV, and why the
 Project picker has no extension filter, are recorded in
 [the storage research](../../docs/research/creative-tool-project-storage.md#device-checks-from-739-recorded-for-822).
+
+## Canvas
+
+A canvas Element shows its Drawing over its `fill`: the commands Scripts and
+the Message Box have drawn on it since its last `clear` or `background`
+([ADR 0116](../../docs/adr/0116-a-canvas-element-keeps-a-retained-drawing-across-play-and-edit.md)).
+Every Script and the Message Box get the `canvas` Grant, the Playground's
+drawing Operations without `size`, each taking the Canvas first:
+
+```talk
+on frame elapsed
+  tell canvas
+    background board, "#1d2b35"
+    noStroke board
+    fill board, "#e0a458"
+    ellipse board, 60, 40, 30, 30
+    fill board, "#ffffff"
+    textSize board, 16
+    text board, "Score: 10", 8, 20
+  end tell
+end frame
+```
+
+`clear`, `background`, `fill`, `noFill`, `stroke`, `noStroke`, `strokeWidth`,
+`line`, `rectangle`, `ellipse`, `text` and `textSize` each cost 1 Fuel.
+Coordinates are the Element's own, one unit to one Page pixel, and drawing is
+clipped to its frame; `ellipse` takes its centre. Colours are `#RRGGBB` or
+`#RRGGBBAA`. `clear` and `background` reset the Drawing to the commands that
+set the current style, so style survives a clear and a `background` every
+`frame` keeps the Drawing one frame long. A Drawing holds at most 10,000
+commands; one more raises a catchable `canvas limit`, and a bad argument a
+catchable `invalid canvas argument`. Scripts cannot read a Drawing back.
+
+The Drawing is one surface across Play and Edit. Play starts from it, and on
+return to Edit each Canvas's Drawing as shown, a half-drawn frame included,
+is committed into the Project as one undoable edit; Undo restores the
+Drawing from before Play. Canvases created during Play are discarded with
+the rest of Play State. In Edit, a Message Box line that draws is one
+undoable edit. Info shows the command count and **Clear drawing**, which
+empties the Drawing back to the default style. Duplicating a Canvas, and
+cloning it in Play, copy its Drawing. The Project file stores the
+Drawing as `{op, args}` commands, checked with the Playground's validation.
+
+[`src/drawing.ts`](src/drawing.ts) holds the retained list and its reset
+rule; [`src/canvas-view.ts`](src/canvas-view.ts) paints it with Canvas 2D in
+Edit and Play, painting only the new commands while a Drawing grows. The Play
+worker sends the page each Drawing's additions or a reset, apart from its
+Element ([`src/play-host.ts`](src/play-host.ts)), and the
+[mirror](src/play-mirror.ts) commits them on return to Edit.
+[`tests/canvas.test.ts`](tests/canvas.test.ts) checks the retained list
+headlessly, with no pixel comparisons.
 
 ## Rich text
 

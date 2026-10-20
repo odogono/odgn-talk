@@ -8,6 +8,7 @@ import {
   isIdentifierName,
   replacePlainText,
   type Asset,
+  type CanvasElement,
   type Element,
   type ElementKind,
   type GroupElement,
@@ -839,6 +840,15 @@ export class ProjectTree {
       replacePlainText(staged, value);
       this.#field(node, 'richText', staged.richText, true);
     });
+  }
+  /** Replaces a Canvas Element's Drawing, as committing Play does. */
+  setDrawing(
+    element: DeepReadonly<CanvasElement>,
+    drawing: DeepReadonly<CanvasElement['drawing']>,
+  ): void {
+    this.transaction(() =>
+      this.#field(this.#mutable(element), 'drawing', drawing),
+    );
   }
   setGeometry(element: DeepReadonly<Element>, changes: Partial<Box>): void {
     this.transaction(() => {

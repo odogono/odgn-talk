@@ -12,7 +12,7 @@ import { PerformanceWindow } from './performance-window';
 import { mountMessageWindow } from './message-window';
 import { type Element, type Project, type TextElement } from './model';
 import { firstView } from './play-host';
-import { PlayMirror, type MirrorPage } from './play-mirror';
+import { commitDrawings, PlayMirror, type MirrorPage } from './play-mirror';
 import { mountPlayPrompts } from './play-prompts';
 import {
   type PlayRequest,
@@ -22,6 +22,7 @@ import {
 import { ReaderTextHistory } from './play-text';
 import { ownerById, ownerId, scriptOwners } from './script-manifest';
 import { browserSoundBackend } from './sounds';
+import { paintCanvas } from './canvas-view';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 
@@ -351,6 +352,9 @@ export const mountPlay = (shell: StackShell): void => {
       }
       const send = (name: 'click' | 'pointerEnter' | 'pointerLeave') =>
         sendTo(element, name);
+      const existing = pageNode.querySelector<HTMLElement>(
+        `[data-element="${CSS.escape(element.name)}"]`,
+      );
       const fresh = renderElement(
         element,
         element.kind === 'image'
@@ -358,12 +362,10 @@ export const mountPlay = (shell: StackShell): void => {
               playing!.assets.find(a => a.name === element.image),
             )
           : undefined,
+        !existing,
       );
       fresh.hidden = !play.isVisible(element);
       fresh.querySelector('[data-replace-image]')?.remove();
-      const existing = pageNode.querySelector<HTMLElement>(
-        `[data-element="${CSS.escape(element.name)}"]`,
-      );
       // Keep the reader's focus, selection and IME intact across other writes.
       if (existing) {
         existing.className = fresh.className;
@@ -372,7 +374,11 @@ export const mountPlay = (shell: StackShell): void => {
         }
         existing.style.cssText = fresh.style.cssText;
         existing.hidden = fresh.hidden;
-        if (
+        const canvas = existing.querySelector('canvas');
+        if (element.kind === 'canvas' && canvas) {
+          // Keep the painted Canvas so a growing Drawing paints only its additions.
+          paintCanvas(canvas, element);
+        } else if (
           element.kind !== 'text' ||
           existing.dataset.renderedRichText !== JSON.stringify(element.richText)
         ) {
@@ -484,11 +490,16 @@ export const mountPlay = (shell: StackShell): void => {
     document.body.classList.toggle('playing', mode === 'present');
     document.body.classList.toggle('browsing', mode === 'browse');
   };
-  /** Ends Play, discarding Play State; browsing leaves Edit on its Page. */
-  const leave = () => {
+  /**
+   * Ends Play, discarding Play State but committing each Canvas's Drawing as
+   * shown (ADR 0116), unless another Project has replaced this one. Browsing
+   * leaves Edit on its Page.
+   */
+  const leave = (commit = true) => {
     if (!session) {
       return;
     }
+    const ended = session;
     const pageName = session.page.name;
     const browsed = mode === 'browse';
     stopPlay();
@@ -507,6 +518,9 @@ export const mountPlay = (shell: StackShell): void => {
       shell.editor.goToPage(index);
     }
     shell.setPlaying(undefined);
+    if (commit && generation === shell.editor.generation) {
+      commitDrawings(shell.editor, owners, ended);
+    }
   };
   let errorsGeneration = shell.editor.generation;
   const start = (next: PlayMode) => {
@@ -570,7 +584,7 @@ export const mountPlay = (shell: StackShell): void => {
       start('browse');
     }
   });
-  editTool.addEventListener('click', leave);
+  editTool.addEventListener('click', () => leave());
   // Choosing an Element tool while browsing returns to Edit to add it.
   byId('tools').addEventListener(
     'click',
@@ -702,7 +716,7 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     if (generation !== shell.editor.generation) {
-      leave();
+      leave(false);
     } else {
       draw();
     }
