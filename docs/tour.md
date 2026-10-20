@@ -669,14 +669,23 @@ on storeTour
     increment "visits", 1
   end tell
 end storeTour
--- An Operation may declare Argument Labels, and a call may write them
--- between its arguments, like a Handler's. They only help it read: the
--- call is the same, and the loader checks the labels against the Grant.
-on labelsTour piece
-  ask world to move piece to "red hangar"   -- labelled
-  ask world to move piece, "red hangar"     -- the same call, positional
-  tell world to place piece at 3 facing "north"
-end labelsTour
+-- An Operation may declare Argument Labels, written between its arguments
+-- just like a Handler's. They only help it read: the loader checks them
+-- against the Grant, and the call is the same with or without them.
+on operationLabelsTour ship
+  ask world to dock ship at "red hangar"    -- labelled
+  ask world to dock ship, "red hangar"      -- the same call, positional
+  tell world to moor ship at 3 facing "north"
+end operationLabelsTour
+-- If `dock` is also a Host Command, it has two Selectors: `dock` and
+-- `dock:at:`. A Handler declared with the same labels takes the labelled one.
+on dock ship at bay
+  say ship & " docks at " & bay
+end dock
+on hostCommandLabelsTour
+  dock "pass" at "red hangar"       -- `dock:at:`: the Handler above
+  dock "pass", "red hangar"         -- `dock`: still the Host Command
+end hostCommandLabelsTour
 -- Store writes commit or roll back with the current Segment. They are not
 -- one transaction across waits. Optional Grants also include SQLite and
 -- user interaction; a Host must explicitly supply them.
