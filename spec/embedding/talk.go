@@ -1,4 +1,4 @@
-// The NorthTalk Go Core's embedding interface: declarations only, never compiled.
+// The NorthTalk Go embedding interface: declarations only, never compiled.
 // Metering extensions and SQLite perStep signatures are staged in
 // metered-operations.md#target-embedding-declarations until runtime implementation.
 // The module is github.com/odogono/odgn-talk/impl/go; this is its root package.

@@ -175,7 +175,7 @@ The `text-model/items-property` case (#565) pins list reads, text
 splitting, integer-range materialization and `wrong kind` fields for unsupported
 subjects. Go and TS agree in ordinary and save/restore replay, and Go requires
 it in its passing gate. Its first human blessing remains pending; current
-support is described in the [Go machine guide](../impl/go/README.md#machine-execution).
+support is described in the [Go machine guide](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/README.md#machine-execution).
 
 The `cancellation/refused-host-crossings` case pins property and Capability
 refusals after their crossing records, including repeated getters after a

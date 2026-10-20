@@ -15,7 +15,7 @@ The `initialiser failed` boundary test obtains its position from executing the
 fixture's actual lowered division instruction. The full Abstract Machine and
 worker Trace replay arrive in #251; #249's runner already reads these records. Handler, Library and
 Capability diagnostics deferred to step 3 are listed beside the checker in
-[the Go guide](../../impl/go/README.md#front-end-and-lowering-checks).
+[the Go guide](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/README.md#front-end-and-lowering-checks).
 
 | Source | Expected diagnostic records | Blessed output |
 | --- | --- | --- |

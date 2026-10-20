@@ -8,7 +8,7 @@ import { parseInstant } from '../src/index';
 import { SessionHost } from '../src/session';
 import { viewSource } from '../src/view';
 
-// impl/testdata/declaration-docs.json, which the Go Core's documentation
+// impl/testdata/declaration-docs.json, which the Go Session Host's documentation
 // tests read too.
 type Step = {
   docs?: string;

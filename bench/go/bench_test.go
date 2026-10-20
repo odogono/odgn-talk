@@ -16,7 +16,7 @@ var smoke = os.Getenv("NORTHTALK_BENCH_SMOKE") != ""
 var filter = os.Getenv("NORTHTALK_BENCH_FILTER")
 
 // manifest returns the Benchmarks the filter selects and the runner doesn't
-// skip: "go" for the Go Core, "peers" for the Peer Languages.
+// skip: "go" for the Go embedding, "peers" for the Peer Languages.
 func manifest(t testing.TB, runner string) []Benchmark {
 	t.Helper()
 	benchmarks, e := Manifest()

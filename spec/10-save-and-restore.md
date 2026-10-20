@@ -10,7 +10,7 @@ Catch dispatch can be saved at any instruction boundary, including ordinary catc
 
 **Save then restore is unobservable** ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)). A restored Group, given the same later Host Inputs, Clock readings and Fuel Slices, gives the same results and reports, and the same Trace apart from the save and restore records, as the Group that was never saved. It uses the same Fuel and faults at the same instruction. Resetting any counter would let a Script launder Fuel through a save.
 
-- **Same Core family only:** a save from the TS Core never restores on the Go Core, and the other way round. The format is each Core's own, and there is no stable cross-Core format ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md)).
+- **Same Core family only:** a save from the TS Core never restores on the Zig Core, and the other way round. The format is each Core's own, and there is no stable cross-Core format ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md)).
 - **Checked on every case:** every Conformance Corpus case is also replayed with a save and a restore between each pair of Pumps where Save succeeds; live-effect boundaries instead check `effects pending` refusal and continue the original Group, and both paths must give identical execution output ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [chapter 11](11-the-trace-and-conformance.md)).
 
 ## Saving

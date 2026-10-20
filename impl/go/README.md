@@ -1,55 +1,55 @@
-# Go Core
+# Go embedding
 
-A Result Target, `into name`, retains the answer of an `ask`, a `tell`-block Operation line, a Command Call (including a Host Command), a call statement or a waiting `send` ([ADR 0114](../../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)). It writes the bare Name with put semantics and keeps `it`; `and wait` remains last. Fire-and-forget calls reject targets, and a Message Path Command Call or explicit send needs explicit `and wait`. A Join records each reached member's destination and assigns them in start order only after every answer converts and all completion charges are reserved, so duplicate targets retain the last-started answer and failure writes no member targets. Saves retain the member instruction and its owning frame, including early answers and repeated destinations.
-
-The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
-package `northtalk`. It provides immutable values, decimal arithmetic, pinned
-Unicode text, a front end and standalone Abstract Machine execution. Its Group
-embedding interface loads Scripts, accepts Deliveries and Requests, pumps Runs and
-emits canonical Trace records. The Session Host provides Entries, Session
-Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and Conformance Corpus are
-the authority; the TS Core is not a reference
+The Go embedding is module `github.com/odogono/odgn-talk/impl/go`, with public
+root package `northtalk`. It runs the [embedded Zig Core](#zig-backend) through
+wazero and provides immutable values, decimal arithmetic, pinned Unicode text
+and the Group embedding interface, which loads Scripts, accepts Deliveries and
+Requests, pumps Runs and emits canonical Trace records. The Session Host
+provides Entries, Session Commands, a REPL and deterministic Transcript replay.
+The Spec, Data Files and Conformance Corpus are the authority
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
-The package runs the [embedded Zig Core](#zig-backend) through wazero; the
-native Go Core was removed in
-[#1055](https://github.com/odogono/odgn-talk/issues/1055). The separate
-[comparison probe](../../spikes/go-zig-binding/README.md) retains its native-Go
-baseline and broader callback experiments; the
-[binding investigation](../../docs/research/go-zig-binding.md) records the gates
-before replacing the Go Core.
+The native Go Core, a separate parser, checker, compiler and interpreter, was
+removed in [#1055](https://github.com/odogono/odgn-talk/issues/1055)
+([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)).
+Its implementation notes are in this guide's
+[last native version](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/README.md).
+The archived [comparison probe](../../spikes/go-zig-binding/README.md) and the
+[binding investigation](../../docs/research/go-zig-binding.md) record the gates
+measured before the switch. Language behaviour is the
+[Zig guide](../zig/README.md)'s and the Spec's.
 
-A Timeout Block, `with timeout of d … end timeout`, bounds the waits written inside it ([ADR 0073](../../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)). `timeout-start` pushes a deadline, the Clock reading plus `d` or the enclosing block's when that is no later, which stays on the stack below the body as an iterator does, so Unwind depths count it and a catch outside the block drops it. `exit repeat` and `next repeat` emit `timeout-end` for each block they leave. Each Suspension Point reads the topmost deadline on its frame's stack: past it, the instruction raises `timeout` with `deadline: true` at once, and otherwise the block's deadline replaces the wait's own timer when it is no later, or for a Join, is a timer of its own set before its members'. The checker reports `not in a timeout` and `empty timeout`, and a Host `Fail` may not use the reserved key `deadline`.
+## Moving from the native Go Core
 
-A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). The parser reads `end` as the block's close and any other first word as an Operation name. Each line is an `ask` until the checker resolves it against the unit's Grants: a fire-and-forget Operation's line without `and wait` becomes a `tell`, once, so an importing Script's recheck tests the Library's lines as compiled. Lines then lower, check suspension and join as the one-line calls they stand for, at their Operation names. A Grant the unit doesn't hold is one `unknown operation` at the block's receiver. With no Grants, as in Disassembly Cases, every line lowers as an `ask`. `DefineCapability` refuses `end` as an Operation name.
+The native Go Core was removed in
+[#1055](https://github.com/odogono/odgn-talk/issues/1055)
+([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)).
+The public API is unchanged, and Hosts move by upgrading the module:
 
-An Operation with `Command: true` is also a Host Command, called by its name alone ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)). `DefineCapability` refuses the flag on a Reserved Word with `invalid value`. The flag is part of the Operation Data, so the Group Fingerprint and restore's declaration matching carry it, written after `segmentBound` and only as `true`, and saves keep it. `OperationCheck.Command` carries it to the checker, from Load, Extend, Reload, `CompileLibrary` and Library replacement. After declarations are collected, `resolveHostCommands` in [operations.go](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/check/operations.go) resolves each unlabelled Command Call that names no Handler of the unit, local, imported or from an earlier Extend, to the one Operation its Grants offer as `command`. That runs before validation, so a Library's Host Commands aren't `not in a library`, while `and wait` on one stays `not in a join` and `not in a timeout` as for any Command Call. `checkOperations` then rewrites the node into the one-line call it stands for, a `tell` for a fire-and-forget Operation without `and wait` and otherwise an `ask`, so load checks, lowering, `needs`, GrantsAsUsed and an importer's recheck see an ordinary Operation call, and no instruction is added. `wrong mode`, `wrong argument count` and `wrong argument` are reported at the command's name or argument. Two Grants offering the called command are `name clash` at the call, and an Import named like any offered command is `name clash` at its name in the `use` line. The compile cache key already includes the Grant declarations, `command` included, so resolved calls never share a unit with unresolved ones; the code identity is unchanged. A Library's `needs` and recorded calls are read from its checked tree, which holds the resolved calls even on a cache hit. Go still rejects an unresolved Command Call in a Library with `not in a library`, where TS and Zig accept it. The Session Host's mocked Operations have no `command` flag. Check with `go -C impl/go test ./internal/check . -run HostCommand` and `go -C impl/go run ./cmd/corpus capabilities/host-commands`.
-
-Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
-
-Whose Clauses ([ADR 0074](../../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)) parse as a whole Expression into a `whose` node, whose `NameToken` is the chunk word: an Every Head is a `chunk` node with an `every` ordinal, and either head sits in a `delimited` node when it has `delimited by`, so `no item chunk` covers it. A Whose Key is a `key` node on a synthetic `it`, never a name. The checker reports `not in a whose` at a condition's non-Built-in call or Lambda, and an `unknown name` in a condition suggests `it's` in its message. Lowering walks the plural property with `iterate` and `next`, and `it` in the condition loads the innermost clause's temp, as chapter 8 lays out. `the items of` a list is the list itself, as chapter 4's property table says.
-
-`a otherwise b` and `the optional k of x` follow [chapter 4](../../spec/04-expressions-and-statements.md#nothing-defaults) of language 1.0-rc.3. `otherwise` parses as the lowest `binary` operator and lowers to `branch-not-nothing` and `pop` at its own token, so the left side runs once and the fallback only on Nothing. Optional reads parse into `optional-key` and `optional-key-computed` nodes — `the optional of m` stays the ordinary key read by the `optional-key` decision — and lower to `get-optional-key` instructions at their `the`, which read maps and Nothing only, reject every Host Object with no Host crossing, and are never Containers. Both forms are checked in every operand in Guards, Constants and other restricted expressions. The Go Core passes the shared `disassembly/nothing-defaults` case and the `nothing-defaults/` and `load-diagnostics/nothing-defaults` Trace Cases.
-
-Maps use persistent balanced trees for key lookup and insertion order. Lists
-use persistent balanced trees of at most 32 values per chunk. A Map key write,
-a List point replacement or deletion, and List growth with `put … after/before`,
-spreading or `collecting` copy only the affected tree paths and chunks. Their
-storage work is O(log n) per changed item, including branches from retained
-values. Replacing or deleting a List range still rebuilds the result. Retained
-values, Segment checkpoints and Host reads keep their original contents.
-Logical contents sizes are cached and updated incrementally, as if nothing were
-shared; Fuel and logical allocation follow the unchanged Cost Model, including
-charging the full result size for `collecting`. Save/Restore uses the same value
-format and reconstructs independent storage.
-
-
-Whole Host Object properties can be assigned with `set` through `me`, `it`
-or `the target`, including intermediate keys/chunks that locate the Object.
-These implicit bindings cannot be replaced or used as roots for ordinary
-Container mutations. `set` does not modify chunks inside a property's value.
-Direct known-owner read-only properties are checked at load; `it` and Target
-properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
+- **Builds:** there is no build tag; `talk_native_go` and
+  `talk_zig_experimental` no longer exist. Builds need only Go, with
+  `CGO_ENABLED=0` if you like; the reactor is embedded. Linux amd64/arm64 and
+  macOS arm64 are the supported platforms.
+- **Saves are disposable across the switch.** Saves stay same-Core
+  ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)), so `Restore`
+  refuses a native Go save (`SaveFormat` `go/…`) with `invalid save`. There is
+  no converter. Before upgrading, either let saved Groups finish on the old
+  version, or plan to start them fresh from source and the Host's own data.
+  The last commit with the native Core is
+  [`8df027ac`](https://github.com/odogono/odgn-talk/tree/8df027ac174cc42a47d4ad14725bcaea768ddee7).
+- **Versions:** `CoreVersions` reports the Zig Core, `zig/…`, and its save
+  format, so a Host that stores the save format beside each save can tell old
+  saves from new ones.
+- **Behaviour:** the Corpus passes unchanged. A Library may call its importer's
+  Handlers, and a transitive name cycle is accepted, as in TS and Zig
+  ([#1037](https://github.com/odogono/odgn-talk/issues/1037)). Error message
+  wording may differ; error codes don't.
+- **Performance:** the API is slower than native Go was, with more memory per
+  Group; the accepted scorecard is on
+  [#1103](https://github.com/odogono/odgn-talk/issues/1103).
+- **Tools:** run Go Corpus cases with
+  `NORTHTALK_CORPUS=<case> go -C impl/go test ./internal/corpus -run TestSelectedCases`;
+  `cmd/corpus`, `cmd/fuzzworker` and the fuzzer's `--go-runner` are gone.
 
 ## Zig backend
 
@@ -117,9 +117,8 @@ compiles a Library, after its imports, the first time `AddLibrary` or
 add and replace refusals and Trace records are the guest's. `ReplaceLibrary`
 returns the typed Reports and settles discarded futures; Grant release hooks
 run with reason `reload` before the importers are reloaded. A Lambda in a
-Library constant is still stale in its callers (#1036), and two checks only
-native Go makes, a Library calling its importer's Handler and a transitive name
-cycle, are decided in #1037.
+Library constant is still stale in its callers (#1036). A Library may call its
+importer's Handlers, and a transitive name cycle is accepted (#1037).
 
 `Script.Reload` and `Script.Extend` go through the guest's `reload` and
 `extend`, which check, record and refuse them as natively, including `state
@@ -131,8 +130,8 @@ was already stopped. Function Values made by the old code are stale afterwards.
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
-Saves are opaque `zig/15` bytes; native Go saves remain per-Core and cannot be
-read by this backend. Restore compiles the supplied Libraries in its fresh
+Saves are the Zig Core's opaque bytes, in the format
+`CoreVersions().SaveFormat` names; native Go saves cannot be read. Restore compiles the supplied Libraries in its fresh
 guest, rebinds Grants and native Objects through the public callbacks, and
 returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and
 Adopt retain their queued semantics; adopted Calls own fresh Go contexts.
@@ -225,16 +224,15 @@ inspection with a separately compiled native-Go binary; a Trace-disabled long
 export exercises concurrent Delivery, Stop, CancelRun and Answer. The native
 reference's refused input from `pumped` is excluded pending #1072.
 
-Unsupported Capability attachments return an `experimental Zig backend` error.
+Unsupported Capability attachments return an `embedded Zig Core: … is not supported` error.
 Two Object Kinds sharing a
 name in one Group's guest, and a Kind first defined inside a Host callback, are
 refused. A Group that has done nothing but exist moves to another guest rather
 than meet a Kind of the same name.
 Shapes nested beyond 32 levels are also refused. These three declaration limits
-are deliberate experimental limits, retained by the maintainer's decision on
+are deliberate limits, retained by the maintainer's decision on
 [#1050](https://github.com/odogono/odgn-talk/issues/1050).
-Unsupported calls do not fall back to native Go language execution.
-Pool, Store and sqlite remain native-Go Host facilities and run through the
+Pool, Store and sqlite are Go Host facilities and run through the
 adapter, including the unchanged tenants example and the Store and sqlite test
 kits. The Session Host, REPL and every Session Transcript run on the adapter
 ([#1053](https://github.com/odogono/odgn-talk/issues/1053)); CI runs them on
@@ -255,11 +253,10 @@ size. The selected acceptance gate includes the unchanged
 [memory measurements](../../docs/research/go-zig-binding.md#large-state-transport-acceptance-1286)
 record the cost of whole-message assembly.
 
-Store retains `machine.ErrorValue`, `machine.Size` and the `internal/value`
-Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module uses
-no Go Core internals directly; its `internal/sqlitekit` test helper uses
-`corpus`, `hostkit` and `value`. These helpers compute from Spec data rather than
-executing the Go Core, so they remain shared under either backend without new
+Store uses `valueops.ErrorValue`, `valueops.Size` and the `internal/value`
+Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module's
+`internal/sqlitekit` test helper uses `corpus`, `hostkit` and `value`. These
+helpers compute from Spec data rather than executing a Core, so they need no
 public API. See the [dependency inventory and decision](https://github.com/odogono/odgn-talk/issues/1052#issuecomment-6227978930).
 sqlite per-step charging remains [#911](https://github.com/odogono/odgn-talk/issues/911).
 
@@ -289,8 +286,8 @@ are copied before another export, and returned Values own Go memory. Data
 conversion uses the existing iterative codec rather than encoding/json's
 nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
-`python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
-from committed Core/spec sources and records identical provenance.
+`python3 impl/go/build-artifact.py` rebuilds the embedded copy from
+committed Core/spec sources and records its provenance.
 The Go Session Host and REPL use the embedded
 Core's negotiated `analysis-v1` exchanges for Entry classification and
 continuation, positioned syntax diagnostics, implicit Script Variables,
@@ -303,19 +300,17 @@ formatting and pinned Unicode name matching stay with the Host. `session`,
 generated catalogue packages. Cancelling an unfinished
 inspection expression prevents its property reader from starting.
 
-Native Session tests and all Session Transcripts pass. The experimental
-backend also passes the `describe`, `named-functions`, `object-inspection` and
-`observation` Transcripts unchanged, including defining documentation, disposed
+Every Session test and Session Transcript passes, including the `describe`,
+`named-functions`, `object-inspection` and `observation` Transcripts unchanged, including defining documentation, disposed
 Object inspection after Restore and Core-raised error messages left out of the
 Trace. The Session’s private pending-input hook uses the
 negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
 Pump per Host call, Store Notifications drain at the same Clock reading, and
 restored settlements are pumped before the next Entry. The query observes the
-guest queue without execution or Trace. On the experimental backend, every
-Session test and Session Transcript passes, including decomposed source, whose
-Trace keeps the source text as written
+guest queue without execution or Trace. Decomposed source keeps the source
+text as written in the Trace
 ([#1053](https://github.com/odogono/odgn-talk/issues/1053)).
-`zig-experimental-check.sh` runs `./session`, `./driver` and every
+`adapter-check.sh` runs `./session`, `./driver` and every
 `TestSessionTranscriptParity` case.
 
 Sharing guests is what keeps a tenant cheap. On an Apple M5 with 10 guests
@@ -332,8 +327,8 @@ CGO_ENABLED=0 go -C impl/go test -run '^$' -bench GroupInstantiation -benchtime 
 Run the focused public slices from the repository root:
 
 ```sh
-CGO_ENABLED=0 impl/go/zig-experimental-check.sh
-impl/go/zig-experimental-check.sh -race
+CGO_ENABLED=0 impl/go/adapter-check.sh
+impl/go/adapter-check.sh -race
 go -C impl/go vet . ./internal/zigwasm
 ```
 
@@ -355,7 +350,7 @@ selection. `TestCoordinatorMappingHoldsAcrossReloadAndRestore` still needs
 Save/Restore; `TestEffectUncertaintyStopsEveryScriptAndCannotReload` reads native
 private Script state, so public Host scenarios cover fatal outcomes instead.
 
-[`build-artifact.py`](../../spikes/go-zig-binding/build-artifact.py) refuses uncommitted Core/spec changes. To try an
+[`build-artifact.py`](build-artifact.py) refuses uncommitted Core/spec changes. To try an
 uncommitted Zig change, build it and swap the embedded copy by hand; the
 digest in `artifact.json` must match, or `NewEngine` refuses the artifact:
 
@@ -368,7 +363,7 @@ shasum -a 256 impl/go/internal/zigwasm/talk.wasm
 
 Never commit these hand-built files. Restore them with
 `git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
-committed, run `python3 spikes/go-zig-binding/build-artifact.py` and commit its output. If a test panics
+committed, run `python3 impl/go/build-artifact.py` and commit its output. If a test panics
 mid-suite, compile once and run tests singly:
 `go -C impl/go test -c -o /tmp/adapter.test .`, then
 `(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
@@ -443,24 +438,14 @@ performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/iss
 
 Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 
-## Source nesting
-
-The Go Core bounds recursive parser regions and the resulting syntax-tree
-depth to 64, on native and WASI builds. This safety limit covers expressions,
-blocks, binding and Text Patterns, Interpolation Holes, and operator or
-property chains built without parser recursion. Load, Library compilation and
-Session Entries refuse excessive nesting with a positioned
-`source nesting too deep` diagnostic; a refused Load leaves the Group usable.
-The diagnostic and bound are Go implementation limits, outside the Spec's
-shared diagnostic catalogue; the Spec does not currently set a source nesting
-bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
-
 ## Layout
 
 - The root package implements the available declarations of the
   [embedding interface](../../spec/embedding/talk.go). `value.go`, `encoding.go`
-  and `text.go` own immutable values and codecs. `core.go` owns compilation and
-  default limits; `group.go` owns Host inputs, and `group_run.go` pumps Runs.
+  and `text.go` own immutable values and codecs. `core.go` owns the Core and
+  default limits, and `group.go` owns Host inputs. The `zig_*.go` files are the
+  adapter to the embedded guest, which [`internal/zigwasm/`](internal/zigwasm/)
+  runs under wazero.
 - `internal/generated/` holds tables from Spec Data Files and pinned Unicode
   sources, with `UNICODE-LICENSE.txt` beside them.
 - `internal/unicode/` supplies NFC, Character boundaries, simple folding, full
@@ -605,98 +590,6 @@ real-clock readings and console answers, uses scratch export I/O, and returns
 actual recorded output; the CLI fails if it differs from the original file.
 Help and quit are terminal actions and are not recorded.
 
-## Front-end and lowering checks
-
-A Script Variable or Constant may share a local Handler's name in either
-declaration order. Value references read the variable or Constant; Command
-Calls resolve the Handler separately, including from a Script extension.
-
-Statically resolved Function and Built-in calls are checked at load against
-their required and total parameter counts. Built-ins accept omitted trailing
-defaults from chapter 7; invalid counts report `wrong argument count` at the
-callee's name. Calls through shadowing variables remain dynamic and check
-arity when they run.
-
-Command Call arguments may start with any Name, including contextual words in
-the FOLLOW set such as `times`, `before` and `whose`, as
-[chapter 2](../../spec/02-grammar.md#statements) specifies. These words still
-cannot start a chunk index; `item mod 2` reads `item` as a Name.
-
-Argument Labels in Handler heads, Command Calls, target-first `send`, `pass`
-and `wait for` form Selectors as [chapter 2](../../spec/02-grammar.md#argument-labels)
-specifies. `move p to sq` names `move:to:`; positional calls retain `move`.
-Selectors identify Clauses, Message Paths, wait events and their `it`, and Trace
-records. Host Deliveries, Requests, Broadcasts and Decisions reject malformed
-colon-containing names or mismatched argument counts at the call with `invalid value`.
-
-`send (e) with a to r` computes its message name ([ADR 0057](../../docs/adr/0057-a-send-may-compute-its-message-name.md)).
-It lowers to `send-named`, `send-named-wait` or `join-send-named`, which pop
-the name below the arguments. The name is checked before the receiver:
-non-text raises `wrong kind`, and text that isn't a Name or a Selector with one
-argument per part raises `bad message name`. A receiver Name for a Script the
-Group doesn't hold raises `object gone` at the send, after that check.
-
-A Fallback Handler, `on any message m`, takes the messages no Handler Clause
-matches ([ADR 0064](../../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
-Its clauses are `fallback` bodies named `any message`, and `pass any message`
-lowers to `pass`. `machine.StartDelivery` appends them, from every code unit,
-after the Selector's clauses, with the uncharged message map `{name, args}` as
-their one argument. Broadcasts, Decisions and `error` messages never reach
-them, and neither do local Command Calls. A Fallback Run reports its message's
-Selector as its Handler, plus `fallback`, which is derived from the selected
-body's kind, so snapshots need nothing new to keep it. A receiver-last `send`
-whose `with` list holds `...e` builds its arguments as one list and ends in
-`send-spread`, `send-spread-wait` or `join-send-spread`, which check the name
-against the list's length as `send-named` does.
-
-Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
-and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
-match byte for byte, including pools, slots, positions,
-Unwind Tables and Event Tables; together they emit every declared opcode.
-Stdlib sources are generated into Go unchanged and execute as ordinary Libraries.
-The shared `stdlib/template-migration` regression checks `${…}` placeholders,
-`$$`, literal braces, text keys, value conversion and date widths in `format`,
-`formatDate` and `parseDate`, including error fields, caller positions and costs.
-All load-diagnostic Trace Cases replay through public `Load`, including
-`initialiser failed` at the raising instruction's source-map position.
-
-`it` is a body local. In a Constant or Script Variable initialiser or a
-parameter default, each unbound `it` reports `unknown name`, alongside
-`not constant` at only the first disallowed token. Handler, function and
-Lambda bodies retain their own `it`, including Lambdas created at load.
-
-Raw Text Literals preserve backslashes and placeholders. Backticks decode
-escapes and accept nested multiline Interpolation Holes. Both forms support
-exact closing margins and physical newline normalization; hole-free forms also
-work in literal-only Text positions. Holes retain Constant and Guard
-restrictions and lower to ordinary concatenation instructions, with generated
-joins mapped to `${`. Invalid closing margins identify the first non-whitespace
-source scalar; paired Corpus cases also pin interpolation Fuel and allocation
-faults and Segment rollback.
-
-Implicit Script Variable initializers allocate Nothing slots without emitting
-stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
-This keeps canonical code positions aligned with the existing Corpus.
-
-Handler call-graph analysis rejects plain calls to may-suspend Handlers and
-function-style calls that could suspend. Grant-aware loading checks Operation
-names, modes, argument counts and literal Shapes, including `say`. Decisions
-also check `veto` and `pass` reachability before suspension. Imported Handlers
-carry their suspension requirement into the caller. Library restrictions reject
-Script state and message facilities, including unresolved commands that would
-climb a Message Path. Library `wait for`, including Joins, is rejected.
-Host Object property Shapes are checked at runtime. Load and Reload use copied
-property declarations to reject writes to missing or read-only properties when
-the well-known binding and literal key are known. Quoted and parenthesized Text
-literals count as known keys; computed keys and local aliases defer to runtime.
-Parentheses around a `set` target preserve its literal or computed key and
-Object receiver. A bare variable remains `not a property` at `set`, including
-when parenthesized. Container paths reject Built-in properties with
-`not a container` at the target's first token; quoted/computed keys and property
-reads in key, index, delimiter and value expressions remain allowed.
-Compilation cache keys include setter availability, so identical source checked
-against one Object declaration cannot bypass another declaration’s checks.
-
 ## Libraries and Standard Library
 
 `Core.CompileLibrary` checks stateless source with explicit imports and Operation
@@ -707,57 +600,6 @@ and dependency identities; the Host version label does not affect it.
 missing or mismatched imports, reused names and reserved stdlib names. Private
 names and imported names are never re-exported. Imports are linked by name,
 including renames, without copying bodies into callers.
-
-Calls, Constants, defaults and Function Values execute in the calling Script's
-Run. Each frame owns its code unit, constant pool and Unwind Table, while Fuel,
-allocation, depth, rollback and retained state belong to the caller. Nested
-Function Values in shared Library Constants and defaults bind to each caller's
-Home without modifying the compiled Library. Imported Handler clauses dispatch
-in source order, and waits retain Library frames across Pump calls.
-
-Every Group holds the seven normative Standard Libraries. Their sources are
-embedded by `tools/go/generate.ts`; no TS implementation is imported. Catalogue
-errors from stdlib code name the nearest call in user code, while user
-Library errors retain the Library location. Reviewed traces pin ordinary calls,
-Function metadata, registration, faults, unwind charges and stdlib caller errors.
-
-The trusted stdlib loader alone lowers private `map:restrictedCall` to
-`call-restricted`. Its inherited frame restriction rejects live Script state,
-Host effects and recovery-context access before acting, and survives catches,
-cleanup, preemption and restore. Host Library compilation cannot enable it.
-Snapshot format `go/7` rejects earlier formats. The `map.transform` Library export uses this boundary for callbacks; no
-public pure-call API is available. See [the normative contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)
-and [the cross-Core kit](../../corpus/restricted-kit/README.md).
-
-`map.transform` implements ordered, presence-aware Mappings from the shared
-normative Library source, including wildcard/default/skip selection, complete
-Shape checks, definition validation before callbacks and complete output or
-ordered diagnostics. Limit Faults escape. The [contract](../../spec/07-libraries-and-the-standard-library.md#checked-mappings)
-fixes definition precedence and concrete source locations; the `stdlib/mappings*`
-Corpus cases cover behavior, sliced restore and resource exhaustion.
-
-Each Library compiles once per process, after its own `use` dependencies, the
-first time a Script, Library or restored save in any Group names it. A Group
-holds only the Standard Libraries it has used, and each WASI instance pays only
-for those. Library compilation reuses one compact syntax
-tree for dependency discovery, code identity, checks, lowering and metadata,
-without retaining the tooling token tape. The cold-compilation benchmark is
-`go test . -run '^$' -bench BenchmarkColdStandardLibraries -benchmem`.
-
-Library calls to immediate, suspending and fire-and-forget Operations use the
-caller's named Grant, Host binding and charge/settlement path. Loading and Reload
-recheck every original Library call against the caller's modes, arity and literal
-Shapes, including private, unused and transitive uses. Missing Operations report
-one `missing grant` per distinct Operation at each `use` line; messages name the
-first original site in direct source order followed by import order. Shared
-diamond call sites are checked once per `use` line. `GrantsAsUsed` retains all
-Library needs. Revocation, cancellation cleanup and late answers belong to the
-caller Run, and a rejected Reload preserves pending calls.
-
-Library frames, closures and imported constants survive full Group snapshots.
-`ReplaceLibrary` recompiles transitive dependents and reloads affected Scripts
-only after every dependent validates and all old effects clean up successfully.
-Library Constants are shared fixed overhead, outside Script Persistent State.
 
 ## Values and codecs
 
@@ -789,125 +631,17 @@ Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
 the number limit. Some huge Unit exponents remain impractical when interval
 bounds and stable-coefficient shortcuts cannot decide the comparison.
 
-## Machine execution
-
-`machine.Initialize` evaluates initializers without Run charges.
-`InitializeBound` supplies Home identity before creating Function Values.
-`StartDelivery` tries arity-compatible Handler Clauses in source order; local
-Handler calls use the same clause-failure rules. `Run.Execute` returns between
-instructions on preemption, keeping frames, locals, stacks and unwind state as
-plain data. It uses no saved Go callback or goroutine continuation.
-
-Standalone execution covers chapter 3/4 arithmetic, Quantities and dates,
-conversions, folded structural comparison, containers and writes, snapshot
-iteration, branches, loops, catch/finally, binary construction/destructuring,
-Text Patterns and replacement, and non-suspending local Function Values with
-captures and named defaults. The Built-ins include number functions, IEEE float
-codecs, pinned case mapping, date fields and fixed-offset conversion, and Function
-Value metadata, plus `objectKind`, `isDisposed` and Core-held Object ids.
-
-The `items` Built-in property returns a list unchanged, splits text, and
-materializes integer ranges. Unsupported subjects raise `wrong kind` with
-`expected` `"list"`. The `text-model/items-property` Trace Case protects the
-results, error fields and costs in ordinary and save/restore replay; its first
-human blessing remains pending (#565).
-
-Generated Cost Model 0 charges precede committed instruction changes. Fuel,
-allocation, depth and dynamic Pattern Size faults leave the faulting instruction
-uncharged and restore Script Variables to the Segment's starting snapshot. Range
-materialization and padding have budget preflights before construction.
-Persistent State counts variables, mailboxes and retained Run frames; a final
-return checks the state that will remain. Cancellation runs finally cleanup
-under its separate Cleanup Budget. Execution tests cover each chapter area and
-pin the text-model fixtures' Fuel, allocation, positions and final variables.
-
-Standalone sends and foreign Function Value calls without a Group adapter,
-unlinked imported calls and standalone Object property calls without a Host
-adapter stop at a
-`Blocked` implementation boundary with the instruction and operands
-untouched and no charge for that instruction. The pending Run remains visible
-and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Group cancellation and Stop Script are supported as described
-below. Segment-bound lifecycle is supported through participant hooks.
-Snapshots retain preempted and suspended Runs, including their rollback bases.
-
 ## Save, restore and code updates
 
-Public Run accounting is returned by Pump, Reload, Library replacement and Restore.
-Dispatch/discard events precede cumulative Fuel and causal queue counts; observation
-charges, detached sends and error Handlers are included without adding Trace records.
-
-`Group.Save` returns opaque `go/5` bytes for a Quiescent Group. It retains the
-Clock, sources and extensions, heap Values and closures, frames and rollback
-bases, dispatch contexts and activations, owner identities, pending transfers,
-cleanup progress and attempt counters, budgets and slice debt, ordered work and input queues, pending replies,
-Decisions and Broadcasts, causal ancestry and accounting order, Objects and Grant state. It never starts work, drains
-inputs or calls Host cleanup. Live scopes or participants, including unresolved
-external effect state, refuse Save with `effects pending`.
-
-`Core.Restore` rebuilds code and checks the saved Group Fingerprint against
-current language/cost versions, Library identities, Grant declarations and
-limits. Saves are specific to the Go Core family and format; corrupt or
-unreadable bytes return `invalid save`. Formats `go/1` to `go/4` are no longer readable. Format `go/5` keeps stale
-Function Values' names, arities and Declaration Documentation, and requires
-causal accounting state as well as transfer references to belong to surviving dispatch contexts,
-including after cancellation. Restore validates retained and active code/body/PC
-references, shared owner-local layouts, phases, action arguments, cleanup tables
-and acyclic ownership before rebuilding aliases. Native Object bindings, Host functions,
-lifecycle hooks and Host futures are supplied again rather than serialized.
-Missing Grant bindings become revoked; unresolved Objects become disposed.
-
-A full restore returns pending Capability calls by Script, Run and call order.
-Before its first accepted Pump, `Group.Settle` selects exactly one of `Answer`,
-`Fail`, `Reissue` or `Adopt` for each id. Reissue calls the rebound Host
-implementation with the original id and arguments, charges only additional Host
-Fuel, and keeps the original deadline. Adopt returns a new Call into the restored
-Group. Unsettled calls fail as `call lost` before due Timers on that first Pump.
-Old Calls and Request/Decision futures still belong to the original Group.
-
-`VariablesOnly` handles a readable mismatched save by carrying Script Variables
-by name from the prospective rollback view. It preserves counters, Objects,
-limits and revoked/disabled Grants, while discarding Runs, messages, Broadcasts
-and slice debt without `finally`. It lists discarded work and abandoned calls;
-open Decisions report `undecided` on the first Pump. Carried Function Values from
-the replaced Script code are stale.
-
-`Script.Extend` validates a new Entry against existing names and unrevoked
-Grants. It appends new code, definitions and initialized variables atomically,
-checking the Persistent State cap first. Existing frames, queues, Function
-Values and code bindings remain live. Extension source order and identities
-participate in the Script identity and Group Fingerprint. Reload and Library
-replacement validate the complete replacement before stopping old work; failed
-validation leaves existing execution intact.
-
-## Text Patterns
-
-The Zig Core compiles chapter 8's normative Pike VM programs
-and matches whole Characters using the pinned Unicode tables. Matching keeps
-threads in priority order and charges every visited list's thread count,
-including discarded empty searches. Boolean searches stop at the first
-accepted match; Match Searches retain the preferred match, converted Captures
-and their Character ranges. `lazily` changes only its element's own repetitions.
-
-Composition accepts Text and Text Patterns, preserves spliced Captures and
-rejects duplicate names or Captures inside repetitions. Canonical source
-omits empty nested groups and separates a leading group with `< <`.
-`make-pattern` uses the resulting program size for its Fuel and allocation;
-loading and initializers remain uncharged. Literal size checks count every
-copy of the singular class and emit no code for a zero count.
-
-The step-2 acceptance test runs all eight reviewed `corpus/text-patterns/`
-cases through the public embedding API and protects their passing-list entries.
-Additional tests pin normative programs, composition errors, conversions,
-absent Captures and compilation charges. Three new regression cases for empty
-literals, counted program sizes and wrong-kind splices agree on both Cores;
-their first blessings were approved on 2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)).
-
-`matching-fuel-exhaustion` and `pattern-size-made-at-run-time` pass with exact
-exhaustion instructions, uncharged failing work and Segment rollback. A separate
-step-4 gate protects the Text Pattern limits alongside all limit and cancellation
-cases.
-`pattern-size-literal-limit` also passes through Reload and snapshot replay.
+`Group.Save` returns the Zig Core's opaque save bytes for a Quiescent Group,
+and `CoreVersions().SaveFormat` names their format. Saves are same-Core
+([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)): `Core.Restore`
+refuses native Go saves and corrupt or unreadable bytes with `invalid save`
+(see [Moving from the native Go Core](#moving-from-the-native-go-core)). Live
+scopes or participants refuse Save with `effects pending`. Restore checks the
+saved Group Fingerprint and rebuilds Host handles for Scripts, Objects and
+pending Calls; [chapter 10](../../spec/10-save-and-restore.md) defines the
+mismatch policies, Reload, Extend and Library replacement.
 
 ## Group embedding
 
@@ -2023,7 +1757,7 @@ the input queued. Hosts must retain those handles even when `err != nil`.
 Initial OnReady is omitted; a Pump refusal notifies after releasing the worker.
 Function staleness fails at drain and wrong arity at execution, as with `Call`.
 
-The experimental Zig backend negotiates the accepted fields envelope by default
+The Go embedding negotiates the accepted fields envelope by default
 for new guests, following the [binary-exchange contract](../../spec/embedding/request-pump-binary.md).
 The codec uses the generated envelope catalogue from `spec/data/envelope.toml`
 for tags, ordered fields, Report names and specialized item kinds. Shared

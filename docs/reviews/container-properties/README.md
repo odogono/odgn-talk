@@ -21,7 +21,7 @@ The Go follow-up unwraps parenthesized `set` targets before checking and lowerin
 their keys. Host Object regressions verify quoted/computed keys, nested
 parentheses, exactly one setter invocation without a property read, read-only
 Load rejection and bare-variable diagnostics. Current support is described in
-the [Go implementation guide](../../../impl/go/README.md#front-end-and-lowering-checks)
+the [Go implementation guide](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/README.md#front-end-and-lowering-checks)
 and [TS implementation guide](../../../impl/ts/README.md).
 
 The first-blessing workflow is defined in

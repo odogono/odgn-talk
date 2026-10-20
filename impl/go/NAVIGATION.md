@@ -60,12 +60,12 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Zig backend
 
-- Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [inline inputs](zig_inline.go), [reply decoding](zig_reply.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](zig-experimental-check.sh)
+- Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [inline inputs](zig_inline.go), [reply decoding](zig_reply.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](adapter-check.sh)
 - Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#zig-backend)
 - Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared public Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against the native Go Core's recorded `TestCapabilityBridge` observations ([testdata](testdata/native-bridge-observations.json.gz)), kept from before its removal. To add a parity scenario, write a `run<Area>BridgeCases(t) []bridgeObservation` in a `zig_<area>_public_test.go` and append it in `runBridgeCases` ([`zig_capability_public_test.go`](zig_capability_public_test.go))
 - Measurements: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite; earlier comparisons with native Go are in [the binding research](../../docs/research/go-zig-binding.md)
-- First check: `CGO_ENABLED=0 go -C impl/go test .`. The focused gate CI also runs: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`. One test: `go -C impl/go test -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
-- After changing the Zig Core: try it with the [hand swap](README.md#zig-backend), then commit and refresh the embedded copy with `python3 spikes/go-zig-binding/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
+- First check: `CGO_ENABLED=0 go -C impl/go test .`. The focused gate CI also runs: `CGO_ENABLED=0 impl/go/adapter-check.sh`. One test: `go -C impl/go test -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
+- After changing the Zig Core: try it with the [hand swap](README.md#zig-backend), then commit and refresh the embedded copy with `python3 impl/go/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
 
 ## Binary Request/Pump and combined calls
 
@@ -73,7 +73,7 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
 - Tests and cases: [adapter tests](zig_combined_test.go), [public tests](group_combined_test.go), [benchmarks](group_combined_bench_test.go); `TALK_ZIG_REQUEST_PUMP=fields` runs the adapter suites on the binary exchange, as the [Go workflow](../../.github/workflows/go.yml) does; Host callbacks ([`zig_callback.go`](zig_callback.go)) are binary unless `TALK_ZIG_CALLBACKS=` is set empty
 - Measurement reports: [paired ratios](cmd/request-pump-report/main.go), [tests](cmd/request-pump-report/main_test.go); first check: `go -C impl/go test ./cmd/request-pump-report`. For sample settings and acceptance claims, read the [measurement protocol](../../docs/research/request-pump-binary.md#measurement-protocol-1278).
-- First check: `CGO_ENABLED=0 TALK_ZIG_REQUEST_PUMP=fields impl/go/zig-experimental-check.sh`; envelope gates: `impl/go/zig-request-pump-bench.sh`, also run by the [bench workflow](../../.github/workflows/go-zig-bench.yml)
+- First check: `CGO_ENABLED=0 TALK_ZIG_REQUEST_PUMP=fields impl/go/adapter-check.sh`; envelope gates: `impl/go/request-pump-bench.sh`, also run by the [bench workflow](../../.github/workflows/go-zig-bench.yml)
 
 ## Public embedding API
 

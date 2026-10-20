@@ -8,6 +8,7 @@ import subprocess
 
 here = Path(__file__).resolve().parent
 root = here.parent.parent
+destination = here / "internal/zigwasm"
 
 def output(*args):
     return subprocess.check_output(args, cwd=root, text=True).strip()
@@ -24,10 +25,7 @@ metadata = {
     "optimize": "safe",
     "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
 }
-# Keep the independent comparison probe and public adapter on identical bytes.
-for destination in (here, root / "impl/go/internal/zigwasm"):
-    destination.mkdir(parents=True, exist_ok=True)
-    binary = destination / "talk.wasm"
-    shutil.copyfile(artifact, binary)
-    binary.chmod(0o644)
-    (destination / "artifact.json").write_text(json.dumps(metadata, indent=2) + "\n")
+binary = destination / "talk.wasm"
+shutil.copyfile(artifact, binary)
+binary.chmod(0o644)
+(destination / "artifact.json").write_text(json.dumps(metadata, indent=2) + "\n")

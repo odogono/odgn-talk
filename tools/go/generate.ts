@@ -124,7 +124,7 @@ export const emitStandardLibraries = (
   );
 
 // The Cost Model's formulas as compiled terms, with named measure and subject
-// codes, so the Go Core evaluates a charge without parsing or lookups.
+// codes, so Go evaluates a charge without parsing or lookups.
 const goTerms = (list: readonly (readonly number[])[]) =>
   `[]CostTerm{${list.map(t => `{${t.join(', ')}}`).join(', ')}}`;
 export const emitCostTerms = (model: CompiledCostModel): string =>

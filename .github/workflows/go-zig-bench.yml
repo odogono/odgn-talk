@@ -47,7 +47,7 @@ jobs:
           go-version: '1.27'
           cache: false
       - run: go -C impl/go test ./cmd/request-pump-report
-      - run: impl/go/zig-request-pump-bench.sh "$RUNNER_TEMP/results"
+      - run: impl/go/request-pump-bench.sh "$RUNNER_TEMP/results"
       - run: cat "$RUNNER_TEMP/results/env.txt" "$RUNNER_TEMP/results/paired.txt" "$RUNNER_TEMP/results/comparison.txt" "$RUNNER_TEMP/results/regression.txt"
       - uses: actions/upload-artifact@v4
         with:
