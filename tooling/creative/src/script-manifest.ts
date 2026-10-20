@@ -9,6 +9,8 @@ import {
   syntaxSelector,
   type SyntaxNode,
 } from '@northtalk/ts';
+import { CANVAS_SIGNATURES } from '@northtalk/tooling/canvas';
+import { DRAWING_OPERATIONS } from './drawing';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = DeepReadonly<Project | Page | Element>;
@@ -185,6 +187,27 @@ const grants = [
       command: true,
       ...docs,
       examples: [...docs.examples],
+    })),
+  },
+  {
+    // ADR 0116: each Operation draws on the Canvas Element it is given.
+    name: 'canvas',
+    capability: 'canvas',
+    operations: DRAWING_OPERATIONS.map(name => ({
+      ...operation(
+        name,
+        [
+          { object: 'canvas' },
+          ...CANVAS_SIGNATURES[name]!.map(arg =>
+            arg.k === 'kind' ? arg.kind : 'value',
+          ),
+        ],
+        'nothing',
+      ),
+      errors: [
+        { code: 'invalid canvas argument', fields: [] },
+        { code: 'canvas limit', fields: [] },
+      ],
     })),
   },
 ];

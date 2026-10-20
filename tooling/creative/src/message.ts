@@ -70,6 +70,8 @@ export const runInEdit = async (
   if (editor.readOnly) {
     return { error: 'This Project is read-only here.' };
   }
+  // A line that draws appends to the Canvas's Drawing in the same edit.
+  play.commitDrawings();
   editor.edit(({ tree }) => tree.adopt(play.project));
   if (play.pageIndex !== editor.pageIndex) {
     editor.goToPage(play.pageIndex);

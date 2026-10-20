@@ -2,6 +2,7 @@
 // requests through the worker supervisor; the worker answers each one, and
 // pushes Play State changes and sound commands unasked. Everything here is
 // plain data, so it crosses `postMessage` as it is.
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { type PerformanceSnapshot } from './performance';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
@@ -63,6 +64,19 @@ export type PromptView = UserPrompt & { id: number };
 export type ProblemView = { line: number; message: string; owner: number };
 
 /**
+ * A Drawing's change: its whole list after a reset, else the commands added
+ * since the last one sent. `owner` places an authored Canvas in
+ * `scriptOwners(project)`, so the page can commit it on return to Edit.
+ */
+export type DrawingView = {
+  commands: CanvasCommand[];
+  name: string;
+  owner?: number;
+  pageIndex: number;
+  reset: boolean;
+};
+
+/**
  * Play State for the page to draw. `full` views carry every Element of the
  * showing Page; others carry only the Elements that changed, and `order`
  * drops the ones that went. Groups arrive without their members, which have
@@ -70,6 +84,8 @@ export type ProblemView = { line: number; message: string; owner: number };
  */
 export type PlayView = {
   designWidth: number;
+  /** Drawings arrive here, never in `elements` (ADR 0116). */
+  drawings: DrawingView[];
   /** `edit` is the last reader edit the worker applied to that Element. */
   elements: { edit?: number; element: Element; shown: boolean }[];
   full: boolean;

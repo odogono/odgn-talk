@@ -17,7 +17,8 @@ export const CANVAS_LIMITS = {
   text: 4096,
   coordinate: 1_000_000,
 } as const;
-const signatures: Record<string, Shape[]> = {
+/** Each Operation's arguments, shared by the Playground and Folio. */
+export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   size: [shape.number, shape.number],
   clear: [],
   background: [shape.text],
@@ -32,12 +33,15 @@ const signatures: Record<string, Shape[]> = {
   text: [shape.text, shape.number, shape.number],
   textSize: [shape.number],
 };
+const signatures = CANVAS_SIGNATURES;
+/** A successful call, its arguments in display spelling. */
 export type CanvasCommand = { args: string[]; op: string };
 const invalid = (message: string): never => {
   throw new ScriptError('invalid canvas argument', message);
 };
 
-const validateArguments = (op: string, values: Value[]) => {
+/** Throws a catchable `invalid canvas argument` unless `values` suit `op`. */
+export const validateCanvasArguments = (op: string, values: Value[]): void => {
   const expected = signatures[op];
   if (
     !expected ||
@@ -100,12 +104,12 @@ export const canvasCapabilities = () => {
   for (const [op, args] of Object.entries(signatures)) {
     operations[op] = {
       mode: 'immediate',
-      args,
+      args: [...args],
       result: shape.nothing,
       cost: { fuel: 1 },
       errors: [{ code: 'invalid canvas argument' }, { code: 'canvas limit' }],
       do: (_call, ...values) => {
-        validateArguments(op, values);
+        validateCanvasArguments(op, values);
         if (count >= CANVAS_LIMITS.commands) {
           throw new ScriptError(
             'canvas limit',
@@ -118,6 +122,30 @@ export const canvasCapabilities = () => {
     };
   }
   return [defineCapability<unknown>('canvas', operations)];
+};
+
+/** Why stored data is not a valid command, or undefined when it is. */
+export const canvasCommandProblem = (value: unknown): string | undefined => {
+  const command = value as Partial<CanvasCommand> | null;
+  if (
+    !command ||
+    typeof command !== 'object' ||
+    typeof command.op !== 'string' ||
+    !Object.hasOwn(signatures, command.op) ||
+    !Array.isArray(command.args) ||
+    command.args.some(arg => typeof arg !== 'string')
+  ) {
+    return 'expected a drawing command {op, args}';
+  }
+  try {
+    validateCanvasArguments(
+      command.op,
+      command.args.map(arg => readDisplay(arg as string)),
+    );
+  } catch (error) {
+    return error instanceof ScriptError ? error.message : String(error);
+  }
+  return undefined;
 };
 
 /** Successful typed Trace calls, not console strings. Values retain decimal spelling. */
@@ -147,7 +175,7 @@ export const canvasCommands = (
     const values = Array.from({ length: args.length }, (_, i) =>
       args.index(i + 1),
     );
-    validateArguments(op, values);
+    validateCanvasArguments(op, values);
     commands.push({ op, args: values.map(v => v.toString()) });
     if (commands.length === CANVAS_LIMITS.commands) {
       break;

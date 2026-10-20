@@ -28,6 +28,7 @@ export const KIND_NAMES: Record<ElementKind, string> = {
   rectangle: 'Rectangle',
   ellipse: 'Ellipse',
   line: 'Line',
+  canvas: 'Canvas',
   group: 'Group',
 };
 const ALIGN_LABELS: Record<TextAlign, string> = {
@@ -315,6 +316,23 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
                 min: 0,
               }),
             )}
+          </>
+        );
+      case 'canvas':
+        return (
+          <>
+            {field('Fill', color('fill', element.fill, disabled))}
+            <p className="muted">
+              Drawing: {element.drawing.length}{' '}
+              {element.drawing.length === 1 ? 'command' : 'commands'}
+            </p>
+            <button
+              data-clear-drawing={element.name}
+              disabled={disabled || !element.drawing.length}
+              type="button"
+            >
+              Clear drawing
+            </button>
           </>
         );
       case 'line':

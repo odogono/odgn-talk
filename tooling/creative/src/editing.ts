@@ -22,6 +22,7 @@ import {
   suggestName,
   type Asset,
   type ButtonElement,
+  type CanvasElement,
   type Element,
   type ElementKind,
   type GroupElement,
@@ -936,6 +937,10 @@ export class StackEditor {
       edit.pageSelected = false;
       return page;
     });
+  }
+  /** Empties a Canvas's Drawing, back to the default style (ADR 0116). */
+  clearDrawing(element: DeepReadonly<CanvasElement>): void {
+    this.edit(({ tree }) => tree.setDrawing(element, []));
   }
   movePage(from: number, to: number): void {
     const pages = this.project.pages;

@@ -39,6 +39,7 @@ import { commandForKey, type EditingCommand } from './shortcuts';
 
 import { byId, h, isTyping } from './dom';
 import { renderRichText } from './rich-text-dom';
+import { paintCanvas } from './canvas-view';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
@@ -52,6 +53,7 @@ const KIND_ICONS: Record<ElementKind, string> = {
   rectangle: '■',
   ellipse: '●',
   line: '╱',
+  canvas: '▦',
   group: '▱',
 };
 
@@ -61,6 +63,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const renderElement = (
   element: DeepReadonly<Element>,
   imageUrl?: string,
+  /** False when the caller repaints an existing Canvas itself. */
+  paint = true,
 ): HTMLElement => {
   const node = h('div', {
     class: `el ${element.kind}${element.visible ? '' : ' hidden'}`,
@@ -127,6 +131,15 @@ export const renderElement = (
         borderWidth: `${element.thickness}px`,
       });
       break;
+    case 'canvas': {
+      node.style.background = element.fill;
+      const canvas = h('canvas', {});
+      node.append(canvas);
+      if (paint) {
+        paintCanvas(canvas, element);
+      }
+      break;
+    }
     case 'line': {
       const svg = document.createElementNS(SVG, 'svg');
       svg.setAttribute('width', '1');
@@ -653,6 +666,11 @@ export const mountStack = (
       chooseSound();
     } else if (button?.dataset.previewSound) {
       togglePreview(button.dataset.previewSound);
+    } else if (button?.dataset.clearDrawing) {
+      const [canvas] = editor.selected;
+      if (canvas?.kind === 'canvas') {
+        edit(() => editor.clearDrawing(canvas));
+      }
     } else if (button?.dataset.editText) {
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {

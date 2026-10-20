@@ -4,7 +4,11 @@ import {
   replayTranscript,
   writeTranscript,
 } from '@northtalk/ts/session';
-import { canvasCapabilities, canvasCommands } from '../src/canvas';
+import {
+  canvasCapabilities,
+  canvasCommandProblem,
+  canvasCommands,
+} from '../src/canvas';
 
 test('typed drawing replays headlessly with identical commands and trace', () => {
   const items: Parameters<typeof writeTranscript>[0][number][] = [];
@@ -147,4 +151,25 @@ test('untrusted pasted Trace calls cannot bypass graphics bounds', () => {
       ['canvas'],
     ),
   ).toThrow('Canvas dimensions');
+});
+
+test('stored commands are checked with the same validation as calls', () => {
+  expect(canvasCommandProblem({ op: 'fill', args: ['"#123456"'] })).toBe(
+    undefined,
+  );
+  expect(canvasCommandProblem({ op: 'text', args: ['"hi"', '1', '2'] })).toBe(
+    undefined,
+  );
+  expect(canvasCommandProblem({ op: 'fill', args: ['"red"'] })).toBe(
+    'Colors use #RRGGBB or #RRGGBBAA',
+  );
+  expect(canvasCommandProblem({ op: 'line', args: ['1', '2'] })).toBe(
+    'Wrong drawing arguments',
+  );
+  expect(canvasCommandProblem({ op: 'fill', args: ['#123456'] })).toBeString();
+  for (const bad of [null, 'fill', { op: 'spin', args: [] }, { op: 'fill' }]) {
+    expect(canvasCommandProblem(bad)).toBe(
+      'expected a drawing command {op, args}',
+    );
+  }
 });

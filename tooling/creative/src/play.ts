@@ -1,3 +1,9 @@
+import {
+  CANVAS_SIGNATURES,
+  validateCanvasArguments,
+  type CanvasCommand,
+} from '@northtalk/tooling/canvas';
+import { Drawing, DRAWING_OPERATIONS } from './drawing';
 import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
@@ -31,6 +37,7 @@ import {
 } from '@northtalk/ts';
 import {
   ELEMENT_KINDS,
+  type CanvasElement,
   type Element,
   type ElementKind,
   type Page,
@@ -130,6 +137,7 @@ export const PUMP_FUEL = 5000;
 const elementShape = shape.oneOf(
   ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
 );
+const canvasShape = { k: 'object' as const, kind: 'canvas' };
 // Releasing a Script's sound Grant stops the sounds it started (#735); the
 // board travels as the Grant's binding so this stays a plain function.
 const releaseSounds: ReleaseHook<SoundBoard> = context =>
@@ -166,6 +174,11 @@ export class PlaySession {
   // Each `frame` Script's last delivery time, and whether its Run is pending.
   #frames = new Map<string, { busy: boolean; last: bigint | undefined }>();
   #pendingClones: DeepReadonly<Element>[] = [];
+  // Drawings this session has drawn on, and those changed since last taken.
+  #drawings = new Map<DeepReadonly<CanvasElement>, Drawing>();
+  #changedDrawings = new Set<DeepReadonly<CanvasElement>>();
+  // Each authored Canvas's place in `scriptOwners(project)`.
+  #authoredCanvases = new Map<DeepReadonly<Element>, number>();
   #pageElements: ObjectElements<ScriptOwner> = {
     shape: elementShape,
     count: ({ native }) =>
@@ -240,6 +253,9 @@ export class PlaySession {
             authorize: fuel => call.charge(fuel),
             install: (root, parent) => this.#install(root, parent),
           });
+          if (element.kind === 'canvas') {
+            this.#changedDrawings.add(element);
+          }
           return this.#objects.get(element)!.value;
         });
       },
@@ -258,6 +274,13 @@ export class PlaySession {
           });
           for (const [original, copy] of cloned.pairs) {
             this.#authored.set(copy, this.#authored.get(original)!);
+            if (original.kind === 'canvas' && copy.kind === 'canvas') {
+              const drawing = this.#drawings.get(original);
+              if (drawing) {
+                this.#drawings.set(copy, new Drawing(drawing.commands));
+              }
+              this.#changedDrawings.add(copy);
+            }
           }
           this.#pendingClones.push(...cloned.pairs.map(([, copy]) => copy));
           return this.#objects.get(cloned.root)!.value;
@@ -301,6 +324,86 @@ export class PlaySession {
       },
     },
   });
+
+  // Each Operation takes its Canvas Element first (ADR 0116).
+  #canvas = defineCapability(
+    'canvas',
+    Object.fromEntries(
+      DRAWING_OPERATIONS.map(op => [
+        op,
+        {
+          mode: 'immediate' as const,
+          args: [canvasShape, ...CANVAS_SIGNATURES[op]!],
+          result: shape.nothing,
+          cost: { fuel: 1 },
+          errors: [
+            { code: 'invalid canvas argument' },
+            { code: 'canvas limit' },
+          ],
+          do: (_call: Call<unknown>, target?: Value, ...values: Value[]) => {
+            const { element } = this.#element(target!);
+            if (element.kind !== 'canvas') {
+              throw new ScriptError('out of domain', 'Not a Canvas Element');
+            }
+            validateCanvasArguments(op, values);
+            this.#drawing(element).add({
+              op,
+              args: values.map(value => value.toString()),
+            });
+            this.#changedDrawings.add(element);
+            return nothing;
+          },
+        },
+      ]),
+    ),
+  );
+
+  #drawing(element: DeepReadonly<CanvasElement>): Drawing {
+    let drawing = this.#drawings.get(element);
+    if (!drawing) {
+      drawing = new Drawing(element.drawing);
+      this.#drawings.set(element, drawing);
+    }
+    return drawing;
+  }
+
+  /** A Canvas's Drawing as this session has it. */
+  drawingOf(
+    element: DeepReadonly<CanvasElement>,
+  ): DeepReadonly<CanvasCommand[]> {
+    return this.#drawing(element).commands;
+  }
+
+  /** The Canvases drawn on, created or cloned since this was last called. */
+  takeDrawingChanges(): DeepReadonly<CanvasElement>[] {
+    const changed = [...this.#changedDrawings].filter(element =>
+      this.#tree.contains(element),
+    );
+    this.#changedDrawings.clear();
+    return changed;
+  }
+
+  /** The index of the Page holding an Element, or -1 once it has gone. */
+  pageIndexOf(element: DeepReadonly<Element>): number {
+    const page = this.#tree.pageOf(element);
+    return page ? this.project.pages.indexOf(page) : -1;
+  }
+
+  /** An authored Canvas's place in `scriptOwners(project)`, if it is one. */
+  authoredCanvas(element: DeepReadonly<CanvasElement>): number | undefined {
+    return this.#authoredCanvases.get(element);
+  }
+
+  /** Writes each Drawing into this session's Project, for the Message Box in Edit. */
+  commitDrawings(): void {
+    this.#tree.transaction(() => {
+      for (const [element, drawing] of this.#drawings) {
+        if (this.#tree.contains(element)) {
+          this.#tree.setDrawing(element, drawing.commands);
+        }
+      }
+    });
+  }
 
   #elementPage(value: Value): DeepReadonly<Page> {
     const page = this.project.pages.find(
@@ -504,6 +607,7 @@ export class PlaySession {
       sound: this.#sound.grant('all', this.sounds),
       user: this.#user.grant('all', undefined),
       folio: this.#folio.grant('all', undefined),
+      canvas: this.#canvas.grant('all', undefined),
     };
   }
 
@@ -623,6 +727,9 @@ export class PlaySession {
     );
     for (const [i, owner] of copies.entries()) {
       this.#authored.set(owner, originals[i]!);
+      if ('kind' in owner && owner.kind === 'canvas') {
+        this.#authoredCanvases.set(owner, i);
+      }
       const kind =
         'kind' in owner
           ? owner.kind

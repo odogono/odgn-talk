@@ -7,9 +7,11 @@ import {
   type Envelope,
   type Reply,
 } from '@northtalk/tooling/worker-supervisor';
-import { type Element, type Project } from './model';
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
+import { type CanvasElement, type Element, type Project } from './model';
 import { PlaySession, PUMP_FUEL, type PendingPrompt } from './play';
 import {
+  type DrawingView,
   type PlayRequest,
   type PlayResponse,
   type PlayView,
@@ -22,10 +24,54 @@ import { text } from '@northtalk/ts';
 const wallClock = () =>
   BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n;
 
-/** An Element as the page receives it: a group without its members. */
+/**
+ * An Element as the page receives it: a group without its members, a Canvas
+ * without its Drawing, which travels as `DrawingView`s.
+ */
 // Views cross `postMessage` as copies, so the readonly live node can go as is.
 const withoutMembers = (element: DeepReadonly<Element>): Element =>
-  (element.kind === 'group' ? { ...element, members: [] } : element) as Element;
+  (element.kind === 'group'
+    ? { ...element, members: [] }
+    : element.kind === 'canvas'
+      ? { ...element, drawing: [] }
+      : element) as Element;
+
+type SentDrawing = { commands: DeepReadonly<CanvasCommand[]>; length: number };
+
+/** What changed in each Drawing since `sent` last recorded it. */
+const drawingViews = (
+  play: PlaySession,
+  canvases: Iterable<DeepReadonly<CanvasElement>>,
+  sent: Map<DeepReadonly<CanvasElement>, SentDrawing>,
+): DrawingView[] => {
+  const views: DrawingView[] = [];
+  for (const element of canvases) {
+    const commands = play.drawingOf(element);
+    const previous = sent.get(element);
+    const reset = previous?.commands !== commands;
+    if (!reset && commands.length === previous.length) {
+      continue;
+    }
+    sent.set(element, { commands, length: commands.length });
+    const owner = play.authoredCanvas(element);
+    views.push({
+      name: element.name,
+      pageIndex: play.pageIndexOf(element),
+      ...(owner === undefined ? {} : { owner }),
+      reset,
+      commands: (reset
+        ? commands
+        : commands.slice(previous.length)) as CanvasCommand[],
+    });
+  }
+  return views;
+};
+
+const canvasesOf = (elements: readonly DeepReadonly<Element>[]) =>
+  elements.filter(
+    (element): element is DeepReadonly<CanvasElement> =>
+      element.kind === 'canvas',
+  );
 
 /**
  * The view the page draws while the worker opens its session: the showing
@@ -44,6 +90,7 @@ export const firstView = (
   return {
     session,
     full: true,
+    drawings: drawingViews(play, canvasesOf(play.elementsOf()), new Map()),
     pageIndex,
     page: {
       name: play.page.name,
@@ -74,6 +121,7 @@ export class PlayHost {
   #owners = new Map<unknown, number>();
   // What the page last received: each Element's JSON, by name.
   #sent = new Map<string, string>();
+  #sentDrawings = new Map<DeepReadonly<CanvasElement>, SentDrawing>();
   #sentPage: PlaySession['page'] | undefined;
   #sentState = '';
   #sentTargets = '';
@@ -236,6 +284,7 @@ export class PlayHost {
       scriptOwners(request.project).map((owner, i) => [owner, i]),
     );
     this.#sent.clear();
+    this.#sentDrawings.clear();
     this.#sentPage = undefined;
     this.#sentState = '';
     this.#sentTargets = '';
@@ -370,6 +419,16 @@ export class PlayHost {
         }
       }
     }
+    // Every changed Drawing goes, off-Page ones too, so the page can commit
+    // them on return to Edit; a new Page also sends its Canvases' Drawings.
+    const drawings = drawingViews(
+      session,
+      new Set([
+        ...session.takeDrawingChanges(),
+        ...(full ? canvasesOf(session.elementsOf()) : []),
+      ]),
+      this.#sentDrawings,
+    );
     const first = session.prompts[0];
     if (first && !this.#prompts.has(first)) {
       this.#prompts.set(first, this.#nextPrompt++);
@@ -401,6 +460,7 @@ export class PlayHost {
     if (
       !targetsChanged &&
       !orderChanged &&
+      !drawings.length &&
       state === this.#sentState &&
       !notices.length &&
       !problems.length
@@ -414,6 +474,7 @@ export class PlayHost {
         ...(targetsChanged ? { messageTargets: targets } : {}),
         session: this.#id,
         full,
+        drawings,
         pageIndex: session.pageIndex,
         page: {
           name: session.page.name,

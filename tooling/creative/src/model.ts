@@ -1,5 +1,6 @@
 // The authored Project model (#748): pure data, no UI and no Play State
 // (ADR 0041). Element kinds and properties follow #735, decisions 2-5.
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { type DeepReadonly, thaw } from './readonly';
 import { allElements } from './tree/rules';
 
@@ -106,6 +107,13 @@ export type LineElement = ElementBase & {
   thickness: number;
 };
 
+export type CanvasElement = ElementBase & {
+  /** Commands since the last `clear` or `background` (ADR 0116). */
+  drawing: CanvasCommand[];
+  fill: string;
+  kind: 'canvas';
+};
+
 export type GroupElement = ElementBase & { kind: 'group'; members: Element[] };
 
 export type Element =
@@ -115,6 +123,7 @@ export type Element =
   | RectangleElement
   | EllipseElement
   | LineElement
+  | CanvasElement
   | GroupElement;
 
 export type ElementKind = Element['kind'];
@@ -126,6 +135,7 @@ export const ELEMENT_KINDS: readonly ElementKind[] = [
   'rectangle',
   'ellipse',
   'line',
+  'canvas',
   'group',
 ];
 
@@ -318,6 +328,8 @@ export const createElement = (kind: ElementKind, name: string): Element => {
         stroke: '#1d1d1f',
         thickness: 2,
       };
+    case 'canvas':
+      return { ...base(name), kind, fill: '#ffffff', drawing: [] };
   }
 };
 

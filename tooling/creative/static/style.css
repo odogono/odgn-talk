@@ -149,6 +149,14 @@ button:disabled {
 .el.ellipse {
   border-radius: 50%;
 }
+.el.canvas {
+  overflow: hidden;
+}
+.el.canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .el.line {
   pointer-events: none;
 }

@@ -3,8 +3,13 @@
 // from it without waiting for the worker. Each Element keeps one object per
 // name, and only fields whose value changed are replaced, so reader history
 // and drawn nodes keyed by Element survive the worker echoing an edit.
+// Drawings arrive apart from their Elements: an addition extends the same
+// array, so the renderer paints only the new commands.
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import type { DeepReadonly } from './readonly';
+import { type StackEditor } from './editing';
 import { type Element, type RichText, type TextElement } from './model';
+import { ownerById, ownerId, type ScriptOwner } from './script-manifest';
 import { type PlayView, type PromptView } from './play-protocol';
 import { type ReaderTextPlay } from './play-text';
 
@@ -39,6 +44,13 @@ export class PlayMirror implements ReaderTextPlay {
   // Each Element's latest reader edit, numbered across the session.
   #edits = new WeakMap<Element, number>();
   #edit = 0;
+  // Every Drawing the worker has sent, by Page and name, and each authored
+  // Canvas's by its place in `scriptOwners(project)`.
+  #drawings = new Map<string, CanvasCommand[]>();
+  #authoredDrawings = new Map<number, CanvasCommand[]>();
+  get authoredDrawings(): ReadonlyMap<number, readonly CanvasCommand[]> {
+    return this.#authoredDrawings;
+  }
   get #byName(): Map<string, Element> {
     let names = this.#pages.get(this.page.index);
     if (!names) {
@@ -71,18 +83,22 @@ export class PlayMirror implements ReaderTextPlay {
       let mirrored = this.#byName.get(element.name);
       if (!mirrored || mirrored.kind !== element.kind) {
         mirrored = element;
+        if (mirrored.kind === 'canvas') {
+          mirrored.drawing =
+            this.#drawings.get(`${view.pageIndex}/${mirrored.name}`) ?? [];
+        }
         this.#byName.set(element.name, mirrored);
       } else {
         const target = mirrored as Record<string, unknown>;
         // Text from before the reader's latest edit would undo it here.
         const stale = (this.#edits.get(mirrored) ?? 0) > edit;
         for (const key of Object.keys(target)) {
-          if (!(key in element)) {
+          if (key !== 'drawing' && !(key in element)) {
             delete target[key];
           }
         }
         for (const [key, value] of Object.entries(element)) {
-          if (stale && key === 'richText') {
+          if ((stale && key === 'richText') || key === 'drawing') {
             continue;
           }
           if (JSON.stringify(target[key]) !== JSON.stringify(value)) {
@@ -94,6 +110,28 @@ export class PlayMirror implements ReaderTextPlay {
         this.#shown.add(mirrored);
       } else {
         this.#shown.delete(mirrored);
+      }
+    }
+    for (const drawing of view.drawings) {
+      const key = `${drawing.pageIndex}/${drawing.name}`;
+      let commands = this.#drawings.get(key);
+      if (drawing.reset || !commands) {
+        commands = [...drawing.commands];
+        this.#drawings.set(key, commands);
+        if (drawing.owner !== undefined) {
+          this.#authoredDrawings.set(drawing.owner, commands);
+        }
+      } else {
+        for (const command of drawing.commands) {
+          commands.push(command);
+        }
+      }
+      const mirrored =
+        drawing.pageIndex === this.page.index
+          ? this.#byName.get(drawing.name)
+          : undefined;
+      if (mirrored?.kind === 'canvas') {
+        mirrored.drawing = commands;
       }
     }
     if (view.order) {
@@ -124,3 +162,27 @@ export class PlayMirror implements ReaderTextPlay {
     this.edited(element, next, this.page.index, this.#edit);
   }
 }
+
+/**
+ * On return to Edit, writes each authored Canvas's Drawing as the page last
+ * showed it into the Project, as one undoable edit (ADR 0116). `owners` is
+ * `scriptOwners` of the Project Play started from.
+ */
+export const commitDrawings = (
+  editor: StackEditor,
+  owners: readonly ScriptOwner[],
+  mirror: PlayMirror,
+): void => {
+  if (!mirror.authoredDrawings.size || editor.readOnly) {
+    return;
+  }
+  editor.edit(({ tree }) => {
+    for (const [index, commands] of mirror.authoredDrawings) {
+      const authored = owners[index];
+      const owner = authored && ownerById(editor.project, ownerId(authored));
+      if (owner && 'kind' in owner && owner.kind === 'canvas') {
+        tree.setDrawing(owner, commands);
+      }
+    }
+  });
+};
