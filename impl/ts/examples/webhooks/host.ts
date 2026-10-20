@@ -281,6 +281,8 @@ export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
     handle: (event, signal) =>
       script.request({ name: 'event', args: [event] }, { signal }).result,
     close: () =>
-      (closing ??= drive.close('Webhook Host shutdown').then(() => db.close())),
+      (closing ??= drive
+        .close('Webhook Host shutdown')
+        .finally(() => db.close())),
   };
 };
