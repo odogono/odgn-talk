@@ -46,6 +46,13 @@ func TestLoadSourceAllocation(t *testing.T) {
 				size = 100000
 				multiplier = 128
 			}
+			// Through the Zig adapter, guest linear memory is Go heap, so the
+			// guest's own source copy and line index count too. These limits
+			// are agreed for the adapter (#1403); the checker's per-handler
+			// cost is #1411.
+			if !nativeCore() {
+				multiplier = map[string]uint64{"blank": 40, "handlers": 320}[kind]
+			}
 			source := hostileSource(kind, size)
 			g := New().NewGroup(GroupOptions{})
 			runtime.GC()

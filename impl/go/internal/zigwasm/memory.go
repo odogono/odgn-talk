@@ -7,8 +7,9 @@ import "github.com/tetratelabs/wazero/experimental"
 // default allocator grows page by page and allocates 5.9 MB per Group (#1103).
 const reserve = 36 << 16
 
-// linearMemory keeps guest memory on the Go heap, growing by a quarter past
-// the reserve.
+// linearMemory keeps guest memory on the Go heap, doubling past the reserve,
+// so a large Load copies its memory about once over, not several times
+// (#1403).
 
 type linearMemory struct{ buf []byte }
 
@@ -16,7 +17,7 @@ func allocate(capacity, max uint64) experimental.LinearMemory { return &linearMe
 
 func (m *linearMemory) Reallocate(size uint64) []byte {
 	if size > uint64(cap(m.buf)) {
-		grown := make([]byte, size, max(size, reserve, uint64(cap(m.buf))*5/4))
+		grown := make([]byte, size, max(size, reserve, uint64(cap(m.buf))*2))
 		copy(grown, m.buf)
 		m.buf = grown
 	}

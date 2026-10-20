@@ -2066,6 +2066,7 @@ pub const Group = struct {
         };
         const t = try scratch.create(ast.Tree);
         t.* = tree;
+        t.lines = &parsed.lines;
         const checked = try check.check(checking.allocator(), t, context);
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
         try diagnostics.appendSlice(scratch, checked.diagnostics);
