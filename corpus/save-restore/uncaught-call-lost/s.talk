@@ -1,0 +1,9 @@
+on single
+  ask remote to get and wait
+end single
+
+on gather
+  wait for all
+    ask remote to get and wait
+  end wait
+end gather
