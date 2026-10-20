@@ -23,8 +23,8 @@ const build = (
   name: string,
   text: string,
   imports: ReturnType<typeof compileLibrary>[] = [],
-) =>
-  compileLibrary({ name, source: text, version: '1' }, imports, declarations);
+  decls: Parameters<typeof compileLibrary>[2] = declarations,
+) => compileLibrary({ name, source: text, version: '1' }, imports, decls);
 const diagnostics = (work: () => unknown) => {
   try {
     work();
@@ -288,14 +288,14 @@ test('multiple imports report missing needs in source order once per Operation p
 });
 
 test('a diamond checks each original call site once per use, keeping equivalent calls at distinct sites', () => {
+  const numberRead = {
+    io: { read: { mode: 'immediate' as const, args: [shape.number] } },
+  };
   const compile = (
     name: string,
-    source: string,
+    text: string,
     imports: ReturnType<typeof compileLibrary>[] = [],
-  ) =>
-    compileLibrary({ name, source, version: '1' }, imports, {
-      io: { read: { mode: 'immediate', args: [shape.number] } },
-    });
+  ) => build(name, text, imports, numberRead);
   const base = compile(
     'base',
     'function fetch\n ask io to read 1\n ask io to read 1\n return it\nend fetch',

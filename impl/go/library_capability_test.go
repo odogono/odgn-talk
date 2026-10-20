@@ -314,12 +314,8 @@ func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {
 				if d.Code != name || d.Unit != "s" || d.Line != line || d.Col != 1 {
 					t.Fatal("original sites must be checked once at each use:", d)
 				}
-			}
-			if grants == nil {
-				for j, d := range rejected.Diagnostics {
-					if d.Line != j+1 || !strings.Contains(d.Message, "top:4:2") {
-						t.Fatal("first direct site order:", d)
-					}
+				if grants == nil && !strings.Contains(d.Message, "top:4:2") {
+					t.Fatal("first direct site order:", d)
 				}
 			}
 		})
