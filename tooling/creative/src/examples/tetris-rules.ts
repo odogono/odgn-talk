@@ -278,11 +278,6 @@ end paint
 
 on showPreview
   beginPreview
-  repeat for each r in 1..4
-    repeat for each c in 1..4
-      previewCell r, c, emptyColour
-    end repeat
-  end repeat
   repeat for each [r, c] in item nextKind of shapes
     previewCell r, c, item nextKind of colours
   end repeat

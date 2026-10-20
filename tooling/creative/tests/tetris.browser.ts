@@ -1,6 +1,6 @@
 // Run on /tetris-test.html, a page without main.js, as described in README.md.
 import { createTetrisProject } from '../src/examples/tetris';
-import { EMPTY_COLOUR } from '../src/examples/tetris-rules';
+import { COLUMNS, EMPTY_COLOUR, ROWS } from '../src/examples/tetris-rules';
 import { createCanvasTetrisProject } from '../src/examples/tetris-canvas';
 import { CELL } from '../src/examples/tetris-layout';
 import { mountPlay } from '../src/play-view';
@@ -118,7 +118,7 @@ export const runCanvasBrowserTests = async () => {
   // Stop may interrupt paint: ADR 0116 deliberately retains partial frames.
   const rectangles = drawing().filter(command => command.op === 'rectangle');
   assert(
-    rectangles.length > 0 && rectangles.length <= 200,
+    rectangles.length > 0 && rectangles.length <= ROWS * COLUMNS,
     'Return to Edit did not retain a bounded board Drawing',
   );
   const previous = drawing();

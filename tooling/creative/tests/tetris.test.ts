@@ -344,10 +344,10 @@ test('a second Browse clears the retained last game and keeps only one frame of 
   )) {
     const drawing = next.play.drawingOf(canvas);
     expect(drawing.some(command => command.op === 'ellipse')).toBe(false);
+    // Only the falling piece and the next piece are filled.
     expect(drawing.filter(command => command.op === 'rectangle')).toHaveLength(
-      canvas.name === 'boardCanvas' ? ROWS * COLUMNS : 20,
+      4,
     );
-    expect(drawing.length).toBeLessThan(410);
   }
   expect(next.play.problems).toEqual([]);
 });

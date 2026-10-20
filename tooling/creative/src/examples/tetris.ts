@@ -25,6 +25,11 @@ on paintCell r, c, colour
 end paintCell
 
 on beginPreview
+  repeat for each r in 1..4
+    repeat for each c in 1..4
+      previewCell r, c, emptyColour
+    end repeat
+  end repeat
 end beginPreview
 
 on previewCell r, c, colour

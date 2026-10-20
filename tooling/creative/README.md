@@ -1088,8 +1088,9 @@ painting Handlers, and share the layout in
 [`src/examples/tetris-layout.ts`](src/examples/tetris-layout.ts). The Canvas
 version ships with empty Drawings. `openPage` clears both surfaces before
 starting a new game, including on a second Browse after the previous game's
-Drawing was kept in Edit. Each changed board or preview clears and redraws
-its surface, keeping the retained commands to one view.
+Drawing was kept in Edit. Each changed board or preview clears its surface
+and draws only the filled cells over the surface's empty fill, so the
+retained commands hold one frame of filled cells.
 
 Arrow keys move, Up and Z turn, Down drops faster and Space drops. Pieces
 come from a 7-bag. Gravity starts at one row a second and speeds up by 75 ms

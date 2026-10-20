@@ -5,8 +5,9 @@ import { TETRIS_RULES } from './tetris-rules';
 
 export const CANVAS_TETRIS_PROJECT_NAME = 'Canvas Tetris';
 
-// Clear before each changed view: the retained Drawing stays one board
-// long, including when Browse starts from the previous game's last frame.
+// Clear before each changed view and draw only filled cells over the
+// surface's empty fill: the retained Drawing stays one frame of filled cells,
+// including when Browse starts from the previous game's last frame.
 const CANVAS_PAINTING = `
 on resetPainting
   tell canvas
@@ -36,6 +37,9 @@ on previewCell r, c, colour
 end previewCell
 
 on drawCell surface, r, c, colour, size
+  if colour is emptyColour then
+    return
+  end if
   tell canvas
     fill surface, colour
     rectangle surface, (c - 1) * size, (r - 1) * size, size, size
