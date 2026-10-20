@@ -1,0 +1,41 @@
+{
+  "method": "Ten alternating before/after rounds through the unchanged Go Zig adapter; GOMAXPROCS=3. Fields exchange and callbacks. Request/RequestPump/CallPump: 5000 iterations/sample. Host immediate/properties/conversion/pump: 100 iterations/sample. Baseline source e4275bb0; only the embedded guest changes.",
+  "archivedBaseline": "bench/results/go-zig-adapter/2026-10-19-callbacks-fields-darwin-arm64/after.txt",
+  "results": {
+    "BenchmarkBackendRequestPump-3": {
+      "beforeMedianNs": 7862.0,
+      "afterMedianNs": 7781.5,
+      "afterBeforeRatio": 0.9897608750953956
+    },
+    "BenchmarkBackendCallPump-3": {
+      "beforeMedianNs": 12275.0,
+      "afterMedianNs": 12348.0,
+      "afterBeforeRatio": 1.0059470468431773
+    },
+    "BenchmarkBackendRequest-3": {
+      "beforeMedianNs": 8907.5,
+      "afterMedianNs": 8883.0,
+      "afterBeforeRatio": 0.9972495088408644
+    },
+    "BenchmarkRun/host/immediate-3": {
+      "beforeMedianNs": 2228362.5,
+      "afterMedianNs": 2215191.0,
+      "afterBeforeRatio": 0.9940891573969675
+    },
+    "BenchmarkRun/host/properties-3": {
+      "beforeMedianNs": 1413539.5,
+      "afterMedianNs": 1417173.5,
+      "afterBeforeRatio": 1.00257085139821
+    },
+    "BenchmarkRun/host/conversion-3": {
+      "beforeMedianNs": 5145181.5,
+      "afterMedianNs": 5141905.5,
+      "afterBeforeRatio": 0.9993632877673995
+    },
+    "BenchmarkRun/host/pump-3": {
+      "beforeMedianNs": 11629.0,
+      "afterMedianNs": 11615.0,
+      "afterBeforeRatio": 0.9987961131653624
+    }
+  }
+}

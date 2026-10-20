@@ -4799,7 +4799,7 @@ fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed:
         .charge_result => .charge_result,
     };
     try w.byte(@backingInt(kind));
-    try w.begin(kind.fields(), true);
+    try w.begin(rp.fields(kind), true);
     switch (report) {
         .charge_result => |r| {
             try w.key("request");
@@ -5068,7 +5068,7 @@ fn binAdmissionOrError(s: *Session, ref: i64, entry: ?*GroupEntry, admitted: Adm
     defer w.deinit();
     try w.header();
     try w.byte(@backingInt(rp.Message.admission));
-    try w.begin(rp.Message.admission.fields(), true);
+    try w.begin(rp.fields(rp.Message.admission), true);
     try w.key("ref");
     try w.int(ref);
     switch (admitted) {
@@ -5182,7 +5182,7 @@ fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, 
     try w.out.ensureTotalCapacityPrecise(s.gpa, 64 + if (fin.ok) |ok| ok.len else 0);
     try w.header();
     try w.byte(@backingInt(rp.Message.completion));
-    try w.begin(rp.Message.completion.fields(), true);
+    try w.begin(rp.fields(rp.Message.completion), true);
     try w.key("ref");
     try w.int(ref);
     if (b.delivery) |d| {
@@ -5375,7 +5375,7 @@ fn handleBinaryLoad(s: *Session, payload: []const u8) []u8 {
     var arena = std.heap.ArenaAllocator.init(s.gpa);
     defer arena.deinit();
     const a = arena.allocator();
-    const names = rp.Message.load.fields();
+    const names = rp.fields(rp.Message.load);
     var spans: [11]?[]const u8 = undefined;
     var r: rp.Reader = .{ .data = payload };
     r.record(names, true, &spans) catch return protocolError(s.gpa, 0, "malformed Load frame");
@@ -5476,9 +5476,9 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
     const message_tag = r.byte() catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     const m = std.enums.fromInt(rp.Message, message_tag) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
     if (m == .load or m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-    r.record(m.fields(), true, spans[0..m.fields().len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+    r.record(rp.fields(m), true, spans[0..rp.fields(m).len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
     if (m == .settle_pump and !s.settlements) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
-    const names = m.fields();
+    const names = rp.fields(m);
     const Get = struct {
         names: []const []const u8,
         spans: []const ?[]const u8,
@@ -5755,7 +5755,7 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
     try w.out.ensureTotalCapacity(s.gpa, 160);
     try w.header();
     try w.byte(@backingInt(c));
-    try w.begin(c.fields(), true);
+    try w.begin(rp.fields(c), true);
     try w.key("ref");
     try w.int(ref);
     switch (n.kind) {
@@ -5847,7 +5847,7 @@ fn binRelease(s: *Session, ref: i64, r: Release) Allocator.Error![]u8 {
     defer w.deinit();
     try w.header();
     try w.byte(@backingInt(rp.Callback.release));
-    try w.begin(rp.Callback.release.fields(), true);
+    try w.begin(rp.fields(rp.Callback.release), true);
     try w.key("ref");
     try w.int(ref);
     try w.key("script");
@@ -5866,7 +5866,7 @@ fn binRelease(s: *Session, ref: i64, r: Release) Allocator.Error![]u8 {
 /// gates its JSON form, and answered as that form is.
 fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
     var spans: [7]?[]const u8 = undefined;
-    const names = c.fields();
+    const names = rp.fields(c);
     var r: rp.Reader = .{ .data = payload };
     r.record(names, true, spans[0..names.len]) catch return protocolError(s.gpa, 0, "malformed binary frame");
     if (!r.done()) return protocolError(s.gpa, 0, "bytes after the frame's item");
@@ -8487,7 +8487,7 @@ fn binReply(c: *Client, frame: []const u8) !Json {
     if (reply[rp.prefix.len + 1] >= @backingInt(rp.Callback.op)) {
         // A callback need, viewed as its JSON envelope.
         const c_ = std.enums.fromInt(rp.Callback, try r.byte()) orelse return error.TestUnexpectedResult;
-        var need = try viewRecord(a, &r, c_.fields());
+        var need = try viewRecord(a, &r, rp.fields(c_));
         try std.testing.expect(r.done());
         v = .{ .object = .empty };
         for ([_][]const u8{ "ref", "abandoned", "settled", "trace" }) |k| if (need.object.fetchSwapRemove(k)) |kv| try v.object.put(a, k, kv.value);
@@ -8497,7 +8497,7 @@ fn binReply(c: *Client, frame: []const u8) !Json {
         return v;
     }
     const m = std.enums.fromInt(rp.Message, try r.byte()) orelse return error.TestUnexpectedResult;
-    v = try viewRecord(a, &r, m.fields());
+    v = try viewRecord(a, &r, rp.fields(m));
     try v.object.put(a, "binary", .{ .string = if (m == .admission) "admission" else "completion" });
     try std.testing.expect(r.done());
     return v;
@@ -8531,7 +8531,7 @@ fn viewItem(a: Allocator, r: *rp.Reader, positional_reports: bool) anyerror!Json
             for (0..try r.uint()) |_| {
                 if (positional_reports) {
                     const kind = std.enums.fromInt(rp.Report, try r.byte()) orelse return error.TestUnexpectedResult;
-                    var rec = try viewRecord(a, r, kind.fields());
+                    var rec = try viewRecord(a, r, rp.fields(kind));
                     try rec.object.put(a, "kind", .{ .string = kind.kind() });
                     try xs.append(rec);
                 } else try xs.append(try viewItem(a, r, false));
@@ -8560,7 +8560,7 @@ fn viewItem(a: Allocator, r: *rp.Reader, positional_reports: bool) anyerror!Json
 fn binInput(w: *rp.Writer, m: rp.Message, ref: i64, group: []const u8) !void {
     try w.header();
     try w.byte(@backingInt(m));
-    try w.begin(m.fields(), true);
+    try w.begin(rp.fields(m), true);
     try w.key("ref");
     try w.int(ref);
     try w.key("group");
@@ -8628,7 +8628,7 @@ fn binResult(a: Allocator, c: rp.Callback, ref: i64, outcome: ?[]const u8, value
     var w = rp.Writer.init(a);
     try w.header();
     try w.byte(@backingInt(c));
-    try w.begin(c.fields(), true);
+    try w.begin(rp.fields(c), true);
     try w.key("ref");
     try w.int(ref);
     try w.key("group");
