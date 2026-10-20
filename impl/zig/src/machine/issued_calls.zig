@@ -50,8 +50,16 @@ pub const IssuedCalls = struct {
 
     fn number(digits: []const u8) ?u64 {
         if (digits.len == 0 or digits[0] == '0') return null;
-        for (digits) |c| if (c < '0' or c > '9') return null;
-        return std.fmt.parseInt(u64, digits, 10) catch null;
+        // Every Host call parses its id here several times; std.fmt.parseInt's
+        // overflow check is a 128-bit multiply per digit on wasm32 (#1103).
+        var n: u64 = 0;
+        for (digits) |c| {
+            if (c < '0' or c > '9') return null;
+            const d: u64 = c - '0';
+            if (n > (std.math.maxInt(u64) - d) / 10) return null;
+            n = n * 10 + d;
+        }
+        return n;
     }
 
     const RunNumber = struct { prefix: []const u8, n: u64 };
@@ -116,6 +124,7 @@ pub const IssuedCalls = struct {
     /// Calls are issued in increasing order within their Run. A deferred
     /// Host crossing can register the same id again without changing it.
     pub fn put(self: *IssuedCalls, a: Allocator, id: []const u8, eligible: bool) !void {
+        if (self.extendAlone(id, eligible)) return;
         if (self.get(id) != null) return;
         const parsed = split(id) orelse return error.InvalidCallId;
         const range: Range = .{ .first = parsed.call, .last = parsed.call, .eligible = eligible };
@@ -137,6 +146,31 @@ pub const IssuedCalls = struct {
         }
         if (range.first == 1) if (runNumber(parsed.run)) |_| return self.span(a, parsed.run, range);
         try self.addRun(a, parsed.run, range);
+    }
+
+    /// The common case of `put`, with one hash lookup: an id already
+    /// issued, or the next call of a Run alone in its Span that joins no
+    /// neighbour, which only grows the Span's calls (#1103). False leaves
+    /// the table unchanged for `put`'s general path.
+    fn extendAlone(self: *IssuedCalls, id: []const u8, eligible: bool) bool {
+        const parsed = split(id) orelse return false;
+        const r = runNumber(parsed.run) orelse return false;
+        const spans = self.spans.getPtr(r.prefix) orelse return false;
+        const at = spanAt(spans.items, r.n) orelse return false;
+        const x = &spans.items[at];
+        if (parsed.call <= x.calls) return true;
+        if (x.first != x.last or x.eligible != eligible or parsed.call != x.calls + 1) return false;
+        const calls = parsed.call;
+        if (at > 0) {
+            const l = spans.items[at - 1];
+            if (l.last + 1 == r.n and l.calls == calls and l.eligible == eligible) return false;
+        }
+        if (at + 1 < spans.items.len) {
+            const h = spans.items[at + 1];
+            if (h.first == r.n + 1 and h.calls == calls and h.eligible == eligible) return false;
+        }
+        x.calls = calls;
+        return true;
     }
 
     fn addRun(self: *IssuedCalls, a: Allocator, run_id: []const u8, range: Range) !void {
@@ -426,4 +460,28 @@ fn spanFailures(a: Allocator) !void {
 
 test "Span allocation refusal releases all owned memory" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, spanFailures, .{});
+}
+
+test "a Run alone in its Span grows in place, and joins a neighbour when it matches (#1103)" {
+    const t = std.testing;
+    var calls: IssuedCalls = .{};
+    defer calls.deinit(t.allocator);
+    try calls.put(t.allocator, "s/r1.c1", false);
+    try calls.put(t.allocator, "s/r1.c2", false);
+    try calls.put(t.allocator, "s/r2.c1", false);
+    try calls.put(t.allocator, "s/r2.c1", true);
+    try t.expectEqualSlices(Span, &.{ .{ .first = 1, .last = 1, .calls = 2, .eligible = false }, .{ .first = 2, .last = 2, .calls = 1, .eligible = false } }, calls.spans.get("s/r").?.items);
+    // r2's second call matches r1, so the two Runs share one Span again.
+    try calls.put(t.allocator, "s/r2.c2", false);
+    try t.expectEqualSlices(Span, &.{.{ .first = 1, .last = 2, .calls = 2, .eligible = false }}, calls.spans.get("s/r").?.items);
+    try calls.put(t.allocator, "s/r3.c1", false);
+    try calls.put(t.allocator, "s/r3.c2", false);
+    try calls.put(t.allocator, "s/r3.c3", false);
+    try t.expectEqualSlices(Span, &.{ .{ .first = 1, .last = 2, .calls = 2, .eligible = false }, .{ .first = 3, .last = 3, .calls = 3, .eligible = false } }, calls.spans.get("s/r").?.items);
+    try t.expectEqual(false, calls.get("s/r3.c3").?);
+    try t.expectEqual(@as(?bool, null), calls.get("s/r3.c4"));
+    // A skipped call, or another eligibility, leaves the fast path.
+    try calls.put(t.allocator, "s/r3.c5", false);
+    try t.expectEqual(@as(?bool, null), calls.get("s/r3.c4"));
+    try t.expect(calls.runs.contains("s/r3"));
 }

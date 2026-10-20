@@ -181,31 +181,40 @@ pub const Writer = struct {
     /// One item header, a tag then an unsigned LEB128, and its bytes,
     /// written together into reserved capacity: on `wasm32`, appending byte
     /// by byte, and short `memory.copy` calls, cost more than the encoding.
-    fn tagged(w: *Writer, t: u8, n0: u128, bytes: []const u8) Allocator.Error!void {
-        try w.out.ensureUnusedCapacity(w.a, 20 + bytes.len);
+    /// A tag, its count and its bytes. Counts are u64: a u128 count costs
+    /// 128-bit arithmetic on wasm32 for every field (#1103), so only `int`
+    /// takes the wide path.
+    fn tagged(w: *Writer, t: u8, n0: u64, bytes: []const u8) Allocator.Error!void {
+        try w.out.ensureUnusedCapacity(w.a, 11 + bytes.len);
         const out = w.out.unusedCapacitySlice();
         out[0] = t;
         var len: usize = 1;
-        if (std.math.cast(u64, n0)) |small| {
-            var n = small;
-            while (n >= 128) : (n >>= 7) {
-                out[len] = @as(u8, @truncate(n)) | 128;
-                len += 1;
-            }
-            out[len] = @intCast(n);
-        } else {
-            var n = n0;
-            while (n >= 128) : (n >>= 7) {
-                out[len] = @as(u8, @truncate(n)) | 128;
-                len += 1;
-            }
-            out[len] = @intCast(n);
+        var n = n0;
+        while (n >= 128) : (n >>= 7) {
+            out[len] = @as(u8, @truncate(n)) | 128;
+            len += 1;
         }
+        out[len] = @intCast(n);
         len += 1;
         if (bytes.len <= 16) {
             for (bytes, out[len..][0..bytes.len]) |b, *o| o.* = b;
         } else @memcpy(out[len..][0..bytes.len], bytes);
         w.out.items.len += len + bytes.len;
+    }
+
+    fn taggedWide(w: *Writer, t: u8, n0: u128) Allocator.Error!void {
+        if (std.math.cast(u64, n0)) |small| return w.tagged(t, small, "");
+        try w.out.ensureUnusedCapacity(w.a, 20);
+        const out = w.out.unusedCapacitySlice();
+        out[0] = t;
+        var len: usize = 1;
+        var n = n0;
+        while (n >= 128) : (n >>= 7) {
+            out[len] = @as(u8, @truncate(n)) | 128;
+            len += 1;
+        }
+        out[len] = @intCast(n);
+        w.out.items.len += len + 1;
     }
 
     /// Opens a record. Every record has at most 16 fields, so a map's
@@ -254,9 +263,9 @@ pub const Writer = struct {
     }
     pub fn int(w: *Writer, n: i128) Allocator.Error!void {
         if (n < 0) {
-            try w.tagged(tag.negative, @intCast(-n), "");
+            try w.taggedWide(tag.negative, @intCast(-n));
         } else {
-            try w.tagged(tag.integer, @intCast(n), "");
+            try w.taggedWide(tag.integer, @intCast(n));
         }
     }
     /// Protocol text: UTF-8 the Core wrote, never NFC-normalized.

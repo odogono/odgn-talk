@@ -9981,21 +9981,18 @@ pub const Group = struct {
         const granted = run.script.grant(grant_name) orelse return g.raise("not implemented", &.{});
         const index = granted.grant.capability.find(op_name) orelse return g.raise("not implemented", &.{});
         const decl = granted.grant.capability.operations[index];
-        const capability_text = try model.text(gpa, grant_name);
-        defer capability_text.release();
-        const operation_text = try model.text(gpa, op_name);
-        defer operation_text.release();
-        const where = [_]model.Pair{
-            .{ .key = "capability", .value = capability_text },
-            .{ .key = "operation", .value = operation_text },
-        };
+        // The capability and operation a refusal names, made only when one
+        // is needed: normalizing both texts on every call is a measurable
+        // part of a Host crossing (#1103).
+        var where: CallWhere = .{ .gpa = gpa, .capability = grant_name, .operation = op_name };
+        defer where.deinit();
         if (granted.disabled) {
             m.uncharged = true;
-            return g.raise("capability disabled", &where);
+            return g.raise("capability disabled", try where.pairs());
         }
         if (granted.revoked) {
             m.uncharged = true;
-            return g.raise("capability revoked", &where);
+            return g.raise("capability revoked", try where.pairs());
         }
 
         // Arguments, depth-first in order.
@@ -10004,12 +10001,12 @@ pub const Group = struct {
             defer checked.release();
             const bad = checked.mismatch orelse continue;
             m.uncharged = true;
-            return g.raiseMismatch(bad, position, &where);
+            return g.raiseMismatch(bad, position, try where.pairs());
         }
 
         if (ins.op == .ask_wait) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
             m.uncharged = true;
-            return g.raiseDeadline(b, &where);
+            return g.raiseDeadline(b, try where.pairs());
         };
         // The Core's own checks, charged nothing either.
         if (decl.before) |before| if (try before(a, &granted.grant.capability.operations[index], args, granted.grant.binding)) |problem| {
@@ -10028,7 +10025,7 @@ pub const Group = struct {
                 .invalid_key => return g.raise("invalid key", &.{}),
                 .mismatch => |x| {
                     defer if (x.keep) |v| v.release();
-                    return g.raiseMismatch(x.bad, x.position, &where);
+                    return g.raiseMismatch(x.bad, x.position, try where.pairs());
                 },
                 .out_of_range => |x| {
                     const field = try model.text(gpa, x.field);
@@ -10058,17 +10055,17 @@ pub const Group = struct {
                 m.uncharged = true;
                 const scope = try model.text(gpa, scope_name);
                 defer scope.release();
-                return g.raise(code, &.{ where[0], where[1], .{ .key = "scope", .value = scope } });
+                return g.raise(code, &.{ (try where.pairs())[0], (try where.pairs())[1], .{ .key = "scope", .value = scope } });
             }
         }
         if (decl.segment_bound and run.returned_op == null) {
             m.uncharged = true;
-            try g.participantConflict(run, granted, &where);
+            try g.participantConflict(run, granted, try where.pairs());
             m.uncharged = false;
             // A failed begin leaves the call's declared cost spent.
             m.declared = decl.cost.fuel;
             m.alloc_extra = decl.cost.alloc;
-            g.enroll(run, granted, &where) catch |err| {
+            g.enroll(run, granted, try where.pairs()) catch |err| {
                 if (err != error.Deferred) return err;
                 // The instruction is made again once the Host answers.
                 for (args) |v| try g.push(frame, v.retain());
@@ -10238,7 +10235,7 @@ pub const Group = struct {
             return error.Landed;
         }
         if (pending) return if (ins.op == .join_ask) .next else .suspended;
-        if (!valid) return g.hostError(id, grant_name, op_name, &where);
+        if (!valid) return g.hostError(id, grant_name, op_name, try where.pairs());
         switch (outcome) {
             .value => |v| {
                 if (decl.mode == .fire_and_forget) return .next;
@@ -10247,19 +10244,19 @@ pub const Group = struct {
                 owned = false;
             },
             .failed => |f| {
-                if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
+                if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, try where.pairs());
                 const shown = try failureMap(gpa, .{ .code = f.code, .message = f.message, .data = f.data });
                 defer shown.release();
                 var pairs: std.ArrayList(model.Pair) = .empty;
                 defer pairs.deinit(gpa);
                 try shown.data.map.appendTo(gpa, &pairs);
-                try pairs.appendSlice(gpa, &where);
+                try pairs.appendSlice(gpa, try where.pairs());
                 m.result = if (f.data) |d| d.retain() else empty.retain();
                 g.pending_error = try model.map(gpa, pairs.items);
                 g.pending_core = false;
                 return error.Raised;
             },
-            .started, .broken => return g.hostError(id, grant_name, op_name, &where),
+            .started, .broken => return g.hostError(id, grant_name, op_name, try where.pairs()),
             .limited => {
                 // Controls land at every Host crossing, including a refused
                 // Charge. Only a surviving Run receives the latched fault;
@@ -11431,3 +11428,28 @@ test "bound Library definitions reuse containers without allocating on later rea
     }
     try testing.expect(!failing.has_induced_failure);
 }
+
+/// The `capability` and `operation` entries of a refused call's error,
+/// made on first use.
+const CallWhere = struct {
+    gpa: Allocator,
+    capability: []const u8,
+    operation: []const u8,
+    made: ?[2]model.Pair = null,
+
+    fn pairs(w: *CallWhere) ![]const model.Pair {
+        if (w.made == null) {
+            const capability = try model.text(w.gpa, w.capability);
+            errdefer capability.release();
+            w.made = .{
+                .{ .key = "capability", .value = capability },
+                .{ .key = "operation", .value = try model.text(w.gpa, w.operation) },
+            };
+        }
+        return &w.made.?;
+    }
+
+    fn deinit(w: *CallWhere) void {
+        if (w.made) |made| for (made) |p| p.value.release();
+    }
+};
