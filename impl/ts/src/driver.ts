@@ -130,17 +130,17 @@ export const autoDrive = (group: Group, o: AutoDriveOptions = {}): Drive => {
         });
       }
     } catch (error) {
+      let failure = error;
       try {
         o.onError?.(error);
       } catch (callbackError) {
         if (!closing) {
           throw callbackError;
         }
-        finishClose?.({ error: callbackError });
-      } finally {
-        if (closing) {
-          finishClose?.({ error });
-        }
+        failure = callbackError;
+      }
+      if (closing) {
+        finishClose?.({ error: failure });
       }
     } finally {
       pumping = false;
