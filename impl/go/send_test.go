@@ -250,30 +250,25 @@ end watch`})
 }
 
 func TestSendCountsHostReservationsAcceptedDuringPump(t *testing.T) {
-	requireSynchronousTrace(t)
-	var trace lines
-	var record func(string)
-	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
-		if record != nil {
-			record(line)
-		} else {
-			trace.Record(line)
-		}
-	})})
-	a, err := g.Load(LoadOptions{Name: "a", Source: "on go\n send ping with 7 to b\n send ping with 8 to b\nend go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := g.Load(LoadOptions{Name: "b", Limits: Limits{MailboxDepth: 2}, Source: "on ping n\n return n\nend ping"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := New()
+	var b *Script
 	var inputError error
-	record = func(line string) {
-		trace.Record(line)
-		if line == `send a/r1 to=b message=ping args=[7]` {
-			_, inputError = b.Deliver(Message{Name: "ping", Args: []Value{Int(99)}})
-		}
+	// The Host's Delivery is accepted between the two sends, during the Pump.
+	def, err := c.DefineCapability("h", Operation{Name: "poke", Mode: Immediate, Result: NothingShape, Do: func(*Call, []Value) (Value, error) {
+		_, inputError = b.Deliver(Message{Name: "ping", Args: []Value{Int(99)}})
+		return Nothing, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c.NewGroup(GroupOptions{})
+	a, err := g.Load(LoadOptions{Name: "a", Grants: map[string]*Grant{"h": def.GrantAll(nil)}, Source: "on go\n send ping with 7 to b\n ask h to poke\n send ping with 8 to b\nend go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = g.Load(LoadOptions{Name: "b", Limits: Limits{MailboxDepth: 2}, Source: "on ping n\n return n\nend ping"})
+	if err != nil {
+		t.Fatal(err)
 	}
 	a.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
