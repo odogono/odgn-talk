@@ -1,4 +1,3 @@
-# Unblessed: extended Result Targets (#1350); first blessing awaits human review.
 
 > add-library lib identity=12d3cd3ff320163f5837211a9382421e06f014d04b04c6949a7440b5ff3a9f22
 > load remote identity=c57ba80e10629541ea6fe19dff87624add6c5a2d94cca492ddd5fe7101478ed8
