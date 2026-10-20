@@ -291,29 +291,29 @@ test('a diamond checks each original call site once per use, keeping equivalent 
   const numberRead = {
     io: { read: { mode: 'immediate' as const, args: [shape.number] } },
   };
-  const compile = (
-    name: string,
-    text: string,
-    imports: ReturnType<typeof compileLibrary>[] = [],
-  ) => build(name, text, imports, numberRead);
-  const base = compile(
+  const base = build(
     'base',
     'function fetch\n ask io to read 1\n ask io to read 1\n return it\nend fetch',
+    [],
+    numberRead,
   );
-  const left = compile(
+  const left = build(
     'left',
     'use fetch from base\nfunction l\n return fetch()\nend l',
     [base],
+    numberRead,
   );
-  const right = compile(
+  const right = build(
     'right',
     'use fetch from base\nfunction r\n return fetch()\nend r',
     [base],
+    numberRead,
   );
-  const top = compile(
+  const top = build(
     'top',
     'use l from left\nuse r from right\nprivate function unused\n ask io to read 99\n return it\nend unused\nfunction run\n return [l(),r()]\nend run',
     [left, right],
+    numberRead,
   );
   expect(top.needs).toEqual([{ capability: 'io', operation: 'read' }]);
   const cap = defineCapability('host', {
