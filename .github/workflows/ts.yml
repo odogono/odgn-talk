@@ -70,9 +70,10 @@ jobs:
       - run: bun test tests
         working-directory: tooling/fuzz
       # A fixed seed keeps this a deterministic gate; the nightly job explores new seeds.
-      # The Go worker makes it dual-Core; the Go workflow runs the same smoke for Go changes.
-      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
-      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --go-runner .cache/fuzzworker
+      # The Zig worker makes it dual-Core.
+      - run: zig build fuzzworker --prefix "$PWD/../../.cache/zig-fuzz"
+        working-directory: impl/zig
+      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

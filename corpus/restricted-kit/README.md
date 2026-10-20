@@ -34,7 +34,7 @@ Run from the repository root:
 bun tools/corpus/restricted-kit.ts
 ```
 
-`--update` writes candidate expectations with TS, checks Go and Zig, and restores
+`--update` writes candidate expectations with TS, checks Zig, and restores
 all previous expectation bytes if a check fails. Updating expectations does
 not confer human approval; later changes need their own review. Use that wrapper, not the internal `UPDATE_RESTRICTED_KIT` environment
 switch. Human approval is recorded separately under the

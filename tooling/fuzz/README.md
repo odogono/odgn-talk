@@ -10,7 +10,7 @@ bun run fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--go-runn
 ```
 
 - **`smoke`** runs 64 cases within two minutes and stops at the first finding. CI runs it on every PR with `--seed 1` in [dual-Core mode](#dual-core-mode), so it is a deterministic gate.
-- **`campaign`** searches for 20 minutes, then minimizes up to two retained findings, within 30 minutes in all. The [nightly workflow](../../.github/workflows/fuzz.yml) runs one against the Go and Zig Cores from a fresh seed and uploads the findings directory. Start it by hand from the Actions tab with a chosen seed and budget.
+- **`campaign`** searches for 20 minutes, then minimizes up to two retained findings, within 30 minutes in all. The [nightly workflow](../../.github/workflows/fuzz.yml) runs one against the Zig Core from a fresh seed and uploads the findings directory. Start it by hand from the Actions tab with a chosen seed and budget.
 - **`--go-runner`** and **`--zig-runner`** also run each case on the Go or Zig Core and compare the complete Traces with TS's ([below](#dual-core-mode)).
 - **`reproduce`** reruns a saved case and prints its findings.
 - **`minimize`** reduces a saved case while its first finding keeps the same signature, and writes the smaller case.
@@ -30,15 +30,15 @@ The output directory, `fuzz-findings/` by default, holds `summary.json`: the see
 | `go.trace`, `zig.trace` | The Go and Zig Cores' Traces, with `--go-runner` or `--zig-runner`. |
 | `minimized.json`, `reduction.json` | The reduced case, and how the reduction went. Only for the first two findings, within budget. |
 
-To work on a nightly finding, download the run's artifact, [build the Go or Zig worker](#dual-core-mode), then:
+To work on a nightly finding, download the run's artifact, [build the Zig worker](#dual-core-mode), then:
 
 ```sh
-bun run fuzz reproduce fuzz-findings/<signature>/case.json --go-runner .cache/fuzzworker
-bun run fuzz minimize fuzz-findings/<signature>/case.json --output minimized.json --go-runner .cache/fuzzworker
-bun run fuzz reproduce minimized.json --go-runner .cache/fuzzworker
+bun run fuzz reproduce fuzz-findings/<signature>/case.json --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
+bun run fuzz minimize fuzz-findings/<signature>/case.json --output minimized.json --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
+bun run fuzz reproduce minimized.json --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
 ```
 
-A `differential` finding is Go's and a `differential-zig` finding Zig's: pass `--zig-runner .cache/zig-fuzz/bin/talk-fuzzworker` for one of those. Leave out both runners for a finding from the TS oracles alone.
+A `differential-zig` finding is Zig's. A `differential` finding is from the retiring Go worker, so reproduce it with `--go-runner` (#1055). Leave out both runners for a finding from the TS oracles alone.
 
 A fixed divergence becomes a corpus case under [`corpus/`](../../corpus/), blessed by the corpus procedure.
 
@@ -56,7 +56,7 @@ With `--go-runner <path>`, every case also runs on the Go Core's fuzz worker, an
 
 ```sh
 go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
-bun run fuzz smoke --seed 1 --go-runner .cache/fuzzworker
+bun run fuzz smoke --seed 1 --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
 ```
 
 With `--zig-runner <path>`, every case also runs on the Zig Core's worker ([`fuzzworker.zig`](../../impl/zig/src/corpus/fuzzworker.zig)), which replays through the Zig Corpus runner's replay Host. Its differences are `differential-zig` findings, and with both runners each Core is compared with TS. Build it from the repository root:

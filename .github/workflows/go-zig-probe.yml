@@ -1,4 +1,4 @@
-name: Go Zig callback probe
+name: Go Zig binding spike
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
     branches: [main]
     paths:
       - 'spikes/go-zig-binding/**'
-      - 'impl/go/**'
       - 'impl/zig/**'
       - 'spec/**'
       - '!spec/**/*.md'
@@ -37,45 +36,3 @@ jobs:
           CGO_ENABLED: '0'
       # The race detector needs cgo; the embedding itself does not.
       - run: go test -race -count=1 ./...
-
-  public-adapter:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27'
-          cache: false
-      # The shared public Hosts also execute on the retiring native Core.
-      - run: go -C impl/go test -tags talk_native_go -run '^TestCapabilityBridge' -count=1 .
-        env:
-          CGO_ENABLED: '0'
-      - run: go -C impl/go vet . ./internal/zigwasm
-        env:
-          CGO_ENABLED: '0'
-      # Keep ordinary JSON coverage when the adapter defaults to fields.
-      - run: impl/go/zig-experimental-check.sh -v
-        env:
-          CGO_ENABLED: '0'
-          TALK_ZIG_REQUEST_PUMP: ''
-      - run: impl/go/zig-experimental-check.sh -race
-      # The same suites over the binary Request/Pump exchange (#1245).
-      - run: impl/go/zig-experimental-check.sh
-        env:
-          CGO_ENABLED: '0'
-          TALK_ZIG_REQUEST_PUMP: fields
-
-  # Pure-Go builds of every target from one runner; the matrix above runs them.
-  cross-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27'
-          cache: false
-      - run: impl/go/cross-check.sh

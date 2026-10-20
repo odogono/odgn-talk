@@ -110,9 +110,9 @@ and the protocol rejects foreign tokens. Public handle ownership, callback
 registration/lifetimes, all error and metering paths, GC ergonomics, Pool
 integration, the full API/Corpus and Session facilities remain binding work.
 
-The [probe CI](../../.github/workflows/go-zig-probe.yml) executes pure-Go tests,
-vet and race checks on Linux amd64/arm64 and macOS arm64, separately from
-cross-compilation. These three targets form the current CI matrix.
+The [spike CI](../../.github/workflows/go-zig-probe.yml) executes pure-Go tests,
+vet and race checks on Linux amd64/arm64 and macOS arm64, and the
+[Go workflow](../../.github/workflows/go.yml) cross-compiles. These three targets form the current CI matrix.
 [#971's embedded run](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
 passes all four native execution/race jobs as well as cross-builds for its
 recorded artifact. Current early-abandonment artifact execution is verified

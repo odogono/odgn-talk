@@ -18,10 +18,6 @@ const steps = [
     cwd: root,
     command: ['bun', 'test', 'impl/ts/tests/restricted-callbacks.test.ts'],
   },
-  {
-    cwd: resolve(root, 'impl/go'),
-    command: ['go', 'test', '.', '-run', '^TestRestricted', '-count=1'],
-  },
   { cwd: resolve(root, 'impl/zig'), command: ['zig', 'build', 'test'] },
 ];
 let passed = false;
@@ -42,7 +38,7 @@ try {
   }
   passed = true;
   console.log(
-    'Restricted callback kit agrees on TS, Go and Zig. Expectation changes require separate human review.',
+    'Restricted callback kit agrees on TS and Zig. Expectation changes require separate human review.',
   );
 } finally {
   if (update && !passed) {
