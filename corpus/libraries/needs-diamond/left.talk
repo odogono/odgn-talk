@@ -1,0 +1,4 @@
+use fetch from base
+function l
+ return fetch()
+end l

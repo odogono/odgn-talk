@@ -285,30 +285,42 @@ func TestLibraryDiamondNeedsCheckEachOriginalSiteOncePerUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, grants := range []map[string]*Grant{nil, {"io": def.GrantAll(nil)}} {
-		g := c.NewGroup(GroupOptions{})
-		for _, l := range []*Library{base, left, right, top} {
-			if err := g.AddLibrary(l); err != nil {
+		name := "missing grant"
+		if grants != nil {
+			name = "wrong argument"
+		}
+		t.Run(name, func(t *testing.T) {
+			g := c.NewGroup(GroupOptions{})
+			for _, l := range []*Library{base, left, right, top} {
+				if err := g.AddLibrary(l); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := g.Load(LoadOptions{Name: "s", Source: "use run from top\nuse run from top as again\n", Grants: grants})
+			rejected, ok := err.(*LoadError)
+			if !ok {
 				t.Fatal(err)
 			}
-		}
-		_, err := g.Load(LoadOptions{Name: "s", Source: "use run from top\nuse run from top as again\n", Grants: grants})
-		rejected, ok := err.(*LoadError)
-		if !ok {
-			t.Fatal(err)
-		}
-		want := 2
-		if grants != nil {
-			want = 4
-		}
-		if len(rejected.Diagnostics) != want {
-			t.Fatal("diamond duplicate or per-use diagnostics lost:", rejected.Diagnostics)
-		}
-		if grants == nil {
+			want := 2
+			if grants != nil {
+				want = 4
+			}
+			if len(rejected.Diagnostics) != want {
+				t.Fatal("diamond duplicate or per-use diagnostics lost:", rejected.Diagnostics)
+			}
 			for j, d := range rejected.Diagnostics {
-				if d.Line != j+1 || nativeCore() && !strings.Contains(d.Message, "top:4:2") {
+				line := j + 1
+				if grants != nil {
+					line = j/2 + 1
+				}
+				if d.Code != name || d.Unit != "s" || d.Line != line || d.Col != 1 {
+					t.Fatal("original sites must be checked once at each use:", d)
+				}
+				// Message wording isn't covered by parity (ADR 0009).
+				if grants == nil && nativeCore() && !strings.Contains(d.Message, "top:4:2") {
 					t.Fatal("first direct site order:", d)
 				}
 			}
-		}
+		})
 	}
 }

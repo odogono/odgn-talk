@@ -1,0 +1,4 @@
+use fetch from base
+function r
+ return fetch()
+end r

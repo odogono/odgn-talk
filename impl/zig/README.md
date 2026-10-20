@@ -172,7 +172,13 @@ leave code identity, Script Variables and existing Runs intact.
 Capability calls, `say` included, are checked only when the `Context` gives
 the Grants, `wrong argument` among them for a literal against an Operation's
 Shape. The checker also records each call as a Library's `needs`, which a
-Script's load checks against its Grants for `missing grant`. Loading raises two
+Script's load checks against its Grants for missing Operations and incompatible
+modes, argument counts, labels and literal Shapes. Each `use` checks original
+sites once per defining Library identity, including shared dependencies in a
+diamond; separate `use` lines repeat the check. Direct calls precede imported
+Libraries in import order, and missing Operations report once per Operation
+per `use`. Message Layer diagnostic messages use catalogue wording and do not
+yet name original Library call sites. Loading raises two
 diagnostics after the checker: `pattern too large` for a Text Pattern literal
 whose compiled program, every copy of a counted repetition counted, runs past
 the default `patternSize`, and `initialiser failed` at the instruction where a

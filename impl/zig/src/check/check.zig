@@ -3018,6 +3018,7 @@ test "every corpus unit gives the diagnostics its case expects" {
             "libraries/needs-transitive",               "reload/replacement-transitive",              "tell-block/library",
             "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets", "capabilities/host-commands-library",
             "capabilities/host-commands-load-checks",   "capabilities/argument-labels-library",       "capabilities/argument-labels-load-checks",
+            "libraries/needs-diamond",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";

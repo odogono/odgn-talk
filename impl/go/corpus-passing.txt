@@ -195,6 +195,7 @@ libraries/caller-capabilities
 libraries/calls
 libraries/constant-functions
 libraries/errors
+libraries/needs-diamond
 libraries/needs-suspending
 libraries/needs-transitive
 libraries/registration

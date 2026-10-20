@@ -1,0 +1,45 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[operations]]
+capability = "io"
+name = "read"
+mode = "immediate"
+args = ["number"]
+result = "number"
+cost = { fuel = 1 }
+[[operations]]
+capability = "textIO"
+name = "read"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 1 }
+[[libraries]]
+name = "base"
+version = "1"
+source = "base.talk"
+[[libraries]]
+name = "left"
+version = "1"
+source = "left.talk"
+[[libraries]]
+name = "right"
+version = "1"
+source = "right.talk"
+[[libraries]]
+name = "top"
+version = "1"
+source = "top.talk"
+[[scripts]]
+name = "missing"
+source = "s.talk"
+[[scripts]]
+name = "wrong"
+source = "s.talk"
+grants = { io = { capability = "textIO", ops = "all" } }
+[[scripts]]
+name = "valid"
+source = "s.talk"
+grants = { io = { ops = "all" } }
