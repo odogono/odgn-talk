@@ -8,6 +8,8 @@ The Go, TS and Zig Cores parse and check source, run Scripts through the embeddi
 
 Notable implementation changes are recorded in the [changelog](impl/ts/CHANGELOG.md).
 
+To add NorthTalk scripting to a TypeScript app, follow [Embed the TS Core](docs/embedding-typescript.md), with a runnable application-service example.
+
 For SQL-backed Scripts, see [Using SQLite](docs/sqlite.md): queries, transactions,
 Host setup and how the implementation works.
 

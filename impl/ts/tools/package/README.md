@@ -4,6 +4,9 @@ NorthTalk is a readable, conversational scripting language for embedding in appl
 
 The [Spec](https://github.com/odogono/odgn-talk/tree/main/spec) defines the language, and the [TS guide](https://github.com/odogono/odgn-talk/tree/main/impl/ts#readme) describes this implementation.
 
+For a walkthrough from the first Handler to asynchronous application services,
+see [Embed the TS Core in a TypeScript app](https://github.com/odogono/odgn-talk/blob/main/docs/embedding-typescript.md).
+
 ```sh
 npm install @northtalk/ts
 ```

@@ -1,5 +1,8 @@
 # TS Core foundations
 
+For a step-by-step introduction to using this Core in an application, see
+[Embed the TS Core in a TypeScript app](../../docs/embedding-typescript.md).
+
 A Result Target, `into name`, retains the answer of an `ask`, a `tell`-block Operation line, a Command Call (including a Host Command), a call statement or a waiting `send` ([ADR 0114](../../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)). It writes the bare Name with put semantics and keeps `it`; `and wait` remains last. Fire-and-forget calls reject targets, and a Message Path Command Call or explicit send needs explicit `and wait`. A Join records each reached member's destination and assigns them in start order only after every answer converts and all completion charges are reserved, so duplicate targets retain the last-started answer and failure writes no member targets. Saves retain the member instruction and its owning frame, including early answers and repeated destinations.
 
 The TS Core supports lazy `otherwise` and map-only `the optional k of x` reads, including computed keys, Constants and Guards. See the [migration guide](../../docs/migrations/nothing-defaults.md).
