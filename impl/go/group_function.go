@@ -2,6 +2,7 @@ package northtalk
 
 import (
 	"context"
+
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 

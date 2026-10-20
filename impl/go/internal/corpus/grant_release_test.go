@@ -1,9 +1,10 @@
 package corpus
 
 import (
-	talk "github.com/odogono/odgn-talk/impl/go"
 	"reflect"
 	"testing"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
 func TestTraceReplayGrantReleaseBoundaries(t *testing.T) {

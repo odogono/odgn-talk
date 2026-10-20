@@ -3,8 +3,8 @@ package northtalk
 import (
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // userMaxPending is how long confirm, choose and enter wait, as console's read.
@@ -88,7 +88,7 @@ func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error
 	checks := def.checks["choose"]
 	checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
 		if len(a[0].Items()) == 0 {
-			e := machine.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText("choose")}, corevalue.Pair{Key: "value", Val: a[0]})
+			e := valueops.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText("choose")}, corevalue.Pair{Key: "value", Val: a[0]})
 			return &e
 		}
 		return nil

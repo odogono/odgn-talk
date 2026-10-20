@@ -77,7 +77,7 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 		listed[line] = true
 	}
 	for _, c := range cases {
-		required := strings.HasPrefix(c.Name, "text-model/") || strings.HasPrefix(c.Name, "load-diagnostics/") || strings.HasPrefix(c.Name, "disassembly/") || c.Name == "bytes/value-encoding" || c.Name == "dates/value-encoding" || c.Name == "quantities/value-encoding"
+		required := strings.HasPrefix(c.Name, "text-model/") || strings.HasPrefix(c.Name, "load-diagnostics/") || c.Name == "bytes/value-encoding" || c.Name == "dates/value-encoding" || c.Name == "quantities/value-encoding"
 		if !required {
 			continue
 		}
@@ -998,7 +998,7 @@ func TestArgumentLabelsAcceptance(t *testing.T) {
 
 func TestRecoveryOffersAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	cases, err := Discover(root, []string{"recovery-offers/basic", "recovery-offers/boundaries", "recovery-offers/costs", "recovery-offers/cleanup-restore", "recovery-offers/nested", "recovery-offers/cancellation", "recovery-offers/action-suspend", "disassembly/recovery-offers"})
+	cases, err := Discover(root, []string{"recovery-offers/basic", "recovery-offers/boundaries", "recovery-offers/costs", "recovery-offers/cleanup-restore", "recovery-offers/nested", "recovery-offers/cancellation", "recovery-offers/action-suspend"})
 	if err != nil {
 		t.Fatal(err)
 	}

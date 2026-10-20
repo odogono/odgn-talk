@@ -514,8 +514,8 @@ measurement overhead; timings remain advisory rather than a CI gate.
 
 The [persistent collection measurements](results/2026-10-10-structural-sharing.md)
 compare point writes at 512 and 8,192 elements and the full collection workloads
-for [#598](https://github.com/odogono/odgn-talk/issues/598). The focused Go benchmark
-runs with `go -C impl/go test ./internal/machine -run '^$' -bench BenchmarkCollectionPointWrites`.
+for [#598](https://github.com/odogono/odgn-talk/issues/598). Their focused Go
+benchmark was the native Go Core's, removed in #1055.
 
 ## Zig ordered Map storage
 

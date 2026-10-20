@@ -16,10 +16,9 @@ import (
 	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
-// The benchmarks in this file measure the Core behind the public API, with no
-// build tag, so the same code compares native Go with the Zig adapter (#1054).
-// The Benchmark Suite in bench/go covers Load, Restore, warm execution, and
-// Capability and conversion workloads; zig-adapter-bench.sh runs both.
+// The benchmarks in this file measure the Zig Core behind the public API
+// (#1054). The Benchmark Suite in bench/go covers Load, Restore, warm
+// execution, and Capability and conversion workloads.
 
 var backendNow = time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
 
@@ -293,7 +292,7 @@ const coldChildEnv = "NORTHTALK_COLD_START_CHILD"
 // the first Request result, then a second Group on the same Core, which shares
 // any compiled code. Process time includes the test binary's own start. With
 // cache=warm the children share a Zig compilation cache directory, filled by
-// an untimed child first; native Go ignores it (#1103).
+// an untimed child first (#1103).
 func BenchmarkBackendColdStart(b *testing.B) {
 	for _, cache := range []string{"none", "warm"} {
 		b.Run("cache="+cache, func(b *testing.B) {

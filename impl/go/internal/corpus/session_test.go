@@ -1,14 +1,15 @@
 package corpus
 
 import (
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/session"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/driver"
+	"github.com/odogono/odgn-talk/impl/go/session"
 )
 
 func TestSessionTranscriptParity(t *testing.T) {

@@ -2,11 +2,12 @@ package corpus
 
 import (
 	"errors"
-	talk "github.com/odogono/odgn-talk/impl/go"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
 func TestStandardReplayRefusesMalformedCostsAndDuplicates(t *testing.T) {

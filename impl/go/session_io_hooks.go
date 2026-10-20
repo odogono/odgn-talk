@@ -3,6 +3,7 @@ package northtalk
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
 	v "github.com/odogono/odgn-talk/impl/go/internal/value"
 )

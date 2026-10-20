@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 )
 
 func hostileSource(kind string, size int) string {

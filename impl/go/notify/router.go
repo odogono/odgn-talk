@@ -26,8 +26,8 @@ import (
 	"sync"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // WatchLimits are a Store's four limits on its watches (Store Notifications,
@@ -236,7 +236,7 @@ func sizeOf(v talk.Value) int64 {
 	if err != nil {
 		panic(err)
 	}
-	return machine.Size(inner)
+	return valueops.Size(inner)
 }
 
 func payloadOf(grant, name, prefix string, keys []string, resync bool) talk.Value {
@@ -275,7 +275,7 @@ func watchLimit(limit string) *talk.ScriptError {
 	data, _ := talk.Map(talk.KV("limit", text(limit)))
 	word, _ := corevalue.NewText(limit)
 	field := corevalue.Pair{Key: "limit", Val: word}
-	message := machine.ErrorValue("watch limit", field).Get("message").Text()
+	message := valueops.ErrorValue("watch limit", field).Get("message").Text()
 	if message == "watch limit" {
 		// Until the catalogue holds it, the Spec's template.
 		message = strings.ReplaceAll("The Store's {limit} limit for watches would be exceeded", "{limit}", field.Val.Display())

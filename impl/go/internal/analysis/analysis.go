@@ -1,7 +1,6 @@
 // Package analysis is the Session Host's backend-independent view of source.
-// Its data follows chapter 9's analysis-v1 exchanges. The native build keeps
-// the retiring Go front end behind talk_native_go; the default build asks
-// the embedded Core and never falls back to Go analysis.
+// Its data follows chapter 9's analysis-v1 exchanges, answered by the
+// embedded Zig Core.
 package analysis
 
 import "fmt"

@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (

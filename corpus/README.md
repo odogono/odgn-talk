@@ -10,7 +10,7 @@ Use case names relative to `corpus/`, such as `text-model/chunk-write-padding`.
 | Runner | Entry point | Selection and gate |
 | --- | --- | --- |
 | TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or category directory; `--list` reports support. No selection runs every case, blessed or not. |
-| Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), via `go -C impl/go run ./cmd/corpus` | One or more **individual case directories**, not category directories; `--list` reports support. `--check-passing` runs every case and enforces [the passing list](../impl/go/corpus-passing.txt); unsupported cases fail. |
+| Go | [`impl/go/internal/corpus`](../impl/go/internal/corpus/), via `go -C impl/go test ./internal/corpus`, through the embedded Zig Core | `NORTHTALK_CORPUS` names **individual case directories** for `-run TestSelectedCases`. The package's tests run every case except Disassembly and enforce [the passing list](../impl/go/corpus-passing.txt). |
 | Zig | [`impl/zig/src/corpus/main.zig`](../impl/zig/src/corpus/main.zig), via `(cd impl/zig && zig build corpus -- …)` | Case names or category directories; `--list` reports support. With no selection it runs every case, and any failing or unsupported case fails. |
 
 After the implementation guide's build prerequisites:
@@ -18,21 +18,19 @@ After the implementation guide's build prerequisites:
 ```sh
 bun run corpus:run recovery-offers                 # TS category
 bun run corpus:run recovery-offers/cleanup-restore # TS single case
-go -C impl/go run ./cmd/corpus recovery-offers/cleanup-restore recovery-offers/cancellation
+NORTHTALK_CORPUS="recovery-offers/cleanup-restore recovery-offers/cancellation" go -C impl/go test ./internal/corpus -run TestSelectedCases
 (cd impl/zig && zig build corpus -- recovery-offers)
-go -C impl/go run ./cmd/corpus --check-passing
+go -C impl/go test ./internal/corpus
 (cd impl/zig && zig build corpus)
 (cd impl/zig && zig build corpus -- --defer-crossings) # CI's deferred-crossing pass
 ```
 
-For a Go category, discover its case directories rather than passing the category
+For a Go category, list its case directories rather than naming the category
 itself (this example runs from the root):
 
 ```sh
-rg --files corpus/recovery-offers -g case.toml | sort | while IFS= read -r file; do
-  name=${file#corpus/}
-  go -C impl/go run ./cmd/corpus "${name%/case.toml}" || exit 1
-done
+NORTHTALK_CORPUS="$(rg --files corpus/recovery-offers -g case.toml | sed 's|^corpus/||; s|/case.toml$||' | sort)" \
+  go -C impl/go test ./internal/corpus -run TestSelectedCases
 ```
 
 A failure reports the first divergence and a `reproduce:` command. Current
@@ -92,8 +90,7 @@ case must also be protected from deletion; deliberate removals or kind changes
 must explain the corresponding baseline edit. Keep Go's passing list current.
 
 Before pushing, run `bun run corpus:check`,
-`go -C impl/go test ./internal/corpus` and
-`go -C impl/go run ./cmd/corpus --check-passing`,
+`go -C impl/go test ./internal/corpus`,
 `(cd impl/zig && zig build corpus)` and
 `(cd impl/zig && zig build corpus -- --defer-crossings)`.
 

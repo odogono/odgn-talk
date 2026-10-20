@@ -231,10 +231,10 @@ const run = async (
   }
 };
 /** Another Core's worker, by the name its findings and Trace carry. */
-export type Peer = { name: 'go' | 'zig'; worker: Worker };
+export type Peer = { name: 'zig'; worker: Worker };
 /** The peers a run compares with TS, from each runner's path. */
-export const peersOf = (runners: { go?: string; zig?: string }): Peer[] =>
-  (['go', 'zig'] as const).flatMap(name =>
+export const peersOf = (runners: { zig?: string }): Peer[] =>
+  (['zig'] as const).flatMap(name =>
     runners[name]
       ? [
           {
@@ -298,7 +298,7 @@ export const evaluate = async (
     const diff = compareTraces(
       result.execution.trace,
       other.execution.trace,
-      peer.name === 'go' ? 'differential' : `differential-${peer.name}`,
+      `differential-${peer.name}`,
     );
     if (diff) {
       diffs.push(diff);
@@ -316,7 +316,6 @@ export type CampaignOptions = {
   budgetMs?: number;
   commit?: string;
   count?: number;
-  goRunner?: string;
   mode: 'smoke' | 'campaign';
   output: string;
   profile?: Feature[];
@@ -337,7 +336,7 @@ export const campaign = async (options: CampaignOptions) => {
       ? deadline
       : Math.min(deadline, started + (options.searchMs ?? 1_200_000));
   const ts = new Worker(),
-    peers = peersOf({ go: options.goRunner, zig: options.zigRunner });
+    peers = peersOf({ zig: options.zigRunner });
   const retained = new Map<
     string,
     { case: FuzzCase; finding: Finding; path: string }

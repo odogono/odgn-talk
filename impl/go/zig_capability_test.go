@@ -1,13 +1,12 @@
-//go:build !talk_native_go
-
 package northtalk_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
-	talk "github.com/odogono/odgn-talk/impl/go"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,26 +15,29 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
-// A fresh binary supplies the native-Go reference; importing the package into
-// this tagged binary would select Zig again and prove nothing about parity.
+// The native Go Core's observations, recorded from its last build before it
+// was removed (#1055), are the reference the Zig backend still matches.
 func TestZigBackendCapabilityParity(t *testing.T) {
 	dir := t.TempDir()
-	binary := filepath.Join(dir, "native.test")
-	build := exec.Command("go", "test", "-c", "-tags", "talk_native_go", "-o", binary, ".")
-	build.Env = append(os.Environ(), "GOFLAGS=", "CGO_ENABLED=0")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("native reference build: %v\n%s", err, out)
-	}
-	path := filepath.Join(dir, "observations.json")
-	native := exec.Command(binary, "-test.run=^TestCapabilityBridge$", "-test.timeout=60s")
-	native.Env = append(os.Environ(), "TALK_BRIDGE_OBSERVATIONS="+path)
-	if out, err := native.CombinedOutput(); err != nil {
-		t.Fatalf("native reference: %v\n%s", err, out)
-	}
-	want, err := os.ReadFile(path)
+	recorded, err := os.Open("testdata/native-bridge-observations.json.gz")
 	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorded.Close()
+	unzipped, err := gzip.NewReader(recorded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := io.ReadAll(unzipped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "native.json")
+	if err := os.WriteFile(path, want, 0600); err != nil {
 		t.Fatal(err)
 	}
 	actualCases := runBridgeCases(t)

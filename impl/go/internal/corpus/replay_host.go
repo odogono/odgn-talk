@@ -44,12 +44,6 @@ func (h *ReplayHost) Apply(line string) error {
 	return h.x.operations.malformed
 }
 
-// Trace is every line written so far, including the runner's Stub lines.
-func (h *ReplayHost) Trace() []string { return h.x.lines }
-
-// SaveIDs lists successful Saves in the order their ids were first written.
-func (h *ReplayHost) SaveIDs() []string { return h.x.saveIDs }
-
 func (h *ReplayHost) Group() *talk.Group { return h.x.g }
 
 func (h *ReplayHost) Close() { h.x.close() }

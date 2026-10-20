@@ -2,9 +2,9 @@ package corpus
 
 import (
 	"fmt"
+	"regexp"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 )
 
 func setupLibraries(core *talk.Core, setup Setup, declarations talk.GrantDecls, readSource func(Setup) (string, error)) (map[string]*talk.Library, error) {
@@ -30,14 +30,10 @@ func setupLibraries(core *talk.Core, setup Setup, declarations talk.GrantDecls, 
 		if err != nil {
 			return nil, err
 		}
-		tree, err := syntax.Parse(source)
-		if err != nil {
-			return nil, err
-		}
 		var imports []*talk.Library
-		for _, n := range tree.Declarations {
-			if n.Kind == "use" && setups[n.Text] != nil {
-				l, err := compile(n.Text)
+		for _, m := range useFrom.FindAllStringSubmatch(source, -1) {
+			if setups[m[1]] != nil {
+				l, err := compile(m[1])
 				if err != nil {
 					return nil, err
 				}
@@ -60,3 +56,6 @@ func setupLibraries(core *talk.Core, setup Setup, declarations talk.GrantDecls, 
 	}
 	return libraries, nil
 }
+
+// useFrom finds each top-level `use … from Library` declaration.
+var useFrom = regexp.MustCompile(`(?m)^use\s[^\n]*?\bfrom\s+([^\s,]+)`)

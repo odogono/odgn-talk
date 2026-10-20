@@ -3,134 +3,54 @@ package northtalk
 import (
 	"context"
 	"errors"
-	"fmt"
-	"github.com/odogono/odgn-talk/impl/go/internal/check"
+	"sync"
+	"time"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"math/big"
-	"slices"
-	"strconv"
-	"sync"
-	"time"
 )
 
 var ErrMailboxFull error = errors.New("mailbox full")
 
 type Group struct {
-	backend                 groupBackend
-	sessionExpose           func(any)
-	accounting              accountingState
-	accountingDiscardReason string
-	traceMu                 sync.Mutex
-	traceQueue              []string
-	recording               bool
+	backend       groupBackend
+	sessionExpose func(any)
+	traceMu       sync.Mutex
+	traceQueue    []string
+	recording     bool
 
-	mu                sync.Mutex
-	core              *Core
-	options           GroupOptions
-	libraries         map[string]*Library
-	objects           map[objectKey]*Object
-	scripts           []*Script
-	inputs            []delivery
-	unrouted          []delivery
-	orphanReplies     []delivery
-	stoppedSends      map[*Script]bool
-	controlsQueued    bool
-	rewound           bool // a Rewind landed in this Pump, which returns at once
-	nextDelivery      int64
-	nextBroadcast     int64
-	calls             map[CallID]*operationCall
-	nextTimer         int64
-	nextSave          int64
-	restored          bool
-	unsettled         map[CallID]*Call
-	settlementsOpen   bool // protected by mu; closes when the first accepted Pump starts
-	deferredDecisions []*Decided
-	clock             time.Time
-	random            uint64 // the `random` generator's state
-	pumping           bool
-	runningPump       bool // refusals land at a crossing only during a Pump
-	effectUnknown     bool // sticky: an external participant's state is unresolved
+	mu             sync.Mutex
+	core           *Core
+	options        GroupOptions
+	libraries      map[string]*Library
+	objects        map[objectKey]*Object
+	scripts        []*Script
+	inputs         []delivery
+	controlsQueued bool
+	calls          map[CallID]*operationCall
+	clock          time.Time
+	pumping        bool
+	runningPump    bool // refusals land at a crossing only during a Pump
 }
 type Script struct {
-	source     string
-	extensions []string
-	identity   [32]byte
+	source string
 
-	group      *Group
-	name       string
-	state      *machine.State
-	limits     Limits
-	queue      []workItem
-	runs       []*execution
-	active     *execution
-	counters   Counters
-	grants     map[string]*Grant
-	stopped    bool // protected by group.mu
-	stopReason string
-	owner      *Object
-	reserved   int
-	debt       int64
+	group  *Group
+	name   string
+	limits Limits
+	grants map[string]*Grant
+	owner  *Object
 }
 type delivery struct {
-	refusal    []string
-	ancestry   RunAncestry
-	id         DeliveryID
-	broadcast  BroadcastID
-	children   []delivery // selected when the Pump drains a Broadcast
-	script     *Script
-	message    Message
-	pending    *Pending
-	decision   *Deciding
-	cancel     DeliveryID
-	kind       string
-	fields     map[string]string
-	reason     string // unencoded Stop reason
-	from       RunID
-	during     *corevalue.Value // non-nil only for an internal error message
-	settlement *operationSettlement
-	reply      CallID
-	function   *corevalue.Value
-	target     *Object // fixed initial recipient
-	path       bool    // recheck the Object path before dispatch
-	after      *Object // climb from this previous owner, never from target
-	parent     *Object // SetParent input
-	object     *Object
-	combined   *combinedPump // a backend's combined admission and Pump (#1245)
-}
-type execution struct {
-	raisesWritten int
-	offersWritten int
-	run           *machine.Run
-	delivery      delivery
-	id            RunID
-	handler       string
-	clause        int // selected body index; -1 until accepted
-	how           string
-	deadline      *big.Int
-	// deadlineAfter is the Timeout Block's duration when deadline is its.
-	deadlineAfter *corevalue.Value
-	memberTimers  []memberTimer
-	timerOrder    int64
-	parked        bool
-	deciding      bool
-	segment       int
-	calls         int64
-	stopReason    *string     // Stop landed at this Run's Host crossing
-	rewound       bool        // a Rewind landed at this Run's Host crossing
-	suspendedOnce bool        // it has passed a Suspension Point, so can't be rewound
-	scopes        []scopeSlot // surviving scopes in successful-opening order
-	participant   *segmentParticipant
-	effect        *EffectFailure
-	waitCall      CallID
-	abandonCall   CallID
-}
-type workItem struct {
-	delivery delivery
-	run      *execution
+	refusal  []string
+	cancel   DeliveryID
+	kind     string
+	function *corevalue.Value
+	target   *Object       // fixed initial recipient
+	path     bool          // recheck the Object path before dispatch
+	combined *combinedPump // a backend's combined admission and Pump (#1245)
 }
 type Pending struct {
 	mu      sync.Mutex
@@ -163,10 +83,8 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	close(p.done)
 }
 func (c *Core) NewGroup(o GroupOptions) *Group {
-	g := &Group{core: c, options: o, libraries: map[string]*Library{}, random: machine.RandomSeedState(o.Seed)}
-	if experimentalGroupFactory != nil {
-		g.backend = experimentalGroupFactory(g)
-	}
+	g := &Group{core: c, options: o, libraries: map[string]*Library{}}
+	g.backend = newZigGroup(g)
 	return g
 }
 func (g *Group) Name() string               { return g.options.Name }
@@ -204,149 +122,7 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 	return &HostError{code, detail}
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
-	if g.backend != nil {
-		return g.backend.load(o)
-	}
-	tree, parseErr := syntax.ParseCompact(o.Source)
-	addStandardLibraries(g.libraries, usedNames(tree)...)
-	exports, ids, states, calls := libraryOptions(g.libraries)
-	id := parsedIdentity("script", o.Name, o.Source, ids, tree)
-	if e := g.beginWorker(); e != nil {
-		g.recordRefusal("load", []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)}, ReentrantCall)
-		return nil, e
-	}
-	defer g.endWorker()
-	g.record("load", true, []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)})
-	if g.effectUnknown {
-		return nil, g.refuse(EffectStateUnknown, "Group has unresolved external effects")
-	}
-	if g.Script(o.Name) != nil {
-		return nil, g.refuse(NameReused, o.Name)
-	}
-	limits, e := effectiveLimits(o.Limits)
-	if e != nil {
-		g.record("refused", false, nil, map[string]string{"code": corevalue.DisplayText(string(InvalidValue))})
-		return nil, e
-	}
-	grants := map[string]*Grant{}
-	declarations := map[string]map[string]check.OperationCheck{}
-	for name, template := range o.Grants {
-		if template == nil || template.definition == nil {
-			return nil, g.refuse(InvalidValue, "invalid Grant")
-		}
-		bound := template.named()
-		declarations[name] = map[string]check.OperationCheck{}
-		for op := range template.operations {
-			bound.operations[op] = true
-			declarations[name][op] = operationCheck(template.definition.ops[op])
-		}
-		grants[name] = bound
-	}
-	if o.Owner != nil {
-		if o.Owner.group != g {
-			return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
-		}
-		g.mu.Lock()
-		invalid := o.Owner.disposed.Load() || o.Owner.owner != nil
-		g.mu.Unlock()
-		if invalid {
-			return nil, g.refuse(InvalidValue, "Object is disposed or already owned")
-		}
-	}
-	objects := []string{}
-	bindings := map[string]corevalue.Value{}
-	for name, object := range o.Objects {
-		if object == nil || object.group != g {
-			return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
-		}
-		objects = append(objects, name)
-		bindings[name] = object.Value().inner
-	}
-	me := corevalue.Value{}
-	if o.Owner != nil {
-		me = o.Owner.Value().inner
-	}
-	unit, loadError := g.core.compileParsed(o.Name, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), OwnerProperties: ownerProperties(o.Owner), PatternSize: limits.PatternSize, Grants: declarations}, id, tree, parseErr)
-	if loadError != nil {
-		g.diagnostics(loadError)
-		return nil, loadError
-	}
-	state, e := machine.InitializeLinkedBound(unit, g, states, me, bindings)
-	if e != nil {
-		pos := e.(*machine.InitError).Instruction.Pos
-		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: o.Name, Line: pos.Line, Col: pos.Column}}}
-		g.diagnostics(loadError)
-		return nil, loadError
-	}
-	if o.GrantsAsUsed {
-		used := map[string]map[string]bool{}
-		tree := unit.Checked().Tree
-		for _, decl := range tree.Declarations {
-			syntax.Walk(decl, func(n *syntax.Node) bool {
-				name, op := "", ""
-				if n.Kind == "ask" || n.Kind == "tell" {
-					name, op = n.Params[0].Text, n.Text
-				}
-				if n.Kind == "command" && n.Text == "say" {
-					name, op = "console", "write"
-				}
-				if name != "" {
-					if used[name] == nil {
-						used[name] = map[string]bool{}
-					}
-					used[name][op] = true
-				}
-				return true
-			})
-		}
-		for _, n := range tree.Declarations {
-			if n.Kind != "use" {
-				continue
-			}
-			if library := g.libraries[n.Text]; library != nil {
-				for _, need := range library.needs {
-					if used[need.Capability] == nil {
-						used[need.Capability] = map[string]bool{}
-					}
-					used[need.Capability][need.Operation] = true
-				}
-			}
-		}
-		for name, grant := range grants {
-			for op := range grant.operations {
-				if scope := grant.definition.ops[op].Scope; used[name][op] && scope != nil && scope.Opens != "" {
-					used[name][scope.Abandon] = true
-				}
-			}
-			for op := range grant.operations {
-				if !used[name][op] {
-					delete(grant.operations, op)
-				}
-			}
-			if len(grant.operations) == 0 {
-				delete(grants, name)
-			}
-		}
-	}
-	s := &Script{source: o.Source, identity: id, grants: grants, group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
-	g.mu.Lock()
-	if o.Owner != nil {
-		o.Owner.owner = s
-	}
-	g.scripts = append(g.scripts, s)
-	for _, loaded := range g.scripts {
-		loaded.state.ScriptNames = append(loaded.state.ScriptNames, o.Name)
-		if loaded != s {
-			state.ScriptNames = append(state.ScriptNames, loaded.name)
-		}
-	}
-	g.mu.Unlock()
-	return s, nil
-}
-func (g *Group) diagnostics(e *LoadError) {
-	for _, d := range e.Diagnostics {
-		g.record("diag", false, []string{d.Unit}, map[string]string{"code": corevalue.DisplayText(d.Code), "pos": fmt.Sprintf("%d:%d", d.Line, d.Col)})
-	}
+	return g.backend.load(o)
 }
 func (s *Script) Deliver(m Message) (DeliveryID, error) {
 	id, _, e := s.group.deliver(s, m, nil, false)
@@ -413,123 +189,29 @@ func (g *Group) admitWithReady(s *Script, m Message, ctx context.Context, reques
 		g.recordRefusal(name, nil, fields, code)
 		return "", nil, &HostError{code, detail}
 	}
-	if g.backend != nil {
-		// The guest knows only this Group's handles, so ownership is checked
-		// here, in the native order; the guest admits everything else.
-		if address.path && (address.target == nil || address.target.group != g) {
-			return refused(WrongGroup, "Object does not belong to Group")
-		}
-		if !broadcast && !address.path && address.function == nil && (s == nil || s.group != g) {
-			return refused(WrongGroup, "receiver does not belong to Group")
-		}
-		if address.function != nil || syntax.ValidMessageSelector(m.Name, len(m.Args)) {
-			for _, v := range m.Args {
-				if !validGroup(v.inner, g) {
-					return refused(WrongGroup, "argument belongs to another Group")
-				}
-			}
-		}
-		var fn *Value
-		if address.function != nil {
-			fn = &Value{*address.function}
-		}
-		if address.combined != nil {
-			return g.backend.(combinedBackend).queueCombined(s, address.target, fn, m, ctx, name, address.combined)
-		}
-		return g.backend.queue(s, address.target, fn, m, ctx, name, decision)
+	// The guest knows only this Group's handles, so ownership is checked
+	// here, in the native order; the guest admits everything else.
+	if address.path && (address.target == nil || address.target.group != g) {
+		return refused(WrongGroup, "Object does not belong to Group")
 	}
-	g.mu.Lock()
-	var target *Object
-	path := address.path
-	if path {
-		target = address.target
-		if target == nil || target.group != g {
-			g.mu.Unlock()
-			return refused(WrongGroup, "Object does not belong to Group")
-		}
-		fields["to"] = target.Value().String()
-		s = g.nearestOwner(target)
-	} else if s != nil {
-		target = s.owner
-	}
-	if address.function != nil {
-		s = g.script(address.function.Function().Home)
-		if s != nil {
-			target = s.owner
-		}
-	}
-	if !broadcast && !path && (s == nil || s.group != g) {
-		g.mu.Unlock()
+	if !broadcast && !address.path && address.function == nil && (s == nil || s.group != g) {
 		return refused(WrongGroup, "receiver does not belong to Group")
 	}
-	if address.function == nil && !syntax.ValidMessageSelector(m.Name, len(m.Args)) {
-		g.mu.Unlock()
-		return refused(InvalidValue, "malformed message Selector or argument count")
-	}
-	m.Args = slices.Clone(m.Args)
-	for _, v := range m.Args {
-		if !validGroup(v.inner, g) {
-			g.mu.Unlock()
-			return refused(WrongGroup, "argument belongs to another Group")
+	if address.function != nil || syntax.ValidMessageSelector(m.Name, len(m.Args)) {
+		for _, v := range m.Args {
+			if !validGroup(v.inner, g) {
+				return refused(WrongGroup, "argument belongs to another Group")
+			}
 		}
 	}
-	limits := DefaultLimits()
-	if s != nil {
-		limits = s.limits
+	var fn *Value
+	if address.function != nil {
+		fn = &Value{*address.function}
 	}
-	if m.Limits != nil {
-		x := *m.Limits
-		m.Limits = &x
-		if x.Set & ^(OverrideFuelPerRun|OverrideAllocPerRun|OverrideMaxWait|OverrideMaxJoin) != 0 || x.FuelPerRun < 0 || x.AllocPerRun < 0 || x.MaxWait < 0 || x.MaxJoin < 0 || x.FuelPerRun > limits.FuelPerRun || x.AllocPerRun > limits.AllocPerRun || x.MaxWait > limits.MaxWait || x.MaxJoin > limits.MaxJoin || x.MaxWait%time.Millisecond != 0 {
-			g.mu.Unlock()
-			return refused(InvalidValue, "invalid limit override")
-		}
+	if address.combined != nil {
+		return g.backend.(combinedBackend).queueCombined(s, address.target, fn, m, ctx, name, address.combined)
 	}
-	if s != nil && s.reserved >= s.limits.MailboxDepth {
-		g.mu.Unlock()
-		g.recordRefusal(name, nil, fields, HostErrorCode("mailbox full"))
-		return "", nil, ErrMailboxFull
-	}
-	var id DeliveryID
-	var bid BroadcastID
-	if broadcast {
-		g.nextBroadcast++
-		bid = BroadcastID(fmt.Sprintf("b%d", g.nextBroadcast))
-	} else {
-		g.nextDelivery++
-		id = DeliveryID(fmt.Sprintf("d%d", g.nextDelivery))
-	}
-	var p *Pending
-	if request {
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		p = &Pending{done: make(chan struct{})}
-	}
-	if s != nil {
-		s.reserved++
-	}
-
-	d := delivery{broadcast: bid, function: address.function, id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
-	g.inputs = append(g.inputs, d)
-	if p != nil {
-		p.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
-	}
-	if decision != nil {
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		decision.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
-	}
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if notify && ready != nil {
-		ready()
-	}
-	if broadcast {
-		id = DeliveryID(bid)
-	}
-	return id, p, nil
+	return g.backend.queue(s, address.target, fn, m, ctx, name, decision)
 }
 func validGroup(root corevalue.Value, g *Group) bool {
 	stack := []corevalue.Value{root}
@@ -565,90 +247,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 
 // pumpOwned reuses a guard already claimed by a combined admission and Pump.
 func (g *Group) pumpOwned(now time.Time, o PumpOptions, owned bool) (PumpResult, error) {
-	if g.backend != nil {
-		return g.backend.pump(now, o)
-	}
-	now = now.Round(0).UTC().Truncate(time.Microsecond)
-	// Format the Host input without constructing a Value: refused Clocks can
-	// fall outside the Instant range, and must not panic while being traced.
-	fields := map[string]string{"clock": now.Format(time.RFC3339Nano)}
-	if o.FuelSlice > 0 {
-		fields["fuel-slice"] = strconv.FormatInt(o.FuelSlice, 10)
-	}
-	if o.FuelCap > 0 {
-		fields["fuel-cap"] = strconv.FormatInt(o.FuelCap, 10)
-	}
-	g.mu.Lock()
-	if g.pumping && !owned {
-		g.mu.Unlock()
-		g.recordRefusal("pump", nil, fields, ReentrantCall)
-		return PumpResult{}, &HostError{ReentrantCall, "Pump inside Pump"}
-	}
-	if now.Year() < 1 || now.Year() > 9999 {
-		g.mu.Unlock()
-		g.recordRefusal("pump", nil, fields, InvalidValue)
-		return PumpResult{}, &HostError{InvalidValue, "Clock outside year 1–9999"}
-	}
-	if now.Before(g.clock) {
-		g.mu.Unlock()
-		g.recordRefusal("pump", nil, fields, ClockBackwards)
-		return PumpResult{}, &HostError{ClockBackwards, "Clock reading decreased"}
-	}
-	if o.FuelSlice < 0 || o.FuelCap < 0 {
-		g.mu.Unlock()
-		g.recordRefusal("pump", nil, fields, InvalidValue)
-		return PumpResult{}, &HostError{InvalidValue, "negative Pump budget"}
-	}
-	g.clock = now
-	g.settlementsOpen = false
-	g.pumping = true
-	g.runningPump = true
-	inputs := g.inputs
-	g.inputs = nil
-	g.controlsQueued = false
-	g.mu.Unlock()
-	defer func() {
-		g.mu.Lock()
-		if !owned {
-			g.pumping = false
-		}
-		g.runningPump = false
-		g.mu.Unlock()
-	}()
-	inputs = g.prepareBroadcasts(inputs)
-
-	accepted := inputs[:0]
-	for _, d := range inputs {
-		if d.cancel != "" && d.decision != nil && d.decision.isSealed() {
-			continue
-		}
-		accepted = append(accepted, d)
-		if d.cancel != "" {
-			g.record("cancel-delivery", true, []string{string(d.cancel)}, nil)
-		} else {
-			if d.kind == "stop" {
-				g.record(d.kind, true, []string{d.script.name}, d.fields)
-			} else if d.kind == "cancel-run" || d.kind == "rewind-run" {
-				g.record(d.kind, true, []string{d.fields["run"]}, nil)
-			} else if d.kind == "revoke" {
-				g.record(d.kind, true, []string{d.script.name}, d.fields)
-			} else if d.kind == "dispose" || d.kind == "set-parent" {
-				g.record(d.kind, true, nil, d.fields)
-			} else if d.settlement != nil {
-				g.record(d.kind, true, []string{string(d.reply)}, d.fields)
-			} else {
-				id := string(d.id)
-				if d.broadcast != "" {
-					id = string(d.broadcast)
-				}
-				g.record(d.kind, true, []string{id}, d.fields)
-			}
-		}
-	}
-	g.record("pump", true, nil, fields)
-	result, err := g.runPump(o, accepted)
-	g.flushAccounting(&result.Reports)
-	return result, err
+	return g.backend.pump(now, o)
 }
 
 func (r *RunEnd) isReport() {}
@@ -662,31 +261,6 @@ func (g *Group) beginWorker() error {
 	return nil
 }
 func (g *Group) endWorker() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }
-func (g *Group) cancelDelivery(d delivery) {
-	g.mu.Lock()
-	settled := false
-	if d.decision != nil {
-		settled = d.decision.isSealed()
-	} else {
-		d.pending.mu.Lock()
-		settled = d.pending.settled
-		d.pending.mu.Unlock()
-	}
-	if settled {
-		g.mu.Unlock()
-		return
-	}
-	id := d.id
-	if d.broadcast != "" {
-		id = DeliveryID(d.broadcast)
-	}
-	g.inputs = append(g.inputs, delivery{cancel: id, script: d.script, pending: d.pending, decision: d.decision})
-	ready := g.options.OnReady
-	g.mu.Unlock()
-	if ready != nil {
-		ready()
-	}
-}
 func overrideDisplay(o LimitOverride) string {
 	var pairs []corevalue.Pair
 	for _, p := range []struct {
@@ -702,111 +276,10 @@ func overrideDisplay(o LimitOverride) string {
 	return v.Display()
 }
 func (g *Group) Inspect() Inspection {
-	if g.backend != nil {
-		return g.backend.inspect()
-	}
-	if e := g.beginWorker(); e != nil {
-		g.recordRefusal("vars", nil, nil, ReentrantCall)
-		panic(e)
-	}
-	defer g.endWorker()
-	g.record("vars", true, nil, nil)
-	out := Inspection{}
-	for _, s := range g.scripts {
-		view := ScriptView{Name: s.name}
-		for name, grant := range s.grants {
-			if grant.disabled {
-				view.DisabledGrants = append(view.DisabledGrants, name)
-			}
-		}
-		slices.Sort(view.DisabledGrants)
-		line := "vars " + s.name
-		for j, name := range s.state.Unit.Variables {
-			v := Value{s.state.Variables[j]}
-			view.Vars = append(view.Vars, KV(name, v))
-			line += " " + name + "=" + coretrace.Display(v.inner)
-		}
-		for _, x := range s.runs {
-			status := Ready
-			if x.run.Status == machine.Preempted {
-				status = Preempted
-			}
-			if x.parked {
-				status = Parked
-			}
-			run := RunView{ID: x.id, Status: status, Handler: x.handler}
-			if x.deadline != nil {
-				run.Status, run.Wait, run.Until = Suspended, "wait", deadlineTime(x.deadline)
-			}
-			if x.run.EventWait != nil {
-				run.Status, run.Wait = Suspended, x.run.EventWait.Kind
-			}
-			if x.run.SendWait {
-				run.Status, run.Wait, run.Calls = Suspended, "send-wait", []CallID{x.waitCall}
-				if x.run.FunctionWait {
-					run.Wait = "call-value-wait"
-				}
-				// A call's own deadline shows only inside a Timeout Block.
-				if x.run.BlockDeadline() == nil {
-					run.Until = time.Time{}
-				}
-				if x.run.OperationWait {
-					run.Wait = "ask-wait"
-				}
-			}
-			if j := x.run.Join; j != nil && j.Waiting && !j.Ready {
-				run.Status, run.Wait = Suspended, "join-end"
-				run.Until = time.Time{}
-				if x.deadlineAfter != nil {
-					run.Until = deadlineTime(x.deadline)
-				}
-				for _, m := range j.Members {
-					if m.Reply == nil {
-						run.Calls = append(run.Calls, CallID(m.ID))
-					}
-				}
-			}
-			view.Runs = append(view.Runs, run)
-		}
-		for _, item := range s.queue {
-			if item.run != nil {
-				continue
-			}
-			d := item.delivery
-			m := d.message
-			m.Args = slices.Clone(m.Args)
-			if m.Limits != nil {
-				copy := *m.Limits
-				m.Limits = &copy
-			}
-			view.Mailbox = append(view.Mailbox, MessageView{Delivery: d.id, From: string(d.from), Message: m})
-		}
-		if g.options.Trace != nil {
-			g.emit(line)
-		}
-		out.Scripts = append(out.Scripts, view)
-	}
-	return out
+	return g.backend.inspect()
 }
 func (s *Script) Counters() Counters {
-	if s.group.backend != nil {
-		return s.group.backend.counters(s)
-	}
-	if e := s.group.beginWorker(); e != nil {
-		s.group.recordRefusal("counters", []string{s.name}, nil, ReentrantCall)
-		panic(e)
-	}
-	defer s.group.endWorker()
-	c := s.counters
-	c.PersistentState = s.persistent()
-	for _, item := range s.queue {
-		if item.run == nil {
-			c.MailboxLen++
-		}
-	}
-	s.group.record("counters", true, []string{s.name}, nil)
-	s.group.record("counters", false, []string{s.name}, map[string]string{"fuel": fmt.Sprint(c.FuelTotal), "alloc": fmt.Sprint(c.AllocTotal), "runs": fmt.Sprint(c.Runs), "faults": fmt.Sprint(c.Faults), "state": fmt.Sprint(c.PersistentState), "mailbox": fmt.Sprint(c.MailboxLen)})
-	return c
+	return s.group.backend.counters(s)
 }
 
 // emit serializes the sink without holding the input queue lock. A queued call

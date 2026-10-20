@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -20,12 +19,9 @@ func init() {
 		if !ok || value.inner.Kind != corevalue.Function || value.inner.Function() == nil {
 			return "", false
 		}
-		fn := value.inner.Function()
-		code, ok := fn.CodeState.(*machine.State)
-		if !ok || code == nil || code.Unit == nil {
-			return "", true
-		}
-		return code.Unit.Doc(fn.Body), true
+		// A Function the guest carries no defining unit for, a Lambda's
+		// among them, has no Declaration Documentation.
+		return "", true
 	}
 	docs.FunctionHead = func(v any) (string, int, int, bool) {
 		value, ok := v.(Value)

@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 // Queued settlements (#1320). With settlements-fields-v1, Call.Answer and

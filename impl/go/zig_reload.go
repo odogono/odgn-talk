@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 // Reload and Extend are worker calls the guest checks and records. A Reload

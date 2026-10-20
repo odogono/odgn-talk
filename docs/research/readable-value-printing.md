@@ -330,7 +330,7 @@ Host echoes `<function session+9:3:5>`. The Go REPL echoes
 `<function session:session+9:3:5>`. The Spec's example and grammar give the TS
 shape, `<function session+3:1:9>` ([chapter 11](../../spec/11-the-trace-and-conformance.md#function-values),
 grammar line 118). Go's `functionCode` prefixes the extension unit's name with
-the Home Script ([Go](../../impl/go/internal/machine/library.go#L10),
+the Home Script ([Go](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/machine/library.go#L10),
 [TS](../../impl/ts/src/machine.ts#L3431)). No Corpus case covers a Lambda made in
 an extension unit. Under the [cross-Core convention](../agents/issue-tracker.md#cross-core-findings),
 it is tracked as Go Core issue [#424](https://github.com/odogono/odgn-talk/issues/424). It affects any echo or Trace that shows such

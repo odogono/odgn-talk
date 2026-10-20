@@ -9,8 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
 )
 
 // sqlite is optional (chapter 7, ADR 0070). The binding names a database the
@@ -220,7 +220,7 @@ func sqliteRowsAllowed(max corevalue.Value, binding SqliteBinding) (int64, *core
 	whole, fraction, _ := strings.Cut(max.Number().String(), ".")
 	n, err := strconv.ParseInt(whole, 10, 64)
 	if strings.HasPrefix(whole, "-") || strings.ContainsAny(fraction, "123456789") || err != nil || n > binding.MaxRows {
-		failure := machine.ErrorValue("out of range", corevalue.Pair{Key: "field", Val: mustText("max")}, corevalue.Pair{Key: "value", Val: max})
+		failure := valueops.ErrorValue("out of range", corevalue.Pair{Key: "field", Val: mustText("max")}, corevalue.Pair{Key: "value", Val: max})
 		return 0, &failure
 	}
 	return n, nil
@@ -232,7 +232,7 @@ func sqliteCheckParams(params corevalue.Value, named []corevalue.Pair) *corevalu
 		fields = append(fields, named...)
 		fields = append(fields, corevalue.Pair{Key: "argument", Val: Int(2).inner})
 		fields = append(fields, path...)
-		failure := machine.ErrorValue("wrong kind", fields...)
+		failure := valueops.ErrorValue("wrong kind", fields...)
 		return &failure
 	}
 	if params.Kind != corevalue.List && params.Kind != corevalue.Map {

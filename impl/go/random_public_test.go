@@ -7,7 +7,7 @@ import (
 	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
-// Exercise the same public Host on native Go and the experimental Zig adapter.
+// Exercise a public Host through the Zig adapter.
 func TestGroupRandomSeedAndRestore(t *testing.T) {
 	core := talk.New()
 	for _, tc := range []struct {

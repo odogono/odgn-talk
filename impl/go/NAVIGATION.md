@@ -12,54 +12,16 @@ All commands below run from the repository root. See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
-## Lexing and parsing
+## Language, lowering and execution
 
-- Implementation: [syntax](internal/syntax/), [Selectors](internal/syntax/selector.go)
-- Rules: [lexical structure](../../spec/01-lexical-structure.md), [grammar](../../spec/02-grammar.md)
-- Tests and cases: [lexer tests](internal/syntax/lexer_test.go), [parser tests](internal/syntax/parser_test.go)
-- First check: `go -C impl/go test ./internal/syntax`
-
-## Name and binding checks
-
-- Implementation: [checker](internal/check/check.go)
-- Rules: [load diagnostics](../../spec/02-grammar.md#load-time-diagnostics)
-- Tests and cases: [checker tests](internal/check/check_test.go), [load diagnostics](../../corpus/load-diagnostics/)
-- First check: `go -C impl/go test ./internal/check`
-
-## Lowering and source maps
-
-- Implementation: [lowering entry](internal/lower/unit.go)
-- Rules: [Abstract Machine](../../spec/08-the-abstract-machine-and-the-cost-model.md)
-- Tests and cases: [lowering tests](internal/lower/lower_test.go), [disassembly cases](../../corpus/disassembly/)
-- First check: `go -C impl/go test ./internal/lower`
-
-## Execution and resource costs
-
-- Implementation: [machine](internal/machine/)
-- Rules: [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md), [limits](../../spec/06-errors-and-limits.md)
-- Tests and cases: [machine tests](internal/machine/machine_test.go), [execution tests](execution_test.go), [limit cases](../../corpus/limits/)
-- First check: `go -C impl/go test ./internal/machine .`
-
-## Built-ins and instruction charging
-
-- Implementation: [Built-ins](internal/machine/builtin.go), [Fuel measures](internal/machine/cost.go), [catalogue generator](../../tools/go/generate.ts)
-- Rules: [charging](../../spec/08-the-abstract-machine-and-the-cost-model.md#charging), [Built-in rates](../../spec/08-the-abstract-machine-and-the-cost-model.md#built-in-rates), [cost data](../../spec/data/costs.toml)
-- Tests and cases: [cost tests](internal/machine/cost_test.go), [Built-in cases](../../corpus/builtins/)
-- First check: `go -C impl/go test ./internal/machine`
-
-## Recovery, cancellation cleanup and retained state
-
-- Implementation: `Run.RetainedSize` in [run.go](internal/machine/run.go), [recovery](internal/machine/recovery.go), [recovery snapshots](internal/machine/recovery_snapshot.go)
-- Rules: [pending cleanup state](../../spec/08-the-abstract-machine-and-the-cost-model.md#pending-cleanup-state)
-- Tests and cases: [cancellation state tests](internal/machine/recovery_cancellation_state_test.go), [nested accounting tests](internal/machine/recovery_nested_accounting_test.go), [Recovery Offer cases](../../corpus/recovery-offers/)
-- First check: `go -C impl/go test ./internal/machine -run Recovery`
+The Go module runs the embedded Zig Core, with no Go parser, checker, compiler or interpreter (#1055). Lexing, checking, lowering, execution, costs, Built-ins and recovery are the [Zig task map](../zig/NAVIGATION.md)'s. Host-side value helpers: Core error maps, logical size and `Add` in [valueops](internal/valueops/), and Selector and label validation in [syntax](internal/syntax/), which also sizes Text Pattern values.
 
 ## Values and collections
 
-- Implementation: [values](internal/value/value.go), [Lists](internal/value/list.go), [Maps](internal/value/map.go), [persistent trees](internal/value/tree.go), List append in `extendList` ([chunk.go](internal/machine/chunk.go))
+- Implementation: [values](internal/value/value.go), [Lists](internal/value/list.go), [Maps](internal/value/map.go), [persistent trees](internal/value/tree.go)
 - Rules: [Lists and maps](../../spec/03-values.md#lists-and-maps), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md)
-- Tests and cases: [collection tests](internal/value/collections_test.go), [layout tests](internal/value/layout_test.go), [List memory](internal/machine/list_memory_test.go), [benchmarks](internal/machine/collections_bench_test.go)
-- First check: `go -C impl/go test ./internal/value ./internal/machine`
+- Tests and cases: [collection tests](internal/value/collections_test.go), [layout tests](internal/value/layout_test.go)
+- First check: `go -C impl/go test ./internal/value`
 
 ## Value Encoding
 
@@ -77,10 +39,10 @@ Files, grammar, or lowering.
 
 ## Capability Operations
 
-- Implementation: [definitions and Grants](capability.go), [Shapes](shape.go), [load checks](internal/check/operations.go), [Operation invocation](group_operation.go), [Host Crossings and resumes](group_crossing.go)
+- Implementation: [definitions and Grants](capability.go), [Shapes](shape.go), [Operation invocation](group_operation.go), [Host Crossings and resumes](group_crossing.go)
 - Rules: [Capabilities and Shapes](../../spec/09-embedding.md#capabilities), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md)
 - Tests and cases: [embedding tests](capability_test.go), [Capability cases](../../corpus/capabilities/)
-- First check: `go -C impl/go test . ./internal/check`
+- First check: `go -C impl/go test .`
 
 ## Capability Scopes, Segment-bound effects and Coordinators
 
@@ -96,20 +58,20 @@ Files, grammar, or lowering.
 - Tests and cases: [release tests](grant_release_test.go), [Stop tests](stop_test.go), [Reload cases](../../corpus/reload/)
 - First check: `go -C impl/go test . -run 'GrantRelease|Stop|Reload'`
 
-## Experimental Zig backend
+## Zig backend
 
 - Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [inline inputs](zig_inline.go), [reply decoding](zig_reply.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](zig-experimental-check.sh)
 - Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#zig-backend)
-- Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared native/Zig Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against native `TestCapabilityBridge` observations. To add a parity scenario, write a `run<Area>BridgeCases(t) []bridgeObservation` in a `zig_<area>_public_test.go` and append it in `runBridgeCases` ([`zig_capability_public_test.go`](zig_capability_public_test.go))
-- Measurements against native Go: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite, run on both by [zig-adapter-bench.sh](zig-adapter-bench.sh); results in [the binding research](../../docs/research/go-zig-binding.md)
-- First check: `CGO_ENABLED=0 go -C impl/go test .`, which runs the Zig backend by default; `-tags talk_native_go` runs the retiring native Core. The focused gate CI also runs: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`. One test: `go -C impl/go test -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
+- Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared public Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against the native Go Core's recorded `TestCapabilityBridge` observations ([testdata](testdata/native-bridge-observations.json.gz)), kept from before its removal. To add a parity scenario, write a `run<Area>BridgeCases(t) []bridgeObservation` in a `zig_<area>_public_test.go` and append it in `runBridgeCases` ([`zig_capability_public_test.go`](zig_capability_public_test.go))
+- Measurements: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite; earlier comparisons with native Go are in [the binding research](../../docs/research/go-zig-binding.md)
+- First check: `CGO_ENABLED=0 go -C impl/go test .`. The focused gate CI also runs: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`. One test: `go -C impl/go test -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
 - After changing the Zig Core: try it with the [hand swap](README.md#zig-backend), then commit and refresh the embedded copy with `python3 spikes/go-zig-binding/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
 
 ## Binary Request/Pump and combined calls
 
 - Implementation: [binary exchange](zig_binary.go), [combined calls through the adapter](zig_combined.go), [combined Request and Pump](group_combined.go)
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
-- Tests and cases: [adapter tests](zig_combined_test.go), [native tests](group_combined_test.go), [benchmarks](group_combined_bench_test.go); `TALK_ZIG_REQUEST_PUMP=fields` runs the adapter suites on the binary exchange, as the [Go workflow](../../.github/workflows/go.yml) does; Host callbacks ([`zig_callback.go`](zig_callback.go)) are binary unless `TALK_ZIG_CALLBACKS=` is set empty
+- Tests and cases: [adapter tests](zig_combined_test.go), [public tests](group_combined_test.go), [benchmarks](group_combined_bench_test.go); `TALK_ZIG_REQUEST_PUMP=fields` runs the adapter suites on the binary exchange, as the [Go workflow](../../.github/workflows/go.yml) does; Host callbacks ([`zig_callback.go`](zig_callback.go)) are binary unless `TALK_ZIG_CALLBACKS=` is set empty
 - Measurement reports: [paired ratios](cmd/request-pump-report/main.go), [tests](cmd/request-pump-report/main_test.go); first check: `go -C impl/go test ./cmd/request-pump-report`. For sample settings and acceptance claims, read the [measurement protocol](../../docs/research/request-pump-binary.md#measurement-protocol-1278).
 - First check: `CGO_ENABLED=0 TALK_ZIG_REQUEST_PUMP=fields impl/go/zig-experimental-check.sh`; envelope gates: `impl/go/zig-request-pump-bench.sh`, also run by the [bench workflow](../../.github/workflows/go-zig-bench.yml)
 
@@ -129,24 +91,24 @@ Files, grammar, or lowering.
 
 ## Libraries and Standard Library
 
-- Implementation: [compilation and registration](library.go), [normative sources](stdlib.go), [Function binding](internal/machine/library.go)
+- Implementation: [compilation and registration](library.go), [normative sources](stdlib.go)
 - Rules: [Libraries](../../spec/07-libraries-and-the-standard-library.md), [identity](../../spec/09-embedding.md#loading-and-libraries)
 - Tests and cases: [public Library tests](library_test.go), [Library cases](../../corpus/libraries/), [stdlib cases](../../corpus/stdlib/)
-- First check: `go -C impl/go test . ./internal/machine`
+- First check: `go -C impl/go test .`
 
 ## Save, restore and code updates
 
 - Implementation: [snapshot DTOs](save.go), [rehydration](restore.go), [save-format version](core.go), [settlements](settle.go), [Extend](script_extend.go), [replacement](library_replace.go)
 - Rules: [save and restore](../../spec/10-save-and-restore.md), [Fingerprint](../../spec/09-embedding.md#the-pump-and-the-group-fingerprint)
 - Tests and cases: [snapshot tests](save_test.go), [extension tests](extend_test.go), [save/restore cases](../../corpus/save-restore/)
-- First check: `go -C impl/go test . ./internal/snapshot`
+- First check: `go -C impl/go test .`
 
 ## Text Patterns
 
-- Implementation: [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go)
+- Implementation: [values](internal/value/pattern.go), [program size](internal/valueops/pattern.go); matching is the Zig Core's
 - Rules: [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs)
-- Tests and cases: [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/)
-- First check: `go -C impl/go test . ./internal/machine`
+- Tests and cases: [public acceptance](pattern_test.go), [pattern cases](../../corpus/text-patterns/)
+- First check: `go -C impl/go test .`
 
 ## Generated tables
 
@@ -157,7 +119,7 @@ Files, grammar, or lowering.
 
 ## Sessions, REPL and Transcripts
 
-- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (native Go or negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](cmd/northtalk/)
+- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](cmd/northtalk/)
 - Rules: [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
 - First check: `go -C impl/go test ./session ./driver`
@@ -176,19 +138,12 @@ Files, grammar, or lowering.
 - Tests and cases: [Pool tests](driver/pool_test.go), [Host tests](examples/tenants/tenants_test.go), [`tenants-*` cases](../../corpus/examples/)
 - First check: `go -C impl/go test -race ./driver ./examples/tenants`
 
-## Differential fuzz worker
-
-- Implementation: [command](cmd/fuzzworker/main.go), [runner and protocol](internal/fuzz/), [replay Host](internal/corpus/replay_host.go)
-- Rules: [dual-Core mode](../../tooling/fuzz/README.md#dual-core-mode), [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)
-- Tests and cases: [worker tests](internal/fuzz/worker_test.go), [dual-Core tests](../../tooling/fuzz/tests/go-runner.test.ts)
-- First check: `go -C impl/go test ./internal/fuzz`
-
 ## Corpus selection and parity
 
-- Implementation: [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt)
+- Implementation: [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt); the Zig Core's own runner checks Disassembly cases
 - Rules: [corpus commands and blessing](../../corpus/README.md#checking), [adding a case](../../corpus/README.md#adding-a-case), [conformance](../../spec/11-the-trace-and-conformance.md)
 - Tests and cases: [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go)
-- First check: `go -C impl/go run ./cmd/corpus --check-passing`
+- First check: `go -C impl/go test ./internal/corpus`; one case: `NORTHTALK_CORPUS=<case> go -C impl/go test ./internal/corpus -run TestSelectedCases`
 
 The [implementation guide](README.md) describes the supported subset and its limits. Follow Spec links for rules and the [ADR index](../../docs/adr/README.md) for rationale. The TS Core is a parity peer; root `tools/grammar/` and `tools/machine/` are Spec-checking prototypes. Update generated files through their generators.
 
@@ -197,9 +152,9 @@ file ([replay_hooks.go](replay_hooks.go), [documentation_hooks.go](documentation
 [session_io_hooks.go](session_io_hooks.go))
 assigns function variables in an `internal/` package from `init`, and `session/`
 calls them. Fixtures both Cores read, such as Declaration Documentation, live in
-[impl/testdata/](../testdata/). A save-format change bumps `SaveFormat` in
-[core.go](core.go) and `saveFormatVersion` in the TS
-[snapshot.ts](../ts/src/snapshot.ts). Add corpus cases as
+[impl/testdata/](../testdata/). `CoreVersions` reports the embedded guest's
+versions, so a save-format change is the Zig Core's
+([Zig task map](../zig/NAVIGATION.md)). Add corpus cases as
 [the corpus guide](../../corpus/README.md#adding-a-case) describes.
 
 Standard Capability construction lives in [standard_capability.go](standard_capability.go). Session cases use `corpus/sessions/<case>/session.transcript` with a companion `case.trace`; discover case names with `rg --files corpus/sessions`. Check Transcript parity with `go -C impl/go test ./internal/corpus -run TestSession`. For a single test, append `-run TestName` to the appropriate `go -C impl/go test` command.

@@ -120,12 +120,6 @@ func TestLabelsInFingerprintAndRestore(t *testing.T) {
 	if _, err := g.Load(LoadOptions{Name: "s", Source: "on go\n ask world to move \"a\", \"b\"\nend go", Grants: map[string]*Grant{"world": labelled.GrantAll(nil)}}); err != nil {
 		t.Fatal(err)
 	}
-	if data := string(jsonData(grantData(labelled.GrantAll(nil)))); !strings.Contains(data, `"name":"move","mode":"immediate","args":["text","text"],"labels":["to"],"result":"text"`) {
-		t.Fatal(data)
-	}
-	if data := string(jsonData(grantData(plain.GrantAll(nil)))); strings.Contains(data, "labels") {
-		t.Fatal(data)
-	}
 	saved, err := g.Save()
 	if err != nil {
 		t.Fatal(err)

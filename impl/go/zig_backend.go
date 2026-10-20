@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (
@@ -24,11 +22,6 @@ var zigCompiled struct {
 	engine   *zigwasm.Engine
 	versions Versions
 	err      error
-}
-
-func init() {
-	experimentalGroupFactory = newZigGroup
-	experimentalVersions = func() Versions { zigEngine(); return zigCompiled.versions }
 }
 
 func zigEngine() *zigwasm.Engine {

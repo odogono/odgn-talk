@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"testing"
 	"time"
@@ -285,16 +284,6 @@ func TestPreviousLanguageSaveRejectsOrRestoresVariablesOnly(t *testing.T) {
 	}
 }
 
-func TestFingerprintStringEscapes(t *testing.T) {
-	got := string(fingerprintJSON(struct {
-		Text string `json:"text"`
-	}{"\b\t\n\f\r\x00\\\"<&\u2028\u2029"}))
-	want := "{\"text\":\"\\u0008\\u0009\\u000a\\u000c\\u000d\\u0000\\\\\\\"<&\u2028\u2029\"}"
-	if got != want {
-		t.Fatalf("canonical fingerprint JSON %q, want %q", got, want)
-	}
-}
-
 func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
 	c := New()
 	ok := func(SegmentContext) EffectResult { return EffectResult{Status: EffectOK} }
@@ -533,23 +522,5 @@ func TestReissueFuelFaultSkipsSiblingHostCalls(t *testing.T) {
 				t.Fatal(operationalReports(pumped.Reports))
 			}
 		})
-	}
-}
-
-func TestSaveEnvelopePreservesBytes(t *testing.T) {
-	// Payload strings have already received the Codec's HTML/JavaScript escaping.
-	for _, payload := range []string{`null`, `{"Text":"quotes \" and backslash \\"}`, `{"Text":"\u003c\u003e\u0026\u2028\u2029\n\u0000"}`, `[0,255,9223372036854775807]`} {
-		hash := sha256.Sum256([]byte(payload))
-		want := jsonData(struct {
-			Hash    string `json:"hash"`
-			Payload string `json:"payload"`
-		}{fmt.Sprintf("%x", hash), payload})
-		got := saveEnvelope([]byte(payload), hash)
-		if !bytes.Equal(got, want) {
-			t.Fatalf("envelope bytes differ:\n%s\n%s", got, want)
-		}
-		if cap(got) != len(got) {
-			t.Fatalf("envelope capacity = %d, length = %d", cap(got), len(got))
-		}
 	}
 }

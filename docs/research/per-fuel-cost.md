@@ -33,13 +33,13 @@ Shares are of Run CPU time (`(*Group).runPump` inclusive), from the CPU profiles
 
 | Mechanism | `core/fib` | `core/calls` | Where |
 |---|---:|---:|---|
-| Cost Model evaluation (`Charge`, `formula`, `measure`) | 36% | 36% | [`cost.go`](../../impl/go/internal/machine/cost.go) |
+| Cost Model evaluation (`Charge`, `formula`, `measure`) | 36% | 36% | [`cost.go`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/machine/cost.go) |
 | …of which parsing formula text | 26% | 26% | `strings.Split`, `strings.Fields`, `strconv.ParseInt` in `formula` |
 | …of which the `digits` measure | 8% | 7% | `Number.String()` builds a `big.Int` from the coefficient text, prints it, then trims it |
-| Instruction semantics (`evaluate`) | 33% | 30% | [`instruction.go`](../../impl/go/internal/machine/instruction.go) |
+| Instruction semantics (`evaluate`) | 33% | 30% | [`instruction.go`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/machine/instruction.go) |
 | …of which the arithmetic operator map | 9% | 5% | a `map[string]string` literal built on every `add`/`subtract` |
 | Trial frame copy and copy-back (Segment rollback) | 10% | 10% | `ExecuteHosted`: stack, locals and `maps.Clone(ReceiverNames)` per instruction |
-| Dispatch checks (`Supported`, `foreignWaitCall`, `propertyRequest`, `preflight`, `i.Name` comparisons) | 13% | 16% | [`run.go`](../../impl/go/internal/machine/run.go) |
+| Dispatch checks (`Supported`, `foreignWaitCall`, `propertyRequest`, `preflight`, `i.Name` comparisons) | 13% | 16% | [`run.go`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/machine/run.go) |
 | Fuel checks (`pay`) | 2% | 1% | |
 | Run accounting (`flushAccounting`, per Pump) | <1% | <1% | [`group_run.go`](../../impl/go/group_run.go) |
 | Garbage collection, in background CPU beside the Run | 13% | 8% | `runtime.gcDrain`, as a share of Run time |
@@ -90,7 +90,7 @@ Shares are of Run CPU time (`turn` inclusive), from the Bun CPU profiles.
 | …of which `numberValue` → `dec` re-parsing | 8% | 16% | `dec` runs `trimWhiteSpace`, which scans grapheme boundaries, then a regex and `literalDigits` |
 | Cost Model evaluation (`pay`, `charge`) | 10% | 10% | [`costs.ts`](../../impl/ts/src/costs.ts). Formulas are pre-parsed, but every charge builds a `subject` closure and may run a regex |
 | `digits` measure | 7% | 6% | `parseDec(n.toString()).coefficient.toString().length` |
-| Depth check (`realDepth`) | 5% | 3% | [`machine.ts`](../../impl/ts/src/machine.ts) builds arrays and a `Set` over every frame on every call. Go caches the depth (`depthValid` in [`depth.go`](../../impl/go/internal/machine/depth.go)) |
+| Depth check (`realDepth`) | 5% | 3% | [`machine.ts`](../../impl/ts/src/machine.ts) builds arrays and a `Set` over every frame on every call. Go caches the depth (`depthValid` in [`depth.go`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/internal/machine/depth.go)) |
 | Interpreter loop (`step`, `execute`, `finishInstruction`) | ~10% | ~11% | |
 
 TS has no Segment rollback copy per instruction. It charges before an instruction changes anything ("Charge, then replace"), where Go evaluates on a trial frame and charges afterwards.

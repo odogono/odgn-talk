@@ -1,5 +1,3 @@
-//go:build !talk_native_go
-
 package northtalk
 
 import (
@@ -142,7 +140,7 @@ func (b *zigGroup) resolve(kind, id string) (*Object, bool) {
 	return b.group.ObjectByID(kind, id)
 }
 
-// propertyFailureDetail is native Go's reason, if any, that a property's
+// propertyFailureDetail is the reason, if any, that a property's
 // well-encoded failure becomes `host error` with a `call failed` report.
 func propertyFailureDetail(e *ScriptError) string {
 	data := e.Data.inner
