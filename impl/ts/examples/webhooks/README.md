@@ -2,7 +2,7 @@
 
 This Bun Host is the webhook rules server of [Appendix B's milestone 2](../../../../spec/appendix-b-implementation-order.md#milestone-2-the-example-hosts). It is an embedding example, built on the [chapter 9](../../../../spec/09-embedding.md) interface alone, not a product.
 
-One Group holds one `rules` Script, driven by [`autoDrive`](../../README.md#the-group-and-trace-cases) from `@northtalk/ts/driver` on the real Clock. Each webhook is answered through a Request to the Script. The Host shows:
+One Group holds one `rules` Script, created with [`newDrivenGroup`](../../README.md#the-group-and-trace-cases) from `@northtalk/ts/driver` and driven on the real Clock. Each webhook is answered through a Request to the Script. The Host shows:
 
 - **A synchronous database as an immediate Operation:** `rules.match` reads the routing rule for an event type, and `rules.record` logs the outcome. Both are bound to a `node:sqlite` database.
 - **Suspending Operations backed by Promises:** `outbound.post` uses `run`, so the Core answers the call when the `fetch` Promise resolves and fails it when the Promise rejects. Scripts name a target; only the Grant's binding holds its URL.

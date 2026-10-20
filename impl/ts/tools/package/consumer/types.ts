@@ -12,7 +12,11 @@ import {
   decodeBinaryValue,
 } from '@northtalk/ts/message-layer';
 import type { DebugController } from '@northtalk/ts/debug';
-import type { autoDrive } from '@northtalk/ts/driver';
+import {
+  newDrivenGroup,
+  type autoDrive,
+  type DrivenGroupOptions,
+} from '@northtalk/ts/driver';
 import type { createRouter } from '@northtalk/ts/notify';
 import { SessionHost } from '@northtalk/ts/session';
 import type { buildSetupGroup } from '@northtalk/ts/setup';
@@ -49,3 +53,14 @@ export const combinedResult: Promise<Value> | undefined = combined.admitted
   : undefined;
 export const buffer: ArrayBuffer = encodeBinaryValue(num(1));
 export const decoded: Value = decodeBinaryValue(buffer);
+
+const drivenOptions: DrivenGroupOptions = {
+  name: 'driven-types',
+  seed: 42n,
+  clock: () => clock,
+  pump: { fuelSlice: 100 },
+};
+const driven = newDrivenGroup(drivenOptions);
+export const drivenGroup: Group = driven.group;
+export const drivenIdle: Promise<void> = driven.drive.idle();
+driven.drive.stop();

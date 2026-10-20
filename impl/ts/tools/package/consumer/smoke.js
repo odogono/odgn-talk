@@ -50,6 +50,22 @@ export const smoke = async () => {
     (await combined.requested.result).toString() === '42',
     'Combined result',
   );
+  const driven = driver.newDrivenGroup({ name: 'driven', clock: () => clock });
+  try {
+    const drivenScript = driven.group.load({
+      name: 'main',
+      source: 'on go\n  return 7\nend go',
+    });
+    expect(
+      (
+        await drivenScript.request({ name: 'go', args: [] }).result
+      ).toString() === '7',
+      'Driven Group request',
+    );
+    await driven.drive.idle();
+  } finally {
+    driven.drive.stop();
+  }
   const buffer = messageLayer.encodeBinaryValue(talk.dec('0.00'));
   expect(
     messageLayer.decodeBinaryValue(buffer).toString() === '0.00',

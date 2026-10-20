@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { autoDrive } from '../src/driver';
+import {
+  autoDrive,
+  newDrivenGroup,
+  type AutoDriveOptions,
+} from '../src/driver';
 import {
   defineCapability,
   formatInstant,
+  HostError,
   newGroup,
   num,
   shape,
@@ -12,21 +17,72 @@ import {
 
 const driven = (
   source: string,
-  options: Parameters<typeof autoDrive>[1] = {},
+  options: AutoDriveOptions = {},
   grants = {},
 ) => {
   const lines: string[] = [];
-  const group = newGroup({
+  const { group, drive } = newDrivenGroup({
+    ...options,
     name: 'g',
-    onReady: () => drive.ready(),
     trace: line => lines.push(line),
   });
-  const drive = autoDrive(group, options);
   const script = group.load({ name: 's', source, grants });
   return { drive, group, lines, script };
 };
 
-describe('autoDrive', () => {
+describe('newDrivenGroup', () => {
+  test('preserves Group options and starts idle', async () => {
+    const lines: string[] = [];
+    const { group, drive } = newDrivenGroup({
+      name: 'seeded',
+      seed: 42n,
+      trace: line => lines.push(line),
+      clock: () => 0n,
+    });
+    try {
+      await drive.idle();
+      expect(group.name).toBe('seeded');
+      expect(lines).toEqual([]);
+      const script = group.load({
+        name: 's',
+        source: 'on roll\n  return random(6)\nend roll',
+      });
+      expect(
+        (await script.request({ name: 'roll', args: [] }).result).toString(),
+      ).toBe('3');
+      await drive.idle();
+      expect(lines).toContain(`> pump clock=${formatInstant(0n)}`);
+    } finally {
+      drive.stop();
+    }
+  });
+
+  test('forwards Pump errors and can drive again afterwards', async () => {
+    let now = 0n;
+    const errors: unknown[] = [];
+    const { group, drive } = newDrivenGroup({
+      name: 'errors',
+      clock: () => now,
+      onError: error => errors.push(error),
+    });
+    try {
+      group.pump(1n);
+      const script = group.load({ name: 's', source: 'on go\nend go' });
+      const reply = script.request({ name: 'go', args: [] });
+      await drive.idle();
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toBeInstanceOf(HostError);
+      expect(errors[0]).toHaveProperty('code', 'clock backwards');
+      now = 1n;
+      drive.ready();
+      await reply.result;
+      await drive.idle();
+      expect(errors).toHaveLength(1);
+    } finally {
+      drive.stop();
+    }
+  });
+
   test('pumps once per readiness, on a later macrotask', async () => {
     const pumps: PumpResult[] = [];
     const { drive, script } = driven('on go\n  return 1\nend go', {
@@ -147,4 +203,21 @@ describe('autoDrive', () => {
     await new Promise(resolve => setTimeout(resolve, 5));
     expect(pumps).toHaveLength(0);
   });
+});
+
+test('autoDrive still drives a manually wired Group', async () => {
+  const group = newGroup({ name: 'manual', onReady: () => drive.ready() });
+  const drive = autoDrive(group);
+  try {
+    const script = group.load({
+      name: 's',
+      source: 'on go\n  return 3\nend go',
+    });
+    expect(
+      (await script.request({ name: 'go', args: [] }).result).toString(),
+    ).toBe('3');
+    await drive.idle();
+  } finally {
+    drive.stop();
+  }
 });
