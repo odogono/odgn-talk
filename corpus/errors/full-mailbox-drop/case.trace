@@ -14,3 +14,5 @@ run s/r2 outcome=completed handler=next fuel=7 alloc=0
 pumped state=idle fuel=48
 > counters s
 counters s fuel=48 alloc=80 runs=2 faults=0 state=0 mailbox=0
+> vars
+vars s
