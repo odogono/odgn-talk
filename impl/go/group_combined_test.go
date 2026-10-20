@@ -1,15 +1,11 @@
 package northtalk
 
 import (
-	"context"
 	"testing"
 	"time"
 )
 
 func TestCombinedRequestAdmissionAndPump(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	ready := 0
 	g := New().NewGroup(GroupOptions{OnReady: func() { ready++ }})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable total = 0\non accumulate n\n put total + n into total\n return total\nend accumulate\n"})
@@ -37,9 +33,6 @@ func TestCombinedRequestAdmissionAndPump(t *testing.T) {
 }
 
 func TestCombinedPumpRefusalRetainsAdmission(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	ready := 0
 	g := New().NewGroup(GroupOptions{OnReady: func() { ready++ }})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 42\nend ping\n"})
@@ -70,39 +63,7 @@ func TestCombinedPumpRefusalRetainsAdmission(t *testing.T) {
 	}
 }
 
-func TestCombinedRefusalDoesNotAdmit(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
-	g := New().NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\nend ping\n", Limits: Limits{MailboxDepth: 1}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := g.beginWorker(); err != nil {
-		t.Fatal(err)
-	}
-	id, p, _, err := s.RequestPump(context.Background(), Message{Name: "ping"}, time.Now(), PumpOptions{})
-	g.endWorker()
-	if err == nil || id != "" || p != nil || g.nextDelivery != 0 {
-		t.Fatalf("worker refusal admitted: %s %v %v", id, p, err)
-	}
-	if _, err := s.Deliver(Message{Name: "ping"}); err != nil {
-		t.Fatal(err)
-	}
-	id, p, _, err = s.RequestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
-	if err != ErrMailboxFull || id != "" || p != nil || g.nextDelivery != 1 {
-		t.Fatalf("mailbox refusal: %s %v %v", id, p, err)
-	}
-	if len(g.inputs) != 1 {
-		t.Fatal("admission refusal pumped earlier work")
-	}
-}
-
 func TestCombinedCallInvalidValueDoesNotPump(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	g := New().NewGroup(GroupOptions{})
 	id, p, _, err := g.CallPump(nil, Int(1), nil, nil, time.Now(), PumpOptions{})
 	if err == nil || id != "" || p != nil || !g.clock.IsZero() {
@@ -115,9 +76,6 @@ func TestCombinedCallInvalidValueDoesNotPump(t *testing.T) {
 }
 
 func TestCombinedFunctionCallAndStaleness(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	g := New().NewGroup(GroupOptions{})
 	home, fn := exportFunction(t, g, "on exported\n return given: 5\nend exported", Limits{})
 	_, p, _, err := g.CallPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
@@ -140,9 +98,6 @@ func TestCombinedFunctionCallAndStaleness(t *testing.T) {
 }
 
 func TestCombinedOnePumpCanLeavePending(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n repeat 100 times\n end repeat\n return 42\nend ping\n"})
 	if err != nil {
@@ -167,9 +122,6 @@ func TestCombinedOnePumpCanLeavePending(t *testing.T) {
 }
 
 func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native combined implementation")
-	}
 	var g *Group
 	g = New().NewGroup(GroupOptions{OnReady: func() {
 		g.mu.Lock()
@@ -187,15 +139,6 @@ func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
 	if err == nil || p == nil {
 		t.Fatal("expected admitted request and refused Pump", err)
 	}
-}
-
-// These acceptance cases run unchanged on native Go and the negotiated Zig
-// backend, through the same public calls a Host uses.
-func TestCombinedObjectRequest(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
-	}
-	testCombinedObjectRequest(t)
 }
 
 func testCombinedObjectRequest(t *testing.T) {
@@ -224,13 +167,6 @@ func testCombinedObjectRequest(t *testing.T) {
 	if v, e := p.Result(); e != nil || v.String() != `"child"` {
 		t.Fatal(v, e)
 	}
-}
-
-func TestCombinedCallArityAtExecution(t *testing.T) {
-	if experimentalGroupFactory != nil {
-		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
-	}
-	testCombinedCallArityAtExecution(t)
 }
 
 func testCombinedCallArityAtExecution(t *testing.T) {

@@ -1,8 +1,6 @@
 // The Zig reactor does not offer object-elements-v1 yet, so these run on the
 // native Core only.
 
-//go:build talk_native_go
-
 package northtalk
 
 import (
