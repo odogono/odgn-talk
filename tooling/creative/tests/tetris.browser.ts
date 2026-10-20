@@ -1,5 +1,8 @@
 // Run on /tetris-test.html, a page without main.js, as described in README.md.
-import { createTetrisProject, EMPTY_COLOUR } from '../src/examples/tetris';
+import { createTetrisProject } from '../src/examples/tetris';
+import { COLUMNS, EMPTY_COLOUR, ROWS } from '../src/examples/tetris-rules';
+import { createCanvasTetrisProject } from '../src/examples/tetris-canvas';
+import { CELL } from '../src/examples/tetris-layout';
 import { mountPlay } from '../src/play-view';
 import { mountStack } from '../src/stack';
 
@@ -68,6 +71,85 @@ export const runBrowserTests = async () => {
       'gravity moves it',
       'arrow keys move it without scrolling',
       'hard drops lock pieces',
+    ],
+  };
+};
+
+// Checks the worker, Canvas views, ordinary controls and retained Drawing
+// together. Run after a reload, separately from the Element game above.
+export const runCanvasBrowserTests = async () => {
+  const { project } = await createCanvasTetrisProject();
+  const shell = mountStack(project);
+  mountPlay(shell);
+  const browse = document.querySelector<HTMLButtonElement>(
+    '#tool-modes [title^="Browse:"]',
+  )!;
+  const edit = document.querySelector<HTMLButtonElement>(
+    '#tool-modes [title^="Edit:"]',
+  )!;
+  const reader = document.querySelector<HTMLElement>('#reader')!;
+  const score = () =>
+    reader.querySelector('[data-element="scoreText"]')?.textContent;
+  const press = (key: string) =>
+    reader.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+    );
+  const drawing = () => {
+    const board = shell.editor.page.elements.find(
+      e => e.name === 'boardCanvas',
+    );
+    if (board?.kind !== 'canvas') {
+      throw new Error('Missing board Canvas');
+    }
+    return board.drawing;
+  };
+  browse.click();
+  await until(() => reader.querySelectorAll('canvas').length === 2);
+  reader.focus();
+  press('ArrowDown');
+  await until(() => score() === 'Score: 1');
+  reader.querySelector<HTMLElement>('[data-element="restartButton"]')!.click();
+  await until(() => score() === 'Score: 0');
+  reader.focus();
+  press(' ');
+  await until(() => Number(score()?.replace('Score: ', '')) > 1);
+  edit.click();
+  await until(() => drawing().length > 0);
+  // Stop may interrupt paint: ADR 0116 deliberately retains partial frames.
+  const rectangles = drawing().filter(command => command.op === 'rectangle');
+  assert(
+    rectangles.length > 0 && rectangles.length <= ROWS * COLUMNS,
+    'Return to Edit did not retain a bounded board Drawing',
+  );
+  const previous = drawing();
+  browse.click();
+  await until(() => reader.querySelectorAll('canvas').length === 2);
+  reader.focus();
+  press('ArrowDown');
+  await until(() => score() === 'Score: 1');
+  edit.click();
+  await until(() => drawing() !== previous);
+  let colour = EMPTY_COLOUR;
+  let filled = 0;
+  for (const command of drawing()) {
+    if (command.op === 'fill') {
+      colour = command.args[0]!.slice(1, -1);
+    } else if (command.op === 'rectangle' && colour !== EMPTY_COLOUR) {
+      filled++;
+      assert(
+        Number(command.args[1]) < 3 * CELL,
+        'The second Browse kept locked cells from the previous game',
+      );
+    }
+  }
+  assert(filled <= 4, 'The second Browse kept cells from the previous game');
+  return {
+    passed: true,
+    checks: [
+      'board and preview Canvas views',
+      'keyboard input and ordinary New Game button',
+      'Drawing retained in Edit',
+      'second Browse starts a fresh game',
     ],
   };
 };

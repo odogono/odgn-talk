@@ -1078,6 +1078,20 @@ turns and drops, and `fits`, `tryMove`, `rotate`, `lockPiece`, `clearLines`
 and `paint` keep the board as a list of lists. `paint` changes only the
 rectangles whose colour differs from what they show.
 
+**Projects → Open Canvas Tetris** adds the same game with a board and preview
+drawn through the `canvas` Grant instead of pre-placed cells
+([#1379](https://github.com/odogono/odgn-talk/issues/1379)), built from
+[`src/examples/tetris-canvas.ts`](src/examples/tetris-canvas.ts). Both builders
+assemble their Page Scripts from the rules in
+[`src/examples/tetris-rules.ts`](src/examples/tetris-rules.ts) and their own
+painting Handlers, and share the layout in
+[`src/examples/tetris-layout.ts`](src/examples/tetris-layout.ts). The Canvas
+version ships with empty Drawings. `openPage` clears both surfaces before
+starting a new game, including on a second Browse after the previous game's
+Drawing was kept in Edit. Each changed board or preview clears its surface
+and draws only the filled cells over the surface's empty fill, so the
+retained commands hold one frame of filled cells.
+
 Arrow keys move, Up and Z turn, Down drops faster and Space drops. Pieces
 come from a 7-bag. Gravity starts at one row a second and speeds up by 75 ms
 each level, down to 100 ms; the level rises every ten lines, and one to four
@@ -1087,10 +1101,17 @@ hold or ghost piece. Pieces come from `random`.
 It is dressed as a game on a colour Macintosh running System 7: a menu bar on
 a periwinkle desktop, a platinum window with a pinstriped title bar and close
 box, Chicago and Geneva type where the browser has them, pieces in the
-classic 16-colour palette, and a bomb alert for Game Over. All of it is
-ordinary rectangles, lines and text.
+classic 16-colour palette, and a bomb alert for Game Over. The window frame,
+score text, New Game button and Game Over Group remain ordinary Elements in
+both versions, beside or above the game surfaces.
 
 Unit tests drive the game on an explicit clock through `frame` and `keyDown`:
 spawning, moving, turning, gravity, drops, a four-line clear, a level-up and
-game over. Open `/tetris-test.html` and run
+game over in both versions. Canvas checks read the retained Drawing rather
+than pixels, and also check the preview and a fresh second Browse.
+Open `/tetris-test.html` and run
 `await import('/tetris.browser.js').then(m => m.runBrowserTests())`.
+Reload, then run
+`await import('/tetris.browser.js').then(m => m.runCanvasBrowserTests())`
+for the Canvas views, keyboard input, New Game button and retained Drawing
+across a second Browse.

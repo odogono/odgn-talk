@@ -223,7 +223,9 @@ List files with `rg --files tooling/creative` before opening one by name.
   [play-mirror.ts](src/play-mirror.ts) keeps and commits them.
 - [canvas-view.ts](src/canvas-view.ts): Canvas 2D painting shared by Edit and
   Play; [script-manifest.ts](src/script-manifest.ts) declares the Grant.
-- Tests: [canvas.test.ts](tests/canvas.test.ts).
+- Tests: [canvas.test.ts](tests/canvas.test.ts); Canvas Tetris
+  ([examples/tetris-canvas.ts](src/examples/tetris-canvas.ts)) exercises a
+  whole game in [tetris.test.ts](tests/tetris.test.ts).
 - First check: `bun test tooling/creative/tests/canvas.test.ts`.
 
 ## User prompts
@@ -301,8 +303,11 @@ List files with `rg --files tooling/creative` before opening one by name.
   and [rich-text-dom.ts](src/rich-text-dom.ts): in-place text editing.
 - [examples/index.ts](src/examples/index.ts): the Example Projects listed in
   the Projects window; [examples/lighthouse.ts](src/examples/lighthouse.ts)
-  builds The Lighthouse Mystery and [examples/tetris.ts](src/examples/tetris.ts)
-  builds Tetris.
+  builds The Lighthouse Mystery, [examples/tetris.ts](src/examples/tetris.ts)
+  builds Tetris and [examples/tetris-canvas.ts](src/examples/tetris-canvas.ts)
+  builds Canvas Tetris, both over the shared
+  [tetris-rules.ts](src/examples/tetris-rules.ts) Script and
+  [tetris-layout.ts](src/examples/tetris-layout.ts) Page.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
   [project-title.browser.ts](tests/project-title.browser.ts),
   [info-panel.browser.ts](tests/info-panel.browser.ts),

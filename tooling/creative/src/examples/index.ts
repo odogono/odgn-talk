@@ -4,6 +4,10 @@
 import { type Project } from '../model';
 import { createLighthouseProject, LIGHTHOUSE_PROJECT_NAME } from './lighthouse';
 import { createTetrisProject, TETRIS_PROJECT_NAME } from './tetris';
+import {
+  CANVAS_TETRIS_PROJECT_NAME,
+  createCanvasTetrisProject,
+} from './tetris-canvas';
 
 export type ExampleContent = {
   /** Asset bytes by SHA-256 hash, for storage and portable export. */
@@ -29,5 +33,11 @@ export const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     description:
       'The falling-blocks game: a frame loop, arrow keys and a board of 200 rectangles repainted by one Page Script.',
     create: createTetrisProject,
+  },
+  {
+    name: CANVAS_TETRIS_PROJECT_NAME,
+    description:
+      'The same falling-blocks game drawn with canvas commands, instead of the Element version’s 200 pre-placed board rectangles.',
+    create: createCanvasTetrisProject,
   },
 ];
