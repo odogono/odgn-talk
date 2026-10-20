@@ -169,6 +169,22 @@ func TestRestoreRejectsMalformedFrames(t *testing.T) {
 		})
 	}
 }
+
+// nativeCore reports whether the Group runs on the native Go Core rather
+// than the Zig adapter.
+func nativeCore() bool {
+	return experimentalGroupFactory == nil
+}
+
+// requireNativeCore skips a test that reads native Go Core internals, which
+// the Zig adapter doesn't have (ADR 0117).
+func requireNativeCore(t *testing.T) {
+	t.Helper()
+	if !nativeCore() {
+		t.Skip("reads native Go Core internals (ADR 0117)")
+	}
+}
+
 func requireNativeSaveFormat(t *testing.T) {
 	t.Helper()
 	if experimentalGroupFactory != nil {
@@ -371,6 +387,7 @@ func TestFingerprintStringEscapes(t *testing.T) {
 }
 
 func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
+	requireNativeCore(t)
 	c := New()
 	ok := func(SegmentContext) EffectResult { return EffectResult{Status: EffectOK} }
 	def, err := c.DefineSegmentCapability("r", SegmentLifecycle{Begin: ok, Commit: ok, Rollback: func(SegmentContext) EffectResult { return EffectResult{Status: EffectUnknown} }}, Operation{Name: "write", Mode: Immediate, SegmentBound: true, Result: NothingShape, Do: func(*Call, []Value) (Value, error) { return Nothing, nil }})

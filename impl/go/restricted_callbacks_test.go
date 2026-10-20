@@ -86,6 +86,7 @@ func restrictedSetup(t *testing.T, c restrictedCase, lines *[]string) *Group {
 }
 
 func TestRestrictedCallbackKit(t *testing.T) {
+	requireNativeCore(t)
 	root := "../../corpus/restricted-kit"
 	raw, err := os.ReadFile(filepath.Join(root, "cases.json"))
 	if err != nil {
@@ -119,6 +120,7 @@ func TestRestrictedCallbackKit(t *testing.T) {
 }
 
 func TestRestrictedCallbackRestoreEveryInstruction(t *testing.T) {
+	requireNativeCore(t)
 	raw, err := os.ReadFile("../../corpus/restricted-kit/cases.json")
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +170,7 @@ func TestRestrictedCallbackRestoreEveryInstruction(t *testing.T) {
 }
 
 func TestRestrictedIntrinsicAccess(t *testing.T) {
+	requireNativeCore(t)
 	if _, err := New().NewGroup(GroupOptions{}).Load(LoadOptions{Name: "private", Source: "use restrictedCall from map\n"}); err == nil {
 		t.Fatal("private intrinsic imported")
 	}

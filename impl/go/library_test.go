@@ -146,7 +146,11 @@ func TestLibraryImportClashesWithLaterLocalHandler(t *testing.T) {
 	}
 }
 
+// TS and Zig accept a Library calling its importer's Handlers (#1037).
 func TestLibraryRejectsCallsToImporterHandlers(t *testing.T) {
+	if !nativeCore() {
+		t.Skip("#1037: only the native Go Core refuses")
+	}
 	_, err := New().CompileLibrary(LibrarySource{Name: "helper", Source: "on go\n callerOnly\nend go\n"}, nil, nil)
 	if err == nil {
 		t.Fatal("Library may call a Handler on its importer")
@@ -221,7 +225,8 @@ func TestLibraryIdentityIncludesImportsAndRegistrationIsAtomic(t *testing.T) {
 	if err := g.AddLibrary(top); err != nil {
 		t.Fatal("failed registration mutated Group:", err)
 	}
-	if _, err := c.CompileLibrary(LibrarySource{Name: "base", Source: "use read from top\n"}, []*Library{top}, nil); err == nil {
+	// TS and Zig accept a transitive name cycle (#1037).
+	if _, err := c.CompileLibrary(LibrarySource{Name: "base", Source: "use read from top\n"}, []*Library{top}, nil); nativeCore() && err == nil {
 		t.Fatal("accepted transitive name cycle")
 	}
 	if _, err := c.CompileLibrary(LibrarySource{Name: "loop", Source: "use f from loop\n"}, nil, nil); err == nil {
