@@ -2071,12 +2071,12 @@ fn runNumber(id: []const u8) u64 {
 fn runView(a: std.mem.Allocator, r: *const machine.Run) !RunView {
     const handler: []const u8 = if (r.delivery.function) |f| try display.string(a, f) else r.handler;
     var out: RunView = .{ .id = r.id.ptr, .id_len = r.id.len, .status = .ready, .handler = handler.ptr, .handler_len = handler.len };
-    if (r.continuing) {
+    if (machine.run_lifecycle.continuing(r)) {
         out.status = .preempted;
         return out;
     }
     if (r.resume_with != null) return out;
-    if (r.parked) {
+    if (r.state == .parked) {
         out.status = .parked;
         return out;
     }

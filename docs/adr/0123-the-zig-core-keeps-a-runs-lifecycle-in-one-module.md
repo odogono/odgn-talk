@@ -10,7 +10,7 @@ A Run's lifecycle in the Zig Core was spread across about ten functions in `mach
 
 The module owns:
 
-- the Run's state, stored explicitly;
+- the Run's state between turns, stored explicitly: running, preempted, paused at a crossing, suspended or parked. It replaces the `parked`, `continuing` and `crossed` flags. Two things stay beside it, because they overlap any state. One is what a ready Run resumes with: a Join's end makes its Run ready before its Segment ends. The other is a Segment end in progress: it can pause at a lifecycle crossing in any state;
 - the Run's place in its Script's live Runs and work: detaching it, putting it back at the head of the work, and keeping a suspended Run live;
 - the start and end of each Stretch, and every addition to the Pump's and the Script's Fuel totals;
 - the one path that faults a Run whose Charge was refused. It decides whether the fault ends the Segment or the whole Run, and which call it abandons.
