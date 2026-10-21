@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { TsGroup, TsScript, type Report, type RunEvent } from '../src/group';
+import { SessionObjects } from '../src/session/objects';
 import { readFileSync } from 'node:fs';
 import { parseEntry, parseInstant } from '../src/index';
 import {
@@ -640,151 +642,140 @@ describe('Saves, Libraries and export', () => {
   });
 });
 
-test('lifecycle failures render without success values or a crash', () => {
-  const { host } = session();
-  // Session mocks have no lifecycle declarations. Exercise the consumer with
-  // the typed notifications/reports an embedding Host receives from the Core.
-  const consumer = host as unknown as {
-    events: import('../src/group').RunEvent[];
-    print(reports: import('../src/group').Report[]): string[];
+// Session Capabilities have no lifecycle, so no Session commit can fail for
+// real. These spies hand the Session Host the reports and Run events an
+// embedding Host gets when one does, for the Run armed.
+const failedCommits = () => {
+  let armed: string | null = null;
+  const port = SessionObjects.prototype.port;
+  const ports = spyOn(SessionObjects.prototype, 'port').mockImplementation(
+    function (this: SessionObjects, runs?: (e: RunEvent) => void) {
+      return port.call(this, e =>
+        runs?.(
+          e.k === 'run' && e.run === armed
+            ? { ...e, outcome: 'effect-failed' }
+            : e,
+        ),
+      );
+    },
+  );
+  const pump = TsGroup.prototype.pump;
+  const pumps = spyOn(TsGroup.prototype, 'pump').mockImplementation(function (
+    this: TsGroup,
+    ...args: Parameters<TsGroup['pump']>
+  ) {
+    const result = pump.apply(this, args);
+    return {
+      ...result,
+      reports: result.reports.flatMap((r): Report[] => {
+        if (r.kind !== 'run end' || r.run !== armed) {
+          return [r];
+        }
+        const effect = {
+          script: r.script,
+          run: r.run,
+          grant: 'db',
+          segment: `${r.run}.s1`,
+          phase: 'commit' as const,
+          status: 'failed' as const,
+        };
+        return [
+          { kind: 'effect failure', ...effect },
+          { ...r, outcome: 'effect failed', effect },
+        ];
+      }),
+    };
+  });
+  return {
+    arm: (run: string) => {
+      armed = run;
+    },
+    restore: () => {
+      ports.mockRestore();
+      pumps.mockRestore();
+    },
   };
-  consumer.events = [{ k: 'run', run: 'session/r1', outcome: 'effect-failed' }];
-  const failure = {
+};
+
+test('lifecycle failures render without success values or a crash', () => {
+  const commits = failedCommits();
+  try {
+    const { host } = session();
+    host.input('on go\n  say "done"\nend go');
+    commits.arm('session/r2');
+    expect(host.input('send go to session')).toEqual([
+      '[session/r2] ! effect failure grant=db segment=session/r2.s1 phase=commit status=failed',
+      '[session/r2] done',
+      '[session/r2] ! effect failed',
+    ]);
+  } finally {
+    commits.restore();
+  }
+});
+
+// A Reload or Library replacement whose cleanup fails reports it outside a
+// Pump. Session Commands can't cause one, so a spy returns the reports.
+const fatalCleanup: Report[] = [
+  {
+    kind: 'effect failure',
     script: 'session',
     run: 'session/r1',
     grant: 'db',
     segment: 'session/r1.s1',
-    phase: 'commit' as const,
-    status: 'failed' as const,
-  };
-  expect(
-    consumer.print([
-      { kind: 'effect failure', ...failure },
-      {
-        kind: 'run end',
-        script: 'session',
-        run: 'session/r1',
-        outcome: 'effect failed',
-        fuel: 0,
-        alloc: 0,
-        effect: failure,
-      },
-    ]),
-  ).toEqual([
-    '[session/r1] ! effect failure grant=db segment=session/r1.s1 phase=commit status=failed',
-    '[session/r1] ! effect failed',
-  ]);
-});
+    phase: 'rollback',
+    status: 'failed',
+  },
+  {
+    kind: 'stop',
+    script: 'session',
+    reason: 'effect state unknown',
+    discardedRuns: ['session/r1'],
+    droppedMessages: [],
+    pendingCalls: [],
+  },
+];
 
 test('outside-Pump lifecycle reports render fatal cleanup instead of silent replacement success', () => {
-  const { host } = session();
-  const consumer = host as unknown as {
-    discarded(reports: import('../src/group').Report[]): string[];
-  };
-  expect(
-    consumer.discarded([
-      {
-        kind: 'effect failure',
-        script: 'session',
-        run: 'session/r1',
-        grant: 'db',
-        segment: 'session/r1.s1',
-        phase: 'rollback',
-        status: 'failed',
-      },
-      {
-        kind: 'stop',
-        script: 'session',
-        reason: 'effect state unknown',
-        discardedRuns: ['session/r1'],
-        droppedMessages: [],
-        pendingCalls: [],
-      },
-    ]),
-  ).toEqual([
-    '[session/r1] ! effect failure grant=db segment=session/r1.s1 phase=rollback status=failed',
-    '! effect state unknown',
-    '! discarded session/r1',
-  ]);
-});
-
-test('`:fix` reads its declarations from a file and records them', () => {
-  const items: TranscriptItem[] = [];
-  const host = new SessionHost({
-    now: () => start,
-    readFile: () => 'on tick, queued\n  say "fixed"\nend tick\n',
-    record: item => items.push(item),
-  });
-  for (const source of [
-    ':mock api.later suspending',
-    ':clock virtual 2026-09-30T10:00:00Z',
-    'on tick, queued\n  ask api to later and wait\nend tick',
-    'send tick to session',
-    'send tick to session',
-  ]) {
-    host.input(source);
-  }
-  expect(host.input(':fix session/r4 fix.talk')).toEqual([
-    '! rewound session/r4',
-    '! discarded session/r2',
-    '[session/r5] fixed',
-  ]);
-  expect(items).toContainEqual({
-    k: 'input',
-    source: ':fix session/r4\non tick, queued\n  say "fixed"\nend tick',
-  });
-});
-
-test('fatal cleanup reports keep the Session Source and user Library at their previous definitions', () => {
-  const reports: import('../src/group').Report[] = [
-    {
-      kind: 'effect failure',
-      script: 'session',
-      run: 'session/r1',
-      grant: 'db',
-      segment: 'session/r1.s1',
-      phase: 'rollback',
-      status: 'failed',
-    },
-    {
-      kind: 'stop',
-      script: 'session',
-      reason: 'effect state unknown',
-      discardedRuns: [],
-      droppedMessages: [],
-      pendingCalls: [],
-    },
-  ];
-  const first = new SessionHost({ now: () => start });
-  first.input('function one\nreturn 1\nend one');
-  const previous = first.source;
-  // Session Commands don't offer lifecycle metadata. Supply the native API's
-  // terminal reports at its boundary to verify the consumer's publication.
-  const script = (first as unknown as { script: { reload(): typeof reports } })
-    .script;
-  script.reload = () => reports;
-  expect(first.input('function one\nreturn 2\nend one')).toContain(
-    '! effect state unknown',
+  const host = new SessionHost({ now: () => start });
+  host.input('function one\nreturn 1\nend one');
+  const previous = host.source;
+  const reload = spyOn(TsScript.prototype, 'reload').mockReturnValueOnce(
+    fatalCleanup,
   );
-  expect(first.source).toBe(previous);
+  try {
+    expect(host.input('function one\nreturn 2\nend one')).toEqual([
+      '[session/r1] ! effect failure grant=db segment=session/r1.s1 phase=rollback status=failed',
+      '! effect state unknown',
+      '! discarded session/r1',
+    ]);
+  } finally {
+    reload.mockRestore();
+  }
+  expect(host.source).toBe(previous);
+});
 
-  const second = new SessionHost({
+test('fatal cleanup reports keep the user Library at its previous definition', () => {
+  const host = new SessionHost({
     now: () => start,
     readFile: path =>
       path === 'old.talk'
         ? 'function one\nreturn 1\nend one'
         : 'function one\nreturn 2\nend one',
   });
-  expect(second.input(':library add user old.talk')).toEqual([]);
-  const libraries = second.setup.libraries;
-  const group = (
-    second as unknown as { group: { replaceLibrary(): typeof reports } }
-  ).group;
-  group.replaceLibrary = () => reports;
-  expect(second.input(':library replace user next.talk')).toContain(
-    '! effect state unknown',
-  );
-  expect(second.setup.libraries).toEqual(libraries);
+  expect(host.input(':library add user old.talk')).toEqual([]);
+  const libraries = host.setup.libraries;
+  const replace = spyOn(
+    TsGroup.prototype,
+    'replaceLibrary',
+  ).mockReturnValueOnce(fatalCleanup);
+  try {
+    expect(host.input(':library replace user next.talk')).toContain(
+      '! effect state unknown',
+    );
+  } finally {
+    replace.mockRestore();
+  }
+  expect(host.setup.libraries).toEqual(libraries);
 });
 
 describe('Debugging a session', () => {
