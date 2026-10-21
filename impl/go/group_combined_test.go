@@ -6,6 +6,7 @@ import (
 )
 
 func TestCombinedRequestAdmissionAndPump(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	ready := 0
 	g := New().NewGroup(GroupOptions{OnReady: func() { ready++ }})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable total = 0\non accumulate n\n put total + n into total\n return total\nend accumulate\n"})
@@ -33,6 +34,7 @@ func TestCombinedRequestAdmissionAndPump(t *testing.T) {
 }
 
 func TestCombinedPumpRefusalRetainsAdmission(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	ready := 0
 	g := New().NewGroup(GroupOptions{OnReady: func() { ready++ }})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 42\nend ping\n"})
@@ -64,6 +66,7 @@ func TestCombinedPumpRefusalRetainsAdmission(t *testing.T) {
 }
 
 func TestCombinedCallInvalidValueDoesNotPump(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	g := New().NewGroup(GroupOptions{})
 	id, p, _, err := g.CallPump(nil, Int(1), nil, nil, time.Now(), PumpOptions{})
 	if err == nil || id != "" || p != nil || !g.clock.IsZero() {
@@ -76,6 +79,7 @@ func TestCombinedCallInvalidValueDoesNotPump(t *testing.T) {
 }
 
 func TestCombinedFunctionCallAndStaleness(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	g := New().NewGroup(GroupOptions{})
 	home, fn := exportFunction(t, g, "on exported\n return given: 5\nend exported", Limits{})
 	_, p, _, err := g.CallPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
@@ -98,6 +102,7 @@ func TestCombinedFunctionCallAndStaleness(t *testing.T) {
 }
 
 func TestCombinedOnePumpCanLeavePending(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n repeat 100 times\n end repeat\n return 42\nend ping\n"})
 	if err != nil {
@@ -122,6 +127,7 @@ func TestCombinedOnePumpCanLeavePending(t *testing.T) {
 }
 
 func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
+	setZigRequestPumpLayout(t, "fields")
 	var g *Group
 	g = New().NewGroup(GroupOptions{OnReady: func() {
 		g.mu.Lock()

@@ -29,13 +29,19 @@ func (t *zigTraceLines) take() []string {
 	return lines
 }
 
+// setZigRequestPumpLayout selects the layout for new guests until test cleanup.
+func setZigRequestPumpLayout(t *testing.T, layout string) {
+	t.Helper()
+	old := zigRequestPump
+	zigRequestPump = layout
+	t.Cleanup(func() { zigRequestPump = old })
+}
+
 // zigCombinedLayouts runs f on new guests negotiating the fields layout.
 func zigCombinedLayouts(t *testing.T, f func(t *testing.T)) {
 	for _, layout := range []string{"fields"} {
 		t.Run(layout, func(t *testing.T) {
-			old := zigRequestPump
-			zigRequestPump = layout
-			t.Cleanup(func() { zigRequestPump = old })
+			setZigRequestPumpLayout(t, layout)
 			f(t)
 		})
 	}
@@ -377,9 +383,7 @@ func TestZigCombinedTokenRewrite(t *testing.T) {
 }
 
 func TestCombinedUnsupportedBackendDoesNotAdmit(t *testing.T) {
-	old := zigRequestPump
-	zigRequestPump = ""
-	defer func() { zigRequestPump = old }()
+	setZigRequestPumpLayout(t, "")
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 42\nend ping\n"})
 	if err != nil {
