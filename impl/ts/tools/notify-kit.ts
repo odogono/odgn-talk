@@ -6,7 +6,7 @@
 // kit needs Bun; running a sequence works in any runtime.
 import type { Call, Grant, GrantContext } from '../src/capabilities';
 import { HostError, MailboxFull, ScriptError } from '../src/errors';
-import type { Group, Message, RestoreOptions } from '../src/group';
+import type { TsGroup, Message, RestoreOptions } from '../src/group';
 import {
   changed,
   createRouter,
@@ -233,7 +233,12 @@ export const runNotifyKitSequence = (
     const grantName = step.grant ?? 'store';
     const binding = step.store ?? 'default';
     group.bindings.set(`${scriptName}.${grantName}`, binding);
-    return { group: group as unknown as Group, scriptName, grantName, binding };
+    return {
+      group: group as unknown as TsGroup,
+      scriptName,
+      grantName,
+      binding,
+    };
   };
   const callOf = (step: Step): Call<string> => ({
     ...owner(step),
@@ -323,7 +328,7 @@ export const runNotifyKitSequence = (
         const group = new StandIn(step.as!, saved.scripts, bindings, log);
         groups.set(step.as!, group);
         return {
-          group: group as unknown as Group,
+          group: group as unknown as TsGroup,
           result: {
             abandonedCalls: [],
             discardedRuns: [],
@@ -403,13 +408,13 @@ export const runNotifyKitSequence = (
         });
         return;
       case 'pumped':
-        outcome.pending = router.pumped(groupOf(step) as unknown as Group);
+        outcome.pending = router.pumped(groupOf(step) as unknown as TsGroup);
         return;
       case 'release':
         router.release({ ...owner(step), now: 0n, reason: step.reason! });
         return;
       case 'detach':
-        router.detach(groupOf(step) as unknown as Group);
+        router.detach(groupOf(step) as unknown as TsGroup);
         return;
       case 'limits':
         limits = step.limits!;
@@ -417,7 +422,7 @@ export const runNotifyKitSequence = (
       case 'checkpoint': {
         const group = groupOf(step);
         group.effects = step.effects ?? false;
-        const bytes = router.save(group as unknown as Group);
+        const bytes = router.save(group as unknown as TsGroup);
         checkpoints.set(step.as!, {
           bytes,
           from: group,

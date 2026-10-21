@@ -12,10 +12,10 @@ npm install @northtalk/ts
 ```
 
 ```ts
-import { num } from '@northtalk/ts';
+import { createCore, num } from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
-const { group, drive } = newDrivenGroup({ name: 'example' });
+const { group, drive } = newDrivenGroup(createCore(), { name: 'example' });
 const script = group.load({
   name: 'main',
   source: 'on total a, b\n  return a + b\nend total',

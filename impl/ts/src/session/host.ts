@@ -32,14 +32,14 @@ import {
   observeValues,
   queuedInputs,
   restore,
-  type Group,
+  type TsGroup,
   type Inspection,
   type LimitOverride,
   type Location,
   type PumpResult,
   type Report,
   type RunEvent,
-  type Script,
+  type TsScript,
 } from '../group';
 import { defaultLimits } from '../machine';
 import { compileLibrary, type Library } from '../library';
@@ -311,10 +311,10 @@ const nodes = (node: SyntaxNode) =>
 
 /** A Session Host for one session (chapter 12). */
 export class SessionHost {
-  private group: Group | null = null;
+  private group: TsGroup | null = null;
   private objectSession: SessionObjects | null = null;
   private objectBindings: Record<string, HostObject> = {};
-  private script: Script | null = null;
+  private script: TsScript | null = null;
   private declarations: Declaration[] = [];
   // The implicit Handlers the Script still has, until a Reload drops them.
   private implicit = new Set<string>();

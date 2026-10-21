@@ -24,7 +24,7 @@ import {
   type Decimal,
 } from './values';
 import { unitKinds } from './generated/syntax';
-import type { Group } from './group';
+import type { Group } from './embedding';
 import { RESERVED } from './lexer';
 import { validArgumentLabel } from './selectors';
 

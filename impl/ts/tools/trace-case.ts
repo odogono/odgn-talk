@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Setup } from '../src/replay';
-import type { Group } from '../src/index';
+import type { TsGroup } from '../src/index';
 import {
   checkTraceCase,
   replayLines,
@@ -26,7 +26,7 @@ export const replay = (
   setup: Setup,
   lines: readonly string[],
   options: {
-    configureDebug?: (group: Group) => void;
+    configureDebug?: (group: TsGroup) => void;
     restoreBetweenPumps?: boolean;
   } = {},
 ): string[] => replayLines(reader(dir), setup, lines, options);

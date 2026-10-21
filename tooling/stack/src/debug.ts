@@ -3,7 +3,7 @@ import {
   list,
   type CarryOver,
   type CodeUnit,
-  type Group,
+  type TsGroup,
   type PumpOptions,
   type PumpResult,
 } from '@northtalk/ts';
@@ -50,7 +50,7 @@ export class ReplayDebugger {
   private driver!: Generator<ReplayEvent, string[], ReplayAction | undefined>;
   private event: ReplayEvent | null = null;
   private debug: LiveDebugger | null = null;
-  private group: Group | null = null;
+  private group: TsGroup | null = null;
   private loadedSources: DebugSource[] = [];
   private output: string[] = [];
   private breaks: SourceBreakpoint[] = [];
@@ -360,7 +360,7 @@ export class LiveDebugger {
   private lastClock: bigint | null = null;
 
   constructor(
-    private readonly group: Group,
+    private readonly group: TsGroup,
     private readonly environment: { now(): bigint },
   ) {
     this.controller = group.debug();

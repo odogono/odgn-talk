@@ -3,7 +3,7 @@
 // corpus page run exactly the same checks. No file or process access here.
 import { replayTrace, same, type Setup } from '../src/replay';
 import type { CaseCore } from '../src/setup';
-import type { Group } from '../src/index';
+import type { TsGroup } from '../src/index';
 import {
   parseTranscript,
   replayTranscript,
@@ -38,7 +38,7 @@ export const replayLines = (
   setup: Setup,
   lines: readonly string[],
   options: {
-    configureDebug?: (group: Group) => void;
+    configureDebug?: (group: TsGroup) => void;
     core?: CaseCore;
     restoreBetweenPumps?: boolean;
   } = {},

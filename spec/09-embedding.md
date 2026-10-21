@@ -35,7 +35,7 @@ The Go embedding's module path is `github.com/odogono/odgn-talk/impl/go`, with t
 
 ### Driving a TS Group
 
-For a Host that runs from the event loop, `newDrivenGroup(options)` from `@northtalk/ts/driver` creates a Group with readiness already wired to its driver and returns `{ group, drive }`. It takes the Group's `name`, optional `seed` and `trace`, and the driver's `clock`, `pump`, `setDeadline`, `onPump` and `onError` options. It owns `onReady`; the Host can queue Requests as soon as the factory returns.
+For a Host that runs from the event loop, `newDrivenGroup(core, options)` from `@northtalk/ts/driver` creates a Group on `core`, the TS Core or the Zig Host Adapter's, with readiness already wired to its driver and returns `{ group, drive }`. It takes the Group's `name`, optional `seed` and `trace`, and the driver's `clock`, `pump`, `setDeadline`, `onPump` and `onError` options. It owns `onReady`; the Host can queue Requests as soon as the factory returns.
 
 The driver schedules one Pump on a later macrotask when input arrives, continues after a Fuel Slice or rewind, and arms a timer for the next deadline. Its default Clock reads epoch microseconds from `Date.now()` and clamps readings so they never go backwards. A Host supplying its own Clock also supplies `setDeadline`. `onPump` receives each Pump result after it returns, and `onError` receives a Pump exception. `drive.idle()` waits until no Pump is scheduled or running; waiting only on a deadline counts as idle. `drive.stop()` cancels scheduled Pumps and the deadline timer and ignores later readiness; it does not stop Scripts or settle their pending Requests.
 
@@ -45,7 +45,7 @@ The driver schedules one Pump on a later macrotask when input arrives, continues
 
 Before closing, the Host stops admitting work, including new Scripts and Reloads. Closing is idempotent: repeated calls share one Promise and the first reason. It works after `drive.stop()` too, restarting scheduling only to finish shutdown. Calling `stop()` during a close does not interrupt it. A Clock, Pump or driver callback failure rejects `close` and cancels scheduling; shutdown may be incomplete. A Host `run` Promise that ignores cancellation and never settles keeps `close` pending; the driver imposes no timeout and cannot force Host I/O to finish. `drive.idle()` retains its narrower scheduling-only meaning.
 
-The driver implements `[Symbol.asyncDispose]()` as `close()`, so a Host can use `await using drive = newDrivenGroup(options).drive` to close at scope exit. This syntax requires runtime support for `Symbol.asyncDispose`; the driver declarations reference TypeScript's `ESNext.Disposable` library. Both explicit close and disposal finish before the Host releases resources the Operations use.
+The driver implements `[Symbol.asyncDispose]()` as `close()`, so a Host can use `await using drive = newDrivenGroup(core, options).drive` to close at scope exit. This syntax requires runtime support for `Symbol.asyncDispose`; the driver declarations reference TypeScript's `ESNext.Disposable` library. Both explicit close and disposal finish before the Host releases resources the Operations use.
 
 ## Time and reports
 
@@ -533,7 +533,7 @@ Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tag
 
 - **Idiom:** how each Core expresses the interface: errors or exceptions, `Start`/`Answer` or a Promise, and the builders for maps.
 - **Wording:** a `HostError`'s detail, and a diagnostic's message. Their codes are normative.
-- **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/impl/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `newDrivenGroup(options)` and `autoDrive(group)` from `@northtalk/ts/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
+- **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/impl/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `newDrivenGroup(core, options)` and `autoDrive(group)` from `@northtalk/ts/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
 - **The TS Core's debug-pause hook** ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [Appendix C](appendix-c-handed-off-open.md)).
 - **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative; a frame may not be refused solely for its nesting depth.
 - **The Host Manifest** is for tooling, and the Core never reads it.

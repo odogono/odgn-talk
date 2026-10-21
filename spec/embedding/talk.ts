@@ -1,7 +1,9 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
 // Metering extensions and SQLite perStep signatures are staged in
 // metered-operations.md#target-embedding-declarations until runtime implementation.
-// The package is @northtalk/ts.
+// The package is @northtalk/ts. Its Core, Group and Script are interfaces that
+// the TS Core and the Zig Host Adapter (@northtalk/ts/wasm) both implement
+// (ADR 0121); each Core's own extras are noted where they apply.
 //
 // This file mirrors talk.go call for call. The differences are idiom only
 // (ADR 0015): exceptions instead of error values, an optional
@@ -612,6 +614,7 @@ export interface Library {
 
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
+  readonly versions: Versions;
   /**
    * A plain lifecycle makes each Grant its own coordinator. Host functions
    * take and return their Shapes' JS forms (ADR 0120). A Capability with a
@@ -635,6 +638,7 @@ export interface Core {
   newGroup(o: GroupOptions): Group;
   restore(save: Uint8Array, o: RestoreOptions): { group: Group; result: RestoreResult };
 }
+/** The TS Core's is synchronous; @northtalk/ts/wasm's returns a Promise, as it compiles the module. */
 export declare function createCore(): Core;
 /**
  * Dedents NorthTalk source written as a template literal. Reads the raw
@@ -742,7 +746,7 @@ export interface Group {
   /** Worker. Synchronous. now is epoch microseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
   /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
-  save(o?: SaveOptions): Uint8Array;
+  save(): Uint8Array; // the TS Core's Group also takes SaveOptions
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
   inspect(): Inspection;
@@ -1032,6 +1036,6 @@ export interface Drive {
 }
 export type DrivenGroupOptions = Omit<GroupOptions, "onReady"> & AutoDriveOptions;
 /** Creates a Group with readiness wired before returning. The factory owns onReady. */
-export declare function newDrivenGroup(o: DrivenGroupOptions): { drive: Drive; group: Group };
+export declare function newDrivenGroup(core: Pick<Core, "newGroup">, o: DrivenGroupOptions): { drive: Drive; group: Group };
 /** For an existing Group whose onReady calls the returned driver's ready method. */
 export declare function autoDrive(group: Group, o?: AutoDriveOptions): Drive;

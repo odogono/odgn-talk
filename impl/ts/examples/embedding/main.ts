@@ -1,4 +1,10 @@
-import { defineCapability, ScriptError, shape, text } from '@northtalk/ts';
+import {
+  createCore,
+  defineCapability,
+  ScriptError,
+  shape,
+  text,
+} from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
 type CustomerDirectory = {
@@ -33,7 +39,7 @@ const directory: CustomerDirectory = {
   },
 };
 
-const { group, drive } = newDrivenGroup({
+const { group, drive } = newDrivenGroup(createCore(), {
   name: 'greetings',
   pump: { fuelSlice: 1000, fuelCap: 5000 },
   onError: error => console.error('Pump failed:', error),

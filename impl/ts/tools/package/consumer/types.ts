@@ -6,6 +6,7 @@ import {
   parseInstant,
   type Group,
   type Value,
+  createCore,
 } from '@northtalk/ts';
 import {
   encodeBinaryValue,
@@ -22,7 +23,7 @@ import { SessionHost } from '@northtalk/ts/session';
 import type { buildSetupGroup } from '@northtalk/ts/setup';
 import type { openSqliteDatabase } from '@northtalk/ts/sqlite';
 import type { encodeContents } from '@northtalk/ts/store';
-import type { createCore } from '@northtalk/ts/wasm';
+import type { createCore as createWasmCore } from '@northtalk/ts/wasm';
 
 export type Modules = [
   DebugController,
@@ -31,7 +32,7 @@ export type Modules = [
   typeof buildSetupGroup,
   typeof openSqliteDatabase,
   typeof encodeContents,
-  typeof createCore,
+  typeof createWasmCore,
 ];
 
 const clock: bigint = parseInstant('2026-10-17T09:00:00Z');
@@ -60,12 +61,14 @@ const drivenOptions: DrivenGroupOptions = {
   clock: () => clock,
   pump: { fuelSlice: 100 },
 };
-const driven = newDrivenGroup(drivenOptions);
+const driven = newDrivenGroup(createCore(), drivenOptions);
 export const drivenGroup: Group = driven.group;
 export const drivenIdle: Promise<void> = driven.drive.idle();
 export const drivenClosed: Promise<void> = driven.drive.close();
 
 export const disposeDrivenGroup = async () => {
-  await using drive = newDrivenGroup({ name: 'dispose-types' }).drive;
+  await using drive = newDrivenGroup(createCore(), {
+    name: 'dispose-types',
+  }).drive;
   await drive.idle();
 };

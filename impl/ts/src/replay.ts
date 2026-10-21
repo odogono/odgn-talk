@@ -45,7 +45,7 @@ import {
   nothing,
   num,
   text,
-  type Group,
+  type TsGroup,
   type Value,
 } from './index';
 import { traceValue } from './trace';
@@ -697,7 +697,7 @@ const valuesOf = (list: Value): Value[] =>
 const isCrossing = (line: string) => /^(call|prop|effect) /.test(line);
 
 // Make a `cancel-run` or `rewind-run` line's call on its Run's Script.
-const landRunInput = (group: Group, r: Parsed) => {
+const landRunInput = (group: TsGroup, r: Parsed) => {
   const script = group.script(r.ids[0]!.split('/r')[0]!)!;
   if (r.name === 'rewind-run') {
     script.rewindRun(r.ids[0]!);
@@ -718,7 +718,7 @@ const driveReplay = function* (
     incremental = false,
     core = tsCore,
   }: {
-    configureDebug?: (group: Group) => void;
+    configureDebug?: (group: TsGroup) => void;
     core?: CaseCore;
     incremental?: boolean;
     restoreBetweenPumps?: boolean;
@@ -761,7 +761,7 @@ const driveReplay = function* (
   };
   const functions = new Map<string, Value>();
   const receive = (value: Value) => rememberFunctions(value, functions);
-  let group: Group;
+  let group: TsGroup;
   const sessionObjects = setup.sessionObjects?.length
     ? new SessionObjects(() => {}, setup.sessionObjects)
     : null;
@@ -1790,7 +1790,7 @@ const driveReplay = function* (
 
 type ReplayReady = {
   callIds: string[];
-  group: Group;
+  group: TsGroup;
   saveIds: string[];
   state: 'ready';
 };
@@ -1801,7 +1801,7 @@ export const replayTrace = function* (
   setup: Setup,
   lines: readonly string[],
   options: {
-    configureDebug?: (group: Group) => void;
+    configureDebug?: (group: TsGroup) => void;
     core?: CaseCore;
     restoreBetweenPumps?: boolean;
     trace?: string[];
@@ -1862,7 +1862,7 @@ export const createReplayHost = (
 };
 
 export type ReplayAction = 'resume' | 'step' | 'stepOver' | 'stepOut';
-export type ReplayEvent = { group: Group; hostInputIndex: number } & (
+export type ReplayEvent = { group: TsGroup; hostInputIndex: number } & (
   | { applied?: boolean; state: 'input' }
   | { pause: DebugPause; state: 'paused' }
   | { result: PumpResult; state: 'pumped' }

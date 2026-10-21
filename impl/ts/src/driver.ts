@@ -5,14 +5,10 @@
 // public embedding interface. Closing also waits for TS Host Promises, outside parity.
 //
 // newDrivenGroup creates a Group with its readiness already wired to a driver.
+// Both work on either Core (ADR 0121), and import nothing from the TS Core.
 import { nowMicros } from './dates';
-import {
-  newGroup,
-  type Group,
-  type GroupOptions,
-  type PumpOptions,
-  type PumpResult,
-} from './group';
+import type { Group } from './embedding';
+import type { GroupOptions, PumpOptions, PumpResult } from './group';
 import { waitForOperations } from './operation-promises';
 
 export type AutoDriveOptions = {
@@ -48,12 +44,18 @@ export type Drive = {
 export type DrivenGroupOptions = Omit<GroupOptions, 'onReady'> &
   AutoDriveOptions;
 
-/** Creates a Group ready to drive queued Inputs from the Host's event loop. */
-export const newDrivenGroup = (
+/** Creates a Group on `core` ready to drive queued Inputs from the Host's event loop. */
+export const newDrivenGroup = <G extends Group>(
+  core: { newGroup(o: GroupOptions): G },
   o: DrivenGroupOptions,
-): { drive: Drive; group: Group } => {
+): { drive: Drive; group: G } => {
   const { name, seed, trace, ...options } = o;
-  const group = newGroup({ name, seed, trace, onReady: () => drive.ready() });
+  const group = core.newGroup({
+    name,
+    seed,
+    trace,
+    onReady: () => drive.ready(),
+  });
   const drive = autoDrive(group, options);
   return { group, drive };
 };

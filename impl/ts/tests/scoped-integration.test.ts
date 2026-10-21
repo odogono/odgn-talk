@@ -10,6 +10,7 @@ import {
   shape,
   text,
   type Call,
+  type Group,
 } from '../src/index';
 
 const library = (value: number) =>
@@ -128,7 +129,10 @@ test('the public API keeps shared Grant templates distinct across Scripts and sa
     },
   });
   const grant = cap.grant('all', 'shared');
-  const groups = [newGroup({ name: 'same' }), newGroup({ name: 'same' })];
+  const groups: Group[] = [
+    newGroup({ name: 'same' }),
+    newGroup({ name: 'same' }),
+  ];
   for (const group of groups) {
     for (const name of ['a', 'b']) {
       group

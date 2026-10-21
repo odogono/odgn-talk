@@ -50,7 +50,10 @@ export const smoke = async () => {
     (await combined.requested.result).toString() === '42',
     'Combined result',
   );
-  const driven = driver.newDrivenGroup({ name: 'driven', clock: () => clock });
+  const driven = driver.newDrivenGroup(talk.createCore(), {
+    name: 'driven',
+    clock: () => clock,
+  });
   let cleaned = false;
   const cleanup = talk.defineCapability('cleanup', {
     fetch: {

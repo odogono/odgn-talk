@@ -16,7 +16,7 @@ import {
   type SemanticNode,
   type SemanticResult,
   type SyntaxNode,
-  type Script,
+  type CompiledScript,
 } from '@northtalk/ts';
 import { lintSyntax, type Lint, type LintProfile } from '../lint';
 import { grantDeclarations, type HostManifest } from './manifest';
@@ -29,7 +29,7 @@ export type Analysis = {
   diagnostics: LspDiagnostic[];
   document: Document;
   lints: Lint[];
-  loaded?: Script;
+  loaded?: CompiledScript;
   names: SemanticName[];
   nodes: SemanticNode[];
   syntax: SyntaxNode;
@@ -242,7 +242,7 @@ export const analyzeWorkspace = (
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();
-  const load = (analysis: Analysis): Script | undefined => {
+  const load = (analysis: Analysis): CompiledScript | undefined => {
     const { document, checked } = analysis;
     if (cached(document)) {
       return analysis.loaded;
@@ -254,7 +254,7 @@ export const analyzeWorkspace = (
       return undefined;
     }
     visiting.add(document.uri);
-    const links = new Map<string, Script>();
+    const links = new Map<string, CompiledScript>();
     let importsReady = true;
     for (const use of analysis.names.filter(n => n.role === 'library')) {
       const lib = libraries.get(use.text);

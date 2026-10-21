@@ -50,10 +50,10 @@ to the local TS Core.
 ## Load a Script and call a Handler
 
 ```ts
-import { num, talk } from '@northtalk/ts';
+import { createCore, num, talk } from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
-const { group, drive } = newDrivenGroup({ name: 'calculator' });
+const { group, drive } = newDrivenGroup(createCore(), { name: 'calculator' });
 const script = group.load({
   name: 'main',
   source: talk`
@@ -120,7 +120,14 @@ the Script a **Grant** containing the Operations it may call.
 This complete `main.ts` looks up a customer's name through an app-owned service:
 
 ```ts
-import { defineCapability, ScriptError, shape, talk, text } from '@northtalk/ts';
+import {
+  createCore,
+  defineCapability,
+  ScriptError,
+  shape,
+  talk,
+  text,
+} from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
 type CustomerDirectory = {
@@ -156,7 +163,7 @@ const directory: CustomerDirectory = {
   },
 };
 
-const { group, drive } = newDrivenGroup({
+const { group, drive } = newDrivenGroup(createCore(), {
   name: 'greetings',
   pump: { fuelSlice: 1000, fuelCap: 5000 },
   onError: error => console.error('Pump failed:', error),
@@ -206,8 +213,9 @@ with a `do` callback returning its result, and call it with `ask …` without
 
 ## Drive execution and manage lifetime
 
-`newDrivenGroup` creates a Group connected to an event-loop driver and returns
-`{ group, drive }`. It combines Group options (`name`, optional `seed` and
+`newDrivenGroup(core, options)` creates a Group on `core` connected to an
+event-loop driver and returns `{ group, drive }`. It works on either Core, so
+`core` may come from `@northtalk/ts/wasm` too. It combines Group options (`name`, optional `seed` and
 `trace`) with driver options (`clock`, `pump`, `setDeadline`, `onPump` and
 `onError`). The factory owns `onReady`: queued inputs, including asynchronous
 Operation answers, schedule a later Pump automatically. The driver also schedules
@@ -279,9 +287,10 @@ rejects close and stops scheduling; cleanup may be incomplete.
 For scope-based lifetime management, the driver also supports async disposal:
 
 ```ts
+import { createCore } from '@northtalk/ts';
 import { newDrivenGroup } from '@northtalk/ts/driver';
 
-const driven = newDrivenGroup({ name: 'app' });
+const driven = newDrivenGroup(createCore(), { name: 'app' });
 await using drive = driven.drive;
 // Load Scripts through driven.group and send requests here.
 // Scope exit awaits drive.close(), even if the scope throws.

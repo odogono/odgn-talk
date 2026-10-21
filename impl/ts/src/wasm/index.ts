@@ -10,10 +10,9 @@ export {
   type WasmSource,
 } from './core';
 export { WasmGroup, WasmScript } from './group';
-export type { Versions } from './session';
+export type { Versions } from '../versions';
+export type { Core, Group, Script } from '../embedding';
 export { InstanceLostError } from './reactor';
-export type { WasmGroup as Group, WasmScript as Script } from './group';
-export type { WasmCore as Core } from './core';
 
 export {
   HostError,
@@ -22,9 +21,11 @@ export {
   ScriptError,
   type HostErrorCode,
   type LoadDiagnostic,
+  type SendFailedReason,
 } from '../errors';
 export type {
   HostObject,
+  ObjectElements,
   ObjectKind,
   ObjectKindDef,
   PropDef,
@@ -34,6 +35,7 @@ export {
   shape,
   type Call,
   type CapabilityDef,
+  type CapabilityDefiner,
   type CoordinatedLifecycle,
   type Cost,
   type EffectResult,
@@ -44,6 +46,9 @@ export {
   type GrantContext,
   type ImmediateOp,
   type Operation,
+  type Operations,
+  type PlainArg,
+  type PlainResult,
   type ReleaseHook,
   type ReleaseReason,
   type ScopeDecl,
@@ -78,7 +83,23 @@ export type {
   Settlement,
   Verdict,
 } from '../group';
-export { formatInstant, parseInstant } from '../dates';
+export { formatInstant, nowMicros, parseInstant } from '../dates';
+export { talk } from '../talk';
+export {
+  fromValue,
+  toValue,
+  type FromValueOptions,
+  type PlainValue,
+  type ToValueOptions,
+} from '../plain';
+export type { LimitName, Limits, Outcome } from '../machine';
+export type {
+  CausalWork,
+  RunAccounting,
+  RunAncestry,
+  RunDiscarded,
+  RunStarted,
+} from '../run-accounting';
 export {
   Value,
   Decimal,

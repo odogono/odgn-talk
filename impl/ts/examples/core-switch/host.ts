@@ -1,11 +1,11 @@
-// A Host written once against the embedding API (spec/embedding/talk.ts),
-// given the package it runs on: ts.ts passes @northtalk/ts and wasm.ts
-// @northtalk/ts/wasm. Nothing else differs.
+// A Host written once against the embedding interface both packages export
+// (ADR 0121), given the package it runs on: ts.ts passes @northtalk/ts and
+// wasm.ts @northtalk/ts/wasm. Nothing else differs.
 //
 // It loads a Script whose Handler waits on a suspending Operation, Pumps it
 // to that wait, saves the Group, restores the save into a fresh Group, answers
 // the pending call there and Pumps the Run to its end.
-import type { CapabilityDef, Grant, Report, Value } from '../../src/index';
+import type { CapabilityDef, Core, Report, Value } from '../../src/index';
 
 const shop = `script variable ledger = []
 
@@ -18,32 +18,6 @@ on order sku, qty
 end order
 `;
 
-type Group = {
-  inspect(): { scripts: { name: string; vars: [string, Value][] }[] };
-  load(o: {
-    grants: Record<string, Grant<string>>;
-    name: string;
-    source: string;
-  }): { request(m: { args: Value[]; name: string }): { id: string } };
-  pump(now: bigint): { reports: Report[]; state: string };
-  save(): Uint8Array;
-  settle(id: string, s: { answer: Value }): unknown;
-};
-type Core = {
-  defineCapability: (typeof import('../../src/index'))['defineCapability'];
-  newGroup(o: { name: string; trace?: (line: string) => void }): Group;
-  restore(
-    save: Uint8Array,
-    o: {
-      grants(script: string, name: string): Grant<string> | undefined;
-      libraries: [];
-      name: string;
-      onMismatch: 'reject';
-      resolve(): undefined;
-      trace?: (line: string) => void;
-    },
-  ): { group: Group; result: { pending: { id: string }[] } };
-};
 /** What the Host takes from either package. */
 export type NorthTalk = {
   createCore(o?: { wasm?: unknown }): Core | Promise<Core>;

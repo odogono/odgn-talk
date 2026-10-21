@@ -803,7 +803,7 @@ export type RunHost = {
    */
   fail(id: string, error: HostScriptError | null, detail?: string): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
-  readonly group: import('./group').Group;
+  readonly group: import('./group').TsGroup;
   isDisabled(name: string): boolean;
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */

@@ -8,7 +8,7 @@
 // Runtime checks supply --setups with pre-parsed TOML so the same runner runs on Node.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import type { GrantDecls, Group, Library } from '../src/index';
+import type { GrantDecls, TsGroup, Library } from '../src/index';
 import type { Setup } from '../src/replay';
 import type { CaseCore } from '../src/setup';
 import { createCore, type WasmGroup } from '../src/wasm/index';
@@ -62,8 +62,8 @@ const debug = Object.freeze({
     throw new DeferredCaseError('a debugger landing');
   },
 });
-const asGroup = (group: WasmGroup): Group =>
-  Object.assign(group, { debug: () => debug }) as unknown as Group;
+const asGroup = (group: WasmGroup): TsGroup =>
+  Object.assign(group, { debug: () => debug }) as unknown as TsGroup;
 
 const caseCore = async (): Promise<CaseCore> => {
   const core = await createCore({
