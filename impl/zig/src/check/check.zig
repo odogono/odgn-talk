@@ -341,6 +341,7 @@ pub fn checkWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast.T
     defer {
         while (c.open.items.len > 0) c.free(c.open.items[c.open.items.len - 1]);
         c.open.deinit(scratch);
+        c.freeTables();
     }
     try c.run();
     var lines = try tree.lineIndex(arena);
@@ -639,19 +640,19 @@ const Checker = struct {
         for (decls) |d| if (d.data == .handler) {
             handler_count += 1;
         };
-        try c.handlers.ensureTotalCapacity(c.a, handler_count);
-        try c.handler_names.ensureTotalCapacity(c.a, handler_count);
+        try c.handlers.ensureTotalCapacity(c.scratch, handler_count);
+        try c.handler_names.ensureTotalCapacity(c.scratch, handler_count);
         try c.suspends.ensureTotalCapacity(c.a, handler_count);
         try c.bodies.ensureTotalCapacity(c.a, decls.len);
-        try c.scopes.ensureTotalCapacity(c.a, decls.len);
+        try c.scopes.ensureTotalCapacity(c.scratch, decls.len);
         // An extension's inherited names come first: its Script Variables
         // number on from the Script's.
         for (c.context.inherited) |x| {
             if (x.variable) {
-                try c.variables.put(c.a, x.name, @intCast(c.variables.count()));
+                try c.variables.put(c.scratch, x.name, @intCast(c.variables.count()));
             } else {
                 const names = if (x.export_.kind == .handler) &c.inherited_handlers else &c.imports;
-                try names.put(c.a, x.name, .{ .decl = std.math.maxInt(u32), .name = 0, .export_ = x.export_ });
+                try names.put(c.scratch, x.name, .{ .decl = std.math.maxInt(u32), .name = 0, .export_ = x.export_ });
             }
         }
         // The unit's names, and their clashes.
@@ -661,9 +662,9 @@ const Checker = struct {
             switch (d.data) {
                 .script_variable => |v| {
                     if (c.context.library) try c.report(.not_in_a_library, v.keyword);
-                    try c.variables.put(c.a, c.text(v.name), @intCast(c.variables.count()));
+                    try c.variables.put(c.scratch, c.text(v.name), @intCast(c.variables.count()));
                 },
-                .constant => |k| try c.constants.put(c.a, c.text(k.name), index),
+                .constant => |k| try c.constants.put(c.scratch, c.text(k.name), index),
                 .function => |f| {
                     var required: usize = 0;
                     var seen_default = false;
@@ -673,16 +674,16 @@ const Checker = struct {
                             if (seen_default) try c.report(.default_order, p.name);
                         }
                     }
-                    try c.functions.put(c.a, c.text(f.name), .{ .decl = index, .required = required, .total = f.params.len });
+                    try c.functions.put(c.scratch, c.text(f.name), .{ .decl = index, .required = required, .total = f.params.len });
                 },
                 .handler => |h| {
                     if (h.fallback and c.context.library) try c.report(.not_in_a_library, h.on);
                     const sel = if (h.fallback) "any message" else try c.selector(h.name, h.labels);
-                    const entry = try c.handlers.getOrPut(c.a, sel);
+                    const entry = try c.handlers.getOrPut(c.scratch, sel);
                     if (!entry.found_existing) entry.value_ptr.* = .{ .decl = index };
-                    try entry.value_ptr.clauses.append(c.a, index);
+                    try entry.value_ptr.clauses.append(c.scratch, index);
                     if (!h.fallback) {
-                        const n = try c.handler_names.getOrPut(c.a, c.text(h.name));
+                        const n = try c.handler_names.getOrPut(c.scratch, c.text(h.name));
                         if (!n.found_existing) n.value_ptr.* = index;
                     }
                 },
@@ -701,7 +702,7 @@ const Checker = struct {
                             continue;
                         }
                         const local = if (u.rename) |r| r else n;
-                        const entry = try c.imports.getOrPut(c.a, c.text(local));
+                        const entry = try c.imports.getOrPut(c.scratch, c.text(local));
                         if (entry.found_existing) {
                             try c.report(.name_clash, local);
                         } else entry.value_ptr.* = .{ .decl = index, .name = local, .export_ = ex };
@@ -791,9 +792,26 @@ const Checker = struct {
         b.locals = try c.a.dupe([]const u8, s.order.items);
         b.binding = try c.a.dupe(Tok, s.order_tokens.items);
         b.captures = try c.a.dupe([]const u8, s.captures.items);
-        try c.scopes.append(c.a, .{ .kind = s.kind, .selector = s.selector, .handler = s.handler, .body = s.body, .sites = try c.a.dupe(Site, s.sites.items) });
+        try c.scopes.ensureUnusedCapacity(c.scratch, 1);
+        c.scopes.appendAssumeCapacity(.{ .kind = s.kind, .selector = s.selector, .handler = s.handler, .body = s.body, .sites = try c.scratch.dupe(Site, s.sites.items) });
         c.free(s);
         return @intCast(c.scopes.items.len - 1);
+    }
+
+    /// Frees the tables only the check reads, so the lowering holds no
+    /// more than the Result (#1461).
+    fn freeTables(c: *Checker) void {
+        for (c.handlers.values()) |*h| h.clauses.deinit(c.scratch);
+        for (c.scopes.items) |d| c.scratch.free(d.sites);
+        c.scopes.deinit(c.scratch);
+        c.variables.deinit(c.scratch);
+        c.constants.deinit(c.scratch);
+        c.functions.deinit(c.scratch);
+        c.handlers.deinit(c.scratch);
+        c.handler_names.deinit(c.scratch);
+        c.imports.deinit(c.scratch);
+        c.inherited_handlers.deinit(c.scratch);
+        c.function_scopes.deinit(c.scratch);
     }
 
     fn free(c: *Checker, s: *Scope) void {
@@ -820,7 +838,7 @@ const Checker = struct {
         try c.collectBlock(s, f.body);
         try c.block(s, f.body, .{});
         const done = try c.finishBody(s);
-        try c.function_scopes.put(c.a, c.text(f.name), done);
+        try c.function_scopes.put(c.scratch, c.text(f.name), done);
     }
 
     fn handlerClause(c: *Checker, h: *const ast.Handler, decl: u32) Allocator.Error!void {
