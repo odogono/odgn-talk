@@ -102,6 +102,10 @@ _Avoid_: reference, native object, proxy
 One synchronous call from a Run into its Host during a Pump: an Operation call or a Host Object property get or set. It writes one `call` or `prop` record, and it is where a pending Stop, cancellation, Rewind or refusal lands.
 _Avoid_: callout, host call
 
+**Crossing Pause**:
+A Pump stopped at a Host Crossing until its Host answers, acknowledges a Grant release, or takes the crossing's Trace. Distinct from a paused Run.
+_Avoid_: deferral, crossing (alone)
+
 **Script Variable**:
 A variable declared at Script level, visible to all of the Script's Handlers and kept for as long as the Host keeps the Script loaded.
 _Avoid_: global, static, script property

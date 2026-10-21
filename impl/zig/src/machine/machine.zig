@@ -3162,6 +3162,73 @@ pub const Group = struct {
         out.writeAll(batch) catch {};
     }
 
+    // The crossing interface a transport Host uses. A Crossing Pause for a
+    // Grant release and one for the crossing's Trace can hold at once: a
+    // crossing deferred by a release pause also pauses for its Trace.
+
+    /// A transport release callback is waiting for the Host's acknowledgement.
+    pub fn pauseForRelease(g: *Group) void {
+        g.release_pause = true;
+    }
+
+    pub fn releasePaused(g: *const Group) bool {
+        return g.release_pause;
+    }
+
+    /// The Host acknowledged the release.
+    pub fn clearReleasePause(g: *Group) void {
+        g.release_pause = false;
+    }
+
+    pub fn tracePaused(g: *const Group) bool {
+        return g.trace_pause;
+    }
+
+    /// The Host took the paused crossing's Trace.
+    pub fn clearTracePause(g: *Group) void {
+        g.trace_pause = false;
+    }
+
+    /// The transport is about to re-enter the callback that paused it.
+    pub fn beginAnswer(g: *Group) void {
+        g.answering_crossing = true;
+    }
+
+    /// The re-entered callback took its answer.
+    pub fn answerTaken(g: *Group) void {
+        g.answering_crossing = false;
+    }
+
+    /// Holds the Trace while a transport callback runs, as `holdTrace` does
+    /// for a native one. `start` is false when the hold may only go on.
+    pub fn holdCallbackTrace(g: *Group, outer: ?*std.Io.Writer, start: bool) void {
+        if (start and g.pumping and g.held_trace == null and outer != null) {
+            if (g.held == null) g.held = .init(g.gpa);
+            g.held_trace = outer;
+        }
+        if (g.held_trace != null) g.trace = &g.held.?.writer;
+    }
+
+    /// Whether an inline record must wait to land after the crossing's.
+    pub fn delaysRecords(g: *const Group) bool {
+        return g.pumping and g.held_trace == null and !g.pump_finishing;
+    }
+
+    /// Lands an owned Trace record after the crossing's records.
+    pub fn delayRecord(g: *Group, record: []u8) !void {
+        try g.landing.append(g.gpa, .{ .record = record, .delayed = true });
+    }
+
+    /// The Host calls of Function Values found gone since they were last
+    /// cleared, for a reply to list before it calls `clearGoneCalls`.
+    pub fn goneCalls(g: *const Group) []const u64 {
+        return g.gone_calls.items;
+    }
+
+    pub fn clearGoneCalls(g: *Group) void {
+        g.gone_calls.clearRetainingCapacity();
+    }
+
     /// Queues cancelling a Delivery, by its delivery number.
     pub fn cancelDeliveryInput(g: *Group, id: u64) !void {
         try g.enqueue(.{ .cancel_delivery = id });

@@ -276,7 +276,7 @@ test "stopped Script Reload releases Grants once before publishing, synchronousl
             const h: *@This() = @ptrCast(@alignCast(context.?));
             h.releases += 1;
             const g: *machine.Group = @ptrCast(@alignCast(gc.group.?));
-            if (h.pause and gc.reason == .reload) g.release_pause = true;
+            if (h.pause and gc.reason == .reload) g.pauseForRelease();
         }
     };
     const gpa = testing.allocator;
@@ -293,7 +293,7 @@ test "stopped Script Reload releases Grants once before publishing, synchronousl
         try g.pump(.{ .seconds = 1790000000, .micros = 0 });
         try testing.expect(s.stopped != null);
         try testing.expectEqual(@as(usize, 1), host.releases);
-        g.release_pause = false;
+        g.clearReleasePause();
         try testing.expectEqual(.refused, try g.reload(s, "on", false, false));
         try testing.expectEqual(@as(usize, 1), host.releases);
         const result = try g.reload(s, fresh, false, false);
@@ -302,7 +302,7 @@ test "stopped Script Reload releases Grants once before publishing, synchronousl
             try testing.expectEqual(.paused, result);
             try testing.expectEqualStrings(old, s.source);
             try testing.expect(s.stopped != null);
-            g.release_pause = false;
+            g.clearReleasePause();
             try testing.expectEqual(.reloaded, (try g.resumeWork()).reload);
         } else {
             try testing.expectEqual(.reloaded, result);
