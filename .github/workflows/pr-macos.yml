@@ -1,0 +1,53 @@
+name: PR native macOS sidecar
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'impl/zig/**'
+      - 'impl/testdata/**'
+      - 'corpus/**'
+      - 'tools/sidecar/**'
+      - 'tools/zig/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - '.bunfig.toml'
+      - '.npmrc'
+      - '.githooks/**'
+      - '.gitattributes'
+      - 'tsconfig.base.json'
+      - 'tools/package.json'
+      - 'tools/unicode/**'
+      - 'spec/**'
+      - '.github/actions/setup-ts/**'
+      - '.github/workflows/pr-macos.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-macos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-sidecar:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: ./.github/actions/setup-ts
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: zig version
+      - run: zig build sidecar
+        working-directory: impl/zig
+      - run: python tools/sidecar/check.py impl/zig/zig-out/bin/messagelayer

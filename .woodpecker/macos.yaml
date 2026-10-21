@@ -1,7 +1,8 @@
-# Share the path condition between PRs and main pushes. Manual runs stay full.
+# PR sidecar checks run on GitHub-hosted macOS independently of this worker.
 when:
-  - event: pull_request
-    path: &paths
+  - event: push
+    branch: main
+    path:
       include:
         - 'impl/zig/**'
         - 'impl/testdata/**'
@@ -21,9 +22,6 @@ when:
         - 'spec/**'
         - '.woodpecker/macos.yaml'
       on_empty: true
-  - event: push
-    branch: main
-    path: *paths
   - event: manual
 
 labels:

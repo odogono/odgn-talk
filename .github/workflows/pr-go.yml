@@ -1,0 +1,58 @@
+name: PR Go core
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'impl/go/**'
+      - '!impl/go/sqlite/**'
+      - 'impl/testdata/**'
+      - 'corpus/**'
+      - 'tools/go/**'
+      - 'tools/grammar/**'
+      - 'tools/machine/**'
+      - 'tools/corpus/**'
+      - 'tools/costs/**'
+      - 'tools/envelope/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - '.bunfig.toml'
+      - '.npmrc'
+      - '.githooks/**'
+      - '.gitattributes'
+      - 'tsconfig.base.json'
+      - 'tools/package.json'
+      - 'tools/unicode/**'
+      - 'spec/**'
+      - '.github/actions/setup-ts/**'
+      - '.github/workflows/pr-go.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-go-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Keep the large Corpus replay's memory behaviour consistent with Woodpecker.
+      GOMEMLIMIT: 1GiB
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache-dependency-path: impl/go/go.sum
+      - uses: ./.github/actions/setup-ts
+      - run: go vet ./...
+        working-directory: impl/go
+      # Keep the large Corpus replay from overlapping other test packages.
+      - run: go test -p 1 -count=1 ./...
+        working-directory: impl/go
+      - run: go test -p 1 -race -count=1 ./...
+        working-directory: impl/go

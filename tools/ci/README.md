@@ -1,13 +1,18 @@
 # Woodpecker CI
 
-Woodpecker runs pull-request checks. GitHub Actions runs the broader matrix on
-`main` or manually, without adding duplicate checks to PRs:
+Pull-request checks share capacity between Woodpecker and GitHub-hosted runners.
+GitHub Actions runs the Go core and native macOS sidecar PR checks, plus the
+broader matrix on `main` or manually:
 
-- `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus, and Go vet,
-  tests, race tests and Corpus in Linux containers. After the shared workspace
-  bootstrap succeeds, affected TS and Go steps run in parallel.
+- `.github/workflows/pr-go.yml` runs Go vet, tests, race tests and Corpus on
+  `ubuntu-latest`, with persistent Go caches between Actions runs.
+- `.github/workflows/pr-macos.yml` builds and checks the Zig sidecar on
+  GitHub-hosted Apple Silicon macOS, so PRs do not wait for Almere.
+- `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus in Linux
+  containers. On `main` pushes and manual runs it also runs Go vet, tests, race
+  tests and Corpus; affected TS and Go steps run in parallel after bootstrap.
 - `.woodpecker/macos.yaml` builds and checks the Zig sidecar on native Apple
-  Silicon macOS.
+  Silicon macOS for `main` pushes and manual runs.
 - `.woodpecker/spec.yaml` runs the Spec workflow's lint, formatting and complete
   `bun run check` gates, including generated tables and documentation checks.
 - `.woodpecker/tooling.yaml` runs the TS workflow's stack and tooling jobs:
@@ -21,7 +26,7 @@ Woodpecker runs pull-request checks. GitHub Actions runs the broader matrix on
   the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
   under TypeScript 5.9 and the latest TypeScript.
 
-These workflows do not yet cover the complete Actions matrix, including fuzz
+The PR workflows do not yet cover the complete Actions matrix, including fuzz
 campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
 and the broader Zig and platform matrix. GitHub Actions keeps that coverage on
 `main` and through manual runs. Go/Zig timing measurements run only on demand.
@@ -35,16 +40,17 @@ Actions Conventions workflow is removed; Woodpecker supplies the required check.
 
 PRs use their complete changed-file list; pushes to `main` use the files changed
 by that push. The expensive workflows filter those paths before taking a worker
-slot. The Linux core workflow also filters its TS and Go steps independently.
+slot. The Linux core workflow also filters its TS and Go steps independently;
+its Go step skips PR events because Actions supplies that check.
 
 | Change | Selected checks, in addition to Conventions and Spec |
 | --- | --- |
 | Root README, `docs/` or changelog only | None |
-| Go embedding | Go core step and Go SQLite |
+| Go embedding | Actions Go core and Woodpecker Go SQLite |
 | Go SQLite module only | Go SQLite |
 | TS Core | TS core step, package and tooling |
 | `tooling/` or `bench/ts/` only | Tooling |
-| Zig Core or native sidecar checks | macOS sidecar |
+| Zig Core or native sidecar checks | Actions macOS sidecar |
 | Spec, dependency lock or shared bootstrap inputs | All consumers |
 | Workflow or worker image | Affected workflows |
 
@@ -59,9 +65,13 @@ worker image inputs. Tooling includes the whole TS workspace typecheck, includin
 
 Manual pipelines run every optional workflow and both core steps regardless of
 changed paths. Conventions requires PR metadata and remains a PR-only check.
-Empty or unavailable changed-file lists also run all optional checks
-(`on_empty: true`). Path filters do not remove jobs already queued from older
-revisions: PR branches must include these workflow changes to benefit.
+The two hosted PR workflows also support **Run workflow** independently and
+cancel superseded runs for the same PR. Empty or unavailable changed-file lists
+run all optional Woodpecker checks (`on_empty: true`). Path filters do not remove
+jobs already queued from older revisions: PR branches must include these
+workflow changes to benefit. Existing queued Woodpecker checks may need
+cancellation after updating a branch; the new Actions checks have separate
+names. Only Woodpecker Conventions remains required for merging.
 
 ## Linux worker image
 
@@ -83,9 +93,9 @@ uses existing local images by default.
 The TS and tooling suites have a 30-second default per-test timeout to
 accommodate the slower shared VPS CPUs; their assertions are unchanged.
 
-The Go core step runs test packages one at a time (`-p 1`) and sets
-`GOMEMLIMIT=1GiB` so the Zig Corpus's large Trace and Save/Restore buffers are
-collected earlier. This is a soft Go memory target, not a process memory cap;
+The Woodpecker and Actions Go core steps run test packages one at a time
+(`-p 1`) and set `GOMEMLIMIT=1GiB` so the Zig Corpus's large Trace and Save/Restore
+buffers are collected earlier. This is a soft Go memory target, not a process memory cap;
 the complete replay can still use several GiB. The default Zig, retiring
 native Go and race suites, and the complete Corpus all remain covered.
 
@@ -277,14 +287,17 @@ and that URL followed by `/authorize` as its callback. Store credentials on the
 server, outside this repository. Activate `odogono/odgn-talk` in Woodpecker and
 enable pull-request events.
 
-Workflows run for pull requests, pushes to `main`, and manual runs. They must be
-present in the revision being built. For a PR opened before activation, trigger
-a new event or start a manual pipeline after the workflow files are available.
+Woodpecker workflows run for pull requests, pushes to `main`, and manual runs;
+Go core and native macOS run only on `main` and manually, with Actions handling
+those PR checks. Workflows must be present in the revision being built. For a PR
+opened before activation, trigger a new event or start a manual pipeline after
+the workflow files are available.
 
 Only make Woodpecker checks required after a GitHub-triggered pipeline has
 reported the expected statuses. Only `ci/woodpecker/pr/conventions` is currently
-required; the other Woodpecker checks remain optional. Actions workflows do not
-automatically run on PRs.
+required; the other Woodpecker checks remain optional. Only the two hosted PR
+workflows run automatically on PRs; the broader Actions matrix stays on `main`
+and manual triggers.
 
 ### Required Conventions check
 
@@ -313,4 +326,5 @@ required checks and branch protection settings intact.
 
 PR branches must contain the Conventions workflow and adapter. Update existing
 branches from `main` before requiring the check for them. Existing PR branches
-also need the updated Actions workflow files to stop the old PR-triggered jobs.
+also need the hosted PR workflows and updated Woodpecker routing to avoid
+duplicating Go checks and waiting for the native macOS worker.
