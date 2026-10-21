@@ -318,7 +318,7 @@ test('successful Reload releases before new code; rejection, Extend, Save and Re
   expect(contexts.map(c => [c.reason, c.now])).toEqual([['reload', now]]);
   expect(reentries[0]).toBeInstanceOf(HostError);
   expect((reentries[0] as HostError).code).toBe('reentrant call');
-  copy.queueStop('s', 'copy');
+  copy.script('s')!.stop('copy');
   copy.pump(now);
   expect(contexts[1]!.group).toBe(copy);
   script.stop('stop');

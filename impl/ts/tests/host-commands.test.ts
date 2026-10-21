@@ -299,7 +299,7 @@ describe('load checks', () => {
       grants: all(),
       grantsAsUsed: true,
     });
-    expect(g.scriptGrants('s')).toEqual({ folio: ['count'] });
+    expect(g.script('s')!.grants()).toEqual({ folio: ['count'] });
   });
 });
 
