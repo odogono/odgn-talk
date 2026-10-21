@@ -3994,11 +3994,7 @@ pub const Group = struct {
                     run_lifecycle.charge(run, g.meter(run.script), q.fuel);
                     g.markRoot(rootOf(run.delivery));
                 } else {
-                    const c = p.call.?;
-                    var ins: lower.Instruction = undefined;
-                    ins.position = .{ .line = c.at_line, .column = c.at_column };
-                    if (!run.continuing) g.dropBase(run);
-                    _ = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
+                    try g.faultRefused(run.script, run, .charge_request, p.call.?);
                     q.fault_run = run;
                 }
             }
@@ -4494,19 +4490,10 @@ pub const Group = struct {
             // A Join member's refused Charge faults the Run now, as it
             // would have at the call (chapter 10), before its body goes
             // on or a sibling is reissued; its Segment rolls back.
-            .limited => if (run.join != null) {
-                var ins: lower.Instruction = undefined;
-                ins.position = .{ .line = c.at_line, .column = c.at_column };
-                if (!run.continuing) g.dropBase(run);
-                // The fault is a Stretch of its own, as a resume is, with
-                // nothing charged in it.
-                run.continuing = false;
-                run_lifecycle.startStretch(run);
-                const s = run.script;
-                run_lifecycle.detach(run, .of(s));
-                const end = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
-                try g.endSegment(s, run, end);
-            } else try g.ready(p, .limited),
+            .limited => if (run.join != null)
+                try g.faultRefused(run.script, run, .join_reissue, c)
+            else
+                try g.ready(p, .limited),
             else => try g.ready(p, .broken),
         }
     }
@@ -4845,6 +4832,11 @@ pub const Group = struct {
                 g.endRun(run, .dropped) catch unreachable;
                 return e;
             };
+            // A reissue the Run couldn't pay for faults at its call.
+            if (run_lifecycle.refusal(run)) |how| {
+                try g.faultRefused(s, run, how, null);
+                return g.dropStoppedSends();
+            }
             break :blk g.resumed(run) catch |e| {
                 g.endRun(run, .dropped) catch unreachable;
                 return e;
@@ -4853,6 +4845,29 @@ pub const Group = struct {
         if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
         try g.endSegment(s, run, outcome);
         try g.dropStoppedSends();
+    }
+
+    /// The one way a Run whose Charge was refused faults (#1068): at the
+    /// call, or where it waited, with its Segment rolled back. A fault that
+    /// ends the Segment ends it here; one that ends the Run is ended by
+    /// `drainCharge` once its rollback, which may pause, completes.
+    fn faultRefused(g: *Group, s: *Script, run: *Run, how: run_lifecycle.Refusal, call: ?*const capabilities.Call) !void {
+        const fault = run_lifecycle.faultCharge(run, .of(s), how);
+        if (fault.drop_base) g.dropBase(run);
+        const end = if (call) |c| at_call: {
+            var ins: lower.Instruction = undefined;
+            ins.position = .{ .line = c.at_line, .column = c.at_column };
+            break :at_call g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
+        } else at_wait: {
+            const frame = &run.frames.items[run.frames.items.len - 1];
+            const pc = frame.pc - 1;
+            break :at_wait g.limitFault(run, .fuel, unitName(run, frame), pc, unitOf(run, frame).code[pc]);
+        };
+        if (fault.abandon) |id| g.write("abandon {s}\n", .{id});
+        switch (fault.end) {
+            .segment => try g.endSegment(s, run, end),
+            .run => {},
+        }
     }
 
     /// A resumed Run's Segment, from what settled its wait.
@@ -4868,23 +4883,6 @@ pub const Group = struct {
         const frame = &run.frames.items[run.frames.items.len - 1];
         const pc = frame.pc - 1;
         const ins = unitOf(run, frame).code[pc];
-        // A reissue the Run couldn't pay for faults at its call, which is
-        // abandoned.
-        if (with == .limited) {
-            const end = g.limitFault(run, .fuel, unitName(run, frame), pc, ins);
-            g.write("abandon {s}\n", .{waited.id});
-            return end;
-        }
-        // So does a Join member's reissue (#1068).
-        if (with == .join_failed) {
-            const x = &run.join.?.members.items[with.join_failed];
-            if (x.with != null and x.with.? == .limited) {
-                x.with = null;
-                const end = g.limitFault(run, .fuel, unitName(run, frame), pc, ins);
-                g.write("abandon {s}\n", .{x.waited.id});
-                return end;
-            }
-        }
         const fuel = run.fuel;
         const alloc = run.alloc;
         const raised: ?*Value = g.resumeWith(run, frame, with, waited, pc, ins) catch |err| {
