@@ -277,23 +277,20 @@ export const paintCanvasShape = (
         context.stroke();
       }
       return true;
-    case 'arc': {
-      // Filled as a pie slice; only the curve is stroked. Angles are degrees.
-      const start = (n(4) * Math.PI) / 180;
-      const stop = (n(5) * Math.PI) / 180;
+    case 'arc':
+      // Filled as a pie slice; only the curve is stroked.
       if (fill) {
         context.moveTo(n(0), n(1));
-        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, start, stop);
+        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, n(4), n(5));
         context.closePath();
         context.fill();
       }
       if (stroke) {
         context.beginPath();
-        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, start, stop);
+        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, n(4), n(5));
         context.stroke();
       }
       return true;
-    }
     case 'triangle':
       context.moveTo(n(0), n(1));
       context.lineTo(n(2), n(3));

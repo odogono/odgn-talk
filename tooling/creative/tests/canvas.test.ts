@@ -103,7 +103,7 @@ test('shapes and stroke styles join the retained list', async () => {
   point board, 5, 6
   circle board, 20, 20, 10
   triangle board, 0, 0, 10, 0, 5, 8
-  arc board, 40, 40, 20, 10, 0, 90
+  arc board, 40, 40, 20, 10, 0, pi / 2
   roundedRectangle board, 1, 2, 30, 20, 4
 end tell`,
   );
@@ -114,9 +114,10 @@ end tell`,
     ['point', '5', '6'],
     ['circle', '20', '20', '10'],
     ['triangle', '0', '0', '10', '0', '5', '8'],
-    ['arc', '40', '40', '20', '10', '0', '90'],
+    ['arc', '40', '40', '20', '10', '0', drawn(play)[5]![6]!],
     ['roundedRectangle', '1', '2', '30', '20', '4'],
   ]);
+  expect(Number(drawn(play)[5]![6])).toBeCloseTo(Math.PI / 2);
   // Cap and join are current style, so they survive a clear.
   await run(play, 'ask canvas to strokeCap board, "square"');
   await run(play, 'ask canvas to clear board');
@@ -153,7 +154,7 @@ test('transforms are retained, and push and pop save the style', async () => {
   fill board, "#ff0000"
   push board
   translate board, 10, 20.5
-  rotate board, 90
+  rotate board, 0.5
   scale board, 2, -1
   fill board, "#00ff00"
   rectangle board, 0, 0, 5, 5
@@ -164,7 +165,7 @@ end tell`,
     ['fill', '"#ff0000"'],
     ['push'],
     ['translate', '10', '20.5'],
-    ['rotate', '90'],
+    ['rotate', '0.5'],
     ['scale', '2', '-1'],
     ['fill', '"#00ff00"'],
     ['rectangle', '0', '0', '5', '5'],
@@ -423,7 +424,7 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
     { op: 'fill', args: ['"#ff0000"'] },
     { op: 'text', args: ['"Score: 10"', '4', '12.5'] },
     { op: 'push', args: [] },
-    { op: 'rotate', args: ['-45'] },
+    { op: 'rotate', args: ['-0.5'] },
   ];
   const loaded = await readProjectFile(
     await writeProjectFile(project, new Map()),

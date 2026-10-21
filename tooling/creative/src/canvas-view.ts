@@ -1,7 +1,7 @@
 // Paints a Canvas Element's Drawing with Canvas 2D, in the Element's own
 // coordinates: one unit is one Page pixel, clipped to the frame (ADR 0116).
 // Edit and Play share it. `push` and `pop` save and restore the style and
-// transform with the context's own stack; `rotate` takes degrees, clockwise. A Drawing that only grew since the last paint
+// transform with the context's own stack; `rotate` takes radians, clockwise. A Drawing that only grew since the last paint
 // gets just its new commands; any other change repaints from the defaults.
 import {
   paintCanvasShape,
@@ -81,7 +81,7 @@ const paint = (
       context.translate(n(0), n(1));
       return;
     case 'rotate':
-      context.rotate((n(0) * Math.PI) / 180);
+      context.rotate(n(0));
       return;
     case 'scale':
       context.scale(n(0), n(1));
