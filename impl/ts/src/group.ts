@@ -2,7 +2,6 @@ import {
   emptyAccounting,
   accountRoot,
   accountingTail,
-  type AccountingState,
   type AccountingReport,
   type RunAncestry,
 } from './run-accounting';
@@ -64,24 +63,20 @@ import {
   type TimerAction as WaitTimerAction,
   type Waiter as WaitWaiter,
 } from './waits';
-import {
-  type Grant,
-  type Call,
-  type ValueOperation,
-  type ReleaseReason,
-} from './capabilities';
+import { type Grant, type Call, type ReleaseReason } from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData } from './manifest';
+import type { References } from './snapshot';
 import {
-  references,
-  reference,
-  saveGraph,
-  restoreGraph,
-  saveFormatVersion,
-  type Graph,
-  type References,
-} from './snapshot';
-import { packGraph, unpackGraph, type PackedGraph } from './snapshot-codec';
+  compareNames,
+  decodeGroup,
+  encodeGroup,
+  hexOf,
+  restoreState,
+  savedRuns,
+  snapshotReferences,
+  versionMismatch,
+} from './group-snapshot';
 import {
   makeObject,
   propertyChecks,
@@ -415,7 +410,7 @@ const overridable = new Set([
   'maxJoin',
 ]);
 
-type Decision = {
+export type Decision = {
   ballots: Ballot[];
   broadcast: boolean;
   discarded?: boolean;
@@ -432,7 +427,7 @@ type Ballot = {
     veto?: Decided['vetoes'][number];
   };
 };
-type Delivery = {
+export type Delivery = {
   ancestry?: RunAncestry;
   args: Value[];
   /** The object whose Owning Script holds it, which it climbs on from. */
@@ -457,7 +452,7 @@ type Delivery = {
   target: ObjectState | null;
   unsubscribe?: () => void;
 };
-type Running = {
+export type Running = {
   cleanupReady?: boolean;
   delivery: Delivery;
   id: string;
@@ -476,18 +471,18 @@ const sameClause = (a: Running, b: Running): boolean =>
   a.run.fallback === b.run.fallback &&
   (a.run.fallback || a.delivery.message === b.delivery.message) &&
   a.run.clauseNumber === b.run.clauseNumber;
-type Timer = WaitTimer<Running, ScriptState>;
+export type Timer = WaitTimer<Running, ScriptState>;
 type TimerAction = WaitTimerAction<Running, ScriptState>;
 type JoinWait = WaitJoin<Running, ScriptState>;
-type Pending = WaitPending<Running, ScriptState>;
-type Waiter = WaitWaiter<Running, ScriptState>;
+export type Pending = WaitPending<Running, ScriptState>;
+export type Waiter = WaitWaiter<Running, ScriptState>;
 type SourceUnit = {
   identity: string;
   imports: readonly Library[];
   source: string;
   tree: SemanticTree;
 };
-type ScriptState = {
+export type ScriptState = {
   /** Work charged to Runs that have ended or been discarded. */
   allocTotal: number;
   debt: number;
@@ -519,7 +514,7 @@ type ScriptState = {
   unbound: Set<string>;
   units: SourceUnit[];
 };
-type InputAction =
+export type InputAction =
   | { code: string; k: 'refusal' }
   | { id: string; k: 'cancel-delivery' }
   | { id: string; k: 'cancel-run'; name: string }
@@ -973,44 +968,12 @@ export class TsGroup implements Group {
     );
   }
 
-  private snapshotReferences(): References {
-    const refs = references();
-    reference(refs, 'function-group', this.functionGroup);
-    const code = (key: string, unit: Code) => {
-      if (refs.byObject.has(unit)) {
-        return;
-      }
-      reference(refs, key, unit);
-      unit.unit.bodies.forEach((body, i) =>
-        reference(refs, `${key}/body/${i}`, body),
-      );
-      unit.unit.unwind.forEach((entry, i) =>
-        reference(refs, `${key}/unwind/${i}`, entry),
-      );
-      for (const [name, imported] of unit.libraries) {
-        code(`library/${name}`, imported);
-      }
-    };
-    for (const s of this.scripts) {
-      reference(refs, `script/${s.name}`, s);
-      s.loaded.units.forEach((unit, i) => code(`code/${s.name}/${i}`, unit));
-      for (const [name, grant] of s.grants) {
-        for (const op of grant.ops) {
-          reference(
-            refs,
-            `operation/${s.name}/${name}/${op}`,
-            grant.capability.operations.get(op)!,
-          );
-        }
-      }
-    }
-    for (const [key, object] of this.objects) {
-      reference(refs, `object/${key}`, object);
-    }
-    return refs;
+  /** Worker. Host callbacks, bindings and native objects aren't in the bytes. */
+  // The objects a save names rather than stores.
+  private references(): References {
+    return snapshotReferences(this.functionGroup, this.scripts, this.objects);
   }
 
-  /** Worker. Host callbacks, bindings and native objects aren't in the bytes. */
   save(o: SaveOptions = {}): Uint8Array {
     this.worker();
     if (
@@ -1037,91 +1000,26 @@ export class TsGroup implements Group {
       );
       throw new HostError('effects pending');
     }
-    const { timers, pending, timerSeq } = this.waits.exportState();
-    const state = {
-      scripts: this.scripts.map(s => ({
-        name: s.name,
-        variables: s.loaded.variables,
-        variableNames: s.loaded.variableNames,
-        definitions: s.loaded.units.map(unit => unit.definitions),
-        live: s.loaded.live,
-        debt: s.debt,
-        incoming: s.incoming,
-        parked: s.parked,
-        queue: s.queue,
-        runs: s.runs,
-        fuelTotal: s.fuelTotal,
-        allocTotal: s.allocTotal,
-        faults: s.faults,
-        stopped: s.stopped,
-        stopReason: s.stopReason,
-        suspended: s.suspended,
-        waiters: this.waits.waitersOf(s),
-        revoked: s.revoked,
-        disabled: s.disabled,
-      })),
+    const bytes = encodeGroup({
       accounting: this.accounting,
-      inputs: this.inputs.map(input => ({
-        action: input.action,
-        urgent: input.urgent,
-        line: typeof input.line === 'string' ? input.line : undefined,
-      })),
-      timers,
-      pending,
-      deliveries: this.deliveries,
       broadcasts: this.broadcasts,
-      timerSeq,
-      lastClock: this.lastClock,
-      randomState: this.randomState,
+      deliveries: this.deliveries,
       discardedDecisions: this.discardedDecisions,
-    };
-    const saved: SavedGroup = {
-      family: 'odgn-talk-ts',
-      format: saveFormatVersion,
-      language: languageVersion,
-      costModel: costModel.version,
-      fingerprint: hexOf(this.fingerprint()),
-      name: this.name,
+      fingerprint: this.fingerprint(),
       id,
-      sourceMode: o.sources ?? 'embedded',
-      libraries: [...this.libraries.values()].map(l => [l.name, identityOf(l)]),
-      objects: [...this.objects].map(([key, o]) => ({
-        key,
-        kind: o.handle.kind.name,
-        id: o.handle.id,
-        disposed: o.disposed,
-        owner: o.owner,
-        parent: o.parent
-          ? `${o.parent.handle.kind.name}\u0000${o.parent.handle.id}`
-          : null,
-      })),
-      scripts: this.scripts.map(s => ({
-        name: s.name,
-        identities: s.units.map(unit => unit.identity),
-        ...(o.sources === 'external'
-          ? {}
-          : { sources: s.units.map(unit => unit.source) }),
-        limits: s.limits,
-        grants: [...s.grants].map(([name, grant]) => ({
-          name,
-          capability: grant.capability.name,
-          operations: [...grant.ops].sort(compareNames).map(name => ({
-            name,
-            declaration: savedOperation(grant.capability.operations.get(name)!),
-          })),
-        })),
-        objects: Object.entries(s.objects).map(([name, o]) => [
-          name,
-          `${o.kind.name}\u0000${o.id}`,
-        ]),
-        owner: s.owner
-          ? `${s.owner.handle.kind.name}\u0000${s.owner.handle.id}`
-          : null,
-      })),
-      graph: saveGraph(state, this.snapshotReferences()),
-    };
+      inputs: this.inputs,
+      lastClock: this.lastClock,
+      libraries: this.libraries,
+      name: this.name,
+      objects: this.objects,
+      randomState: this.randomState,
+      references: this.references(),
+      scripts: this.scripts,
+      sources: o.sources ?? 'embedded',
+      waits: this.waits,
+    });
     this.trace?.(recordLine('save', [id], [], true));
-    return writeSave(saved);
+    return bytes;
   }
 
   /** Build and check the complete replacement before publishing the Group. */
@@ -1129,7 +1027,7 @@ export class TsGroup implements Group {
     bytes: Uint8Array,
     o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult } {
-    const saved = readSave(bytes);
+    const saved = decodeGroup(bytes);
     let emitting = false;
     const group = new TsGroup({
       name: o.name,
@@ -1164,15 +1062,7 @@ export class TsGroup implements Group {
     for (const library of o.libraries) {
       group.libraries.set(library.name, library);
     }
-    let mismatch =
-      saved.format !== saveFormatVersion ||
-      saved.language !== languageVersion ||
-      saved.costModel !== costModel.version ||
-      saved.libraries.some(
-        ([name, identity]) =>
-          !group.libraries.has(name) ||
-          identityOf(group.libraries.get(name)!) !== identity,
-      );
+    let mismatch = versionMismatch(saved, group.libraries);
     let loadFailure: LoadError | undefined;
     for (const script of saved.scripts) {
       const supplied =
@@ -1362,9 +1252,8 @@ export class TsGroup implements Group {
         ]),
       );
     }
-    const refs = group.snapshotReferences();
-    const state = restoreGraph(saved.graph, refs, mismatch) as SavedState;
-    validateSavedAccounting(state);
+    const refs = group.references();
+    const state = restoreState(saved, refs, mismatch);
     const result: RestoreResult = {
       reports: [],
       variablesOnly: mismatch,
@@ -5338,133 +5227,6 @@ const endReason = (outcome: Outcome): string => {
   }
 };
 
-type SavedGrant = {
-  capability: string;
-  name: string;
-  operations: { declaration: ValueOperation<unknown>; name: string }[];
-};
-type SavedGroup = {
-  costModel: number;
-  family: string;
-  fingerprint: string;
-  format: number;
-  graph: Graph;
-  id: string;
-  language: string;
-  libraries: [string, string][];
-  name: string;
-  objects: {
-    disposed: boolean;
-    id: string;
-    key: string;
-    kind: string;
-    owner: string | null;
-    parent: string | null;
-  }[];
-  scripts: {
-    grants: SavedGrant[];
-    identities: string[];
-    limits: Limits;
-    name: string;
-    objects: [string, string][];
-    owner: string | null;
-    sources?: string[];
-  }[];
-  sourceMode: 'embedded' | 'external';
-};
-type SavedScriptState = Pick<
-  ScriptState,
-  | 'name'
-  | 'fuelTotal'
-  | 'allocTotal'
-  | 'faults'
-  | 'debt'
-  | 'incoming'
-  | 'parked'
-  | 'queue'
-  | 'runs'
-  | 'stopped'
-  | 'stopReason'
-  | 'suspended'
-  | 'revoked'
-  | 'disabled'
-> & {
-  definitions: Value[][];
-  live: boolean;
-  variableNames: string[];
-  variables: Value[];
-  waiters: Waiter[];
-};
-type SavedState = {
-  accounting: AccountingState;
-  broadcasts: number;
-  deliveries: number;
-  discardedDecisions: Decision[];
-  inputs: { action: InputAction; line?: string; urgent?: boolean }[];
-  lastClock: bigint | null;
-  pending: Map<string, Pending>;
-  randomState: bigint;
-  scripts: SavedScriptState[];
-  timers: Timer[];
-  timerSeq: number;
-};
-const invalidAccounting = (): never => {
-  throw new HostError('invalid save', 'Invalid saved Run accounting');
-};
-const validateSavedAccounting = (state: SavedState) => {
-  const a = state.accounting;
-
-  if (
-    !a ||
-    Object.prototype.toString.call(a.runs) !== '[object Map]' ||
-    Object.prototype.toString.call(a.roots) !== '[object Map]' ||
-    !Number.isSafeInteger(a.next) ||
-    a.next < 0
-  ) {
-    invalidAccounting();
-  }
-  const orders = new Set<number>();
-  let count = 0;
-  for (const s of state.scripts) {
-    for (const r of savedRuns(s)) {
-      count++;
-      const row = a.runs.get(r.id);
-      if (
-        !row ||
-        row.report.run !== r.id ||
-        row.report.script !== s.name ||
-        row.report.state !== 'live' ||
-        row.report.fuel !== r.run.fuel ||
-        !a.roots.has(row.report.rootDelivery) ||
-        !Number.isSafeInteger(row.order) ||
-        row.order <= 0 ||
-        row.order > a.next ||
-        orders.has(row.order)
-      ) {
-        invalidAccounting();
-      }
-      orders.add(row!.order);
-    }
-  }
-  if (count !== a.runs.size) {
-    invalidAccounting();
-  }
-  for (const [id, row] of a.roots) {
-    const n = Number(id.slice(1));
-    if (
-      id !== `d${n}` ||
-      !Number.isSafeInteger(n) ||
-      n <= 0 ||
-      n > state.deliveries ||
-      !row ||
-      !Number.isSafeInteger(row.discarded) ||
-      row.discarded < 0
-    ) {
-      invalidAccounting();
-    }
-  }
-};
-const compareNames = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const compareCallIds = (a: string, b: string) => {
   const left = /^(.*)\/r(\d+)\.c(\d+)$/.exec(a);
   const right = /^(.*)\/r(\d+)\.c(\d+)$/.exec(b);
@@ -5481,148 +5243,6 @@ const byName = (a: { name: string }, b: { name: string }) =>
   compareNames(a.name, b.name);
 const hexBytes = (hex: string) =>
   Uint8Array.from(hex.match(/../g)!, byte => Number.parseInt(byte, 16));
-const hexOf = (bytes: Uint8Array) =>
-  [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
-const savedRuns = (s: SavedScriptState) =>
-  [
-    ...s.queue.filter((q): q is Running => 'run' in q),
-    ...s.suspended,
-    ...s.parked,
-  ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
-// Callbacks are executable and documentation is manifest-only.
-const unsavedOperationKeys = new Set([
-  'do',
-  'fire',
-  'run',
-  'start',
-  'description',
-  'examples',
-]);
-const savedOperation = (op: ValueOperation<unknown>): ValueOperation<unknown> =>
-  Object.fromEntries(
-    Object.entries(op).filter(([key]) => !unsavedOperationKeys.has(key)),
-  ) as ValueOperation<unknown>;
-type SavedWire = Omit<SavedGroup, 'graph' | 'scripts'> & {
-  declarations: Omit<SavedGrant, 'name'>[];
-  graph: PackedGraph;
-  scripts: (Omit<SavedGroup['scripts'][number], 'grants'> & {
-    grants: { declaration: number; name: string }[];
-  })[];
-};
-const writeSave = (saved: SavedGroup): Uint8Array => {
-  const declarations: SavedWire['declarations'] = [];
-  const seen = new Map<string, number>();
-  const scripts = saved.scripts.map(script => ({
-    ...script,
-    grants: script.grants.map(({ name, ...declaration }) => {
-      const key = canonicalJSON(declaration);
-      let id = seen.get(key);
-      if (id === undefined) {
-        id = declarations.length;
-        declarations.push(declaration);
-        seen.set(key, id);
-      }
-      return { name, declaration: id };
-    }),
-  }));
-  const payload: SavedWire = {
-    ...saved,
-    declarations,
-    scripts,
-    graph: packGraph(saved.graph),
-  };
-  return new TextEncoder().encode(
-    JSON.stringify({ hash: sha256(JSON.stringify(payload)), payload }),
-  );
-};
-const readSave = (bytes: Uint8Array): SavedGroup => {
-  try {
-    const outer = JSON.parse(
-      new TextDecoder('utf-8', { fatal: true }).decode(bytes),
-    ) as { hash: string; payload: SavedWire };
-    if (
-      !outer.payload ||
-      typeof outer.payload !== 'object' ||
-      sha256(JSON.stringify(outer.payload)) !== outer.hash
-    ) {
-      throw new Error('Corrupt save');
-    }
-    const saved = outer.payload;
-    if (
-      saved.family !== 'odgn-talk-ts' ||
-      saved.format !== saveFormatVersion ||
-      !/^s[1-9]\d*$/.test(saved.id) ||
-      !Array.isArray(saved.scripts) ||
-      !Array.isArray(saved.objects) ||
-      !Array.isArray(saved.libraries) ||
-      !Array.isArray(saved.declarations) ||
-      !['embedded', 'external'].includes(saved.sourceMode) ||
-      !Array.isArray(saved.graph.nodes)
-    ) {
-      throw new Error('Unreadable save');
-    }
-    const names = new Set<string>();
-    const scripts = saved.scripts.map(script => {
-      if (
-        typeof script.name !== 'string' ||
-        names.has(script.name) ||
-        !Array.isArray(script.identities) ||
-        !script.identities.length ||
-        script.identities.some(
-          id => typeof id !== 'string' || !/^[\da-f]{64}$/.test(id),
-        ) ||
-        (saved.sourceMode === 'embedded' &&
-          (!Array.isArray(script.sources) ||
-            script.sources.length !== script.identities.length ||
-            script.sources.some(s => typeof s !== 'string'))) ||
-        (saved.sourceMode === 'external' && script.sources !== undefined) ||
-        !Array.isArray(script.grants)
-      ) {
-        throw new Error('Invalid saved Script');
-      }
-      names.add(script.name);
-      const grants = new Set<string>();
-      return {
-        ...script,
-        grants: script.grants.map(grant => {
-          if (
-            typeof grant.name !== 'string' ||
-            grants.has(grant.name) ||
-            !Number.isSafeInteger(grant.declaration) ||
-            grant.declaration < 0 ||
-            grant.declaration >= saved.declarations.length
-          ) {
-            throw new Error('Invalid saved Grant');
-          }
-          grants.add(grant.name);
-          return {
-            ...saved.declarations[grant.declaration]!,
-            name: grant.name,
-          };
-        }),
-      };
-    });
-    for (const declaration of saved.declarations) {
-      if (
-        !declaration ||
-        typeof declaration.capability !== 'string' ||
-        !Array.isArray(declaration.operations) ||
-        declaration.operations.some(
-          op =>
-            typeof op.name !== 'string' ||
-            !op.declaration ||
-            typeof op.declaration !== 'object',
-        )
-      ) {
-        throw new Error('Invalid saved declaration');
-      }
-    }
-    return { ...saved, scripts, graph: unpackGraph(saved.graph) };
-  } catch {
-    throw new HostError('invalid save');
-  }
-};
-
 const validOverride = (name: string, value: unknown, cap: number): boolean =>
   overridable.has(name) &&
   typeof value === 'number' &&

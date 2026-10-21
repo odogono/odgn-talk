@@ -123,3 +123,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0119: TS Hosts may convert plain JS values by one stated rule](0119-ts-hosts-may-convert-plain-js-values-by-one-stated-rule.md)
 - [0120: TS Host functions take the JS forms of their Shapes](0120-ts-host-functions-take-the-js-forms-of-their-shapes.md)
 - [0121: TS Host code types against one embedding interface](0121-ts-host-code-types-against-one-embedding-interface.md)
+- [0122: The TS Core keeps its save format in one module](0122-the-ts-core-keeps-its-save-format-in-one-module.md)

@@ -146,7 +146,7 @@ Files, grammar, or lowering.
 
 ## Save and restore
 
-- Implementation: [snapshot and `saveFormatVersion`](src/snapshot.ts), [Group](src/group.ts)
+- Implementation: [save format](src/group-snapshot.ts) (saved record, versions and checks, reference table), [snapshot graph and `saveFormatVersion`](src/snapshot.ts), [Group](src/group.ts) (save refusal, Trace, rebuild on restore). The boundary follows [ADR 0122](../../docs/adr/0122-the-ts-core-keeps-its-save-format-in-one-module.md).
 - Rules: [save and restore](../../spec/10-save-and-restore.md)
 - Tests and cases: [save/restore tests](tests/save-restore.test.ts)
 - First check: `bun test impl/ts/tests/save-restore.test.ts`
