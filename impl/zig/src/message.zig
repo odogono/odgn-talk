@@ -6012,7 +6012,7 @@ fn binFailure(s: *Session, entry: *GroupEntry, code: ?[]const u8, message: ?[]co
 
 // ---------------------------------------------------------- wasm exports
 
-const export_allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
+const export_allocator = @import("process_allocator.zig").allocator;
 var instance: ?*Session = null;
 var in_buffer: []u8 = &.{};
 var reply_buffer: []u8 = &.{};

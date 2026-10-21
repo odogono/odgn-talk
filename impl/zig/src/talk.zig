@@ -20,7 +20,7 @@ const group_allocator = @import("machine/group_allocator.zig");
 const limits_table = @import("generated/limits.zig").limits;
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
-const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
+const allocator = @import("process_allocator.zig").allocator;
 pub const Value = model.Value;
 pub const Kind = model.Kind;
 pub const Decimal = model.Decimal;

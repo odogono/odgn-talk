@@ -85,6 +85,7 @@ test {
     _ = @import("machine/error_during_test.zig");
     _ = @import("machine/lifecycle_test.zig");
     _ = @import("precise_arena.zig");
+    _ = @import("process_allocator.zig");
     _ = @import("machine/load_memory_test.zig");
     _ = @import("machine/extend_veto_test.zig");
     _ = @import("machine/library_binding_test.zig");

@@ -17,7 +17,7 @@ const machine = @import("../machine/machine.zig");
 const Value = model.Value;
 const Group = talk.Group;
 const Allocator = std.mem.Allocator;
-const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
+const allocator = @import("../process_allocator.zig").allocator;
 
 pub const WatchLimits = extern struct { watches: i64, watch_size: i64, pending: i64, pending_size: i64 };
 
