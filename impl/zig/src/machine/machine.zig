@@ -17,6 +17,7 @@ const lexer = @import("../syntax/lexer.zig");
 const ast = @import("../syntax/ast.zig");
 const chunks = @import("chunks.zig");
 const scratch_arena = @import("scratch.zig");
+const precise = @import("../precise_arena.zig");
 pub const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
 const random_gen = @import("random.zig");
@@ -590,7 +591,7 @@ pub const Script = struct {
     arena: std.heap.ArenaAllocator,
     /// The arena that owns its source and code unit, which a Reload
     /// replaces.
-    code: std.heap.ArenaAllocator,
+    code: precise.PreciseArena,
     source: []const u8 = "",
     unit: lower.Unit,
     /// Its extensions, in the order made, each a code unit of its own
@@ -2002,20 +2003,18 @@ pub const Group = struct {
     /// `use` lines import. The import slice lives in the caller's code
     /// storage; the tree and line index live only until `deinit`.
     pub const Parsed = struct {
-        arena: std.heap.ArenaAllocator,
+        arena: precise.PreciseArena,
         lines: lexer.Lines,
         result: parser.Result,
         imports: []*Library,
 
         pub fn deinit(self: *Parsed) void {
-            var arena = self.arena;
-            self.arena = .init(arena.child_allocator);
-            arena.deinit();
+            self.arena.deinit();
         }
     };
 
     pub fn parseCode(g: *Group, a: Allocator, source: []const u8) !Parsed {
-        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        var arena: precise.PreciseArena = .init(g.gpa);
         errdefer arena.deinit();
         const scratch = arena.allocator();
         const lines: lexer.Lines = try .init(scratch, source);
@@ -2049,10 +2048,10 @@ pub const Group = struct {
     /// under `label`: null when refused, with how many in `refused`. A
     /// successful lowering releases the parse storage before keeping code.
     pub fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
-        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        var arena: precise.PreciseArena = .init(g.gpa);
         defer arena.deinit();
         const scratch = arena.allocator();
-        var checking: std.heap.ArenaAllocator = .init(g.gpa);
+        var checking: precise.PreciseArena = .init(g.gpa);
         defer checking.deinit();
         var lines = parsed.lines;
         const tree = switch (parsed.result) {
@@ -2067,7 +2066,7 @@ pub const Group = struct {
         const t = try scratch.create(ast.Tree);
         t.* = tree;
         t.lines = &parsed.lines;
-        const checked = try check.check(checking.allocator(), t, context);
+        const checked = try check.checkWithScratch(checking.allocator(), g.gpa, t, context);
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
         try diagnostics.appendSlice(scratch, checked.diagnostics);
         try g.libraryNeeds(scratch, t, context.grants orelse &.{}, &diagnostics);

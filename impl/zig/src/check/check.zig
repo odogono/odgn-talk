@@ -331,7 +331,17 @@ pub const Result = struct {
 
 /// Checks a parsed unit. Everything is allocated in `arena`.
 pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocator.Error!Result {
-    var c: Checker = .{ .a = arena, .tree = tree, .context = context };
+    return checkWithScratch(arena, arena, tree, context);
+}
+
+/// As `check`, with each body's working storage taken from `scratch` and
+/// returned as the body finishes (#1411).
+pub fn checkWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast.Tree, context: Context) Allocator.Error!Result {
+    var c: Checker = .{ .a = arena, .scratch = scratch, .tree = tree, .context = context };
+    defer {
+        while (c.open.items.len > 0) c.free(c.open.items[c.open.items.len - 1]);
+        c.open.deinit(scratch);
+    }
     try c.run();
     var lines = try tree.lineIndex(arena);
     sorting.stable(Diagnostic, c.diagnostics.items, &lines, Diagnostic.lessThan);
@@ -521,6 +531,15 @@ const Scope = struct {
     body: u32 = 0,
 };
 
+/// What the suspension analysis keeps of a finished body's Scope.
+const Done = struct {
+    kind: BodyKind,
+    selector: []const u8,
+    handler: ?*const ast.Handler,
+    body: u32,
+    sites: []const Site,
+};
+
 /// Where a statement sits, for the context rules.
 const Where = struct {
     loops: u32 = 0,
@@ -543,6 +562,11 @@ const Checker = struct {
     in_replace: bool = false,
     roots: std.AutoHashMapUnmanaged(u32, std.ArrayList([]const u8)) = .empty,
     a: Allocator,
+    /// Each body's Scope and its working tables, freed when the body
+    /// finishes; the arena when it isn't given.
+    scratch: Allocator,
+    /// The Scopes not finished yet, freed if the check is refused.
+    open: std.ArrayList(*Scope) = .empty,
     tree: *const ast.Tree,
     context: Context,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
@@ -565,11 +589,13 @@ const Checker = struct {
     constants_above: u32 = 0,
     /// The first offending token of the initialiser being checked.
     not_constant: ?Tok = null,
-    scopes: std.ArrayList(*Scope) = .empty,
+    /// Finished bodies, for the suspension analysis. Their Scopes are
+    /// freed as each body finishes (#1411).
+    scopes: std.ArrayList(Done) = .empty,
     /// Join Members counted while a Join's body is checked.
     members: usize = 0,
     /// Each function's body, by name.
-    function_scopes: std.StringHashMapUnmanaged(*Scope) = .empty,
+    function_scopes: std.StringHashMapUnmanaged(u32) = .empty,
 
     fn report(c: *Checker, code: Code, t: Tok) Allocator.Error!void {
         try c.diagnostics.append(c.a, .{ .code = code, .offset = c.tree.tokens[t].start });
@@ -607,6 +633,17 @@ const Checker = struct {
 
     fn run(c: *Checker) Allocator.Error!void {
         const decls = c.tree.declarations;
+        // The arena keeps every outgrown buffer, so size the tables that
+        // grow with the declarations once (#1411).
+        var handler_count: u32 = 0;
+        for (decls) |d| if (d.data == .handler) {
+            handler_count += 1;
+        };
+        try c.handlers.ensureTotalCapacity(c.a, handler_count);
+        try c.handler_names.ensureTotalCapacity(c.a, handler_count);
+        try c.suspends.ensureTotalCapacity(c.a, handler_count);
+        try c.bodies.ensureTotalCapacity(c.a, decls.len);
+        try c.scopes.ensureTotalCapacity(c.a, decls.len);
         // An extension's inherited names come first: its Script Variables
         // number on from the Script's.
         for (c.context.inherited) |x| {
@@ -690,7 +727,7 @@ const Checker = struct {
         for (decls, 0..) |*d, i| {
             if (d.data == .function) for (d.data.function.params) |p| if (p.default) |e| try c.initialiser(init, e, @intCast(i));
         }
-        try c.finishBody(init);
+        _ = try c.finishBody(init);
         // Each function and Handler Clause.
         for (decls, 0..) |*d, i| {
             switch (d.data) {
@@ -735,8 +772,10 @@ const Checker = struct {
     }
 
     fn newScope(c: *Checker, kind: BodyKind, parent: ?*Scope) Allocator.Error!*Scope {
-        const s = try c.a.create(Scope);
+        try c.open.ensureUnusedCapacity(c.scratch, 1);
+        const s = try c.scratch.create(Scope);
         s.* = .{ .kind = kind, .parent = parent };
+        c.open.appendAssumeCapacity(s);
         return s;
     }
 
@@ -745,12 +784,26 @@ const Checker = struct {
         return @intCast(c.bodies.items.len - 1);
     }
 
-    fn finishBody(c: *Checker, s: *Scope) Allocator.Error!void {
+    /// Keeps what the lowering and the suspension analysis read of a body,
+    /// at its exact size, and frees its Scope.
+    fn finishBody(c: *Checker, s: *Scope) Allocator.Error!u32 {
         const b = &c.bodies.items[s.body];
-        b.locals = s.order.items;
-        b.binding = s.order_tokens.items;
-        b.captures = s.captures.items;
-        try c.scopes.append(c.a, s);
+        b.locals = try c.a.dupe([]const u8, s.order.items);
+        b.binding = try c.a.dupe(Tok, s.order_tokens.items);
+        b.captures = try c.a.dupe([]const u8, s.captures.items);
+        try c.scopes.append(c.a, .{ .kind = s.kind, .selector = s.selector, .handler = s.handler, .body = s.body, .sites = try c.a.dupe(Site, s.sites.items) });
+        c.free(s);
+        return @intCast(c.scopes.items.len - 1);
+    }
+
+    fn free(c: *Checker, s: *Scope) void {
+        s.locals.deinit(c.scratch);
+        s.order.deinit(c.scratch);
+        s.order_tokens.deinit(c.scratch);
+        s.captures.deinit(c.scratch);
+        s.sites.deinit(c.scratch);
+        if (std.mem.lastIndexOfScalar(*Scope, c.open.items, s)) |i| _ = c.open.orderedRemove(i);
+        c.scratch.destroy(s);
     }
 
     fn initialiser(c: *Checker, s: *Scope, e: *const Expr, decl: u32) Allocator.Error!void {
@@ -766,8 +819,8 @@ const Checker = struct {
         for (f.params) |p| try c.param(s, p.name);
         try c.collectBlock(s, f.body);
         try c.block(s, f.body, .{});
-        try c.finishBody(s);
-        try c.function_scopes.put(c.a, c.text(f.name), s);
+        const done = try c.finishBody(s);
+        try c.function_scopes.put(c.a, c.text(f.name), done);
     }
 
     fn handlerClause(c: *Checker, h: *const ast.Handler, decl: u32) Allocator.Error!void {
@@ -789,7 +842,7 @@ const Checker = struct {
         if (h.guard) |g| try c.expr(s, g.condition, .guard);
         try c.block(s, h.body, .{});
         if (h.finally) |f| try c.block(s, f.body, .{ .finally = 0 });
-        try c.finishBody(s);
+        _ = try c.finishBody(s);
     }
 
     fn suffixes(c: *Checker, h: *const ast.Handler) Allocator.Error!void {
@@ -844,10 +897,10 @@ const Checker = struct {
         }
         if (c.functions.get(name)) |f| try c.report(.name_clash, later(t, c.tree.declarations[f.decl].data.function.name));
         if (c.imports.get(name)) |im| try c.report(.name_clash, later(t, im.name));
-        const entry = try s.locals.getOrPut(c.a, name);
+        const entry = try s.locals.getOrPut(c.scratch, name);
         if (!entry.found_existing) {
-            try s.order.append(c.a, name);
-            try s.order_tokens.append(c.a, t);
+            try s.order.append(c.scratch, name);
+            try s.order_tokens.append(c.scratch, t);
             if (c.context.collect_roots and (!pattern_name or c.in_replace)) {
                 const e = try c.roots.getOrPut(c.a, s.body);
                 if (!e.found_existing) e.value_ptr.* = .empty;
@@ -1135,7 +1188,7 @@ const Checker = struct {
         var scope: ?*Scope = s;
         while (scope) |sc| : (scope = sc.parent) {
             if (sc.locals.contains(name)) return;
-            if (!among(name, sc.captures.items)) try sc.captures.append(c.a, name);
+            if (!among(name, sc.captures.items)) try sc.captures.append(c.scratch, name);
         }
     }
 
@@ -1146,7 +1199,7 @@ const Checker = struct {
     }
 
     fn site(c: *Checker, s: *Scope, kind: @FieldType(Site, "kind"), t: Tok, target: []const u8, waits: bool, w: Where) Allocator.Error!void {
-        try s.sites.append(c.a, .{ .kind = kind, .token = t, .target = target, .waits = waits, .forbidden = w.finally != null or w.recovery != null });
+        try s.sites.append(c.scratch, .{ .kind = kind, .token = t, .target = target, .waits = waits, .forbidden = w.finally != null or w.recovery != null });
     }
 
     /// `wait`, `wait for`, a Join, and every other written wait: refused in a
@@ -2272,9 +2325,10 @@ const Checker = struct {
             .block => |b| try c.block(inner, b, .{}),
             .expr => |x| try c.expr(inner, x, .normal),
         }
-        try c.finishBody(inner);
+        const body = inner.body;
+        _ = try c.finishBody(inner);
         // A Lambda's captures are loaded where it is made.
-        for (inner.captures.items) |name| {
+        for (c.bodies.items[body].captures) |name| {
             if (!s.locals.contains(name)) try c.capture(s, name);
         }
     }
@@ -2293,7 +2347,7 @@ const Checker = struct {
                 if (s.kind != .handler and s.kind != .fallback) continue;
                 const h = c.handlers.getPtr(s.selector) orelse continue;
                 if (h.may_suspend) continue;
-                for (s.sites.items) |x| {
+                for (s.sites) |x| {
                     const suspends = switch (x.kind) {
                         .intrinsic => true,
                         .command => if (c.handlers.get(x.target)) |g| g.may_suspend else false,
@@ -2311,7 +2365,7 @@ const Checker = struct {
         while (it.next()) |e| try c.suspends.put(c.a, e.key_ptr.*, e.value_ptr.may_suspend);
         for (c.scopes.items) |s| {
             const body = &c.bodies.items[s.body];
-            for (s.sites.items) |x| {
+            for (s.sites) |x| {
                 const suspends = switch (x.kind) {
                     .intrinsic => true,
                     .command => blk: {
@@ -2338,15 +2392,15 @@ const Checker = struct {
             if (c.handlers.get(s.selector)) |info| if (info.called) {
                 try c.vetoes(h.body);
             };
-            _ = try c.flow(s, h.body, false);
+            _ = try c.flow(&s, h.body, false);
         }
     }
 
     /// Whether a function-style call to `name` can reach a Suspension Point.
     fn reaches(c: *Checker, name: []const u8) bool {
         if (c.handlers.get(name)) |h| return h.may_suspend;
-        const s = c.function_scopes.get(name) orelse return false;
-        for (s.sites.items) |x| switch (x.kind) {
+        const s = c.scopes.items[c.function_scopes.get(name) orelse return false];
+        for (s.sites) |x| switch (x.kind) {
             .intrinsic => return true,
             .command => if (c.handlers.get(x.target)) |g| if (g.may_suspend) return true,
             .function_style => {},
@@ -2363,13 +2417,13 @@ const Checker = struct {
     /// Whether a Suspension Point may have been reached after `b`, given
     /// whether one may have been before it; reports `veto` and `pass` after
     /// one.
-    fn flow(c: *Checker, s: *Scope, b: ast.Block, before: bool) Allocator.Error!bool {
+    fn flow(c: *Checker, s: *const Done, b: ast.Block, before: bool) Allocator.Error!bool {
         var state = before;
         for (b) |st| state = try c.flowStmt(s, st, state);
         return state;
     }
 
-    fn flowStmt(c: *Checker, s: *Scope, st: *const Stmt, before: bool) Allocator.Error!bool {
+    fn flowStmt(c: *Checker, s: *const Done, st: *const Stmt, before: bool) Allocator.Error!bool {
         switch (st.data) {
             .veto, .pass => {
                 if (before) try c.report(.after_a_suspension, st.first);

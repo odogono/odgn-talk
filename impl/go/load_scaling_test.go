@@ -43,7 +43,7 @@ func TestLoadSourceAllocation(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			// Guest linear memory is Go heap, so the guest's own source copy
 			// and line index count too. These limits are agreed for the Zig
-			// adapter (#1403); the checker's per-handler cost is #1411.
+			// adapter (#1403); its guest memory growth is #1447.
 			size, multiplier := 1<<20, uint64(40)
 			if kind == "handlers" {
 				size, multiplier = 100000, 320

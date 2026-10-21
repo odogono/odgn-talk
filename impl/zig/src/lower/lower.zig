@@ -177,6 +177,13 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
     }
     // The pool's values outlive the arena, so a refusal releases them.
     errdefer if (options.values != null) for (l.values.items) |c| if (c == .value) c.value.release();
+    defer {
+        for (l.made.items) |b| {
+            l.releaseBody(b);
+            l.work().destroy(b);
+        }
+        l.made.deinit(l.work());
+    }
     try l.run();
     return l.finish();
 }
@@ -216,6 +223,30 @@ const Lowerer = struct {
     clauses: std.StringHashMapUnmanaged(u32) = .empty,
     declaration_bodies: []?*const check.Body,
     lambda_bodies: std.AutoHashMapUnmanaged(*const Expr, *const check.Body) = .empty,
+    /// Every body's working code, from `work`, released once `finish`
+    /// has copied it into the unit, or when the lowering is refused.
+    made: std.ArrayList(*BodyCode) = .empty,
+
+    /// Where bodies' working code lives: the caller's scratch, so it
+    /// doesn't stay in the arena beside the unit (#1411).
+    fn work(l: *Lowerer) Allocator {
+        return l.options.scratch orelse l.a;
+    }
+
+    fn releaseBody(l: *Lowerer, b: *BodyCode) void {
+        const w = l.work();
+        for (b.code.items) |ins| w.free(ins.operands);
+        b.code.deinit(w);
+        b.labels.deinit(w);
+        b.unwind.deinit(w);
+        b.offers.deinit(w);
+        // `finish` releases a body once copied; the final release finds it
+        // empty.
+        b.code = .empty;
+        b.labels = .empty;
+        b.unwind = .empty;
+        b.offers = .empty;
+    }
 
     fn position(l: *Lowerer, t: Tok) Position {
         const p = l.lines.position(l.tree.tokens[t].start);
@@ -304,8 +335,10 @@ const Lowerer = struct {
     }
 
     fn newBody(l: *Lowerer, info: Body) Allocator.Error!*BodyCode {
-        const b = try l.a.create(BodyCode);
+        try l.made.ensureUnusedCapacity(l.work(), 1);
+        const b = try l.work().create(BodyCode);
         b.* = .{ .info = info, .code = .empty, .labels = .empty, .unwind = .empty, .offers = .empty };
+        l.made.appendAssumeCapacity(b);
         return b;
     }
 
@@ -478,7 +511,7 @@ const Lowerer = struct {
             try f.testPattern(p, @intCast(i + 1), fail, .direct, false);
         }
         if (h.guard) |g| try f.guard(g, fail);
-        if (f.pc() > start) try f.body.unwind.append(l.a, .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
+        if (f.pc() > start) try f.body.unwind.append(f.l.work(), .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
         const guard_entry = if (f.pc() > start) f.body.unwind.items.len - 1 else null;
         if (h.finally) |fin| {
             try f.tryStatement(.{ .body = h.body, .offers = &.{}, .catches = &.{}, .finally = fin, .end = h.end }, fin.keyword);
@@ -578,6 +611,7 @@ const Lowerer = struct {
                 r.offers = entries;
                 try offers.append(l.a, r);
             }
+            l.releaseBody(b);
         }
         // Offer entries name records by their index in the unit.
         var seen: u32 = 0;
@@ -747,7 +781,7 @@ const Frame = struct {
     }
 
     fn newLabel(f: *Frame) Allocator.Error!u32 {
-        try f.body.labels.append(f.l.a, null);
+        try f.body.labels.append(f.l.work(), null);
         return @intCast(f.body.labels.items.len - 1);
     }
 
@@ -760,7 +794,8 @@ const Frame = struct {
     }
 
     fn emitAt(f: *Frame, op: Opcode, operands: []const Operand, at: Position, note: []const u8) Allocator.Error!void {
-        const owned = try f.l.a.dupe(Operand, operands);
+        const owned = try f.l.work().dupe(Operand, operands);
+        errdefer f.l.work().free(owned);
         if (op == .convert or op == .can_convert) {
             if (model.units.Unit.parse(operands[0].text)) |unit| {
                 const prepared = try f.l.a.create(UnitTarget);
@@ -768,7 +803,7 @@ const Frame = struct {
                 owned[0] = .{ .unit_target = prepared };
             } else |_| {}
         }
-        try f.body.code.append(f.l.a, .{ .op = op, .operands = owned, .position = at, .note = note });
+        try f.body.code.append(f.l.work(), .{ .op = op, .operands = owned, .position = at, .note = note });
     }
 
     fn emit(f: *Frame, op: Opcode, operands: []const Operand, at: Tok, note: []const u8) Allocator.Error!void {
@@ -1103,7 +1138,7 @@ const Frame = struct {
                 try f.captures(br.pattern.data.text, br.pattern.first, .temps);
             } else try f.testPattern(br.pattern, t, fail, .temps, fold);
             if (br.guard) |g| try f.guard(g, fail);
-            try f.body.unwind.append(f.l.a, .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = fail, .depth = f.depth });
+            try f.body.unwind.append(f.l.work(), .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = fail, .depth = f.depth });
             const entry = f.body.unwind.items.len - 1;
             try f.moves(br.keyword);
             try f.block(br.body);
@@ -1210,10 +1245,10 @@ const Frame = struct {
         try f.mark(after);
         const excluded = f.tries.items[index].exclusions.items;
         if (t.catches.len > 0) try f.spans(.@"catch", body_start, body_end, excluded, handler_start, f.depth);
-        try f.body.unwind.appendSlice(l.a, guards.items);
+        try f.body.unwind.appendSlice(f.l.work(), guards.items);
         if (t.offers.len > 0) {
             try f.spans(.offer, body_start, body_end, excluded, 0, f.depth);
-            try f.body.offers.append(l.a, .{ .body = 0, .depth = f.depth, .end = f.labelPc(after), .offers = offer_entries.items });
+            try f.body.offers.append(f.l.work(), .{ .body = 0, .depth = f.depth, .end = f.labelPc(after), .offers = offer_entries.items });
         }
         if (fin != null) {
             try f.spans(.finally, body_start, body_end, excluded, cleanup, f.depth);
@@ -1254,10 +1289,10 @@ const Frame = struct {
                     s = x[1];
                     continue;
                 }
-                try f.body.unwind.append(f.l.a, .{ .first = s, .last = x[0] - 1, .kind = kind, .target = target, .depth = depth });
+                try f.body.unwind.append(f.l.work(), .{ .first = s, .last = x[0] - 1, .kind = kind, .target = target, .depth = depth });
                 s = x[1];
             } else {
-                try f.body.unwind.append(f.l.a, .{ .first = s, .last = to - 1, .kind = kind, .target = target, .depth = depth });
+                try f.body.unwind.append(f.l.work(), .{ .first = s, .last = to - 1, .kind = kind, .target = target, .depth = depth });
                 break;
             }
         }
@@ -1474,7 +1509,7 @@ const Frame = struct {
             try e.testPattern(p, @intCast(i + 1), fail, .direct, false);
         }
         if (guard_clause) |g| try e.guard(g, fail);
-        if (e.pc() > start) try e.body.unwind.append(l.a, .{ .first = start, .last = e.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
+        if (e.pc() > start) try e.body.unwind.append(e.l.work(), .{ .first = start, .last = e.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
         const entry = if (e.pc() > start) e.body.unwind.items.len - 1 else null;
         var binds: std.ArrayList(u32) = .empty;
         for (bound.items) |b| {
@@ -2048,7 +2083,9 @@ const Frame = struct {
                 .rest => |r| {
                     try f.jump(.bin_rest, fail, field.first);
                     const last = &f.body.code.items[f.body.code.items.len - 1];
-                    last.operands = try l.a.dupe(Operand, &.{ .{ .text = if (r.as_text) "bytes as text" else "bytes" }, .{ .label = fail } });
+                    const operands = try l.work().dupe(Operand, &.{ .{ .text = if (r.as_text) "bytes as text" else "bytes" }, .{ .label = fail } });
+                    l.work().free(last.operands);
+                    last.operands = operands;
                     if (r.name) |n| try f.bindName(n, binding, field.first) else try f.emit(.pop, &.{}, field.first, "");
                     rest = true;
                     i += 1;
