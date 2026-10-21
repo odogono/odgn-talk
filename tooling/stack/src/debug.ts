@@ -411,10 +411,9 @@ export class LiveDebugger {
   clock(): bigint {
     const reading =
       this.environment.now() -
+      // Paused time is in milliseconds.
       BigInt(
-        Math.floor(
-          (this.controller.pausedTime() - this.pausedBaseline) * 1_000_000,
-        ),
+        Math.floor((this.controller.pausedTime() - this.pausedBaseline) * 1000),
       );
     // Coarse Host clocks and separately sampled monotonic paused time can
     // otherwise regress by a fraction of a millisecond after a pause.

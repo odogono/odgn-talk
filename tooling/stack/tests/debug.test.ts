@@ -128,7 +128,8 @@ for (const caught of [true, false]) {
 test('live Clock subtracts time spent paused and freezes during a pause', async () => {
   const { group, script } = setup();
   const debug = new LiveDebugger(group, {
-    now: () => BigInt(Math.floor(performance.now() * 1_000_000)),
+    // Epoch microseconds, as a Host supplies them.
+    now: () => BigInt(Math.floor(performance.now() * 1000)),
   });
   debug.registerSource(compileSource(source, { name: 's' }).unit!, 's');
   debug.setBreakpoints([{ unit: 's', line: 3 }]);
@@ -136,11 +137,14 @@ test('live Clock subtracts time spent paused and freezes during a pause', async 
   debug.pump();
   const before = debug.clock();
   await new Promise(resolve => setTimeout(resolve, 20));
-  expect(Number(debug.clock() - before)).toBeLessThan(2_000_000);
+  expect(Number(debug.clock() - before)).toBeLessThan(2000);
   debug.resume();
+  // The 20 ms pause is taken off once: the Clock goes on from where it
+  // froze rather than holding still for a thousand times as long (#1449).
   const resumed = debug.clock();
+  expect(Number(resumed - before)).toBeLessThan(5000);
   await new Promise(resolve => setTimeout(resolve, 10));
-  expect(Number(debug.clock() - resumed)).toBeGreaterThan(5_000_000);
+  expect(Number(debug.clock() - resumed)).toBeGreaterThan(5000);
 });
 
 for (const mode of ['send', 'function'] as const) {
