@@ -147,12 +147,12 @@ Set Launch to `draw`. Operations are immediate and return Nothing. A `tell canva
 | `roundedRectangle` | As `rectangle`, then a nonnegative corner radius |
 | `ellipse` | x, y, positive width, positive height; center origin |
 | `circle` | x, y, positive diameter; center origin |
-| `arc` | x, y, positive width, positive height, start, stop; center origin, angles in radians clockwise from the positive x-axis; fills a pie slice and strokes only the curve |
+| `arc` | x, y, positive width, positive height, start, stop; center origin, angles in degrees clockwise from the positive x-axis; fills a pie slice and strokes only the curve |
 | `text` | Text, x, y; left-aligned alphabetic baseline; uses fill/stroke |
 | `textSize` | Positive size in logical pixels; sans-serif |
 | `push`, `pop` | No arguments; save and restore styles and the transform; nest up to 64 deep; `pop` needs a matching `push` |
 | `translate` | x, y; moves the origin |
-| `rotate` | Angle in radians, clockwise |
+| `rotate` | Angle in degrees, clockwise |
 | `scale` | x, y factors; negative mirrors |
 
 Colors are `#RRGGBB` or `#RRGGBBAA`, case-insensitive. Coordinates and numeric arguments are bounded to ±1,000,000. Text is limited to 4096 UTF-16 code units. A session accepts at most 10,000 operations (including style changes); Run fresh resets this budget. Each call costs one Fuel. Invalid values raise `invalid canvas argument`; exhaustion raises `canvas limit`. Core Shape checks reject wrong types and argument counts.

@@ -129,7 +129,7 @@ export const createCanvasView = (
           context.translate(numberAt(args, 0), numberAt(args, 1));
           break;
         case 'rotate':
-          context.rotate(numberAt(args, 0));
+          context.rotate((numberAt(args, 0) * Math.PI) / 180);
           break;
         case 'scale':
           context.scale(numberAt(args, 0), numberAt(args, 1));
