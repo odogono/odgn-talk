@@ -1,4 +1,4 @@
-// Chapter 9's process-wide Core. The free functions and this facade share
+// Chapter 9's process-wide Core. The free functions and this Core object share
 // compilation caches and Object Kind definitions; Groups own all live state.
 import { defineCapability } from './capabilities';
 import type { Core } from './embedding';
@@ -15,24 +15,18 @@ import {
 import { sqliteCapability } from './sqlite-capability';
 import { storeCapability } from './store-capability';
 import { userCapability } from './user-capability';
-import { coreVersions, type Versions } from './versions';
+import { coreVersions } from './versions';
 
 /** The TS Core: the embedding interface's Core, with its Groups typed as TsGroup. */
-export type TsCore = {
-  calendarCapability: typeof calendarCapability;
-  clockCapability: typeof clockCapability;
+// Core's members, with the TS Core's own Group and its extra overloads.
+export type TsCore = Omit<
+  Core,
+  'compileLibrary' | 'defineObjectKind' | 'newGroup' | 'restore'
+> & {
   compileLibrary: typeof compileLibrary;
-  consoleCapability: typeof consoleCapability;
-  defineCapability: typeof defineCapability;
   defineObjectKind: typeof defineObjectKind;
-  localeCapability: typeof localeCapability;
   newGroup: typeof newGroup;
   restore: typeof restore;
-  sqliteCapability: typeof sqliteCapability;
-  storeCapability: typeof storeCapability;
-  timerCapability: typeof timerCapability;
-  userCapability: typeof userCapability;
-  readonly versions: Versions;
 };
 
 const core: TsCore = Object.freeze({

@@ -71,7 +71,7 @@ export type Core = {
 
 /**
  * A Script Group. The TS Core's Group adds `save(options)` and the debugger
- * hooks; the Zig Host Adapter's adds `memoryBytes()` and `rebind()`.
+ * hooks; the Zig Host Adapter's adds `memoryBytes()`, `rebind()` and `restore()`.
  */
 export type Group = {
   addLibrary(l: Library): void;
