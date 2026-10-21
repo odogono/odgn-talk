@@ -1,7 +1,8 @@
-//! A Run's lifecycle (ADR 0123): its place in its Script's live Runs and
-//! work, the start and end of each Stretch, and the Fuel each Stretch adds
-//! to its Script's and its Pump's totals. Which Run goes next and every Trace
-//! record belong to the Group.
+//! A Run's lifecycle (ADR 0123): its state between turns, its place in its
+//! Script's live Runs and work, the start and end of each Stretch, the Fuel
+//! each Stretch adds to its Script's and its Pump's totals, and the one fault
+//! for a refused Charge. Which Run goes next and every Trace record belong to
+//! the Group.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const machine = @import("machine.zig");
@@ -30,6 +31,120 @@ pub const Meter = struct {
         m.spent.* += fuel;
     }
 };
+
+/// Where a Run is between its turns. What a ready Run resumes with, and a
+/// Segment end in progress, are kept beside it: a Join can make its Run
+/// ready before its Segment ends, and an ending can pause in any state.
+pub const State = union(enum) {
+    /// Running, or about to, off its Script's lists: `continuing` while its
+    /// Stretch continues its Segment after a preemption.
+    running: struct { continuing: bool = false },
+    /// Preempted mid-Segment: live, at the head of its work.
+    preempted,
+    /// Paused at a Host Crossing mid-Stretch: live, at the head of its work,
+    /// to make the same instruction again with its records as they were.
+    crossing_paused: struct { started: bool, continuing: bool },
+    /// At a Suspension Point: live, and in its work once ready.
+    suspended,
+    /// A Parked Run: live, off its work until its clause's earlier Run ends.
+    parked,
+};
+
+/// Whether the Run's next or current Stretch continues its Segment after a
+/// preemption, as its `seg` and `preempt` records say. A crossing pause
+/// counts as one until it goes on.
+pub fn continuing(run: *const Run) bool {
+    return switch (run.state) {
+        .running => |r| r.continuing,
+        .preempted, .crossing_paused => true,
+        .suspended, .parked => false,
+    };
+}
+
+/// Ends a Stretch at a preemption. The Run is requeued at the head of its
+/// work.
+pub fn preempt(run: *Run) void {
+    std.debug.assert(run.state == .running);
+    run.state = .preempted;
+}
+
+/// Pauses a running Run at a Host Crossing, keeping its records' flags. The
+/// Run is requeued at the head of its work.
+pub fn pauseAtCrossing(run: *Run) void {
+    const was = run.state.running;
+    run.state = .{ .crossing_paused = .{ .started = run.started, .continuing = was.continuing } };
+}
+
+/// Where a Run's Segment ends at a Suspension Point: waiting, or parked by
+/// its clause's Queueing Policy.
+pub const Rest = enum { wait, park };
+
+/// Ends a Segment at a Suspension Point. The Run was kept live first.
+pub fn rest(run: *Run, how: Rest) void {
+    std.debug.assert(run.state == .running);
+    run.state = switch (how) {
+        .wait => .suspended,
+        .park => .parked,
+    };
+}
+
+/// Takes a Parked Run out of its clause's queue, to resume from its first
+/// instruction or be cancelled.
+pub fn unpark(run: *Run) void {
+    std.debug.assert(run.state == .parked);
+    run.state = .suspended;
+}
+
+/// How a Run taken from its work goes on.
+pub const Turn = enum {
+    /// In the same Segment, after a preemption.
+    continue_segment,
+    /// At the same instruction, in the same Stretch, after a crossing pause.
+    retry_crossing,
+    /// With what settled its wait.
+    resume_wait,
+};
+
+/// Starts a Run's turn, taken from its work. A Segment end paused at a
+/// lifecycle crossing goes on before this.
+pub fn takeTurn(run: *Run) Turn {
+    switch (run.state) {
+        .preempted => {
+            run.state = .{ .running = .{ .continuing = true } };
+            return .continue_segment;
+        },
+        .crossing_paused => |was| {
+            run.started = was.started;
+            run.state = .{ .running = .{ .continuing = was.continuing } };
+            return .retry_crossing;
+        },
+        // Only a restored Parked Run, from a save no Core wrote, can be
+        // made ready without leaving its clause's queue; it resumes as any
+        // other ready Run.
+        .suspended, .parked => {
+            std.debug.assert(run.resume_with != null);
+            run.state = .{ .running = .{} };
+            return .resume_wait;
+        },
+        .running => unreachable,
+    }
+}
+
+/// A restored Run's state, from the flags its save holds: preempted,
+/// parked, or else suspended. A save never holds both.
+pub fn restore(run: *Run, preempted: bool, parked: bool) error{InvalidSave}!void {
+    if (preempted and parked) return error.InvalidSave;
+    run.state = if (preempted) .preempted else if (parked) .parked else .suspended;
+}
+
+/// Whether a live Run that isn't running can be rewound (ADR 0068): it
+/// hasn't passed a Suspension Point, which a Run parked at dispatch, or
+/// just unparked, hasn't either, and isn't cleaning up.
+pub fn rewindable(run: *const Run) bool {
+    const unparked = run.resume_with != null and run.resume_with.? == .unparked;
+    const first = run.segments == 0 or run.state == .parked or unparked;
+    return first and run.cleanup_from == null and (run.resume_with == null or unparked);
+}
 
 /// What an ended Stretch spent.
 pub const Stretch = struct { fuel: u64, alloc: u64 };
@@ -130,13 +245,13 @@ pub fn faultCharge(run: *Run, lists: Lists, how: Refusal) Fault {
     switch (how) {
         // Its rollback may pause at a crossing, so the Group ends the Run
         // once that completes.
-        .charge_request => return .{ .end = .run, .drop_base = !run.continuing, .abandon = null },
+        .charge_request => return .{ .end = .run, .drop_base = !continuing(run), .abandon = null },
         .join_reissue => {
-            const drop_base = !run.continuing;
+            const drop_base = !continuing(run);
             // The fault is a Stretch of its own, as a resume is, with
             // nothing charged in it. An ending that pauses requeues the
             // Run, so it leaves its lists first.
-            run.continuing = false;
+            run.state = .{ .running = .{} };
             startStretch(run);
             detach(run, lists);
             return .{ .end = .segment, .drop_base = drop_base, .abandon = null };
@@ -172,7 +287,10 @@ fn bareRun() Run {
     run.alloc = 0;
     run.segment_fuel = 0;
     run.segment_alloc = 0;
-    run.continuing = false;
+    run.state = .{ .running = .{} };
+    run.started = false;
+    run.segments = 0;
+    run.cleanup_from = null;
     run.resume_with = null;
     run.waited = .{};
     run.join = null;
@@ -308,13 +426,14 @@ test "a Join Member's refused reissue faults in a Stretch of its own, detached" 
     var run = bareRun();
     run.fuel = 50;
     run.segment_fuel = 20;
-    run.continuing = true;
+    run.state = .preempted;
     try requeueAtHead(t.allocator, &run, l.lists());
     const f = faultCharge(&run, l.lists(), .join_reissue);
     try t.expectEqual(.segment, f.end);
     // A preempted Run's base is its Segment's, which the fault rolls back to.
     try t.expect(!f.drop_base);
-    try t.expect(!run.continuing);
+    try t.expect(!continuing(&run));
+    try t.expect(run.state == .running);
     try t.expectEqual(@as(u64, 0), stretchFuel(&run));
     try t.expectEqual(@as(usize, 0), l.live.items.len);
     try t.expectEqual(@as(usize, 0), l.work.items.len);
@@ -351,4 +470,76 @@ test "a Join that failed on a refused member names that member" {
     try t.expectEqualStrings("c2", f.abandon.?);
     try t.expectEqual(@as(?machine.Resume, null), join.members.items[1].with);
     try t.expectEqual(@as(?machine.Resume, null), run.resume_with);
+}
+
+test "a preempted Run continues its Segment on its next turn" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    preempt(&run);
+    try requeueAtHead(t.allocator, &run, l.lists());
+    try t.expect(continuing(&run));
+    detach(&run, l.lists());
+    try t.expectEqual(Turn.continue_segment, takeTurn(&run));
+    try t.expect(continuing(&run));
+    // Its Segment ends at a wait: no longer continuing.
+    rest(&run, .wait);
+    try t.expect(!continuing(&run));
+}
+
+test "a crossing pause keeps its records' flags and counts as continuing" {
+    var run = bareRun();
+    run.started = true;
+    pauseAtCrossing(&run);
+    try t.expect(continuing(&run));
+    run.started = false;
+    try t.expectEqual(Turn.retry_crossing, takeTurn(&run));
+    try t.expect(run.started);
+    try t.expect(!continuing(&run));
+}
+
+test "park, cancel, then free: the Run leaves the queue and is detached" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    run.segments = 1;
+    try keepLive(t.allocator, &run, l.lists());
+    rest(&run, .park);
+    try t.expect(rewindable(&run));
+    // A cancellation unparks it and readies it with its cleanup.
+    unpark(&run);
+    run.resume_with = .cancelled;
+    try l.work.append(t.allocator, .{ .run = &run });
+    try t.expect(!rewindable(&run));
+    detach(&run, l.lists());
+    try t.expectEqual(@as(usize, 0), l.live.items.len);
+    try t.expectEqual(@as(usize, 0), l.work.items.len);
+    try t.expectEqual(Turn.resume_wait, takeTurn(&run));
+}
+
+test "only a Run that hasn't passed a Suspension Point is rewindable" {
+    var run = bareRun();
+    run.state = .preempted;
+    try t.expect(rewindable(&run));
+    run.state = .suspended;
+    run.segments = 1;
+    try t.expect(!rewindable(&run));
+    run.resume_with = .unparked;
+    try t.expect(rewindable(&run));
+    run.cleanup_from = 0;
+    try t.expect(!rewindable(&run));
+    run.cleanup_from = null;
+    run.resume_with = .timeout;
+    try t.expect(!rewindable(&run));
+}
+
+test "a restored Run is preempted, parked or suspended, never two" {
+    var run = bareRun();
+    try restore(&run, true, false);
+    try t.expect(run.state == .preempted);
+    try restore(&run, false, true);
+    try t.expect(run.state == .parked);
+    try restore(&run, false, false);
+    try t.expect(run.state == .suspended);
+    try t.expectError(error.InvalidSave, restore(&run, true, true));
 }

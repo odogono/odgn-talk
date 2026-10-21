@@ -811,7 +811,7 @@ const Saving = struct {
             try s.o.int(p.body);
             try s.o.flag(p.fallback);
         }
-        try s.o.flag(r.continuing);
+        try s.o.flag(machine.run_lifecycle.continuing(r));
         try s.o.int(r.clauses_seen);
         try s.o.flag(r.cleanup_from != null);
         if (r.cleanup_from) |x| try s.o.int(x);
@@ -854,7 +854,7 @@ const Saving = struct {
         try s.o.flag(r.fallback);
         try s.o.flag(r.select_at != null);
         if (r.select_at) |x| try s.o.int(x);
-        try s.o.flag(r.parked);
+        try s.o.flag(r.state == .parked);
         try s.o.int(r.abandoned.items.len);
         for (r.abandoned.items) |id| try s.o.str(id);
         try s.o.int(r.base);
@@ -1675,7 +1675,7 @@ const Restoring = struct {
             if (!r.skim and body >= s.unitIn(library).bodies.len) return error.InvalidSave;
             x.preempted_in = .{ .library = library, .body = body, .fallback = try r.i.flag() };
         }
-        x.continuing = try r.i.flag();
+        const preempted = try r.i.flag();
         x.clauses_seen = try r.i.small(u32);
         if (try r.i.flag()) x.cleanup_from = try r.i.int();
         x.cleanup_limited = try r.i.flag();
@@ -1720,7 +1720,7 @@ const Restoring = struct {
         }
         x.fallback = try r.i.flag();
         if (try r.i.flag()) x.select_at = try r.i.small(u32);
-        x.parked = try r.i.flag();
+        try machine.run_lifecycle.restore(x, preempted, try r.i.flag());
         const abandoned = try r.i.count();
         for (0..abandoned) |_| try x.abandoned.append(a, try r.kept());
         x.base = try r.i.small(usize);
@@ -1862,7 +1862,7 @@ const Restoring = struct {
                     .call, .call_import, .call_handler, .call_handler_wait, .call_value, .call_restricted, .call_value_wait => less = 1,
                     else => if (!controlled) return error.InvalidSave,
                 }
-            } else if (!run.continuing and f.pc > 0) {
+            } else if (!machine.run_lifecycle.continuing(run) and f.pc > 0) {
                 // Suspended at the instruction before, which pushes what it
                 // waited for when the Run resumes.
                 const ins = code.code[f.pc - 1];
@@ -2448,7 +2448,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
                 const x = r.runs.items[try i.index(r.runs.items.len)];
                 if (x.script != s) return error.InvalidSave;
                 // Ready with what it waited for, or preempted, and once.
-                if (!x.continuing and x.resume_with == null) return error.InvalidSave;
+                if (!machine.run_lifecycle.continuing(x) and x.resume_with == null) return error.InvalidSave;
                 for (s.work.items) |w| if (w == .run and w.run == x) return error.InvalidSave;
                 s.work.appendAssumeCapacity(.{ .run = x });
             },
@@ -2645,7 +2645,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
         // The prospective post-rollback view of the saved variables.
         const view = try a.dupe(*Value, x.variables);
         defer a.free(view);
-        for (runs.items) |run| if (run.continuing) if (run.segment_base) |base| {
+        for (runs.items) |run| if (machine.run_lifecycle.continuing(run)) if (run.segment_base) |base| {
             if (base.len > view.len) return error.InvalidSave;
             @memcpy(view[0..base.len], base);
         };
@@ -2839,14 +2839,14 @@ test "pending Calls retain their crossing Clock and Segment through restore" {
         try g.pump(.{ .seconds = -2, .micros = 123456 });
         try g.pumpWith(original, if (join) 40 else 0, 0);
         try testing.expectEqual(@as(usize, 1), g.waits.pending.items.len);
-        try testing.expectEqual(join, g.waits.pending.items[0].run.continuing);
+        try testing.expectEqual(join, machine.run_lifecycle.continuing(g.waits.pending.items[0].run));
         const call = g.waits.pending.items[0].call.?;
         try testing.expectEqualStrings("s/r1.s2", call.segment);
         // The ordinary wait stays pending across multiple later Pumps.
         // Keep the Join preempted by spending only one instruction's Fuel.
         try g.pumpWith(later, if (join) 1 else 0, 0);
         if (!join) try g.pump(.{ .seconds = 0, .micros = 999999 });
-        try testing.expectEqual(join, g.waits.pending.items[0].run.continuing);
+        try testing.expectEqual(join, machine.run_lifecycle.continuing(g.waits.pending.items[0].run));
         try testing.expectEqualStrings("s/r1.s2", call.segment);
         const bytes = try save(&g, gpa, try g.groupFingerprint());
         defer gpa.free(bytes);

@@ -270,8 +270,9 @@ pub const Run = struct {
     /// Preempted in a clause's patterns or Guard: the clause, and whether it
     /// is a Fallback's, from which dispatch goes on.
     preempted_in: ?struct { library: ?*Library, body: u32, fallback: bool } = null,
-    /// Whether its next Stretch continues it after a preemption.
-    continuing: bool = false,
+    /// Where it is between turns, and whether its Stretch continues its
+    /// Segment after a preemption.
+    state: run_lifecycle.State = .{ .running = .{} },
     /// Named clauses dispatch has counted so far.
     clauses_seen: u32 = 0,
     /// A cancelled Run's Fuel when its cleanup began, which the Cleanup
@@ -322,8 +323,6 @@ pub const Run = struct {
     /// While it is dispatched, the pc in its clause body where the clause's
     /// patterns and Guard have passed.
     select_at: ?u32 = null,
-    /// Whether it waits in its clause's queue, under `, queued`.
-    parked: bool = false,
     /// The calls a cancellation abandoned, which its first cleanup Stretch's
     /// `seg` or `preempt` names; the ids are the Group's.
     abandoned: std.ArrayList([]const u8) = .empty,
@@ -339,9 +338,6 @@ pub const Run = struct {
     verdict: bool = false,
     /// Its Segment's participant, once a Segment-bound call enrolls one.
     participant: ?Participant = null,
-    /// Its record flags before a crossing pause, which the pause leaves
-    /// unchanged.
-    crossed: ?struct { started: bool, continuing: bool } = null,
     /// An answered `begin` whose follow-up crossing deferred, so the
     /// re-made call doesn't ask for it again.
     begun: ?capabilities.EffectStatus = null,
@@ -2500,7 +2496,7 @@ pub const Group = struct {
                 return runNumber(x.id) < runNumber(y.id);
             }
         }.less);
-        for (runs.items) |r| if (r.continuing) if (r.segment_base) |base| {
+        for (runs.items) |r| if (run_lifecycle.continuing(r)) if (r.segment_base) |base| {
             @memcpy(view[0..base.len], base);
         };
         for (fresh.variableNames(), fresh.variables) |name, *v| {
@@ -3068,15 +3064,14 @@ pub const Group = struct {
         };
         for (g.scripts.items) |s| for (s.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
             // A Run parked at dispatch hasn't begun its clause.
-            const first = r.segments == 0 or r.parked or (r.resume_with != null and r.resume_with.? == .unparked);
-            if (!first or r.cleanup_from != null or (r.resume_with != null and r.resume_with.? != .unparked)) {
+            if (!run_lifecycle.rewindable(r)) {
                 g.write("note {s} kind=not-rewindable\n", .{id});
                 return;
             }
             // Its rollback first, which may defer while draining.
             try g.cleanupLifecycle(r, .rewound);
             // Preempted or parked: it has no Stretch to end.
-            if (!r.parked) g.restoreBase(r);
+            if (r.state != .parked) g.restoreBase(r);
             try g.putBack(s, r);
             try g.endRun(r, .rewound);
             return;
@@ -3312,13 +3307,13 @@ pub const Group = struct {
         g.waits.abandonReady(r, .cancelled);
         // Its rollback first, which may defer while draining: nothing else
         // changes until it completes.
-        if (r.continuing and r.participant != null) {
+        if (run_lifecycle.continuing(r) and r.participant != null) {
             if (r.cleanup == null) r.cleanup = .{ .outcome = .stopped, .participating_only = true };
             try g.cleanupLifecycle(r, .cancelled);
         }
         if (r.resume_with) |w| g.releaseResume(w);
-        const queued = r.resume_with != null or r.continuing;
-        if (r.continuing) {
+        const queued = r.resume_with != null or run_lifecycle.continuing(r);
+        if (run_lifecycle.continuing(r)) {
             g.restoreBase(r);
             r.preempted_in = null;
             // Its cleanup is a Segment of its own.
@@ -3335,7 +3330,7 @@ pub const Group = struct {
             try r.abandoned.append(g.gpa, x.waited.id);
         };
         g.dropJoin(r);
-        r.parked = false;
+        if (r.state == .parked) run_lifecycle.unpark(r);
         r.resume_with = .cancelled;
         if (!queued) try s.work.append(g.gpa, .{ .run = r });
     }
@@ -4257,7 +4252,7 @@ pub const Group = struct {
                 // A Rewind of another Run ends this Pump after the active
                 // callback and its Segment finalization finish, including
                 // continuations paused at lifecycle crossings.
-                const resuming_crossing = s.work.items.len > 0 and s.work.items[0] == .run and (s.work.items[0].run.crossed != null or s.work.items[0].run.ending != null);
+                const resuming_crossing = s.work.items.len > 0 and s.work.items[0] == .run and (s.work.items[0].run.state == .crossing_paused or s.work.items[0].run.ending != null);
                 if (g.rewound and !resuming_crossing) break :turns;
                 if (s.work.items.len == 0) continue;
                 // So does unknown effect state, once a Run paused at a
@@ -4707,8 +4702,8 @@ pub const Group = struct {
                         const f = &run.frames.items[run.frames.items.len - 1];
                         return g.limitFault(run, .persistent, unitName(run, f), f.pc, unitOf(run, f).code[f.pc]);
                     }
+                    // Its Segment's end parks it.
                     try g.takeVerdict(run, b.deciding);
-                    run.parked = true;
                     run.suspended_at = "park";
                     return .suspended;
                 },
@@ -4751,21 +4746,20 @@ pub const Group = struct {
         // taking another turn. The Run goes on as if it hadn't paused.
         if (by == .crossing) {
             g.crossing_pause = true;
-            run.crossed = .{ .started = run.started, .continuing = run.continuing };
-            run.continuing = true;
+            run_lifecycle.pauseAtCrossing(run);
             return g.requeueAtHead(s, run);
         }
         const stretch = run_lifecycle.endStretch(run, g.meter(s));
         {
             if (g.trace) |out| {
-                out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
+                out.print("preempt {s} {s}", .{ run.id, if (run_lifecycle.continuing(run)) "continue" else if (run.started) "resume" else "start" }) catch {};
                 if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
                 out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), stretch.fuel, stretch.alloc }) catch {};
             }
             g.writeAbandoned(run);
         }
         run.started = true;
-        run.continuing = true;
+        run_lifecycle.preempt(run);
         run_lifecycle.startStretch(run);
         return g.requeueAtHead(s, run);
     }
@@ -4809,12 +4803,10 @@ pub const Group = struct {
         run_lifecycle.detach(run, .of(s));
         // A Segment end paused at a lifecycle crossing goes on from there.
         if (run.ending) |e| return g.endSegment(s, run, e.outcome);
+        const turn = run_lifecycle.takeTurn(run);
         // A Run paused at a crossing makes the same instruction again, in
         // the same Stretch, its records as if it hadn't paused.
-        if (run.crossed) |was| {
-            run.crossed = null;
-            run.started = was.started;
-            run.continuing = was.continuing;
+        if (turn == .retry_crossing) {
             const outcome = (if (run.crossing_cancel) g.landedCancel(run) else g.continueRun(s, run)) catch |e| {
                 g.endRun(run, .dropped) catch unreachable;
                 return e;
@@ -4824,7 +4816,7 @@ pub const Group = struct {
         }
         run_lifecycle.startStretch(run);
         // A preempted Run goes on in the same Segment.
-        const outcome = if (run.continuing) g.continueRun(s, run) catch |e| {
+        const outcome = if (turn == .continue_segment) g.continueRun(s, run) catch |e| {
             g.endRun(run, .dropped) catch unreachable;
             return e;
         } else blk: {
@@ -6093,7 +6085,7 @@ pub const Group = struct {
         const state = g.persistentState(s);
         const d = run.delivery;
         if (g.trace) |out| {
-            out.print("seg {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
+            out.print("seg {s} {s}", .{ run.id, if (run_lifecycle.continuing(run)) "continue" else if (run.started) "resume" else "start" }) catch {};
             if (!run.started) g.writeStart(out, s, run, outcome != .unhandled and outcome != .clause_failed);
             const end: []const u8 = switch (outcome) {
                 .returned => "return",
@@ -6150,12 +6142,13 @@ pub const Group = struct {
             else => {},
         };
         run.started = true;
-        run.continuing = false;
         run.segments += 1;
         if (outcome == .suspended) {
+            run_lifecycle.rest(run, if (std.mem.eql(u8, run.suspended_at, "park")) .park else .wait);
             run_lifecycle.startStretch(run);
             return;
         }
+        run.state = .{ .running = .{} };
         try g.endRun(run, .{ .finished = .{ .outcome = outcome, .segment = segment } });
     }
 
@@ -6360,7 +6353,7 @@ pub const Group = struct {
             }
         }.less);
         for (runs.items) |r| {
-            if (r == running or r.continuing) g.restoreBase(r);
+            if (r == running or run_lifecycle.continuing(r)) g.restoreBase(r);
             // Reports and deferred Decisions outlive the Run. Own its name
             // until the batch has written its stopped record and Decisions.
             const id = try names.allocator().dupe(u8, r.id);
@@ -6720,11 +6713,11 @@ pub const Group = struct {
     fn releaseParked(g: *Group, s: *Script, library: ?*Library, body: u32) !void {
         var first: ?*Run = null;
         for (s.live.items) |r| if (r.clause_body == body and r.clause_unit == library) {
-            if (!r.parked) return;
+            if (r.state != .parked) return;
             if (first == null) first = r;
         };
         const r = first orelse return;
-        r.parked = false;
+        run_lifecycle.unpark(r);
         r.resume_with = .unparked;
         try s.work.append(g.gpa, .{ .run = r });
     }
@@ -6733,7 +6726,7 @@ pub const Group = struct {
     /// instruction. Preemption likewise stops before the next instruction.
     fn cancellationPlace(run: *const Run) u32 {
         const pc = run.frames.items[run.frames.items.len - 1].pc;
-        return if (run.continuing or std.mem.eql(u8, run.suspended_at, "park")) pc else pc -| 1;
+        return if (run_lifecycle.continuing(run) or std.mem.eql(u8, run.suspended_at, "park")) pc else pc -| 1;
     }
 
     /// `, replacing`: cancels every Run of the clause that hasn't ended.

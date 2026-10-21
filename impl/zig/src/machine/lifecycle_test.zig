@@ -344,7 +344,7 @@ test "cancelling a parked queued Run cleans up without releasing the active Run 
     try g.pump(.{ .seconds = 0, .micros = 0 });
     try testing.expectEqual(@as(usize, 2), script.live.items.len);
     try testing.expectEqualStrings("s/r1", script.live.items[0].id);
-    try testing.expect(script.live.items[1].parked);
+    try testing.expect(script.live.items[1].state == .parked);
     try testing.expectEqual(@as(usize, 2), script.variables[0].data.list.len);
     for ([_]i64{ 1, 20 }, script.variables[0].data.list) |want, got| {
         try testing.expectEqual(want, try got.data.number.integer(i64));
@@ -352,7 +352,7 @@ test "cancelling a parked queued Run cleans up without releasing the active Run 
     try g.pump(.{ .seconds = 1, .micros = 0 });
     try testing.expectEqual(@as(usize, 1), script.live.items.len);
     try testing.expectEqualStrings("s/r3", script.live.items[0].id);
-    try testing.expect(!script.live.items[0].parked);
+    try testing.expect(script.live.items[0].state != .parked);
     try g.pump(.{ .seconds = 2, .micros = 0 });
     try testing.expectEqual(@as(usize, 0), script.live.items.len);
 }

@@ -434,7 +434,7 @@ pub const Waits = struct {
         for (w.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
             // A preempted Run's Join hasn't reached its end, so its members'
             // waits aren't timers yet.
-            if (p.member != null and p.run.continuing) continue;
+            if (p.member != null and machine.run_lifecycle.continuing(p.run)) continue;
             best = p.deadline;
         };
         return best;
@@ -480,7 +480,7 @@ fn bareRun() Run {
     var run: Run = undefined;
     run.waiting = null;
     run.join = null;
-    run.continuing = false;
+    run.state = .{ .running = .{} };
     run.resume_with = null;
     run.waited = .{};
     run.abandoned = .empty;
@@ -558,7 +558,7 @@ test "a Join Member's Wait is referenced by its member until taken" {
     // A member's Wait leaves the Run's own reference alone.
     try t.expectEqual(@as(?*Pending, null), run.waiting);
     // A preempted Run's members aren't timers yet.
-    run.continuing = true;
+    run.state = .preempted;
     try t.expectEqual(@as(?Ticks, null), w.next());
 }
 

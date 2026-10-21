@@ -615,7 +615,7 @@ test "a charge refusal in a preempted Join rolls back the open Segment even acro
             if (h.calls.items.len > 0) break;
         }
         try t.expectEqual(@as(usize, 1), h.calls.items.len);
-        try t.expect(g.waits.all()[0].run.continuing);
+        try t.expect(machine.run_lifecycle.continuing(g.waits.all()[0].run));
         try t.expectEqual(@as(i64, 1), try s.variables[0].data.number.integer(i64));
         const at = trace.written().len;
         const q = try g.requestCharge(h.calls.items[0].id, 1000);
