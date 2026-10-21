@@ -48,7 +48,7 @@ func TestLoadSourceAllocation(t *testing.T) {
 			// powers of two (#1447).
 			size, multiplier, guestMultiplier := 1<<20, uint64(20), uint64(10)
 			if kind == "handlers" {
-				size, multiplier, guestMultiplier = 100000, 160, 60
+				size, multiplier, guestMultiplier = 100000, 160, 50
 			}
 			source := hostileSource(kind, size)
 			g := New().NewGroup(GroupOptions{})
