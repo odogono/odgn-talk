@@ -92,6 +92,7 @@ test {
     _ = @import("machine/crossing_test.zig");
     _ = @import("machine/elements_test.zig");
     _ = @import("machine/waits.zig");
+    _ = @import("machine/run_lifecycle.zig");
     _ = @import("machine/wait_for_guard_test.zig");
     _ = @import("machine/wait_range_test.zig");
     _ = @import("machine/list_write_test.zig");

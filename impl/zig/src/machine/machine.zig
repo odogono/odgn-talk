@@ -29,6 +29,7 @@ pub const capabilities = @import("capabilities.zig");
 pub const fingerprint = @import("fingerprint.zig");
 pub const snapshot = @import("snapshot.zig");
 pub const wait_table = @import("waits.zig");
+pub const run_lifecycle = @import("run_lifecycle.zig");
 pub const verify = @import("verify.zig");
 pub const objects = @import("objects.zig");
 pub const report = @import("reports.zig");
@@ -3989,11 +3990,8 @@ pub const Group = struct {
             if (pending) |p| {
                 const run = p.run;
                 if (q.status == .accepted) {
-                    run.fuel += q.fuel;
                     // Keep queued charges out of the next Stretch's total.
-                    run.segment_fuel += q.fuel;
-                    run.script.spent += q.fuel;
-                    g.pump_fuel += q.fuel;
+                    run_lifecycle.charge(run, g.meter(run.script), q.fuel);
                     g.markRoot(rootOf(run.delivery));
                 } else {
                     const c = p.call.?;
@@ -4477,9 +4475,7 @@ pub const Group = struct {
         g.trace = held;
         if (outcome == .deferred) return error.Deferred;
         c.starting = false;
-        run.fuel += c.charged;
-        g.pump_fuel += c.charged;
-        run.script.spent += c.charged;
+        run_lifecycle.chargeSuspended(run, g.meter(run.script), c.charged);
         if (g.trace) |w| {
             w.print("call {s} op={s}.{s} args=[", .{ id, p.grant, p.operation }) catch {};
             for (c.args, 0..) |v, k| {
@@ -4505,19 +4501,9 @@ pub const Group = struct {
                 // The fault is a Stretch of its own, as a resume is, with
                 // nothing charged in it.
                 run.continuing = false;
-                run.segment_fuel = run.fuel;
-                run.segment_alloc = run.alloc;
+                run_lifecycle.startStretch(run);
                 const s = run.script;
-                for (s.live.items, 0..) |r, i| if (r == run) {
-                    _ = s.live.orderedRemove(i);
-                    break;
-                };
-                var i: usize = 0;
-                while (i < s.work.items.len) {
-                    if (s.work.items[i] == .run and s.work.items[i].run == run) {
-                        _ = s.work.orderedRemove(i);
-                    } else i += 1;
-                }
+                run_lifecycle.detach(run, .of(s));
                 const end = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
                 try g.endSegment(s, run, end);
             } else try g.ready(p, .limited),
@@ -4764,7 +4750,7 @@ pub const Group = struct {
     /// Whether the running Run must stop before its next instruction: its
     /// Script's slice spent, or else the Group's cap.
     fn preemption(g: *Group, run: *const Run) ?Preemption {
-        const stretch = run.fuel - run.segment_fuel;
+        const stretch = run_lifecycle.stretchFuel(run);
         if (g.slice > 0 and run.script.spent + stretch >= run.script.allowance) return .slice;
         if (g.cap > 0 and g.pump_fuel + stretch >= g.cap) return .cap;
         return null;
@@ -4780,37 +4766,34 @@ pub const Group = struct {
             g.crossing_pause = true;
             run.crossed = .{ .started = run.started, .continuing = run.continuing };
             run.continuing = true;
-            return g.park(s, run);
+            return g.requeueAtHead(s, run);
         }
-        const fuel = run.fuel - run.segment_fuel;
-        const alloc = run.alloc - run.segment_alloc;
-        g.pump_fuel += fuel;
-        s.spent += fuel;
+        const stretch = run_lifecycle.endStretch(run, g.meter(s));
         {
             if (g.trace) |out| {
                 out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
                 if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
-                out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), fuel, alloc }) catch {};
+                out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), stretch.fuel, stretch.alloc }) catch {};
             }
             g.writeAbandoned(run);
         }
         run.started = true;
         run.continuing = true;
-        run.segment_fuel = run.fuel;
-        run.segment_alloc = run.alloc;
-        return g.park(s, run);
+        run_lifecycle.startStretch(run);
+        return g.requeueAtHead(s, run);
     }
 
-    /// Puts a Run at the head of its Script's work, live.
-    fn park(g: *Group, s: *Script, run: *Run) !void {
-        s.live.append(g.gpa, run) catch |e| {
+    /// Puts a Run at the head of its Script's work, live, or drops it.
+    fn requeueAtHead(g: *Group, s: *Script, run: *Run) !void {
+        run_lifecycle.requeueAtHead(g.gpa, run, .of(s)) catch |e| {
             g.endRun(run, .dropped) catch unreachable;
             return e;
         };
-        s.work.insert(g.gpa, 0, .{ .run = run }) catch |e| {
-            g.endRun(run, .dropped) catch unreachable;
-            return e;
-        };
+    }
+
+    /// The totals a Script's Stretches are paid into.
+    fn meter(g: *Group, s: *Script) run_lifecycle.Meter {
+        return .{ .pump_fuel = &g.pump_fuel, .spent = &s.spent };
     }
 
     /// A cancellation's abandoned calls, once, after its first cleanup
@@ -4836,10 +4819,7 @@ pub const Group = struct {
 
     /// Resumes a ready Run with what settled its wait.
     fn resumeRun(g: *Group, s: *Script, run: *Run) !void {
-        for (s.live.items, 0..) |r, i| if (r == run) {
-            _ = s.live.orderedRemove(i);
-            break;
-        };
+        run_lifecycle.detach(run, .of(s));
         // A Segment end paused at a lifecycle crossing goes on from there.
         if (run.ending) |e| return g.endSegment(s, run, e.outcome);
         // A Run paused at a crossing makes the same instruction again, in
@@ -4855,8 +4835,7 @@ pub const Group = struct {
             if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
             return g.endSegment(s, run, outcome);
         }
-        run.segment_fuel = run.fuel;
-        run.segment_alloc = run.alloc;
+        run_lifecycle.startStretch(run);
         // A preempted Run goes on in the same Segment.
         const outcome = if (run.continuing) g.continueRun(s, run) catch |e| {
             g.endRun(run, .dropped) catch unreachable;
@@ -5609,8 +5588,7 @@ pub const Group = struct {
         run.base = base;
         defer run.base = 0;
         const outcome = try g.execute(run, true);
-        g.pump_fuel += run.fuel - fuel;
-        run.script.spent += run.fuel - fuel;
+        g.meter(run.script).add(run.fuel - fuel);
         return switch (outcome) {
             .returned => |v| v,
             .errored => |e| blk: {
@@ -6067,7 +6045,7 @@ pub const Group = struct {
     /// and allocation still its Segment's.
     fn pauseEnding(g: *Group, s: *Script, run: *Run) !void {
         g.crossing_pause = true;
-        return g.park(s, run);
+        return g.requeueAtHead(s, run);
     }
 
     fn endSegment(g: *Group, s: *Script, run: *Run, ended: Outcome) !void {
@@ -6100,10 +6078,7 @@ pub const Group = struct {
             run.verdict = false;
             run.delivery.decision = true;
         }
-        const fuel = run.fuel - run.segment_fuel;
-        const alloc = run.alloc - run.segment_alloc;
-        g.pump_fuel += fuel;
-        s.spent += fuel;
+        const stretch = run_lifecycle.endStretch(run, g.meter(s));
         // A Rewind rolls its Segment back as a Limit Fault would, and puts
         // its message back.
         if (outcome == .rewound) {
@@ -6113,7 +6088,7 @@ pub const Group = struct {
                 return e;
             };
         }
-        if (outcome == .suspended) s.live.append(g.gpa, run) catch |e| {
+        if (outcome == .suspended) run_lifecycle.keepLive(g.gpa, run, .of(s)) catch |e| {
             g.endRun(run, .dropped) catch unreachable;
             return e;
         };
@@ -6137,7 +6112,7 @@ pub const Group = struct {
                 .rewound => "rewind",
                 .selected, .preempted => unreachable,
             };
-            out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
+            out.print(" fuel={d} alloc={d} state={d} end={s}", .{ stretch.fuel, stretch.alloc, state, end }) catch {};
             if (outcome == .vetoed and outcome.vetoed.data != .nothing) {
                 out.writeAll(" value=") catch {};
                 display.writeTrace(out, outcome.vetoed) catch {};
@@ -6180,8 +6155,7 @@ pub const Group = struct {
         run.continuing = false;
         run.segments += 1;
         if (outcome == .suspended) {
-            run.segment_fuel = run.fuel;
-            run.segment_alloc = run.alloc;
+            run_lifecycle.startStretch(run);
             return;
         }
         try g.endRun(run, .{ .finished = .{ .outcome = outcome, .segment = segment } });
@@ -6622,16 +6596,7 @@ pub const Group = struct {
     /// destruction cannot fail, even when completion or waking is refused.
     pub fn endRun(g: *Group, run: *Run, how: RunEnd) !void {
         const s = run.script;
-        for (s.live.items, 0..) |r, i| if (r == run) {
-            _ = s.live.orderedRemove(i);
-            break;
-        };
-        var i: usize = 0;
-        while (i < s.work.items.len) {
-            if (s.work.items[i] == .run and s.work.items[i].run == run) {
-                _ = s.work.orderedRemove(i);
-            } else i += 1;
-        }
+        run_lifecycle.detach(run, .of(s));
         defer g.destroyRun(run);
         switch (how) {
             .finished => |end| {

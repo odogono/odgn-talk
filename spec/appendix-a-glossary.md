@@ -470,6 +470,10 @@ _Avoid_: catch-all (that suggests catching errors), doesNotUnderstand, default h
 What a Handler Clause does with a message that arrives while an earlier Run of the clause is still suspended. With no suffix the new Run starts and they run concurrently. `, queued` runs them one at a time, `, dropping` ends the new Run as dropped, and `, replacing` cancels the earlier Run.
 _Avoid_: concurrency mode, lock
 
+**Parked Run**:
+A Run of a `, queued` Handler Clause held at dispatch, before its clause body runs, until the earlier Run of the clause ends.
+_Avoid_: queued Run, blocked, held
+
 **Guard**:
 The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds. A Guard may call Built-ins, but never a Script or Library function or a Function Value.
 _Avoid_: filter, predicate
@@ -527,7 +531,7 @@ A Delivery to every Script in a Group that currently wants the message, through 
 _Avoid_: publish, fan-out, multicast
 
 **Quiescent**:
-The state of a Script in which no Run is mid-step: every Run is suspended, queued, or preempted at a time-slice boundary.
+The state of a Script in which no Run is mid-step: every Run is suspended, queued, or preempted at a Fuel Slice boundary.
 _Avoid_: idle, paused, stable
 
 **Script Snapshot**:
@@ -556,11 +560,11 @@ _Avoid_: turn, slice, tick
 
 **Stretch**:
 One uninterrupted piece of a Segment, from the Run's start, a resume or its continuation after a preemption, to the Segment's end or the next preemption. A Segment that is never preempted is a single Stretch; one preempted by a Fuel Slice spans several.
+_Avoid_: slice, burst, run (a Run is the whole handling of one message)
 
 **Rewind**:
 Ending a Run that hasn't yet passed a Suspension Point as if it had never started: its Segment is rolled back and its message goes back to the head of its Script's mailbox, to be dispatched again. Effects that a rollback can't undo stay done, and happen again on the redispatch.
 _Avoid_: restart, retry, rerun, restart frame
-_Avoid_: slice, burst, run (a Run is the whole handling of one message)
 
 ## Resources
 
@@ -583,6 +587,10 @@ _Avoid_: exception table, handler table (a Handler is something else), landing p
 **Fuel Slice**:
 A Host-set amount of Fuel after which a Run is preempted at the next instruction boundary, e.g. once per game tick. Fuel spent past the end of a slice is carried as debt into the next one.
 _Avoid_: quantum, time slice (unqualified), tick budget
+
+**Preemption**:
+Stopping a Run at an instruction boundary once its Fuel Slice is spent, so other work can run. The Run later continues from the same point in the same Segment, starting a new Stretch.
+_Avoid_: yield, interrupt
 
 **Allocation Budget**:
 The limit on how much value a single Run may construct, counted by logical size, with frees ignored.
