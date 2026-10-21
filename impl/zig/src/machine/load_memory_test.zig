@@ -40,7 +40,7 @@ const Peak = struct {
     }
 };
 
-test "a Load of many empty Handlers peaks under 80 times its source (#1411, #1447)" {
+test "a Load of many empty Handlers peaks under 60 times its source (#1411, #1447, #1461)" {
     const gpa = std.testing.allocator;
     var source: std.ArrayList(u8) = .empty;
     defer source.deinit(gpa);
@@ -53,8 +53,9 @@ test "a Load of many empty Handlers peaks under 80 times its source (#1411, #144
     const kept = counted.live / source.items.len;
     // Before #1411 a Load peaked at about 181 times its source, and kept 33.
     // Before #1447 it peaked at 85, holding every body's working code until
-    // the lowering laid them all out.
-    std.testing.expect(peak < 80 and kept < 31) catch |e| {
+    // the lowering laid them all out. Before #1461 it peaked at 76, holding
+    // the checker's own tables through the lowering.
+    std.testing.expect(peak < 60 and kept < 31) catch |e| {
         std.debug.print("peak {d}x, kept {d}x\n", .{ peak, kept });
         return e;
     };
