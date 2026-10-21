@@ -135,6 +135,13 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 - Tests and cases: tests in the Wait table, [metering tests](src/machine/metering_test.zig), [crossing tests](src/machine/crossing_test.zig), [lifecycle tests](src/machine/lifecycle_test.zig), [C Host tests](tests/talk_h_test.c)
 - First check: `cd impl/zig && zig build test`
 
+## Run lifecycle, Stretches and endings
+
+- Implementation: [the Run lifecycle](src/machine/run_lifecycle.zig) (a Run's place in its Script's live Runs and work, detaching it, the start and end of each Stretch, and the Fuel paid into the Pump's and Script's totals), [machine](src/machine/machine.zig) (which Run goes next, `endSegment` and `endRun`, and every `preempt`, `seg`, `fault` and `abandon` record). The boundary follows [ADR 0123](../../docs/adr/0123-the-zig-core-keeps-a-runs-lifecycle-in-one-module.md).
+- Rules: [Suspension Points](../../spec/05-handlers-messages-and-scheduling.md#suspension-points), [the Trace](../../spec/11-the-trace-and-conformance.md#the-trace)
+- Tests and cases: tests in the Run lifecycle, [lifecycle tests](src/machine/lifecycle_test.zig), [metering tests](src/machine/metering_test.zig), [crossing tests](src/machine/crossing_test.zig), `zig build corpus -- --defer-crossings`
+- First check: `cd impl/zig && zig build test`
+
 ## Metered Operations and request admission
 
 - Implementation: [machine](src/machine/machine.zig), [declarations and Calls](src/machine/capabilities.zig), [SQLite factory](src/talk.zig), [Message Layer](src/message.zig)
