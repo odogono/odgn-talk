@@ -93,6 +93,59 @@ end tell`,
   ]);
 });
 
+test('shapes and stroke styles join the retained list', async () => {
+  const play = new PlaySession(fixture());
+  await run(
+    play,
+    `tell canvas
+  strokeCap board, "round"
+  strokeJoin board, "bevel"
+  point board, 5, 6
+  circle board, 20, 20, 10
+  triangle board, 0, 0, 10, 0, 5, 8
+  arc board, 40, 40, 20, 10, 0, pi / 2
+  roundedRectangle board, 1, 2, 30, 20, 4
+end tell`,
+  );
+  expect(play.problems).toEqual([]);
+  expect(drawn(play)).toEqual([
+    ['strokeCap', '"round"'],
+    ['strokeJoin', '"bevel"'],
+    ['point', '5', '6'],
+    ['circle', '20', '20', '10'],
+    ['triangle', '0', '0', '10', '0', '5', '8'],
+    ['arc', '40', '40', '20', '10', '0', drawn(play)[5]![6]!],
+    ['roundedRectangle', '1', '2', '30', '20', '4'],
+  ]);
+  expect(Number(drawn(play)[5]![6])).toBeCloseTo(Math.PI / 2);
+  // Cap and join are current style, so they survive a clear.
+  await run(play, 'ask canvas to strokeCap board, "square"');
+  await run(play, 'ask canvas to clear board');
+  expect(drawn(play)).toEqual([
+    ['strokeCap', '"square"'],
+    ['strokeJoin', '"bevel"'],
+  ]);
+});
+
+test('bad shape and stroke style arguments are catchable', async () => {
+  const play = new PlaySession(fixture());
+  for (const call of [
+    'strokeCap board, "flat"',
+    'strokeJoin board, "sharp"',
+    'circle board, 1, 1, 0',
+    'arc board, 1, 1, 10, -1, 0, 1',
+    'roundedRectangle board, 0, 0, 10, 10, -1',
+  ]) {
+    expect(
+      await run(
+        play,
+        `try\n ask canvas to ${call}\ncatch e\n return e's code\nend try`,
+      ),
+    ).toEqual({ text: 'invalid canvas argument' });
+  }
+  expect(drawn(play)).toEqual([]);
+});
+
 test('a frame Script painting background keeps one frame of commands', async () => {
   const project = fixture();
   canvasOf(project).script = `on frame elapsed

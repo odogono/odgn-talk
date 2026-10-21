@@ -22,6 +22,8 @@ const STYLE_GROUPS: Readonly<Record<string, string>> = {
   stroke: 'stroke',
   noStroke: 'stroke',
   strokeWidth: 'strokeWidth',
+  strokeCap: 'strokeCap',
+  strokeJoin: 'strokeJoin',
   textSize: 'textSize',
 };
 

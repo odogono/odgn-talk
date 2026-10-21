@@ -28,13 +28,23 @@ export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   stroke: [shape.text],
   noStroke: [],
   strokeWidth: [shape.number],
+  strokeCap: [shape.text],
+  strokeJoin: [shape.text],
+  point: [shape.number, shape.number],
   line: [shape.number, shape.number, shape.number, shape.number],
+  triangle: Array<Shape>(6).fill(shape.number),
   rectangle: [shape.number, shape.number, shape.number, shape.number],
+  roundedRectangle: Array<Shape>(5).fill(shape.number),
   ellipse: [shape.number, shape.number, shape.number, shape.number],
+  circle: [shape.number, shape.number, shape.number],
+  arc: Array<Shape>(6).fill(shape.number),
   text: [shape.text, shape.number, shape.number],
   textSize: [shape.number],
 };
 const signatures = CANVAS_SIGNATURES;
+/** Accepted `strokeCap` and `strokeJoin` values, as Canvas 2D names them. */
+export const STROKE_CAPS = ['butt', 'round', 'square'] as const;
+export const STROKE_JOINS = ['miter', 'round', 'bevel'] as const;
 /** A successful call, its arguments in display spelling. */
 export type CanvasCommand = { args: string[]; op: string };
 const invalid = (message: string): never => {
@@ -87,9 +97,27 @@ export const validateCanvasArguments = (op: string, values: Value[]): void => {
       }
     }
   }
-  if (op === 'rectangle' || op === 'ellipse') {
+  if (['rectangle', 'roundedRectangle', 'ellipse', 'arc'].includes(op)) {
     positive(2);
     positive(3);
+  }
+  if (op === 'circle') {
+    positive(2);
+  }
+  if (op === 'roundedRectangle' && Number(values[4]!.toString()) < 0) {
+    invalid('Corner radius must not be negative');
+  }
+  if (
+    op === 'strokeCap' &&
+    !(STROKE_CAPS as readonly string[]).includes(values[0]!.asText()!)
+  ) {
+    invalid('Stroke caps are "butt", "round" or "square"');
+  }
+  if (
+    op === 'strokeJoin' &&
+    !(STROKE_JOINS as readonly string[]).includes(values[0]!.asText()!)
+  ) {
+    invalid('Stroke joins are "miter", "round" or "bevel"');
   }
   if (op === 'textSize') {
     positive(0);
@@ -187,4 +215,79 @@ export const canvasCommands = (
     }
   }
   return commands;
+};
+
+/**
+ * Paints one shape command with the current fill and stroke, taking its
+ * numeric arguments by index. `stroke` is false when stroking is off or the
+ * stroke width is zero. Returns false for a command that is not a shape.
+ */
+export const paintCanvasShape = (
+  context: CanvasRenderingContext2D,
+  op: string,
+  n: (i: number) => number,
+  fill: boolean,
+  stroke: boolean,
+): boolean => {
+  context.beginPath();
+  switch (op) {
+    case 'point':
+      // A point is a dot in the stroke colour, as wide as the stroke.
+      if (stroke) {
+        context.save();
+        context.fillStyle = context.strokeStyle;
+        context.arc(n(0), n(1), context.lineWidth / 2, 0, 2 * Math.PI);
+        context.fill();
+        context.restore();
+      }
+      return true;
+    case 'line':
+      context.moveTo(n(0), n(1));
+      context.lineTo(n(2), n(3));
+      if (stroke) {
+        context.stroke();
+      }
+      return true;
+    case 'arc':
+      // Filled as a pie slice; only the curve is stroked.
+      if (fill) {
+        context.moveTo(n(0), n(1));
+        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, n(4), n(5));
+        context.closePath();
+        context.fill();
+      }
+      if (stroke) {
+        context.beginPath();
+        context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, n(4), n(5));
+        context.stroke();
+      }
+      return true;
+    case 'triangle':
+      context.moveTo(n(0), n(1));
+      context.lineTo(n(2), n(3));
+      context.lineTo(n(4), n(5));
+      context.closePath();
+      break;
+    case 'rectangle':
+      context.rect(n(0), n(1), n(2), n(3));
+      break;
+    case 'roundedRectangle':
+      context.roundRect(n(0), n(1), n(2), n(3), n(4));
+      break;
+    case 'ellipse':
+      context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, 0, 2 * Math.PI);
+      break;
+    case 'circle':
+      context.arc(n(0), n(1), n(2) / 2, 0, 2 * Math.PI);
+      break;
+    default:
+      return false;
+  }
+  if (fill) {
+    context.fill();
+  }
+  if (stroke) {
+    context.stroke();
+  }
+  return true;
 };

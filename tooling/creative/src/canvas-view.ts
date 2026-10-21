@@ -2,7 +2,10 @@
 // coordinates: one unit is one Page pixel, clipped to the frame (ADR 0116).
 // Edit and Play share it. A Drawing that only grew since the last paint
 // gets just its new commands; any other change repaints from the defaults.
-import type { CanvasCommand } from '@northtalk/tooling/canvas';
+import {
+  paintCanvasShape,
+  type CanvasCommand,
+} from '@northtalk/tooling/canvas';
 import { readDisplay } from '@northtalk/ts';
 import type { CanvasElement } from './model';
 import type { DeepReadonly } from './readonly';
@@ -55,6 +58,12 @@ const paint = (
         context.lineWidth = state.strokeWidth;
       }
       return;
+    case 'strokeCap':
+      context.lineCap = t(0) as CanvasLineCap;
+      return;
+    case 'strokeJoin':
+      context.lineJoin = t(0) as CanvasLineJoin;
+      return;
     case 'textSize':
       context.font = `${n(0)}px sans-serif`;
       return;
@@ -67,23 +76,13 @@ const paint = (
       }
       return;
   }
-  context.beginPath();
-  if (command.op === 'line') {
-    context.moveTo(n(0), n(1));
-    context.lineTo(n(2), n(3));
-  } else if (command.op === 'rectangle') {
-    context.rect(n(0), n(1), n(2), n(3));
-  } else if (command.op === 'ellipse') {
-    context.ellipse(n(0), n(1), n(2) / 2, n(3) / 2, 0, 0, 2 * Math.PI);
-  } else {
-    return;
-  }
-  if (state.fill && command.op !== 'line') {
-    context.fill();
-  }
-  if (state.stroke && state.strokeWidth > 0) {
-    context.stroke();
-  }
+  paintCanvasShape(
+    context,
+    command.op,
+    n,
+    state.fill,
+    state.stroke && state.strokeWidth > 0,
+  );
 };
 
 /** Brings `canvas` up to date with the Element's size and Drawing. */
@@ -115,6 +114,8 @@ export const paintCanvas = (
     context.clearRect(0, 0, element.width, element.height);
     context.fillStyle = context.strokeStyle = '#000000';
     context.lineWidth = 1;
+    context.lineCap = 'butt';
+    context.lineJoin = 'miter';
     context.font = '12px sans-serif';
     context.textAlign = 'left';
     context.textBaseline = 'alphabetic';
