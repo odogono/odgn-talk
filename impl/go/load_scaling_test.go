@@ -42,11 +42,13 @@ func TestLoadSourceAllocation(t *testing.T) {
 	for _, kind := range []string{"blank", "handlers"} {
 		t.Run(kind, func(t *testing.T) {
 			// Guest linear memory is Go heap, so the guest's own source copy
-			// and line index count too. These limits are agreed for the Zig
-			// adapter (#1403); its guest memory growth is #1447.
-			size, multiplier := 1<<20, uint64(40)
+			// and line index count too (#1403). The guest's memory, bounded by
+			// guestMultiplier, sets the total: the adapter doubles its buffer
+			// past the reserve (memory.go), so the total moves only at
+			// powers of two, and 100,000 Handlers sit just past one (#1447).
+			size, multiplier, guestMultiplier := 1<<20, uint64(20), uint64(10)
 			if kind == "handlers" {
-				size, multiplier = 100000, 320
+				size, multiplier, guestMultiplier = 100000, 320, 85
 			}
 			source := hostileSource(kind, size)
 			g := New().NewGroup(GroupOptions{})
@@ -63,6 +65,11 @@ func TestLoadSourceAllocation(t *testing.T) {
 			t.Logf("%d source bytes: %d bytes allocated (%.1fx)", len(source), allocated, float64(allocated)/float64(len(source)))
 			if allocated > uint64(len(source))*multiplier {
 				t.Fatalf("Load allocated more than %d times the source size", multiplier)
+			}
+			guest := uint64(g.backend.(*zigGroup).reactor.MemoryBytes())
+			t.Logf("guest memory: %d bytes (%.1fx)", guest, float64(guest)/float64(len(source)))
+			if guest > uint64(len(source))*guestMultiplier {
+				t.Fatalf("guest memory grew past %d times the source size", guestMultiplier)
 			}
 			runtime.KeepAlive(g)
 		})
