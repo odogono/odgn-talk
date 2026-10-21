@@ -14,7 +14,7 @@ import {
   restore,
   type Group,
   type Report,
-  type ScriptHandle,
+  type Script,
   type LoadOptions,
 } from '@northtalk/ts';
 import { peerRunners } from './runners';
@@ -111,7 +111,7 @@ export type RunReport = {
 /** A Benchmark's Script loaded into its own Group, ready to Run. */
 export class Loaded {
   private readonly group = newGroup({ name: 'bench' });
-  private readonly script: ScriptHandle;
+  private readonly script: Script;
   /** The `restore` Host: the N its rows were last filled for. */
   private filled: number | undefined;
   constructor(
@@ -210,7 +210,7 @@ export class Loaded {
  * Group's Pumps ended on its way. */
 const pump = (
   group: Group,
-  script: ScriptHandle,
+  script: Script,
   message: string,
   n: number,
   fuelSlice?: number,

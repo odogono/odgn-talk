@@ -13,6 +13,7 @@ import {
   shape,
   type Call,
   type PumpResult,
+  createCore,
 } from '../src/index';
 
 const driven = (
@@ -21,7 +22,7 @@ const driven = (
   grants = {},
 ) => {
   const lines: string[] = [];
-  const { group, drive } = newDrivenGroup({
+  const { group, drive } = newDrivenGroup(createCore(), {
     ...options,
     name: 'g',
     trace: line => lines.push(line),
@@ -33,7 +34,7 @@ const driven = (
 describe('newDrivenGroup', () => {
   test('preserves Group options and starts idle', async () => {
     const lines: string[] = [];
-    const { group, drive } = newDrivenGroup({
+    const { group, drive } = newDrivenGroup(createCore(), {
       name: 'seeded',
       seed: 42n,
       trace: line => lines.push(line),
@@ -60,7 +61,7 @@ describe('newDrivenGroup', () => {
   test('forwards Pump errors and can drive again afterwards', async () => {
     let now = 0n;
     const errors: unknown[] = [];
-    const { group, drive } = newDrivenGroup({
+    const { group, drive } = newDrivenGroup(createCore(), {
       name: 'errors',
       clock: () => now,
       onError: error => errors.push(error),
@@ -248,7 +249,7 @@ describe('Drive.close', () => {
       call => released.push(call.scriptName),
     );
     const lines: string[] = [];
-    const { group, drive } = newDrivenGroup({
+    const { group, drive } = newDrivenGroup(createCore(), {
       name: 'g',
       trace: l => lines.push(l),
     });
@@ -437,7 +438,7 @@ describe('Drive.close', () => {
 
   test('can close from onPump without resolving idle inside that callback', async () => {
     let closing: Promise<void> | undefined;
-    const { group, drive } = newDrivenGroup({
+    const { group, drive } = newDrivenGroup(createCore(), {
       name: 'g',
       onPump: () => {
         closing ??= drive.close();
@@ -452,7 +453,7 @@ describe('Drive.close', () => {
   });
 
   test('async disposal stops Scripts even when the scope throws', async () => {
-    const { group, drive } = newDrivenGroup({ name: 'g' });
+    const { group, drive } = newDrivenGroup(createCore(), { name: 'g' });
     const script = group.load({ name: 's', source: 'on go\nend go' });
     const failure = new Error('Scope failed');
     await expect(
@@ -474,7 +475,7 @@ describe('Drive.close', () => {
     async failureAt => {
       const failure = new Error(failureAt);
       const errors: unknown[] = [];
-      const { group, drive } = newDrivenGroup({
+      const { group, drive } = newDrivenGroup(createCore(), {
         name: 'g',
         clock: () => {
           if (failureAt === 'clock') {

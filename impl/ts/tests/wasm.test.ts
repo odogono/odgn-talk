@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import * as ts from '../src/index';
 // eslint-disable-next-line import-x/no-namespace -- each test takes a whole package.
 import * as wasm from '../src/wasm/index';
+import { autoDrive, newDrivenGroup } from '../src/driver';
 
 const artifact = resolve(
   import.meta.dir,
@@ -19,10 +20,14 @@ const module = built
   ? await WebAssembly.compile(readFileSync(artifact))
   : undefined;
 
-type NT = typeof wasm;
+// The values both packages export, apart from their own createCore.
+type NT = Omit<
+  Pick<typeof wasm, keyof typeof ts & keyof typeof wasm>,
+  'createCore'
+>;
 type Core = wasm.Core;
 const cores: [string, () => Promise<Core>, NT][] = [
-  ['ts', async () => ts.createCore() as unknown as Core, ts as unknown as NT],
+  ['ts', async () => ts.createCore(), ts],
   [
     'wasm',
     () => wasm.createCore({ wasm: module!, diagnostics: () => {} }),
@@ -195,8 +200,8 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
         bad: {
           mode: 'immediate',
           cost: { fuel: 1 },
-          // A JavaScript Host can return a primitive despite the TS declaration.
-          do: () => 42 as unknown as wasm.Value,
+          // @ts-expect-error A JavaScript Host can return a primitive despite the TS declaration.
+          do: () => 42,
         },
       });
       const g = core.newGroup({ name: 'g' });
@@ -341,14 +346,12 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
         cost: { fuel: 1 },
         do: c => {
           try {
-            (c.group as unknown as wasm.Group).pump(5n * second);
+            c.group.pump(5n * second);
           } catch (error) {
             code = (error as wasm.HostError).code;
           }
           // Queued calls are fine.
-          (c.group as unknown as wasm.Group)
-            .script(c.scriptName)!
-            .deliver({ name: 'later' });
+          c.group.script(c.scriptName)!.deliver({ name: 'later' });
           return nt.nothing;
         },
       },
@@ -474,6 +477,69 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
       tag: nt.text('x').kind,
     };
   });
+
+  both(
+    'newDrivenGroup drives Requests and invoke to their answers',
+    async (core, nt) => {
+      const { group, drive } = newDrivenGroup(core, { name: 'g' });
+      const s = group.load({
+        name: 's',
+        source: 'on double n\n  return n * 2\nend double',
+      });
+      const answers = await Promise.all([
+        s.request({ name: 'double', args: [nt.num(2)] }).result,
+        s.invoke('double', nt.num(21)),
+      ]);
+      await drive.close();
+      return answers.map(String);
+    },
+  );
+
+  both(
+    'a driver closes only after an abandoned Host Promise settles',
+    async (core, nt) => {
+      const events: string[] = [];
+      const cleanup = Promise.withResolvers<void>();
+      const api = core.defineCapability('api', {
+        fetch: {
+          mode: 'suspending',
+          args: [],
+          result: nt.shape.nothing,
+          cost: { fuel: 0 },
+          run: async call => {
+            await new Promise<void>(resolve =>
+              call.signal.addEventListener('abort', () => resolve(), {
+                once: true,
+              }),
+            );
+            events.push('abort');
+            await cleanup.promise;
+            events.push('cleanup');
+            return nt.nothing;
+          },
+        },
+      });
+      // onReady runs only once Inputs are queued, after drive exists.
+      const group = core.newGroup({ name: 'g', onReady: () => drive.ready() });
+      const drive = autoDrive(group);
+      const reply = group
+        .load({
+          name: 's',
+          source: 'on go\n  ask api to fetch and wait\nend go',
+          grants: { api: api.grant('all', undefined) },
+        })
+        .request({ name: 'go', args: [] })
+        .result.catch((error: wasm.ScriptError) => error.code);
+      await drive.idle();
+      const closing = drive.close().then(() => events.push('closed'));
+      events.push(String(await reply));
+      await drive.idle();
+      expect(events).not.toContain('closed');
+      cleanup.resolve();
+      await closing;
+      return events;
+    },
+  );
 
   test('a trap loses only its own Group', async () => {
     const core = await wasm.createCore({

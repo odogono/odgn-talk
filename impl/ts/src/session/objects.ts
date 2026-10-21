@@ -10,7 +10,7 @@ import { HostError, ScriptError } from '../errors';
 import {
   sessionReply,
   observeValues,
-  type Group,
+  type TsGroup,
   type Report,
   type Message,
   type LimitOverride,
@@ -489,7 +489,7 @@ export const decodeShape = (raw: unknown): Shape => {
 
 /** Host adapters use this context for object registration and external actions. */
 export class SessionObjects {
-  private group!: Group;
+  private group!: TsGroup;
   readonly items: TranscriptItem[] = [];
   private kinds = new Map<string, ObjectKind>();
   private declarations = new Map<string, string>();
@@ -527,7 +527,7 @@ export class SessionObjects {
           }))
       : null;
   }
-  attach(group: Group) {
+  attach(group: TsGroup) {
     group[observeValues](tree => this.expose(tree));
     this.group = group;
     for (const [key, o] of this.objects) {

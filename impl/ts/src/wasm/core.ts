@@ -3,6 +3,7 @@
 // Group's Grants or Libraries need. createCore is the one asynchronous call:
 // compiling the module. Everything after it is synchronous, as in the TS Core.
 import { defineCapability, type CapabilityDef } from '../capabilities';
+import type { Core } from '../embedding';
 import type { GrantDecls } from '../effects';
 import { HostError } from '../errors';
 import type { GroupOptions, RestoreOptions, RestoreResult } from '../group';
@@ -24,7 +25,8 @@ import { sqliteCapability } from '../sqlite-capability';
 import { storeCapability } from '../store-capability';
 import { userCapability } from '../user-capability';
 import { WasmGroup, bytesFrame, bytesOfFrame, type GroupCore } from './group';
-import { Session, type Versions } from './session';
+import type { Versions } from '../versions';
+import { Session } from './session';
 import { field, listOf, plain, type Frame } from './wire';
 
 /** Where `talk.wasm` comes from. A URL or path is fetched; `file:` URLs are read. */
@@ -84,7 +86,7 @@ const compile = async (source: WasmSource): Promise<WebAssembly.Module> => {
 const hex = (b: Uint8Array) =>
   [...b].map(x => x.toString(16).padStart(2, '0')).join('');
 
-export class WasmCore {
+export class WasmCore implements Core {
   /** The reactor's `hello`: its Core, language, Cost Model, Unicode and save format. */
   readonly versions: Versions;
   readonly #module: WebAssembly.Module;

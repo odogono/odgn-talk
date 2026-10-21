@@ -1,6 +1,6 @@
 // Host Promise lifetimes outlive the Core's Waits when a call is abandoned.
-// Keep this TS-only bookkeeping outside saves, Traces and Script accounting.
-import type { Group } from './group';
+// Both Cores fill it (ADR 0121); it stays outside saves, Traces and Script accounting.
+import type { Group } from './embedding';
 
 const pending = new WeakMap<Group, Set<Promise<void>>>();
 

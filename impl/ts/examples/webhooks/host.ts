@@ -16,8 +16,9 @@ import {
   shape,
   text,
   type Group,
-  type ScriptHandle,
+  type Script,
   type Value,
+  createCore,
 } from '../../src/index';
 
 export const rulesSource = readFileSync(
@@ -235,7 +236,7 @@ export type WebhookHost = {
   /** Sends `event` as a Request. Aborting the signal cancels its Run. */
   handle(event: Value, signal?: AbortSignal): Promise<Value>;
   readonly recorder?: Recorder;
-  readonly script: ScriptHandle;
+  readonly script: Script;
 };
 
 export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
@@ -251,7 +252,7 @@ export const createWebhookHost = (o: WebhookHostOptions): WebhookHost => {
     insert.run(rule.type, rule.target, rule.retries);
   }
   const recorder = o.record ? new Recorder() : undefined;
-  const { group, drive } = newDrivenGroup({
+  const { group, drive } = newDrivenGroup(createCore(), {
     ...o.drive,
     name: 'webhooks',
     trace: recorder?.trace,

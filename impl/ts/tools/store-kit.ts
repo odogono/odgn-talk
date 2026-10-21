@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Call, SegmentContext, SegmentGrant } from '../src/capabilities';
 import { ScriptError } from '../src/errors';
-import type { Group } from '../src/group';
+import type { TsGroup } from '../src/group';
 import { readDisplay } from '../src/readers';
 import type { StoreImpl } from '../src/store-capability';
 import type { StoreQuotas } from '../src/store/engine';
@@ -74,7 +74,7 @@ const LIFECYCLE = new Set(['begin', 'commit', 'rollback']);
 const SEGMENT_BOUND = new Set(['set', 'delete', 'increment', 'swap']);
 
 // One Group for every step: Segment ids are unique within it.
-const group = {} as Group;
+const group = {} as TsGroup;
 const grantOf = (step: Step): SegmentGrant<string> => ({
   grantName: step.grant ?? 'store',
   binding: step.store ?? 'default',

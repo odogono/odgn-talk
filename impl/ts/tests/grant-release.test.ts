@@ -133,7 +133,7 @@ test('Stop abandons scopes and rolls back before release, then publishes stopped
         segmentBound: true,
         scope: { opens: 'file', abandon: 'close' },
         do: c => {
-          c.group.queueStop(c.scriptName, 'done');
+          c.group.script(c.scriptName)!.stop('done');
           return nothing;
         },
       },
@@ -480,7 +480,7 @@ test('hook exceptions are ignored, worker calls refused, and inputs may be queue
         reentries.push(error);
       }
     }
-    c.group.queueRevoke('s', 'z');
+    c.group.script('s')!.revoke('z');
     events.push(c.grantName);
     throw new Error('cleanup cannot refuse');
   });

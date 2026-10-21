@@ -28,11 +28,13 @@ import {
 // Fuel cap, and Inspect, writing chapter 11's Trace as it goes. Turns follow
 // chapter 5's scheduler.
 import { sizeOf, partSize } from './costs';
+import { invoke, type Group, type Script } from './embedding';
 import {
   HostError,
   LoadError,
   MailboxFull,
   ScriptError,
+  sendFailed,
   type HostErrorCode,
   type ScriptError as HostScriptError,
 } from './errors';
@@ -478,7 +480,7 @@ type ScriptState = {
   faults: number;
   fuelTotal: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
-  handle: Script;
+  handle: TsScript;
   identity: string;
   /** Deliveries queued to it that the next Pump drains. */
   incoming: number;
@@ -595,9 +597,9 @@ const availableGrants = (s: ScriptState) =>
   new Map([...s.grants].filter(([name]) => !s.revoked.has(name)));
 
 /** A handle for calls addressed to one Script. */
-export class Script {
+export class TsScript implements Script {
   constructor(
-    private readonly group: Group,
+    private readonly group: TsGroup,
     readonly name: string,
   ) {}
   /** Worker. A snapshot of kept Operations, including revoked Grants. */
@@ -630,7 +632,7 @@ export class Script {
   }
   /** Queued. A Request for the answer only; use `request` for its id or a signal. */
   invoke(name: string, ...args: Value[]): Promise<Value> {
-    return this.request({ args, name }).result;
+    return invoke(this, name, args);
   }
   /** Worker. Request this Script and perform exactly one Pump. */
   requestPump(
@@ -666,7 +668,7 @@ export class Script {
   }
 }
 
-export class Group {
+export class TsGroup implements Group {
   private valueObserver?: (tree: unknown) => void;
   [observeValues](observer: (tree: unknown) => void) {
     this.valueObserver = observer;
@@ -1087,10 +1089,10 @@ export class Group {
   static restore(
     bytes: Uint8Array,
     o: RestoreOptions,
-  ): { group: Group; result: RestoreResult } {
+  ): { group: TsGroup; result: RestoreResult } {
     const saved = readSave(bytes);
     let emitting = false;
-    const group = new Group({
+    const group = new TsGroup({
       name: o.name,
       onReady: o.onReady,
       trace: o.trace
@@ -2179,7 +2181,7 @@ export class Group {
       : undefined;
   }
 
-  script(name: string): Script | undefined {
+  script(name: string): TsScript | undefined {
     return this.scripts.find(s => s.name === name)?.handle;
   }
 
@@ -2289,7 +2291,7 @@ export class Group {
   }
 
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
-  load(o: LoadOptions): Script {
+  load(o: LoadOptions): TsScript {
     this.worker();
     this.requireKnownEffects();
     const objects = Object.keys(o.objects ?? {});
@@ -2331,7 +2333,7 @@ export class Group {
         return used && bound.ops.size === 0 ? [] : [[name, bound] as const];
       }),
     );
-    const handle = new Script(this, o.name);
+    const handle = new TsScript(this, o.name);
     if (owner) {
       owner.owner = o.name;
     }
@@ -3869,15 +3871,7 @@ export class Group {
       if (outcome.kind === 'completed') {
         delivery.request.resolve(outcome.result);
       } else {
-        const reason =
-          outcome.kind === 'limit fault' ? 'limit fault' : outcome.kind;
-        delivery.request.reject(
-          new ScriptError(
-            'send failed',
-            `No answer came: the receiver's Run ended ${reason}`,
-            map([['reason', text(reason)]]),
-          ),
-        );
+        delivery.request.reject(sendFailed(outcome.kind));
       }
     }
   }
@@ -5600,7 +5594,7 @@ const messageFields = (m: Message): [string, string | null][] => {
   ];
 };
 
-export const newGroup = (o: GroupOptions): Group => new Group(o);
+export const newGroup = (o: GroupOptions): TsGroup => new TsGroup(o);
 
 export const restore = (bytes: Uint8Array, options: RestoreOptions) =>
-  Group.restore(bytes, options);
+  TsGroup.restore(bytes, options);

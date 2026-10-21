@@ -15,7 +15,7 @@ import type {
   SegmentGrant,
 } from '../src/capabilities';
 import { ScriptError as HostScriptError } from '../src/errors';
-import type { Group } from '../src/group';
+import type { TsGroup } from '../src/group';
 import { ScriptError } from '../src/operations';
 import { readDisplay } from '../src/readers';
 import {
@@ -109,7 +109,7 @@ const SEGMENT_BOUND = new Set([
 ]);
 
 // One Group for every step: Segment ids are unique within it.
-const group = {} as Group;
+const group = {} as TsGroup;
 const callOf = <B>(
   segment: string,
   grantName: string,

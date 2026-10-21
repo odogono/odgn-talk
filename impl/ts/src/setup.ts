@@ -14,11 +14,11 @@ import { LoadError } from './errors';
 import {
   newGroup,
   restore,
-  type Group,
+  type TsGroup,
   type GroupOptions,
   type RestoreOptions,
   type RestoreResult,
-  type Script,
+  type TsScript,
 } from './group';
 import { compileLibrary, replacementLibraries, type Library } from './library';
 import {
@@ -164,13 +164,13 @@ export const operationDeclarations = (
 export type CaseCore = {
   compileLibrary: typeof compileLibrary;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
-  newGroup(o: GroupOptions): Group;
+  newGroup(o: GroupOptions): TsGroup;
   /** The Host's Libraries after a replacement, its dependents recompiled. */
   replacementLibraries: typeof replacementLibraries;
   restore(
     bytes: Uint8Array,
     o: RestoreOptions,
-  ): { group: Group; result: RestoreResult };
+  ): { group: TsGroup; result: RestoreResult };
 };
 export const tsCore: CaseCore = {
   compileLibrary,
@@ -301,13 +301,13 @@ export const immutableSetup = (setup: Setup): Setup => {
 export type SetupGroup = {
   declarations: GrantDecls;
   grants: Map<string, Record<string, Grant<unknown>>>;
-  group: Group;
+  group: TsGroup;
   libraries: Map<string, Library | LoadError>;
   load(
-    group: Group,
+    group: TsGroup,
     name: string,
     objects?: Record<string, HostObject>,
-  ): Script;
+  ): TsScript;
 };
 
 /** Make a Group whose Scripts are loaded only when the Host requests them. */

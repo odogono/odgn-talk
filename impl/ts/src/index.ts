@@ -54,7 +54,8 @@ export {
   type OperationRef,
 } from './library';
 export {
-  Group,
+  TsGroup,
+  TsScript,
   newGroup,
   restore,
   type RestoreOptions,
@@ -64,7 +65,6 @@ export {
   type RestoreResult,
   type PendingCall,
   type Settlement,
-  Script as ScriptHandle,
   type GroupOptions,
   type CancellationOptions,
   type CarryOver,
@@ -112,7 +112,8 @@ export {
 export { encodeValue } from './encoding';
 export { decodeJson, encodeJson } from './json';
 export { coreVersions, type Versions } from './versions';
-export { createCore, type Core } from './core';
+export { createCore, type TsCore } from './core';
+export type { Core, Group, Script } from './embedding';
 export {
   exportManifest,
   type ManifestSpec,
@@ -155,7 +156,7 @@ export {
   loadScript,
   UnitLoadError,
   Run,
-  Script,
+  Script as CompiledScript,
   type LimitName,
   type Limits,
   type Outcome,

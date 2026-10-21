@@ -1,4 +1,4 @@
-import { nothing, type Value } from './values';
+import { map, nothing, text, type Value } from './values';
 
 // The catalogue is deliberately open to the later embedding implementation.
 export type HostErrorCode =
@@ -86,3 +86,11 @@ export class ScriptError extends Error {
         : undefined;
   }
 }
+
+/** The rejection of a Request whose receiver's Run ended without answering. */
+export const sendFailed = (reason: SendFailedReason): ScriptError =>
+  new ScriptError(
+    'send failed',
+    `No answer came: the receiver's Run ended ${reason}`,
+    map([['reason', text(reason)]]),
+  );

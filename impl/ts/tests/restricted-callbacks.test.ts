@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import cases from '../../../corpus/restricted-kit/cases.json';
-import { newGroup, restore, type Group } from '../src/group';
+import { newGroup, restore, type TsGroup } from '../src/group';
 import { codeOf, compileLibrary, stdlibLibrary } from '../src/library';
 import { type Script } from '../src/machine';
 import { functionValue } from '../src/values';
@@ -38,7 +38,7 @@ const api = defineCapability('restrictedApi', {
 }).grant('all', undefined);
 
 const root = resolve(import.meta.dir, '../../../corpus/restricted-kit');
-const intrinsic = (group: Group) => {
+const intrinsic = (group: TsGroup) => {
   // This test-only Host constructs a private Function Value. No Script import
   // or production embedding API exposes the intrinsic.
   const home = (group as unknown as { scripts: { loaded: Script }[] })

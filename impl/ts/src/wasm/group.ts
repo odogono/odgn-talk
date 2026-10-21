@@ -12,8 +12,15 @@ import {
   type SegmentLifecycle,
 } from '../capabilities';
 import { fromBase64, toBase64 } from '../base64';
+import { invoke, type Group, type Script } from '../embedding';
+import { trackOperation } from '../operation-promises';
 import { formatInstant, parseInstant } from '../dates';
-import { HostError, ScriptError, type HostErrorCode } from '../errors';
+import {
+  HostError,
+  ScriptError,
+  sendFailed,
+  type HostErrorCode,
+} from '../errors';
 import { limitDefaults } from '../generated/machine';
 import type {
   CancellationOptions,
@@ -43,7 +50,7 @@ import {
   type ObjectKind,
   type ObjectState,
 } from '../objects';
-import { map, nothing, text, Value } from '../values';
+import { map, nothing, Value } from '../values';
 import { binaryValues, decode, encode, encodeAll, type Codec } from './codec';
 import { InstanceLostError } from './reactor';
 import { Session } from './session';
@@ -128,16 +135,8 @@ const scriptError = (error: Value): ScriptError => {
   );
 };
 
-// As the TS Core rejects a Request (group.ts answer).
-const sendFailed = (reason: string) =>
-  new ScriptError(
-    'send failed',
-    `No answer came: the receiver's Run ended ${reason}`,
-    map([['reason', text(reason)]]),
-  );
-
 /** A handle for calls addressed to one Script. */
-export class WasmScript {
+export class WasmScript implements Script {
   constructor(
     private readonly group: WasmGroup,
     readonly name: string,
@@ -174,6 +173,10 @@ export class WasmScript {
       o,
     );
   }
+  /** Queued. A Request for the answer only; use `request` for its id or a signal. */
+  invoke(name: string, ...args: Value[]): Promise<Value> {
+    return invoke(this, name, args);
+  }
   decide(m: Message, o?: CancellationOptions): Deciding {
     return this.group.decision({ to: { script: this.name } }, m, o);
   }
@@ -206,7 +209,7 @@ export class WasmScript {
   }
 }
 
-export class WasmGroup {
+export class WasmGroup implements Group {
   readonly name: string;
   readonly #core: GroupCore;
   readonly #session: Session;
@@ -412,7 +415,7 @@ export class WasmGroup {
     const id = textOf(field(need, 'call'))!;
     const scope = textOf(field(need, 'scope'));
     return Object.freeze({
-      group: this as never,
+      group: this,
       id,
       scriptName: textOf(field(need, 'script'))!,
       runId: textOf(field(need, 'run'))!,
@@ -581,9 +584,13 @@ export class WasmGroup {
         }
         // An answer the Host can't send, such as another Group's Value,
         // fails the call instead.
-        op.run!(call, ...args)
-          .then(v => call.answer(v))
-          .catch((error: unknown) => call.fail(error as ScriptError));
+        // Tracked as the TS Core tracks it, so a driver's close waits for it.
+        trackOperation(
+          this,
+          op.run!(call, ...args)
+            .then(v => call.answer(v))
+            .catch((error: unknown) => call.fail(error as ScriptError)),
+        );
         return undefined;
     }
   }
@@ -675,7 +682,7 @@ export class WasmGroup {
     } else {
       try {
         result = hooks[phase]({
-          group: this as never,
+          group: this,
           scriptName: script,
           runId: textOf(field(need, 'run'))!,
           grantName: name,
@@ -706,7 +713,7 @@ export class WasmGroup {
     const grant = this.#grantOf(script, name);
     try {
       grant?.capability.release?.({
-        group: this as never,
+        group: this,
         scriptName: script,
         grantName: name,
         binding: grant.binding,

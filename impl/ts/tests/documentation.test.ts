@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fixture from '../../testdata/declaration-docs.json';
 import { checkSource } from '../src/checker';
 import { functionDoc } from '../src/documentation';
-import { newGroup, restore, type Group } from '../src/group';
+import { newGroup, restore, type TsGroup } from '../src/group';
 import { compileLibrary } from '../src/library';
 import { parseInstant } from '../src/index';
 import { SessionHost } from '../src/session';
@@ -71,7 +71,7 @@ const restoreOptions = {
   resolve: () => undefined,
   onMismatch: 'reject' as const,
 };
-const docOf = (group: Group, name: string) =>
+const docOf = (group: TsGroup, name: string) =>
   functionDoc(group.inspect().scripts[0]!.vars.find(([n]) => n === name)![1]);
 
 describe('Function Value documentation', () => {

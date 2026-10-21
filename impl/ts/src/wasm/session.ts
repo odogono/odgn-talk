@@ -25,6 +25,7 @@ import {
   callbacksFeature,
 } from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
+import type { Versions } from '../versions';
 import { guestPayload } from './codec';
 import { InstanceLostError, Reactor, type Diagnostics } from './reactor';
 import {
@@ -59,14 +60,6 @@ export const optionalFeatures = [
   requestPumpFeature,
   callbacksFeature,
 ] as const;
-
-export type Versions = {
-  core: string;
-  costModel: string;
-  language: string;
-  saveFormat: string;
-  unicode: string;
-};
 
 /** Answers one interim need with its `…-result` fields. */
 export type NeedHandler = (need: Json, packet: Json) => Record<string, Frame>;

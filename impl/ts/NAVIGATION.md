@@ -82,11 +82,11 @@ Files, grammar, or lowering.
 
 ## Public embedding API
 
-- Implementation: [declarations](../../spec/embedding/talk.ts), exported from [index.ts](src/index.ts)
+- Implementation: [declarations](../../spec/embedding/talk.ts); the `Core`, `Group` and `Script` interfaces both Cores implement in [embedding.ts](src/embedding.ts) ([ADR 0121](../../docs/adr/0121-ts-host-code-types-against-one-embedding-interface.md)), exported from [index.ts](src/index.ts) and [wasm/index.ts](src/wasm/index.ts)
 - Rules: [Embedding](../../spec/09-embedding.md), [Public values](README.md#public-values)
-- Tests and cases: No automated check compares the TS exports with `talk.ts`; keep them in step by hand, as the Go [API comparison](../go/internal/apicheck/api_test.go) does for `talk.go`
+- Tests and cases: [the API comparison](tests/embedding-api.test.ts) holds `embedding.ts` and the driver to `talk.ts`, as the [Go one](../go/internal/apicheck/api_test.go) does for `talk.go`, and fails when `index.ts` gains an export `wasm/index.ts` lacks, unless its TS-only list names it
 - Combined admission/Pump: [native/WASM parity tests](tests/combined.test.ts); transferable codecs in [message-layer.ts](src/message-layer.ts), [Value tests](tests/binary-value.test.ts) and [frame tests](tests/request-pump-binary.test.ts). Browser interoperability: `bun impl/ts/tools/request-pump-browser.ts`.
-- First check: `bun run typecheck`
+- First check: `bun run typecheck && bun test impl/ts/tests/embedding-api.test.ts`
 
 ## The Zig reactor behind the embedding API
 

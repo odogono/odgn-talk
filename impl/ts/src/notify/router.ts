@@ -6,13 +6,14 @@
 // `Script.deliver`, `Group.scriptNames`, `Group.save` and `Core.restore` are
 // all it calls.
 import type { Call, Grant, GrantContext } from '../capabilities';
-import type { Core } from '../core';
+import type { TsCore } from '../core';
 import { sizeOf } from '../costs';
 import { encodeValue } from '../encoding';
 import { HostError, ScriptError } from '../errors';
+import type { Group } from '../embedding';
 import type {
-  Group,
   RestoreOptions,
+  TsGroup,
   RestoreResult,
   SaveOptions,
 } from '../group';
@@ -57,12 +58,12 @@ export type NotificationRouter = {
   release(context: GrantContext<string>): void;
   /** Throws HostError `invalid checkpoint`, or whatever Core.restore throws. */
   restore(
-    core: Pick<Core, 'restore'>,
+    core: Pick<TsCore, 'restore'>,
     checkpoint: Uint8Array,
     o: RestoreOptions,
-  ): { group: Group; result: RestoreResult; routing: RoutingResult };
+  ): { group: TsGroup; result: RestoreResult; routing: RoutingResult };
   /** A checkpoint; throws effects pending as Group.save does. */
-  save(group: Group, options?: SaveOptions): Uint8Array;
+  save(group: TsGroup, options?: SaveOptions): Uint8Array;
   unwatch(call: Call<string>, name: string): void;
   /** Registers or replaces a watch; throws ScriptError `watch limit` {limit}. */
   watch(
