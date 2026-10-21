@@ -88,6 +88,73 @@ pub fn charge(run: *Run, meter: Meter, fuel: u64) void {
     meter.add(fuel);
 }
 
+/// Where a Run's refused Charge faults it (#1068): a Charge Request drained
+/// while its call waits, a Join Member's reissue, or the resume of a
+/// reissued call or Join Member that the Run couldn't pay for.
+pub const Refusal = union(enum) {
+    charge_request,
+    join_reissue,
+    resumed_limited,
+    join_member_limited: usize,
+};
+
+/// How a refused Charge's fault goes on, which the Group carries out after
+/// its `fault` record.
+pub const Fault = struct {
+    /// Whether the fault ends the Run's Segment, as a Stretch of its own,
+    /// or the Run itself, with no `seg` record.
+    end: enum { segment, run },
+    /// Whether the Run's Segment base, taken while it waited, is dropped.
+    drop_base: bool,
+    /// The call the fault abandons, which the Group writes after it.
+    abandon: ?[]const u8,
+};
+
+/// The refusal a ready Run resumes into, if its wait settled with one.
+pub fn refusal(run: *const Run) ?Refusal {
+    const with = run.resume_with orelse return null;
+    switch (with) {
+        .limited => return .resumed_limited,
+        .join_failed => |i| {
+            const x = run.join.?.members.items[i];
+            if (x.with != null and x.with.? == .limited) return .{ .join_member_limited = i };
+        },
+        else => {},
+    }
+    return null;
+}
+
+/// The one path that faults a Run whose Charge was refused: it settles the
+/// Run's state and lists for the fault and says how it ends.
+pub fn faultCharge(run: *Run, lists: Lists, how: Refusal) Fault {
+    switch (how) {
+        // Its rollback may pause at a crossing, so the Group ends the Run
+        // once that completes.
+        .charge_request => return .{ .end = .run, .drop_base = !run.continuing, .abandon = null },
+        .join_reissue => {
+            const drop_base = !run.continuing;
+            // The fault is a Stretch of its own, as a resume is, with
+            // nothing charged in it. An ending that pauses requeues the
+            // Run, so it leaves its lists first.
+            run.continuing = false;
+            startStretch(run);
+            detach(run, lists);
+            return .{ .end = .segment, .drop_base = drop_base, .abandon = null };
+        },
+        // Settlement already took the Wait, so the fault names the call.
+        .resumed_limited => {
+            run.resume_with = null;
+            return .{ .end = .segment, .drop_base = false, .abandon = run.waited.id };
+        },
+        .join_member_limited => |i| {
+            run.resume_with = null;
+            const x = &run.join.?.members.items[i];
+            x.with = null;
+            return .{ .end = .segment, .drop_base = false, .abandon = x.waited.id };
+        },
+    }
+}
+
 /// Charges a suspended Run paid as it goes, before its next Stretch, which
 /// starts from its Fuel then.
 pub fn chargeSuspended(run: *Run, meter: Meter, fuel: u64) void {
@@ -105,6 +172,10 @@ fn bareRun() Run {
     run.alloc = 0;
     run.segment_fuel = 0;
     run.segment_alloc = 0;
+    run.continuing = false;
+    run.resume_with = null;
+    run.waited = .{};
+    run.join = null;
     return run;
 }
 
@@ -213,4 +284,71 @@ test "a suspended Run's Charge is paid, and its next Stretch starts after it" {
     startStretch(&run);
     try t.expectEqual(Stretch{ .fuel = 0, .alloc = 0 }, endStretch(&run, meter));
     try t.expectEqual(@as(u64, 6), pump);
+}
+
+test "a Charge refused while its call waits ends the Run, with no Stretch or abandon" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    run.fuel = 40;
+    run.segment_fuel = 10;
+    try keepLive(t.allocator, &run, l.lists());
+    const f = faultCharge(&run, l.lists(), .charge_request);
+    try t.expectEqual(.run, f.end);
+    try t.expect(f.drop_base);
+    try t.expectEqual(@as(?[]const u8, null), f.abandon);
+    // The Run stays where it was until it ends; its Stretch is untouched.
+    try t.expectEqual(@as(usize, 1), l.live.items.len);
+    try t.expectEqual(@as(u64, 30), stretchFuel(&run));
+}
+
+test "a Join Member's refused reissue faults in a Stretch of its own, detached" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    run.fuel = 50;
+    run.segment_fuel = 20;
+    run.continuing = true;
+    try requeueAtHead(t.allocator, &run, l.lists());
+    const f = faultCharge(&run, l.lists(), .join_reissue);
+    try t.expectEqual(.segment, f.end);
+    // A preempted Run's base is its Segment's, which the fault rolls back to.
+    try t.expect(!f.drop_base);
+    try t.expect(!run.continuing);
+    try t.expectEqual(@as(u64, 0), stretchFuel(&run));
+    try t.expectEqual(@as(usize, 0), l.live.items.len);
+    try t.expectEqual(@as(usize, 0), l.work.items.len);
+}
+
+test "a resumed refusal names the call it abandons" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    run.waited = .{ .id = "c1" };
+    run.resume_with = .limited;
+    try t.expectEqual(Refusal.resumed_limited, refusal(&run).?);
+    const f = faultCharge(&run, l.lists(), refusal(&run).?);
+    try t.expectEqual(.segment, f.end);
+    try t.expectEqualStrings("c1", f.abandon.?);
+    try t.expectEqual(@as(?machine.Resume, null), run.resume_with);
+    try t.expectEqual(@as(?Refusal, null), refusal(&run));
+}
+
+test "a Join that failed on a refused member names that member" {
+    var l: TestLists = .{};
+    defer l.deinit();
+    var run = bareRun();
+    var join: machine.Join = .{};
+    defer join.members.deinit(t.allocator);
+    try join.members.append(t.allocator, .{ .pending = null, .waited = .{ .id = "c1" }, .with = .broken });
+    try join.members.append(t.allocator, .{ .pending = null, .waited = .{ .id = "c2" }, .with = .limited });
+    run.join = &join;
+    // A Join failed by another failure isn't a refusal.
+    run.resume_with = .{ .join_failed = 0 };
+    try t.expectEqual(@as(?Refusal, null), refusal(&run));
+    run.resume_with = .{ .join_failed = 1 };
+    const f = faultCharge(&run, l.lists(), refusal(&run).?);
+    try t.expectEqualStrings("c2", f.abandon.?);
+    try t.expectEqual(@as(?machine.Resume, null), join.members.items[1].with);
+    try t.expectEqual(@as(?machine.Resume, null), run.resume_with);
 }
