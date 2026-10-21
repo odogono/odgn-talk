@@ -1697,15 +1697,6 @@ fn writeHeld(o: *Out, held: *const machine.report.Reports) Allocator.Error!void 
     try o.raw("]");
 }
 
-/// A field whose empty text means absent.
-fn optionalText(o: *Out, name: []const u8, s: []const u8) Allocator.Error!void {
-    if (s.len == 0) return;
-    try o.raw(",\"");
-    try o.raw(name);
-    try o.raw("\":");
-    try o.text(s);
-}
-
 fn reportValue(o: *Out, v: *const Value) Allocator.Error!void {
     o.value(v) catch |e| switch (e) {
         error.NotEncodable => try o.raw("null"),
@@ -1734,242 +1725,397 @@ fn outcomeWord(outcome: machine.report.Outcome) []const u8 {
     };
 }
 
-/// An effect failure's fields, after the caller's opening brace.
-fn effectFields(o: *Out, e: machine.report.EffectFailure) Allocator.Error!void {
-    try o.raw("\"script\":");
-    try o.text(e.script);
-    try o.raw(",\"run\":");
-    try o.text(e.run);
-    try o.raw(",\"grant\":");
-    try o.text(e.grant);
-    try o.raw(",\"segment\":");
-    try o.text(e.segment);
-    try o.raw(",\"phase\":");
-    try o.text(e.phase);
-    try o.raw(",\"status\":");
-    try o.text(e.status);
-    try optionalText(o, "scope", e.scope);
+/// Each Report's fields, in order, written once for both layouts. `e` is a
+/// `JsonReport` or a `BinReport`: an encoder with `key`, `text`, `int`,
+/// `boolean`, `texts`, `value` (a Value Encoding field), `plain` (an error
+/// record, never core-marked), `map`/`endMap` and `list`/`item`/`endList`.
+fn reportFields(e: anytype, report: machine.report.Report, climbed: bool) Allocator.Error!void {
+    switch (report) {
+        .charge_result => |r| {
+            try e.key("request");
+            try e.text(r.request);
+            try e.key("call");
+            try e.text(r.call);
+            try e.key("fuel");
+            try e.int(r.fuel);
+            try e.key("status");
+            try e.text(@tagName(r.status));
+        },
+        .run_end => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try optionalField(e, "run", r.run);
+            try optionalField(e, "delivery", r.delivery);
+            try optionalField(e, "broadcast", r.broadcast);
+            try optionalField(e, "handler", r.handler);
+            if (r.fallback) {
+                try e.key("fallback");
+                try e.boolean(true);
+            }
+            if (climbed and r.climbed) {
+                try e.key("climbed");
+                try e.boolean(true);
+            }
+            try e.key("outcome");
+            try e.text(outcomeWord(r.outcome));
+            if (r.result) |v| {
+                try e.key("result");
+                try e.value(v);
+            }
+            if (r.err) |v| {
+                // `error` is a plain error record, not a Value Encoding
+                // field, so `core-message-v1` leaves it unmarked.
+                try e.key("error");
+                try e.plain(v);
+            }
+            try optionalField(e, "limit", r.limit);
+            if (r.effect) |x| {
+                try e.key("effect");
+                try e.map();
+                try effectFields(e, x);
+                try e.endMap();
+            }
+            if (r.cleanup_failed) |c| {
+                try e.key("cleanupFailed");
+                try e.map();
+                if (c.code.len > 0) {
+                    try e.key("code");
+                    try e.text(c.code);
+                } else {
+                    try e.key("limit");
+                    try e.text(c.limit);
+                }
+                try e.endMap();
+            }
+            if (r.at.unit.len > 0) {
+                try e.key("at");
+                try e.map();
+                try e.key("unit");
+                try e.text(r.at.unit);
+                try e.key("line");
+                try e.int(r.at.line);
+                try e.key("col");
+                try e.int(r.at.column);
+                try e.key("handler");
+                try e.text(r.at.handler);
+                try e.key("pc");
+                try e.int(r.at.pc);
+                try e.endMap();
+            }
+            try e.key("fuel");
+            try e.int(r.fuel);
+            try e.key("alloc");
+            try e.int(r.alloc);
+        },
+        .stop => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try e.key("reason");
+            try e.text(r.reason);
+            try e.key("discardedRuns");
+            try e.texts(r.discarded_runs);
+            try e.key("droppedMessages");
+            try e.texts(r.dropped_messages);
+            try e.key("pendingCalls");
+            try e.texts(r.pending_calls);
+        },
+        .unhandled => |r| {
+            try e.key("delivery");
+            try e.text(r.delivery);
+            try e.key("message");
+            try e.map();
+            try e.key("name");
+            try e.text(r.message);
+            try e.key("args");
+            try values(e, r.args);
+            try e.endMap();
+            if (r.target) |t| {
+                try e.key("target");
+                try e.value(t.value);
+            }
+        },
+        .call_failed => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try e.key("call");
+            try e.text(r.call);
+            try e.key("operation");
+            try e.map();
+            try e.key("capability");
+            try e.text(r.capability);
+            try e.key("operation");
+            try e.text(r.operation);
+            try e.endMap();
+            try e.key("detail");
+            try e.text(r.detail);
+        },
+        .effect_failure => |x| try effectFields(e, x),
+        .decided => |r| {
+            try optionalField(e, "delivery", r.delivery);
+            try optionalField(e, "broadcast", r.broadcast);
+            try e.key("verdict");
+            try e.text(@tagName(r.verdict));
+            try e.key("vetoes");
+            try e.list(r.vetoes.len);
+            for (r.vetoes) |v| {
+                try e.item();
+                try e.map();
+                try e.key("script");
+                try e.text(v.script);
+                try e.key("run");
+                try e.text(v.run);
+                try e.key("reason");
+                try e.value(v.reason);
+                try e.endMap();
+            }
+            try e.endList();
+            try e.key("undecided");
+            try e.list(r.undecided.len);
+            for (r.undecided) |u| {
+                try e.item();
+                try e.map();
+                try e.key("script");
+                try e.text(u.script);
+                try e.key("run");
+                try e.text(u.run);
+                try e.key("outcome");
+                try e.text(outcomeWord(u.outcome));
+                try e.endMap();
+            }
+            try e.endList();
+        },
+        .run_started => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try e.key("run");
+            try e.text(r.run);
+            try e.key("args");
+            try values(e, r.args);
+            try ancestryFields(e, r.ancestry);
+            try optionalField(e, "delivery", r.delivery);
+            try optionalField(e, "selector", r.selector);
+            if (r.function) |f| {
+                try e.key("fn");
+                try e.value(f);
+            }
+        },
+        .run_discarded => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try e.key("run");
+            try e.text(r.run);
+            try e.key("reason");
+            try e.text(r.reason);
+            try ancestryFields(e, r.ancestry);
+        },
+        .run_accounting => |r| {
+            try e.key("script");
+            try e.text(r.script);
+            try e.key("run");
+            try e.text(r.run);
+            try e.key("fuel");
+            try e.int(r.fuel);
+            try e.key("state");
+            try e.text(@tagName(r.state));
+            try ancestryFields(e, r.ancestry);
+        },
+        .causal_work => |r| {
+            try e.key("rootDelivery");
+            try e.text(r.root);
+            try e.key("liveRuns");
+            try e.int(r.live_runs);
+            try e.key("queuedMessages");
+            try e.int(r.queued_messages);
+            try e.key("discardedMessages");
+            try e.int(r.discarded_messages);
+        },
+        .host_error => |r| {
+            try e.key("code");
+            try e.text(r.code);
+            try optionalField(e, "detail", r.detail);
+        },
+    }
 }
 
-/// Where a Run's work came from, as fields after the caller's others.
-fn ancestryFields(o: *Out, a: machine.report.Ancestry) Allocator.Error!void {
-    try o.raw(",\"rootDelivery\":");
-    try o.text(a.root);
-    try optionalText(o, "parentRun", a.parent_run);
-    try optionalText(o, "parentCall", a.parent_call);
+/// A text field a Report leaves out when it is empty.
+fn optionalField(e: anytype, comptime name: []const u8, text: []const u8) Allocator.Error!void {
+    if (text.len == 0) return;
+    try e.key(name);
+    try e.text(text);
+}
+
+fn values(e: anytype, vs: []const *Value) Allocator.Error!void {
+    try e.list(vs.len);
+    for (vs) |v| {
+        try e.item();
+        try e.value(v);
+    }
+    try e.endList();
+}
+
+fn effectFields(e: anytype, x: machine.report.EffectFailure) Allocator.Error!void {
+    try e.key("script");
+    try e.text(x.script);
+    try e.key("run");
+    try e.text(x.run);
+    try e.key("grant");
+    try e.text(x.grant);
+    try e.key("segment");
+    try e.text(x.segment);
+    try e.key("phase");
+    try e.text(x.phase);
+    try e.key("status");
+    try e.text(x.status);
+    try optionalField(e, "scope", x.scope);
+}
+
+fn ancestryFields(e: anytype, a: machine.report.Ancestry) Allocator.Error!void {
+    try e.key("rootDelivery");
+    try e.text(a.root);
+    try optionalField(e, "parentRun", a.parent_run);
+    try optionalField(e, "parentCall", a.parent_call);
+}
+
+/// The JSON layout's Report encoder: an object led by its `kind`.
+const JsonReport = struct {
+    o: *Out,
+    /// Whether the open container at each depth has an entry yet.
+    started: [8]bool = @splat(false),
+    depth: usize = 0,
+
+    fn open(j: *JsonReport, s: []const u8) Allocator.Error!void {
+        try j.o.raw(s);
+        j.depth += 1;
+        j.started[j.depth] = false;
+    }
+
+    fn close(j: *JsonReport, s: []const u8) Allocator.Error!void {
+        j.depth -= 1;
+        try j.o.raw(s);
+    }
+
+    fn entry(j: *JsonReport) Allocator.Error!void {
+        if (j.started[j.depth]) try j.o.raw(",");
+        j.started[j.depth] = true;
+    }
+
+    fn key(j: *JsonReport, comptime name: []const u8) Allocator.Error!void {
+        const first = !j.started[j.depth];
+        j.started[j.depth] = true;
+        try j.o.raw(if (first) "\"" ++ name ++ "\":" else ",\"" ++ name ++ "\":");
+    }
+
+    fn text(j: *JsonReport, s: []const u8) Allocator.Error!void {
+        try j.o.text(s);
+    }
+
+    fn int(j: *JsonReport, n: i128) Allocator.Error!void {
+        try j.o.int(n);
+    }
+
+    fn boolean(j: *JsonReport, b: bool) Allocator.Error!void {
+        try j.o.raw(if (b) "true" else "false");
+    }
+
+    fn texts(j: *JsonReport, xs: []const []const u8) Allocator.Error!void {
+        try textList(j.o, xs);
+    }
+
+    fn value(j: *JsonReport, v: *const Value) Allocator.Error!void {
+        try reportValue(j.o, v);
+    }
+
+    fn plain(j: *JsonReport, v: *const Value) Allocator.Error!void {
+        j.o.valueWith(v, false) catch |e| switch (e) {
+            error.NotEncodable => try j.o.raw("null"),
+            error.OutOfMemory => return error.OutOfMemory,
+        };
+    }
+
+    fn map(j: *JsonReport) Allocator.Error!void {
+        try j.open("{");
+    }
+
+    fn endMap(j: *JsonReport) Allocator.Error!void {
+        try j.close("}");
+    }
+
+    fn list(j: *JsonReport, _: usize) Allocator.Error!void {
+        try j.open("[");
+    }
+
+    fn item(j: *JsonReport) Allocator.Error!void {
+        try j.entry();
+    }
+
+    fn endList(j: *JsonReport) Allocator.Error!void {
+        try j.close("]");
+    }
+};
+
+/// The fields layout's Report encoder: a positional record after its tag.
+const BinReport = struct {
+    w: *rp.Writer,
+    s: *Session,
+
+    fn key(b: BinReport, comptime name: []const u8) Allocator.Error!void {
+        try b.w.key(name);
+    }
+
+    fn text(b: BinReport, s: []const u8) Allocator.Error!void {
+        try b.w.ptext(s);
+    }
+
+    fn int(b: BinReport, n: i128) Allocator.Error!void {
+        try b.w.int(n);
+    }
+
+    fn boolean(b: BinReport, v: bool) Allocator.Error!void {
+        try b.w.boolean(v);
+    }
+
+    fn texts(b: BinReport, xs: []const []const u8) Allocator.Error!void {
+        try b.w.ptexts(xs);
+    }
+
+    fn value(b: BinReport, v: *const Value) Allocator.Error!void {
+        try binValue(b.w, b.s, v, b.s.core_errors);
+    }
+
+    fn plain(b: BinReport, v: *const Value) Allocator.Error!void {
+        try binValue(b.w, b.s, v, false);
+    }
+
+    fn map(b: BinReport) Allocator.Error!void {
+        try b.w.begin(&.{}, false);
+    }
+
+    fn endMap(b: BinReport) Allocator.Error!void {
+        try b.w.end();
+    }
+
+    fn list(b: BinReport, n: usize) Allocator.Error!void {
+        try b.w.list(n);
+    }
+
+    fn item(_: BinReport) Allocator.Error!void {}
+
+    fn endList(_: BinReport) Allocator.Error!void {}
+};
+
+fn reportKind(report: machine.report.Report) rp.Report {
+    return switch (report) {
+        inline else => |_, tag| @field(rp.Report, @tagName(tag)),
+    };
 }
 
 fn writeReport(o: *Out, report: machine.report.Report, climbed: bool) Allocator.Error!void {
-    switch (report) {
-        .charge_result => |r| {
-            try o.raw("{\"kind\":\"charge result\",\"request\":");
-            try o.text(r.request);
-            try o.raw(",\"call\":");
-            try o.text(r.call);
-            try o.raw(",\"fuel\":");
-            try o.int(r.fuel);
-            try o.raw(",\"status\":");
-            try o.text(@tagName(r.status));
-            try o.raw("}");
-        },
-        .run_end => |r| {
-            try o.raw("{\"kind\":\"run end\",\"script\":");
-            try o.text(r.script);
-            try optionalText(o, "run", r.run);
-            try optionalText(o, "delivery", r.delivery);
-            try optionalText(o, "broadcast", r.broadcast);
-            try optionalText(o, "handler", r.handler);
-            if (r.fallback) try o.raw(",\"fallback\":true");
-            if (climbed and r.climbed) try o.raw(",\"climbed\":true");
-            try o.raw(",\"outcome\":");
-            try o.text(outcomeWord(r.outcome));
-            if (r.result) |v| {
-                try o.raw(",\"result\":");
-                try reportValue(o, v);
-            }
-            if (r.err) |v| {
-                try o.raw(",\"error\":");
-                // `error` is a plain error record, not a Value Encoding
-                // field, so `core-message-v1` leaves it unmarked.
-                o.valueWith(v, false) catch |e| switch (e) {
-                    error.NotEncodable => try o.raw("null"),
-                    error.OutOfMemory => return error.OutOfMemory,
-                };
-            }
-            try optionalText(o, "limit", r.limit);
-            if (r.effect) |e| {
-                try o.raw(",\"effect\":{");
-                try effectFields(o, e);
-                try o.raw("}");
-            }
-            if (r.cleanup_failed) |c| {
-                try o.raw(",\"cleanupFailed\":{");
-                if (c.code.len > 0) {
-                    try o.raw("\"code\":");
-                    try o.text(c.code);
-                } else {
-                    try o.raw("\"limit\":");
-                    try o.text(c.limit);
-                }
-                try o.raw("}");
-            }
-            if (r.at.unit.len > 0) {
-                try o.raw(",\"at\":{\"unit\":");
-                try o.text(r.at.unit);
-                try o.raw(",\"line\":");
-                try o.int(r.at.line);
-                try o.raw(",\"col\":");
-                try o.int(r.at.column);
-                try o.raw(",\"handler\":");
-                try o.text(r.at.handler);
-                try o.raw(",\"pc\":");
-                try o.int(r.at.pc);
-                try o.raw("}");
-            }
-            try o.raw(",\"fuel\":");
-            try o.int(r.fuel);
-            try o.raw(",\"alloc\":");
-            try o.int(r.alloc);
-            try o.raw("}");
-        },
-        .stop => |r| {
-            try o.raw("{\"kind\":\"stop\",\"script\":");
-            try o.text(r.script);
-            try o.raw(",\"reason\":");
-            try o.text(r.reason);
-            try o.raw(",\"discardedRuns\":");
-            try textList(o, r.discarded_runs);
-            try o.raw(",\"droppedMessages\":");
-            try textList(o, r.dropped_messages);
-            try o.raw(",\"pendingCalls\":");
-            try textList(o, r.pending_calls);
-            try o.raw("}");
-        },
-        .unhandled => |r| {
-            try o.raw("{\"kind\":\"unhandled\",\"delivery\":");
-            try o.text(r.delivery);
-            try o.raw(",\"message\":{\"name\":");
-            try o.text(r.message);
-            try o.raw(",\"args\":[");
-            for (r.args, 0..) |v, i| {
-                if (i > 0) try o.raw(",");
-                try reportValue(o, v);
-            }
-            try o.raw("]}");
-            if (r.target) |t| {
-                try o.raw(",\"target\":");
-                try reportValue(o, t.value);
-            }
-            try o.raw("}");
-        },
-        .call_failed => |r| {
-            try o.raw("{\"kind\":\"call failed\",\"script\":");
-            try o.text(r.script);
-            try o.raw(",\"call\":");
-            try o.text(r.call);
-            try o.raw(",\"operation\":{\"capability\":");
-            try o.text(r.capability);
-            try o.raw(",\"operation\":");
-            try o.text(r.operation);
-            try o.raw("},\"detail\":");
-            try o.text(r.detail);
-            try o.raw("}");
-        },
-        .effect_failure => |e| {
-            try o.raw("{\"kind\":\"effect failure\",");
-            try effectFields(o, e);
-            try o.raw("}");
-        },
-        .decided => |r| {
-            try o.raw("{\"kind\":\"decided\"");
-            try optionalText(o, "delivery", r.delivery);
-            try optionalText(o, "broadcast", r.broadcast);
-            try o.raw(",\"verdict\":");
-            try o.text(@tagName(r.verdict));
-            try o.raw(",\"vetoes\":[");
-            for (r.vetoes, 0..) |v, i| {
-                if (i > 0) try o.raw(",");
-                try o.raw("{\"script\":");
-                try o.text(v.script);
-                try o.raw(",\"run\":");
-                try o.text(v.run);
-                try o.raw(",\"reason\":");
-                try reportValue(o, v.reason);
-                try o.raw("}");
-            }
-            try o.raw("],\"undecided\":[");
-            for (r.undecided, 0..) |u, i| {
-                if (i > 0) try o.raw(",");
-                try o.raw("{\"script\":");
-                try o.text(u.script);
-                try o.raw(",\"run\":");
-                try o.text(u.run);
-                try o.raw(",\"outcome\":");
-                try o.text(outcomeWord(u.outcome));
-                try o.raw("}");
-            }
-            try o.raw("]}");
-        },
-        .run_started => |r| {
-            try o.raw("{\"kind\":\"run started\",\"script\":");
-            try o.text(r.script);
-            try o.raw(",\"run\":");
-            try o.text(r.run);
-            try o.raw(",\"args\":[");
-            for (r.args, 0..) |v, i| {
-                if (i > 0) try o.raw(",");
-                try reportValue(o, v);
-            }
-            try o.raw("]");
-            try ancestryFields(o, r.ancestry);
-            try optionalText(o, "delivery", r.delivery);
-            try optionalText(o, "selector", r.selector);
-            if (r.function) |f| {
-                try o.raw(",\"fn\":");
-                try reportValue(o, f);
-            }
-            try o.raw("}");
-        },
-        .run_discarded => |r| {
-            try o.raw("{\"kind\":\"run discarded\",\"script\":");
-            try o.text(r.script);
-            try o.raw(",\"run\":");
-            try o.text(r.run);
-            try o.raw(",\"reason\":");
-            try o.text(r.reason);
-            try ancestryFields(o, r.ancestry);
-            try o.raw("}");
-        },
-        .run_accounting => |r| {
-            try o.raw("{\"kind\":\"run accounting\",\"script\":");
-            try o.text(r.script);
-            try o.raw(",\"run\":");
-            try o.text(r.run);
-            try o.raw(",\"fuel\":");
-            try o.int(r.fuel);
-            try o.raw(",\"state\":");
-            try o.text(@tagName(r.state));
-            try ancestryFields(o, r.ancestry);
-            try o.raw("}");
-        },
-        .causal_work => |r| {
-            try o.raw("{\"kind\":\"causal work\",\"rootDelivery\":");
-            try o.text(r.root);
-            try o.raw(",\"liveRuns\":");
-            try o.int(r.live_runs);
-            try o.raw(",\"queuedMessages\":");
-            try o.int(r.queued_messages);
-            try o.raw(",\"discardedMessages\":");
-            try o.int(r.discarded_messages);
-            try o.raw("}");
-        },
-        .host_error => |r| {
-            try o.raw("{\"kind\":\"host error\",\"code\":");
-            try o.text(r.code);
-            try optionalText(o, "detail", r.detail);
-            try o.raw("}");
-        },
-    }
+    var j: JsonReport = .{ .o = o };
+    try o.raw("{\"kind\":");
+    try o.text(reportKind(report).kind());
+    j.started[0] = true;
+    try reportFields(&j, report, climbed);
+    try o.raw("}");
 }
 
 fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
@@ -2909,7 +3055,7 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
             made += 1;
         }
     }
-    var id = switch (admitQueued(entry, how, target, mname, args, overrideOfJson(field(message, "limits")))) {
+    var id = switch (admit(entry, .{ .how = .{ .queued = how }, .target = target, .name = mname, .args = args, .limits = overrideOfJson(field(message, "limits")) })) {
         .id => |id| id,
         .code => |code| return hostError(s.gpa, ref, code),
     };
@@ -2920,6 +3066,23 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     o.raw(if (to_all) "\"broadcast\":" else "\"delivery\":") catch {};
     o.text(if (id.data) |d| d[0..id.len] else "") catch {};
     return finishOk(s, &o, entry);
+}
+
+/// An input that admits work, decoded from either layout: a queued
+/// Delivery, Broadcast or Decision, or a Function Value call.
+const Admission = struct {
+    how: union(enum) { queued: Asking, call: *Value },
+    target: Target = .all,
+    name: []const u8 = "",
+    args: []*Value,
+    limits: Override,
+};
+
+fn admit(entry: *GroupEntry, a: Admission) Admitted {
+    return switch (a.how) {
+        .queued => |how| admitQueued(entry, how, a.target, a.name, a.args, a.limits),
+        .call => |f| admitCall(entry, f, a.args, a.limits),
+    };
 }
 
 /// Admits a Delivery, Request, Decision or Broadcast with the ordinary
@@ -4020,7 +4183,7 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
             };
         }
     }
-    var id = switch (admitCall(entry, f, args.items, overrideOfJson(field(msg, "limits")))) {
+    var id = switch (admit(entry, .{ .how = .{ .call = f }, .args = args.items, .limits = overrideOfJson(field(msg, "limits")) })) {
         .id => |id| id,
         .code => |code| return hostError(s.gpa, ref, code),
     };
@@ -4804,256 +4967,13 @@ fn binValue(w: *rp.Writer, s: *Session, v: *const Value, core_errors: bool) Allo
     };
 }
 
-fn binOptional(w: *rp.Writer, name: []const u8, text: []const u8) Allocator.Error!void {
-    if (text.len == 0) return;
-    try w.key(name);
-    try w.ptext(text);
-}
-
-fn binEffect(w: *rp.Writer, e: machine.report.EffectFailure) Allocator.Error!void {
-    try w.key("script");
-    try w.ptext(e.script);
-    try w.key("run");
-    try w.ptext(e.run);
-    try w.key("grant");
-    try w.ptext(e.grant);
-    try w.key("segment");
-    try w.ptext(e.segment);
-    try w.key("phase");
-    try w.ptext(e.phase);
-    try w.key("status");
-    try w.ptext(e.status);
-    try binOptional(w, "scope", e.scope);
-}
-
-fn binAncestry(w: *rp.Writer, a: machine.report.Ancestry) Allocator.Error!void {
-    try w.key("rootDelivery");
-    try w.ptext(a.root);
-    try binOptional(w, "parentRun", a.parent_run);
-    try binOptional(w, "parentCall", a.parent_call);
-}
-
 /// One Report: its report tag and positional list. Nested records keep
 /// their ordinary map shapes.
 fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed: bool) Allocator.Error!void {
-    const kind: rp.Report = switch (report) {
-        .run_end => .run_end,
-        .run_started => .run_started,
-        .run_discarded => .run_discarded,
-        .run_accounting => .run_accounting,
-        .causal_work => .causal_work,
-        .stop => .stop,
-        .unhandled => .unhandled,
-        .call_failed => .call_failed,
-        .effect_failure => .effect_failure,
-        .decided => .decided,
-        .host_error => .host_error,
-        .charge_result => .charge_result,
-    };
+    const kind = reportKind(report);
     try w.byte(@backingInt(kind));
     try w.begin(rp.fields(kind), true);
-    switch (report) {
-        .charge_result => |r| {
-            try w.key("request");
-            try w.ptext(r.request);
-            try w.key("call");
-            try w.ptext(r.call);
-            try w.key("fuel");
-            try w.int(r.fuel);
-            try w.key("status");
-            try w.ptext(@tagName(r.status));
-        },
-        .run_end => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try binOptional(w, "run", r.run);
-            try binOptional(w, "delivery", r.delivery);
-            try binOptional(w, "broadcast", r.broadcast);
-            try binOptional(w, "handler", r.handler);
-            if (r.fallback) {
-                try w.key("fallback");
-                try w.boolean(true);
-            }
-            if (climbed and r.climbed) {
-                try w.key("climbed");
-                try w.boolean(true);
-            }
-            try w.key("outcome");
-            try w.ptext(outcomeWord(r.outcome));
-            if (r.result) |v| {
-                try w.key("result");
-                try binValue(w, s, v, s.core_errors);
-            }
-            if (r.err) |v| {
-                // A plain error record, as in JSON: never core-marked.
-                try w.key("error");
-                try binValue(w, s, v, false);
-            }
-            try binOptional(w, "limit", r.limit);
-            if (r.effect) |e| {
-                try w.key("effect");
-                try w.begin(&.{}, false);
-                try binEffect(w, e);
-                try w.end();
-            }
-            if (r.cleanup_failed) |c| {
-                try w.key("cleanupFailed");
-                try w.begin(&.{}, false);
-                if (c.code.len > 0) {
-                    try w.key("code");
-                    try w.ptext(c.code);
-                } else {
-                    try w.key("limit");
-                    try w.ptext(c.limit);
-                }
-                try w.end();
-            }
-            if (r.at.unit.len > 0) {
-                try w.key("at");
-                try w.begin(&.{}, false);
-                try w.key("unit");
-                try w.ptext(r.at.unit);
-                try w.key("line");
-                try w.int(r.at.line);
-                try w.key("col");
-                try w.int(r.at.column);
-                try w.key("handler");
-                try w.ptext(r.at.handler);
-                try w.key("pc");
-                try w.int(r.at.pc);
-                try w.end();
-            }
-            try w.key("fuel");
-            try w.int(r.fuel);
-            try w.key("alloc");
-            try w.int(r.alloc);
-        },
-        .stop => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try w.key("reason");
-            try w.ptext(r.reason);
-            try w.key("discardedRuns");
-            try w.ptexts(r.discarded_runs);
-            try w.key("droppedMessages");
-            try w.ptexts(r.dropped_messages);
-            try w.key("pendingCalls");
-            try w.ptexts(r.pending_calls);
-        },
-        .unhandled => |r| {
-            try w.key("delivery");
-            try w.ptext(r.delivery);
-            try w.key("message");
-            try w.begin(&.{}, false);
-            try w.key("name");
-            try w.ptext(r.message);
-            try w.key("args");
-            try w.list(r.args.len);
-            for (r.args) |v| try binValue(w, s, v, s.core_errors);
-            try w.end();
-            if (r.target) |t| {
-                try w.key("target");
-                try binValue(w, s, t.value, s.core_errors);
-            }
-        },
-        .call_failed => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try w.key("call");
-            try w.ptext(r.call);
-            try w.key("operation");
-            try w.begin(&.{}, false);
-            try w.key("capability");
-            try w.ptext(r.capability);
-            try w.key("operation");
-            try w.ptext(r.operation);
-            try w.end();
-            try w.key("detail");
-            try w.ptext(r.detail);
-        },
-        .effect_failure => |e| try binEffect(w, e),
-        .decided => |r| {
-            try binOptional(w, "delivery", r.delivery);
-            try binOptional(w, "broadcast", r.broadcast);
-            try w.key("verdict");
-            try w.ptext(@tagName(r.verdict));
-            try w.key("vetoes");
-            try w.list(r.vetoes.len);
-            for (r.vetoes) |v| {
-                try w.begin(&.{}, false);
-                try w.key("script");
-                try w.ptext(v.script);
-                try w.key("run");
-                try w.ptext(v.run);
-                try w.key("reason");
-                try binValue(w, s, v.reason, s.core_errors);
-                try w.end();
-            }
-            try w.key("undecided");
-            try w.list(r.undecided.len);
-            for (r.undecided) |u| {
-                try w.begin(&.{}, false);
-                try w.key("script");
-                try w.ptext(u.script);
-                try w.key("run");
-                try w.ptext(u.run);
-                try w.key("outcome");
-                try w.ptext(outcomeWord(u.outcome));
-                try w.end();
-            }
-        },
-        .run_started => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try w.key("run");
-            try w.ptext(r.run);
-            try w.key("args");
-            try w.list(r.args.len);
-            for (r.args) |v| try binValue(w, s, v, s.core_errors);
-            try binAncestry(w, r.ancestry);
-            try binOptional(w, "delivery", r.delivery);
-            try binOptional(w, "selector", r.selector);
-            if (r.function) |f| {
-                try w.key("fn");
-                try binValue(w, s, f, s.core_errors);
-            }
-        },
-        .run_discarded => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try w.key("run");
-            try w.ptext(r.run);
-            try w.key("reason");
-            try w.ptext(r.reason);
-            try binAncestry(w, r.ancestry);
-        },
-        .run_accounting => |r| {
-            try w.key("script");
-            try w.ptext(r.script);
-            try w.key("run");
-            try w.ptext(r.run);
-            try w.key("fuel");
-            try w.int(r.fuel);
-            try w.key("state");
-            try w.ptext(@tagName(r.state));
-            try binAncestry(w, r.ancestry);
-        },
-        .causal_work => |r| {
-            try w.key("rootDelivery");
-            try w.ptext(r.root);
-            try w.key("liveRuns");
-            try w.int(r.live_runs);
-            try w.key("queuedMessages");
-            try w.int(r.queued_messages);
-            try w.key("discardedMessages");
-            try w.int(r.discarded_messages);
-        },
-        .host_error => |r| {
-            try w.key("code");
-            try w.ptext(r.code);
-            try binOptional(w, "detail", r.detail);
-        },
-    }
+    try reportFields(BinReport{ .w = w, .s = s }, report, climbed);
     try w.end();
 }
 
@@ -5291,6 +5211,20 @@ const BinInput = struct {
     /// A `settle-pump`'s settlements, applied in order before its Pump.
     settlements: []Settlement = &.{},
 
+    /// What an admitting input asks for; a combined input admits as its
+    /// Request or call does.
+    fn admission(in: *const BinInput) Admission {
+        const how: @FieldType(Admission, "how") = switch (in.m) {
+            .request, .request_pump => .{ .queued = .request },
+            .deliver => .{ .queued = .deliver },
+            .broadcast => .{ .queued = .broadcast },
+            .decide => .{ .queued = .decide },
+            .call, .call_pump => .{ .call = in.function.? },
+            else => unreachable,
+        };
+        return .{ .how = how, .target = if (in.m == .broadcast) .all else in.target, .name = in.name, .args = in.args, .limits = in.limits };
+    }
+
     fn deinit(in: *BinInput, gpa: Allocator) void {
         for (in.args) |v| v.release();
         gpa.free(in.args);
@@ -5475,11 +5409,7 @@ fn binaryPaused(s: *Session, in: *BinInput, worker_ref: i64) []u8 {
 fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
     const entry = in.entry;
     switch (in.m) {
-        .request => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
-        .deliver => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .deliver, in.target, in.name, in.args, in.limits)),
-        .broadcast => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .broadcast, .all, in.name, in.args, in.limits)),
-        .decide => return binAdmissionOwned(s, in.ref, entry, admitQueued(entry, .decide, in.target, in.name, in.args, in.limits)),
-        .call => return binAdmissionOwned(s, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
+        .request, .deliver, .broadcast, .decide, .call => return binAdmissionOwned(s, in.ref, entry, admit(entry, in.admission())),
         .pump, .settle_pump => {
             const code = applySettlements(in.settlements);
             if (code != .ok) return binRefusal(s, in.m, in.ref, entry, code);
@@ -5489,7 +5419,7 @@ fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
         },
         .request_pump, .call_pump => {
             if (bindingOf(s, in.token) != null) return protocolError(s.gpa, in.ref, "the token is already bound");
-            const admitted = if (in.m == .request_pump) admitQueued(entry, .request, in.target, in.name, in.args, in.limits) else admitCall(entry, in.function.?, in.args, in.limits);
+            const admitted = admit(entry, in.admission());
             var id = switch (admitted) {
                 .id => |id| id,
                 .code => return binAdmission(s, in.ref, entry, admitted),
@@ -9200,4 +9130,65 @@ test "load-fields-v1 creates once, keeps refused-load diagnostics and recovers f
     try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, invalid)));
     _ = try okOf(try binReply(&c, later));
     try std.testing.expect(Direct.groupScript(s.groupNamed("g").?.group, "later", 5) != null);
+}
+
+/// A Report of each kind with every optional field it can carry.
+fn reportSample(a: Allocator, comptime kind: std.meta.Tag(machine.report.Report)) !machine.report.Report {
+    const R = machine.report;
+    const ancestry: R.Ancestry = .{ .root = "d1", .parent_run = "r1", .parent_call = "c1" };
+    return switch (kind) {
+        .charge_result => .{ .charge_result = .{ .request = "q1", .call = "c1", .fuel = 7, .status = .accepted } },
+        .run_end => .{ .run_end = .{
+            .script = "s",
+            .run = "r1",
+            .delivery = "d1",
+            .broadcast = "b1",
+            .handler = "ping",
+            .fallback = true,
+            .climbed = true,
+            .outcome = .effect_failure,
+            .effect = .{ .script = "s", .run = "r1", .grant = "g", .segment = "1", .phase = "commit", .status = "unknown", .scope = "run" },
+            .cleanup_failed = .{ .limit = "fuel" },
+            .result = try model.text(a, "done"),
+            .err = try model.map(a, try a.dupe(model.Pair, &.{.{ .key = "code", .value = try model.text(a, "boom") }})),
+            .limit = "fuel",
+            .at = .{ .unit = "s", .line = 3, .column = 5, .handler = "ping", .pc = 9 },
+            .fuel = 11,
+            .alloc = 13,
+        } },
+        .stop => .{ .stop = .{ .script = "s", .reason = "stop", .discarded_runs = &.{ "r1", "r2" }, .dropped_messages = &.{"d2"}, .pending_calls = &.{} } },
+        .unhandled => .{ .unhandled = .{ .delivery = "d1", .message = "ping", .args = try a.dupe(*Value, &.{ try model.text(a, "x"), try model.text(a, "y") }) } },
+        .call_failed => .{ .call_failed = .{ .script = "s", .call = "c1", .capability = "Clock", .operation = "now", .detail = "broken" } },
+        .effect_failure => .{ .effect_failure = .{ .script = "s", .run = "r1", .grant = "g", .segment = "1", .phase = "commit", .status = "unknown", .scope = "run" } },
+        .decided => .{ .decided = .{
+            .broadcast = "b1",
+            .verdict = .vetoed,
+            .vetoes = try a.dupe(R.Veto, &.{.{ .script = "s", .run = "r1", .reason = try model.text(a, "no") }}),
+            .undecided = &.{.{ .script = "t", .run = "r2", .outcome = .errored }},
+        } },
+        .host_error => .{ .host_error = .{ .code = "mailbox full", .detail = "s" } },
+        .run_started => .{ .run_started = .{ .ancestry = ancestry, .script = "s", .run = "r1", .delivery = "d1", .selector = "ping", .args = try a.dupe(*Value, &.{try model.text(a, "x")}) } },
+        .run_discarded => .{ .run_discarded = .{ .ancestry = ancestry, .script = "s", .run = "r1", .reason = "reload" } },
+        .run_accounting => .{ .run_accounting = .{ .ancestry = ancestry, .script = "s", .run = "r1", .fuel = 5, .state = .terminal } },
+        .causal_work => .{ .causal_work = .{ .root = "d1", .live_runs = 1, .queued_messages = 2, .discarded_messages = 3 } },
+    };
+}
+
+test "every Report decodes to the same fields in the JSON and fields layouts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    inline for (@typeInfo(machine.report.Report).@"union".field_names) |name| {
+        const report = try reportSample(a, @field(std.meta.Tag(machine.report.Report), name));
+        errdefer std.debug.print("Report: {s}\n", .{name});
+        var o = Out.init(a);
+        try writeReport(&o, report, true);
+        const json = try o.finish();
+        const tree = (try std.json.parseFromSlice(Json, a, json, .{ .parse_numbers = false })).value;
+        var w = rp.Writer.init(a);
+        try binReport(&w, s, report, true);
+        try @import("envelope_vectors_test.zig").checkReport(a, w.out.items, tree);
+    }
 }

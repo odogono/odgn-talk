@@ -105,6 +105,20 @@ pub fn check() !void {
     }
 }
 
+/// Checks one fields-layout Report, its tag then its record, against the
+/// JSON Report it should decode to.
+pub fn checkReport(a: Allocator, data: []const u8, expected: Json) !void {
+    var values: Values = .{ .a = a, .tokens = std.StringHashMap(usize).init(a) };
+    var r: rp.Reader = .{ .data = data };
+    const entry = try entryFor(env.reports, try r.byte());
+    try std.testing.expectEqualStrings(entry.name, get(expected, "kind").string);
+    var w = rp.Writer.init(a);
+    try w.byte(entry.tag);
+    try record(a, &values, &w, &r, entry.fields, expected);
+    try std.testing.expect(r.done());
+    try std.testing.expectEqualSlices(u8, data, w.out.items);
+}
+
 fn record(a: Allocator, values: *Values, w: *rp.Writer, r: *rp.Reader, fields: []const env.Field, expected: Json) anyerror!void {
     try std.testing.expectEqual(rp.tag.list, try r.byte());
     try std.testing.expectEqual(fields.len, try r.uint());
