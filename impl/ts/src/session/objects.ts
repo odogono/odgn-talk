@@ -8,8 +8,9 @@ import {
 } from '../objects';
 import { HostError, ScriptError } from '../errors';
 import {
-  sessionReply,
-  observeValues,
+  type RunEvent,
+  type SessionControls,
+  type SessionPort,
   type TsGroup,
   type Report,
   type Message,
@@ -487,9 +488,13 @@ export const decodeShape = (raw: unknown): Shape => {
   return { k: 'map', fields, open: obj.open === true };
 };
 
+/** A Session port that keeps the controls its Group connects. */
+export type GroupPort = SessionPort & { controls: SessionControls | null };
+
 /** Host adapters use this context for object registration and external actions. */
 export class SessionObjects {
   private group!: TsGroup;
+  private reply!: SessionControls['reply'];
   readonly items: TranscriptItem[] = [];
   private kinds = new Map<string, ObjectKind>();
   private declarations = new Map<string, string>();
@@ -527,9 +532,25 @@ export class SessionObjects {
           }))
       : null;
   }
-  attach(group: TsGroup) {
-    group[observeValues](tree => this.expose(tree));
+  /**
+   * A port to build or restore the next Group with. Its controls only count
+   * once `attach` adopts the Group, since a restore can still fail after the
+   * Core connects it.
+   */
+  port(runs?: (e: RunEvent) => void): GroupPort {
+    const port: GroupPort = {
+      controls: null,
+      connect: c => {
+        port.controls = c;
+      },
+      runs: e => runs?.(e),
+      values: tree => this.expose(tree),
+    };
+    return port;
+  }
+  attach(group: TsGroup, port: GroupPort) {
     this.group = group;
+    this.reply = port.controls!.reply;
     for (const [key, o] of this.objects) {
       const restored = group.objectById(o.kind.name, o.id);
       if (restored) {
@@ -1359,7 +1380,7 @@ export class SessionObjects {
           script().revoke(string(request.grant));
           break;
         case 'answer':
-          this.group[sessionReply](string(request.call), {
+          this.reply(string(request.call), {
             k: 'answer',
             value: val('value'),
             fuel: Number(request.fuel ?? 0),
@@ -1367,7 +1388,7 @@ export class SessionObjects {
           break;
         case 'fail': {
           const f = exact(request.error, ['code', 'message', 'data']);
-          this.group[sessionReply](string(request.call), {
+          this.reply(string(request.call), {
             k: 'fail',
             error: new ScriptError(
               string(f.code),

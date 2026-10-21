@@ -12,7 +12,7 @@ import { encodeValue } from '../encoding';
 import { HostError, ScriptError } from '../errors';
 import type { Group } from '../embedding';
 import type {
-  RestoreOptions,
+  TsRestoreOptions,
   TsGroup,
   RestoreResult,
   SaveOptions,
@@ -60,7 +60,7 @@ export type NotificationRouter = {
   restore(
     core: Pick<TsCore, 'restore'>,
     checkpoint: Uint8Array,
-    o: RestoreOptions,
+    o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult; routing: RoutingResult };
   /** A checkpoint; throws effects pending as Group.save does. */
   save(group: TsGroup, options?: SaveOptions): Uint8Array;

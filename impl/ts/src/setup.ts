@@ -15,8 +15,9 @@ import {
   newGroup,
   restore,
   type TsGroup,
-  type GroupOptions,
-  type RestoreOptions,
+  type SessionPort,
+  type TsGroupOptions,
+  type TsRestoreOptions,
   type RestoreResult,
   type TsScript,
 } from './group';
@@ -164,12 +165,12 @@ export const operationDeclarations = (
 export type CaseCore = {
   compileLibrary: typeof compileLibrary;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
-  newGroup(o: GroupOptions): TsGroup;
+  newGroup(o: TsGroupOptions): TsGroup;
   /** The Host's Libraries after a replacement, its dependents recompiled. */
   replacementLibraries: typeof replacementLibraries;
   restore(
     bytes: Uint8Array,
-    o: RestoreOptions,
+    o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult };
 };
 export const tsCore: CaseCore = {
@@ -319,6 +320,7 @@ export const buildSetupGroup = (
     name: string;
     readSource?(file: string): string;
     resolveObject?(kind: string, id: string): HostObject | undefined;
+    session?: SessionPort;
     trace?(line: string): void;
     // Replay's Coordinator adapter associates a name while making a Grant.
     withCoordinator?<T>(name: string | undefined, make: () => T): T;
@@ -327,6 +329,7 @@ export const buildSetupGroup = (
   const core = options.core ?? tsCore;
   const group = core.newGroup({
     name: options.name,
+    session: options.session,
     trace: options.trace,
     ...(setup.seed === undefined ? {} : { seed: BigInt(setup.seed) }),
   });
