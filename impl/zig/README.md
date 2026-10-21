@@ -817,6 +817,16 @@ refusal happened. A test refuses at every allocation of a run of Scripts with
 sends, Joins, `wait for`, errors and `finally`, and checks that nothing is
 left.
 
+The Core's own allocator is `smp_allocator` natively. On `wasm32` it is
+[a heap for large blocks](src/process_allocator.zig) over `wasm_allocator`,
+which keeps the latter's size classes for blocks up to half a 64 KiB page
+(#1447). A larger block takes exactly the pages it needs. Freed runs merge
+with free neighbours and serve any later block that fits, and a block grows
+in place into a free run after it or at the top of memory. `wasm_allocator`
+alone rounds large blocks up to a power of two of pages and reuses a freed
+run only at the same size. With it, a Load of 100,000 empty Handlers took
+104 times its source in linear memory, against 76 times now.
+
 A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
 `clause` rate at each clause's first instruction. A Command Call to a Handler

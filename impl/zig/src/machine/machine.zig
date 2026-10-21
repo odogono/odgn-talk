@@ -996,7 +996,7 @@ fn importedDefinition(imports: []const *Library, d: []const u8) !?*Value {
 
 /// The process's allocator for the stdlib Libraries, which live as long as
 /// the process.
-const process_allocator = if (@import("builtin").target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
+const process_allocator = @import("../process_allocator.zig").allocator;
 var stdlib_compiled: [stdlib_sources.len]?*Library = @splat(null);
 
 /// A stdlib Library, compiled the first time a unit imports it.
