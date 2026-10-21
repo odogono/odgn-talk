@@ -45,10 +45,10 @@ func TestLoadSourceAllocation(t *testing.T) {
 			// and line index count too (#1403). The guest's memory, bounded by
 			// guestMultiplier, sets the total: the adapter doubles its buffer
 			// past the reserve (memory.go), so the total moves only at
-			// powers of two, and 100,000 Handlers sit just past one (#1447).
+			// powers of two (#1447).
 			size, multiplier, guestMultiplier := 1<<20, uint64(20), uint64(10)
 			if kind == "handlers" {
-				size, multiplier, guestMultiplier = 100000, 320, 85
+				size, multiplier, guestMultiplier = 100000, 160, 60
 			}
 			source := hostileSource(kind, size)
 			g := New().NewGroup(GroupOptions{})

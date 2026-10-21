@@ -1,4 +1,4 @@
-//! A Load's memory relative to its source (#1403, #1411).
+//! A Load's memory relative to its source (#1403, #1411, #1447).
 const std = @import("std");
 const machine = @import("machine.zig");
 
@@ -40,7 +40,7 @@ const Peak = struct {
     }
 };
 
-test "a Load of many empty Handlers peaks under 100 times its source (#1411)" {
+test "a Load of many empty Handlers peaks under 80 times its source (#1411, #1447)" {
     const gpa = std.testing.allocator;
     var source: std.ArrayList(u8) = .empty;
     defer source.deinit(gpa);
@@ -52,7 +52,9 @@ test "a Load of many empty Handlers peaks under 100 times its source (#1411)" {
     const peak = counted.peak / source.items.len;
     const kept = counted.live / source.items.len;
     // Before #1411 a Load peaked at about 181 times its source, and kept 33.
-    std.testing.expect(peak < 100 and kept < 31) catch |e| {
+    // Before #1447 it peaked at 85, holding every body's working code until
+    // the lowering laid them all out.
+    std.testing.expect(peak < 80 and kept < 31) catch |e| {
         std.debug.print("peak {d}x, kept {d}x\n", .{ peak, kept });
         return e;
     };

@@ -178,10 +178,10 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
     // The pool's values outlive the arena, so a refusal releases them.
     errdefer if (options.values != null) for (l.values.items) |c| if (c == .value) c.value.release();
     defer {
-        for (l.made.items) |b| {
+        for (l.made.items) |maybe| if (maybe) |b| {
             l.releaseBody(b);
             l.work().destroy(b);
-        }
+        };
         l.made.deinit(l.work());
     }
     try l.run();
@@ -194,6 +194,8 @@ const Import = struct { library: []const u8, name: []const u8, kind: @FieldType(
 
 const BodyCode = struct {
     info: Body,
+    /// Its entry in `Lowerer.made`.
+    made: usize,
     code: std.ArrayList(Instruction),
     labels: std.ArrayList(?u32),
     unwind: std.ArrayList(Unwind),
@@ -223,9 +225,16 @@ const Lowerer = struct {
     clauses: std.StringHashMapUnmanaged(u32) = .empty,
     declaration_bodies: []?*const check.Body,
     lambda_bodies: std.AutoHashMapUnmanaged(*const Expr, *const check.Body) = .empty,
-    /// Every body's working code, from `work`, released once `finish`
-    /// has copied it into the unit, or when the lowering is refused.
-    made: std.ArrayList(*BodyCode) = .empty,
+    /// Every body's working code, from `work`, released once `place` has
+    /// laid it out, or when the lowering is refused.
+    made: std.ArrayList(?*BodyCode) = .empty,
+    /// The unit's code so far: bodies before `laid` are laid out, and
+    /// their working code is gone.
+    laid: usize = 0,
+    code: std.ArrayList(Instruction) = .empty,
+    laid_bodies: std.ArrayList(Body) = .empty,
+    unwind: std.ArrayList(Unwind) = .empty,
+    offers: std.ArrayList(OfferRecord) = .empty,
 
     /// Where bodies' working code lives: the caller's scratch, so it
     /// doesn't stay in the arena beside the unit (#1411).
@@ -337,7 +346,7 @@ const Lowerer = struct {
     fn newBody(l: *Lowerer, info: Body) Allocator.Error!*BodyCode {
         try l.made.ensureUnusedCapacity(l.work(), 1);
         const b = try l.work().create(BodyCode);
-        b.* = .{ .info = info, .code = .empty, .labels = .empty, .unwind = .empty, .offers = .empty };
+        b.* = .{ .info = info, .made = l.made.items.len, .code = .empty, .labels = .empty, .unwind = .empty, .offers = .empty };
         l.made.appendAssumeCapacity(b);
         return b;
     }
@@ -412,11 +421,11 @@ const Lowerer = struct {
         var next: u32 = 1;
         for (decls, 0..) |*d, i| switch (d.data) {
             .function => |*f| {
-                l.bodies.items[next] = try l.function(f, @intCast(i));
+                try l.place(next, try l.function(f, @intCast(i)));
                 next += 1;
             },
             .handler => |*h| {
-                l.bodies.items[next] = try l.handlerClause(h, @intCast(i));
+                try l.place(next, try l.handlerClause(h, @intCast(i)));
                 next += 1;
             },
             else => {},
@@ -453,7 +462,7 @@ const Lowerer = struct {
             };
         };
         try f.endAt(.{ .line = 1, .column = 1 });
-        l.bodies.items[0] = try f.done(&.{});
+        try l.place(0, try f.done(&.{}));
     }
 
     fn variableIndex(l: *Lowerer, name: []const u8) i64 {
@@ -554,68 +563,68 @@ const Lowerer = struct {
         return out.items;
     }
 
-    /// Lays out the bodies' code in body order, resolving labels.
-    fn finish(l: *Lowerer) Allocator.Error!Unit {
-        var instructions: usize = 0;
-        var unwinds: usize = 0;
-        var records: usize = 0;
-        for (l.bodies.items) |maybe| {
-            const b = maybe.?;
-            instructions += b.code.items.len;
-            unwinds += b.unwind.items.len;
-            records += b.offers.items.len;
-        }
-        var code: std.ArrayList(Instruction) = .empty;
-        var bodies: std.ArrayList(Body) = .empty;
-        var unwind: std.ArrayList(Unwind) = .empty;
-        var offers: std.ArrayList(OfferRecord) = .empty;
-        // The sizes are known now. Growing these buffers in an arena would
-        // retain each superseded allocation alongside the bodies' buffers.
-        try code.ensureTotalCapacityPrecise(l.a, instructions);
-        try bodies.ensureTotalCapacityPrecise(l.a, l.bodies.items.len);
-        try unwind.ensureTotalCapacityPrecise(l.a, unwinds);
-        try offers.ensureTotalCapacityPrecise(l.a, records);
-        for (l.bodies.items, 0..) |maybe, body_index| {
-            const b = maybe.?;
-            const base: u32 = @intCast(code.items.len);
-            for (b.code.items) |ins| {
-                var copy = ins;
-                const ops = try l.a.dupe(Operand, ins.operands);
-                for (ops) |*o| if (o.* == .label) {
-                    const target = base + b.labels.items[o.label].?;
-                    o.* = .{ .int = target };
-                };
-                copy.operands = ops;
-                try code.append(l.a, copy);
-            }
-            var info = b.info;
-            info.first = base;
-            info.last = @intCast(code.items.len - 1);
-            for (b.code.items) |ins| {
-                if (machine.instruction[@backingInt(ins.op)].suspends) info.may_suspend = true;
-            }
-            try bodies.append(l.a, info);
-            for (b.unwind.items) |u| {
-                var e = u;
-                e.first += base;
-                e.last += base;
-                if (e.kind != .offer) e.target += base;
-                try unwind.append(l.a, e);
-            }
-            for (b.offers.items) |o| {
-                var r = o;
-                r.body = @intCast(body_index);
-                r.end += base;
-                const entries = try l.a.dupe(Offer, o.offers);
-                for (entries) |*e| e.entry += base;
-                r.offers = entries;
-                try offers.append(l.a, r);
-            }
+    /// Fills body `index`, then lays out every body ready in order: a
+    /// body's labels are its own, so it is laid out once the bodies before
+    /// it are. Lambdas and event tests are numbered after every declared
+    /// body, so only theirs wait for the end. Laying out as it goes keeps
+    /// one body's working code at a time rather than the whole Script's
+    /// (#1447).
+    fn place(l: *Lowerer, index: u32, body: *BodyCode) Allocator.Error!void {
+        l.bodies.items[index] = body;
+        while (l.laid < l.bodies.items.len) : (l.laid += 1) {
+            const b = l.bodies.items[l.laid] orelse return;
+            try l.layOut(b, @intCast(l.laid));
+            l.made.items[b.made] = null;
             l.releaseBody(b);
+            l.work().destroy(b);
+            l.bodies.items[l.laid] = null;
         }
+    }
+
+    /// Appends a body's code to the unit's, resolving its labels.
+    fn layOut(l: *Lowerer, b: *BodyCode, body_index: u32) Allocator.Error!void {
+        const base: u32 = @intCast(l.code.items.len);
+        try l.code.ensureUnusedCapacity(l.a, b.code.items.len);
+        for (b.code.items) |ins| {
+            var copy = ins;
+            const ops = try l.a.dupe(Operand, ins.operands);
+            for (ops) |*o| if (o.* == .label) {
+                const target = base + b.labels.items[o.label].?;
+                o.* = .{ .int = target };
+            };
+            copy.operands = ops;
+            l.code.appendAssumeCapacity(copy);
+        }
+        var info = b.info;
+        info.first = base;
+        info.last = @intCast(l.code.items.len - 1);
+        for (b.code.items) |ins| {
+            if (machine.instruction[@backingInt(ins.op)].suspends) info.may_suspend = true;
+        }
+        try l.laid_bodies.append(l.a, info);
+        for (b.unwind.items) |u| {
+            var e = u;
+            e.first += base;
+            e.last += base;
+            if (e.kind != .offer) e.target += base;
+            try l.unwind.append(l.a, e);
+        }
+        for (b.offers.items) |o| {
+            var r = o;
+            r.body = body_index;
+            r.end += base;
+            const entries = try l.a.dupe(Offer, o.offers);
+            for (entries) |*e| e.entry += base;
+            r.offers = entries;
+            try l.offers.append(l.a, r);
+        }
+    }
+
+    fn finish(l: *Lowerer) Allocator.Error!Unit {
+        std.debug.assert(l.laid == l.bodies.items.len);
         // Offer entries name records by their index in the unit.
         var seen: u32 = 0;
-        for (unwind.items) |*u| if (u.kind == .offer) {
+        for (l.unwind.items) |*u| if (u.kind == .offer) {
             u.target = seen;
             seen += 1;
         };
@@ -627,10 +636,10 @@ const Lowerer = struct {
             .definitions = l.definitions.items,
             .variables = l.variables.items,
             .objects = l.objects.items,
-            .bodies = bodies.items,
-            .code = code.items,
-            .unwind = unwind.items,
-            .offers = offers.items,
+            .bodies = l.laid_bodies.items,
+            .code = l.code.items,
+            .unwind = l.unwind.items,
+            .offers = l.offers.items,
             .events = l.events.items,
         };
     }
@@ -1521,7 +1530,7 @@ const Frame = struct {
         try e.mark(fail);
         try e.emit(.clause_fail, &.{}, at, "");
         if (entry) |g| e.body.unwind.items[g].target = e.labelPc(fail);
-        l.bodies.items[body_index] = try e.done(params);
+        try l.place(body_index, try e.done(params));
         return .{ .when = .{ .message = message, .from = ev.from != null, .body = body_index, .captures = @intCast(captured.items.len), .binds = binds.items } };
     }
 
@@ -2661,7 +2670,7 @@ const Frame = struct {
             try inner.mark(fail);
             try inner.raise("no match", lam.given);
         }
-        l.bodies.items[index] = try inner.done(params);
+        try l.place(index, try inner.done(params));
         // Its captures, loaded where it is made.
         for (cb.captures) |c| {
             if (f.pendingTemp(c)) |tmp| try f.load(tmp, lam.given) else try f.load(f.names.get(c).?, lam.given);
