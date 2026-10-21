@@ -22,7 +22,13 @@ List files with `rg --files tooling/creative` before opening one by name.
 - Unit tests: `bun test tooling/editor/tests tooling/creative/tests`. They
   never run `*.browser.ts`.
 - Typecheck: `bun run --cwd tooling/creative typecheck`.
-- Browser suites: with the server running, `bun run --cwd tooling/creative build:browser-tests`
+- Browser suites, automated: `bun run --cwd tooling/creative test:browser`
+  ([browser-tests.ts](tools/browser-tests.ts)) builds every suite, serves
+  `dist/` and runs each `run*BrowserTests` export headless in its own fresh
+  Chromium context, so the service-worker trap below cannot happen.
+  `--suite play,tetris` runs a subset, `--headed` shows the browser. Once per
+  machine: `bunx playwright install chromium-headless-shell`.
+- Browser suites by hand: with the server running, `bun run --cwd tooling/creative build:browser-tests`
   ([build-browser-tests.ts](tools/build-browser-tests.ts)) rebuilds the app
   and every suite, and prints where each one runs: `/<suite>-test.html` (a
   page without `main.js`; the suite mounts the UI itself), or `/` for

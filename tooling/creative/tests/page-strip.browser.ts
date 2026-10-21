@@ -143,7 +143,9 @@ export const runBrowserTests = async () => {
     after.forEach((button, i) => {
       assert(button.dataset.page === String(i), 'Updated data-page');
       assert(
-        button.querySelector('span')!.textContent!.startsWith(`${i + 1}. `),
+        button
+          .querySelector(':scope > span')!
+          .textContent!.startsWith(`${i + 1}. `),
         'Updated Page number',
       );
     });

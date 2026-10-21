@@ -51,6 +51,9 @@
         "@preact/signals-core": "^1.14.4",
         "preact": "^11.0.1",
       },
+      "devDependencies": {
+        "playwright": "^1.64.1",
+      },
     },
     "tooling/editor": {
       "name": "@northtalk/editor",

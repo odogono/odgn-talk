@@ -30,6 +30,17 @@ jobs:
       - run: bun run build
         working-directory: impl/ts
 
+  # Every Folio browser suite, headless, each run in a fresh browser context.
+  folio-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - run: bunx playwright install --with-deps chromium-headless-shell
+        working-directory: tooling/creative
+      - run: bun run test:browser
+        working-directory: tooling/creative
+
   # The packed tarball, installed outside the workspace as npm consumers get it:
   # under Node 22 and Bun, unbundled in Chromium, and against TypeScript 5.9 and
   # the latest TypeScript.
