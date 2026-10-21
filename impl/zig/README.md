@@ -1499,7 +1499,9 @@ turns, or at its end.
 `talk_script_rewind_run` is RewindRun (ADR 0068): a Run still in its first
 Segment, or parked at dispatch, ends as if it had never started. Its Segment
 rolls back as at a Limit Fault, its Script Variables too unless it was
-parked, its scopes are abandoned and its participant rolled back, and its
+parked or had been unparked but had not resumed its clause body. Changes
+committed by other Runs since dispatch stay committed. Its scopes are
+abandoned and its participant rolled back, and its
 message goes back to the head of its Script's mailbox as it left it, its ids,
 its place on its Message Path and an open Decision kept. Its Fuel stays in
 its Script's counters. The Pump it lands in returns `rewound`, so the Host can Reload before the

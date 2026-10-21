@@ -3071,7 +3071,10 @@ pub const Group = struct {
             // Its rollback first, which may defer while draining.
             try g.cleanupLifecycle(r, .rewound);
             // Preempted or parked: it has no Stretch to end.
-            if (r.state != .parked) g.restoreBase(r);
+            // Before an unparked Run resumes, its dispatch-time base may
+            // predate other Runs' commits and it has no changes to undo.
+            const unparked = r.resume_with != null and r.resume_with.? == .unparked;
+            if (r.state != .parked and !unparked) g.restoreBase(r);
             try g.putBack(s, r);
             try g.endRun(r, .rewound);
             return;
