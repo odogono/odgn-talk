@@ -626,6 +626,16 @@ var Costs = CostsTable{
 			Alloc: "size(result)",
 		},
 		CostsTableRateEntry{
+			Key:   "builtin.degrees",
+			Fuel:  "60",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.radians",
+			Fuel:  "60",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
 			Key:   "builtin.random",
 			Fuel:  "4",
 			Alloc: "size(result)",

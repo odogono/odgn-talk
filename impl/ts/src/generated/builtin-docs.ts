@@ -136,6 +136,14 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
     "call": "atan2(y, x)",
     "gives": "The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi"
   },
+  "degrees": {
+    "call": "degrees(x)",
+    "gives": "`x` radians in degrees"
+  },
+  "radians": {
+    "call": "radians(x)",
+    "gives": "`x` degrees in radians"
+  },
   "random": {
     "call": "random(n)",
     "gives": "A whole number from 1 to `n`, the next from the Script Group's generator"

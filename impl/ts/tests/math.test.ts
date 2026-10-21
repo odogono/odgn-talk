@@ -107,6 +107,13 @@ describe('correctly rounded number functions', () => {
     ['atan2(-1, -0.5)', '-2.034443935795702735445577923100966'],
     ['atan2(0, -1)', '3.141592653589793238462643383279503'],
     ['atan2(-1, 0)', '-1.570796326794896619231321691639751'],
+    ['degrees(1)', '57.29577951308232087679815481410517'],
+    ['degrees(-0.5)', '-28.64788975654116043839907740705259'],
+    ['degrees(pi)', '180'],
+    ['radians(180)', '3.141592653589793238462643383279503'],
+    ['radians(-45)', '-0.7853981633974483096156608458198757'],
+    ['radians(1)', '0.01745329251994329576923690768488613'],
+    ['radians(0.000001)', '0.00000001745329251994329576923690768488613'],
   ])('%s', (call, expected) => {
     expect(value(call)).toBe(expected);
   });
@@ -174,6 +181,13 @@ describe('correctly rounded number functions', () => {
     expect(value('atan2(0, 0)')).toBe(
       'error code: "out of domain", function: "atan2", value: 0',
     );
+    expect(value('degrees(9000000000000000000000000000000000)')).toBe(
+      'error code: "overflow", operator: "degrees"',
+    );
+    expect(value('[degrees(0), radians(0), radians(180) = pi]')).toBe(
+      '[0, 0, true]',
+    );
+    expect(value('radians(90 kg)')).toContain('"wrong kind"');
     expect(value('power(0, -0.5)')).toBe('error code: "division by zero"');
     expect(value('power(0, -1)')).toBe('error code: "division by zero"');
     expect(value('power(0, 0.5)')).toBe('0');

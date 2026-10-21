@@ -1008,6 +1008,24 @@ export const builtins = [
     }
   },
   {
+    "name": "degrees",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1,
+      "variadic": false
+    }
+  },
+  {
+    "name": "radians",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1,
+      "variadic": false
+    }
+  },
+  {
     "name": "random",
     "kind": "function",
     "contract": {

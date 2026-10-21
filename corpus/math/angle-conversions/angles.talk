@@ -1,0 +1,17 @@
+-- angles.talk: the angle-conversions case.
+
+script variable toDegrees
+script variable toRadians
+script variable exact
+script variable failure
+
+on go
+  put [degrees(1), degrees(-0.5), degrees(pi), degrees(0)] into toDegrees
+  put [radians(180), radians(-45), radians(1), radians(0.000001)] into toRadians
+  put [radians(180) = pi, degrees(radians(90))] into exact
+  try
+    put degrees(9000000000000000000000000000000000) into failure
+  catch e
+    put e's code into failure
+  end try
+end go

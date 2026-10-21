@@ -1,0 +1,14 @@
+# Unblessed: degrees and radians conversions (#1450); first blessing awaits human review.
+# angle-conversions: each conversion is correctly rounded, `radians(180)` is
+# pi and `degrees(pi)` is 180, and `degrees` raises overflow at 10^34.
+
+> load angles identity=b2a0de269adfc91f76b7c5b3b0f0bc5ffd2152a2932d0c08b5b6f2dde9246b0a
+> deliver d1 to=angles message=go
+> pump clock=2026-10-21T09:00:00Z
+raise angles/r1 code="overflow" at=angles:34 pos=13:9
+seg angles/r1 start delivery=d1 handler=go clause=1 fuel=782 alloc=488 state=304 end=return
+run angles/r1 outcome=completed delivery=d1 handler=go fuel=782 alloc=488
+pumped state=idle fuel=782
+
+> vars
+vars angles toDegrees=[57.29577951308232087679815481410517, -28.64788975654116043839907740705259, 180, 0] toRadians=[3.141592653589793238462643383279503, -0.7853981633974483096156608458198757, 0.01745329251994329576923690768488613, 0.00000001745329251994329576923690768488613] exact=[true, 89.99999999999999999999999999999997] failure="overflow"

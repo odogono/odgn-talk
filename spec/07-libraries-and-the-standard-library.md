@@ -321,6 +321,8 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 | `acos(x)` | The arccosine of `x`, in radians from 0 to pi | `out of domain` |
 | `atan(x)` | The arctangent of `x`, in radians between -pi/2 and pi/2 |  |
 | `atan2(y, x)` | The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi | `out of domain` |
+| `degrees(x)` | `x` radians in degrees | `overflow` |
+| `radians(x)` | `x` degrees in radians |  |
 | `random(n)` | A whole number from 1 to `n`, the next from the Script Group's generator | `out of domain` |
 
 <!-- end -->
@@ -331,10 +333,10 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
   - `places` is an integer, 0 or more, and the result has exactly that many digits after the point, so `round(3, 2)` is `3.00`.
   - `mode` is one of `"half up"`, `"half even"`, `"up"`, `"down"`, `"floor"` and `"ceiling"`, and any other text raises `out of domain`. The names are those of the General Decimal Arithmetic: `"half up"` rounds a tie away from zero, `"up"` rounds away from zero and `"down"` toward it.
   - So by default `round(2.5)` is `3` and `round(-2.5)` is `-3`, while `round(2.5, 0, "half even")` is `2`.
-- **Correctly rounded:** `sqrt`, `exp`, `ln`, `log10`, `power` and the trigonometric functions give the exact mathematical value rounded half-even to 34 significant digits, or at exponent −6176 if that keeps fewer digits, then with any trailing zeros after the point dropped ([chapter 3](03-values.md#arithmetic)). So both Cores agree by definition, and `sqrt(4)` is `2` and `exp(0)` is `1`. The one exception is `power(x, y)` for an integer `y`, which is `x ^ y`, so `power(2.50, 2)` is `6.2500`.
+- **Correctly rounded:** `sqrt`, `exp`, `ln`, `log10`, `power`, the trigonometric functions, `degrees` and `radians` give the exact mathematical value rounded half-even to 34 significant digits, or at exponent −6176 if that keeps fewer digits, then with any trailing zeros after the point dropped ([chapter 3](03-values.md#arithmetic)). So both Cores agree by definition, and `sqrt(4)` is `2` and `exp(0)` is `1`. The one exception is `power(x, y)` for an integer `y`, which is `x ^ y`, so `power(2.50, 2)` is `6.2500`.
 - **Domains:** `sqrt` of a negative number, `ln` or `log10` of a number at or below 0, `asin` or `acos` outside -1 to 1, `atan2(0, 0)`, and `power` of a negative number to a non-integer raise `out of domain`, with `value` the argument, which is `x` for `power` and `0` for `atan2`. `power(0, y)` for a negative `y` raises `division by zero`, and `power(0, 0)` is `1`.
 - **Overflow:** a result of 10^34 or more in magnitude raises `overflow`, with `operator` the function's name, as in `exp(100)` or `round(x, places)` when `x` has too many integer digits to keep `places` digits after the point. A result too small to keep rounds, and never raises.
-- **Angles** are in radians.
+- **Angles** are in radians, Talk's one angle unit, in the Built-ins and in Host Operations alike. `degrees(x)` is `x` × 180/π and `radians(x)` is `x` × π/180, each correctly rounded, so `radians(180)` is `pi` and `degrees(pi)` is `180`.
 
 ### Random numbers
 
