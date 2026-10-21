@@ -611,19 +611,38 @@ const usedOperations = (tree: SemanticTree, imports: readonly Library[]) => {
 const availableGrants = (s: ScriptState) =>
   new Map([...s.grants].filter(([name]) => !s.revoked.has(name)));
 
+/**
+ * What a Script handle reaches its Group through: the Group's Script-only
+ * operations, which aren't on the Group itself.
+ */
+type ScriptChannel = {
+  combine: TsGroup['combine'];
+  counters: TsGroup['scriptCounters'];
+  extend: TsGroup['extend'];
+  grants: TsGroup['scriptGrants'];
+  queueCancelRun: TsGroup['queueCancelRun'];
+  queueDecision: TsGroup['queueDecision'];
+  queueDelivery: TsGroup['queueDelivery'];
+  queueRevoke: TsGroup['queueRevoke'];
+  queueRewindRun: TsGroup['queueRewindRun'];
+  queueStop: TsGroup['queueStop'];
+  reload: TsGroup['reload'];
+  watchCancellation: TsGroup['watchCancellation'];
+};
+
 /** A handle for calls addressed to one Script. */
 export class TsScript implements Script {
   constructor(
-    private readonly group: TsGroup,
+    private readonly group: ScriptChannel,
     readonly name: string,
   ) {}
   /** Worker. A snapshot of kept Operations, including revoked Grants. */
   grants(): Record<string, string[]> {
-    return this.group.scriptGrants(this.name);
+    return this.group.grants(this.name);
   }
   /** Worker. Lifetime totals and current state, without draining inputs. */
   counters(): Counters {
-    return this.group.scriptCounters(this.name);
+    return this.group.counters(this.name);
   }
   /** Queued. Returns the delivery id. */
   deliver(m: Message): string {
@@ -685,6 +704,21 @@ export class TsScript implements Script {
 
 export class TsGroup implements Group {
   private session: SessionPort | null = null;
+  private readonly channel: ScriptChannel = {
+    combine: (admit, now, o) => this.combine(admit, now, o),
+    counters: name => this.scriptCounters(name),
+    extend: (name, source) => this.extend(name, source),
+    grants: name => this.scriptGrants(name),
+    queueCancelRun: (name, id) => this.queueCancelRun(name, id),
+    queueDecision: (name, m, o) => this.queueDecision(name, m, o),
+    queueDelivery: (...a) => this.queueDelivery(...a),
+    queueRevoke: (name, grant) => this.queueRevoke(name, grant),
+    queueRewindRun: (name, id) => this.queueRewindRun(name, id),
+    queueStop: (name, reason) => this.queueStop(name, reason),
+    reload: (...a) => this.reload(...a),
+    watchCancellation: (delivery, signal) =>
+      this.watchCancellation(delivery, signal),
+  };
   readonly name: string;
   private readonly trace: ((line: string) => void) | undefined;
   private readonly onReady: (() => void) | undefined;
@@ -722,7 +756,7 @@ export class TsGroup implements Group {
    * The next `random(n)` draw from the Group's generator; `commit` advances
    * the generator past it (chapter 7, Random numbers).
    */
-  drawRandom(n: bigint): { commit(): void; value: bigint } {
+  private drawRandom(n: bigint): { commit(): void; value: bigint } {
     const next = nextRandom(this.randomState, n);
     return {
       value: next.value,
@@ -1647,7 +1681,7 @@ export class TsGroup implements Group {
   }
 
   /** A Request's signal lives until its Run ends; a Decision's until its seal. */
-  watchCancellation(delivery: Delivery, signal?: AbortSignal) {
+  private watchCancellation(delivery: Delivery, signal?: AbortSignal) {
     if (!signal) {
       return;
     }
@@ -1716,7 +1750,7 @@ export class TsGroup implements Group {
     }
   }
 
-  queueCancelRun(name: string, id: string): void {
+  private queueCancelRun(name: string, id: string): void {
     this.queueInput({
       urgent: true,
       line: recordLine('cancel-run', [id], [], true),
@@ -1724,7 +1758,7 @@ export class TsGroup implements Group {
     });
   }
 
-  queueRewindRun(name: string, id: string): void {
+  private queueRewindRun(name: string, id: string): void {
     this.queueInput({
       urgent: true,
       line: recordLine('rewind-run', [id], [], true),
@@ -1732,7 +1766,7 @@ export class TsGroup implements Group {
     });
   }
 
-  queueStop(name: string, reason: string): void {
+  private queueStop(name: string, reason: string): void {
     reason = text(reason).asText()!;
     this.queueInput({
       urgent: true,
@@ -1746,7 +1780,7 @@ export class TsGroup implements Group {
     });
   }
 
-  queueRevoke(name: string, grant: string): void {
+  private queueRevoke(name: string, grant: string): void {
     this.queueInput({
       line: recordLine('revoke', [name], [['grant', grant]], true),
       action: { k: 'revoke', name, grant },
@@ -2259,7 +2293,7 @@ export class TsGroup implements Group {
     s.allocTotal += run.alloc;
   }
 
-  scriptCounters(name: string): Counters {
+  private scriptCounters(name: string): Counters {
     this.worker();
     const s = this.scripts.find(s => s.name === name)!;
     const counters = {
@@ -2292,7 +2326,7 @@ export class TsGroup implements Group {
     return counters;
   }
 
-  scriptGrants(name: string): Record<string, string[]> {
+  private scriptGrants(name: string): Record<string, string[]> {
     this.worker();
     return Object.fromEntries(
       [...this.scripts.find(s => s.name === name)!.grants]
@@ -2344,7 +2378,7 @@ export class TsGroup implements Group {
         return used && bound.ops.size === 0 ? [] : [[name, bound] as const];
       }),
     );
-    const handle = new TsScript(this, o.name);
+    const handle = new TsScript(this.channel, o.name);
     if (owner) {
       owner.owner = o.name;
     }
@@ -2920,6 +2954,8 @@ export class TsGroup implements Group {
   private hostFor(s: ScriptState, run: Run): RunHost {
     const group = this;
     return {
+      drawRandom: n => this.drawRandom(n),
+      holdsObject: v => this.holdsObject(v),
       crossing: () => {
         const active = this.active!;
         this.writeRecords(active.running, active.records);
@@ -3266,7 +3302,7 @@ export class TsGroup implements Group {
   }
 
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
-  queueDelivery(
+  private queueDelivery(
     record: 'deliver' | 'request' | 'decide' | 'call-value',
     to: string | ObjectState,
     m: Message,
@@ -3360,7 +3396,7 @@ export class TsGroup implements Group {
     return this.queueDecision(this.held(to), m, o);
   }
 
-  queueDecision(
+  private queueDecision(
     to: string | ObjectState,
     m: Message,
     o?: CancellationOptions,
@@ -3638,8 +3674,11 @@ export class TsGroup implements Group {
     return this.combine(() => this.call(fn, args, o), now, o);
   }
 
-  /** @internal Shared with the Script target. */
-  combine(admit: () => Requested, now: bigint, o?: PumpOptions): PumpedRequest {
+  private combine(
+    admit: () => Requested,
+    now: bigint,
+    o?: PumpOptions,
+  ): PumpedRequest {
     let requested: Requested;
     try {
       this.worker();
@@ -3735,7 +3774,7 @@ export class TsGroup implements Group {
   }
 
   /** Whether an object value is one of this Group's handles. */
-  holdsObject(v: Value): boolean {
+  private holdsObject(v: Value): boolean {
     const state = stateOf(v);
     return (
       !!state &&

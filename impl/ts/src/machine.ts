@@ -796,6 +796,11 @@ export type RunHost = {
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
   disableGrant(name: string): void;
+  /**
+   * The next `random(n)` draw from the Group's generator; `commit` advances
+   * the generator past it (chapter 7, Random numbers).
+   */
+  drawRandom(n: bigint): { commit(): void; value: bigint };
   expose?(tree: unknown): void;
   /**
    * Queues its failure, as `fail`; null fails with what isn't a Script error,
@@ -803,7 +808,10 @@ export type RunHost = {
    */
   fail(id: string, error: HostScriptError | null, detail?: string): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
-  readonly group: import('./group').TsGroup;
+  /** The Group, as the Calls and Segment contexts the Run makes see it. */
+  readonly group: import('./embedding').Group;
+  /** Whether a Value refers only to objects of this Group. */
+  holdsObject(v: Value): boolean;
   isDisabled(name: string): boolean;
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
@@ -3192,7 +3200,7 @@ export class Run {
     if (member.disposed) {
       return 'its member is disposed';
     }
-    if (this.host && !this.host.group.holdsObject(result)) {
+    if (this.host && !this.host.holdsObject(result)) {
       return 'its member belongs to another Group';
     }
     return null;
@@ -5505,7 +5513,7 @@ export class Run {
         }
         if (a === 'random') {
           // The draw is kept only once its Fuel is paid.
-          const draw = this.host!.group.drawRandom(randomBound(args[0]!));
+          const draw = this.host!.drawRandom(randomBound(args[0]!));
           m.result = integerValue(draw.value);
           this.replace(n, rate);
           draw.commit();
