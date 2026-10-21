@@ -2,7 +2,7 @@ import { operationalResult } from './operational-reports';
 import { expect, test } from 'bun:test';
 import cases from '../../../tools/machine/recovery-cases.json';
 import nested from '../../../tools/machine/recovery-nested-cases.json';
-import { newGroup, restore, type Group, type PumpOptions } from '../src';
+import { newGroup, restore, type PumpOptions } from '../src';
 import { restoreGraph, type References } from '../src/snapshot';
 import { Run } from '../src/machine';
 import {
@@ -11,11 +11,27 @@ import {
   type PackedGraph,
 } from '../src/snapshot-codec';
 
-const state = (bytes: Uint8Array, g: Group) => {
+// Stands one placeholder in for each referenced object, so two saves of the
+// same Group decode to equal graphs.
+class Placeholders extends Map<string, object> {
+  constructor(private readonly refs: References) {
+    super();
+  }
+  override get(key: string) {
+    let value = super.get(key);
+    if (!value) {
+      value = Object.freeze({ reference: key });
+      this.set(key, value);
+      this.refs.byObject.set(value, key);
+    }
+    return value;
+  }
+}
+
+const state = (bytes: Uint8Array) => {
   const saved = JSON.parse(new TextDecoder().decode(bytes)).payload;
-  const refs = (
-    g as unknown as { snapshotReferences(): References }
-  ).snapshotReferences();
+  const refs: References = { byKey: new Map(), byObject: new Map() };
+  refs.byKey = new Placeholders(refs);
   const decoded = restoreGraph(unpackGraph(saved.graph), refs);
   const seen = new Set<object>();
   const work = [decoded];
@@ -81,7 +97,7 @@ for (const fixture of [...cases, ...nested]) {
         // Includes every local, activation/retained PC and stack, attempt,
         // Segment base, counters and debt, not just the public inspection.
         const saved = g.save();
-        expect(state(copy.save(), g)).toEqual(state(saved, g));
+        expect(state(copy.save())).toEqual(state(saved));
         copy = restore(saved, options(resumed)).group;
         if (a.state === 'idle') {
           return;
@@ -379,7 +395,7 @@ for (const phase of ['selection', 'offer', 'catch', 'nested'] as const) {
       expect(output(resumed)).toEqual(output(original));
       expect(copy.inspect()).toEqual(g.inspect());
       const bytes = g.save();
-      expect(state(copy.save(), g)).toEqual(state(bytes, g));
+      expect(state(copy.save())).toEqual(state(bytes));
       copy = restore(bytes, options(resumed)).group;
       if (a.state === 'idle') {
         return;
@@ -435,7 +451,7 @@ test('Library offers and same-Run callbacks save every boundary and keep attempt
         .map(l => l.split(' ').slice(1, 3).join(' ')),
     );
     const bytes = g.save();
-    expect(state(copy.save(), g)).toEqual(state(bytes, g));
+    expect(state(copy.save())).toEqual(state(bytes));
     copy = restore(bytes, settings).group;
     if (a.state === 'idle') {
       expect(choices).toEqual([
