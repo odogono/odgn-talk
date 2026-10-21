@@ -1168,6 +1168,8 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `acos` | `60` | `size(result)` |  |
 | `atan` | `60` | `size(result)` |  |
 | `atan2` | `60` | `size(result)` |  |
+| `degrees` | `60` | `size(result)` |  |
+| `radians` | `60` | `size(result)` |  |
 | `random` | `4` | `size(result)` |  |
 | `fromFloat64` | `8` | `size(result)` |  |
 | `fromFloat32` | `8` | `size(result)` |  |

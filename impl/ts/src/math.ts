@@ -441,6 +441,39 @@ export const acos = (x: Dec): Dec => {
   });
 };
 export const atan = (x: Dec): Dec => atan2(x, ONE);
+// n × 10^k, toward zero.
+const shift = (n: bigint, k: number) => (k >= 0 ? n * ten(k) : n / ten(-k));
+/** x radians in degrees, x × 180/π. */
+export const degrees = (x: Dec): Dec => {
+  if (x.coefficient === 0n) {
+    return ZERO;
+  }
+  return settle(p => {
+    const q = p + 10 + below(magnitude(x) + 2);
+    // π to enough digits that its error moves the result by under one unit.
+    const g = Math.max(10, q + magnitude(x) + 5);
+    return {
+      v: shift(signedOf(x) * 180n, x.exponent + q + g) / pi(g),
+      scale: q,
+      err: ERR,
+    };
+  });
+};
+/** x degrees in radians, x × π/180. */
+export const radians = (x: Dec): Dec => {
+  if (x.coefficient === 0n) {
+    return ZERO;
+  }
+  return settle(p => {
+    const q = p + 10 + below(magnitude(x) - 2);
+    const g = Math.max(10, q + magnitude(x) + 5);
+    return {
+      v: shift(signedOf(x) * pi(g), x.exponent + q - g) / 180n,
+      scale: q,
+      err: ERR,
+    };
+  });
+};
 /** The angle of (x, y), for x and y not both 0. */
 export const atan2 = (y: Dec, x: Dec): Dec => {
   if (y.coefficient === 0n && !x.negative) {

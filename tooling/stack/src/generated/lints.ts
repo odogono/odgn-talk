@@ -411,6 +411,14 @@ export const builtins = [
     "kind": "function"
   },
   {
+    "name": "degrees",
+    "kind": "function"
+  },
+  {
+    "name": "radians",
+    "kind": "function"
+  },
+  {
     "name": "random",
     "kind": "function"
   },

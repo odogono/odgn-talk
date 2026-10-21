@@ -159,6 +159,10 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Char
   (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
   // builtin.atan2
   (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  // builtin.degrees
+  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  // builtin.radians
+  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
   // builtin.random
   (m) => ({ fuel: 4, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
   // builtin.fromFloat64

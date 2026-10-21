@@ -1,5 +1,5 @@
 //! The correctly rounded Built-ins of chapter 7 (Numbers): `exp`, `ln`,
-//! `log10` and the trigonometric functions, each the exact value rounded
+//! `log10`, the trigonometric functions, `degrees` and `radians`, each the exact value rounded
 //! half-even to 34 significant digits with trailing zeros after the point
 //! dropped. `sqrt` and `power` are `decimal.power`'s.
 //!
@@ -19,7 +19,7 @@ const Decimal = decimal.Decimal;
 
 pub const Error = decimal.Error;
 
-pub const Function = enum { exp, ln, log10, sin, cos, tan, asin, acos, atan };
+pub const Function = enum { exp, ln, log10, sin, cos, tan, asin, acos, atan, degrees, radians };
 
 /// Bits of relative precision the bounds aim for, beyond the argument's
 /// own integer bits; guard bits double from the first to the last attempt.
@@ -75,7 +75,7 @@ fn exactly(f: Function, x: Decimal) Error!?Decimal {
                 if (r.coefficient == 1) return Decimal.fromInt(r.exponent);
             }
         },
-        .sin, .tan, .atan => if (zero) return .{},
+        .sin, .tan, .atan, .degrees, .radians => if (zero) return .{},
         .cos => if (zero) return one,
         .asin, .acos => {
             if (x.order(one) == .gt or x.order(one.negate()) == .lt) return error.OutOfDomain;
@@ -154,8 +154,13 @@ const Ctx = struct {
 
     /// A decimal as an interval: num * 2^p / 10^-e, rounded outward.
     fn decimalValue(c: Ctx, d: Decimal) !Interval {
+        return c.decimalScaled(d, 0);
+    }
+
+    /// `d` * 2^k as an interval, so a tiny `d` keeps its precision.
+    fn decimalScaled(c: Ctx, d: Decimal, k: usize) !Interval {
         var num = try c.big(d.coefficient);
-        try num.shiftLeft(&num, c.p);
+        try num.shiftLeft(&num, c.p + k);
         if (d.negative) num.negate();
         var den = try c.big(@as(u8, 1));
         if (d.exponent < 0) {
@@ -396,7 +401,20 @@ const Ctx = struct {
             .atan => .{ .value = try c.atan(try c.decimalValue(x)) },
             .asin => .{ .value = try c.asin(x) },
             .acos => .{ .value = try c.sub(try c.divInt(try c.pi(), 2), try c.asin(x)) },
+            .degrees, .radians => c.convertAngle(f, x),
         };
+    }
+
+    /// x * 180/pi or x * pi/180, worked on x * 2^k so a tiny x keeps its
+    /// relative precision; the result is scaled back by 2^-k.
+    fn convertAngle(c: Ctx, f: Function, x: Decimal) !Attempt {
+        const k: usize = if (x.exponent < 0) @intCast(@divFloor(-x.exponent * 3322, 1000) + 1) else 0;
+        const xi = try c.decimalScaled(x, k);
+        const value = if (f == .degrees)
+            try c.div(try c.mulBig(xi, try c.big(@as(u8, 180))), try c.pi())
+        else
+            try c.divInt(try c.mul(xi, try c.pi()), 180);
+        return .{ .value = value, .scale = -@as(i64, @intCast(k)) };
     }
 
     /// e^x = 2^k e^r, with r = x - k ln 2 and |r| about ln 2 / 2 at most.
@@ -563,6 +581,17 @@ test "correctly rounded to 34 digits, exact where the value is" {
     try expectCall(.asin, "1", "1.570796326794896619231321691639751");
     try expectCall(.acos, "-1", "3.141592653589793238462643383279503");
     try expectCall(.sin, "0", "0");
+    try expectCall(.degrees, "1", "57.29577951308232087679815481410517");
+    try expectCall(.degrees, "-0.5", "-28.64788975654116043839907740705259");
+    try expectCall(.degrees, "3.141592653589793238462643383279503", "180");
+    try expectCall(.radians, "180", "3.141592653589793238462643383279503");
+    try expectCall(.radians, "-45", "-0.7853981633974483096156608458198757");
+    try expectCall(.radians, "0.000001", "0.00000001745329251994329576923690768488613");
+    // A tiny argument keeps all 34 digits.
+    const tiny = try call(std.testing.allocator, .radians, .{ .coefficient = 1, .exponent = -6000 });
+    try std.testing.expectEqual(@as(@TypeOf(tiny.coefficient), 1745329251994329576923690768488613), tiny.coefficient);
+    try std.testing.expectEqual(@as(@TypeOf(tiny.exponent), -6035), tiny.exponent);
+    try expectCall(.degrees, "0", "0");
     // Checked against mpmath at 160 digits: a reduction by about 6.4e33
     // quarter turns, a cosine within 5e-10 of -1, a tangent near its pole,
     // an arcsine near 1, and atan2 in the third and second quadrants.
@@ -579,4 +608,5 @@ test "correctly rounded to 34 digits, exact where the value is" {
     }
     try std.testing.expectError(error.OutOfDomain, call(std.testing.allocator, .ln, Decimal.fromInt(0)));
     try std.testing.expectError(error.Overflow, call(std.testing.allocator, .exp, Decimal.fromInt(100)));
+    try std.testing.expectError(error.Overflow, call(std.testing.allocator, .degrees, try Decimal.parse("9000000000000000000000000000000000")));
 }

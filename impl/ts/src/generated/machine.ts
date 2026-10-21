@@ -2275,6 +2275,24 @@ export const costModel = {
       ]
     },
     {
+      "key": "builtin.degrees",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.radians",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
       "key": "builtin.random",
       "fuel": [
         [0, 0, 4, 1]

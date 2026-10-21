@@ -266,6 +266,19 @@ gives = "The angle of the point (`x`, `y`) from the positive x-axis, in radians 
 errors = ["out of domain"]
 
 [[builtin]]
+name = "degrees"
+group = "numbers"
+call = "degrees(x)"
+gives = "`x` radians in degrees"
+errors = ["overflow"]
+
+[[builtin]]
+name = "radians"
+group = "numbers"
+call = "radians(x)"
+gives = "`x` degrees in radians"
+
+[[builtin]]
 name = "random"
 group = "numbers"
 call = "random(n)"

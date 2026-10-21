@@ -39,10 +39,12 @@ import {
   atan,
   atan2,
   cos,
+  degrees,
   exp,
   ln,
   log10,
   power,
+  radians,
   sin,
   sqrt,
   tan,
@@ -2100,6 +2102,8 @@ const unary: Record<string, (x: Dec) => Dec> = {
   asin,
   acos,
   atan,
+  degrees,
+  radians,
 };
 const ONE: Dec = { negative: false, coefficient: 1n, exponent: 0 };
 const inDomain = (name: string, x: Dec, y?: Dec): boolean => {
@@ -2380,6 +2384,8 @@ export const builtin = (
     case 'acos':
     case 'atan':
     case 'atan2':
+    case 'degrees':
+    case 'radians':
       return { result: numberFunction(name, args) };
     case 'fromFloat64':
     case 'fromFloat32':

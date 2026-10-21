@@ -1,0 +1,16 @@
+# angle-conversions: `degrees` and `radians` convert between radians, Talk's
+# one angle unit, and degrees, each the exact value rounded half-even to 34
+# significant digits (spec chapter 7, Numbers), so `radians(180)` is `pi` and
+# `degrees(pi)` is `180`; `degrees` overflows at 10^34.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "angles"
+source = "angles.talk"

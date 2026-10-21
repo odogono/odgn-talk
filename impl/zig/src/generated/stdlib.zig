@@ -427,6 +427,27 @@ pub const stdlib: StdlibTable = .{
             .variadic = false,
         },
         .{
+            .name = "degrees",
+            .group = "numbers",
+            .call = "degrees(x)",
+            .gives = "`x` radians in degrees",
+            .errors = &.{
+                "overflow",
+            },
+            .required = 1,
+            .total = 1,
+            .variadic = false,
+        },
+        .{
+            .name = "radians",
+            .group = "numbers",
+            .call = "radians(x)",
+            .gives = "`x` degrees in radians",
+            .required = 1,
+            .total = 1,
+            .variadic = false,
+        },
+        .{
             .name = "random",
             .group = "numbers",
             .call = "random(n)",
