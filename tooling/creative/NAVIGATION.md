@@ -121,7 +121,7 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [images.ts](src/images.ts): image intake and the session's
   content-addressed bytes, which hold sound bytes too.
 - [sounds.ts](src/sounds.ts): sound intake, the `SoundBoard` and playback;
-  Play wires the `sound` Grant in [play.ts](src/play.ts).
+  [grants/sound.ts](src/grants/sound.ts) is the `sound` Grant.
 - Tests: [images.test.ts](tests/images.test.ts),
   [sounds.test.ts](tests/sounds.test.ts),
   [images.browser.ts](tests/images.browser.ts),
@@ -130,11 +130,9 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## The folio Grant and hide/show
 
-- [script-manifest.ts](src/script-manifest.ts): `FOLIO_COMMANDS`, the `hide`
-  and `show` Operations' documentation, and the `folio` Grant in each Script's
-  Manifest, both marked `command`.
-- [play.ts](src/play.ts) defines the `folio` Capability and grants it to every
-  Script; [message-script.ts](src/message-script.ts) builds the Message Box's
+- [grants/folio.ts](src/grants/folio.ts): the `hide` and `show` Operations,
+  their documentation and the `folio` Capability, both marked `command`.
+- [play.ts](src/play.ts) grants it to every Script; [message-script.ts](src/message-script.ts) builds the Message Box's
   wrapper Script. They are Host Commands
   ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)),
   so they never climb the Message Path.
@@ -218,11 +216,12 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [drawing.ts](src/drawing.ts): the retained Drawing, its `clear`/`background`
   reset and limit, and project-file checks over the shared
   [canvas validation](../stack/src/canvas.ts) (ADR 0116).
-- [play.ts](src/play.ts): the `canvas` Grant and each session's Drawings;
+- [grants/canvas.ts](src/grants/canvas.ts): the `canvas` Grant;
+  [play.ts](src/play.ts) keeps each session's Drawings;
   [play-host.ts](src/play-host.ts) sends their changes as `DrawingView`s and
   [play-mirror.ts](src/play-mirror.ts) keeps and commits them.
 - [canvas-view.ts](src/canvas-view.ts): Canvas 2D painting shared by Edit and
-  Play; [script-manifest.ts](src/script-manifest.ts) declares the Grant.
+  Play.
 - Tests: [canvas.test.ts](tests/canvas.test.ts); Canvas Tetris
   ([examples/tetris-canvas.ts](src/examples/tetris-canvas.ts)) exercises a
   whole game in [tetris.test.ts](tests/tetris.test.ts).
@@ -236,6 +235,17 @@ List files with `rg --files tooling/creative` before opening one by name.
 - Tests: `user` cases in [play.test.ts](tests/play.test.ts),
   `runUserBrowserTests` in [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts -t user`.
+
+## Grants
+
+- [grants/](src/grants/): one module per Grant (`pages`, `elements`, `sound`,
+  `user`, `folio`, `canvas`), each declaring its Operations once and building
+  its Capability over the narrow state [play.ts](src/play.ts) passes in.
+  [grants/grant.ts](src/grants/grant.ts) derives the Manifest entry and the
+  Library declarations; [grants/index.ts](src/grants/index.ts) lists them.
+- Tests: [grants.test.ts](tests/grants.test.ts) checks every Grant's
+  Manifest against its Capability and runs Grants over stub state.
+- First check: `bun test tooling/creative/tests/grants.test.ts`.
 
 ## Host Manifests, Code Browser and Libraries
 

@@ -9,8 +9,7 @@ import {
   syntaxSelector,
   type SyntaxNode,
 } from '@northtalk/ts';
-import { CANVAS_SIGNATURES } from '@northtalk/tooling/canvas';
-import { DRAWING_OPERATIONS } from './drawing';
+import { manifestGrants } from './grants';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = DeepReadonly<Project | Page | Element>;
@@ -59,50 +58,8 @@ const props = (kind: string): ManifestProperty[] =>
       readOnly: !descriptor.set,
       ...(descriptor.setCost ? { setCost: descriptor.setCost } : {}),
     }));
-/**
- * Folio's Host Commands (ADR 0094): Operations of the `folio` Grant that any
- * Script calls by name alone, as `hide welcomeText`.
- */
-export const FOLIO_COMMANDS = {
-  hide: {
-    description:
-      "Hides an Element: sets its visible to false. A Host Command, so any Script can call it by name; a Script's own `on hide` takes its calls instead.",
-    examples: ['hide welcomeText'],
-  },
-  show: {
-    description:
-      "Shows an Element: sets its visible to true. A Host Command, so any Script can call it by name; a Script's own `on show` takes its calls instead.",
-    examples: ['show welcomeText'],
-  },
-} as const;
-// Any Element, as the `folio` and `elements` Operations take one.
+// Any Element, as a Page or Group's members are.
 const elementShape = { oneOf: ELEMENT_KINDS.map(kind => ({ object: kind })) };
-
-const operation = (name: string, args: unknown[], result?: unknown) => ({
-  name,
-  args,
-  mode: result === undefined ? 'fire-and-forget' : 'immediate',
-  ...(result === undefined ? {} : { result }),
-});
-
-const suspending = (name: string, args: unknown[], result: unknown) => ({
-  name,
-  args,
-  mode: 'suspending',
-  result,
-  maxPending: 2_147_483_647,
-  errors: [{ code: 'user busy', fields: [] }],
-});
-// An Optional closed map whose every key is Optional.
-const options = (fields: Record<string, string>) => ({
-  optional: {
-    map: Object.entries(fields).map(([key, shape]) => ({
-      key,
-      shape: { optional: shape },
-      optional: true,
-    })),
-  },
-});
 
 // Shared by every Script's manifest.
 const objectKinds = [
@@ -133,84 +90,8 @@ const objectKinds = [
       : {}),
   })),
 ];
-const grants = [
-  {
-    name: 'pages',
-    capability: 'pages',
-    operations: [operation('show', [{ object: 'page' }])],
-  },
-  {
-    name: 'elements',
-    capability: 'elements',
-    operations: [
-      operation(
-        'create',
-        ['text', { object: 'page' }, { optional: 'text' }],
-        'object',
-      ),
-      operation('clone', ['object'], 'object'),
-      operation('delete', ['object']),
-      operation('find', ['text', { object: 'page' }], 'object'),
-    ],
-  },
-  {
-    name: 'sound',
-    capability: 'sound',
-    operations: [
-      operation('play', ['text']),
-      operation('loop', ['text']),
-      operation('stop', [{ optional: 'text' }]),
-    ],
-  },
-  {
-    // Chapter 7's `user` Standard Capability, as the Play Session offers it.
-    name: 'user',
-    capability: 'user',
-    operations: [
-      suspending('confirm', ['text'], 'boolean'),
-      suspending(
-        'choose',
-        [{ list: 'text' }, options({ prompt: 'text', multiple: 'boolean' })],
-        { optional: { oneOf: ['text', { list: 'text' }] } },
-      ),
-      suspending('enter', ['text', options({ default: 'text' })], {
-        optional: 'text',
-      }),
-      operation('notify', ['text', options({ title: 'text' })]),
-    ],
-  },
-  {
-    name: 'folio',
-    capability: 'folio',
-    operations: Object.entries(FOLIO_COMMANDS).map(([name, docs]) => ({
-      ...operation(name, [elementShape]),
-      command: true,
-      ...docs,
-      examples: [...docs.examples],
-    })),
-  },
-  {
-    // ADR 0116: each Operation draws on the Canvas Element it is given.
-    name: 'canvas',
-    capability: 'canvas',
-    operations: DRAWING_OPERATIONS.map(name => ({
-      ...operation(
-        name,
-        [
-          { object: 'canvas' },
-          ...CANVAS_SIGNATURES[name]!.map(arg =>
-            arg.k === 'kind' ? arg.kind : 'value',
-          ),
-        ],
-        'nothing',
-      ),
-      errors: [
-        { code: 'invalid canvas argument', fields: [] },
-        { code: 'canvas limit', fields: [] },
-      ],
-    })),
-  },
-];
+// Each Grant's entry, derived from its definition (#1453).
+const grants = manifestGrants();
 const messages = [
   'click',
   'pointerEnter',

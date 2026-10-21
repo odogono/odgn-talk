@@ -1,10 +1,9 @@
-import {
-  CANVAS_SIGNATURES,
-  canvasArgumentValues,
-  validateCanvasArguments,
-  type CanvasCommand,
-} from '@northtalk/tooling/canvas';
-import { Drawing, DRAWING_OPERATIONS } from './drawing';
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
+import { Drawing } from './drawing';
+import { grantDeclarations, grantsFor, type GrantStates } from './grants';
+import { PUMP_FUEL } from './grants/elements';
+import { elementShape } from './grants/grant';
+import type { UserPrompt } from './grants/user';
 import { compileProjectLibraries } from './libraries';
 import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
@@ -16,7 +15,6 @@ import { scriptNameProblems } from './script-names';
 import {
   bool,
   defineObjectKind,
-  defineCapability,
   list,
   LoadError,
   MailboxFull,
@@ -27,21 +25,17 @@ import {
   ScriptError,
   shape,
   text,
-  userCapability,
   type Call,
   type Group,
   type HostObject,
-  type ReleaseHook,
   type ObjectElements,
   type ObjectKind,
   type PropDef,
   type Value,
 } from '@northtalk/ts';
 import {
-  ELEMENT_KINDS,
   type CanvasElement,
   type Element,
-  type ElementKind,
   type Page,
   type Project,
   type ProjectLibrary,
@@ -49,7 +43,6 @@ import {
   type TextElement,
 } from './model';
 import {
-  FOLIO_COMMANDS,
   ownerId,
   scriptManifest,
   scriptOwners,
@@ -129,15 +122,7 @@ export const definesHandler = (source: string, message: string): boolean => {
 const MESSAGE_SCRIPT = 'message:';
 
 /** A `user` prompt the reader hasn't answered yet (chapter 7). */
-export type UserPrompt =
-  | { kind: 'confirm'; message: string }
-  | {
-      items: readonly string[];
-      kind: 'choose';
-      multiple: boolean;
-      prompt: string;
-    }
-  | { fallback: string; kind: 'enter'; message: string };
+export type { UserPrompt };
 /** A shown prompt; its answer is ignored once the prompt is taken down. */
 export type PendingPrompt = UserPrompt & {
   answer(value: boolean | string | readonly string[] | undefined): void;
@@ -149,17 +134,7 @@ export type UserNotice = { message: string; title: string };
 export type MessageOutcome =
   { ok: true; result: Promise<Value> } | { error: string; ok: false };
 
-// Construction/disposal consumes a Pump's budget so queued Core parent and
-// disposal inputs land before a Script can use the changed object graph.
-export const PUMP_FUEL = 5000;
-const elementShape = shape.oneOf(
-  ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
-);
-const canvasShape = { k: 'object' as const, kind: 'canvas' };
-// Releasing a Script's sound Grant stops the sounds it started (#735); the
-// board travels as the Grant's binding so this stays a plain function.
-const releaseSounds: ReleaseHook<SoundBoard> = context =>
-  context.binding.stopOwner(context.scriptName);
+export { PUMP_FUEL };
 
 export class PlaySession {
   readonly #tree: ProjectTree;
@@ -249,138 +224,6 @@ export class PlaySession {
   reorder(parent: TreeParent, order: readonly DeepReadonly<Element>[]): void {
     this.#tree.reorder(parent, order);
   }
-
-  #elements = defineCapability('elements', {
-    create: {
-      mode: 'immediate',
-      args: [
-        shape.text,
-        { k: 'object', kind: 'page' },
-        shape.optional(shape.text),
-      ],
-      result: elementShape,
-      cost: { fuel: PUMP_FUEL },
-      do: (call, kindValue, pageValue, nameValue) => {
-        const kind = kindValue as ElementKind;
-        if (!ELEMENT_KINDS.includes(kind) || kind === 'group') {
-          throw new ScriptError('out of domain', 'Unknown Element kind');
-        }
-        const page = this.#elementPage((pageValue as HostObject).value);
-        return this.#treeOperation(() => {
-          const element = this.#tree.create(
-            kind,
-            page,
-            nameValue ?? undefined,
-            {
-              authorize: fuel => call.charge(fuel),
-              install: (root, parent) => this.#install(root, parent),
-            },
-          );
-          if (element.kind === 'canvas') {
-            this.#changedDrawings.add(element);
-          }
-          return this.#objects.get(element)!.value;
-        });
-      },
-    },
-    clone: {
-      mode: 'immediate',
-      args: [elementShape],
-      result: elementShape,
-      cost: { fuel: PUMP_FUEL },
-      do: (call, value) => {
-        const { element } = this.#element(value!);
-        return this.#treeOperation(() => {
-          const cloned = this.#tree.clone(element, {
-            authorize: fuel => call.charge(fuel),
-            install: (root, parent) => this.#install(root, parent),
-          });
-          for (const [original, copy] of cloned.pairs) {
-            this.#authored.set(copy, this.#authored.get(original)!);
-            if (original.kind === 'canvas' && copy.kind === 'canvas') {
-              const drawing = this.#drawings.get(original);
-              if (drawing) {
-                this.#drawings.set(copy, new Drawing(drawing.commands));
-              }
-              this.#changedDrawings.add(copy);
-            }
-          }
-          this.#pendingClones.push(...cloned.pairs.map(([, copy]) => copy));
-          return this.#objects.get(cloned.root)!.value;
-        });
-      },
-    },
-    delete: {
-      mode: 'fire-and-forget',
-      args: [elementShape],
-      cost: { fuel: PUMP_FUEL },
-      fire: (call, value) => {
-        const { element } = this.#element(value!);
-        const removed = this.#treeOperation(() =>
-          this.#tree.remove(element, { authorize: fuel => call.charge(fuel) }),
-        );
-        for (const member of removed) {
-          const name = this.#scripts.get(member);
-          if (name) {
-            this.sounds.stopOwner(name);
-            this.#frames.delete(name);
-            this.group.script(name)?.stop('Element deleted');
-            this.#scripts.delete(member);
-            this.#targets.delete(name);
-          }
-          this.group.dispose(this.#objects.get(member)!);
-        }
-      },
-    },
-    find: {
-      mode: 'immediate',
-      args: [shape.text, { k: 'object', kind: 'page' }],
-      result: elementShape,
-      cost: { fuel: 1 },
-      do: (_call, name, value) => {
-        const page = this.#elementPage((value as HostObject).value);
-        const element = this.#tree.find(page, name);
-        if (!element) {
-          throw new ScriptError('out of domain', 'Element not found');
-        }
-        return this.#objects.get(element)!.value;
-      },
-    },
-  });
-
-  // Each Operation takes its Canvas Element first (ADR 0116).
-  #canvas = defineCapability(
-    'canvas',
-    Object.fromEntries(
-      DRAWING_OPERATIONS.map(op => [
-        op,
-        {
-          mode: 'immediate' as const,
-          args: [canvasShape, ...CANVAS_SIGNATURES[op]!],
-          result: shape.nothing,
-          cost: { fuel: 1 },
-          errors: [
-            { code: 'invalid canvas argument' },
-            { code: 'canvas limit' },
-          ],
-          do: (_call: Call<unknown>, target: unknown, ...args: unknown[]) => {
-            const { element } = this.#element((target as HostObject).value);
-            const values = canvasArgumentValues(args);
-            if (element.kind !== 'canvas') {
-              throw new ScriptError('out of domain', 'Not a Canvas Element');
-            }
-            validateCanvasArguments(op, values);
-            this.#drawing(element).add({
-              op,
-              args: values.map(value => value.toString()),
-            });
-            this.#changedDrawings.add(element);
-            return nothing;
-          },
-        },
-      ]),
-    ),
-  );
 
   #drawing(element: DeepReadonly<CanvasElement>): Drawing {
     let drawing = this.#drawings.get(element);
@@ -475,32 +318,116 @@ export class PlaySession {
     install(root, parent);
   }
 
-  // Folio's Host Commands (ADR 0094): `hide x` is an Operation call in the
-  // caller's Run, so a bad argument fails at the calling line.
-  #folio = defineCapability('folio', {
-    hide: {
-      mode: 'fire-and-forget',
-      command: true,
-      args: [elementShape],
-      cost: { fuel: 1 },
-      ...FOLIO_COMMANDS.hide,
-      examples: [...FOLIO_COMMANDS.hide.examples],
-      fire: (_call, value) => this.#setVisible(value!, false),
-    },
-    show: {
-      mode: 'fire-and-forget',
-      command: true,
-      args: [elementShape],
-      cost: { fuel: 1 },
-      ...FOLIO_COMMANDS.show,
-      examples: [...FOLIO_COMMANDS.show.examples],
-      fire: (_call, value) => this.#setVisible(value!, true),
-    },
-  });
-
   #setVisible(value: Value, visible: boolean): void {
     const { element } = this.#element(value);
     this.#tree.setProperty(element, 'visible', visible);
+  }
+
+  // The state each Grant reads (#1453); the Grants are built once a session's
+  // SoundBoard exists and are shared by every Script it loads.
+  #grants!: ReturnType<typeof grantsFor>;
+  #grantStates(): GrantStates {
+    return {
+      pages: {
+        pageIndex: page =>
+          this.project.pages.findIndex(
+            p => this.#objects.get(p) === page.value.asObject(),
+          ),
+        requestPage: index => {
+          if (!this.stopped && !this.#closing) {
+            this.#requestedPage = index;
+          }
+        },
+      },
+      elements: {
+        create: (kind, pageObject, name, charge) => {
+          const page = this.#elementPage(pageObject.value);
+          return this.#treeOperation(() => {
+            const element = this.#tree.create(kind, page, name, {
+              authorize: charge,
+              install: (root, parent) => this.#install(root, parent),
+            });
+            if (element.kind === 'canvas') {
+              this.#changedDrawings.add(element);
+            }
+            return this.#objects.get(element)!.value;
+          });
+        },
+        clone: (object, charge) => {
+          const { element } = this.#element(object);
+          return this.#treeOperation(() => {
+            const cloned = this.#tree.clone(element, {
+              authorize: charge,
+              install: (root, parent) => this.#install(root, parent),
+            });
+            for (const [original, copy] of cloned.pairs) {
+              this.#authored.set(copy, this.#authored.get(original)!);
+              if (original.kind === 'canvas' && copy.kind === 'canvas') {
+                const drawing = this.#drawings.get(original);
+                if (drawing) {
+                  this.#drawings.set(copy, new Drawing(drawing.commands));
+                }
+                this.#changedDrawings.add(copy);
+              }
+            }
+            this.#pendingClones.push(...cloned.pairs.map(([, copy]) => copy));
+            return this.#objects.get(cloned.root)!.value;
+          });
+        },
+        remove: (object, charge) => {
+          const { element } = this.#element(object);
+          const removed = this.#treeOperation(() =>
+            this.#tree.remove(element, { authorize: charge }),
+          );
+          for (const member of removed) {
+            const name = this.#scripts.get(member);
+            if (name) {
+              this.sounds.stopOwner(name);
+              this.#frames.delete(name);
+              this.group.script(name)?.stop('Element deleted');
+              this.#scripts.delete(member);
+              this.#targets.delete(name);
+            }
+            this.group.dispose(this.#objects.get(member)!);
+          }
+        },
+        find: (pageObject, name) => {
+          const element = this.#tree.find(
+            this.#elementPage(pageObject.value),
+            name,
+          );
+          return element && this.#objects.get(element)!.value;
+        },
+      },
+      sound: {
+        sounds: this.sounds,
+        play: (owner, name, loop) => this.#playSound(owner, name, loop),
+      },
+      user: {
+        ask: (call, prompt) => this.#ask(call, prompt),
+        notify: (message, title) => {
+          if (!this.stopped) {
+            this.notices.push({ message, title });
+            this.changed = true;
+          }
+        },
+      },
+      folio: {
+        setVisible: (element, visible) => this.#setVisible(element, visible),
+      },
+      canvas: {
+        drawingOf: object => {
+          const { element } = this.#element(object.value);
+          if (element.kind !== 'canvas') {
+            throw new ScriptError('out of domain', 'Not a Canvas Element');
+          }
+          return command => {
+            this.#drawing(element).add(command);
+            this.#changedDrawings.add(element);
+          };
+        },
+      },
+    };
   }
 
   #requestedPage: number | undefined;
@@ -513,76 +440,10 @@ export class PlaySession {
         target: number;
       }
     | undefined;
-  #pages = defineCapability('pages', {
-    show: {
-      mode: 'fire-and-forget',
-      args: [{ k: 'object', kind: 'page' }],
-      cost: { fuel: 1 },
-      fire: (_call, value) => {
-        const index = this.project.pages.findIndex(
-          p => this.#objects.get(p) === (value as HostObject).value.asObject(),
-        );
-        if (index < 0) {
-          throw new ScriptError('out of domain', 'Unknown Page');
-        }
-        if (!this.stopped && !this.#closing) {
-          this.#requestedPage = index;
-        }
-      },
-    },
-  });
-  // The release hook stops a Script's sounds whenever the Core stops,
-  // reloads or revokes it, so no lifecycle path can leak a voice (#735).
-  #sound = defineCapability<SoundBoard>()(
-    'sound',
-    {
-      play: {
-        mode: 'fire-and-forget',
-        args: [shape.text],
-        cost: { fuel: 1 },
-        fire: (call, value) => this.#playSound(call.scriptName, value!, false),
-      },
-      loop: {
-        mode: 'fire-and-forget',
-        args: [shape.text],
-        cost: { fuel: 1 },
-        fire: (call, value) => this.#playSound(call.scriptName, value!, true),
-      },
-      stop: {
-        mode: 'fire-and-forget',
-        args: [shape.optional(shape.text)],
-        cost: { fuel: 1 },
-        fire: (call, value) =>
-          this.sounds.stop(call.scriptName, value ?? undefined),
-      },
-    },
-    undefined,
-    releaseSounds,
-  );
-
   /** Unanswered prompts, oldest first; the Play view shows the first. */
   readonly prompts: PendingPrompt[] = [];
   /** Notices not yet shown; the Play view takes them. */
   readonly notices: UserNotice[] = [];
-  #user = userCapability(
-    {
-      confirm: (call, message) => this.#ask(call, { kind: 'confirm', message }),
-      choose: (call, items, prompt, multiple) =>
-        this.#ask(call, { kind: 'choose', items, prompt, multiple }),
-      enter: (call, message, fallback) =>
-        this.#ask(call, { kind: 'enter', message, fallback }),
-      notify: (_call, message, title) => {
-        if (!this.stopped) {
-          this.notices.push({ message, title });
-          this.changed = true;
-        }
-      },
-    },
-    Object.fromEntries(
-      ['confirm', 'choose', 'enter', 'notify'].map(name => [name, { fuel: 1 }]),
-    ),
-  );
-
   // One prompt per Script at a time; prompts from different Scripts queue.
   // An abandoned call (Stop, leaving the Page, a timeout) takes its prompt
   // down.
@@ -622,17 +483,6 @@ export class PlaySession {
     this.prompts.push(pending);
     this.changed = true;
     call.signal.addEventListener('abort', remove);
-  }
-
-  #grants() {
-    return {
-      pages: this.#pages.grant(['show'], undefined),
-      elements: this.#elements.grant('all', undefined),
-      sound: this.#sound.grant('all', this.sounds),
-      user: this.#user.grant('all', undefined),
-      folio: this.#folio.grant('all', undefined),
-      canvas: this.#canvas.grant('all', undefined),
-    };
   }
 
   #playSound(owner: string, name: string, loop: boolean): void {
@@ -686,6 +536,7 @@ export class PlaySession {
         });
       }
     });
+    this.#grants = grantsFor(this.#grantStates());
     const names = scriptNameProblems(project);
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
@@ -776,26 +627,10 @@ export class PlaySession {
         );
       }
     }
-    const declarations = Object.fromEntries(
-      Object.entries(this.#grants()).map(([name, grant]) => [
-        name,
-        Object.fromEntries(
-          [...grant.ops].map(op => {
-            const declaration = grant.capability.operations.get(op)!;
-            return [
-              op,
-              {
-                mode: declaration.mode,
-                args: declaration.args ?? [],
-                ...(declaration.labels ? { labels: declaration.labels } : {}),
-                ...(declaration.command ? { command: true } : {}),
-              },
-            ];
-          }),
-        ),
-      ]),
+    const compiled = compileProjectLibraries(
+      project.libraries,
+      grantDeclarations(),
     );
-    const compiled = compileProjectLibraries(project.libraries, declarations);
     for (const library of compiled.libraries) {
       this.group.addLibrary(library);
     }
@@ -880,7 +715,7 @@ export class PlaySession {
       name,
       source,
       objects,
-      grants: this.#grants(),
+      grants: this.#grants,
     });
     return name;
   }
@@ -1052,7 +887,7 @@ export class PlaySession {
             source: owner.script,
             owner: this.#objects.get(owner),
             objects,
-            grants: this.#grants(),
+            grants: this.#grants,
           });
         }
         this.#targets.set(name, {

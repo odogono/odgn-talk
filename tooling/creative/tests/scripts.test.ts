@@ -13,6 +13,7 @@ import {
   createProject,
   ELEMENT_KINDS,
 } from '../src/model';
+import { FOLIO_GRANTS } from '../src/grants';
 import { scriptManifest } from '../src/script-manifest';
 import { createLighthouseProject } from '../src/examples/lighthouse';
 import { createTetrisProject } from '../src/examples/tetris';
@@ -41,56 +42,14 @@ test('each owner gets its scoped names, typed properties and six Grants', () => 
             'project',
           ],
     );
-    expect([...manifest.grants.keys()]).toEqual([
-      'pages',
-      'elements',
-      'sound',
-      'user',
-      'folio',
-      'canvas',
-    ]);
-    expect([...manifest.grants.get('canvas')!.keys()]).toEqual([
-      'clear',
-      'background',
-      'fill',
-      'noFill',
-      'stroke',
-      'noStroke',
-      'strokeWidth',
-      'strokeCap',
-      'strokeJoin',
-      'point',
-      'line',
-      'triangle',
-      'rectangle',
-      'roundedRectangle',
-      'ellipse',
-      'circle',
-      'arc',
-      'text',
-      'textSize',
-      'push',
-      'pop',
-      'translate',
-      'rotate',
-      'scale',
-    ]);
+    // tests/grants.test.ts checks each Grant's Operations.
+    expect([...manifest.grants.keys()]).toEqual(
+      FOLIO_GRANTS.map(grant => grant.name),
+    );
     const folio = manifest.grants.get('folio')!;
     expect([...folio.values()].map(op => [op.name, op.command])).toEqual([
       ['hide', true],
       ['show', true],
-    ]);
-    expect([...manifest.grants.get('user')!.keys()]).toEqual([
-      'confirm',
-      'choose',
-      'enter',
-      'notify',
-    ]);
-    expect([...manifest.grants.get('elements')!.keys()]).toEqual([
-      'create',
-      'clone',
-      'delete',
-      'find',
     ]);
     expect(manifest.objects).not.toContain('otherButton');
     expect(
