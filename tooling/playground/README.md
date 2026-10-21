@@ -132,9 +132,9 @@ Set Launch to `draw`. Operations are immediate and return Nothing. A `tell canva
 
 | Operation | Arguments and behavior |
 | --- | --- |
-| `size` | Integer width, height, each 1–4096; clears pixels and resets styles |
-| `clear` | No arguments; clears pixels, preserving styles |
-| `background` | Color; replaces all pixels, preserving styles |
+| `size` | Integer width, height, each 1–4096; clears pixels and resets styles, the transform and the `push` stack |
+| `clear` | No arguments; clears pixels, preserving styles; resets the transform and empties the `push` stack |
+| `background` | Color; replaces all pixels, preserving styles; resets the transform and empties the `push` stack |
 | `fill`, `stroke` | Color; enables and sets that style |
 | `noFill`, `noStroke` | No arguments; disables that style |
 | `strokeWidth` | Nonnegative number; zero suppresses strokes |
@@ -150,6 +150,10 @@ Set Launch to `draw`. Operations are immediate and return Nothing. A `tell canva
 | `arc` | x, y, positive width, positive height, start, stop; center origin, angles in radians clockwise from the positive x-axis; fills a pie slice and strokes only the curve |
 | `text` | Text, x, y; left-aligned alphabetic baseline; uses fill/stroke |
 | `textSize` | Positive size in logical pixels; sans-serif |
+| `push`, `pop` | No arguments; save and restore styles and the transform; nest up to 64 deep; `pop` needs a matching `push` |
+| `translate` | x, y; moves the origin |
+| `rotate` | Angle in radians, clockwise |
+| `scale` | x, y factors; negative mirrors |
 
 Colors are `#RRGGBB` or `#RRGGBBAA`, case-insensitive. Coordinates and numeric arguments are bounded to ±1,000,000. Text is limited to 4096 UTF-16 code units. A session accepts at most 10,000 operations (including style changes); Run fresh resets this budget. Each call costs one Fuel. Invalid values raise `invalid canvas argument`; exhaustion raises `canvas limit`. Core Shape checks reject wrong types and argument counts.
 

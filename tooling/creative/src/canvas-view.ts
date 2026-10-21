@@ -1,6 +1,7 @@
 // Paints a Canvas Element's Drawing with Canvas 2D, in the Element's own
 // coordinates: one unit is one Page pixel, clipped to the frame (ADR 0116).
-// Edit and Play share it. A Drawing that only grew since the last paint
+// Edit and Play share it. `push` and `pop` save and restore the style and
+// transform with the context's own stack; `rotate` takes radians, clockwise. A Drawing that only grew since the last paint
 // gets just its new commands; any other change repaints from the defaults.
 import {
   paintCanvasShape,
@@ -10,13 +11,12 @@ import { readDisplay } from '@northtalk/ts';
 import type { CanvasElement } from './model';
 import type { DeepReadonly } from './readonly';
 
-type Painted = {
+type Flags = { fill: boolean; stroke: boolean; strokeWidth: number };
+type Painted = Flags & {
   commands: DeepReadonly<CanvasCommand[]>;
-  fill: boolean;
   length: number;
+  saved: Flags[];
   scale: number;
-  stroke: boolean;
-  strokeWidth: number;
 };
 const painted = new WeakMap<HTMLCanvasElement, Painted>();
 
@@ -33,6 +33,7 @@ const paint = (
   switch (command.op) {
     case 'background':
       context.save();
+      context.setTransform(state.scale, 0, 0, state.scale, 0, 0);
       context.fillStyle = t(0);
       context.clearRect(0, 0, width, height);
       context.fillRect(0, 0, width, height);
@@ -63,6 +64,27 @@ const paint = (
       return;
     case 'strokeJoin':
       context.lineJoin = t(0) as CanvasLineJoin;
+      return;
+    case 'push':
+      state.saved.push({
+        fill: state.fill,
+        stroke: state.stroke,
+        strokeWidth: state.strokeWidth,
+      });
+      context.save();
+      return;
+    case 'pop':
+      Object.assign(state, state.saved.pop());
+      context.restore();
+      return;
+    case 'translate':
+      context.translate(n(0), n(1));
+      return;
+    case 'rotate':
+      context.rotate(n(0));
+      return;
+    case 'scale':
+      context.scale(n(0), n(1));
       return;
     case 'textSize':
       context.font = `${n(0)}px sans-serif`;
@@ -106,6 +128,7 @@ export const paintCanvas = (
     state.commands !== element.drawing ||
     state.length > element.drawing.length
   ) {
+    state?.saved.forEach(() => context.restore());
     if (resized) {
       canvas.width = width;
       canvas.height = height;
@@ -123,6 +146,7 @@ export const paintCanvas = (
       commands: element.drawing,
       length: 0,
       scale,
+      saved: [],
       fill: true,
       stroke: true,
       strokeWidth: 1,

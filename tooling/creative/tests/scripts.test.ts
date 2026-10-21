@@ -69,6 +69,11 @@ test('each owner gets its scoped names, typed properties and six Grants', () => 
       'arc',
       'text',
       'textSize',
+      'push',
+      'pop',
+      'translate',
+      'rotate',
+      'scale',
     ]);
     const folio = manifest.grants.get('folio')!;
     expect([...folio.values()].map(op => [op.name, op.command])).toEqual([

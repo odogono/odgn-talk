@@ -1,10 +1,13 @@
 // A Canvas Element's Drawing (ADR 0116): a retained command list. `clear`
 // and `background` reset it to the current style, so style survives a clear
 // and a Script that paints `background` every frame keeps one frame's list.
+// They also reset the transform and empty the `push` stack, as p5.js does
+// at the start of each `draw`.
 import {
   CANVAS_LIMITS,
   CANVAS_SIGNATURES,
   canvasCommandProblem,
+  canvasStackDepth,
   type CanvasCommand,
 } from '@northtalk/tooling/canvas';
 import { ScriptError } from '@northtalk/ts';
@@ -35,13 +38,23 @@ export const drawingProblem = (value: unknown): string | undefined => {
   if (value.length > CANVAS_LIMITS.commands) {
     return `a Drawing holds at most ${CANVAS_LIMITS.commands} commands`;
   }
+  let depth = 0;
+  const stackProblem = (op: string) => {
+    try {
+      depth = canvasStackDepth(op, depth);
+      return undefined;
+    } catch (error) {
+      return error instanceof ScriptError ? error.message : String(error);
+    }
+  };
   for (const [i, command] of value.entries()) {
     const problem =
       canvasCommandProblem(command) ??
       (DRAWING_OPERATIONS.includes((command as CanvasCommand).op) &&
       (command as CanvasCommand).op !== 'clear'
         ? undefined
-        : `a Drawing cannot hold ${(command as CanvasCommand).op}`);
+        : `a Drawing cannot hold ${(command as CanvasCommand).op}`) ??
+      stackProblem((command as CanvasCommand).op);
     if (problem) {
       return `command ${i + 1}: ${problem}`;
     }
@@ -56,7 +69,9 @@ export const drawingProblem = (value: unknown): string | undefined => {
  */
 export class Drawing {
   commands: CanvasCommand[];
-  readonly #style = new Map<string, CanvasCommand>();
+  #style = new Map<string, CanvasCommand>();
+  // The style each open `push` saved; `pop` restores it.
+  #saved: Map<string, CanvasCommand>[] = [];
 
   constructor(initial: DeepReadonly<CanvasCommand[]>) {
     this.commands = initial.map(command => ({
@@ -69,19 +84,29 @@ export class Drawing {
   }
 
   #note(command: CanvasCommand): void {
+    if (command.op === 'push') {
+      this.#saved.push(new Map(this.#style));
+    } else if (command.op === 'pop') {
+      this.#style = this.#saved.pop()!;
+    }
     const group = STYLE_GROUPS[command.op];
     if (group) {
       this.#style.set(group, command);
     }
   }
 
-  /** Adds an accepted command, or throws a catchable `canvas limit`. */
+  /**
+   * Adds an accepted command, or throws a catchable `canvas limit`, or
+   * `invalid canvas argument` for an unmatched `pop` or too deep a `push`.
+   */
   add(command: CanvasCommand): void {
+    canvasStackDepth(command.op, this.#saved.length);
     if (command.op === 'clear' || command.op === 'background') {
       this.commands = [
         ...this.#style.values(),
         ...(command.op === 'background' ? [command] : []),
       ];
+      this.#saved = [];
       return;
     }
     if (this.commands.length >= CANVAS_LIMITS.commands) {
