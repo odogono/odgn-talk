@@ -28,10 +28,8 @@ import {
   type LoadDiagnostic,
 } from '../errors';
 import {
-  observeRuns,
-  observeValues,
-  queuedInputs,
   restore,
+  type SessionControls,
   type TsGroup,
   type Inspection,
   type LimitOverride,
@@ -312,6 +310,8 @@ const nodes = (node: SyntaxNode) =>
 /** A Session Host for one session (chapter 12). */
 export class SessionHost {
   private group: TsGroup | null = null;
+  // The Session-only controls of `group`, from its port.
+  private controls: SessionControls | null = null;
   private objectSession: SessionObjects | null = null;
   private objectBindings: Record<string, HostObject> = {};
   private script: TsScript | null = null;
@@ -661,7 +661,6 @@ export class SessionHost {
     return out;
   }
 
-  // Ends a Host call, then pumps once more, as a Host call of its own, if
   // Host Inputs are still queued. That Pump never causes another, so what
   // it leaves waits for the next Host call (chapter 12, The foreground).
   private finished(lines: string[]): string[] {
@@ -669,7 +668,7 @@ export class SessionHost {
     if (
       !this.group ||
       this.state.k === 'paused' ||
-      !this.group[queuedInputs]()
+      !this.controls!.queuedInputs()
     ) {
       return out;
     }
@@ -776,22 +775,23 @@ export class SessionHost {
       return;
     }
     const capabilities = this.capabilities(setup);
-    const built = buildSetupGroup(setup, capabilities, {
-      name: NAME,
-      trace: line => this.env.trace?.(line),
-    });
-    const { group } = built;
-    group[observeRuns](e => this.events.push(e));
-    this.declarations0 = Object.fromEntries(capabilities);
-    this.group = group;
     this.objectSession = new SessionObjects(
       item => this.record(item),
       this.env.objectTranscript,
       this.env.objectTranscript === undefined ||
         !!this.env.objectTranscript?.some(i => i.k === 'envelope'),
     );
-    this.objectSession.attach(group);
-    group[observeValues](tree => this.objectSession!.expose(tree));
+    const port = this.objectSession.port(e => this.events.push(e));
+    const built = buildSetupGroup(setup, capabilities, {
+      name: NAME,
+      session: port,
+      trace: line => this.env.trace?.(line),
+    });
+    const { group } = built;
+    this.declarations0 = Object.fromEntries(capabilities);
+    this.group = group;
+    this.controls = port.controls!;
+    this.objectSession.attach(group, port);
     this.objectBindings = this.env.objectTranscript
       ? this.objectSession.preload()
       : (this.env.objects?.(this.objectSession) ?? {});
@@ -1613,10 +1613,12 @@ export class SessionHost {
     }
     this.recorded();
     let restored: ReturnType<NotificationRouter['restore']>;
+    const port = this.objectSession!.port(e => this.events.push(e));
     this.notified = false;
     try {
       restored = this.stores.router.restore({ restore }, saved.checkpoint, {
         name: NAME,
+        session: port,
         trace: line => this.env.trace?.(line),
         libraries: [...this.libraries.values()].map(l => l.library),
         grants: (_, grant) => this.grantsByName[grant],
@@ -1631,13 +1633,12 @@ export class SessionHost {
       throw error;
     }
     const { group, result } = restored;
-    group[observeRuns](e => this.events.push(e));
     this.stores.router.detach(this.group!);
     this.group = group;
+    this.controls = port.controls!;
     this.objectSession!.restored();
-    this.objectSession!.attach(group);
+    this.objectSession!.attach(group, port);
     this.objectSession!.reports(result.reports);
-    group[observeValues](tree => this.objectSession!.expose(tree));
     this.controller = null;
     this.script = group.script(NAME)!;
     this.declarations = [...saved.declarations];
@@ -2157,7 +2158,7 @@ export class SessionHost {
     while (
       this.notified &&
       this.state.k !== 'paused' &&
-      this.group![queuedInputs]()
+      this.controls!.queuedInputs()
     ) {
       out.push(...this.pumpAt(this.lastClock!));
     }

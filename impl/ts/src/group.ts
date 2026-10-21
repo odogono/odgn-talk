@@ -171,10 +171,25 @@ export type RunEvent =
       outcome: string;
       run: string;
     };
-export const observeValues = Symbol('Session value exposures');
-export const sessionReply = Symbol('Session message-layer reply');
-export const observeRuns = Symbol('observeRuns');
-export const queuedInputs = Symbol('queuedInputs');
+/**
+ * TS-internal, and not exported from the package: how a Session Host follows
+ * a TS Core Group (ADR 0045). The Group calls `connect` once, when the port
+ * attaches, with the controls only the Session drives.
+ */
+export type SessionPort = {
+  connect(controls: SessionControls): void;
+  runs(r: RunEvent): void;
+  values(tree: unknown): void;
+};
+export type SessionControls = {
+  /** Whether Host Inputs wait for the next Pump (chapter 12, The foreground). */
+  queuedInputs(): boolean;
+  /** Settles a Call the Session's message layer answered. */
+  reply(id: string, reply: Resumption): void;
+};
+/** The TS Core's own options, beyond the embedding interface's. */
+export type TsGroupOptions = GroupOptions & { session?: SessionPort };
+export type TsRestoreOptions = RestoreOptions & { session?: SessionPort };
 export type LoadOptions = {
   /** Its Grants, by the name the Script uses for each. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
@@ -669,13 +684,7 @@ export class TsScript implements Script {
 }
 
 export class TsGroup implements Group {
-  private valueObserver?: (tree: unknown) => void;
-  [observeValues](observer: (tree: unknown) => void) {
-    this.valueObserver = observer;
-  }
-  [sessionReply](id: string, reply: Resumption) {
-    this.settleReply(id, reply);
-  }
+  private session: SessionPort | null = null;
   readonly name: string;
   private readonly trace: ((line: string) => void) | undefined;
   private readonly onReady: (() => void) | undefined;
@@ -890,16 +899,12 @@ export class TsGroup implements Group {
     return { state: 'sliced', fuelUsed: 0, reports: [] };
   }
 
-  private observer: ((r: RunEvent) => void) | null = null;
-
-  /** TS-internal: receives the records a Session Host follows (ADR 0045). */
-  [observeRuns](observer: ((r: RunEvent) => void) | null): void {
-    this.observer = observer;
-  }
-
-  /** TS-internal: whether Host Inputs wait for the next Pump (chapter 12, The foreground). */
-  [queuedInputs](): boolean {
-    return this.inputs.length > 0;
+  private attachSession(port: SessionPort) {
+    this.session = port;
+    port.connect({
+      queuedInputs: () => this.inputs.length > 0,
+      reply: (id, reply) => this.settleReply(id, reply),
+    });
   }
 
   /** Worker. A Fingerprint covers code, declarations and limits, never state. */
@@ -1088,7 +1093,7 @@ export class TsGroup implements Group {
   /** Build and check the complete replacement before publishing the Group. */
   static restore(
     bytes: Uint8Array,
-    o: RestoreOptions,
+    o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult } {
     const saved = readSave(bytes);
     let emitting = false;
@@ -1472,6 +1477,9 @@ export class TsGroup implements Group {
     group.flushAccounting(result.reports);
     emitting = true;
     o.trace?.(restoreLine(result));
+    if (o.session) {
+      group.attachSession(o.session);
+    }
     return { group, result };
   }
 
@@ -2157,7 +2165,7 @@ export class TsGroup implements Group {
     }
   }
 
-  constructor(options: GroupOptions) {
+  constructor(options: TsGroupOptions) {
     this.name = options.name;
     this.onReady = options.onReady;
     if (options.seed !== undefined) {
@@ -2179,6 +2187,9 @@ export class TsGroup implements Group {
           }
         }
       : undefined;
+    if (options.session) {
+      this.attachSession(options.session);
+    }
   }
 
   script(name: string): TsScript | undefined {
@@ -2942,7 +2953,7 @@ export class TsGroup implements Group {
       object: name =>
         Object.hasOwn(s.objects, name) ? s.objects[name]!.value : undefined,
       isScript: name => this.scripts.some(other => other.name === name),
-      expose: tree => this.valueObserver?.(tree),
+      expose: tree => this.session?.values(tree),
       callValue: (fn, args, reply) => {
         const receiver = this.scripts.find(
           other => other.name === fn.homeScript(),
@@ -3831,7 +3842,7 @@ export class TsGroup implements Group {
         ],
       ),
     );
-    this.observer?.({
+    this.session?.runs({
       k: 'unhandled',
       ...(run ? { run } : {}),
       message: delivery.message,
@@ -4395,7 +4406,7 @@ export class TsGroup implements Group {
         ? running.delivery.message
         : null;
     const observe = (end: string, until?: bigint) =>
-      this.observer?.({
+      this.session?.runs({
         k: 'seg',
         run: running.id,
         how,
@@ -4715,7 +4726,7 @@ export class TsGroup implements Group {
             ],
           ),
         );
-        this.observer?.({
+        this.session?.runs({
           k: 'unhandled',
           run: running.id,
           message: rec.message ?? '',
@@ -4755,13 +4766,13 @@ export class TsGroup implements Group {
             ],
           ),
         );
-        this.observer?.({ k: 'call', call: rec.id, run: running.id });
+        this.session?.runs({ k: 'call', call: rec.id, run: running.id });
         continue;
       }
       if (rec.kind === 'call-failed') {
         if (rec.id) {
           this.trace?.(recordLine('call-failed', [rec.id], [['op', rec.op]]));
-          this.observer?.({ k: 'call', call: rec.id, run: running.id });
+          this.session?.runs({ k: 'call', call: rec.id, run: running.id });
         }
         this.drainReports.push(this.callFailed(run.script.name, rec));
         continue;
@@ -4906,7 +4917,7 @@ export class TsGroup implements Group {
         ],
       ),
     );
-    this.observer?.({
+    this.session?.runs({
       k: 'run',
       run: running.id,
       outcome: word,
@@ -5594,7 +5605,7 @@ const messageFields = (m: Message): [string, string | null][] => {
   ];
 };
 
-export const newGroup = (o: GroupOptions): TsGroup => new TsGroup(o);
+export const newGroup = (o: TsGroupOptions): TsGroup => new TsGroup(o);
 
-export const restore = (bytes: Uint8Array, options: RestoreOptions) =>
+export const restore = (bytes: Uint8Array, options: TsRestoreOptions) =>
   TsGroup.restore(bytes, options);

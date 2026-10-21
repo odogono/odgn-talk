@@ -1072,9 +1072,11 @@ const driveReplay = function* (
     lifecycle,
     coordinator,
   );
+  const port = sessionObjects?.port();
   const built = buildSetupGroup(setup, capabilities, {
     core,
     name: 'case',
+    session: port,
     trace: writeTrace,
     readSource,
     resolveObject,
@@ -1088,7 +1090,9 @@ const driveReplay = function* (
     },
   });
   group = built.group;
-  sessionObjects?.attach(group);
+  if (sessionObjects) {
+    sessionObjects.attach(group, port!);
+  }
   const sessionBindings = sessionObjects?.preload();
   configureDebug?.(group);
   for (const o of setup.objects ?? []) {
@@ -1347,8 +1351,10 @@ const driveReplay = function* (
           const disposed = r.fields.has('disposed')
             ? valuesOf(value(r.fields.get('disposed')!)).map(v => v.toString())
             : [];
+          const restorePort = sessionObjects?.port();
           const restored = core.restore(saved.get(from)!, {
             name: 'case',
+            session: restorePort,
             trace: writeTrace,
             libraries: [...registered.values()].filter(
               l => !withheld.has(l.name),
@@ -1378,7 +1384,9 @@ const driveReplay = function* (
           }
           group = restored.group;
           sessionObjects?.restored(r.fields.get('from'));
-          sessionObjects?.attach(group);
+          if (sessionObjects) {
+            sessionObjects.attach(group, restorePort!);
+          }
           sessionObjects?.reports(restored.result.reports);
           configureDebug?.(group);
           registered = new Map(
@@ -1607,8 +1615,10 @@ const driveReplay = function* (
               hidden = false;
               break;
             }
+            const retryPort = sessionObjects?.port();
             const restored = core.restore(bytes, {
               name: 'case',
+              session: retryPort,
               trace: writeTrace,
               libraries: [...registered.values()],
               grants: (script, name) => bound.get(script)?.[name],
@@ -1629,7 +1639,9 @@ const driveReplay = function* (
               )
             ) {
               group = restored.group;
-              sessionObjects?.attach(group);
+              if (sessionObjects) {
+                sessionObjects.attach(group, retryPort!);
+              }
               configureDebug?.(group);
               for (const [key, handle] of made) {
                 made.set(key, group.objectById(handle.kind.name, handle.id)!);
