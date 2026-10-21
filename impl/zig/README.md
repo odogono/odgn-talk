@@ -824,8 +824,10 @@ which keeps the latter's size classes for blocks up to half a 64 KiB page
 with free neighbours and serve any later block that fits, and a block grows
 in place into a free run after it or at the top of memory. `wasm_allocator`
 alone rounds large blocks up to a power of two of pages and reuses a freed
-run only at the same size. With it, a Load of 100,000 empty Handlers took
-104 times its source in linear memory, against 76 times now.
+run only at the same size. The lowering also lays out each body's code as
+soon as the bodies before it are laid out, so it holds one body's working
+code at a time. Together these took a Load of 100,000 empty Handlers from
+104 times its source in linear memory to 51.
 
 A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
