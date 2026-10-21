@@ -958,9 +958,9 @@ fn chargeAnswer(call: *caps.Call, charged: u64) bool {
 fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Outcome {
     const oc: *OpContext = @ptrCast(@alignCast(context.?));
     const s = oc.session;
-    if (s.x.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
+    if (s.x.pumping_entry) |e| if (e.group.group.releasePaused()) return .deferred;
     if (s.x.answer) |*a| {
-        s.x.pumping_entry.?.group.group.answering_crossing = false;
+        s.x.pumping_entry.?.group.group.answerTaken();
         const answer = a.*;
         s.x.answer = null;
         // A result answers only an immediate Operation, started only a
@@ -1115,9 +1115,9 @@ fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
 fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentContext) caps.EffectStatus {
     const ec: *EffectContext = @ptrCast(@alignCast(context.?));
     const s = ec.session;
-    if (s.x.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
+    if (s.x.pumping_entry) |e| if (e.group.group.releasePaused()) return .deferred;
     if (s.x.effect_answer) |status| {
-        s.x.pumping_entry.?.group.group.answering_crossing = false;
+        s.x.pumping_entry.?.group.group.answerTaken();
         s.x.effect_answer = null;
         return status;
     }
@@ -1195,12 +1195,12 @@ fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
         s.gpa.free(grant);
         return;
     };
-    if (s.x.in_pump or s.x.in_work) s.x.pumping_entry.?.group.group.release_pause = true;
+    if (s.x.in_pump or s.x.in_work) s.x.pumping_entry.?.group.group.pauseForRelease();
 }
 
 fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
     const a = &(s.x.answer orelse return null);
-    s.x.pumping_entry.?.group.group.answering_crossing = false;
+    s.x.pumping_entry.?.group.group.answerTaken();
     const answer = a.*;
     s.x.answer = null;
     switch (answer.kind) {
@@ -1666,11 +1666,11 @@ fn needReply(s: *Session, ref: i64) []u8 {
 fn writeReports(o: *Out, entry: *GroupEntry) Allocator.Error!void {
     o.climbed = entry.climb;
     // Stale Function Value calls rejected `function gone` with no report.
-    const gone = &entry.group.group.gone_calls;
-    defer gone.clearRetainingCapacity();
+    const gone = entry.group.group.goneCalls();
+    defer entry.group.group.clearGoneCalls();
     if (entry.gone) {
         try o.raw(",\"gone\":[");
-        for (gone.items, 0..) |id, i| {
+        for (gone, 0..) |id, i| {
             if (i > 0) try o.raw(",");
             try o.raw("\"d");
             try o.int(id);
@@ -2035,7 +2035,7 @@ fn pausedReply(s: *Session, ref: i64) []u8 {
         const reply = holdForReleases(s, ref, s.x.exchange_entry.?, needReply(s, ref), .outer);
         return if (s.crossing_trace) withTrace(s, s.x.exchange_entry.?, reply) else reply;
     }
-    if (s.x.exchange_entry.?.group.group.trace_pause) {
+    if (s.x.exchange_entry.?.group.group.tracePaused()) {
         var o = Out.init(s.gpa);
         defer o.deinit();
         o.raw("{\"ref\":") catch return oomReply();
@@ -2173,14 +2173,14 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
         spent.deinit(s.gpa);
         s.x.paused_ref = null;
         const entry = s.x.exchange_entry.?;
-        entry.group.group.release_pause = false;
+        entry.group.group.clearReleasePause();
         if (s.x.work_paused) {
             s.x.work_paused = false;
             return runWork(s, ref, entry, .resumed);
         }
         return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
     }
-    if (s.x.exchange_entry) |e| e.group.group.release_pause = false;
+    if (s.x.exchange_entry) |e| e.group.group.clearReleasePause();
     if (s.x.paused_ref == null) s.x.exchange_entry = null;
     if (reply.bin) |fin| {
         s.gpa.free(reply.frame);
@@ -3470,7 +3470,7 @@ fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode
 /// After an answer, the paused Reload or library replacement goes on, or
 /// else the paused Pump.
 fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
-    entry.group.group.answering_crossing = true;
+    entry.group.group.beginAnswer();
     if (s.x.work_paused) {
         s.x.work_paused = false;
         return runWork(s, ref, entry, .resumed);
@@ -4392,11 +4392,11 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         return releaseResultReply(s, ref);
     }
     if (s.x.paused_ref) |paused| {
-        if (s.x.need == null and s.x.exchange_entry.?.group.group.trace_pause) {
+        if (s.x.need == null and s.x.exchange_entry.?.group.group.tracePaused()) {
             if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
             if (!std.mem.eql(u8, m, "trace-result")) return protocolError(s.gpa, ref, "a crossing is waiting for trace-result");
             const entry = s.x.exchange_entry.?;
-            entry.group.group.trace_pause = false;
+            entry.group.group.clearTracePause();
             s.x.paused_ref = null;
             return resumeAnswered(s, ref, entry);
         }
@@ -4668,11 +4668,7 @@ fn enterPaused(s: *Session, entry: *GroupEntry) Paused {
     const mg = &entry.group.group;
     const held: Paused = .{ .entry = entry, .pumping = mg.pumping, .trace = mg.trace, .old_inline = mg.inline_admitting };
     mg.pumping = s.x.exchange_pump;
-    if (mg.pumping and !s.inline_active and mg.held_trace == null and held.trace != null) {
-        if (mg.held == null) mg.held = .init(mg.gpa);
-        mg.held_trace = held.trace;
-    }
-    if (mg.held_trace != null) mg.trace = &mg.held.?.writer;
+    mg.holdCallbackTrace(held.trace, !s.inline_active);
     s.admitting = true;
     mg.inline_admitting = s.inline_active;
     return held;
@@ -5153,12 +5149,12 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
     var gone = rp.Writer.init(s.gpa);
     defer gone.deinit();
     {
-        const ids = &mg.gone_calls;
-        defer ids.clearRetainingCapacity();
+        const ids = mg.goneCalls();
+        defer mg.clearGoneCalls();
         if (entry.gone) {
-            try gone.list(ids.items.len);
+            try gone.list(ids.len);
             var buf: [24]u8 = undefined;
-            for (ids.items) |id| try gone.ptext(std.fmt.bufPrint(&buf, "d{d}", .{id}) catch unreachable);
+            for (ids) |id| try gone.ptext(std.fmt.bufPrint(&buf, "d{d}", .{id}) catch unreachable);
         }
     }
     var w = rp.Writer.init(s.gpa);
@@ -6143,9 +6139,9 @@ const InlineTrace = struct {
                     return error.WriteFailed;
                 };
             }
-            if (t.session.inline_active and t.entry.group.group.pumping and t.entry.group.group.held_trace == null and !t.entry.group.group.pump_finishing) {
+            if (t.session.inline_active and t.entry.group.group.delaysRecords()) {
                 const own = t.entry.gpa.dupe(u8, line) catch return error.WriteFailed;
-                t.entry.group.group.landing.append(t.entry.gpa, .{ .record = own, .delayed = true }) catch {
+                t.entry.group.group.delayRecord(own) catch {
                     t.entry.gpa.free(own);
                     return error.WriteFailed;
                 };
