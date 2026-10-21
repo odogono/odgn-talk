@@ -68,7 +68,7 @@ pub fn startStretch(run: *Run) void {
 }
 
 /// The Fuel the Run's current Stretch has spent.
-pub fn stretchFuel(run: *const Run) u64 {
+pub inline fn stretchFuel(run: *const Run) u64 {
     return run.fuel - run.segment_fuel;
 }
 
