@@ -11,6 +11,15 @@ import {
 import { coreVersions } from '@northtalk/ts';
 import { verifyHttpExample, verifyScriptRunner } from './run-integration';
 
+// Node 22/24 warn about the bundled node:sqlite import. Child processes
+// still check CLI stderr and retain runtime warnings of other types.
+process.env['NODE_OPTIONS'] = [
+  process.env['NODE_OPTIONS'],
+  '--disable-warning=ExperimentalWarning',
+]
+  .filter(Boolean)
+  .join(' ');
+
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-node-'));
 const main = fileURLToPath(new URL('./main.js', import.meta.url));
 try {

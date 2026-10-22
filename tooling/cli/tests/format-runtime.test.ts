@@ -17,10 +17,17 @@ test('the fmt CLI runs under both Node and Bun', async () => {
     expect(build.success).toBe(true);
     writeFileSync(main, await build.outputs[0]!.text());
     for (const runtime of ['node', process.execPath]) {
+      // Node 22/24 warn about the bundled node:sqlite import; assert only
+      // the CLI's stderr, while retaining other runtime warnings.
+      const flags =
+        runtime === 'node' ? ['--disable-warning=ExperimentalWarning'] : [];
       const run = (args: string[], stdin = '') => {
-        const result = Bun.spawnSync([runtime, main, 'fmt', ...args], {
-          stdin: new TextEncoder().encode(stdin),
-        });
+        const result = Bun.spawnSync(
+          [runtime, ...flags, main, 'fmt', ...args],
+          {
+            stdin: new TextEncoder().encode(stdin),
+          },
+        );
         return {
           code: result.exitCode,
           stdout: result.stdout.toString(),
