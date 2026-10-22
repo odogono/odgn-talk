@@ -129,3 +129,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0125: A Host function's Call names the Delivery that started its Run](0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)
 - [0126: A `northtalk` command given a file runs it as a Script Runner](0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)
 - [0127: The Zig Message Layer keeps an Exchange's lifecycle in one module](0127-the-zig-message-layer-keeps-an-exchanges-lifecycle-in-one-module.md)
+- [0128: Folio pauses a browsing Play Session on a virtual Host clock](0128-folio-pauses-a-browsing-play-session-on-a-virtual-host-clock.md)
