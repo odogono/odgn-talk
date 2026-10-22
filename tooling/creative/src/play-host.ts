@@ -21,9 +21,12 @@ import { scriptOwners } from './script-manifest';
 import { variablesOf } from './variables';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
+import { pausableClock } from '@northtalk/tooling/pausable-clock';
 
-const wallClock = () =>
-  BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n;
+const wallClock = pausableClock(
+  () => BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n,
+  () => 0,
+);
 
 /**
  * An Element as the page receives it: a group without its members, a Canvas

@@ -24,6 +24,7 @@ import {
   type ReplayEvent,
   type Setup,
 } from '@northtalk/ts/replay';
+import { pausableClock } from './pausable-clock';
 export type { Setup as ReplaySetup } from '@northtalk/ts/replay';
 
 export type SourceBreakpoint = {
@@ -356,15 +357,17 @@ export class LiveDebugger {
     { script?: string; unit: CodeUnit }
   >();
   private breakpoints: SourceBreakpoint[] = [];
-  private readonly pausedBaseline: number;
-  private lastClock: bigint | null = null;
+  private readonly pausable: () => bigint;
 
   constructor(
     private readonly group: TsGroup,
     private readonly environment: { now(): bigint },
   ) {
     this.controller = group.debug();
-    this.pausedBaseline = this.controller.pausedTime();
+    this.pausable = pausableClock(
+      () => this.environment.now(),
+      () => this.controller.pausedTime(),
+    );
   }
   get isPaused(): boolean {
     return this.controller.isPaused;
@@ -409,18 +412,7 @@ export class LiveDebugger {
   }
   /** Epoch microseconds supplied by the Host, less cumulative paused wall time. */
   clock(): bigint {
-    const reading =
-      this.environment.now() -
-      // Paused time is in milliseconds.
-      BigInt(
-        Math.floor((this.controller.pausedTime() - this.pausedBaseline) * 1000),
-      );
-    // Coarse Host clocks and separately sampled monotonic paused time can
-    // otherwise regress by a fraction of a millisecond after a pause.
-    if (this.lastClock === null || reading > this.lastClock) {
-      this.lastClock = reading;
-    }
-    return this.lastClock;
+    return this.pausable();
   }
   pump(now = this.clock(), options?: PumpOptions): DebugResult {
     return this.result(this.group.pump(now, options));
