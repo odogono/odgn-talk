@@ -108,6 +108,10 @@ _Avoid_: callout, host call
 A Pump stopped at a Host Crossing until its Host answers, acknowledges a Grant release, or takes the crossing's Trace. Distinct from a paused Run.
 _Avoid_: deferral, crossing (alone)
 
+**Exchange**:
+A Host-started Message Layer call that may pause before its final reply: a Pump, Reload or library replacement, with the needs, Grant releases and Trace it pauses for and the Host's answers to them. It reserves its call's ref until the final reply. With `group-exchanges-v1` each Script Group has its own, and one Group's open Exchange gates only that Group's frames.
+_Avoid_: conversation, round trip, transaction
+
 **Script Variable**:
 A variable declared at Script level, visible to all of the Script's Handlers and kept for as long as the Host keeps the Script loaded.
 _Avoid_: global, static, script property

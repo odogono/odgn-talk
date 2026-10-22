@@ -128,3 +128,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0124: `http` is an optional Standard Capability answered by the Run that receives each HTTP Exchange](0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md)
 - [0125: A Host function's Call names the Delivery that started its Run](0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)
 - [0126: A `northtalk` command given a file runs it as a Script Runner](0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)
+- [0127: The Zig Message Layer keeps an Exchange's lifecycle in one module](0127-the-zig-message-layer-keeps-an-exchanges-lifecycle-in-one-module.md)
