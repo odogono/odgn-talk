@@ -161,9 +161,19 @@ class Checks(unittest.TestCase):
             self.assertEqual(self.h.frame(b'{"ignored":' + value)["err"]["kind"], "protocol error")
         paused = self.paused()
         ref = paused["ref"]
-        self.assertEqual(self.h.frame(b'{"m":"op-result","ref":1,"result":' + b"[" * 100_000)["err"]["kind"], "protocol error")
-        self.assertEqual(self.h.send("op-result", ref=ref + 100, result=7)["err"]["kind"], "protocol error")
-        self.assertEqual(run_end(self.h.send("op-result", ref=ref, result=42))["result"], 42)
+        self.assertEqual(self.h.frame(b'{"m":"op-result","group":"g","ref":1,"result":' + b"[" * 100_000)["err"]["kind"], "protocol error")
+        self.assertEqual(self.h.send("op-result", group="g", ref=ref + 100, result=7)["err"]["kind"], "protocol error")
+        self.assertEqual(run_end(self.h.send("op-result", group="g", ref=ref, result=42))["result"], 42)
+
+    def test_callback_result_group_refusals(self):
+        self.h.ok("new-group", group="other")
+        paused = self.paused()
+        for fields in ({}, {"group": None}, {"group": 7}, {"group": "unknown"}, {"group": "other"}):
+            with self.subTest(fields=fields):
+                reply = self.h.send("op-result", ref=paused["ref"], result=42, **fields)
+                self.assertEqual(reply["err"]["kind"], "protocol error")
+        self.assertEqual(run_end(self.h.send("op-result", group="g", ref=paused["ref"], result=42))["result"], 42)
+        self.assertEqual(self.h.ok("inspect", group="g")["scripts"][0]["vars"], [["n", 42]])
 
     def test_frame_limit_and_bounded_oversize_drain(self):
         self.group()
@@ -210,7 +220,7 @@ class Checks(unittest.TestCase):
         self.request(args=[value])
         paused = self.pump()
         self.assertEqual(paused["need"]["args"], [value])
-        self.assertEqual(run_end(self.h.send("op-result", ref=paused["ref"], result=value))["result"], value)
+        self.assertEqual(run_end(self.h.send("op-result", group="g", ref=paused["ref"], result=value))["result"], value)
 
         # Trace, argument admission, interim needs and results retain deep
         # Values; inspect the bytes to avoid Python's own JSON depth ceiling.
@@ -219,7 +229,7 @@ class Checks(unittest.TestCase):
         self.assertIn("ok", self.h.frame(request))
         need = self.h.frame_raw(b'{"m":"pump","ref":91,"group":"g","now":"' + NOW.encode() + b'"}')
         self.assertIn(b'"args":[' + nested + b']', need)
-        done = self.h.frame_raw(b'{"m":"op-result","ref":91,"result":' + nested + b'}')
+        done = self.h.frame_raw(b'{"m":"op-result","group":"g","ref":91,"result":' + nested + b'}')
         self.assertIn(b'"result":' + nested, done)
         self.assertIn(b'"completed"', done)
 
@@ -228,7 +238,7 @@ class Checks(unittest.TestCase):
         call = paused["need"]["call"]
         self.assertEqual(self.h.ok("request-charge", group="g", call=call, fuel=1)["request"], "q1")
         self.h.ok("answer", group="g", call=call, value=42)
-        parked = self.h.ok("op-result", ref=paused["ref"], started=True)
+        parked = self.h.ok("op-result", group="g", ref=paused["ref"], started=True)
         self.assertFalse(any(r["kind"] == "run end" for r in parked["reports"]))
         done = self.pump()
         self.assertEqual(run_end(done)["result"], 42)
@@ -244,7 +254,7 @@ class Checks(unittest.TestCase):
                         paused = self.paused(mode)
                         self.h.ok(control, group="g", script="s", run="s/r1", reason="crossing")
                         outcome = {"started": True} if mode == "suspending" else {"result": "wrong shape"}
-                        done = self.h.ok("op-result", ref=paused["ref"], **outcome)
+                        done = self.h.ok("op-result", group="g", ref=paused["ref"], **outcome)
                         self.assertEqual(done["state"], state)
                         scripts = self.h.ok("inspect", group="g")["scripts"]
                         self.assertEqual(scripts[0]["vars"], [["n", 0]])
@@ -265,12 +275,12 @@ class Checks(unittest.TestCase):
         self.assertEqual(paused["need"]["m"], "prop")
         self.assertEqual(self.h.send("inspect", group="g")["err"]["code"], "reentrant call")
         self.h.ok("stop", group="g", script="s", reason="property")
-        self.assertEqual(self.h.ok("prop-result", ref=paused["ref"], value="wrong shape")["state"], "stopped")
+        self.assertEqual(self.h.ok("prop-result", group="g", ref=paused["ref"], value="wrong shape")["state"], "stopped")
         self.assertEqual(self.h.ok("inspect", group="g")["scripts"][0]["vars"], [["n", 0]])
 
     def test_save_restore_pending_call_on_fresh_process(self):
         paused = self.paused("suspending")
-        self.h.ok("op-result", ref=paused["ref"], started=True)
+        self.h.ok("op-result", group="g", ref=paused["ref"], started=True)
         saved = self.h.ok("save", group="g")["save"]
         self.assertEqual(self.h.close(), (0, b""))
         self.h = Sidecar()
@@ -296,30 +306,30 @@ class Checks(unittest.TestCase):
         reply = self.pump()
         ref = reply["ref"]
         self.assertEqual(reply["need"]["phase"], "begin")
-        reply = self.h.send("effect-result", ref=ref, status="ok")
+        reply = self.h.send("effect-result", group="g", ref=ref, status="ok")
         self.assertEqual(reply["need"]["operation"], "open")
-        reply = self.h.send("op-result", ref=ref, result=None)
+        reply = self.h.send("op-result", group="g", ref=ref, result=None)
         self.assertEqual(reply["need"]["operation"], "close")
         self.assertTrue(reply["need"]["automatic"])
-        reply = self.h.send("op-result", ref=ref, result=None)
+        reply = self.h.send("op-result", group="g", ref=ref, result=None)
         self.assertEqual(reply["need"]["phase"], "commit")
-        self.assertEqual(run_end(self.h.send("effect-result", ref=ref, status="ok"))["result"], 42)
+        self.assertEqual(run_end(self.h.send("effect-result", group="g", ref=ref, status="ok"))["result"], 42)
         # Cancellation while a resource is open closes it, rolls back, then
         # releases the Grant, all before the enclosing Pump returns.
         self.request()
         reply = self.pump()
         ref = reply["ref"]
-        reply = self.h.send("effect-result", ref=ref, status="ok")
+        reply = self.h.send("effect-result", group="g", ref=ref, status="ok")
         self.assertEqual(reply["need"]["operation"], "open")
         self.h.ok("stop", group="g", script="s", reason="cleanup")
-        reply = self.h.send("op-result", ref=ref, result=None)
+        reply = self.h.send("op-result", group="g", ref=ref, result=None)
         self.assertEqual(reply["need"]["operation"], "close")
-        reply = self.h.send("op-result", ref=ref, result=None)
+        reply = self.h.send("op-result", group="g", ref=ref, result=None)
         self.assertEqual(reply["need"]["phase"], "rollback")
-        reply = self.h.send("effect-result", ref=ref, status="ok")
+        reply = self.h.send("effect-result", group="g", ref=ref, status="ok")
         self.assertEqual(reply["need"]["m"], "release")
         self.assertEqual(self.h.send("inspect", group="g")["err"]["code"], "reentrant call")
-        self.assertEqual(self.h.ok("release-result", ref=ref)["state"], "stopped")
+        self.assertEqual(self.h.ok("release-result", group="g", ref=ref)["state"], "stopped")
 
 
 if __name__ == "__main__":

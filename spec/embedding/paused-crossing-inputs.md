@@ -289,7 +289,8 @@ records already produced before that callback. After a matching `op-result`,
 the worker records the outcome, installs any started Call, and yields
 `{"ref": n, "need": {"m": "trace"}, "trace": [ ... ]}` before landing
 crossing controls or converting the result. The Host invokes its Trace sink
-in array order, then replies `{"m": "trace-result", "ref": n}`. The same
+in array order, then replies `{"m": "trace-result", "ref": n, "group": g}`,
+where `g` names the worker's Group. The same
 paused-input allowlist and reserved worker ref rules apply. Wrong results keep
 the observation open. The continuation retains the original Clock, Fuel,
 operands and callback outcome; acknowledgement must never invoke the Operation

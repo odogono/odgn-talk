@@ -55,6 +55,8 @@ pub const Refusal = enum {
     no_worker,
     /// Admission: an input for another Group, or for none.
     other_group,
+    /// A result for another Group than the exchange's, or for none.
+    wrong_group,
     /// Admission: a message paused admission doesn't take.
     not_admitted,
 };
@@ -322,9 +324,22 @@ pub fn Exchange(comptime Parts: type) type {
 
         // -------------------------------------------------------- gating
 
-        /// What a frame under `ref` does to the exchange. JSON and binary
-        /// differ where they did before the module (#1496).
-        pub fn gate(x: *const X, ref: i64, frame: Frame, layout: Layout) Gate {
+        /// What a frame under `ref`, addressed to `group`, does to the
+        /// exchange. A result it would take must address the exchange's
+        /// Group, including a release holding a final reply after its
+        /// worker has finished (#1492). JSON and binary differ where they
+        /// did before the module (#1496).
+        pub fn gate(x: *const X, ref: i64, frame: Frame, layout: Layout, group: ?Entry) Gate {
+            const g = x.gateFrame(ref, frame, layout);
+            const owner = switch (g) {
+                .result, .trace_result => x.entry,
+                .release_result => x.releasing(),
+                .dispatch, .admit, .refuse => return g,
+            };
+            return if (group != null and group == owner) g else .{ .refuse = .wrong_group };
+        }
+
+        fn gateFrame(x: *const X, ref: i64, frame: Frame, layout: Layout) Gate {
             const binary_result = layout == .binary and frame == .result;
             switch (x.state) {
                 .idle => return if (binary_result) .{ .refuse = .not_open } else .dispatch,
@@ -583,8 +598,8 @@ test "a need's result resumes the worker that paused, and only that result is ta
     defer g.calls.deinit(gpa);
     var x: TestX = .{};
     defer x.deinit(gpa);
-    try testing.expectEqual(Gate.dispatch, x.gate(7, .{ .result = .op }, .json));
-    try testing.expectEqual(Gate{ .refuse = .not_open }, x.gate(7, .{ .result = .op }, .binary));
+    try testing.expectEqual(Gate.dispatch, x.gate(7, .{ .result = .op }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .not_open }, x.gate(7, .{ .result = .op }, .binary, &g));
 
     x.start(&g, .work);
     try testing.expect(x.canDefer(.op) and x.canDefer(.effect) and !x.canDefer(.prop));
@@ -594,14 +609,17 @@ test "a need's result resumes the worker that paused, and only that result is ta
     try testing.expect(x.open() and !x.canDefer(.op));
 
     // JSON: a result under another ref is an input; the kind is checked last.
-    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(8, .{ .result = .op }, .json));
-    try testing.expectEqual(Gate{ .refuse = .kind_mismatch }, x.gate(7, .{ .result = .prop }, .json));
-    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .{ .result = .release }, .json));
-    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .input, .json));
+    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(8, .{ .result = .op }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .kind_mismatch }, x.gate(7, .{ .result = .prop }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .{ .result = .release }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .input, .json, &g));
     // Binary: the ref is checked first, and an input is always considered.
-    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(8, .{ .result = .op }, .binary));
-    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(7, .input, .binary));
-    try testing.expectEqual(Gate{ .result = .op }, x.gate(7, .{ .result = .op }, .binary));
+    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(8, .{ .result = .op }, .binary, &g));
+    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(7, .input, .binary, &g));
+    try testing.expectEqual(Gate{ .result = .op }, x.gate(7, .{ .result = .op }, .binary, &g));
+    var other: TestGroup = .{};
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, .binary, &other));
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, .json, null));
 
     const r = x.answered(gpa, TestX.Answer.make("41"));
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .work }, r);
@@ -624,12 +642,12 @@ test "a Trace pause takes only trace-result, which no binary result is" {
     x.start(&g, .pump);
     try testing.expectEqual(TestX.Pause.trace, x.pause(3));
     x.stop(gpa);
-    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(4, .{ .result = .op }, .json));
-    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .json));
-    try testing.expectEqual(Gate.trace_result, x.gate(3, .{ .result = .trace }, .json));
-    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(4, .{ .result = .op }, .binary));
-    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .binary));
-    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(3, .input, .binary));
+    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(4, .{ .result = .op }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .json, &g));
+    try testing.expectEqual(Gate.trace_result, x.gate(3, .{ .result = .trace }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(4, .{ .result = .op }, .binary, &g));
+    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .binary, &g));
+    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(3, .input, .binary, &g));
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .pump }, x.traceTaken());
     try expectCalls(&g, &.{ "clearTracePause", "beginAnswer" });
     try testing.expect(!x.open() and !g.trace_pause);
@@ -658,11 +676,13 @@ test "a final reply waits for each release, then ends the exchange" {
     try testing.expect(x.hold(5, heldReply(&g, "final")));
     try testing.expectEqual(&g, x.releasing());
     try testing.expectEqualStrings("a", x.nextRelease().bytes);
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(5, .{ .result = .op }, .json));
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .{ .result = .release }, .json));
-    try testing.expectEqual(Gate{ .refuse = .release_pending }, x.gate(5, .{ .result = .op }, .binary));
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .input, .binary));
-    try testing.expectEqual(Gate.release_result, x.gate(5, .{ .result = .release }, .binary));
+    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(5, .{ .result = .op }, .json, &g));
+    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .{ .result = .release }, .json, &g));
+    try testing.expectEqual(Gate{ .refuse = .release_pending }, x.gate(5, .{ .result = .op }, .binary, &g));
+    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .input, .binary, &g));
+    try testing.expectEqual(Gate.release_result, x.gate(5, .{ .result = .release }, .binary, &g));
+    var other: TestGroup = .{};
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(5, .{ .result = .release }, .binary, &other));
     try testing.expectEqual(TestX.Acknowledged.next_release, x.releaseAcknowledged(gpa));
     try testing.expectEqualStrings("b", x.nextRelease().bytes);
     var sent = x.releaseAcknowledged(gpa).reply;
@@ -688,7 +708,7 @@ test "a need reply held behind a release leaves its need open" {
     var sent = x.releaseAcknowledged(gpa).reply;
     sent.deinit(gpa);
     try expectCalls(&g, &.{"clearReleasePause"});
-    try testing.expectEqual(Gate{ .result = .effect }, x.gate(9, .{ .result = .effect }, .json));
+    try testing.expectEqual(Gate{ .result = .effect }, x.gate(9, .{ .result = .effect }, .json, &g));
     try testing.expectEqual(&g, x.entry.?);
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .pump }, x.effectAnswered(gpa, .ok));
     x.start(&g, .pump);

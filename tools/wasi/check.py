@@ -182,6 +182,7 @@ def check(engine, module):
     )
     grant = h.ok("grant", capability="api", ops="all")["grant"]
     h.ok("new-group", group="g", name="g", trace=True)
+    h.ok("new-group", group="other")
     expressions = [
         "(" * 100_000 + "1" + ")" * 100_000,
         "[" * 100_000 + "1" + "]" * 100_000,
@@ -251,6 +252,9 @@ end bad
     assert need["m"] == "op" and need["args"] == [20], need
     assert 0 < need["fuelLeft"] < 1000, need
     # Bad exchanges leave the parked worker available for the right result.
+    for fields in ({}, {"group": None}, {"group": 7}, {"group": "unknown"}, {"group": "other"}):
+        refused = h.send("op-result", is_result=True, result=40, **fields)
+        assert refused["err"]["kind"] == "protocol error", refused
     assert (
         h.send("hello", is_result=True, protocol=1)["err"]["kind"] == "protocol error"
     )
@@ -259,12 +263,12 @@ end bad
     ).encode()
     assert h.frame(wrong_ref)["err"]["kind"] == "protocol error"
     deep_result = (
-        '{"m":"op-result","ref":' + str(h.ref) + ',"result":'
+        '{"m":"op-result","group":"g","ref":' + str(h.ref) + ',"result":'
         + '[' * 100_000 + '1' + ']' * 100_000
     ).encode()
     rejected = h.frame(deep_result)
     assert rejected["err"]["kind"] == "protocol error", rejected
-    done = h.send("op-result", is_result=True, result=40, charged=3)
+    done = h.send("op-result", group="g", is_result=True, result=40, charged=3)
     end = run_end(done)
     assert end["outcome"] == "completed" and end["result"] == 41, end
     assert any("charged=3" in line for line in done["ok"]["trace"]), done
@@ -272,7 +276,7 @@ end bad
     h.ok("request", group="g", to={"script": "s"}, message={"name": "fetch"})
     need = h.send("pump", group="g", now=now)["need"]
     assert need["mode"] == "suspending", need
-    parked = h.send("op-result", is_result=True, started=True)["ok"]
+    parked = h.send("op-result", group="g", is_result=True, started=True)["ok"]
     assert not any(r["kind"] == "run end" for r in parked["reports"]), parked
     h.ok("answer", group="g", call=need["call"], value=37)
     end = run_end(h.send("pump", group="g", now=now))
@@ -291,7 +295,7 @@ end bad
         message={"name": "double", "args": [1]},
     )
     assert h.send("pump", group="g", now=now)["need"]["operation"] == "double"
-    end = run_end(h.send("op-result", is_result=True, result=2))
+    end = run_end(h.send("op-result", group="g", is_result=True, result=2))
     assert end["outcome"] == "completed" and end["result"] == 3, end
     assert "$bytes" in h.ok("save", group="g")["save"]
     assert "$bytes" in h.ok("fingerprint", group="g")["fingerprint"]
@@ -327,7 +331,7 @@ end bad
     ).encode())
     assert b'"need"' in need and deep.encode() in need
     ended = exchange.frame_raw((
-        '{"m":"op-result","ref":2,"result":' + deep + '}'
+        '{"m":"op-result","group":"g","ref":2,"result":' + deep + '}'
     ).encode())
     assert b'"completed"' in ended and deep.encode() in ended
     assert exchange.ok("add", a=20, b=22)["value"] == 42
@@ -360,7 +364,7 @@ end go
         assert value == 1
     need = h.send("pump", group="g", now=now)["need"]
     check_value(need["args"][0])
-    end = run_end(h.send("op-result", is_result=True, result=42))
+    end = run_end(h.send("op-result", group="g", is_result=True, result=42))
     assert end["outcome"] == "completed", end
     check_value(end["result"])
     assert h.ok("add", a=20, b=22)["value"] == 42
