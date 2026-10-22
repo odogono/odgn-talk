@@ -203,6 +203,13 @@ Files, grammar, or lowering.
 - Tests and cases: [grammar tests](../../tooling/vscode/tests/grammar.test.ts)
 - First check: `bun test tooling/vscode/tests`
 
+## Running a Script file
+
+- Implementation: [Script Runner](../../tooling/cli/src/run.ts), dispatched from [the CLI](../../tooling/cli/src/main.ts), over [`newDrivenGroup`](src/driver.ts) and [the HTTP router](src/http/router.ts)
+- Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [ADR 0126](../../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md), [CLI guide](../../tooling/cli/README.md#running-a-script)
+- Tests and cases: [Runner checks shared by Bun and Node](../../tooling/cli/tests/run-integration.ts), [the HTTP example](../../examples/http/hello.talk)
+- First check: `bun test tooling/cli/tests/run-runtime.test.ts`
+
 ## Testing user Scripts
 
 - Implementation: [Test runner](../../tooling/cli/src/test.ts) over the public Group API

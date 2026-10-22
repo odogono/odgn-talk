@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // The `northtalk` command (chapter 12, Tooling). The REPL's interface and
 // formatting and Lints are outside parity; Session output and recording aren't.
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { format } from './format';
 import { lintFiles } from './lint';
@@ -9,6 +9,8 @@ import { lsp } from './lsp';
 import { replay } from './replay';
 
 const usage = `Usage:
+  northtalk [--port <n>] <file.talk> [args…]
+                                          run a Script: Deliver start args
   northtalk debug <script> [--trace <file>] live debugger in a Bun Host
   northtalk debug --trace <file> [--setup <file>]
                                           replay debugger (case.toml by default)
@@ -23,7 +25,46 @@ const usage = `Usage:
   northtalk test [--manifest <file>] [--only <text>] [<path>…]
                                           run Test Scripts and Transcripts`;
 
+const commands = new Set([
+  'debug',
+  'lsp',
+  'repl',
+  'replay',
+  'fmt',
+  'lint',
+  'test',
+  'help',
+]);
+
+// A first argument that ends in `.talk`, or names an existing file and isn't
+// a subcommand, is a Script to run (ADR 0126).
+const isScriptFile = (arg: string | undefined): arg is string =>
+  arg !== undefined &&
+  !arg.startsWith('-') &&
+  !commands.has(arg) &&
+  (arg.endsWith('.talk') ||
+    statSync(arg, { throwIfNoEntry: false })?.isFile() === true);
+
+const portOf = (value: string | undefined): number => {
+  const port = Number(value);
+  if (!/^\d+$/u.test(value ?? '') || port > 65_535) {
+    throw new Error(`--port needs a port from 0 to 65535, not ${value}`);
+  }
+  return port;
+};
+
 const main = async (args: string[]): Promise<number> => {
+  const runs = args[0] === '--port' ? 2 : 0;
+  if (isScriptFile(args[runs])) {
+    const env = process.env['PORT'];
+    const port = runs > 0 ? portOf(args[1]) : env ? portOf(env) : undefined;
+    const { runScript } = await import('./run');
+    return runScript({
+      file: args[runs]!,
+      args: args.slice(runs + 1),
+      ...(port === undefined ? {} : { port }),
+    });
+  }
   const [command = 'repl', ...rest] = args[0]?.startsWith('--')
     ? ['repl', ...args]
     : args;

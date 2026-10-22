@@ -9,6 +9,7 @@ import {
   verifyLspInvalidConfiguration,
 } from './lsp-integration';
 import { coreVersions } from '@northtalk/ts';
+import { verifyHttpExample, verifyScriptRunner } from './run-integration';
 
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-node-'));
 const main = fileURLToPath(new URL('./main.js', import.meta.url));
@@ -75,3 +76,14 @@ await verifyLspStdio(
 process.stdout.write('Node CLI LSP: fixture workspace passed\n');
 
 await verifyLspInvalidConfiguration(process.execPath, main);
+
+verifyScriptRunner(process.execPath, main);
+process.stdout.write(
+  'Node CLI run: start args, exit codes, timers and reads passed\n',
+);
+await verifyHttpExample(
+  process.execPath,
+  main,
+  fileURLToPath(new URL('../../../examples/http/hello.talk', import.meta.url)),
+);
+process.stdout.write('Node CLI run: HTTP example served until SIGINT\n');

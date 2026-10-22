@@ -1,0 +1,24 @@
+-- A small web server: `northtalk examples/http/hello.talk`, then
+-- `curl localhost:3000/users/7`. `--port` or PORT picks another port.
+use decodeText from bytes
+
+on start args
+  ask http to serve "site", "/", "httpRequest", {port: 3000} and wait
+  say "listening on " & the port of it
+end start
+
+on httpRequest {method: "GET", segments: [], exchange: x}
+  ask http to respond x, {body: "hello"}
+end httpRequest
+
+on httpRequest {method: "GET", segments: ["users", id], exchange: x}
+  ask http to respond x, {json: {id: id}}
+end httpRequest
+
+on httpRequest {method: "POST", segments: ["echo"], body: b, exchange: x}
+  ask http to respond x, {status: 201, body: decodeText(b)}
+end httpRequest
+
+-- Returns without responding, so the Host answers 500.
+on httpRequest {method: "GET", segments: ["never"]}
+end httpRequest
