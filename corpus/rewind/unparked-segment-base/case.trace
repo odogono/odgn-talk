@@ -1,4 +1,3 @@
-# Unblessed: Rewind before an unparked Run resumes (#1476); first blessing awaits human review.
 # The resource Grant makes the Script use Segment bases even though this
 # Handler never enlists a participant. s/r2 parks with n=0. s/r1 then commits
 # n=1 and unparks s/r2, but the Pump cap stops it before its body resumes.
