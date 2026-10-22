@@ -62,13 +62,23 @@ export const drawingProblem = (value: unknown): string | undefined => {
   return undefined;
 };
 
+/** How far a reader has seen a Drawing: its count of resets and its length. */
+export type DrawingMark = { readonly length: number; readonly resets: number };
+
+/** A Drawing's commands since a mark: all of them after a reset. */
+export type DrawingChange = {
+  commands: CanvasCommand[];
+  mark: DrawingMark;
+  reset: boolean;
+};
+
 /**
- * A Play Session's working copy of one Drawing. `commands` is replaced by a
- * new array on each reset and appended to otherwise, so a reader can tell a
- * reset from new commands by identity alone.
+ * A Play Session's working copy of one Drawing. Readers follow it with
+ * `changesSince`, so each learns of a reset or new commands in one place.
  */
 export class Drawing {
   commands: CanvasCommand[];
+  #resets = 0;
   #style = new Map<string, CanvasCommand>();
   // The style each open `push` saved; `pop` restores it.
   #saved: Map<string, CanvasCommand>[] = [];
@@ -107,6 +117,7 @@ export class Drawing {
         ...(command.op === 'background' ? [command] : []),
       ];
       this.#saved = [];
+      this.#resets++;
       return;
     }
     if (this.commands.length >= CANVAS_LIMITS.commands) {
@@ -117,5 +128,45 @@ export class Drawing {
     }
     this.commands.push(command);
     this.#note(command);
+  }
+
+  /**
+   * What changed since `mark`, or undefined when nothing has. Without a mark,
+   * or after a reset, the change is the whole Drawing, sharing its array.
+   */
+  changesSince(mark?: DrawingMark): DrawingChange | undefined {
+    const now = { resets: this.#resets, length: this.commands.length };
+    const reset = mark?.resets !== now.resets;
+    if (!reset && now.length === mark.length) {
+      return undefined;
+    }
+    return {
+      reset,
+      commands: reset ? this.commands : this.commands.slice(mark.length),
+      mark: now,
+    };
+  }
+}
+
+/**
+ * The page's copy of a Drawing, kept from the changes the worker sends. A
+ * reset replaces `commands` with a new array and new commands extend the
+ * same one, so a painter that keeps the array it painted repaints only after
+ * a reset.
+ */
+export class ReceivedDrawing {
+  #commands: CanvasCommand[] = [];
+  get commands(): CanvasCommand[] {
+    return this.#commands;
+  }
+
+  apply(change: { commands: readonly CanvasCommand[]; reset: boolean }): void {
+    if (change.reset) {
+      this.#commands = [...change.commands];
+    } else {
+      for (const command of change.commands) {
+        this.#commands.push(command);
+      }
+    }
   }
 }

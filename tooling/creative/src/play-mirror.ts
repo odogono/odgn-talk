@@ -3,10 +3,12 @@
 // from it without waiting for the worker. Each Element keeps one object per
 // name, and only fields whose value changed are replaced, so reader history
 // and drawn nodes keyed by Element survive the worker echoing an edit.
-// Drawings arrive apart from their Elements: an addition extends the same
-// array, so the renderer paints only the new commands.
+// Drawings arrive apart from their Elements as `ReceivedDrawing`s, which
+// extend the same array on an addition, so the renderer paints only the new
+// commands.
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import type { DeepReadonly } from './readonly';
+import { ReceivedDrawing } from './drawing';
 import { type StackEditor } from './editing';
 import { type Element, type RichText, type TextElement } from './model';
 import { ownerById, ownerId, type ScriptOwner } from './script-manifest';
@@ -46,7 +48,7 @@ export class PlayMirror implements ReaderTextPlay {
   #edit = 0;
   // Every Drawing the worker has sent, by Page and name, and each authored
   // Canvas's by its place in `scriptOwners(project)`.
-  #drawings = new Map<string, CanvasCommand[]>();
+  #drawings = new Map<string, ReceivedDrawing>();
   #authoredDrawings = new Map<number, CanvasCommand[]>();
   get authoredDrawings(): ReadonlyMap<number, readonly CanvasCommand[]> {
     return this.#authoredDrawings;
@@ -85,7 +87,8 @@ export class PlayMirror implements ReaderTextPlay {
         mirrored = element;
         if (mirrored.kind === 'canvas') {
           mirrored.drawing =
-            this.#drawings.get(`${view.pageIndex}/${mirrored.name}`) ?? [];
+            this.#drawings.get(`${view.pageIndex}/${mirrored.name}`)
+              ?.commands ?? [];
         }
         this.#byName.set(element.name, mirrored);
       } else {
@@ -114,17 +117,15 @@ export class PlayMirror implements ReaderTextPlay {
     }
     for (const drawing of view.drawings) {
       const key = `${drawing.pageIndex}/${drawing.name}`;
-      let commands = this.#drawings.get(key);
-      if (drawing.reset || !commands) {
-        commands = [...drawing.commands];
-        this.#drawings.set(key, commands);
-        if (drawing.owner !== undefined) {
-          this.#authoredDrawings.set(drawing.owner, commands);
-        }
-      } else {
-        for (const command of drawing.commands) {
-          commands.push(command);
-        }
+      let received = this.#drawings.get(key);
+      if (!received) {
+        received = new ReceivedDrawing();
+        this.#drawings.set(key, received);
+      }
+      received.apply(drawing);
+      const commands = received.commands;
+      if (drawing.owner !== undefined) {
+        this.#authoredDrawings.set(drawing.owner, commands);
       }
       const mirrored =
         drawing.pageIndex === this.page.index

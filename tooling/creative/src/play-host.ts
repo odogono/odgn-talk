@@ -7,7 +7,7 @@ import {
   type Envelope,
   type Reply,
 } from '@northtalk/tooling/worker-supervisor';
-import type { CanvasCommand } from '@northtalk/tooling/canvas';
+import type { DrawingMark } from './drawing';
 import { type CanvasElement, type Element, type Project } from './model';
 import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
@@ -36,32 +36,26 @@ const withoutMembers = (element: DeepReadonly<Element>): Element =>
       ? { ...element, drawing: [] }
       : element) as Element;
 
-type SentDrawing = { commands: DeepReadonly<CanvasCommand[]>; length: number };
-
 /** What changed in each Drawing since `sent` last recorded it. */
 const drawingViews = (
   play: PlaySession,
   canvases: Iterable<DeepReadonly<CanvasElement>>,
-  sent: Map<DeepReadonly<CanvasElement>, SentDrawing>,
+  sent: Map<DeepReadonly<CanvasElement>, DrawingMark>,
 ): DrawingView[] => {
   const views: DrawingView[] = [];
   for (const element of canvases) {
-    const commands = play.drawingOf(element);
-    const previous = sent.get(element);
-    const reset = previous?.commands !== commands;
-    if (!reset && commands.length === previous.length) {
+    const change = play.drawingChangesSince(element, sent.get(element));
+    if (!change) {
       continue;
     }
-    sent.set(element, { commands, length: commands.length });
+    sent.set(element, change.mark);
     const owner = play.authoredCanvas(element);
     views.push({
       name: element.name,
       pageIndex: play.pageIndexOf(element),
       ...(owner === undefined ? {} : { owner }),
-      reset,
-      commands: (reset
-        ? commands
-        : commands.slice(previous.length)) as CanvasCommand[],
+      reset: change.reset,
+      commands: change.commands,
     });
   }
   return views;
@@ -121,7 +115,7 @@ export class PlayHost {
   #owners = new Map<unknown, number>();
   // What the page last received: each Element's JSON, by name.
   #sent = new Map<string, string>();
-  #sentDrawings = new Map<DeepReadonly<CanvasElement>, SentDrawing>();
+  #sentDrawings = new Map<DeepReadonly<CanvasElement>, DrawingMark>();
   #sentPage: PlaySession['page'] | undefined;
   #sentState = '';
   #sentTargets = '';
