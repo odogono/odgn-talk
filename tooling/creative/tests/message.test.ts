@@ -323,6 +323,8 @@ test('commands cannot escape their wrapper to declare Script names', async () =>
   expect(await targeted(play, target.id, 'score')).toEqual({ text: '3' });
 });
 
+// Reaching the real 1,000-command cap compiles against accumulated units on
+// each Extend; shared Woodpecker load has pushed this past 30 s (#1488).
 test('repeated commands reuse code, avoid authored names, and respect the distinct-command cap', async () => {
   const project = fixture();
   project.script = 'script variable folioMessage1 = 7';
@@ -337,7 +339,7 @@ test('repeated commands reuse code, avoid authored names, and respect the distin
   }
   expect((await targeted(play, id, '1000')).error).toContain('Restart Play');
   expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
-}, 30_000);
+}, 120_000);
 
 test('overlapping commands retain their own errors and completed effects', async () => {
   const project = fixture();
