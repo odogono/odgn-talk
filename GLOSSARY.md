@@ -356,6 +356,10 @@ _Avoid_: canvas (for the Page), sketch
 The commands a Canvas Element has accumulated since its last `clear` or `background`, which keep only the current style, whether drawn during Play or from the Message Box. It is kept with the Project.
 _Avoid_: picture, image, display list
 
+**Drawing Reset**:
+A `clear` or `background` that replaces a Drawing's commands with its current style, followed by the `background` itself.
+_Avoid_: wipe, redraw
+
 **Group Element**:
 A named composite Element whose members are Elements on the same Page, including other Group Elements. Its members retain their Page-wide names.
 _Avoid_: Script Group (for a visual composite), folder, component

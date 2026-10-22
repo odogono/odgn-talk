@@ -221,7 +221,9 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [drawing.ts](src/drawing.ts): the retained Drawing, its `clear`/`background`
   reset and limit, and project-file checks over the shared
-  [canvas validation](../stack/src/canvas.ts) (ADR 0116).
+  [canvas validation](../stack/src/canvas.ts) (ADR 0116). It also owns the
+  change contract: `changesSince` gives the worker a Drawing's reset or new
+  commands, and `ReceivedDrawing` applies them on the page.
 - [grants/canvas.ts](src/grants/canvas.ts): the `canvas` Grant;
   [play.ts](src/play.ts) keeps each session's Drawings;
   [play-host.ts](src/play-host.ts) sends their changes as `DrawingView`s and

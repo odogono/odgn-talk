@@ -1,5 +1,5 @@
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
-import { Drawing } from './drawing';
+import { Drawing, type DrawingChange, type DrawingMark } from './drawing';
 import { grantDeclarations, grantsFor, type GrantStates } from './grants';
 import { PUMP_FUEL } from './grants/elements';
 import { elementShape } from './grants/grant';
@@ -239,6 +239,14 @@ export class PlaySession {
     element: DeepReadonly<CanvasElement>,
   ): DeepReadonly<CanvasCommand[]> {
     return this.#drawing(element).commands;
+  }
+
+  /** What changed in a Canvas's Drawing since `mark`, if anything. */
+  drawingChangesSince(
+    element: DeepReadonly<CanvasElement>,
+    mark?: DrawingMark,
+  ): DrawingChange | undefined {
+    return this.#drawing(element).changesSince(mark);
   }
 
   /** The Canvases drawn on, created or cloned since this was last called. */
