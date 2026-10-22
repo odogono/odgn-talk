@@ -57,6 +57,7 @@ test {
     _ = encoding;
     _ = binary_value;
     _ = request_pump;
+    _ = @import("exchange.zig");
     _ = syntax;
     _ = check;
     _ = analysis;

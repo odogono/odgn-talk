@@ -25,6 +25,7 @@ const generated_diagnostics = @import("generated/diagnostics.zig");
 const analysis = @import("analysis.zig");
 const binary_value = @import("binary_value.zig");
 const rp = @import("request_pump.zig");
+const exchange = @import("exchange.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -224,7 +225,7 @@ const Answer = struct {
     data: ?*Value = null,
     charged: u64 = 0,
 
-    fn release(a: *Answer, gpa: Allocator) void {
+    pub fn release(a: *Answer, gpa: Allocator) void {
         if (a.value) |v| v.release();
         if (a.data) |v| v.release();
         if (a.code.len > 0) gpa.free(a.code);
@@ -235,7 +236,7 @@ const Answer = struct {
 
 /// The crossing a Pump paused at, until its result comes back.
 const Need = struct {
-    kind: enum { op, prop, effect },
+    kind: exchange.Crossing,
     /// The paused Pump's Group.
     entry: *GroupEntry,
     /// When not empty, the one allocation an op's texts are slices of.
@@ -271,7 +272,7 @@ const Need = struct {
     coordinator: ?[]u8 = null,
     phase: caps.Phase = .begin,
 
-    fn release(n: *Need, gpa: Allocator) void {
+    pub fn release(n: *Need, gpa: Allocator) void {
         if (n.packed_texts.len != 0) {
             gpa.free(n.packed_texts);
         } else for ([_][]u8{ n.call, n.script, n.run, n.segment, n.grant, n.capability, n.operation, n.scope }) |s| gpa.free(s);
@@ -287,52 +288,42 @@ const Need = struct {
     }
 };
 
-/// A Host-started worker exchange: a Pump, Reload or library replacement
-/// that may pause for needs and Grant releases before its final reply.
-const Exchange = struct {
-    /// Whether a Pump is running, so a load's initialiser cannot defer.
-    in_pump: bool = false,
-    /// Whether a Reload or library replacement is ending the old code's
-    /// Runs, where a lifecycle crossing may send a need too.
-    in_work: bool = false,
-    /// A Reload or library replacement paused for a need, which the
-    /// answer goes on with instead of a Pump.
-    work_paused: bool = false,
-    /// The Pump paused at a crossing: its `ref` and its need.
-    paused_ref: ?i64 = null,
-    need: ?Need = null,
-    answer: ?Answer = null,
-    /// The Group whose Pump is running, which a need belongs to.
-    pumping_entry: ?*GroupEntry = null,
-    exchange_entry: ?*GroupEntry = null,
-    exchange_pump: bool = false,
-    /// What an `effect-result` brought back, for the re-made hook.
-    effect_answer: ?caps.EffectStatus = null,
-    /// Grant releases the Core made, sent as `release` needs before the
-    /// reply they came before; `held` is that reply.
-    releases: std.ArrayList(Release) = .empty,
-    held: ?HeldReply = null,
-    held_ref: i64 = 0,
-    release_continuation: bool = false,
-    /// A binary exchange (#1245), kept across JSON needs so its final reply
-    /// is binary, and a combined one's delivery and token.
-    bin: ?BinExchange = null,
+const layer = @This();
 
-    /// Whether the exchange waits for a result from the Host.
-    fn open(x: *const Exchange) bool {
-        return x.paused_ref != null or x.held != null;
-    }
+/// A Host-started worker exchange (`exchange.zig`): a Pump, Reload or
+/// library replacement that may pause for needs and Grant releases before
+/// its final reply.
+const Exchange = exchange.Exchange(struct {
+    pub const Entry = *GroupEntry;
+    pub const Need = layer.Need;
+    pub const Answer = layer.Answer;
+    pub const Held = HeldReply;
+    pub const Release = layer.Release;
+    pub const Bin = BinExchange;
+    pub const EffectStatus = caps.EffectStatus;
 
-    fn deinit(x: *Exchange, gpa: Allocator) void {
-        if (x.need) |*n| n.release(gpa);
-        if (x.answer) |*a| a.release(gpa);
-        for (x.releases.items) |*r| r.deinit(gpa);
-        x.releases.deinit(gpa);
-        if (x.held) |*h| h.deinit(gpa);
-        if (x.bin) |b| if (b.delivery) |d| gpa.free(d);
-        x.* = .{};
+    pub fn releasePaused(e: *GroupEntry) bool {
+        return e.group.group.releasePaused();
     }
-};
+    pub fn pauseForRelease(e: *GroupEntry) void {
+        e.group.group.pauseForRelease();
+    }
+    pub fn clearReleasePause(e: *GroupEntry) void {
+        e.group.group.clearReleasePause();
+    }
+    pub fn tracePaused(e: *GroupEntry) bool {
+        return e.group.group.tracePaused();
+    }
+    pub fn clearTracePause(e: *GroupEntry) void {
+        e.group.group.clearTracePause();
+    }
+    pub fn beginAnswer(e: *GroupEntry) void {
+        e.group.group.beginAnswer();
+    }
+    pub fn answerTaken(e: *GroupEntry) void {
+        e.group.group.answerTaken();
+    }
+});
 
 /// One instance's Message Layer state: its Core, and the Handles the Host
 /// holds. Created whole by `Session.init`; the wasm exports keep one in
@@ -490,7 +481,7 @@ const Release = struct {
     reason: caps.ReleaseReason,
     now: model.dates.Instant,
 
-    fn deinit(r: *Release, gpa: Allocator) void {
+    pub fn deinit(r: *Release, gpa: Allocator) void {
         gpa.free(r.script);
         gpa.free(r.grant);
     }
@@ -958,11 +949,8 @@ fn chargeAnswer(call: *caps.Call, charged: u64) bool {
 fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Outcome {
     const oc: *OpContext = @ptrCast(@alignCast(context.?));
     const s = oc.session;
-    if (s.x.pumping_entry) |e| if (e.group.group.releasePaused()) return .deferred;
-    if (s.x.answer) |*a| {
-        s.x.pumping_entry.?.group.group.answerTaken();
-        const answer = a.*;
-        s.x.answer = null;
+    if (s.x.releasePaused()) return .deferred;
+    if (s.x.takeAnswer()) |answer| {
         // A result answers only an immediate Operation, started only a
         // suspending one, done only a fire-and-forget one.
         const fits = switch (answer.kind) {
@@ -990,7 +978,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
                 if (!chargeAnswer(call, answer.charged)) return .limited;
                 // The Host works on it now, until it answers or the Core
                 // abandons it.
-                if (s.x.pumping_entry) |e| e.track(call.id);
+                if (s.x.runningEntry()) |e| e.track(call.id);
                 return .started;
             },
             .done => {
@@ -1034,8 +1022,8 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         }
     }
     // An automatic call where its crossing can't pause has no answer.
-    if (!(s.x.in_pump or s.x.in_work) or !call.deferrable) return .broken;
-    s.x.need = need: {
+    if (!s.x.canDefer(.op) or !call.deferrable) return .broken;
+    s.x.cross(need: {
         const gpa = s.gpa;
         // One allocation holds every text the need carries (#1103).
         const texts = [_][]const u8{ call.id, call.script, call.run, call.segment, call.grant, oc.capability, oc.operation, call.scope };
@@ -1051,7 +1039,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         }
         var n: Need = .{
             .kind = .op,
-            .entry = s.x.pumping_entry.?,
+            .entry = s.x.runningEntry().?,
             .packed_texts = packed_texts,
             .call = slices[0],
             .script = slices[1],
@@ -1077,7 +1065,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         for (args, kept) |v, *slot| slot.* = v.retain();
         n.args = kept;
         break :need n;
-    };
+    });
     return .deferred;
 }
 
@@ -1115,17 +1103,13 @@ fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
 fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentContext) caps.EffectStatus {
     const ec: *EffectContext = @ptrCast(@alignCast(context.?));
     const s = ec.session;
-    if (s.x.pumping_entry) |e| if (e.group.group.releasePaused()) return .deferred;
-    if (s.x.effect_answer) |status| {
-        s.x.pumping_entry.?.group.group.answerTaken();
-        s.x.effect_answer = null;
-        return status;
-    }
-    if (!(s.x.in_pump or s.x.in_work) or !sc.deferrable) return .unknown;
+    if (s.x.releasePaused()) return .deferred;
+    if (s.x.takeEffectAnswer()) |status| return status;
+    if (!s.x.canDefer(.effect) or !sc.deferrable) return .unknown;
     const gpa = s.gpa;
     var n: Need = .{
         .kind = .effect,
-        .entry = s.x.pumping_entry.?,
+        .entry = s.x.runningEntry().?,
         .call = &.{},
         .script = &.{},
         .run = &.{},
@@ -1158,7 +1142,7 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
             made += 1;
         }
         n.grants = names;
-        s.x.need = n;
+        s.x.cross(n);
         return .deferred;
     }
     n.release(gpa);
@@ -1169,8 +1153,12 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
 /// the reply it comes before. It has no result and can't refuse.
 fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
     const s: *Session = @ptrCast(@alignCast(context.?));
-    if (s.inline_inputs and !s.inline_active) {
-        const entry = s.x.exchange_entry orelse return;
+    const entry = switch (s.x.route(s.inline_inputs and !s.inline_active)) {
+        .inline_to => |e| e,
+        .drop => return,
+        .queue => null,
+    };
+    if (entry) |e| {
         var o = Out.init(s.gpa);
         defer o.deinit();
         o.raw("{\"need\":{\"m\":\"release\",\"script\":") catch return;
@@ -1182,7 +1170,7 @@ fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
         o.raw(",\"now\":") catch return;
         o.instant(s.gpa, gc.now) catch return;
         o.raw("}}") catch return;
-        inlineRound(s, entry, o.buf.written());
+        inlineRound(s, e, o.buf.written());
         return;
     }
     const script = s.gpa.dupe(u8, gc.script) catch return;
@@ -1190,19 +1178,14 @@ fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
         s.gpa.free(script);
         return;
     };
-    s.x.releases.append(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
+    s.x.queue(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
         s.gpa.free(script);
         s.gpa.free(grant);
-        return;
     };
-    if (s.x.in_pump or s.x.in_work) s.x.pumping_entry.?.group.group.pauseForRelease();
 }
 
 fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
-    const a = &(s.x.answer orelse return null);
-    s.x.pumping_entry.?.group.group.answerTaken();
-    const answer = a.*;
-    s.x.answer = null;
+    const answer = s.x.takeAnswer() orelse return null;
     switch (answer.kind) {
         .result => return .{ .value = answer.value.? },
         .done => return .done,
@@ -1233,11 +1216,11 @@ fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
 }
 
 fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) objects.Result {
-    if (!s.x.in_pump) return .broken;
+    if (!s.x.canDefer(.prop)) return .broken;
     const gpa = s.gpa;
-    s.x.need = .{
+    s.x.cross(.{
         .kind = .prop,
-        .entry = s.x.pumping_entry.?,
+        .entry = s.x.runningEntry().?,
         .call = &.{},
         .script = &.{},
         .run = &.{},
@@ -1252,7 +1235,7 @@ fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) o
         .object_id = gpa.dupe(u8, o.id) catch return .broken,
         .prop = gpa.dupe(u8, pc.prop) catch return .broken,
         .value = if (value) |v| v.retain() else null,
-    };
+    });
     return .deferred;
 }
 
@@ -1261,8 +1244,8 @@ fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) o
 fn elementNeed(s: *Session, pc: *PropContext, o: *objects.Object, op: []const u8, selector: ?*Value) objects.Result {
     const r = propNeed(s, pc, o, null);
     if (r == .deferred) {
-        s.x.need.?.op = op;
-        s.x.need.?.selector = selector;
+        s.x.crossing().op = op;
+        s.x.crossing().selector = selector;
     } else if (selector) |v| v.release();
     return r;
 }
@@ -1570,7 +1553,7 @@ fn modeName(m: caps.Mode) []const u8 {
 /// The `need` reply a paused Pump gets.
 fn needReply(s: *Session, ref: i64) []u8 {
     if (s.callbacks) return binNeed(s, ref) catch oomReply();
-    const n = &s.x.need.?;
+    const n = s.x.openNeed();
     var o = Out.init(s.gpa);
     defer o.deinit();
     o.raw("{\"ref\":") catch {};
@@ -2139,14 +2122,8 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 /// writes its reply.
 fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model.dates.Instant, slice: u64, cap: u64) []u8 {
     if (entry.group.memory.refused) return pumpFailure(s, ref, entry, .out_of_memory);
-    s.x.in_pump = true;
-    s.x.exchange_pump = true;
-    s.x.exchange_entry = entry;
-    s.x.pumping_entry = entry;
-    defer {
-        s.x.in_pump = false;
-        s.x.pumping_entry = null;
-    }
+    s.x.start(entry, .pump);
+    defer s.x.stop(s.gpa);
     const mg = &entry.group.group;
     mg.observe_crossings = s.crossing_trace and entry.traced;
     // Load/change-code workers still need the sink for diagnostics when
@@ -2163,10 +2140,7 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     if (!resuming) mg.waits.releaseRetired(mg.gpa, entry, mg.liveRuns());
     if (resuming) mg.resumePump() catch |e| return pumpFailure(s, ref, entry, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return pumpFailure(s, ref, entry, talk.status(e));
     entry.group.flush();
-    if (mg.pumpPaused()) {
-        s.x.paused_ref = ref;
-        return pausedReply(s, ref);
-    }
+    if (mg.pumpPaused()) return pausedReply(s, ref);
     if (s.x.bin != null) return holdBinary(s, ref, entry, binaryPumpOk(s, entry) catch {
         endBinary(s);
         return oomReply();
@@ -2174,25 +2148,27 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     return holdForReleases(s, ref, entry, pumpOk(s, ref, entry), .ok);
 }
 
-/// A release may be the only reason execution paused: its acknowledgement
-/// resumes the saved worker rather than returning a precomputed final reply.
+/// A worker paused under `ref`: its need, behind any Grant releases; the
+/// crossing's Trace; or a release that was the only reason it paused, whose
+/// acknowledgement resumes the worker.
 fn pausedReply(s: *Session, ref: i64) []u8 {
-    if (s.x.need != null) {
-        const reply = holdForReleases(s, ref, s.x.exchange_entry.?, needReply(s, ref), .outer);
-        return if (s.crossing_trace) withTrace(s, s.x.exchange_entry.?, reply) else reply;
+    const entry = s.x.entry.?;
+    switch (s.x.pause(ref)) {
+        .need => {
+            const reply = holdForReleases(s, ref, entry, needReply(s, ref), .outer);
+            return if (s.crossing_trace) withTrace(s, entry, reply) else reply;
+        },
+        .trace => {
+            var o = Out.init(s.gpa);
+            defer o.deinit();
+            o.raw("{\"ref\":") catch return oomReply();
+            o.int(ref) catch return oomReply();
+            o.raw(",\"need\":{\"m\":\"trace\"}}") catch return oomReply();
+            const reply = o.finish() catch return oomReply();
+            return withTrace(s, entry, withAbandoned(s, entry, reply, .outer));
+        },
+        .release => return releaseNeed(s, ref),
     }
-    if (s.x.exchange_entry.?.group.group.tracePaused()) {
-        var o = Out.init(s.gpa);
-        defer o.deinit();
-        o.raw("{\"ref\":") catch return oomReply();
-        o.int(ref) catch return oomReply();
-        o.raw(",\"need\":{\"m\":\"trace\"}}") catch return oomReply();
-        const reply = o.finish() catch return oomReply();
-        return withTrace(s, s.x.exchange_entry.?, withAbandoned(s, s.x.exchange_entry.?, reply, .outer));
-    }
-    std.debug.assert(s.x.releases.items.len > 0);
-    s.x.release_continuation = true;
-    return holdForReleases(s, ref, s.x.exchange_entry.?, s.gpa.dupe(u8, "") catch return oomReply(), .outer);
 }
 
 /// Opt-in outer Trace for needs and errors. Consumed only after the complete
@@ -2241,7 +2217,7 @@ const HeldReply = struct {
     /// A binary exchange's final reply, assembled when it is sent.
     bin: ?BinFinal = null,
 
-    fn deinit(h: *HeldReply, gpa: Allocator) void {
+    pub fn deinit(h: *HeldReply, gpa: Allocator) void {
         gpa.free(h.frame);
         if (h.bin) |*b| b.deinit(gpa);
     }
@@ -2275,20 +2251,15 @@ fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFiel
 /// Sends queued Grant releases before `reply`, holding its abandonment
 /// notifications until the first reply actually reaches the Host.
 fn holdForReleases(s: *Session, ref: i64, entry: *GroupEntry, reply: []u8, fields: ReplyFields) []u8 {
-    if (s.x.releases.items.len == 0) {
-        if (s.x.paused_ref == null) s.x.exchange_entry = null;
-        return withAbandoned(s, entry, reply, fields);
-    }
-    s.x.held = .{ .frame = reply, .entry = entry, .fields = fields };
-    s.x.held_ref = ref;
+    if (!s.x.hold(ref, .{ .frame = reply, .entry = entry, .fields = fields })) return withAbandoned(s, entry, reply, fields);
     return releaseNeed(s, ref);
 }
 
 fn releaseNeed(s: *Session, ref: i64) []u8 {
-    const r = s.x.releases.items[0];
+    const r = s.x.nextRelease().*;
     if (s.callbacks) {
         const frame = binRelease(s, ref, r) catch return oomReply();
-        return withAbandoned(s, s.x.held.?.entry, frame, .outer);
+        return withAbandoned(s, s.x.releasing(), frame, .outer);
     }
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -2303,36 +2274,23 @@ fn releaseNeed(s: *Session, ref: i64) []u8 {
     o.raw(",\"now\":") catch {};
     o.instant(s.gpa, r.now) catch {};
     o.raw("}}") catch {};
-    return withAbandoned(s, s.x.held.?.entry, o.finish() catch return oomReply(), .outer);
+    return withAbandoned(s, s.x.releasing(), o.finish() catch return oomReply(), .outer);
 }
 
-/// `release-result`: the next release, or the held reply.
+/// `release-result`: the next release, the held reply, or the worker that
+/// paused for the releases.
 fn releaseResultReply(s: *Session, ref: i64) []u8 {
-    var done = s.x.releases.orderedRemove(0);
-    done.deinit(s.gpa);
-    if (s.x.releases.items.len > 0) return releaseNeed(s, ref);
-    const reply = s.x.held.?;
-    s.x.held = null;
-    if (s.x.release_continuation) {
-        s.x.release_continuation = false;
-        var spent = reply;
-        spent.deinit(s.gpa);
-        s.x.paused_ref = null;
-        const entry = s.x.exchange_entry.?;
-        entry.group.group.clearReleasePause();
-        if (s.x.work_paused) {
-            s.x.work_paused = false;
-            return runWork(s, ref, entry, .resumed);
-        }
-        return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
+    switch (s.x.releaseAcknowledged(s.gpa)) {
+        .next_release => return releaseNeed(s, ref),
+        .resume_worker => |r| return goOn(s, ref, r),
+        .reply => |reply| {
+            if (reply.bin) |fin| {
+                s.gpa.free(reply.frame);
+                return emitFinal(s, reply.entry, ref, fin, true);
+            }
+            return withAbandoned(s, reply.entry, reply.frame, reply.fields);
+        },
     }
-    if (s.x.exchange_entry) |e| e.group.group.clearReleasePause();
-    if (s.x.paused_ref == null) s.x.exchange_entry = null;
-    if (reply.bin) |fin| {
-        s.gpa.free(reply.frame);
-        return emitFinal(s, reply.entry, ref, fin, true);
-    }
-    return withAbandoned(s, reply.entry, reply.frame, reply.fields);
 }
 
 /// `effect-result`: `status` of `ok`, `failed` or `unknown`; anything
@@ -2344,13 +2302,7 @@ fn answerEffect(s: *Session, msg: Json, ref: i64) []u8 {
 }
 
 fn resumeEffect(s: *Session, ref: i64, status: caps.EffectStatus) []u8 {
-    var spent = s.x.need.?;
-    const entry = spent.entry;
-    s.x.need = null;
-    s.x.paused_ref = null;
-    spent.release(s.gpa);
-    s.x.effect_answer = status;
-    return resumeAnswered(s, ref, entry);
+    return goOn(s, ref, s.x.effectAnswered(s.gpa, status));
 }
 
 /// An error Data map's value, from a result's `fail`/`error` object.
@@ -2373,8 +2325,7 @@ fn failureOf(s: *Session, entry: ?*GroupEntry, j: Json, answer: *Answer) (Alloca
 
 /// Answers the paused Pump's need and resumes it.
 fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
-    const need = s.x.need.?;
-    const entry = need.entry;
+    const entry = s.x.openNeed().entry;
     var answer: Answer = .{ .kind = .host_error };
     if (field(msg, "charged")) |v| {
         answer.charged = asU64(v) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -2423,14 +2374,7 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
 
 /// Hands the paused Pump its need's answer and resumes it.
 fn resumeNeed(s: *Session, ref: i64, answer: Answer) []u8 {
-    const need = s.x.need.?;
-    const entry = need.entry;
-    s.x.answer = answer;
-    var spent = need;
-    s.x.need = null;
-    s.x.paused_ref = null;
-    spent.release(s.gpa);
-    return resumeAnswered(s, ref, entry);
+    return goOn(s, ref, s.x.answered(s.gpa, answer));
 }
 
 fn helloReply(s: *Session, ref: i64) []u8 {
@@ -3553,14 +3497,8 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
     const mg = &entry.group.group;
     const c = s.core;
-    s.x.in_work = true;
-    s.x.exchange_pump = false;
-    s.x.exchange_entry = entry;
-    s.x.pumping_entry = entry;
-    defer {
-        s.x.in_work = false;
-        s.x.pumping_entry = null;
-    }
+    s.x.start(entry, .work);
+    defer s.x.stop(s.gpa);
     const outcome: machine.Group.Resumed = switch (work) {
         .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| {
             entry.group.flush();
@@ -3579,11 +3517,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
         .reload => |r| r == .paused,
         .replace => |r| r == .paused,
     };
-    if (paused) {
-        s.x.paused_ref = ref;
-        s.x.work_paused = true;
-        return pausedReply(s, ref);
-    }
+    if (paused) return pausedReply(s, ref);
     switch (outcome) {
         .reload => |r| switch (r) {
             .reloaded => {},
@@ -3630,15 +3564,13 @@ fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode
     return holdForReleases(s, ref, entry, hostError(s.gpa, ref, code), .outer);
 }
 
-/// After an answer, the paused Reload or library replacement goes on, or
-/// else the paused Pump.
-fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
-    entry.group.group.beginAnswer();
-    if (s.x.work_paused) {
-        s.x.work_paused = false;
-        return runWork(s, ref, entry, .resumed);
-    }
-    return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
+/// The paused Reload or library replacement goes on, or else the paused
+/// Pump.
+fn goOn(s: *Session, ref: i64, r: Exchange.Resume) []u8 {
+    return switch (r.worker) {
+        .work => runWork(s, ref, r.entry, .resumed),
+        .pump => runPump(s, ref, r.entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0),
+    };
 }
 
 /// `talk.ts`'s CarryOver text.
@@ -4548,33 +4480,13 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
     }
-    // Releases go first: each `release` need waits for its
-    // `release-result`, then the reply they came before.
-    if (s.x.held != null) {
-        if (ref != s.x.held_ref or !std.mem.eql(u8, m, "release-result")) return pausedAdmission(s, msg, ref, m, s.x.held_ref);
-        return releaseResultReply(s, ref);
-    }
-    if (s.x.paused_ref) |paused| {
-        if (s.x.need == null and s.x.exchange_entry.?.group.group.tracePaused()) {
-            if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
-            if (!std.mem.eql(u8, m, "trace-result")) return protocolError(s.gpa, ref, "a crossing is waiting for trace-result");
-            const entry = s.x.exchange_entry.?;
-            entry.group.group.clearTracePause();
-            s.x.paused_ref = null;
-            return resumeAnswered(s, ref, entry);
-        }
-        const want: []const u8 = switch (s.x.need.?.kind) {
-            .op => "op-result",
-            .prop => "prop-result",
-            .effect => "effect-result",
-        };
-        if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
-        if (!std.mem.eql(u8, m, want)) {
-            if (std.mem.eql(u8, m, "op-result") or std.mem.eql(u8, m, "prop-result") or std.mem.eql(u8, m, "effect-result")) return protocolError(s.gpa, ref, "the result does not match the need");
-            return protocolError(s.gpa, ref, "a Pump is waiting for its result");
-        }
-        if (s.x.need.?.kind == .effect) return answerEffect(s, msg, ref);
-        return answerNeed(s, msg, ref, s.x.need.?.kind == .prop);
+    switch (s.x.gate(ref, jsonFrame(m), .json)) {
+        .dispatch => {},
+        .admit => |worker_ref| return pausedAdmission(s, msg, ref, m, s.x.paused(worker_ref)),
+        .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
+        .result => |kind| return if (kind == .effect) answerEffect(s, msg, ref) else answerNeed(s, msg, ref, kind == .prop),
+        .trace_result => return goOn(s, ref, s.x.traceTaken()),
+        .release_result => return releaseResultReply(s, ref),
     }
     // The binding may have refused a worker while this export was still
     // running, then reached this boundary before servicing its queued frame.
@@ -4765,6 +4677,34 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
     return protocolError(s.gpa, ref, "unknown or unsupported message");
 }
 
+/// A JSON frame as an exchange's gate sees it.
+fn jsonFrame(m: []const u8) exchange.Frame {
+    const results = [_]struct { []const u8, exchange.Result }{
+        .{ "op-result", .op },
+        .{ "prop-result", .prop },
+        .{ "effect-result", .effect },
+        .{ "trace-result", .trace },
+        .{ "release-result", .release },
+    };
+    for (results) |r| if (std.mem.eql(u8, m, r[0])) return .{ .result = r[1] };
+    return .input;
+}
+
+/// A refused frame's protocol error detail, in either layout.
+fn refusalDetail(why: exchange.Refusal) []const u8 {
+    return switch (why) {
+        .kind_mismatch => "the result does not match the need",
+        .result_pending => "a Pump is waiting for its result",
+        .trace_pending => "a crossing is waiting for trace-result",
+        .release_pending => "a Grant release is waiting for its release-result",
+        .wrong_ref, .reserved_ref => "the worker ref is reserved for its result",
+        .not_open => "unknown or unsupported message",
+        .no_worker => "no paused worker",
+        .other_group => "a paused input must address the worker's Group",
+        .not_admitted => "a worker is waiting for its result",
+    };
+}
+
 fn messageIn(m: []const u8, names: []const []const u8) bool {
     for (names) |name| if (std.mem.eql(u8, m, name)) return true;
     return false;
@@ -4773,7 +4713,7 @@ fn messageIn(m: []const u8, names: []const []const u8) bool {
 /// Loads `entry`'s exchange into `s.x`, parking the one loaded before
 /// in its own Group's entry.
 fn loadExchange(s: *Session, entry: *GroupEntry) void {
-    const owner = s.x_owner orelse s.x.exchange_entry;
+    const owner = s.x_owner orelse s.x.entry;
     if (owner != entry) {
         // With no owner the loaded exchange has never been used.
         if (owner) |o| o.parked = s.x;
@@ -4806,20 +4746,29 @@ fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
-fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: i64) []u8 {
-    if (ref == worker_ref) return protocolError(s.gpa, ref, "the worker ref is reserved for its result");
-    const entry = s.x.exchange_entry orelse return protocolError(s.gpa, ref, "no paused worker");
-    const group = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
-    if (group != entry) return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
-    const worker = messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" });
-    if (!worker and !messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
-    const held = enterPaused(s, entry);
-    defer leavePaused(s, held);
-    if (worker) {
-        recordWorkerRefusal(s, entry, msg, m);
-        return hostError(s.gpa, ref, .reentrant_call);
+const PausedWorker = exchange.Paused(*GroupEntry);
+
+fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, paused: PausedWorker) []u8 {
+    const input: exchange.Input = if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" }))
+        .worker
+    else if (messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" }))
+        .admitted
+    else
+        .other;
+    switch (paused.admission(ref, groupOf(s, msg), input)) {
+        .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
+        .refuse_worker => |entry| {
+            const held = enterPaused(s, entry, paused.worker);
+            defer leavePaused(s, held);
+            recordWorkerRefusal(s, entry, msg, m);
+            return hostError(s.gpa, ref, .reentrant_call);
+        },
+        .admit => |entry| {
+            const held = enterPaused(s, entry, paused.worker);
+            defer leavePaused(s, held);
+            return dispatch(s, msg, ref, m, &.{});
+        },
     }
-    return dispatch(s, msg, ref, m, &.{});
 }
 
 /// What admission during a paused worker changes, to restore after it.
@@ -4827,10 +4776,10 @@ const Paused = struct { entry: *GroupEntry, pumping: bool, trace: ?*std.Io.Write
 
 /// A WASM export has returned, but its Host callback has not. Admission
 /// must use the same control queue and Trace hold as native callbacks.
-fn enterPaused(s: *Session, entry: *GroupEntry) Paused {
+fn enterPaused(s: *Session, entry: *GroupEntry, worker: exchange.Worker) Paused {
     const mg = &entry.group.group;
     const held: Paused = .{ .entry = entry, .pumping = mg.pumping, .trace = mg.trace, .old_inline = mg.inline_admitting };
-    mg.pumping = s.x.exchange_pump;
+    mg.pumping = worker == .pump;
     mg.holdCallbackTrace(held.trace, !s.inline_active);
     s.admitting = true;
     mg.inline_admitting = s.inline_active;
@@ -4883,6 +4832,11 @@ fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8
 const BinExchange = struct {
     delivery: ?[]u8 = null,
     token: u64 = 0,
+
+    /// Frees its delivery; the Session's binding of its token stays.
+    pub fn deinit(b: *BinExchange, gpa: Allocator) void {
+        if (b.delivery) |d| gpa.free(d);
+    }
 };
 
 /// A binary final Pump reply's parts, assembled with its abandonment
@@ -5121,18 +5075,7 @@ fn pumpFailure(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCo
 
 /// As holdForReleases: Grant releases go before the final reply.
 fn holdBinary(s: *Session, ref: i64, entry: *GroupEntry, fin: BinFinal) []u8 {
-    if (s.x.releases.items.len == 0) {
-        if (s.x.paused_ref == null) s.x.exchange_entry = null;
-        return emitFinal(s, entry, ref, fin, true);
-    }
-    const frame = s.gpa.alloc(u8, 0) catch {
-        var spent = fin;
-        spent.deinit(s.gpa);
-        endBinary(s);
-        return oomReply();
-    };
-    s.x.held = .{ .frame = frame, .entry = entry, .fields = .ok, .bin = fin };
-    s.x.held_ref = ref;
+    if (!s.x.hold(ref, .{ .frame = &.{}, .entry = entry, .fields = .ok, .bin = fin })) return emitFinal(s, entry, ref, fin, true);
     return releaseNeed(s, ref);
 }
 
@@ -5294,9 +5237,11 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     const ref = in.ref;
     if (s.group_exchanges and s.restoring == null) loadExchange(s, in.entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
-    if (s.x.held != null) return binaryPaused(s, &in, s.x.held_ref);
-    if (s.x.paused_ref) |paused| return binaryPaused(s, &in, paused);
-    return binaryDispatch(s, &in);
+    return switch (s.x.gate(ref, .input, .binary)) {
+        .dispatch => binaryDispatch(s, &in),
+        .admit => |worker_ref| binaryPaused(s, &in, s.x.paused(worker_ref)),
+        .refuse, .result, .trace_result, .release_result => unreachable,
+    };
 }
 
 /// Load metadata uses protocol items only. Build the existing validation
@@ -5393,17 +5338,21 @@ fn handleBinaryLoad(s: *Session, payload: []const u8) []u8 {
 
 /// As pausedAdmission: inputs join the paused worker's queue; another
 /// worker, combined ones included, is refused before admission.
-fn binaryPaused(s: *Session, in: *BinInput, worker_ref: i64) []u8 {
-    if (in.ref == worker_ref) return protocolError(s.gpa, in.ref, "the worker ref is reserved for its result");
-    const entry = s.x.exchange_entry orelse return protocolError(s.gpa, in.ref, "no paused worker");
-    if (in.entry != entry) return protocolError(s.gpa, in.ref, "a paused input must address the worker's Group");
-    const held = enterPaused(s, entry);
-    defer leavePaused(s, held);
-    if (in.m.pumps()) {
-        entry.group.group.refuseWorker(.{ .pump = .{ .now = in.now, .slice = @intCast(@min(in.slice, std.math.maxInt(i64))), .cap = @intCast(@min(in.cap, std.math.maxInt(i64))) } });
-        return binRefusal(s, in.m, in.ref, entry, .reentrant_call);
+fn binaryPaused(s: *Session, in: *BinInput, paused: PausedWorker) []u8 {
+    switch (paused.admission(in.ref, in.entry, if (in.m.pumps()) .worker else .admitted)) {
+        .refuse => |why| return protocolError(s.gpa, in.ref, refusalDetail(why)),
+        .refuse_worker => |entry| {
+            const held = enterPaused(s, entry, paused.worker);
+            defer leavePaused(s, held);
+            entry.group.group.refuseWorker(.{ .pump = .{ .now = in.now, .slice = @intCast(@min(in.slice, std.math.maxInt(i64))), .cap = @intCast(@min(in.cap, std.math.maxInt(i64))) } });
+            return binRefusal(s, in.m, in.ref, entry, .reentrant_call);
+        },
+        .admit => |entry| {
+            const held = enterPaused(s, entry, paused.worker);
+            defer leavePaused(s, held);
+            return binaryDispatch(s, in);
+        },
     }
-    return binaryDispatch(s, in);
 }
 
 fn binaryDispatch(s: *Session, in: *BinInput) []u8 {
@@ -5735,7 +5684,7 @@ fn binNeedValue(s: *Session, w: *rp.Writer, v: *const Value) Allocator.Error!voi
 
 /// The binary `need` a paused Pump gets: an op, prop or effect frame.
 fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
-    const n = &s.x.need.?;
+    const n = s.x.openNeed();
     const c: rp.Callback = switch (n.kind) {
         .op => .op,
         .prop => .prop,
@@ -5867,19 +5816,19 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
     const entry = s.groupNamed(group) orelse return protocolError(s.gpa, ref, "an unknown group");
     if (s.group_exchanges and s.restoring == null) loadExchange(s, entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
-    if (s.x.held != null) {
-        if (ref != s.x.held_ref or c != .release_result) return protocolError(s.gpa, ref, "a Grant release is waiting for its release-result");
-        return releaseResultReply(s, ref);
-    }
-    const paused = s.x.paused_ref orelse return protocolError(s.gpa, ref, "unknown or unsupported message");
-    if (ref != paused) return protocolError(s.gpa, ref, "the worker ref is reserved for its result");
-    const need = s.x.need orelse return protocolError(s.gpa, ref, "a crossing is waiting for trace-result");
-    const want: rp.Callback = switch (need.kind) {
-        .op => .op_result,
-        .prop => .prop_result,
-        .effect => .effect_result,
+    const result: exchange.Result = switch (c) {
+        .op_result => .op,
+        .prop_result => .prop,
+        .effect_result => .effect,
+        .release_result => .release,
+        .op, .prop, .effect, .release => unreachable,
     };
-    if (c != want) return protocolError(s.gpa, ref, if (c == .release_result) "a Pump is waiting for its result" else "the result does not match the need");
+    switch (s.x.gate(ref, .{ .result = result }, .binary)) {
+        .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
+        .release_result => return releaseResultReply(s, ref),
+        .result => {},
+        .dispatch, .admit, .trace_result => unreachable,
+    }
     if (c == .effect_result) {
         const given = if (spans[2]) |x| rp.ptextOf(x) catch "unknown" else "unknown";
         const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
@@ -6117,14 +6066,6 @@ fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
     const io = s.inline_io orelse return;
     s.inline_active = true;
     defer s.inline_active = false;
-    const old_entry = s.x.exchange_entry;
-    const old_pump = s.x.exchange_pump;
-    s.x.exchange_entry = entry;
-    s.x.exchange_pump = entry.group.group.pumping;
-    defer {
-        s.x.exchange_entry = old_entry;
-        s.x.exchange_pump = old_pump;
-    }
     const owned = s.gpa.dupe(u8, event) catch return;
     const observed = withAbandoned(s, entry, owned, .outer);
     defer freeReply(s.gpa, observed);
@@ -6138,7 +6079,9 @@ fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
         const msg = parsed.value;
         const ref = asInt(field(msg, "ref")) orelse @trap();
         const m = asText(field(msg, "m")) orelse @trap();
-        const reply = withTrace(s, entry, pausedAdmission(s, msg, ref, m, s.active_ref));
+        // Admission joins the producing worker, whichever exchange is open.
+        const producing: PausedWorker = .{ .ref = s.active_ref, .entry = entry, .worker = if (entry.group.group.pumping) .pump else .work };
+        const reply = withTrace(s, entry, pausedAdmission(s, msg, ref, m, producing));
         defer freeReply(s.gpa, reply);
         var out = Out.init(s.gpa);
         defer out.deinit();
