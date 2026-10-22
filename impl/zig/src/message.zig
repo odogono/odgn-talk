@@ -2365,6 +2365,8 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
             answer.kind = .host_error;
         } else return protocolError(s.gpa, ref, "a prop-result with no outcome");
     } else {
+        // `limit` comes first: a successful reply cannot override a latched
+        // refusal (spec/embedding/metered-operations.md).
         if (field(msg, "limit")) |v| {
             if (!(asBool(v) orelse false)) return hostError(s.gpa, ref, .invalid_value);
             answer.kind = .limit;
@@ -2381,8 +2383,6 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
                 if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
                 answer.kind = .host_error;
             };
-        } else if (field(msg, "limit") != null) {
-            answer.kind = .limit;
         } else if (field(msg, "hostError") != null) {
             answer.kind = .host_error;
         } else return protocolError(s.gpa, ref, "an op-result with no outcome");
