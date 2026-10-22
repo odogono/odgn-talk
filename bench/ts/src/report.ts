@@ -1,5 +1,8 @@
 // Merging each runner's measurements into one report: Fuel parity between
 // the Cores, advisory Cost Model outliers, and the Markdown table.
+import type { Payload, Sizes } from '../../../impl/ts/tools/payload';
+
+export type { Payload, Sizes };
 
 /** Timings of one phase over its samples, in nanoseconds. */
 export type Stats = {
@@ -50,6 +53,8 @@ export type Results = {
   outlierFactor: number;
   outliers: Outlier[];
   parity: ParityFailure[];
+  /** Each Core's Payload. Absent in older saved reports and without the TS runner. */
+  payload?: Payload;
   settings: Record<string, string | number | boolean>;
   skipped: Skipped[];
   versions: Record<string, string>;
@@ -189,11 +194,11 @@ export const outliers = (
 };
 
 // Three significant figures for the Peer Languages' sub-millisecond Runs.
-const ms = (ns: number) =>
+export const ms = (ns: number) =>
   ns >= 1e6 ? (ns / 1e6).toFixed(3) : (ns / 1e6).toPrecision(3);
-const us = (ns: number | undefined) =>
+export const us = (ns: number | undefined) =>
   ns === undefined ? '' : (ns / 1e3).toFixed(1);
-const bytes = (n: number | undefined) =>
+export const bytes = (n: number | undefined) =>
   n === undefined
     ? ''
     : n >= 1 << 20
@@ -201,11 +206,63 @@ const bytes = (n: number | undefined) =>
       : n >= 1 << 10
         ? `${(n / (1 << 10)).toFixed(1)} KiB`
         : `${Math.round(n)} B`;
-const count = (n: number | undefined) =>
+export const count = (n: number | undefined) =>
   n === undefined ? '' : String(Math.round(n));
 
 // Each Benchmark's Cores come first in the report, then its Peer Languages.
-const isPeer = (m: Measurement) => (cores.includes(m.runner) ? 0 : 1);
+export const isPeer = (m: Measurement) => (cores.includes(m.runner) ? 0 : 1);
+
+/** One row of the Payload comparison. */
+export type PayloadRow = { label: string; sizes: Sizes };
+
+/**
+ * The TS Core's Example Host and whole package, then the Zig Core's Host
+ * Adapter and reactor summed, as a Host ships both.
+ */
+export const payloadRows = (p: Payload): PayloadRow[] => {
+  const rows = [
+    { label: 'TS Core: Example Host', sizes: p.tsHost },
+    { label: 'TS Core: @northtalk/ts', sizes: p.tsPackage },
+  ];
+  const zig = zigPayload(p);
+  return zig
+    ? [...rows, { label: 'Zig Core: Example Host + talk.wasm', sizes: zig }]
+    : rows;
+};
+
+/** The Zig Core's Example Host and the reactor it loads, summed. */
+export const zigPayload = (p: Payload): Sizes | undefined =>
+  p.wasmHost && p.talkWasm
+    ? {
+        brotli: p.wasmHost.brotli + p.talkWasm.brotli,
+        gzip: p.wasmHost.gzip + p.talkWasm.gzip,
+        raw: p.wasmHost.raw + p.talkWasm.raw,
+      }
+    : undefined;
+
+const payloadMarkdown = (p: Payload): string[] => {
+  const zig = zigPayload(p);
+  const ratio = (k: keyof Sizes) =>
+    zig ? `${(zig[k] / p.tsHost[k]).toFixed(1)}×` : '';
+  return [
+    '',
+    '## Payload',
+    '',
+    'What a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.',
+    '',
+    '| Payload | Brotli | gzip -9 | Raw |',
+    '| - | -: | -: | -: |',
+    ...payloadRows(p).map(
+      ({ label, sizes }) =>
+        `| ${label} | ${bytes(sizes.brotli)} | ${bytes(sizes.gzip)} | ${bytes(sizes.raw)} |`,
+    ),
+    ...(zig
+      ? [
+          `| Zig ÷ TS Example Host | ${ratio('brotli')} | ${ratio('gzip')} | ${ratio('raw')} |`,
+        ]
+      : []),
+  ];
+};
 
 export const markdown = (r: Results): string => {
   const lines = [
@@ -249,6 +306,7 @@ export const markdown = (r: Results): string => {
     s => `- ${s.benchmark} on ${s.runner}: ${s.reason}`,
   );
   lines.push(
+    ...(r.payload ? payloadMarkdown(r.payload) : []),
     '',
     '## Fuel parity',
     '',

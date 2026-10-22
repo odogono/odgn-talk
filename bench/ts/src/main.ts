@@ -6,6 +6,8 @@ import { arch, cpus, platform, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { coreVersions } from '@northtalk/ts';
+import { measurePayload } from '../../../impl/ts/tools/payload';
+import { html } from './html';
 import {
   fuelParity,
   markdown,
@@ -24,6 +26,7 @@ const { values: flags } = parseArgs({
     filter: { type: 'string' },
     'no-save': { default: false, type: 'boolean' },
     only: { type: 'string' },
+    html: { type: 'string' },
     'outlier-factor': { default: '3', type: 'string' },
     smoke: { default: false, type: 'boolean' },
   },
@@ -259,6 +262,8 @@ const results: Results = {
     outlierFactor,
   ),
   parity: fuelParity(measurements),
+  // The Zig Core's half needs the reactor built into .cache/zig-wasi.
+  ...(runners.includes('ts') ? { payload: await measurePayload() } : {}),
   settings: {
     count: flags.smoke ? 1 : Number(flags.count),
     filter,
@@ -298,6 +303,10 @@ if (!flags.smoke && !flags['no-save']) {
   writeFileSync(`${base}.json`, JSON.stringify(results, null, 2) + '\n');
   writeFileSync(`${base}.md`, report);
   console.error(`Wrote ${base}.json and .md`);
+}
+if (flags.html) {
+  writeFileSync(flags.html, html(results));
+  console.error(`Wrote ${flags.html}`);
 }
 if (results.parity.length) {
   console.error('Fuel differs between the Cores.');

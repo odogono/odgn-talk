@@ -7,7 +7,7 @@ fault isolation. Its measurements are separate from the Core/Peer suite below.
 Measures how fast each Core runs the same Scripts, to find slow paths and to compare NorthTalk with its Peer Languages. Nothing here is normative. [ADR 0054](../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md) records why the suite lives outside the Cores and only advises the Cost Model.
 
 ```sh
-bun run bench [--filter <text>] [--only <runner,...>] [--count <n>] [--smoke] [--no-save] [--outlier-factor <k>]
+bun run bench [--filter <text>] [--only <runner,...>] [--count <n>] [--smoke] [--no-save] [--html <path>] [--outlier-factor <k>]
 ```
 
 - **`--filter`** keeps the Benchmarks whose names contain the text, such as `core` or `core/fib`.
@@ -15,6 +15,7 @@ bun run bench [--filter <text>] [--only <runner,...>] [--count <n>] [--smoke] [-
 - **`--count`** is the Go `-count` and the number of Zig, CPython and AppleScript repeats, 10 by default. mitata picks the sample count on Bun.
 - **`--smoke`** runs each Benchmark once at its smoke size and checks output and Fuel parity, without saving anything. Its timings mean nothing. CI runs it on Linux for every PR that touches a Core, the suite or the Cost Model data ([`bench.yml`](../.github/workflows/bench.yml)).
 - **`--no-save`** prints the report without writing it to `results/`.
+- **`--html`** also writes the run as [the benchmark page](#the-benchmark-page), even when Fuel differs.
 - **`--outlier-factor`** sets the Cost Model outlier threshold, 3 by default.
 - **Exit codes:** 0 when every Benchmark and every port produced its expected output and Fuel agreed, 1 otherwise.
 
@@ -32,6 +33,24 @@ bun run bench --only zig,ts,applescript,gopher-lua --count 3
 above uses Go only to host Lua. Add `--filter core` for a smaller workload set,
 or `--smoke` to check outputs and Fuel before measuring. Elixir and the separate
 WASI embedding benchmarks are outside this suite and are not started.
+
+When the `ts` runner is selected, the report also gives each Core's [Payload](../GLOSSARY.md): the core-switch Example Host bundled for a browser, the whole `@northtalk/ts` entry, and the Zig Core's `@northtalk/ts/wasm` Host with `talk.wasm`, raw, gzip -9 and Brotli-11, measured as in [the browser figures](../docs/research/zig-browser-figures.md). The Zig Core's half needs the reactor built first, with `zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi` in `impl/zig`, and is left out without it.
+
+## The benchmark page
+
+[`docs/benchmarks.html`](../docs/benchmarks.html) shows one run as a single page with no external resources: the Payload, Fuel parity, Cost Model outliers, a bar chart per Benchmark comparing each runner's Run median with its min–max range, and a sortable table of every measurement. Open it from a clone; GitHub shows its source.
+
+The [Benchmark page workflow](../.github/workflows/bench-page.yml), run by hand from the Actions tab with optional `count`, `filter` and `only`, runs the suite on `ubuntu-latest` and opens a `docs(repo)` PR with the page and the run's results. Its timings come from a shared runner and are advisory, never a gate. A run that fails, such as on a Fuel difference, uploads the page as an artifact instead.
+
+The workflow approves and auto-merges its PR with the `BENCH_PAGE_TOKEN` secret, a fine-grained token with Contents and Pull requests write on this repository, and needs "Allow auto-merge" and "Allow GitHub Actions to create and approve pull requests" turned on. Without the secret, the PR waits to be merged by hand.
+
+To render a saved run again:
+
+```sh
+bun run bench:html results/<run>.json [out.html]
+```
+
+The output defaults to `docs/benchmarks.html`.
 
 The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements. The [first full results with wave 2](results/2026-10-08-darwin-arm64-apple-m5.md) cover all 38 workloads, including the four Fuel Slice sweep runs, on an Apple M5. Their [JSON](results/2026-10-08-darwin-arm64-apple-m5.json) records 216 measurements.
 
