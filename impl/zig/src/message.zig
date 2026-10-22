@@ -8733,6 +8733,119 @@ test "callbacks-fields-v1: op and release needs and their results cross in binar
     _ = try okOf(try binReply(&c, try binResult(a, .release_result, 9, null, null)));
 }
 
+/// A protocol error's detail.
+fn refusalOf(reply: Json) ![]const u8 {
+    try std.testing.expectEqualStrings("protocol error", try errKind(reply));
+    return reply.object.get("err").?.object.get("detail").?.string;
+}
+
+/// Scripts `s`, which asks `api` twice, and `t` and `u`, whose Grants'
+/// releases a Stop queues, in traced Group `g`; refs 1..6 set up.
+fn exchangeFixture(c: *Client, features: []const u8) !void {
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[{s}]}}", .{ 1, features }));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"release\":true,\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\"}}]}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    for ([_][]const u8{ "s", "t", "u" }) |name| {
+        const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{4}))).object.get("grant").?.integer;
+        const source = if (std.mem.eql(u8, name, "s")) "on go\\n ask api to read\\n ask api to read\\n return it\\nend go" else "on idle\\nend idle";
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"{s}\",\"grants\":{{\"api\":{d}}},\"source\":\"{s}\"}}", .{ 5, name, grant, source }));
+    }
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{6}));
+}
+
+test "a paused JSON exchange's refusals, and Pumps paused for Grant releases (#1481)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    try exchangeFixture(&c, "\"crossing-trace-v1\"");
+    // A Stop between exchanges runs in the Pump, whose Grant release
+    // pauses it before its first need.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"t\",\"reason\":\"done\"}}", .{7}));
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8});
+    errdefer std.debug.print("last: {f}\n", .{std.json.fmt(reply, .{})});
+    try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+    // Awaiting the release: other inputs go through paused admission.
+    try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{})));
+    try std.testing.expectEqualStrings("a paused input must address the worker's Group", try refusalOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{9})));
+    try std.testing.expectEqualStrings("a worker is waiting for its result", try refusalOf(try c.send("{{\"m\":\"release-result\",\"ref\":{d},\"group\":\"g\"}}", .{9})));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"t\"}},\"message\":{{\"name\":\"idle\"}}}}", .{9}));
+    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+    try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
+    // Awaiting the op's result: a result under another ref is an input.
+    try std.testing.expectEqualStrings("a worker is waiting for its result", try refusalOf(try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"g\",\"result\":1}}", .{9})));
+    try std.testing.expectEqualStrings("a paused input must address the worker's Group", try refusalOf(try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"result\":1}}", .{9})));
+    try std.testing.expectEqualStrings("the result does not match the need", try refusalOf(try c.sendRef(8, "{{\"m\":\"prop-result\",\"ref\":8,\"value\":1}}", .{})));
+    try std.testing.expectEqualStrings("the result does not match the need", try refusalOf(try c.sendRef(8, "{{\"m\":\"effect-result\",\"ref\":8,\"status\":\"ok\"}}", .{})));
+    for ([_][]const u8{ "release-result", "trace-result", "deliver" }) |m| {
+        try std.testing.expectEqualStrings("a Pump is waiting for its result", try refusalOf(try c.sendRef(8, "{{\"m\":\"{s}\",\"ref\":8,\"group\":\"g\"}}", .{m})));
+    }
+    // A Stop admitted while paused runs when the Pump goes on, after the
+    // crossing's Trace, and its release pauses the Pump again.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"u\",\"reason\":\"done\"}}", .{10}));
+    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{});
+    // Awaiting the crossing's Trace.
+    try std.testing.expectEqualStrings("trace", reply.object.get("need").?.object.get("m").?.string);
+    try std.testing.expectEqualStrings("a crossing is waiting for trace-result", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{})));
+    try std.testing.expectEqualStrings("a worker is waiting for its result", try refusalOf(try c.send("{{\"m\":\"trace-result\",\"ref\":{d},\"group\":\"g\"}}", .{9})));
+    reply = try c.sendRef(8, "{{\"m\":\"trace-result\",\"ref\":8,\"group\":\"g\"}}", .{});
+    try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+    try std.testing.expectEqualStrings("u", reply.object.get("need").?.object.get("script").?.string);
+    try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{})));
+    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+    try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
+    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":2}}", .{});
+    while (reply.object.get("need")) |n| {
+        try std.testing.expectEqualStrings("trace", n.object.get("m").?.string);
+        reply = try c.sendRef(8, "{{\"m\":\"trace-result\",\"ref\":8,\"group\":\"g\"}}", .{});
+    }
+    try std.testing.expectEqual(@as(i64, 2), (try runEnd(reply)).object.get("result").?.integer);
+    // With nothing open, a result is not a message the Session knows.
+    try std.testing.expectEqualStrings("unknown or unsupported message", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":2}}", .{})));
+}
+
+test "a paused binary exchange's refusals keep their own wording (#1481)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    try exchangeFixture(&c, "\"callbacks-fields-v1\",\"crossing-trace-v1\"");
+    var reply = try binReply(&c, "{\"m\":\"pump\",\"ref\":7,\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}");
+    errdefer std.debug.print("last: {f}\n", .{std.json.fmt(reply, .{})});
+    try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
+    // Awaiting the op's result: the ref is checked before the kind.
+    try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try binReply(&c, try binResult(a, .op_result, 8, "result", 1))));
+    try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try binReply(&c, try binResult(a, .prop_result, 8, "value", 1))));
+    try std.testing.expectEqualStrings("the result does not match the need", try refusalOf(try binReply(&c, try binResult(a, .prop_result, 7, "value", 1))));
+    try std.testing.expectEqualStrings("the result does not match the need", try refusalOf(try binReply(&c, try binResult(a, .effect_result, 7, "ok", null))));
+    try std.testing.expectEqualStrings("a Pump is waiting for its result", try refusalOf(try binReply(&c, try binResult(a, .release_result, 7, null, null))));
+    reply = try binReply(&c, try binResult(a, .op_result, 7, "result", 1));
+    // Awaiting the crossing's Trace, which only JSON answers.
+    try std.testing.expectEqualStrings("trace", reply.object.get("need").?.object.get("m").?.string);
+    try std.testing.expectEqualStrings("a crossing is waiting for trace-result", try refusalOf(try binReply(&c, try binResult(a, .op_result, 7, "result", 1))));
+    try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try binReply(&c, try binResult(a, .op_result, 8, "result", 1))));
+    reply = try binReply(&c, "{\"m\":\"trace-result\",\"ref\":7,\"group\":\"g\"}");
+    try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
+    reply = try binReply(&c, try binResult(a, .op_result, 7, "result", 2));
+    while (reply.object.get("need")) |n| {
+        try std.testing.expectEqualStrings("trace", n.object.get("m").?.string);
+        reply = try binReply(&c, "{\"m\":\"trace-result\",\"ref\":7,\"group\":\"g\"}");
+    }
+    _ = try okOf(reply);
+    // A final reply held behind a Grant release: only its result is taken.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"t\",\"reason\":\"done\"}}", .{8}));
+    reply = try binReply(&c, "{\"m\":\"pump\",\"ref\":9,\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}");
+    try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+    for ([_]i64{ 9, 10 }) |ref| {
+        try std.testing.expectEqualStrings("a Grant release is waiting for its release-result", try refusalOf(try binReply(&c, try binResult(a, .op_result, ref, "result", 1))));
+        try std.testing.expectEqualStrings("a Grant release is waiting for its release-result", try refusalOf(try binReply(&c, try binResult(a, .release_result, ref + 1, null, null))));
+    }
+    _ = try okOf(try binReply(&c, try binResult(a, .release_result, 9, null, null)));
+    // With nothing open, a binary result is not a message the Session knows.
+    try std.testing.expectEqualStrings("unknown or unsupported message", try refusalOf(try binReply(&c, try binResult(a, .op_result, 9, "result", 1))));
+}
+
 /// A settle-pump with one settlement of `call`, or with `outcome` malformed.
 fn binSettlePump(a: Allocator, ref: i64, call: []const u8, outcome: []const u8, value: i64) ![]u8 {
     var w = rp.Writer.init(a);
