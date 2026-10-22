@@ -200,6 +200,13 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 | `too many rows` | `max` | A `sqlite` statement gives more rows than the call's `max`; the Host raises it, leaving the database as it was before the call, and never truncates the result | [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [#466](https://github.com/odogono/odgn-talk/issues/466) |
 | `unrepresentable` | `column` | A `sqlite` result holds a value Talk can't hold exactly: a NaN, an infinity, a `REAL` of magnitude 10^34 or more, or `TEXT` that isn't valid UTF-8; `column` is its column's name, and the Core raises it, except that a TS Host raises it for `TEXT` | [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [#466](https://github.com/odogono/odgn-talk/issues/466) |
 | `user busy` | none | A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything | [ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md), [#527](https://github.com/odogono/odgn-talk/issues/527) |
+| `invalid serve` | `field` | An `http` `serve` or `unserve` is given empty text as its name, or `serve` a prefix that doesn't begin with `/` or an effective message that isn't a plain Name; `field` is `name`, `prefix` or `message`, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `address in use` | none | An `http` `serve` asks for a host and port another listener already holds; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `bad address` | none | An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `invalid response` | `field` | An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `already responded` | none | An `http` `respond` names an HTTP Exchange that has already been answered; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `exchange closed` | none | An `http` `respond` names an HTTP Exchange whose client has gone; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `not owner` | none | An `http` `respond` comes from a Run other than the one the HTTP Exchange's Delivery started; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0125](../docs/adr/0125-a-host-functions-call-names-the-delivery-that-started-its-run.md) |
 
 <!-- end -->
 
@@ -262,6 +269,13 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `too many rows` | The statement gave more than {max} rows |
 | `unrepresentable` | The value in {column} can't be represented |
 | `user busy` | Another prompt is waiting for an answer |
+| `invalid serve` | A Serve Registration's {field} isn't valid |
+| `address in use` | That address is already in use |
+| `bad address` | That address can't be served |
+| `invalid response` | The response's {field} isn't valid |
+| `already responded` | That HTTP request has already been answered |
+| `exchange closed` | The client has gone |
+| `not owner` | Only the Run that received this HTTP request can answer it |
 
 <!-- end -->
 

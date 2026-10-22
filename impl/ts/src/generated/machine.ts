@@ -1475,7 +1475,14 @@ export const errorMessages = {
   "not read-only": "A query must not change the database",
   "too many rows": "The statement gave more than {max} rows",
   "unrepresentable": "The value in {column} can't be represented",
-  "user busy": "Another prompt is waiting for an answer"
+  "user busy": "Another prompt is waiting for an answer",
+  "invalid serve": "A Serve Registration's {field} isn't valid",
+  "address in use": "That address is already in use",
+  "bad address": "That address can't be served",
+  "invalid response": "The response's {field} isn't valid",
+  "already responded": "That HTTP request has already been answered",
+  "exchange closed": "The client has gone",
+  "not owner": "Only the Run that received this HTTP request can answer it"
 };
 export const reservedErrorKeys = ["code","message","at","capability","operation","index","during","deadline"] as const;
 export const limitDefaults = {

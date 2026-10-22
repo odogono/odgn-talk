@@ -62,10 +62,12 @@ pub const stdlib: StdlibTable = .{
         "store",
         "sqlite",
         "user",
+        "http",
     },
     .optional = &.{
         "sqlite",
         "user",
+        "http",
     },
     .builtin = &.{
         .{
@@ -1557,6 +1559,41 @@ pub const stdlib: StdlibTable = .{
             .mode = "fire-and-forget",
             .call = "notify message [, options]",
             .gives = "Shows `message`, with `options`' `title`, without waiting for anyone",
+        },
+        .{
+            .capability = "http",
+            .name = "serve",
+            .mode = "suspending",
+            .call = "serve name, prefix [, message [, options]]",
+            .gives = "`{host, port}` once the Host listens; from then on, each HTTP request whose path the text `prefix` begins delivers `message` to the Script, replacing its Serve Registration called `name`",
+            .errors = &.{
+                "invalid serve",
+                "address in use",
+                "bad address",
+            },
+        },
+        .{
+            .capability = "http",
+            .name = "unserve",
+            .mode = "immediate",
+            .call = "unserve name",
+            .gives = "Nothing; removes the Script's Serve Registration called `name` through this Grant, if there is one",
+            .errors = &.{
+                "invalid serve",
+            },
+        },
+        .{
+            .capability = "http",
+            .name = "respond",
+            .mode = "immediate",
+            .call = "respond exchange, response",
+            .gives = "Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json`",
+            .errors = &.{
+                "invalid response",
+                "already responded",
+                "exchange closed",
+                "not owner",
+            },
         },
     },
 };
