@@ -7,6 +7,7 @@ import { type PerformanceSnapshot } from './performance';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
+import { type VariableScript } from './variables';
 
 /** Element messages the page sends for reader input. */
 export type ReaderMessage = Extract<
@@ -55,6 +56,7 @@ export type PlayRequest =
   | { kind: 'message'; session: number; target?: number; text: string }
   | { error?: string; kind: 'soundEnded'; voice: number }
   | { kind: 'inspect'; session: number }
+  | { kind: 'variables'; session: number }
   | { kind: 'stop'; session: number };
 
 /** A prompt as the page shows it; its answer names the prompt's id. */
@@ -121,5 +123,7 @@ export type PlayResponse =
   | { error?: string; kind: 'message'; text?: string }
   /** The Group's inspection as JSON, big integers as strings. */
   | { inspection: string; kind: 'inspection' }
+  /** The Variables window's Scripts; absent if no Pump ran since last asked. */
+  | { kind: 'variables'; scripts?: VariableScript[] }
   /** What every pending request gets when the worker is ended. */
   | { kind: 'ended' };

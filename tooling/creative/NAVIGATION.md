@@ -203,6 +203,22 @@ List files with `rg --files tooling/creative` before opening one by name.
   [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts`.
 
+## Variables window
+
+- [variables.ts](src/variables.ts): the worker's read of the showing Page's
+  Script Variables (`variablesOf`, from `group.inspect()`), their plain
+  encoding, and the rows the page draws from them; no DOM.
+- [play-host.ts](src/play-host.ts) answers the `variables` request in
+  [play-protocol.ts](src/play-protocol.ts), without values when no Pump has
+  run since the last one; [play-view.ts](src/play-view.ts) asks every 100 ms
+  while the window is open and Play is browsing.
+- [variables-window.tsx](src/variables-window.tsx): the Preact window, its
+  open rows and change highlights.
+- Tests: [play-host.test.ts](tests/play-host.test.ts) and
+  [variables.browser.ts](tests/variables.browser.ts) on
+  `/variables-test.html`.
+- First check: `bun test tooling/creative/tests/play-host.test.ts`.
+
 ## Performance window
 
 - [performance.ts](src/performance.ts): typed Run accounting, frame counts and

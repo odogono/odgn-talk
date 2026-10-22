@@ -18,6 +18,7 @@ import {
   type PromptView,
 } from './play-protocol';
 import { scriptOwners } from './script-manifest';
+import { variablesOf } from './variables';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
 
@@ -122,6 +123,8 @@ export class PlayHost {
   #pageHandles = { keyDown: false, keyUp: false };
   #edits = new WeakMap<DeepReadonly<Element>, number>();
   #problems = 0;
+  // The Pump count when the Variables window last asked.
+  #variablesPumps = -1;
   #prompts = new WeakMap<PendingPrompt, number>();
   #nextPrompt = 1;
   #voices = new Map<
@@ -240,6 +243,15 @@ export class PlayHost {
         });
         return;
       }
+      case 'variables': {
+        const fresh = session.pumps !== this.#variablesPumps;
+        this.#variablesPumps = session.pumps;
+        reply({
+          kind: 'variables',
+          ...(fresh ? { scripts: variablesOf(session, this.#owners) } : {}),
+        });
+        return;
+      }
       case 'message': {
         const started = session.runMessage(request.text, request.target);
         if (!started.ok) {
@@ -283,6 +295,7 @@ export class PlayHost {
     this.#sentState = '';
     this.#sentTargets = '';
     this.#problems = 0;
+    this.#variablesPumps = -1;
     this.#voices.clear();
     this.#session = new PlaySession(request.project, request.pageIndex, {
       // A different game each time (ADR 0096).

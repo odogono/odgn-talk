@@ -732,6 +732,30 @@ opt-in. Capture does not change frame delivery or scheduling. Telemetry is
 separate from the Play mirror, allowing final Stop snapshots to arrive after
 Play State is discarded; session and capture epochs reject stale snapshots.
 
+## Variables window
+
+Open **Window → Variables** to watch a browsing Play Session's Script
+Variables. It lists the Project's Script, the showing Page's Script and the
+Scripts of that Page's Elements, Elements created during the session
+included, each labelled by its owner as the Errors window labels them. Scripts
+without Script Variables, Message Box Scripts and the Scripts of Pages the
+session has left are hidden. It is read-only, and it isn't available in
+Present.
+
+Values show in source form. Lists and maps show their size and open to show
+their first 100 items, then a "… N more" row; open rows stay open across
+refreshes. An Element reference shows the Element's name, and clicking an
+authored Element selects it; an Element that has gone shows as "(deleted)".
+Other Host Objects show their kind and id, and a Function shows as
+`function`. A value that changed since the last refresh is highlighted for
+600 ms.
+
+The window reads the session at most every 100 ms, only while it is open and
+a Pump has run since it last asked. The Play worker calls the Group's
+`inspect()`, which costs no Fuel, and sends only the shown Scripts' variables.
+After the session ends the window keeps the last values, marked as from the
+ended session, until the next session starts.
+
 ## Play
 
 There are two ways to run a Project, both on the Page being edited

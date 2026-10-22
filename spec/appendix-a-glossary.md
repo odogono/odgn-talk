@@ -407,7 +407,7 @@ A window in Folio where an author types one line of NorthTalk and runs it at onc
 _Avoid_: console, REPL, Message (for the window)
 
 **Variables window**:
-A window in Folio that, while browsing, shows the Script Variables of the Project's and the showing Page's Scripts with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
+A window in Folio that, while browsing, shows the Script Variables of the Project's Script, the showing Page's Script and the Scripts of that Page's Elements with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
 _Avoid_: inspector, debugger, watch window
 
 **Performance window**:

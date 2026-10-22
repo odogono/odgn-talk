@@ -1070,8 +1070,12 @@ export class PlaySession {
     }
   }
 
+  /** How many turns have run, so readers of Script state can skip a repeat. */
+  pumps = 0;
+
   /** One bounded turn; the browser schedules another turn only after yielding. */
   pump(now: bigint) {
+    this.pumps++;
     if (
       this.#closing &&
       (this.#closing.done || now >= this.#closing.deadline)
