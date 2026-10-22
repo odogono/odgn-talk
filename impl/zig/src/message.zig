@@ -252,6 +252,8 @@ const Need = struct {
     mode: caps.Mode = .immediate,
     scope: []u8,
     automatic: bool = false,
+    /// The Host Delivery that started the Run, or empty (ADR 0125).
+    delivery: []u8 = &.{},
     /// The Run's Fuel left after the declared cost; null for an automatic
     /// call or an unlimited one.
     fuel_left: ?u64 = null,
@@ -1026,7 +1028,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
     s.x.cross(need: {
         const gpa = s.gpa;
         // One allocation holds every text the need carries (#1103).
-        const texts = [_][]const u8{ call.id, call.script, call.run, call.segment, call.grant, oc.capability, oc.operation, call.scope };
+        const texts = [_][]const u8{ call.id, call.script, call.run, call.segment, call.grant, oc.capability, oc.operation, call.scope, call.delivery() };
         var total: usize = 0;
         for (texts) |t| total += t.len;
         const packed_texts = gpa.alloc(u8, total) catch return .broken;
@@ -1049,6 +1051,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
             .capability = slices[5],
             .operation = slices[6],
             .scope = slices[7],
+            .delivery = slices[8],
             .now = call.now,
             .args = &.{},
             .object_kind = &.{},
@@ -1594,6 +1597,10 @@ fn needReply(s: *Session, ref: i64) []u8 {
             if (n.fuel_left) |left| {
                 o.raw(",\"fuelLeft\":") catch {};
                 o.int(left) catch {};
+            }
+            if (n.delivery.len > 0) {
+                o.raw(",\"delivery\":") catch {};
+                o.text(n.delivery) catch {};
             }
         },
         .effect => {
@@ -5732,6 +5739,10 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
                 try w.key("fuelLeft");
                 try w.int(left);
             }
+            if (n.delivery.len > 0) {
+                try w.key("delivery");
+                try w.ptext(n.delivery);
+            }
         },
         .effect => {
             try w.key("script");
@@ -6734,6 +6745,8 @@ test "an immediate op pauses the Pump and resumes on its result" {
     try std.testing.expectEqual(@as(i64, 20), need.object.get("args").?.array.items[0].integer);
     const left = need.object.get("fuelLeft").?.integer;
     try std.testing.expect(left > 0 and left < 1000);
+    // The Run's Host Delivery reaches the Host (ADR 0125).
+    try std.testing.expectEqualStrings("d1", need.object.get("delivery").?.string);
     // A wrong ref and another message are refused; the Pump stays parked.
     const stray = try c.sendRef(99, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":40}}", .{99});
     try std.testing.expectEqualStrings("protocol error", try errKind(stray));

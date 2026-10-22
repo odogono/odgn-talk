@@ -228,6 +228,7 @@ defmodule NorthTalk.Generated.Envelope do
         %{name: "scope", kind: :text, required: false},
         %{name: "automatic", kind: :bool, required: false},
         %{name: "fuelLeft", kind: :uint, required: false},
+        %{name: "delivery", kind: :text, required: false},
         %{name: "abandoned", kind: :texts, required: false},
         %{name: "settled", kind: :texts, required: false},
         %{name: "trace", kind: :texts, required: false}

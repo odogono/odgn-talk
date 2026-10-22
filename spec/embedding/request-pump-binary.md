@@ -273,7 +273,7 @@ tag and a positional list, as above:
 | `07` | prop-result | host-to-guest | ref, group, outcome, value, code, message, charged |
 | `08` | effect-result | host-to-guest | ref, group, status |
 | `09` | release-result | host-to-guest | ref, group |
-| `83` | op | guest-to-host | ref, call, script, run, segment, grant, capability, operation, mode, now, args, scope, automatic, fuelLeft, abandoned, settled, trace |
+| `83` | op | guest-to-host | ref, call, script, run, segment, grant, capability, operation, mode, now, args, scope, automatic, fuelLeft, delivery, abandoned, settled, trace |
 | `84` | prop | guest-to-host | ref, object, prop, set, value, op, selector, abandoned, settled, trace |
 | `85` | effect | guest-to-host | ref, script, run, segment, grant, grants, coordinator, phase, now, abandoned, settled, trace |
 | `86` | release | guest-to-host | ref, script, grant, reason, now, abandoned, settled, trace |

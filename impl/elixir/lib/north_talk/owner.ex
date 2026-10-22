@@ -1187,6 +1187,7 @@ defmodule NorthTalk.Owner do
         run: need["run"],
         segment: need["segment"],
         scope: need["scope"],
+        delivery: need["delivery"],
         automatic: need["automatic"] == true
       }
 

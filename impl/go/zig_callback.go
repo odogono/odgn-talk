@@ -55,7 +55,7 @@ type zigNeed struct {
 	bindGrants, bindObjects                            [][2]string
 	kind                                               string
 	script, grant, reason, operation, capability, call string
-	scope, run, segment, phase                         string
+	scope, run, segment, phase, delivery               string
 	now                                                time.Time
 	nowErr                                             error
 	args                                               []Value
@@ -261,7 +261,7 @@ func (b *zigGroup) operation(n *zigNeed, out *zigResult) error {
 	if automatic {
 		ctx = context.Background()
 	}
-	c := &Call{automatic: automatic, scopeName: n.scope, group: b.group, scriptName: s.name, runID: RunID(n.run), grantName: grantName, binding: grant.binding, id: CallID(n.call), segmentID: n.segment, now: n.now, context: ctx, starting: true}
+	c := &Call{automatic: automatic, delivery: n.delivery, scopeName: n.scope, group: b.group, scriptName: s.name, runID: RunID(n.run), grantName: grantName, binding: grant.binding, id: CallID(n.call), segmentID: n.segment, now: n.now, context: ctx, starting: true}
 	if n.fuelErr != nil {
 		cancel()
 		return n.fuelErr

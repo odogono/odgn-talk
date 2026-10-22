@@ -414,6 +414,7 @@ export class WasmGroup implements Group {
   ): Call<unknown> {
     const id = textOf(field(need, 'call'))!;
     const scope = textOf(field(need, 'scope'));
+    const delivery = textOf(field(need, 'delivery'));
     return Object.freeze({
       group: this,
       id,
@@ -423,6 +424,7 @@ export class WasmGroup implements Group {
       segmentId: textOf(field(need, 'segment'))!,
       ...(scope ? { scopeName: scope } : {}),
       automatic: boolOf(field(need, 'automatic')) ?? false,
+      ...(delivery ? { delivery } : {}),
       binding: grant.binding,
       now: parseInstant(textOf(field(need, 'now'))!),
       signal: pending.abort.signal,

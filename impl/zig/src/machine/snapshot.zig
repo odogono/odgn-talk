@@ -1407,6 +1407,7 @@ const Restoring = struct {
         p.deadline = try deadline(&r.i);
         p.order = try r.i.int();
         p.call = try r.call();
+        if (p.call) |c| c.setDelivery(machine.Group.hostDelivery(run.delivery));
         p.grant = try r.kept();
         p.operation = try r.kept();
         if (try r.i.flag()) p.decl = try r.decl(run.script, p.grant, p.operation);

@@ -682,6 +682,10 @@ void talk_call_segment_id(const talk_call *c, const char **s, size_t *len);
 /* The scope a lifecycle Operation opens or closes; empty for one without
  * scope metadata. */
 void talk_call_scope_name(const talk_call *c, const char **s, size_t *len);
+/* The delivery id of the Host Delivery that started the calling Run, such as
+ * "d1"; empty when a Script's send, a Function Value call or the Core started
+ * it. Never traced. */
+void talk_call_delivery(const talk_call *c, const char **s, size_t *len);
 /* True only when the Core abandons a scope its Run left open. Such a call
  * may not charge, and only a normal return counts as success. */
 bool talk_call_automatic(const talk_call *c);

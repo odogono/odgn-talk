@@ -1349,7 +1349,11 @@ export class TsGroup implements Group {
         });
         for (const running of group.runsOf(script)) {
           running.run.validateSnapshot(new Set(refs.byObject.keys()));
-          running.run.host = group.hostFor(script, running.run);
+          running.run.host = group.hostFor(
+            script,
+            running.run,
+            running.delivery.id,
+          );
           running.run.rebindCalls();
           running.run.persistentState = () => group.persistentState(script, 1);
         }
@@ -2844,9 +2848,10 @@ export class TsGroup implements Group {
   }
 
   // What a Run of the Script reaches outside it through (machine.ts).
-  private hostFor(s: ScriptState, run: Run): RunHost {
+  private hostFor(s: ScriptState, run: Run, delivery: string | null): RunHost {
     const group = this;
     return {
+      ...(delivery ? { delivery } : {}),
       drawRandom: n => this.drawRandom(n),
       holdsObject: v => this.holdsObject(v),
       crossing: () => {
@@ -4114,7 +4119,7 @@ export class TsGroup implements Group {
       };
       this.accountStart(s, head);
       run.id = head.id;
-      run.host = this.hostFor(s, run);
+      run.host = this.hostFor(s, run, delivery.id);
       if (delivery.during) {
         run.setDuring(delivery.during);
       }
