@@ -1,5 +1,7 @@
 # Woodpecker CI
 
+To read a failed Woodpecker check, run `bun run ci:log <pr>` ([`log.ts`](log.ts)).
+
 Pull-request checks share capacity between Woodpecker and GitHub-hosted runners.
 GitHub Actions runs the Go core and native macOS sidecar PR checks, plus the
 broader matrix on `main` or manually:

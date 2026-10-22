@@ -1,20 +1,16 @@
 // @northtalk/ts/wasm: the embedding API over the Zig reactor (#1121).
 // Each test runs the same Host code on the TS Core and on the facade, and
 // expects the same result. Skipped when talk.wasm hasn't been built:
-// `cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi`.
+// `bun run wasm:build`.
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 // eslint-disable-next-line import-x/no-namespace -- each test takes a whole package.
 import * as ts from '../src/index';
 // eslint-disable-next-line import-x/no-namespace -- each test takes a whole package.
 import * as wasm from '../src/wasm/index';
 import { autoDrive, newDrivenGroup } from '../src/driver';
+import { artifact } from './reactor-artifact';
 
-const artifact = resolve(
-  import.meta.dir,
-  process.env.NORTHTALK_WASM ?? '../../../.cache/zig-wasi/bin/talk.wasm',
-);
 const built = existsSync(artifact);
 const module = built
   ? await WebAssembly.compile(readFileSync(artifact))

@@ -22,6 +22,14 @@ cd impl/zig && zig test -ODebug --dep talk.h --dep inspect-reader -Mroot=src/roo
   --test-filter '<test name>'
 ```
 
+To measure a change, run `bun run bench --only zig --count 5 --no-save
+[--filter <text>]` on `origin/main` and on the branch, alternating; runs vary
+by ±5–8%. A detached baseline worktree comes from
+`git worktree add --detach <dir> origin/main`, since the local `main` may be
+behind. For the WASI embedding itself (Pump and Capability exchanges, startup,
+memory), use the [Message Layer C Host](../../bench/message-layer-c/README.md);
+`impl/go/request-pump-bench.sh` compares against a pinned `BASE`, not `main`.
+
 A new module's tests run only once the `test` block in
 [`root.zig`](src/root.zig) references it (`_ = binary_value;`).
 `message.zig` and `machine/machine.zig` run to thousands of lines; find a
@@ -244,7 +252,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 The Go adapter and the Elixir package each run a pinned copy of the WASI reactor, so a Zig change reaches them only through these steps:
 
-1. Try uncommitted Zig in Go with the [hand swap](../go/README.md#zig-backend), then gate it with `CGO_ENABLED=0 impl/go/adapter-check.sh`. Restore with `git checkout -- impl/go/internal/zigwasm`.
+1. Try uncommitted Zig in Go with `impl/go/hand-swap.sh` (the [hand swap](../go/README.md#hand-swap)), then gate it with `CGO_ENABLED=0 impl/go/adapter-check.sh`. Restore with `git checkout -- impl/go/internal/zigwasm`.
 2. Commit the Zig change, then run `python3 impl/go/build-artifact.py`. It refreshes the embedded copy in `impl/go/internal/zigwasm` with its digest; commit its output. It refuses uncommitted Core or spec changes. After a rebase, rerun it rather than merging those files by hand.
 3. If `format_version` in [`snapshot.zig`](src/machine/snapshot.zig) changed, set `@save_format` in [`artifact.ex`](../elixir/lib/north_talk/artifact.ex) and the assertion in [`fault_test.exs`](../elixir/test/fault_test.exs), then follow [the pinned reactor release](../elixir/NAVIGATION.md#the-pinned-reactor-release). `bun run check` fails until the two agree.
 

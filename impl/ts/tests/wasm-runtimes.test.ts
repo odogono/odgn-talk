@@ -11,12 +11,9 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { readSetup } from '../tools/corpus';
 import { callbackScenario } from '../tools/wasm-callbacks';
+import { artifact } from './reactor-artifact';
 
 const root = resolve(import.meta.dirname, '../../..');
-const artifact = resolve(
-  import.meta.dirname,
-  process.env.NORTHTALK_WASM ?? '../../../.cache/zig-wasi/bin/talk.wasm',
-);
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-wasm-runtimes-'));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 let expected: Awaited<ReturnType<typeof callbackScenario>>;

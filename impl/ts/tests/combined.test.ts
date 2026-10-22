@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   createCore,
   num,
@@ -8,11 +7,8 @@ import {
   type Requested,
 } from '../src/index';
 import { createCore as createWasmCore } from '../src/wasm/index';
+import { artifact } from './reactor-artifact';
 
-const artifact = resolve(
-  import.meta.dir,
-  process.env.NORTHTALK_WASM ?? '../../../.cache/zig-wasi/bin/talk.wasm',
-);
 const module = existsSync(artifact)
   ? await WebAssembly.compile(readFileSync(artifact))
   : undefined;
