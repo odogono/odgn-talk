@@ -66,6 +66,10 @@ _Avoid_: scoped Operation (for atomic effects), transactional Run
 The Host object that begins, commits and rolls back the Segment-bound effects of every Grant whose binding the Host maps to it. All of a Segment's Segment-bound Operations must go through one Segment Coordinator, so that the Segment commits or rolls back as a whole.
 _Avoid_: participant (for the Host object), transaction manager, resource manager
 
+**Segment participant**:
+The single Host-side party engaged in one Segment's Segment-bound effects. It is named by its first enrolled Grant and shared by every Grant on the same Segment Coordinator; it begins with the Segment's first Segment-bound Operation and ends when the Segment commits or rolls back.
+_Avoid_: Segment Coordinator (for the per-Segment engagement), transaction
+
 **Metered Operation**:
 An Operation that obtains Fuel authorization incrementally before doing each chunk of work, with effects that are read-only or belong to the calling Segment.
 _Avoid_: streaming Operation (for charging), billable Operation

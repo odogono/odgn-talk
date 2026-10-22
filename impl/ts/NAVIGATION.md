@@ -70,7 +70,7 @@ Files, grammar, or lowering.
 
 ## Capability Scopes, Segment-bound effects and Coordinators
 
-- Implementation: [Segment participants and Coordinators](src/machine.ts), [Scope declarations and Coordinator mapping](src/capabilities.ts)
+- Implementation: [Segment participant policy](src/segment-participant.ts), [Run enrollment and Scopes](src/machine.ts), [Scope declarations and Coordinator mapping](src/capabilities.ts)
 - Rules: [Scopes and Segment-bound effects](../../spec/09-embedding.md#capability-scopes-and-segment-bound-effects), [worked examples](../../spec/embedding/scoped-effects.md)
 - Tests and cases: [Segment effect tests](tests/segment-effects.test.ts), [Coordinator tests](tests/segment-coordinators.test.ts), [Scope conformance](tests/scoped-conformance.test.ts), [`effect-*` Capability cases](../../corpus/capabilities/)
 - First check: `bun test impl/ts/tests/segment-effects.test.ts impl/ts/tests/segment-coordinators.test.ts`

@@ -91,13 +91,18 @@ import {
   type ValueOperation,
   type ValueImmediateOp,
   type EffectResult,
-  type SegmentContext,
-  type SegmentCoordinator,
-  type SegmentLifecycle,
   type Shape,
 } from './capabilities';
 import type { EffectFailure } from './group';
-import { HostError, ScriptError as HostScriptError } from './errors';
+import {
+  HostError,
+  hostDetail,
+  ScriptError as HostScriptError,
+} from './errors';
+import {
+  SegmentParticipant,
+  type ParticipantSite,
+} from './segment-participant';
 import {
   bool,
   dec,
@@ -864,12 +869,6 @@ const itemSize = (item: Item): number => {
   }
 };
 
-// What the Host did wrong, for a `call failed` report's detail. Its wording
-// is outside parity (chapter 9).
-const hostDetail = (error: unknown): string =>
-  error instanceof Error
-    ? `${error.name}: ${error.message}`
-    : `the Host threw ${typeof error === 'symbol' ? error.toString() : String(error)}`;
 const resultDetail = (
   result: unknown,
   shape: Shape | undefined,
@@ -1049,149 +1048,56 @@ export class Run {
     op: ValueImmediateOp<unknown>;
   }[] = [];
 
-  // The Segment's Segment Coordinator and the Grants enrolled in it, in
-  // enrollment order. A Grant with no coordinator is its own (ADR 0069).
-  private participant: {
-    coordinator?: SegmentCoordinator;
-    enrolled: { grant: Grant<unknown>; grantName: string }[];
-    hooks: SegmentLifecycle<unknown>;
-  } | null = null;
-  private participantAbandonment: EffectFailure | null = null;
-  effectStateUnknown = false;
+  // Never saved: the Group refuses a save while a participant is active or
+  // its effect state is unknown, so a restored Run starts a fresh one.
+  private participant = new SegmentParticipant();
+
+  private get participantSite(): ParticipantSite {
+    return {
+      group: this.host!.group,
+      now: this.host!.now,
+      records: this.records,
+      runId: this.id,
+      scriptName: this.script.name,
+      segmentId: this.segmentId,
+    };
+  }
 
   get hasParticipant(): boolean {
-    return this.participant !== null;
+    return this.participant.active;
   }
 
-  /** The participant's first enrolled Grant, which the Trace names. */
-  private get participantName(): string {
-    return this.participant!.enrolled[0]!.grantName;
-  }
-
-  private enrolled(grantName: string): boolean {
-    return !!this.participant?.enrolled.some(g => g.grantName === grantName);
-  }
-
-  /** Whether a Segment-bound call through this Grant joins the participant. */
-  private sharesParticipant(grantName: string, grant: Grant<unknown>) {
-    const participant = this.participant!;
-    return participant.coordinator
-      ? grant.coordinator === participant.coordinator
-      : participant.enrolled[0]!.grantName === grantName;
-  }
-
-  private lifecycle(phase: 'begin' | 'commit' | 'rollback'): EffectResult {
-    const participant = this.participant!;
-    const first = participant.enrolled[0]!;
-    const context: SegmentContext<unknown> = {
-      group: this.host!.group,
-      binding: first.grant.binding,
-      scriptName: this.script.name,
-      runId: this.id,
-      grantName: first.grantName,
-      grants: participant.enrolled.map(g => ({
-        grantName: g.grantName,
-        binding: g.grant.binding,
-      })),
-      segmentId: this.segmentId,
-      now: this.host!.now,
-    };
-    let result: EffectResult;
-    try {
-      const returned = participant.hooks[phase](context);
-      const status = returned?.status;
-      const detail = returned?.detail;
-      if (
-        !['ok', 'failed', 'unknown'].includes(status) ||
-        (detail !== undefined && typeof detail !== 'string')
-      ) {
-        throw new Error('Malformed lifecycle result');
-      }
-      result = { status, ...(detail === undefined ? {} : { detail }) };
-    } catch (error) {
-      result = { status: 'unknown', detail: hostDetail(error) };
-    }
-    this.records.push({
-      kind: 'effect',
-      grant: first.grantName,
-      segment: this.segmentId,
-      phase,
-      status: result.status,
-    });
-    if (result.status !== 'ok') {
-      this.records.push({
-        kind: 'effect-failure',
-        grant: first.grantName,
-        segment: this.segmentId,
-        phase,
-        status: result.status,
-        detail: result.detail ?? '',
-      });
-    }
-    return result;
-  }
-
-  private effectFailure(
-    phase: EffectFailure['phase'],
-    result: EffectResult,
-  ): EffectFailure {
-    return {
-      script: this.script.name,
-      run: this.id,
-      grant: this.participantName,
-      segment: this.segmentId,
-      phase,
-      status: result.status as 'failed' | 'unknown',
-      ...(result.detail === undefined ? {} : { detail: result.detail }),
-    };
-  }
-
-  private rollbackParticipant() {
-    if (!this.participant) {
-      return;
-    }
-    if (this.lifecycle('rollback').status !== 'ok') {
-      this.effectStateUnknown = true;
-    }
-    this.participant = null;
-    this.participantAbandonment = null;
-    this.script.variables = [...this.segmentBase];
+  get effectStateUnknown(): boolean {
+    return this.participant.effectStateUnknown;
   }
 
   /** After charges/state checks, before any Segment outcome becomes visible. */
   finalizeEffects(rollback = false) {
-    if (rollback || this.done) {
-      this.abandonScopes();
-    }
-    if (!this.participant) {
-      return;
-    }
-    if (
+    const ending = this.participant.end(
       rollback ||
-      this.outcome?.kind === 'limit fault' ||
-      (this.outcome?.kind === 'cancelled' &&
-        this.outcome.cleanupFailed &&
-        'limit' in this.outcome.cleanupFailed)
-    ) {
-      this.rollbackParticipant();
-      return;
+        this.outcome?.kind === 'limit fault' ||
+        (this.outcome?.kind === 'cancelled' &&
+          this.outcome.cleanupFailed &&
+          'limit' in this.outcome.cleanupFailed)
+        ? 'rollback'
+        : 'commit',
+      () => this.participantSite,
+      () => {
+        if (rollback || this.done) {
+          this.abandonScopes();
+        }
+      },
+    );
+    if (ending.kind === 'rolled back' || ending.kind === 'effect failed') {
+      this.script.variables = [...this.segmentBase];
     }
-    const abandonment = this.participantAbandonment;
-    const result = abandonment ? null : this.lifecycle('commit');
-    if (result?.status === 'ok') {
-      this.participant = null;
-      this.participantAbandonment = null;
-      return;
+    if (ending.kind === 'effect failed') {
+      const pending = this.discard('effect-failed');
+      this.records.push(
+        ...pending.map(id => ({ kind: 'abandon' as const, id })),
+      );
+      this.outcome = { kind: 'effect failed', effect: ending.failure };
     }
-    const failure = abandonment ?? this.effectFailure('commit', result!);
-    if (result?.status === 'unknown') {
-      this.effectStateUnknown = true;
-    }
-    this.rollbackParticipant();
-    const pending = this.discard('effect-failed');
-    this.records.push(...pending.map(id => ({ kind: 'abandon' as const, id })));
-    this.script.variables = [...this.segmentBase];
-    this.outcome = { kind: 'effect failed', effect: failure };
   }
 
   get hasOpenScopes(): boolean {
@@ -1342,18 +1248,16 @@ export class Run {
           },
         );
         this.host!.disableGrant(scope.grantName);
-        if (this.enrolled(scope.grantName)) {
-          this.participantAbandonment ??= {
-            script: this.script.name,
-            run: this.id,
-            grant: scope.grantName,
-            segment: this.segmentId,
-            phase: 'abandon',
-            scope: scope.name,
-            status,
-            detail: hostDetail(error),
-          };
-        }
+        this.participant.abandonFailed({
+          script: this.script.name,
+          run: this.id,
+          grant: scope.grantName,
+          segment: this.segmentId,
+          phase: 'abandon',
+          scope: scope.name,
+          status,
+          detail: hostDetail(error),
+        });
       }
     }
   }
@@ -1555,7 +1459,12 @@ export class Run {
 
   /** The plain machine state, without its Group's Host functions. */
   snapshot(): Record<string, unknown> {
-    const { host: _host, persistentState: _state, ...state } = this;
+    const {
+      host: _host,
+      participant: _participant,
+      persistentState: _state,
+      ...state
+    } = this;
     return state;
   }
 
@@ -1567,6 +1476,7 @@ export class Run {
   restore(state: Record<string, unknown>): void {
     Object.assign(this, state);
     this.host = null;
+    this.participant = new SegmentParticipant();
     this.persistentState = () => this.script.variablesSize();
   }
 
@@ -2017,9 +1927,13 @@ export class Run {
         owner.stack = [];
       }
     }
-    if (this.participant) {
-      this.abandonScopes(name => this.enrolled(name));
-      this.rollbackParticipant();
+    const ending = this.participant.end(
+      'rollback',
+      () => this.participantSite,
+      () => this.abandonScopes(name => this.participant.enrolled(name)),
+    );
+    if (ending.kind === 'rolled back') {
+      this.script.variables = [...this.segmentBase];
     }
     this.cancellationAbandons = this.discard('cancelled', betweenSegments);
     this.segment++;
@@ -4202,46 +4116,26 @@ export class Run {
         throw new ScriptError('scope not open', fields, true);
       }
     }
-    if (
-      op.mode === 'immediate' &&
-      op.segmentBound &&
-      this.participant &&
-      !this.sharesParticipant(grantName, grant)
-    ) {
+    const segmentBound = op.mode === 'immediate' && op.segmentBound;
+    const conflict =
+      segmentBound && this.participant.conflict(grantName, grant);
+    if (conflict) {
       throw new ScriptError(
         'segment participant conflict',
-        [...named, ['participant', text(this.participantName)]],
+        [...named, ['participant', text(conflict)]],
         true,
       );
     }
     const declared = op.cost.fuel;
     this.pay(rate, { declared }, op.cost.alloc ?? 0);
-    if (
-      op.mode === 'immediate' &&
-      op.segmentBound &&
-      this.participant &&
-      !this.enrolled(grantName)
-    ) {
-      // A later Grant of the same coordinator joins with no hook.
-      this.participant.enrolled.push({ grantName, grant });
+    const begun = segmentBound
+      ? this.participant.enroll(grantName, grant, this.participantSite)
+      : 'ok';
+    if (begun === 'failed') {
+      throw new ScriptError('host error', named, true);
     }
-    if (op.mode === 'immediate' && op.segmentBound && !this.participant) {
-      this.participant = {
-        enrolled: [{ grantName, grant }],
-        hooks: grant.coordinator ?? grant.capability.lifecycle!,
-        ...(grant.coordinator ? { coordinator: grant.coordinator } : {}),
-      };
-      const result = this.lifecycle('begin');
-      if (result.status === 'failed') {
-        this.participant = null;
-        throw new ScriptError('host error', named, true);
-      }
-      if (result.status === 'unknown') {
-        // Keep the possibly acquired participant for terminal cleanup, which
-        // abandons existing scopes before attempting rollback exactly once.
-        this.effectStateUnknown = true;
-        throw new CrossingInterruptedError();
-      }
+    if (begun === 'unknown') {
+      throw new CrossingInterruptedError();
     }
     const id = `${this.id}.c${++this.calls}`;
     const ctx: CallContext = {
