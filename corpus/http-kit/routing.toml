@@ -1,0 +1,128 @@
+# Serve Registrations: matching, replacing, conflicts and listener lifetime.
+
+[[case]]
+name = "the longest prefix wins, and no match is 404"
+script = '''
+on start
+  ask http to serve "root", "/", "root" and wait
+  put the port of it into p
+  ask http to serve "api", "/api", "api", {port: p} and wait
+  ask http to serve "deep", "/api/v2", "deep", {port: p} and wait
+  return p
+end start
+
+on root {path: p, exchange: x}
+  ask http to respond x, {body: "root " & p}
+end root
+
+on api {path: p, exchange: x}
+  ask http to respond x, {body: "api " & p}
+end api
+
+on deep {path: p, exchange: x}
+  ask http to respond x, {body: "deep " & p}
+end deep
+'''
+steps = [
+  { request = "GET /", status = 200, response = "root /" },
+  { request = "GET /apix", status = 200, response = "api /apix" },
+  { request = "GET /api/v2/users?all=1", status = 200, response = "deep /api/v2/users" },
+  { request = "GET /api/v1", status = 200, response = "api /api/v1" },
+]
+
+[[case]]
+name = "a path no registration's prefix begins is 404"
+script = '''
+on start
+  ask http to serve "only", "/only" and wait
+  return the port of it
+end start
+
+on httpRequest {exchange: x}
+  ask http to respond x, {body: "only"}
+end httpRequest
+'''
+steps = [
+  { request = "GET /only/here", status = 200, response = "only" },
+  { request = "GET /", status = 404 },
+  { request = "GET /onl", status = 404 },
+]
+
+[[case]]
+name = "serve with the same parameters gives the address again, and different ones replace"
+script = '''
+script variable port = 0
+
+on start
+  ask http to serve "a", "/one" and wait
+  put the port of it into port
+  ask http to serve "a", "/one", nothing, {port: port} and wait
+  if the port of it is not port then throw "moved"
+  return port
+end start
+
+on move
+  ask http to serve "a", "/two", nothing, {port: port} and wait
+end move
+
+on httpRequest {path: p, exchange: x}
+  ask http to respond x, {body: p}
+end httpRequest
+'''
+steps = [
+  { request = "GET /one", status = 200, response = "/one" },
+  { request = "GET /two", status = 404 },
+  { send = "move" },
+  { request = "GET /one", status = 404 },
+  { request = "GET /two", status = 200, response = "/two" },
+]
+
+[[case]]
+name = "an equal prefix from another owner on one listener is address in use"
+grants = ["http", "web"]
+script = '''
+script variable seen = "none"
+
+on start
+  ask http to serve "a", "/x" and wait
+  put the port of it into p
+  try
+    ask web to serve "b", "/x", nothing, {port: p} and wait
+  catch {code: c}
+    put c into seen
+  end try
+  ask web to serve "c", "/y", nothing, {port: p} and wait
+  return p
+end start
+
+on httpRequest {path: p, exchange: x}
+  ask http to respond x, {body: p & " " & seen}
+end httpRequest
+'''
+steps = [
+  { request = "GET /x", status = 200, response = "/x address in use" },
+  { request = "GET /y", status = 200, response = "/y address in use" },
+]
+
+[[case]]
+name = "unserving the last registration closes the listener"
+script = '''
+on start
+  ask http to serve "a", "/" and wait
+  return the port of it
+end start
+
+on shut
+  ask http to unserve "a"
+  ask http to unserve "never served"
+end shut
+
+on httpRequest {exchange: x}
+  ask http to respond x, {body: "up"}
+end httpRequest
+'''
+steps = [
+  { request = "GET /", status = 200, response = "up" },
+  { send = "shut" },
+  { refused = "GET /" },
+]

@@ -1,0 +1,119 @@
+# respond: bodies, content types, and the errors it fails with.
+
+[[case]]
+name = "text, Bytes and json bodies, and their content types"
+script = '''
+on start
+  ask http to serve "site", "/" and wait
+  return the port of it
+end start
+
+on httpRequest {segments: ["text"], exchange: x}
+  ask http to respond x, {body: "héllo"}
+end httpRequest
+
+on httpRequest {segments: ["bytes"], exchange: x}
+  ask http to respond x, {status: 201, body: <<0x00, 0xFF>>}
+end httpRequest
+
+on httpRequest {segments: ["json"], exchange: x}
+  ask http to respond x, {json: {a: 1, b: [true, "x"]}}
+end httpRequest
+
+on httpRequest {segments: ["typed"], exchange: x}
+  ask http to respond x, {status: 202, headers: {"Content-Type": "text/html", "x-list": ["a", "b"]}, body: "<p>"}
+end httpRequest
+
+on httpRequest {segments: ["empty"], exchange: x}
+  ask http to respond x, {status: 204}
+end httpRequest
+'''
+steps = [
+  { request = "GET /text", status = 200, type = "text/plain; charset=utf-8", response = "héllo" },
+  { request = "GET /bytes", status = 201, type = "", responseHex = "00ff" },
+  { request = "GET /json", status = 200, type = "application/json", response = '{"a":1,"b":[true,"x"]}' },
+  { request = "GET /typed", status = 202, type = "text/html", response = "<p>", responseHeaders = { x-list = "a, b" } },
+  { request = "GET /empty", status = 204, response = "" },
+]
+
+[[case]]
+name = "a second respond fails with already responded"
+script = '''
+script variable seen = "none"
+
+on start
+  ask http to serve "site", "/" and wait
+  return the port of it
+end start
+
+on httpRequest {segments: ["twice"], exchange: x}
+  ask http to respond x, {body: "first"}
+  try
+    ask http to respond x, {body: "second"}
+  catch {code: c}
+    put c into seen
+  end try
+end httpRequest
+
+on httpRequest {segments: ["result"], exchange: x}
+  ask http to respond x, {body: seen}
+end httpRequest
+'''
+steps = [
+  { request = "GET /twice", status = 200, response = "first" },
+  { request = "GET /result", status = 200, response = "already responded" },
+]
+
+[[case]]
+name = "a Run another Run's send started can't respond: not owner"
+script = '''
+on start
+  ask http to serve "site", "/" and wait
+  return the port of it
+end start
+
+on httpRequest {exchange: x}
+  send steal with x to me and wait
+  ask http to respond x, {body: it}
+end httpRequest
+
+on steal x
+  try
+    ask http to respond x, {body: "stolen"}
+    return "responded"
+  catch {code: c}
+    return c
+  end try
+end steal
+'''
+steps = [{ request = "GET /", status = 200, response = "not owner" }]
+
+[[case]]
+name = "after the client goes, closed is true and respond fails with exchange closed"
+script = '''
+script variable seen = []
+
+on start
+  ask http to serve "site", "/" and wait
+  return the port of it
+end start
+
+on httpRequest {segments: ["slow"], exchange: x}
+  wait 0.3 s
+  put the closed of x after seen
+  try
+    ask http to respond x, {body: "late"}
+  catch {code: c}
+    put c after seen
+  end try
+end httpRequest
+
+on httpRequest {segments: ["result"], exchange: x}
+  ask http to respond x, {json: seen}
+end httpRequest
+'''
+steps = [
+  { abort = "GET /slow" },
+  { sleep = 600 },
+  { request = "GET /result", status = 200, response = '[true,"exchange closed"]' },
+]

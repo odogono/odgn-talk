@@ -73,7 +73,7 @@ for (const typescript of typescripts) {
 
 // The browser fetches each module as it is, as an unbundled Host serves them.
 const browserSubpaths = (Object.keys(entries) as Subpath[]).filter(
-  subpath => subpath !== './sqlite',
+  subpath => subpath !== './sqlite' && subpath !== './http',
 );
 const imports = Object.fromEntries(
   browserSubpaths.map(subpath => [

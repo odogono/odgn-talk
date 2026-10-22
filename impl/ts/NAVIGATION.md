@@ -133,6 +133,13 @@ Files, grammar, or lowering.
 - Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/)
 - First check: `bun test impl/ts/tests/http-capability.test.ts`
 
+## HTTP router
+
+- Implementation: [`@northtalk/ts/http`](src/http/router.ts), on `node:http`
+- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges)
+- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](tools/http-kit.ts), [kit tests](tests/http-kit.test.ts), [Node runs](tests/http-runtimes.test.ts), [lifecycle tests](tests/http-host.test.ts)
+- First check: `bun test impl/ts/tests/http-kit.test.ts impl/ts/tests/http-host.test.ts`
+
 ## Notification router
 
 - Implementation: [router](src/notify/router.ts), [`Group.scriptNames`](src/group.ts)
