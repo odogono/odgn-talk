@@ -6,7 +6,9 @@ List paths with `rg --files` in the relevant directory before opening files by
 name. For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
 [ADR index](../../docs/adr/README.md).
 
-All commands below run from the repository root. See the
+All commands below run from the repository root; `lint`, `format:check` and
+`check` exist only as root scripts. To measure a change, run `bun run bench --only ts --count 5 --no-save [--filter <text>]` on
+`origin/main` and on the branch, alternating; runs vary by ±5–8%. See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
@@ -93,7 +95,8 @@ Files, grammar, or lowering.
 - Implementation: [`@northtalk/ts/wasm`](src/wasm/index.ts): the [Group](src/wasm/group.ts) and its needs, the [guest conversation](src/wasm/session.ts), [Values crossing](src/wasm/codec.ts), [frames](src/wasm/wire.ts) and the [WASI imports](src/wasm/reactor.ts)
 - Rules: [the message layer](../../spec/09-embedding.md#the-message-layer), [paused inputs](../../spec/embedding/paused-crossing-inputs.md), [ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md), [the guide's differences](README.md#the-zig-reactor-in-a-browser)
 - Tests and cases: [parity tests](tests/wasm.test.ts), [core-switch example](examples/core-switch/), [Corpus replay](tools/wasm-corpus.ts), [browser figures](tools/wasm-browser.ts)
-- First check: `(cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi) && bun test impl/ts/tests/wasm.test.ts && bun impl/ts/tools/wasm-corpus.ts --quiet`
+- First check: `bun run wasm:build && bun test impl/ts/tests/wasm.test.ts && bun impl/ts/tools/wasm-corpus.ts --quiet`
+- Nothing rebuilds `.cache/zig-wasi/bin/talk.wasm`: after pulling or rebasing onto Zig changes, run `bun run wasm:build` again before trusting a WASM failure. The tests warn when it is missing or older than the Zig sources ([the shared lookup](tests/reactor-artifact.ts)).
 
 ## Host Manifest export
 

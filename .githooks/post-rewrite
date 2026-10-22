@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rebases only: an amend keeps the working tree, so it needs no install.
+[ "$1" = rebase ] || exit 0
+exec "$(dirname "$0")/sync-deps" ORIG_HEAD HEAD

@@ -350,24 +350,6 @@ selection. `TestCoordinatorMappingHoldsAcrossReloadAndRestore` still needs
 Save/Restore; `TestEffectUncertaintyStopsEveryScriptAndCannotReload` reads native
 private Script state, so public Host scenarios cover fatal outcomes instead.
 
-[`build-artifact.py`](build-artifact.py) refuses uncommitted Core/spec changes. To try an
-uncommitted Zig change, build it and swap the embedded copy by hand; the
-digest in `artifact.json` must match, or `NewEngine` refuses the artifact:
-
-```sh
-(cd impl/zig && zig build -Dtarget=wasm32-wasi -Doptimize=safe)
-cp impl/zig/zig-out/bin/talk.wasm impl/go/internal/zigwasm/talk.wasm
-# then set "sha256" in impl/go/internal/zigwasm/artifact.json to:
-shasum -a 256 impl/go/internal/zigwasm/talk.wasm
-```
-
-Never commit these hand-built files. Restore them with
-`git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
-committed, run `python3 impl/go/build-artifact.py` and commit its output. If a test panics
-mid-suite, compile once and run tests singly:
-`go -C impl/go test -c -o /tmp/adapter.test .`, then
-`(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
-
 The shared public Hosts include callback-generated Broadcasts, cancellation
 cleanup order and rollback, refused out-of-range Pump Clocks, and malformed
 immediate, Start and later Fail data. Pump results, typed Reports, Fuel, futures,
@@ -431,6 +413,24 @@ facility tests and the tenants executable for every target. It includes unchange
 public-interface Go tests and dedicated adapter tests, rather than asserting the whole native suite
 passes under this tag. Full API/Corpus, facility, concurrency and measured
 performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/issues/884).
+
+### Hand swap
+
+[`build-artifact.py`](build-artifact.py) refuses uncommitted Core/spec changes. To try an
+uncommitted Zig change, swap the embedded copy by hand with
+[`hand-swap.sh`](hand-swap.sh). It builds the Zig Core, copies `talk.wasm` and
+writes its digest into `artifact.json`, which must match, or `NewEngine` refuses the artifact:
+
+```sh
+impl/go/hand-swap.sh
+```
+
+Never commit these hand-built files. Restore them with
+`git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
+committed, run `python3 impl/go/build-artifact.py` and commit its output. If a test panics
+mid-suite, compile once and run tests singly:
+`go -C impl/go test -c -o /tmp/adapter.test .`, then
+`(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
 
 ## Task navigation
 

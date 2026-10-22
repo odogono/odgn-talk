@@ -1,0 +1,9 @@
+#!/bin/sh
+# Reinstalls workspace dependencies when bun.lock changed between two commits,
+# so lint and tests do not run against a stale node_modules after a pull,
+# rebase or branch switch. A fresh worktree installs per AGENTS.md instead.
+old=$1 new=$2
+[ -d node_modules ] || exit 0
+git diff --quiet "$old" "$new" -- bun.lock 2>/dev/null && exit 0
+echo 'bun.lock changed: running bun install --frozen-lockfile' >&2
+bun install --frozen-lockfile >/dev/null 2>&1 || echo 'bun install failed; run it by hand' >&2

@@ -2,11 +2,11 @@
 
 ### Issue tracker
 
-For issue work, start with [repository identity and issue conventions](docs/agents/issue-tracker.md).
+For issue work, start with [repository identity and issue conventions](docs/agents/issue-tracker.md). Read an issue with `gh issue view <number> --json number,title,body,state,labels,comments`; `--comments` alone prints nothing for an issue without comments.
 
 ### Commits
 
-PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment. See `docs/agents/commits.md`.
+PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment. See `docs/agents/commits.md`, which also covers the git hooks and reading a failed CI check with `bun run ci:log <pr>`.
 
 ### Triage labels
 

@@ -1,6 +1,5 @@
 import { expect, spyOn, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { BinaryWriter, integerItem } from '../src/binary-value';
 import {
   callbacksFeature,
@@ -24,6 +23,7 @@ import {
 } from '../src/wasm/wire';
 import { Reactor } from '../src/wasm/reactor';
 import { callbackScenario } from '../tools/wasm-callbacks';
+import { artifact } from './reactor-artifact';
 
 const roundTrip = (frame: Frame) =>
   plain(decodeBinaryFrame(encodeBinaryFrame(frameTree(frame))));
@@ -242,10 +242,6 @@ test('malformed callback fields and unknown outcomes are refused before dispatch
   ).toThrow();
 });
 
-const artifact = resolve(
-  import.meta.dirname,
-  process.env.NORTHTALK_WASM ?? '../../../.cache/zig-wasi/bin/talk.wasm',
-);
 test.skipIf(!existsSync(artifact))(
   'a binary need accepts JSON answers and rejects a wrong ref without consuming the need',
   async () => {

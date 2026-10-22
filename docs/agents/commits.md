@@ -1,6 +1,6 @@
 # Commits and the changelog
 
-PRs are squash-merged, so a PR's title becomes the commit on `main`. CI checks every PR title, and requires a changelog fragment for the changes a reader of the changelog would want to hear about. A `commit-msg` hook checks local commits' format. A `pre-push` hook checks that a fragment matches the branch's `feat`, `fix` or `perf` commits and that new ADR numbers are free on `origin/main`, then runs the lint, format and Spec checks CI runs. Both live in [`.githooks/`](../../.githooks/), and `bun install` turns them on.
+PRs are squash-merged, so a PR's title becomes the commit on `main`. CI checks every PR title, and requires a changelog fragment for the changes a reader of the changelog would want to hear about. A `commit-msg` hook checks local commits' format. A `pre-push` hook checks that a fragment matches the branch's `feat`, `fix` or `perf` commits and that new ADR numbers are free on `origin/main`, then runs the lint, format and Spec checks CI runs. A `pre-commit` hook runs `bun run spec:check` when `GLOSSARY.md` or `spec/` is staged, so a stale generated file, such as Appendix A after a glossary edit, fails at commit rather than push; run `bun run spec:gen` and stage what it writes. After a pull, rebase or branch switch that changes `bun.lock`, the `post-merge`, `post-rewrite` and `post-checkout` hooks rerun `bun install --frozen-lockfile`. All of them live in [`.githooks/`](../../.githooks/), and `bun install` turns them on.
 
 ## Subject format
 
@@ -48,3 +48,7 @@ PR_TITLE="feat(ts): Add x" BASE_REF=main bun tools/commits/check.ts pr
 ```
 
 `BASE_REF` is the branch name (`main`), without `origin/`; the checker adds the remote prefix.
+
+## Failed CI checks
+
+Checks named `ci/woodpecker/...` run on Woodpecker, whose logs `gh` cannot show. `bun run ci:log <pr>` prints the failed steps' logs of a PR's failing Woodpecker checks; it also takes a check's link, `--step <name>` and `--tail <lines>` ([`tools/ci/log.ts`](../../tools/ci/log.ts)). For a GitHub Actions check, use `gh run view <run-id> --log-failed`. [The CI guide](../../tools/ci/README.md) lists which workflow runs where.

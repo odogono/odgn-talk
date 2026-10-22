@@ -1,0 +1,9 @@
+#!/bin/sh
+# Spec Appendix A and the other generated spec files come from GLOSSARY.md and
+# spec/ (docs/agents/domain.md); check them here rather than at pre-push.
+if git diff --cached --name-only -- GLOSSARY.md spec | grep -q .; then
+	bun run --silent --cwd tools spec:check || {
+		echo 'pre-commit: run `bun run spec:gen` and stage what it writes' >&2
+		exit 1
+	}
+fi

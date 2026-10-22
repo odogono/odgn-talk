@@ -1,0 +1,4 @@
+#!/bin/sh
+# Branch checkouts only; a file checkout passes 0 as the third argument.
+[ "$3" = 1 ] || exit 0
+exec "$(dirname "$0")/sync-deps" "$1" "$2"

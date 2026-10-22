@@ -136,8 +136,10 @@ test "long-lived polling Runs compact issued call history" {
                 const bytes = try snapshot.save(&g, t.allocator, try g.groupFingerprint());
                 defer t.allocator.free(bytes);
                 if (tick == 240) baseline = bytes.len else {
-                    std.debug.print("polling {s}: save@240={d}, save@480={d}\n", .{ @tagName(mode), baseline, bytes.len });
-                    try t.expect(bytes.len <= baseline + 32);
+                    t.expect(bytes.len <= baseline + 32) catch |e| {
+                        std.debug.print("polling {s}: save@240={d}, save@480={d}\n", .{ @tagName(mode), baseline, bytes.len });
+                        return e;
+                    };
                 }
                 var copy: machine.Group = .init(t.allocator, null);
                 defer copy.deinit();

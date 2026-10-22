@@ -11,12 +11,12 @@ Commands run from `impl/elixir/` unless they say otherwise.
 ## Setup and checks
 
 - On a fresh worktree, build the reactor the tests use, then fetch the deps:
-  `(cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)` from the repository root,
+  `bun run wasm:build` from the repository root,
   then `cd impl/elixir && mix deps.get`.
 - How the reactor is found: [`artifact.ex`](lib/north_talk/artifact.ex) `path/0` tries `NORTH_TALK_WASM`, then
   `config :north_talk, wasm_path:`, then `priv/talk.wasm`. In tests, [`config.exs`](config/config.exs) sets
   `wasm_path` to `.cache/zig-wasi/bin/talk.wasm` at the repository root.
-- **After pulling or changing Zig code, run the `zig build` above again.** Nothing rebuilds
+- **After pulling or changing Zig code, run `bun run wasm:build` again.** Nothing rebuilds
   `.cache/zig-wasi/bin/talk.wasm` for you, so the tests keep running the old reactor.
 - To try another reactor, run `NORTH_TALK_WASM=/path/to/talk.wasm mix test`.
 - No sidecar is used here. The native sidecar is for the [benchmark Host](../../bench/message-layer/elixir/) only.

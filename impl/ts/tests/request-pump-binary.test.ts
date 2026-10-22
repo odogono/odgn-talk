@@ -1,6 +1,5 @@
 import { expect, spyOn, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   decodeBinaryFrame,
   encodeBinaryFrame,
@@ -15,6 +14,7 @@ import { bytes, list, map, text } from '../src/values';
 import { fromJson } from '../src/readers';
 import { Reactor } from '../src/wasm/reactor';
 import { createCore } from '../src/wasm/index';
+import { artifact } from './reactor-artifact';
 
 const frame = (data: Frame) => readOrderedJSON(frameJSON(data));
 test('a frame holding Values encodes as its Value Encoding would', () => {
@@ -223,10 +223,6 @@ test('truncated records, unknown tags/layouts, extra fields and trailing bytes a
   ).toThrow();
 });
 
-const artifact = resolve(
-  import.meta.dir,
-  process.env.NORTHTALK_WASM ?? '../../../.cache/zig-wasi/bin/talk.wasm',
-);
 test.skipIf(!existsSync(artifact))(
   'a real guest recovers from malformed binary and rejects stale tokens',
   async () => {
