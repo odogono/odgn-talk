@@ -79,6 +79,7 @@ type registration struct {
 type listener struct {
 	address       Address
 	server        *http.Server
+	socket        net.Listener
 	registrations map[*registration]struct{}
 	closed        bool
 }
@@ -251,7 +252,7 @@ func (h *Host) listen(host string, port int) (*listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &listener{address: Address{host, ln.Addr().(*net.TCPAddr).Port}, registrations: map[*registration]struct{}{}}
+	l := &listener{address: Address{host, ln.Addr().(*net.TCPAddr).Port}, socket: ln, registrations: map[*registration]struct{}{}}
 	l.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.handle(l, w, r) }), ReadHeaderTimeout: 30 * time.Second}
 	h.listeners[l.address] = l
 	h.order = append(h.order, l)
@@ -267,6 +268,9 @@ func (h *Host) closeListener(l *listener) {
 	l.closed = true
 	delete(h.listeners, l.address)
 	h.order = slices.DeleteFunc(h.order, func(x *listener) bool { return x == l })
+	// Close the socket before unserve returns, so a new connection is
+	// refused rather than accepted into the backlog and reset.
+	_ = l.socket.Close()
 	go func() { _ = l.server.Shutdown(context.Background()) }()
 }
 
