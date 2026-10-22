@@ -289,8 +289,8 @@ adapter behind `talk_zig_experimental` against native Go through the same
 public API. [`zig-adapter-bench.sh`](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/impl/go/zig-adapter-bench.sh) runs the
 Backend benchmarks in [`backend_bench_test.go`](../../impl/go/backend_bench_test.go),
 Group instantiation, and the Benchmark Suite's Load and Run, built once without
-and once with the tag. The [`go-zig-bench` workflow](../../.github/workflows/go-zig-bench.yml)
-runs it on each platform. All runs use Go 1.27.2, wazero v1.12.0,
+and once with the tag. The [historical `go-zig-bench` workflow](https://github.com/odogono/odgn-talk/blob/8df027ac174cc42a47d4ad14725bcaea768ddee7/.github/workflows/go-zig-bench.yml)
+ran it on each platform. All runs use Go 1.27.2, wazero v1.12.0,
 `CGO_ENABLED=0`, `-count 5`, and the embedded artifact built from
 `079a7c36` by Zig 0.17.0 (wasm32-wasi, ReleaseSafe, sha256
 `18c5ac696faa06a5784543b881608c50291b333c20fd556b724f3e039fdb65ee`).
