@@ -180,4 +180,9 @@ with its corpus runner Stubs in [internal/corpus/operations.go](internal/corpus/
 check it with `go -C impl/go test . -run User` and the `standard-user*`
 Capability cases.
 
+The optional `http` factory lives in [http_capability.go](http_capability.go),
+with its corpus runner Stubs in [internal/corpus/operations.go](internal/corpus/operations.go);
+the embedded Zig Core makes its checks. Check it with `go -C impl/go test . -run HTTP`
+and the `standard-http*` Capability cases.
+
 The native Message Layer sidecar and WASI reactor now live in the [Zig task map](../zig/NAVIGATION.md). The Go public embedding API remains here.

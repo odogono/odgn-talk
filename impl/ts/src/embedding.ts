@@ -36,6 +36,7 @@ import type { localeCapability } from './locale-capability';
 import type { sqliteCapability } from './sqlite-capability';
 import type { storeCapability } from './store-capability';
 import type { userCapability } from './user-capability';
+import type { httpCapability } from './http-capability';
 import type { Value } from './values';
 import type { Versions } from './versions';
 
@@ -56,6 +57,7 @@ export type Core = {
   consoleCapability: typeof consoleCapability;
   defineCapability: typeof defineCapability;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
+  httpCapability: typeof httpCapability;
   localeCapability: typeof localeCapability;
   newGroup(o: GroupOptions): Group;
   restore(

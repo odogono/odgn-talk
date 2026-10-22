@@ -24,6 +24,7 @@ import {
 import { sqliteCapability } from '../sqlite-capability';
 import { storeCapability } from '../store-capability';
 import { userCapability } from '../user-capability';
+import { httpCapability } from '../http-capability';
 import { WasmGroup, bytesFrame, bytesOfFrame, type GroupCore } from './group';
 import type { Versions } from '../versions';
 import { Session } from './session';
@@ -145,6 +146,7 @@ export class WasmCore implements Core {
   storeCapability = storeCapability;
   sqliteCapability = sqliteCapability;
   userCapability = userCapability;
+  httpCapability = httpCapability;
 
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N> {
     const kind = defineObjectKind(k);

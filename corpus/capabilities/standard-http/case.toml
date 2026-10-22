@@ -1,0 +1,27 @@
+# standard-http: `serve` waits for the Host's `{host, port}`, with and
+# without a message and options; `unserve` and `respond` are immediate; and
+# each HTTP Exchange arrives as an ordinary Delivery whose map carries an
+# `httpExchange` Host Object, matched by `segments` (chapter 7, ADR 0124).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { serve = { fuel = 5 }, unserve = { fuel = 2 }, respond = { fuel = 3 } }
+[[objectKinds]]
+name = "httpExchange"
+props = [{ name = "closed", shape = "boolean", readOnly = true }]
+[[objects]]
+kind = "httpExchange"
+id = "e1"
+props = { closed = "false" }
+[[objects]]
+kind = "httpExchange"
+id = "e2"
+props = { closed = "false" }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { http = { ops = "all" } }

@@ -32,7 +32,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -210,6 +210,33 @@ const ObjectStore = struct {
 };
 
 const PropHost = struct { store: *ObjectStore, name: []const u8 };
+
+/// Reads a displayed `<object kind "id">` as the case's object, keeping each
+/// value it makes until the read is done.
+const DisplayObjects = struct {
+    a: std.mem.Allocator,
+    store: *ObjectStore,
+    made: std.ArrayList(*c.talk_value) = .empty,
+
+    fn object(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize) callconv(.c) ?*c.talk_value {
+        const r: *DisplayObjects = @ptrCast(@alignCast(context.?));
+        var buf: [256]u8 = undefined;
+        const key = std.fmt.bufPrint(&buf, "{s}/{s}", .{ kind[0..kind_len], id[0..id_len] }) catch return null;
+        const o = r.store.handles.get(key) orelse return null;
+        var v: ?*c.talk_value = null;
+        if (c.talk_object_value(o, &v) != c.TALK_OK) return null;
+        r.made.append(r.a, v.?) catch {
+            c.talk_value_release(v);
+            return null;
+        };
+        return v;
+    }
+
+    fn deinit(r: *DisplayObjects) void {
+        for (r.made.items) |v| c.talk_value_release(v);
+        r.made.deinit(r.a);
+    }
+};
 
 fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
     _ = err;
@@ -772,6 +799,8 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "write", c.TALK_FIRE_AND_FORGET }, .{ "read", c.TALK_SUSPENDING } }
         else if (std.mem.eql(u8, which, "user"))
             &.{ .{ "confirm", c.TALK_SUSPENDING }, .{ "choose", c.TALK_SUSPENDING }, .{ "enter", c.TALK_SUSPENDING }, .{ "notify", c.TALK_FIRE_AND_FORGET } }
+        else if (std.mem.eql(u8, which, "http"))
+            &.{ .{ "serve", c.TALK_SUSPENDING }, .{ "unserve", c.TALK_IMMEDIATE }, .{ "respond", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "sqlite"))
             &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
@@ -797,6 +826,9 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
         } else if (std.mem.eql(u8, which, "user")) {
             const impl: c.talk_user_impl = .{ .context = hosts, .confirm = standardHost("user.confirm"), .choose = standardHost("user.choose"), .enter = standardHost("user.enter"), .notify = standardHost("user.notify") };
             try check(c.talk_user_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "http")) {
+            const impl: c.talk_http_impl = .{ .context = hosts, .serve = standardHost("http.serve"), .unserve = standardHost("http.unserve"), .respond = standardHost("http.respond") };
+            try check(c.talk_http_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
             try check(c.talk_console_capability(core, &impl, &all_costs, &def));
@@ -1787,8 +1819,11 @@ pub const Host = struct {
             var args: std.ArrayList(?*c.talk_value) = .empty;
             defer for (args.items) |v| c.talk_value_release(v);
             if (field(input, "args")) |shown| {
+                // An HTTP Exchange, say, carries a Host Object in its args.
+                var objects: DisplayObjects = .{ .a = a, .store = store };
+                defer objects.deinit();
                 var list: ?*c.talk_value = null;
-                try check(c.talk_parse_display(shown.ptr, shown.len, &list));
+                try check(c.talk_parse_display_objects(shown.ptr, shown.len, DisplayObjects.object, &objects, &list));
                 defer c.talk_value_release(list);
                 for (0..c.talk_value_len(list)) |i| {
                     var item: ?*c.talk_value = null;

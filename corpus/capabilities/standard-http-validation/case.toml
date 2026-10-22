@@ -1,0 +1,26 @@
+# standard-http-validation: before charging or calling the Host, the Core
+# raises `invalid serve` for an empty name, a prefix without a leading `/`
+# and an effective message that isn't a plain Name, in that order, and
+# `invalid response` for a status outside 100 to 599 or not whole, a header
+# value that isn't text or a list of texts, and `body` with `json`, whose
+# field is `json`. An unknown response key is `wrong kind` (chapter 7,
+# ADR 0124).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { serve = { fuel = 5 }, unserve = { fuel = 2 }, respond = { fuel = 3 } }
+[[objectKinds]]
+name = "httpExchange"
+props = [{ name = "closed", shape = "boolean", readOnly = true }]
+[[objects]]
+kind = "httpExchange"
+id = "e1"
+props = { closed = "false" }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { http = { ops = "all" } }

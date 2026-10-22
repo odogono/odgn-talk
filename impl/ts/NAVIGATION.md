@@ -126,6 +126,13 @@ Files, grammar, or lowering.
 - Tests and cases: [factory tests](tests/user-capability.test.ts), [`standard-user*` cases](../../corpus/capabilities/)
 - First check: `bun test impl/ts/tests/user-capability.test.ts`
 
+## `http`
+
+- Implementation: [`http` factory, `invalid serve` and `invalid response` checks](src/http-capability.ts), [corpus runner Stubs](src/replay.ts)
+- Rules: [`http`](../../spec/07-libraries-and-the-standard-library.md#http), [the factory](../../spec/09-embedding.md#the-http-factory)
+- Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/)
+- First check: `bun test impl/ts/tests/http-capability.test.ts`
+
 ## Notification router
 
 - Implementation: [router](src/notify/router.ts), [`Group.scriptNames`](src/group.ts)

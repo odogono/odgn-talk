@@ -1,0 +1,22 @@
+script variable errors = []
+on serve name, prefix, message
+  try
+    ask http to serve name, prefix, message and wait
+  catch e
+    put e after errors
+  end try
+end serve
+on unserve name
+  try
+    ask http to unserve name
+  catch e
+    put e after errors
+  end try
+end unserve
+on respond x, response
+  try
+    ask http to respond x, response
+  catch e
+    put e after errors
+  end try
+end respond

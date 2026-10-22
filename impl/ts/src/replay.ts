@@ -26,6 +26,7 @@ import {
   storeCapability,
   timerCapability,
   userCapability,
+  httpCapability,
   type HostObject,
   ScriptError,
   type Call,
@@ -610,6 +611,43 @@ const capabilitiesOf = (
                 crossing,
                 recordedCall(call),
               ),
+          },
+          costs,
+        ),
+      );
+    } else if (capability === 'http') {
+      // The runner keeps no listener: `serve` waits for an answer, and
+      // `unserve` and `respond` take a Stub that gives Nothing.
+      const nothingStub = (operation: string, call: Call<unknown>) => {
+        try {
+          const given = stubs.take(
+            `http.${operation}`,
+            call,
+            true,
+            recordedCall(call),
+          );
+          if (given.kind !== 'nothing') {
+            throw new Error(`An http.${operation} Stub must give nothing`);
+          }
+        } finally {
+          crossing(call.id);
+        }
+      };
+      out.set(
+        capability,
+        httpCapability(
+          {
+            serve: call =>
+              startStub(
+                stubs,
+                'http.serve',
+                call,
+                calls,
+                crossing,
+                recordedCall(call),
+              ),
+            unserve: call => nothingStub('unserve', call),
+            respond: call => nothingStub('respond', call),
           },
           costs,
         ),
