@@ -251,4 +251,3 @@ func runCase(core *talk.Core, c kitCase) (failure error) {
 	}
 	return nil
 }
-
