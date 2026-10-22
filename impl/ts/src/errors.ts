@@ -94,3 +94,10 @@ export const sendFailed = (reason: SendFailedReason): ScriptError =>
     `No answer came: the receiver's Run ended ${reason}`,
     map([['reason', text(reason)]]),
   );
+
+// What the Host did wrong, for a `call failed` report's detail. Its wording
+// is outside parity (chapter 9).
+export const hostDetail = (error: unknown): string =>
+  error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : `the Host threw ${typeof error === 'symbol' ? error.toString() : String(error)}`;
