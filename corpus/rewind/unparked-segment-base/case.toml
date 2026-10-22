@@ -1,0 +1,23 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "later"
+mode = "suspending"
+result = "number"
+
+[[operations]]
+capability = "resource"
+name = "write"
+mode = "immediate"
+result = "nothing"
+segmentBound = true
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["later"] }, resource = { ops = ["write"] } }

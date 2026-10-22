@@ -33,5 +33,13 @@ changes the Script Variables' shape (`at-crossing` keeps `n` as it was), and a
 rolled-back Store write (`effects` rolls back a `resource` participant). They
 follow in #481.
 
+## `rewind/unparked-segment-base`
+
+On 2026-10-22, the maintainer reviewed and approved this case's first
+blessing for #1476 and #1479, added in
+[PR #1480](https://github.com/odogono/odgn-talk/pull/1480). Only its
+`Unblessed` header was removed. TS, Zig and Go agree on it, including in
+Save/Restore replay.
+
 The expectation review follows
 [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).

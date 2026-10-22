@@ -1848,8 +1848,12 @@ export class TsGroup implements Group {
    */
   private rewindRunning(s: ScriptState, running: Running) {
     this.rewound = true;
-    // A parked Run is between Segments: other Runs may have committed since.
-    const pending = running.run.discard('rewound', running.parked);
+    // Before a parked or just-unparked Run resumes, other Runs may have
+    // committed since its base was taken. It has no changes to undo.
+    const pending = running.run.discard(
+      'rewound',
+      running.parked || running.resuming,
+    );
     this.finalizeEffects(running, true);
     this.forgetWait(s, running);
     this.accumulateRunCosts(s, running.run);
