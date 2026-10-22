@@ -1,0 +1,36 @@
+# Unblessed: the http Standard Capability (ADR 0124); first blessing awaits human review.
+> load s identity=38b71943944aa05cc565f9a67c930ebd0241d3140b9bc49ae2fb1cbbdf746a8c
+> deliver d1 to=s message=go
+> pump clock=2026-10-22T12:00:00Z
+call s/r1.c1 op=http.serve args=["site", "/", "httpRequest", {port: 3000}]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=27 alloc=60 state=256 end=ask-wait
+pumped state=idle fuel=27 next=2026-11-16T08:31:23.647Z
+> answer s/r1.c1 value={host: "127.0.0.1", port: 3000}
+> pump clock=2026-10-22T12:00:01Z
+call s/r1.c2 op=http.serve args=["api", "/api"]
+seg s/r1 resume fuel=31 alloc=234 state=587 end=ask-wait
+pumped state=idle fuel=31 next=2026-11-16T08:31:24.647Z
+> stub http.unserve value=nothing
+> answer s/r1.c2 value={host: "127.0.0.1", port: 3000}
+> pump clock=2026-10-22T12:00:02Z
+call s/r1.c3 op=http.unserve args=["api"] result=nothing
+seg s/r1 resume fuel=44 alloc=177 state=193 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=102 alloc=471
+pumped state=idle fuel=44
+> stub http.respond value=nothing
+> deliver d2 to=s message=httpRequest args=[{method: "GET", path: "/", segments: [], query: {}, headers: {}, body: <<>>, exchange: <object httpExchange "e1">}]
+> pump clock=2026-10-22T12:00:03Z
+prop s/r2 object=<object httpExchange "e1"> name=closed op=get value=false
+call s/r2.c1 op=http.respond args=[<object httpExchange "e1">, {body: "hello"}] result=nothing
+seg s/r2 start delivery=d2 handler=httpRequest clause=1 fuel=65 alloc=125 state=237 end=return
+run s/r2 outcome=completed delivery=d2 handler=httpRequest fuel=65 alloc=125
+pumped state=idle fuel=65
+> stub http.respond value=nothing
+> deliver d3 to=s message=httpRequest args=[{method: "GET", path: "/users/7", segments: ["users", "7"], query: {}, headers: {}, body: <<>>, exchange: <object httpExchange "e2">}]
+> pump clock=2026-10-22T12:00:04Z
+call s/r3.c1 op=http.respond args=[<object httpExchange "e2">, {status: 200, headers: {"x-tag": ["a", "b"]}, json: {id: "7"}}] result=nothing
+seg s/r3 start delivery=d3 handler=httpRequest clause=2 fuel=98 alloc=560 state=262 end=return
+run s/r3 outcome=completed delivery=d3 handler=httpRequest fuel=98 alloc=560
+pumped state=idle fuel=98
+> vars
+vars s got=[{host: "127.0.0.1", port: 3000}, 3000, "unserved", false, "root", "7"]

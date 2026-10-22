@@ -617,6 +617,25 @@ type UserImpl interface {
 // UserCapability is optional for Hosts.
 func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error)
 
+// http is optional (chapter 7, ADR 0124). The binding is the Host's own
+// description of the addresses a Grant may listen on; the Core never reads
+// it. The Core has checked the Shapes and raised `invalid serve` and
+// `invalid response`. Serve hears its effective message, `httpRequest` for an
+// omitted or Nothing one, and an omitted options as an empty map; it starts a
+// suspending call with maxPending 2147483647 ms, answered with {host, port}
+// once the Host listens, or failed with `address in use` or `bad address`.
+// Respond hears the response as the Script gave it, except that `json` is its
+// compact JSON text; fail it with `already responded`, `exchange closed` or
+// `not owner` when the Call's Delivery isn't the exchange's.
+type HTTPImpl interface {
+	Serve(c *Call, name string, prefix string, message string, options Value) error
+	Unserve(c *Call, name string) error
+	Respond(c *Call, exchange *Object, response Value) error
+}
+
+// HTTPCapability is optional for Hosts.
+func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error)
+
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)
 // ---------------------------------------------------------------------------

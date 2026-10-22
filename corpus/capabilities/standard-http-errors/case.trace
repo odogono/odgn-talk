@@ -1,0 +1,73 @@
+# Unblessed: http Host failures and answer checks (ADR 0124); first blessing awaits human review.
+> load s identity=ec1a758361ae6b0dcf42fe9a83d1d557e187fa1d0ca27187248261077e3553fe
+> stub http.serve error={code: "address in use"}
+> deliver d1 to=s message=serve
+> pump clock=2026-10-22T12:00:00Z
+call s/r1.c1 op=http.serve args=["site", "/", nothing, {host: "localhost", port: 8080}] error={code: "address in use"}
+raise s/r1 code="address in use" at=s:10 pos=4:5
+seg s/r1 start delivery=d1 handler=serve clause=1 fuel=52 alloc=167 state=54 end=return
+run s/r1 outcome=completed delivery=d1 handler=serve fuel=52 alloc=167
+pumped state=idle fuel=52
+> stub http.serve error={code: "bad address"}
+> deliver d2 to=s message=serve
+> pump clock=2026-10-22T12:00:01Z
+call s/r2.c1 op=http.serve args=["site", "/", nothing, {host: "localhost", port: 8080}] error={code: "bad address"}
+raise s/r2 code="bad address" at=s:10 pos=4:5
+seg s/r2 start delivery=d2 handler=serve clause=1 fuel=52 alloc=164 state=89 end=return
+run s/r2 outcome=completed delivery=d2 handler=serve fuel=52 alloc=164
+pumped state=idle fuel=52
+> deliver d3 to=s message=serve
+> deliver d4 to=s message=serve
+> deliver d5 to=s message=serve
+> pump clock=2026-10-22T12:00:02Z
+call s/r3.c1 op=http.serve args=["site", "/", nothing, {host: "localhost", port: 8080}]
+seg s/r3 start delivery=d3 handler=serve clause=1 fuel=30 alloc=113 state=441 end=ask-wait
+call s/r4.c1 op=http.serve args=["site", "/", nothing, {host: "localhost", port: 8080}]
+seg s/r4 start delivery=d4 handler=serve clause=1 fuel=30 alloc=113 state=697 end=ask-wait
+call s/r5.c1 op=http.serve args=["site", "/", nothing, {host: "localhost", port: 8080}]
+seg s/r5 start delivery=d5 handler=serve clause=1 fuel=30 alloc=113 state=953 end=ask-wait
+pumped state=idle fuel=90 next=2026-11-16T08:31:25.647Z
+> answer s/r3.c1 value={host: "localhost", port: 80.5}
+> answer s/r4.c1 value="localhost:8080"
+> answer s/r5.c1 value={host: "localhost", port: 8080}
+> pump clock=2026-10-22T12:00:03Z
+call-failed s/r3.c1 op=http.serve
+raise s/r3 code="host error" at=s:10 pos=4:5
+seg s/r3 resume fuel=21 alloc=34 state=746 end=return
+run s/r3 outcome=completed delivery=d3 handler=serve fuel=51 alloc=147
+call-failed s/r4.c1 op=http.serve
+raise s/r4 code="host error" at=s:10 pos=4:5
+seg s/r4 resume fuel=21 alloc=34 state=510 end=return
+run s/r4 outcome=completed delivery=d4 handler=serve fuel=51 alloc=147
+seg s/r5 resume fuel=18 alloc=234 state=278 end=return
+run s/r5 outcome=completed delivery=d5 handler=serve fuel=48 alloc=347
+pumped state=idle fuel=60
+> stub http.respond error={code: "not owner"}
+> stub http.respond error={code: "already responded"}
+> stub http.respond error={code: "exchange closed"}
+> stub http.respond error={code: "user busy"}
+> deliver d6 to=s message=respond args=[<object httpExchange "e1">]
+> deliver d7 to=s message=respond args=[<object httpExchange "e1">]
+> deliver d8 to=s message=respond args=[<object httpExchange "e1">]
+> deliver d9 to=s message=respond args=[<object httpExchange "e1">]
+> pump clock=2026-10-22T12:00:04Z
+call s/r6.c1 op=http.respond args=[<object httpExchange "e1">, {status: 204}] error={code: "not owner"}
+raise s/r6 code="not owner" at=s:41 pos=12:5
+seg s/r6 start delivery=d6 handler=respond clause=1 fuel=45 alloc=111 state=455 end=return
+run s/r6 outcome=completed delivery=d6 handler=respond fuel=45 alloc=111
+call s/r7.c1 op=http.respond args=[<object httpExchange "e1">, {status: 204}] error={code: "already responded"}
+raise s/r7 code="already responded" at=s:41 pos=12:5
+seg s/r7 start delivery=d7 handler=respond clause=1 fuel=45 alloc=119 state=448 end=return
+run s/r7 outcome=completed delivery=d7 handler=respond fuel=45 alloc=119
+call s/r8.c1 op=http.respond args=[<object httpExchange "e1">, {status: 204}] error={code: "exchange closed"}
+raise s/r8 code="exchange closed" at=s:41 pos=12:5
+seg s/r8 start delivery=d8 handler=respond clause=1 fuel=45 alloc=117 state=439 end=return
+run s/r8 outcome=completed delivery=d8 handler=respond fuel=45 alloc=117
+call s/r9.c1 op=http.respond args=[<object httpExchange "e1">, {status: 204}] error={code: "user busy"}
+call-failed s/r9.c1 op=http.respond
+raise s/r9 code="host error" at=s:41 pos=12:5
+seg s/r9 start delivery=d9 handler=respond clause=1 fuel=44 alloc=96 state=425 end=return
+run s/r9 outcome=completed delivery=d9 handler=respond fuel=44 alloc=96
+pumped state=idle fuel=179
+> vars
+vars s got=["address in use", "bad address", "host error", "host error", {host: "localhost", port: 8080}, "not owner", "already responded", "exchange closed", "host error"]

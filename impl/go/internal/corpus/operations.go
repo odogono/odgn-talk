@@ -153,6 +153,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"compare", "rank", "upper", "lower", "numberSymbols", "monthNames", "dayNames", "tag"}
 		case "user":
 			names = []string{"confirm", "choose", "enter", "notify"}
+		case "http":
+			names = []string{"serve", "unserve", "respond"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -213,6 +215,13 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				)}},
 				"enter":  {Mode: talk.Suspending, Args: []talk.Shape{talk.TextShape, options(talk.Field{Key: "default", Shape: optionalText, Optional: true})}},
 				"notify": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape, options(talk.Field{Key: "title", Shape: optionalText, Optional: true})}},
+			}
+		case "http":
+			def, err = core.HTTPCapability(replayHTTP{out}, costs)
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"serve":   {Mode: talk.Suspending},
+				"unserve": {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}},
+				"respond": {Mode: talk.Immediate},
 			}
 		case "sqlite":
 			perRow := int64(0)
@@ -651,4 +660,25 @@ func (h replayUser) Enter(c *talk.Call, _ string, _ string) error { return h.pro
 func (h replayUser) Notify(c *talk.Call, _ string, _ string) error {
 	_, err := h.replay.invoke("user.notify", talk.FireAndForget, c)
 	return err
+}
+
+type replayHTTP struct{ replay *operationReplay }
+
+// Serve starts a suspending call, which a Stub fails at once, or an `answer`
+// line settles later.
+func (h replayHTTP) Serve(c *talk.Call, _, _, _ string, _ talk.Value) error {
+	return replayUser(h).prompt("http.serve", c)
+}
+func (h replayHTTP) Unserve(c *talk.Call, _ string) error {
+	return h.nothing("http.unserve", c)
+}
+func (h replayHTTP) Respond(c *talk.Call, _ *talk.Object, _ talk.Value) error {
+	return h.nothing("http.respond", c)
+}
+func (h replayHTTP) nothing(operation string, c *talk.Call) error {
+	v, e := h.replay.invoke(operation, talk.Immediate, c)
+	if e == nil && v.Kind() != talk.KindNothing {
+		return fmt.Errorf("%s Stub is not Nothing", operation)
+	}
+	return e
 }

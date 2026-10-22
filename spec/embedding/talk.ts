@@ -500,6 +500,23 @@ export interface UserImpl {
   enter(call: Call<unknown>, message: string, fallback: string): void;
   notify(call: Call<unknown>, message: string, title: string): void;
 }
+/**
+ * http is optional (chapter 7, ADR 0124). The binding is the Host's own
+ * description of the addresses a Grant may listen on; the Core never reads
+ * it. The Core has checked the Shapes and raised `invalid serve` and
+ * `invalid response`. serve hears its effective message, `httpRequest` for an
+ * omitted or Nothing one, and an omitted options as an empty map; it starts a
+ * suspending call with maxPendingMs 2147483647, answered with {host, port}
+ * once the Host listens, or failed with `address in use` or `bad address`.
+ * respond hears the response as the Script gave it, except that `json` is its
+ * compact JSON text; fail it with `already responded`, `exchange closed` or
+ * `not owner` when the Call's delivery isn't the exchange's.
+ */
+export interface HttpImpl {
+  serve(call: Call<unknown>, name: string, prefix: string, message: string, options: Value): void;
+  unserve(call: Call<unknown>, name: string): void;
+  respond(call: Call<unknown>, exchange: HostObject, response: Value): void;
+}
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {
   write(call: Call<unknown>, value: Value): void;
@@ -634,6 +651,8 @@ export interface Core {
   sqliteCapability(impl: SqliteImpl, costs: Costs, perRow: number): CapabilityDef<SqliteBinding>;
   /** Optional for Hosts. */
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
+  /** Optional for Hosts. */
+  httpCapability(impl: HttpImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

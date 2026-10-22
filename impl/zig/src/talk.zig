@@ -277,6 +277,18 @@ export fn talk_parse_display(s: ?[*]const u8, len: usize, out: *?*Value) HostErr
     out.* = null;
     return result(out, display.parse(allocator, bytes(s, len) catch return .invalid_value, .{}));
 }
+/// C only: the display reader, with `<object kind "id">` read through
+/// `resolve`, as `talk_decode_value` reads `$object`.
+export fn talk_parse_display_objects(s: ?[*]const u8, len: usize, resolve: ?ResolveObject, context: ?*anyopaque, out: *?*Value) HostErrorCode {
+    out.* = null;
+    var r: ResolveContext = undefined;
+    var resolver: display.Resolver = .{};
+    if (resolve) |callback| {
+        r = .{ .callback = callback, .context = context };
+        resolver = .{ .context = &r, .object = resolveObject };
+    }
+    return result(out, display.parse(allocator, bytes(s, len) catch return .invalid_value, resolver));
+}
 export fn talk_value_retain(v: *Value) void {
     _ = v.retain();
 }
@@ -3030,6 +3042,7 @@ pub const LocaleImpl = extern struct { context: ?*anyopaque, compare: OperationF
 pub const TimerImpl = extern struct { context: ?*anyopaque, schedule: OperationFn, cancel: OperationFn };
 pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
 pub const UserImpl = extern struct { context: ?*anyopaque, confirm: OperationFn, choose: OperationFn, enter: OperationFn, notify: OperationFn };
+pub const HttpImpl = extern struct { context: ?*anyopaque, serve: OperationFn, unserve: OperationFn, respond: OperationFn };
 
 /// The largest cost component: 2^53 - 1.
 const max_cost = 9_007_199_254_740_991;
@@ -3119,6 +3132,11 @@ export fn talk_timer_capability(c: *Core, impl: *const TimerImpl, costs: ?*const
 export fn talk_user_capability(c: *Core, impl: *const UserImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     // In name order: choose, confirm, enter, notify.
     return defineStandard(c, .user, &.{ impl.choose, impl.confirm, impl.enter, impl.notify }, impl.context, costs, out);
+}
+
+export fn talk_http_capability(c: *Core, impl: *const HttpImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: respond, serve, unserve.
+    return defineStandard(c, .http, &.{ impl.respond, impl.serve, impl.unserve }, impl.context, costs, out);
 }
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {

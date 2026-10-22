@@ -195,6 +195,9 @@ talk_host_error_code talk_encode_json(const talk_value *v, talk_owned_bytes *out
 /* C only: reads the chapter 11 display form, including NFC normalization.
  * Host objects and functions require a Group reader. Patterns are reparsed. */
 talk_host_error_code talk_parse_display(const char *s, size_t len, talk_value **out);
+/* C only: talk_parse_display, reading each Host Object through resolve, as
+ * talk_decode_value does; without resolve an object is refused. */
+talk_host_error_code talk_parse_display_objects(const char *s, size_t len, talk_resolve_object resolve, void *context, talk_value **out);
 /* C only: acquires another reference to v. */
 void talk_value_retain(talk_value *v);
 /* C only: ends the caller's reference to v. NULL is ignored. */
@@ -623,6 +626,19 @@ typedef struct talk_user_impl {
     talk_operation_fn confirm, choose, enter, notify;
 } talk_user_impl;
 
+/* http: serve receives the name, the prefix, the effective message,
+ * httpRequest when omitted or Nothing, and the options map, empty when
+ * omitted or Nothing; it is suspending, answered with {host, port} once the
+ * Host listens, which the Core checks. unserve receives the name. respond
+ * receives the httpExchange Host Object and the response map as given,
+ * except that json is its compact JSON text. Fail serve with address in use
+ * or bad address, and respond with already responded, exchange closed or not
+ * owner when the call's delivery isn't the exchange's. */
+typedef struct talk_http_impl {
+    void *context;
+    talk_operation_fn serve, unserve, respond;
+} talk_http_impl;
+
 /* console: write receives the value to show. read is suspending, and
  * suspending calls aren't made yet. */
 typedef struct talk_console_impl {
@@ -666,6 +682,10 @@ talk_host_error_code talk_sqlite_legacy_capability(talk_core *c, const talk_sqli
 /* user is optional (chapter 7), and has no binding. The Core refuses an
  * empty items with out of domain before calling choose. */
 talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* http is optional (chapter 7, ADR 0124). The binding is the Host's; the
+ * Core never reads it. The Core raises invalid serve and invalid response
+ * before calling serve, unserve or respond. */
+talk_host_error_code talk_http_capability(talk_core *c, const talk_http_impl *impl, const talk_costs *costs, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);

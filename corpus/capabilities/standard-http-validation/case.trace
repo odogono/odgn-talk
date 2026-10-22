@@ -1,0 +1,68 @@
+# Unblessed: http argument checks (ADR 0124); first blessing awaits human review.
+> load s identity=1ea3aed417eda6483af8e29a3b7444605e74d7c58e654e9bd26a68bd5a29d3e2
+> deliver d1 to=s message=serve args=["", "nope", "put"]
+> deliver d2 to=s message=serve args=["site", "api", "put"]
+> deliver d3 to=s message=serve args=["site", "/api", "put"]
+> deliver d4 to=s message=serve args=["site", "/api", "all"]
+> deliver d5 to=s message=serve args=["site", "/api", "web:request"]
+> deliver d6 to=s message=unserve args=[""]
+> pump clock=2026-10-22T12:00:00Z
+raise s/r1 code="invalid serve" at=s:7 pos=4:5
+seg s/r1 start delivery=d1 handler=serve clause=1 fuel=25 alloc=447 state=882 end=return
+run s/r1 outcome=completed delivery=d1 handler=serve fuel=25 alloc=447
+raise s/r2 code="invalid serve" at=s:7 pos=4:5
+seg s/r2 start delivery=d2 handler=serve clause=1 fuel=25 alloc=451 state=1243 end=return
+run s/r2 outcome=completed delivery=d2 handler=serve fuel=25 alloc=451
+raise s/r3 code="invalid serve" at=s:7 pos=4:5
+seg s/r3 start delivery=d3 handler=serve clause=1 fuel=25 alloc=453 state=1605 end=return
+run s/r3 outcome=completed delivery=d3 handler=serve fuel=25 alloc=453
+raise s/r4 code="invalid serve" at=s:7 pos=4:5
+seg s/r4 start delivery=d4 handler=serve clause=1 fuel=25 alloc=453 state=1967 end=return
+run s/r4 outcome=completed delivery=d4 handler=serve fuel=25 alloc=453
+raise s/r5 code="invalid serve" at=s:7 pos=4:5
+seg s/r5 start delivery=d5 handler=serve clause=1 fuel=25 alloc=453 state=2321 end=return
+run s/r5 outcome=completed delivery=d5 handler=serve fuel=25 alloc=453
+raise s/r6 code="invalid serve" at=s:27 pos=11:5
+seg s/r6 start delivery=d6 handler=unserve clause=1 fuel=23 alloc=449 state=2722 end=return
+run s/r6 outcome=completed delivery=d6 handler=unserve fuel=23 alloc=449
+pumped state=idle fuel=148
+> deliver d7 to=s message=respond args=[<object httpExchange "e1">, {status: 99}]
+> deliver d8 to=s message=respond args=[<object httpExchange "e1">, {status: 600}]
+> deliver d9 to=s message=respond args=[<object httpExchange "e1">, {status: 200.5}]
+> deliver d10 to=s message=respond args=[<object httpExchange "e1">, {headers: {"x-n": 1}}]
+> deliver d11 to=s message=respond args=[<object httpExchange "e1">, {headers: {"x-l": ["a", 2]}}]
+> deliver d12 to=s message=respond args=[<object httpExchange "e1">, {body: "a", json: 1}]
+> deliver d13 to=s message=respond args=[<object httpExchange "e1">, {json: {at: 2026-10-22}}]
+> deliver d14 to=s message=respond args=[<object httpExchange "e1">, {code: 200}]
+> deliver d15 to=s message=respond args=["e1", {}]
+> pump clock=2026-10-22T12:00:01Z
+raise s/r7 code="invalid response" at=s:48 pos=18:5
+seg s/r7 start delivery=d7 handler=respond clause=1 fuel=24 alloc=448 state=4224 end=return
+run s/r7 outcome=completed delivery=d7 handler=respond fuel=24 alloc=448
+raise s/r8 code="invalid response" at=s:48 pos=18:5
+seg s/r8 start delivery=d8 handler=respond clause=1 fuel=24 alloc=448 state=4562 end=return
+run s/r8 outcome=completed delivery=d8 handler=respond fuel=24 alloc=448
+raise s/r9 code="invalid response" at=s:48 pos=18:5
+seg s/r9 start delivery=d9 handler=respond clause=1 fuel=24 alloc=448 state=4900 end=return
+run s/r9 outcome=completed delivery=d9 handler=respond fuel=24 alloc=448
+raise s/r10 code="invalid response" at=s:48 pos=18:5
+seg s/r10 start delivery=d10 handler=respond clause=1 fuel=24 alloc=450 state=5196 end=return
+run s/r10 outcome=completed delivery=d10 handler=respond fuel=24 alloc=450
+raise s/r11 code="invalid response" at=s:48 pos=18:5
+seg s/r11 start delivery=d11 handler=respond clause=1 fuel=24 alloc=450 state=5443 end=return
+run s/r11 outcome=completed delivery=d11 handler=respond fuel=24 alloc=450
+raise s/r12 code="invalid response" at=s:48 pos=18:5
+seg s/r12 start delivery=d12 handler=respond clause=1 fuel=24 alloc=444 state=5734 end=return
+run s/r12 outcome=completed delivery=d12 handler=respond fuel=24 alloc=444
+raise s/r13 code="invalid response" at=s:48 pos=18:5
+seg s/r13 start delivery=d13 handler=respond clause=1 fuel=24 alloc=444 state=6028 end=return
+run s/r13 outcome=completed delivery=d13 handler=respond fuel=24 alloc=444
+raise s/r14 code="wrong kind" at=s:48 pos=18:5
+seg s/r14 start delivery=d14 handler=respond clause=1 fuel=24 alloc=776 state=6696 end=return
+run s/r14 outcome=completed delivery=d14 handler=respond fuel=24 alloc=776
+raise s/r15 code="wrong kind" at=s:48 pos=18:5
+seg s/r15 start delivery=d15 handler=respond clause=1 fuel=24 alloc=713 state=7343 end=return
+run s/r15 outcome=completed delivery=d15 handler=respond fuel=24 alloc=713
+pumped state=idle fuel=216
+> vars
+vars s errors=[{code: "invalid serve", field: "name", at: {unit: "s", handler: "serve", line: 4, column: 5}}, {code: "invalid serve", field: "prefix", at: {unit: "s", handler: "serve", line: 4, column: 5}}, {code: "invalid serve", field: "message", at: {unit: "s", handler: "serve", line: 4, column: 5}}, {code: "invalid serve", field: "message", at: {unit: "s", handler: "serve", line: 4, column: 5}}, {code: "invalid serve", field: "message", at: {unit: "s", handler: "serve", line: 4, column: 5}}, {code: "invalid serve", field: "name", at: {unit: "s", handler: "unserve", line: 11, column: 5}}, {code: "invalid response", field: "status", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "status", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "status", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "headers", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "headers", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "json", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "invalid response", field: "json", at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "wrong kind", expected: "nothing", got: "number", value: 200, capability: "http", operation: "respond", argument: 2, path: ["code"], at: {unit: "s", handler: "respond", line: 18, column: 5}}, {code: "wrong kind", expected: "httpExchange", got: "text", value: "e1", capability: "http", operation: "respond", argument: 1, at: {unit: "s", handler: "respond", line: 18, column: 5}}]

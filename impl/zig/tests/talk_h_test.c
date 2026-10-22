@@ -2428,6 +2428,84 @@ static int user_test(void) {
     return bad;
 }
 
+/* http's serve: starts the call when it hears the effective message and an
+ * empty options map. */
+static talk_call_end http_serve(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)result; (void)error;
+    const char *message = NULL;
+    size_t message_len = 0;
+    if (len != 4 || !talk_value_as_text(args[2], &message, &message_len)) return TALK_CALL_BROKEN;
+    if (message_len != 11 || memcmp(message, "httpRequest", 11) != 0 || talk_value_kind(args[3]) != TALK_KIND_MAP || talk_value_len(args[3]) != 0) return TALK_CALL_BROKEN;
+    started = call;
+    return TALK_CALL_STARTED;
+}
+
+/* http's respond: answers when it hears json as its JSON text. */
+static talk_call_end http_respond(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)error;
+    talk_value *json = NULL;
+    const char *written = NULL;
+    size_t written_len = 0;
+    if (len != 2 || talk_value_get(args[1], "json", 4, &json) != TALK_OK) return TALK_CALL_BROKEN;
+    bool ok = talk_value_as_text(json, &written, &written_len) && written_len == 8 && memcmp(written, "{\"id\":7}", 8) == 0;
+    talk_value_release(json);
+    if (!ok) return TALK_CALL_BROKEN;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+/* http's serve hears its defaults resolved, a bad answer is host error,
+ * respond hears json as text, and invalid serve never reaches the Host. */
+static int http_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_object_kind_def kind_def = {"httpExchange", 12, NULL, 0, NULL, NULL, 0, NULL};
+    talk_object_kind *kind = NULL;
+    int bad = talk_define_object_kind(core, &kind_def, &kind) != TALK_OK;
+    talk_object *exchange = NULL;
+    bad |= talk_group_object(group, kind, "e1", 2, NULL, &exchange) != TALK_OK;
+    talk_named_cost costs[] = {{"serve", 5, {1, 0}}, {"unserve", 7, {1, 0}}, {"respond", 7, {1, 0}}};
+    talk_costs all = {costs, 3};
+    talk_http_impl impl = {NULL, http_serve, unused, http_respond};
+    talk_capability_def *http = NULL;
+    bad |= talk_http_capability(core, &impl, &all, &http) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(http, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"http", 4, grant}};
+    const char *source = "script variable got = []\non go x\n  try\n    ask http to serve \"\", \"/\" and wait\n  catch {code: code, field: f}\n    put [code, f] after got\n  end try\n"
+                         "  ask http to respond x, {json: {id: 7}}\n"
+                         "  try\n    ask http to serve \"site\", \"/\" and wait\n  catch {code: code}\n    put code after got\n  end try\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_value *x = NULL;
+    bad |= talk_object_value(exchange, &x) != TALK_OK;
+    talk_value *args[] = {x};
+    talk_message go = {"go", 2, args, 1, NULL};
+    started = NULL;
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    talk_value_release(x);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= started == NULL;
+    talk_value *answer = NULL;
+    talk_text("localhost:80", 12, &answer);
+    bad |= started == NULL || talk_call_answer(started, answer) != TALK_OK;
+    talk_value_release(answer);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group, NULL);
+    bad |= strstr(trace, "op=http.respond args=[<object httpExchange \"e1\">, {json: {id: 7}}] result=nothing\n") == NULL;
+    bad |= strstr(trace, "call-failed s/r1.c2 op=http.serve\n") == NULL;
+    bad |= strstr(trace, "vars s got=[[\"invalid serve\", \"name\"], \"host error\"]\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop cancels a suspending Call before the first synchronous release hook. */
 static int release_saw_cancelled;
 static void release_observe_call(void *context, const talk_grant_context *gc) {
@@ -3244,6 +3322,7 @@ int main(void) {
     expect(save_test() == 0, "a save restores a waiting Run, a corrupt save is refused, and the first Pump can't go back in time");
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
+    expect(http_test() == 0, "http's serve hears its defaults, a bad answer is host error, and respond hears json as text");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
