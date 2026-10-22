@@ -4480,11 +4480,7 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
     }
-    const gate = s.x.gate(ref, jsonFrame(m), .json);
-    if ((gate == .result or gate == .trace_result or gate == .release_result) and !resultGroupMatches(s, groupOf(s, msg))) {
-        return protocolError(s.gpa, ref, "the result must address the exchange's Group");
-    }
-    switch (gate) {
+    switch (s.x.gate(ref, jsonFrame(m), .json, groupOf(s, msg))) {
         .dispatch => {},
         .admit => |worker_ref| return pausedAdmission(s, msg, ref, m, s.x.paused(worker_ref)),
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
@@ -4694,14 +4690,6 @@ fn jsonFrame(m: []const u8) exchange.Frame {
     return .input;
 }
 
-/// Check before consuming a result, including a release holding a final
-/// reply after its worker has finished. This also rejects a missing Group
-/// when per-Group routing left the previously selected exchange loaded.
-fn resultGroupMatches(s: *Session, entry: ?*GroupEntry) bool {
-    const owner = if (s.x.state == .awaiting_release) s.x.releasing() else s.x.entry;
-    return entry != null and entry == owner;
-}
-
 /// A refused frame's protocol error detail, in either layout.
 fn refusalDetail(why: exchange.Refusal) []const u8 {
     return switch (why) {
@@ -4713,6 +4701,7 @@ fn refusalDetail(why: exchange.Refusal) []const u8 {
         .not_open => "unknown or unsupported message",
         .no_worker => "no paused worker",
         .other_group => "a paused input must address the worker's Group",
+        .wrong_group => "the result must address the exchange's Group",
         .not_admitted => "a worker is waiting for its result",
     };
 }
@@ -5249,7 +5238,7 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     const ref = in.ref;
     if (s.group_exchanges and s.restoring == null) loadExchange(s, in.entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
-    return switch (s.x.gate(ref, .input, .binary)) {
+    return switch (s.x.gate(ref, .input, .binary, null)) {
         .dispatch => binaryDispatch(s, &in),
         .admit => |worker_ref| binaryPaused(s, &in, s.x.paused(worker_ref)),
         .refuse, .result, .trace_result, .release_result => unreachable,
@@ -5835,11 +5824,7 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
         .release_result => .release,
         .op, .prop, .effect, .release => unreachable,
     };
-    const gate = s.x.gate(ref, .{ .result = result }, .binary);
-    if ((gate == .result or gate == .release_result) and !resultGroupMatches(s, entry)) {
-        return protocolError(s.gpa, ref, "the result must address the exchange's Group");
-    }
-    switch (gate) {
+    switch (s.x.gate(ref, .{ .result = result }, .binary, entry)) {
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
         .release_result => return releaseResultReply(s, ref),
         .result => {},
