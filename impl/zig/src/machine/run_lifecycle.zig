@@ -141,9 +141,14 @@ pub fn restore(run: *Run, preempted: bool, parked: bool) error{InvalidSave}!void
 /// hasn't passed a Suspension Point, which a Run parked at dispatch, or
 /// just unparked, hasn't either, and isn't cleaning up.
 pub fn rewindable(run: *const Run) bool {
-    const unparked = run.resume_with != null and run.resume_with.? == .unparked;
+    const unparked = justUnparked(run);
     const first = run.segments == 0 or run.state == .parked or unparked;
     return first and run.cleanup_from == null and (run.resume_with == null or unparked);
+}
+
+/// Whether a Run has been unparked but hasn't resumed its body yet.
+pub fn justUnparked(run: *const Run) bool {
+    return run.resume_with != null and run.resume_with.? == .unparked;
 }
 
 /// What an ended Stretch spent.

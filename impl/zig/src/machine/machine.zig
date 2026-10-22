@@ -3073,8 +3073,7 @@ pub const Group = struct {
             // Preempted or parked: it has no Stretch to end.
             // Before an unparked Run resumes, its dispatch-time base may
             // predate other Runs' commits and it has no changes to undo.
-            const unparked = r.resume_with != null and r.resume_with.? == .unparked;
-            if (r.state != .parked and !unparked) g.restoreBase(r);
+            if (r.state != .parked and !run_lifecycle.justUnparked(r)) g.restoreBase(r);
             try g.putBack(s, r);
             try g.endRun(r, .rewound);
             return;
