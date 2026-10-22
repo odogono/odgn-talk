@@ -2544,6 +2544,51 @@ static int release_cancellation_test(void) {
     return bad;
 }
 
+/* A suspending Start that answers before returning: through the call, or
+ * with TALK_CALL_ANSWERED and a result (#1509). */
+static talk_call_end start_answering(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)args; (void)len; (void)error;
+    talk_value *answer = NULL;
+    if (talk_int(7, &answer) != TALK_OK) return TALK_CALL_BROKEN;
+    if (*(const bool *)context) {
+        *result = answer;
+        return TALK_CALL_ANSWERED;
+    }
+    talk_call_end end = talk_call_answer(call, answer) == TALK_OK ? TALK_CALL_STARTED : TALK_CALL_BROKEN;
+    talk_value_release(answer);
+    return end;
+}
+
+/* Either way the Run resumes with the answer in the same Pump. */
+static int synchronous_answer_test(bool returned) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start_answering, &returned, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false, NULL, NULL, 0}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "feed", 4, ops, 1, NULL, 0, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"feed", 4, grant}};
+    const char *source = "script variable got\non go\n  ask feed to fetch and wait\n  put it into got\nend go\n";
+    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group, NULL);
+    bad |= strstr(trace, "vars waiter got=7\n") == NULL;
+    if (bad) fprintf(stderr, "synchronous answer (%s):\n%s\n", returned ? "returned" : "through the call", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A Run suspends at ask … and wait, and resumes with the Host's answer. */
 static int suspension_test(void) {
     talk_core *core = talk_new();
@@ -3303,6 +3348,8 @@ int main(void) {
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(synchronous_answer_test(false) == 0, "a suspending call answered through the call during its Start resumes the Run");
+    expect(synchronous_answer_test(true) == 0, "a suspending call answered by its Start's result resumes the Run");
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");

@@ -321,7 +321,8 @@ typedef enum talk_call_end {
 
 /* C only: an immediate Operation's Do, a suspending one's Start, or a
  * fire-and-forget one's Fire. The arguments are borrowed. Start returns
- * TALK_CALL_STARTED, or fails as Do does. */
+ * TALK_CALL_STARTED, or fails as Do does; TALK_CALL_ANSWERED with *result
+ * answers the call as talk_call_answer would. */
 typedef talk_call_end (*talk_operation_fn)(void *context, talk_call *call, talk_value *const *args, size_t args_len, talk_value **result, talk_script_error *error);
 
 typedef struct talk_operation {
@@ -1422,7 +1423,9 @@ bool talk_pending_done(const talk_pending *p);
 bool talk_deciding_done(const talk_deciding *d);
 /* The Verdict, borrowed from the Group, or NULL until a Pump seals it. */
 const talk_decided *talk_deciding_decided(talk_deciding *d);
-/* Runs a Pump with one Clock reading. o may be NULL. */
+/* Runs a Pump with one Clock reading. o may be NULL. A suspending call
+ * answered during its Start is settled by a further Pump at the same
+ * reading before this returns; out sums their fuel and reports. */
 talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_pump_result *out);
 /* Makes the Group's handle for a Host-owned thing, the first time it
  * crosses into the Group. A reused id within the kind is
