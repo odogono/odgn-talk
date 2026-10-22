@@ -197,8 +197,8 @@ pub fn Exchange(comptime Parts: type) type {
 
         state: State = .idle,
         /// The Group whose worker last started, and which worker. It stays
-        /// while the exchange is open, and also after a worker fails without
-        /// a reply that could be held (#1493).
+        /// while the exchange is open; holding its final reply clears it
+        /// after any queued releases have been acknowledged.
         entry: ?Entry = null,
         worker: Worker = .pump,
         running: ?Running = null,

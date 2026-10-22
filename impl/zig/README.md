@@ -473,6 +473,11 @@ error. Either export may grow memory, so refresh memory views
 after calls. Host Operations and properties use interim needs and result
 messages, without custom Host imports or reentrant exports.
 
+Pump, Reload and Library replacement errors send queued Grant releases before
+their final reply, including binary Pump errors and refused Reload sources.
+The final reply clears the exchange's release owner; a Trace pause retains it
+until the Host answers `trace-result` and the worker finishes.
+
 `load-fields-v1` independently enables binary Load inputs with raw UTF-8
 source and optional `newGroup` fields, as the
 [binary-exchange contract](../../spec/embedding/request-pump-binary.md#load-and-deferred-group-creation)

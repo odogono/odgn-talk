@@ -2159,6 +2159,8 @@ fn pausedReply(s: *Session, ref: i64) []u8 {
             return if (s.crossing_trace) withTrace(s, entry, reply) else reply;
         },
         .trace => {
+            // The worker still owns this exchange until trace-result.
+            // Unlike a final reply, this must not clear its entry.
             var o = Out.init(s.gpa);
             defer o.deinit();
             o.raw("{\"ref\":") catch return oomReply();
@@ -3494,23 +3496,20 @@ const Work = union(enum) {
 /// where a lifecycle crossing as it ends the old code's Runs may pause
 /// for a need; its reply is that need, or the outcome.
 fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
-    if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
+    if (entry.group.memory.refused) return workError(s, ref, entry, .out_of_memory);
     const mg = &entry.group.group;
     const c = s.core;
     s.x.start(entry, .work);
     defer s.x.stop(s.gpa);
     const outcome: machine.Group.Resumed = switch (work) {
-        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| {
-            entry.group.flush();
-            return workError(s, ref, entry, talk.status(e));
-        } },
+        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| return workError(s, ref, entry, talk.status(e)) },
         .replace => |x| blk: {
             // Room for every Library it could recompile, which the Core
             // owns once the Group uses them.
-            c.libraries.ensureUnusedCapacity(c.gpa, mg.libraries.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
-            break :blk .{ .replace = mg.replaceLibrary(x.library, x.carry, c.gpa) catch |e| return hostError(s.gpa, ref, talk.status(e)) };
+            c.libraries.ensureUnusedCapacity(c.gpa, mg.libraries.items.len) catch return workError(s, ref, entry, .out_of_memory);
+            break :blk .{ .replace = mg.replaceLibrary(x.library, x.carry, c.gpa) catch |e| return workError(s, ref, entry, talk.status(e)) };
         },
-        .resumed => mg.resumeWork() catch |e| return hostError(s.gpa, ref, talk.status(e)),
+        .resumed => mg.resumeWork() catch |e| return workError(s, ref, entry, talk.status(e)),
     };
     entry.group.flush();
     const paused = switch (outcome) {
@@ -3529,7 +3528,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
         .replace => |r| switch (r) {
             .replaced => |made| {
                 defer mg.gpa.free(made);
-                c.libraries.ensureUnusedCapacity(c.gpa, made.len) catch return hostError(s.gpa, ref, .out_of_memory);
+                c.libraries.ensureUnusedCapacity(c.gpa, made.len) catch return workError(s, ref, entry, .out_of_memory);
                 c.libraries.appendSliceAssumeCapacity(made);
             },
             .refused => return workRefused(s, ref, entry),
@@ -3552,14 +3551,15 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
 
 fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     // As a refused Load: the error reply publishes its diagnostic records.
-    if (s.crossing_trace) return entryLoadError(s, ref, entry);
+    if (s.crossing_trace) return holdForReleases(s, ref, entry, entryLoadError(s, ref, entry), .outer);
     const lines = takeTrace(entry);
     defer freeTrace(s.gpa, lines);
-    return loadError(s.gpa, ref, lines);
+    return holdForReleases(s, ref, entry, loadError(s.gpa, ref, lines), .outer);
 }
 
 fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
     // The error reply publishes its refusal records to an opted-in Host.
+    entry.group.flush();
     if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
     return holdForReleases(s, ref, entry, hostError(s.gpa, ref, code), .outer);
 }
@@ -5060,7 +5060,7 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
 /// A final reply that is the Pump's refusal, whether it never started or
 /// an admitted combined input stays queued.
 fn pumpFailure(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
-    if (s.x.bin == null) return hostError(s.gpa, ref, code);
+    if (s.x.bin == null) return holdForReleases(s, ref, entry, hostError(s.gpa, ref, code), .outer);
     var fin: BinFinal = .{};
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
@@ -5070,7 +5070,7 @@ fn pumpFailure(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCo
         fin.deinit(s.gpa);
         return oomReply();
     };
-    return emitFinal(s, entry, ref, fin, false);
+    return holdBinary(s, ref, entry, fin);
 }
 
 /// As holdForReleases: Grant releases go before the final reply.
@@ -6272,6 +6272,84 @@ test "untraced Pump skips machine Trace formatting but keeps Reports" {
     try std.testing.expectEqual(@as(i64, 42), ended.object.get("result").?.integer);
     try std.testing.expectEqual(@as(usize, 0), capture.written().len);
     try std.testing.expectEqual(@as(?*std.Io.Writer, &capture.writer), entry.group.group.trace);
+}
+
+test "failed workers end the exchange instead of retaining an inline release owner (#1493)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"name\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\nend go\\n\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-22T12:00:00Z\"}}", .{3}));
+    const failed = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-21T12:00:00Z\"}}", .{4});
+    try std.testing.expectEqualStrings("clock backwards", failed.object.get("err").?.object.get("code").?.string);
+    try std.testing.expectEqual(Exchange.Route.drop, s.x.route(true));
+    const refused = try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"source\":\"on\"}}", .{5});
+    try std.testing.expectEqualStrings("load error", try errKind(refused));
+    try std.testing.expectEqual(Exchange.Route.drop, s.x.route(true));
+}
+
+test "worker failures send queued releases before their final error (#1493)" {
+    const Worker = enum { pump, binary_pump, reload_oom, replace_error, refused };
+    for (std.enums.values(Worker)) |worker| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        const binary = worker == .binary_pump;
+        if (binary) _ = try okOf(try binHello(&c, 0, rp.feature_fields));
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"name\":\"g\",\"trace\":true}}", .{1}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\nend go\\n\"}}", .{2}));
+        _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-22T12:00:00Z\"}}", .{3}));
+        const entry = s.groupNamed("g").?;
+        const library = if (worker == .replace_error)
+            (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"user\",\"source\":\"function one\\nreturn 1\\nend one\\n\"}}", .{10}))).object.get("identity").?.object.get("$bytes").?.string
+        else
+            "";
+        // Inject the callbacks a worker queued before it failed. The
+        // Session allocator stays usable even if the Group cannot allocate.
+        for ([_][]const u8{ "a", "b" }) |grant| releaseHook(s, &.{
+            .group = &entry.group.group,
+            .script = "s",
+            .grant = grant,
+            .binding = null,
+            .now = entry.group.group.clock,
+            .reason = .reload,
+        });
+        if (worker == .reload_oom) entry.group.memory.refused = true;
+        if (worker == .replace_error) entry.group.group.fatal = true;
+        var reply = switch (worker) {
+            .binary_pump => try binReply(&c, try binRequest(c.arena.allocator(), .request_pump, 4, 77, "s", "go", &.{}, now_2026)),
+            .pump => try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-21T12:00:00Z\"}}", .{4}),
+            .refused, .reload_oom => try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"source\":\"on\"}}", .{4}),
+            .replace_error => try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"reset variables\"}}", .{ 4, library }),
+        };
+        for ([_][]const u8{ "a", "b" }) |grant| {
+            const need = reply.object.get("need") orelse return unexpected(reply);
+            try std.testing.expectEqualStrings("release", need.object.get("m").?.string);
+            try std.testing.expectEqualStrings(grant, need.object.get("grant").?.string);
+            try std.testing.expect(s.x.open() and s.x.releases.items.len > 0);
+            reply = try binReply(&c, "{\"m\":\"release-result\",\"ref\":4,\"group\":\"g\"}");
+        }
+        if (worker == .refused) {
+            try std.testing.expectEqualStrings("load error", try errKind(reply));
+        } else {
+            const code = reply.object.get("err").?.object.get("code").?.string;
+            try std.testing.expectEqualStrings(switch (worker) {
+                .pump, .binary_pump => "clock backwards",
+                .reload_oom => "out of memory",
+                .replace_error => "effect state unknown",
+                .refused => unreachable,
+            }, code);
+        }
+        try std.testing.expect(!s.x.open() and s.x.entry == null and s.x.releases.items.len == 0);
+        if (binary) {
+            try std.testing.expectEqual(@as(i64, 77), reply.object.get("token").?.integer);
+            try std.testing.expect(reply.object.get("delivery") != null);
+            try std.testing.expect(s.x.bin == null and s.bindings.items.len == 0);
+        }
+    }
 }
 
 test "queued-inputs reads the owning Group without execution or Trace" {
