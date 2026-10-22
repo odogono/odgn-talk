@@ -1,19 +1,27 @@
-//! `talk-repl`: the Zig Core's REPL, the Session Host (chapter 12) at a
-//! terminal under a real Clock. Entries and Session Commands come from
-//! standard input, an Entry over as many lines as it needs, and what the
-//! session prints goes to standard output. It can write the session's
-//! Transcript and the Group's Trace as it goes.
+//! `northtalk`, the native command. Given a Script file it runs it with the
+//! Script Runner (chapter 12, The Script Runner; ADR 0126). Otherwise it is
+//! the Zig Core's REPL, the Session Host (chapter 12) at a terminal under a
+//! real Clock. Entries and Session Commands come from standard input, an
+//! Entry over as many lines as it needs, and what the session prints goes
+//! to standard output. It can write the session's Transcript and the
+//! Group's Trace as it goes.
 const std = @import("std");
 const c = @import("talk-c");
 const session = @import("session");
+const runner = @import("runner");
 
 const transcript = session.transcript;
 const Session = session.Session;
 
 const usage =
-    \\usage: talk-repl [--transcript <file>] [--trace <file>]
+    \\usage: northtalk [--port <n>] <file.talk> [args...]
+    \\       northtalk [--transcript <file>] [--trace <file>]
     \\
-    \\Reads Entries and Session Commands (`:help` lists none; see chapter 12)
+    \\Given a Script file, runs it: Delivers start with the arguments after
+    \\it, and exits once nothing can happen again. --port, or the PORT
+    \\environment variable, overrides every http serve's port.
+    \\
+    \\Otherwise reads Entries and Session Commands (`:help` lists none; see chapter 12)
     \\from standard input. An Entry may span lines: the REPL waits for more
     \\while it is incomplete. End the session with end of input (Ctrl-D).
     \\
@@ -222,6 +230,20 @@ pub fn main(init: std.process.Init) !u8 {
     var stderr = std.Io.File.stderr().writerStreaming(io, &stderr_buffer);
     const e = &stderr.interface;
     defer e.flush() catch {};
+    // A Script file, after an optional --port (ADR 0126).
+    const runs: usize = if (args.len > 1 and std.mem.eql(u8, args[1], "--port")) 3 else 1;
+    if (args.len > runs and runner.isScriptFile(io, args[runs])) {
+        var port: ?u16 = null;
+        const value: ?[]const u8 = if (runs == 3) args[2] else init.environ_map.get("PORT");
+        if (value) |v| if (runs == 3 or v.len > 0) {
+            port = runner.portOf(v) orelse {
+                try e.print("--port needs a port from 0 to 65535, not {s}\n", .{v});
+                return 2;
+            };
+        };
+        try e.flush();
+        return runner.run(gpa, io, .{ .file = args[runs], .args = args[runs + 1 ..], .port = port });
+    }
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg = args[i];
