@@ -434,6 +434,71 @@ button:disabled {
 #error-list button:hover:not(:disabled) .where {
   color: inherit;
 }
+#variables-window {
+  width: 22rem;
+}
+#variables-panel {
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+#variables-panel p {
+  margin: 0 0 0.5rem;
+}
+.variables-script h3 {
+  margin: 0.4rem 0 0.2rem;
+  font-size: inherit;
+}
+.variables-script ul {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+}
+.variables-script li {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.1rem 0;
+  border-bottom: 1px solid #eee;
+}
+.variables-script .name {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.variables-script .toggle {
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: left;
+}
+.variables-script .value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+}
+.variables-script .element {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  font: inherit;
+}
+.variables-script .more {
+  color: var(--muted);
+}
+/* A changed value lights up, then fades. */
+.variables-script .changed {
+  animation: variable-changed 600ms ease-out;
+}
+@keyframes variable-changed {
+  from {
+    background: #ffe58a;
+  }
+  to {
+    background: transparent;
+  }
+}
 #info-window {
   width: 15rem;
   min-width: 12rem;
@@ -846,6 +911,7 @@ button:disabled {
 .playing #projects-window,
 .playing #versions-window,
 .playing #errors-window,
+.playing #variables-window,
 .playing #message-window,
 .playing #about-window,
 .playing #file-menu,
@@ -1031,7 +1097,7 @@ button:disabled {
   flex: 1;
   min-width: 0;
 }
-#message-window .message-context [role="status"],
+#message-window .message-context [role='status'],
 #message-window .message-log .context {
   font-size: 0.7rem;
   color: var(--muted);

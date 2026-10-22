@@ -47,7 +47,13 @@
       <details id="window-menu" class="menu">
         <summary>Window</summary>
         <div class="menu-commands" aria-label="Windows">
-          <button type="button" role="menuitemcheckbox" data-window="code-browser">Code Browser</button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="code-browser"
+          >
+            Code Browser
+          </button>
           <button
             type="button"
             role="menuitemcheckbox"
@@ -76,6 +82,13 @@
             data-window="errors-window"
           >
             Errors
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="variables-window"
+          >
+            Variables
           </button>
           <button
             type="button"
@@ -229,7 +242,11 @@
           aria-label="Align left"
         >
           <svg viewBox="0 0 16 15" width="14" height="14" aria-hidden="true">
-            <path d="M2 3h12 M2 6h9 M2 9h12 M2 12h8" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M2 3h12 M2 6h9 M2 9h12 M2 12h8"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
         </button>
         <button
@@ -240,7 +257,11 @@
           aria-label="Centre"
         >
           <svg viewBox="0 0 16 15" width="14" height="14" aria-hidden="true">
-            <path d="M2 3h12 M4 6h8 M2 9h12 M4 12h8" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M2 3h12 M4 6h8 M2 9h12 M4 12h8"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
         </button>
         <button
@@ -251,7 +272,11 @@
           aria-label="Align right"
         >
           <svg viewBox="0 0 16 15" width="14" height="14" aria-hidden="true">
-            <path d="M2 3h12 M5 6h9 M2 9h12 M6 12h8" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M2 3h12 M5 6h9 M2 9h12 M6 12h8"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
         </button>
         <button
@@ -262,7 +287,11 @@
           aria-label="Justify"
         >
           <svg viewBox="0 0 16 15" width="14" height="14" aria-hidden="true">
-            <path d="M2 3h12 M2 6h12 M2 9h12 M2 12h12" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M2 3h12 M2 6h12 M2 9h12 M2 12h12"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
         </button>
         <label
@@ -393,6 +422,26 @@
       </div>
       <!-- The empty note, problem list and Clear button: src/errors.tsx -->
       <div id="errors-panel"></div>
+    </section>
+    <section
+      id="variables-window"
+      class="window"
+      aria-label="Variables"
+      data-left="200"
+      data-top="140"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Variables"
+        ></button>
+        <span>Variables</span>
+      </div>
+      <!-- Each Script's variables: src/variables-window.tsx -->
+      <div id="variables-panel"></div>
     </section>
     <section
       id="about-window"

@@ -21,6 +21,13 @@ import {
   type PlayView,
 } from '../src/play-protocol';
 import { ReaderTextHistory } from '../src/play-text';
+import {
+  ITEM_LIMIT,
+  rowKey,
+  summary,
+  variableRows,
+  type VariableScript,
+} from '../src/variables';
 
 const until = async (check: () => boolean) => {
   for (let i = 0; i < 200 && !check(); i++) {
@@ -522,4 +529,122 @@ test('Library diagnostics retain source targets through the worker protocol', as
     ]),
   );
   request({ kind: 'stop', session: 1 });
+});
+
+test('the Variables window reads the showing Page’s Scripts once per Pump', async () => {
+  const project = fixture();
+  project.script = 'script variable level = 1';
+  project.pages[0]!.script = [
+    'script variable score = 0',
+    'script variable board = [[1, 2], [3]]',
+    'script variable target = nothing',
+    'script variable step = nothing',
+    'on openPage',
+    ' put 5 into score',
+    ' put go into target',
+    ' put given x: x into step',
+    'end openPage',
+  ].join('\n');
+  project.pages[0]!.elements[0]!.script =
+    'script variable presses = 0\non click\n put presses + 1 into presses\nend click';
+  const other = createPage('Other');
+  other.script = 'script variable hidden = 1';
+  project.pages.push(other);
+  const { replies, request } = hosted(project);
+  const ask = () => {
+    request({ kind: 'variables', session: 1 });
+    return replies.at(-1)!.response as Extract<
+      PlayResponse,
+      { kind: 'variables' }
+    >;
+  };
+  // `until` checks once more after it passes, so keep the last values.
+  let scripts: VariableScript[] = [];
+  const shows = (variable: string, text: string) => () => {
+    scripts = ask().scripts ?? scripts;
+    return scripts.some(script =>
+      script.vars.some(
+        ([name, value]) =>
+          name === variable && value.kind === 'plain' && value.text === text,
+      ),
+    );
+  };
+  await until(shows('score', '5'));
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(shows('presses', '1'));
+  expect(scripts.map(script => script.label)).toEqual([
+    'Project',
+    'page1',
+    'page1 › go',
+  ]);
+  const page = new Map(scripts[1]!.vars);
+  expect(page.get('board')).toEqual({
+    kind: 'list',
+    length: 2,
+    items: [
+      {
+        kind: 'list',
+        length: 2,
+        items: [
+          { kind: 'plain', text: '1' },
+          { kind: 'plain', text: '2' },
+        ],
+      },
+      { kind: 'list', length: 1, items: [{ kind: 'plain', text: '3' }] },
+    ],
+  });
+  expect(page.get('target')).toMatchObject({
+    kind: 'object',
+    name: 'go',
+    live: true,
+    owner: 2,
+  });
+  expect(page.get('step')).toEqual({ kind: 'function' });
+  // Nothing has pumped since, so the window keeps what it has.
+  expect(ask().scripts).toBeUndefined();
+});
+
+test('Variables rows open lists by key and cap them with a more row', () => {
+  const script: VariableScript = {
+    label: 'Page 1',
+    script: 'page',
+    vars: [
+      [
+        'board',
+        {
+          kind: 'list',
+          length: ITEM_LIMIT + 5,
+          items: Array.from({ length: ITEM_LIMIT }, (_, i) => ({
+            kind: 'plain' as const,
+            text: String(i),
+          })),
+        },
+      ],
+      ['score', { kind: 'plain', text: '5' }],
+    ],
+  };
+  expect(variableRows(script, new Set()).map(row => row.label)).toEqual([
+    'board',
+    'score',
+  ]);
+  const open = variableRows(script, new Set([rowKey('page', ['board'])]));
+  expect(open).toHaveLength(ITEM_LIMIT + 3);
+  expect(open[0]!.expanded).toBe(true);
+  expect(open[ITEM_LIMIT + 1]!.more).toBe(5);
+  expect(summary(script.vars[0]![1])).toBe(`list of ${ITEM_LIMIT + 5}`);
+  expect(
+    summary({
+      kind: 'object',
+      host: 'element',
+      id: '7',
+      name: 'gone',
+      live: false,
+    }),
+  ).toBe('(deleted)');
 });

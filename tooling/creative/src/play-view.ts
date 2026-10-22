@@ -20,11 +20,20 @@ import {
   type ReaderMessage,
 } from './play-protocol';
 import { ReaderTextHistory } from './play-text';
-import { ownerById, ownerId, scriptOwners } from './script-manifest';
+import {
+  ownerById,
+  ownerId,
+  scriptOwners,
+  scriptPage,
+} from './script-manifest';
 import { browserSoundBackend } from './sounds';
 import { paintCanvas } from './canvas-view';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
+import { VariablesWindow } from './variables-window';
+
+/** How often the Variables window reads a browsing session, in ms. */
+const VARIABLES_REFRESH = 100;
 
 /** Shown when the worker was ended because Stop got no answer in time. */
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
@@ -84,6 +93,47 @@ export const mountPlay = (shell: StackShell): void => {
       }
     },
   );
+  // Clicking an authored Element in the Variables window selects it.
+  const variables = new VariablesWindow(index => {
+    const owner = owners[index];
+    if (!owner || generation !== shell.editor.generation) {
+      return;
+    }
+    const project = shell.editor.project;
+    const current = ownerById(project, ownerId(owner));
+    const page = current && scriptPage(project, current);
+    if (!current || !page || 'elements' in current) {
+      return;
+    }
+    const pageIndex = project.pages.indexOf(page);
+    if (pageIndex !== shell.editor.pageIndex) {
+      shell.editor.goToPage(pageIndex);
+    }
+    shell.editor.click(current.name);
+  });
+  let variablesTimer: ReturnType<typeof setInterval> | undefined;
+  let variablesAsked = false;
+  // Only while the window is open and Play is browsing; the worker answers
+  // without values when no Pump has run since it was last asked.
+  const refreshVariables = () => {
+    if (
+      variablesAsked ||
+      !variables.visible ||
+      mode !== 'browse' ||
+      !session ||
+      session.stopped
+    ) {
+      return;
+    }
+    const asked = sessionId;
+    variablesAsked = true;
+    void supervisor.call({ kind: 'variables', session: asked }).then(reply => {
+      variablesAsked = false;
+      if (reply.kind === 'variables' && reply.scripts && asked === sessionId) {
+        variables.update(reply.scripts);
+      }
+    });
+  };
   const reader = h('div', {
     id: 'reader',
     role: 'region',
@@ -490,6 +540,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     silence();
     session.stopped = true;
+    clearInterval(variablesTimer);
+    variablesTimer = undefined;
+    variables.end();
     void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {
@@ -574,7 +627,9 @@ export const mountPlay = (shell: StackShell): void => {
     session.apply(firstView(playing, shell.editor.pageIndex, sessionId));
     syncMessage();
     histories.clear();
+    variables.start();
     if (mode === 'browse') {
+      variablesTimer = setInterval(refreshVariables, VARIABLES_REFRESH);
       byId('desk').append(toolbar, reader);
     } else {
       document.body.append(toolbar, reader);
