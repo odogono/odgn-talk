@@ -284,6 +284,24 @@ identity. This Core has no Message Layer adapter; its release transport tests
 are deferred, while the [Go adapter](../go/README.md#message-layer) carries the
 exchange. The `store` factory forwards its implementation's release hook; see the router below.
 
+## The HTTP router
+
+`@northtalk/ts/http` supplies `createHttpHost(options)`, the
+[HTTP router](../../spec/09-embedding.md#the-http-router) for the optional
+`http` Standard Capability (ADR 0124). It is server-only, on `node:http`, and
+runs under Bun and Node. Give its `impl` to `httpCapability`, and call
+`pumped(group, result)` after each Pump, as `onPump(group)` does for a
+driver. It keys Serve Registrations by owner (Group, Script, named Grant) and
+name, shares a listener per host and port, matches the longest prefix, delivers
+each request as one `Script.deliver` and answers what the Script didn't from
+the Pump's reports. `allow(host, port, binding)` refuses addresses with `bad
+address`; `defaultHost` is `127.0.0.1` and `defaultPort` 0; `portOverride`
+moves every `serve`. A body over `maxBodyBytes`, 1 MiB by default, is answered
+413 without a Delivery. `detach(group)` answers a discarded Group's open
+exchanges 503; `stopAccepting()`, `drain(ms)` and `close()` shut down
+gracefully. The [http test kit](../../corpus/http-kit/) holds it to the Spec
+through [`tools/http-kit.ts`](tools/http-kit.ts).
+
 ## The notification router
 
 `@northtalk/ts/notify` supplies `createRouter({limits, revision})`, the
