@@ -11,10 +11,12 @@ require (
 
 require (
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
 
 replace (
 	github.com/odogono/odgn-talk/bench/peers/go => ../peers/go
 	github.com/odogono/odgn-talk/impl/go => ../../impl/go
 )
+
+replace github.com/odogono/odgn-talk/impl/go/sqlite => ../../impl/go/sqlite

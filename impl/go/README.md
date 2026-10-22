@@ -599,9 +599,17 @@ names an existing file is run; arguments after it, flags included, go to
 `start` as a list of texts. `-port` (or `--port`), else `PORT`, overrides every
 `serve`'s port. Grants, used as needed: `console`, `clock`, `timer`, an
 in-memory `store` named `default`, `http` (any address) and, when stdin is a
-terminal, `user` with the REPL's prompts. The Go Runner has no `calendar` or
-`locale` (the Go module has no implementation of either) and no `sqlite`
-(`sqlite/` is a separate module the CLI doesn't import). It exits 0 when no
+terminal, `user` with the REPL's prompts, plus `calendar` bound to `UTC`,
+`locale` bound to `und` and `sqlite` on a database `main` in a temporary
+directory, opened at first use and removed at exit, giving at most 10,000 rows a
+call. `calendar` reads Go's time zone database, embedded with `time/tzdata`.
+`locale` takes Collation and case mapping from `golang.org/x/text` and names
+and number symbols from [a table](cmd/northtalk/locale_data.go) pinned from
+Node's ICU by `node impl/go/cmd/northtalk/gen-locale-data.ts`; it supports `und`
+and the tags listed there, and any other tag falls back by lookup, so a tag the
+TS Runner resolves through Intl, such as `de-CH`, may resolve to `de` here.
+`und` has en-US names and symbols, as the TS Runner has on an en-US runtime.
+The main module requires `sqlite/` through a `replace`; it stays cgo-free. It exits 0 when no
 Run, queued message, timer, Serve Registration or open Exchange is left, 1
 after any uncaught error or a load diagnostic (`file:line:col: message`), and
 on SIGINT or SIGTERM Delivers `stop`, stops accepting, waits up to 5 s for open

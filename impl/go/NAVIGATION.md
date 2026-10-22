@@ -126,7 +126,7 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Script Runner
 
-- Implementation: [`northtalk app.talk`](cmd/northtalk/run.go), dispatched in [main](cmd/northtalk/main.go)
+- Implementation: [`northtalk app.talk`](cmd/northtalk/run.go), dispatched in [main](cmd/northtalk/main.go), with [`calendar`](cmd/northtalk/calendar.go), [`locale`](cmd/northtalk/locale.go) over [pinned data](cmd/northtalk/gen-locale-data.ts) and [`sqlite`](cmd/northtalk/sqlite.go)
 - Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [ADR 0126](../../docs/adr/README.md); mirrors [the TS Runner](../../tooling/cli/src/run.ts)
 - Tests and cases: [Runner tests](cmd/northtalk/run_test.go), including [the HTTP example](../../examples/http/hello.talk) under SIGINT
 - First check: `go -C impl/go test ./cmd/northtalk`
