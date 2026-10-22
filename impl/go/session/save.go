@@ -182,6 +182,13 @@ func (h *Host) library(rest string) []string {
 	if !exists {
 		h.libraryOrder = append(h.libraryOrder, name)
 	}
+	// A replacement can change what its dependents re-export.
+	for key, l := range staged {
+		if l.handlers == nil || l.compiled != h.libraries[key].compiled {
+			l.handlers = libraryHandlers(l.compiled)
+			staged[key] = l
+		}
+	}
 	h.libraries = staged
 	h.harvestSources()
 	return h.discarded(reports)

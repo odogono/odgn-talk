@@ -77,6 +77,9 @@ type stub struct {
 type library struct {
 	added    string
 	compiled *talk.Library
+	// handlers are the public Handler names compiled exports, worked out once
+	// when the Library is staged so Entries need not re-analyse its source.
+	handlers map[string]bool
 }
 
 // saved is what `:save` keeps: a checkpoint of the Group and its watches,
@@ -347,50 +350,81 @@ type consoleBinding struct{ h *Host }
 func (b consoleBinding) Write(c *talk.Call, v talk.Value) error { return b.h.Write(c, v) }
 func (b consoleBinding) Read(c *talk.Call) error                { return b.h.ReadCall(c) }
 func (h *Host) isHandler(name string) bool {
+	return slices.Contains(h.names().handlers, name)
+}
+
+// sessionNames are the Names an Entry is analysed against.
+type sessionNames struct{ handlers, bound []string }
+
+// names is the Host's one account of which session Names are Handlers and
+// which are bound, read by both analysis and isHandler.
+func (h *Host) names() sessionNames {
+	var n sessionNames
 	for _, d := range h.declarations {
-		// A Selector's first part names the Handler's Entries (chapter 12).
-		if d.kind == "handler" && strings.Split(d.names[0], ":")[0] == name {
-			return true
+		for _, name := range d.names {
+			// Selectors and the Fallback Handler are not variable Names.
+			if !strings.ContainsAny(name, ": ") {
+				n.bound = append(n.bound, name)
+			}
+		}
+		if d.kind == "handler" {
+			// A Selector's first part names the Handler's Entries (chapter 12).
+			n.handlers = append(n.handlers, strings.Split(d.names[0], ":")[0])
 		}
 		if d.kind == "use" {
 			for _, u := range d.uses {
-				if u.local == name {
-					return libraryHandler(h.libraries[d.library].compiled, u.name)
+				if h.libraries[d.library].handlers[u.name] {
+					n.handlers = append(n.handlers, u.local)
 				}
 			}
 		}
 	}
-	return h.implicit[name]
-}
-func libraryHandler(l *talk.Library, name string) bool {
-	if l == nil {
-		return false
+	for name := range h.implicit {
+		n.handlers = append(n.handlers, name)
+		n.bound = append(n.bound, name)
 	}
+	for name := range h.objectBindings {
+		n.bound = append(n.bound, name)
+	}
+	// Stable context makes requests reproducible without changing source order.
+	slices.Sort(n.handlers)
+	slices.Sort(n.bound)
+	n.handlers = slices.Compact(n.handlers)
+	n.bound = slices.Compact(n.bound)
+	return n
+}
+
+// libraryHandlers lists the public Handler names l exports, following
+// re-exports through the Libraries it uses.
+func libraryHandlers(l *talk.Library) map[string]bool {
+	out := map[string]bool{}
 	ds, err := analysis.Source(l.Source())
 	if err != nil {
-		return false
+		return out
 	}
 	for _, n := range ds {
 		if n.Private {
 			continue
 		}
-		if n.Kind == "handler" && n.Name == name {
-			return true
+		if n.Kind == "handler" {
+			out[n.Name] = true
 		}
 		if n.Kind == "use" {
 			d := describe("", n)
-			for _, u := range d.uses {
-				if u.local == name {
-					for _, imported := range l.Imports() {
-						if imported.Name() == d.library {
-							return libraryHandler(imported, u.name)
-						}
+			for _, imported := range l.Imports() {
+				if imported.Name() != d.library {
+					continue
+				}
+				exported := libraryHandlers(imported)
+				for _, u := range d.uses {
+					if exported[u.name] {
+						out[u.local] = true
 					}
 				}
 			}
 		}
 	}
-	return false
+	return out
 }
 
 // NeedsMore classifies continuation with the same names as actual submission.
