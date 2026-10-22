@@ -121,7 +121,9 @@ pub fn Paused(comptime Entry: type) type {
 /// - the crossing-pause calls on a Group: `releasePaused`, `pauseForRelease`,
 ///   `clearReleasePause`, `tracePaused`, `clearTracePause`, `beginAnswer`
 ///   and `answerTaken`;
-/// - `EffectStatus`, an effect's result.
+/// - `EffectStatus`, an effect's result;
+/// - `parked`, where a Group keeps its own exchange while another Group's
+///   is loaded (`group-exchanges-v1`).
 pub fn Exchange(comptime Parts: type) type {
     return struct {
         const X = @This();
@@ -213,6 +215,9 @@ pub fn Exchange(comptime Parts: type) type {
         /// A binary exchange (#1245), kept across JSON needs so its final
         /// reply is binary.
         bin: ?Bin = null,
+        /// The Group the loaded exchange belongs to (`group-exchanges-v1`);
+        /// null before any is loaded, when `entry` stands for it.
+        owner: ?Entry = null,
 
         /// Whether the exchange waits for the Host.
         pub fn open(x: *const X) bool {
@@ -238,6 +243,39 @@ pub fn Exchange(comptime Parts: type) type {
             x.releases.deinit(gpa);
             if (x.bin) |*b| b.deinit(gpa);
             x.* = .{};
+        }
+
+        // ------------------------------------------------ Group exchanges
+
+        /// `group-exchanges-v1`: makes `entry`'s exchange the loaded one,
+        /// parking the one loaded before in its own Group.
+        pub fn load(x: *X, entry: Entry) void {
+            const owner = x.owner orelse x.entry;
+            if (owner != entry) {
+                // With no owner the loaded exchange has never been used.
+                if (owner) |o| Parts.parked(o).* = x.*;
+                x.* = Parts.parked(entry).*;
+                Parts.parked(entry).* = .{};
+            }
+            x.owner = entry;
+        }
+
+        /// Whether the loaded exchange, or any of `entries`' parked ones,
+        /// waits for the Host.
+        pub fn anyOpen(x: *const X, entries: []const Entry) bool {
+            if (x.open()) return true;
+            for (entries) |e| if (Parts.parked(e).open()) return true;
+            return false;
+        }
+
+        /// Frees the loaded exchange if it is `entry`'s, whose Group is
+        /// being dropped; false, freeing nothing, while it waits for the
+        /// Host. The Group frees its parked one.
+        pub fn drop(x: *X, gpa: Allocator, entry: Entry) bool {
+            if (x.owner != entry) return true;
+            if (x.open()) return false;
+            x.deinit(gpa);
+            return true;
         }
 
         // ------------------------------------------------ the running worker
@@ -510,6 +548,7 @@ const TestGroup = struct {
     release_pause: bool = false,
     trace_pause: bool = false,
     calls: std.ArrayList([]const u8) = .empty,
+    parked: TestX = .{},
 
     fn note(g: *TestGroup, call: []const u8) void {
         g.calls.append(testing.allocator, call) catch @panic("OOM");
@@ -570,6 +609,9 @@ const TestX = Exchange(struct {
     }
     pub fn answerTaken(g: *TestGroup) void {
         g.note("answerTaken");
+    }
+    pub fn parked(g: *TestGroup) *TestX {
+        return &g.parked;
     }
 });
 
@@ -780,4 +822,38 @@ test "an open exchange frees what it holds" {
     x.bin = TestX.Bin.make("delivery");
     x.deinit(gpa);
     try testing.expect(!x.open());
+}
+
+test "each Group's exchange is parked while another's is loaded, and dropped only when idle" {
+    const gpa = testing.allocator;
+    var a: TestGroup = .{};
+    var b: TestGroup = .{};
+    defer for ([_]*TestGroup{ &a, &b }) |g| {
+        g.parked.deinit(gpa);
+        g.calls.deinit(gpa);
+    };
+    var x: TestX = .{};
+    defer x.deinit(gpa);
+
+    x.load(&a);
+    x.start(&a, .pump);
+    x.cross(opNeed(&a, .op));
+    try testing.expectEqual(TestX.Pause.need, x.pause(4));
+    x.stop(gpa);
+    try testing.expect(x.anyOpen(&.{ &a, &b }));
+
+    // Loading b parks a's paused exchange in a, and gives b a fresh one.
+    x.load(&b);
+    try testing.expect(!x.open());
+    try testing.expect(a.parked.open());
+    try testing.expect(x.anyOpen(&.{ &a, &b }));
+    try testing.expect(x.drop(gpa, &b));
+
+    // a's exchange comes back as it was, and can't be dropped while paused.
+    x.load(&a);
+    try testing.expect(x.open());
+    try testing.expect(!a.parked.open());
+    try testing.expect(!x.drop(gpa, &a));
+    try testing.expect(x.open());
+    try testing.expect(x.drop(gpa, &b));
 }

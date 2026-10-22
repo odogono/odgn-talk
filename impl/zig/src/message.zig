@@ -325,6 +325,9 @@ const Exchange = exchange.Exchange(struct {
     pub fn answerTaken(e: *GroupEntry) void {
         e.group.group.answerTaken();
     }
+    pub fn parked(e: *GroupEntry) *Exchange {
+        return &e.parked;
+    }
 });
 
 /// One instance's Message Layer state: its Core, and the Handles the Host
@@ -345,8 +348,6 @@ pub const Session = struct {
     /// `group-exchanges-v1` it is the Session's only exchange; with it,
     /// each Group parks its own in its entry while another's is loaded.
     x: Exchange = .{},
-    /// The Group whose exchange is loaded in `x`; null for the Session's.
-    x_owner: ?*GroupEntry = null,
     /// `group-exchanges-v1`: each Group has its own exchange.
     group_exchanges: bool = false,
     /// `object-elements-v1`: Object Kinds may declare a collection (#1143).
@@ -4472,7 +4473,7 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         // Each Group's exchange gates only that Group's frames. A frame
         // naming no Group, or one not made yet, waits on no exchange.
         if (groupOf(s, msg)) |entry| {
-            loadExchange(s, entry);
+            s.x.load(entry);
         } else if (std.mem.eql(u8, m, "restore") and anyExchangeOpen(s)) {
             return protocolError(s.gpa, ref, "a Group's exchange is open");
         } else if (!messageIn(m, &.{ "op-result", "prop-result", "effect-result", "trace-result", "release-result", "resolve-result" })) {
@@ -4718,33 +4719,14 @@ fn messageIn(m: []const u8, names: []const []const u8) bool {
     return false;
 }
 
-/// Loads `entry`'s exchange into `s.x`, parking the one loaded before
-/// in its own Group's entry.
-fn loadExchange(s: *Session, entry: *GroupEntry) void {
-    const owner = s.x_owner orelse s.x.entry;
-    if (owner != entry) {
-        // With no owner the loaded exchange has never been used.
-        if (owner) |o| o.parked = s.x;
-        s.x = entry.parked;
-        entry.parked = .{};
-    }
-    s.x_owner = entry;
-}
-
 fn anyExchangeOpen(s: *Session) bool {
-    if (s.x.open()) return true;
-    for (s.groups.values()) |e| if (e.parked.open()) return true;
-    return false;
+    return s.x.anyOpen(s.groups.values());
 }
 
 /// `drop-group`: frees a Group with no open exchange, running nothing.
 fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-    if (s.x_owner == entry) {
-        if (s.x.open()) return protocolError(s.gpa, ref, "the Group's exchange is open");
-        s.x.deinit(s.gpa);
-        s.x_owner = null;
-    }
+    if (!s.x.drop(s.gpa, entry)) return protocolError(s.gpa, ref, "the Group's exchange is open");
     _ = s.groups.swapRemove(entry.name);
     unbindGroup(s, entry);
     entry.destroy();
@@ -5243,7 +5225,7 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     defer in.deinit(s.gpa);
     s.active_ref = in.ref;
     const ref = in.ref;
-    if (s.group_exchanges and s.restoring == null) loadExchange(s, in.entry);
+    if (s.group_exchanges and s.restoring == null) s.x.load(in.entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
     return switch (s.x.gate(ref, .input, .binary, null)) {
         .dispatch => binaryDispatch(s, &in),
@@ -5826,7 +5808,7 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
     s.active_ref = ref;
     const group = rp.ptextOf(spans[1] orelse return protocolError(s.gpa, ref, "no group")) catch return protocolError(s.gpa, ref, "malformed binary frame");
     const entry = s.groupNamed(group) orelse return protocolError(s.gpa, ref, "an unknown group");
-    if (s.group_exchanges and s.restoring == null) loadExchange(s, entry);
+    if (s.group_exchanges and s.restoring == null) s.x.load(entry);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
     const result: exchange.Result = switch (c) {
         .op_result => .op,
