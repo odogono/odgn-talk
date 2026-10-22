@@ -647,8 +647,9 @@ Trace go.
 
 ### The REPL and Transcript replay
 
-[`src/repl/main.zig`](src/repl/main.zig) is `talk-repl`, the Session Host at
-a terminal under a real Clock. It reads Entries and Session Commands from
+[`src/repl/main.zig`](src/repl/main.zig) is `northtalk`, the native command.
+Given a Script file it runs it ([The Script Runner](#the-script-runner));
+otherwise it is the REPL, the Session Host at a terminal under a real Clock. It reads Entries and Session Commands from
 standard input and prints what the session prints. An Entry may span lines:
 the REPL prompts `| ` and waits while its syntax ends early or a fenced literal
 or hole is open
@@ -668,11 +669,57 @@ From a clean checkout, with Zig 0.17 (nothing else is needed to build):
 cd impl/zig
 zig build repl                                       # start a session
 zig build repl -- --transcript s.transcript --trace s.trace
-zig build && ./zig-out/bin/talk-repl --help          # the installed binary
+zig build && ./zig-out/bin/northtalk --help          # the installed binary
 ```
 
 `--transcript` writes the session's Transcript as it goes, and `--trace` the
 Group's Trace.
+
+### The Script Runner
+
+`northtalk app.talk [args…]` runs a Script file
+([chapter 12](../../spec/12-sessions-and-tooling.md#the-script-runner),
+[ADR 0126](../../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)),
+as the TS and Go `northtalk` commands do. A first argument that ends in `.talk`,
+or names an existing file and isn't a flag, is the file; `--port <n>` may come
+before it.
+
+```sh
+cd impl/zig
+zig build && ./zig-out/bin/northtalk ../../examples/http/hello.talk
+zig build repl -- --port 0 ../../examples/http/hello.talk
+```
+
+[`src/runner/`](src/runner/) loads the file as one Script, named for the file,
+in one Group, granted under `GrantsAsUsed` `console`, `clock`, `timer`, an
+in-memory `store` (the Session Store's), `http` and, when standard input is a
+terminal, `user`. It has no time-zone or Locale data, so it offers no
+`calendar` or `locale`. It Delivers `start` with the list of the arguments
+after the file, and exits 0 once nothing can happen again, or 1 when a Run
+ended with an uncaught error, a limit fault or a failed effect, which it
+writes to standard error as `file:line:col: …`. A load error is written as
+`file:line:col: <code>`: talk.h gives a Script's diagnostics only through the
+Trace, without their wording. The first SIGINT or SIGTERM stops accepting
+connections, Delivers `stop`, waits up to 5 seconds for open HTTP Exchanges,
+answers the rest 503 and exits 130 or 143; a second exits at once.
+
+One thread does everything: it polls the HTTP sockets, standard input (while a
+`read` or `user` prompt waits) and a signal pipe, and pumps at each Host Input,
+timer and deadline. The HTTP router ([`router.zig`](src/runner/router.zig),
+[`request.zig`](src/runner/request.zig)) is the TS and Go routers' over
+talk.h: one listener per address shared by its Serve Registrations, port 0
+for one the system picks, the longest prefix, the request map with its query
+keys and header names in code-point order, a 1 MiB body limit answered 413,
+and 404, 500 and 503 settled from the Pump's reports. A suspending call the
+Host can answer at once, such as `serve`, is answered once the Pump returns,
+since a Host function's own answer to one isn't taken.
+
+```sh
+zig build runner-test   # northtalk on examples/http/hello.talk, over sockets
+zig build http-kit      # corpus/http-kit/ through the native router
+```
+
+`zig build test` runs both.
 
 Transcript replay is the corpus runner's. It gives a case's
 `session.transcript` to a fresh Session Host, with the recorded Clock

@@ -100,21 +100,67 @@ pub fn build(b: *std.Build) void {
     const fuzzworker = b.addExecutable(.{ .name = "talk-fuzzworker", .root_module = fuzz_module });
     b.step("fuzzworker", "Build the differential fuzz worker").dependOn(&b.addInstallArtifact(fuzzworker, .{}).step);
 
-    // The REPL: the Session Host at a terminal (chapter 12).
+    // The native Script Runner and its HTTP router (chapter 12, The Script
+    // Runner; ADR 0126). Its sockets and signals come from libc; the Core
+    // itself still links none.
+    const runner_module = b.createModule(.{
+        .root_source_file = b.path("src/runner/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    runner_module.addImport("northtalk", core);
+    runner_module.addImport("talk-c", c_module);
+    runner_module.addImport("session", session_module);
+
+    // `northtalk`: the Script Runner given a file, and otherwise the REPL,
+    // the Session Host at a terminal (chapter 12).
     const repl_module = b.createModule(.{
         .root_source_file = b.path("src/repl/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     repl_module.addImport("talk-c", c_module);
     repl_module.addImport("session", session_module);
-    const repl = b.addExecutable(.{ .name = "talk-repl", .root_module = repl_module });
-    // It waits on standard input with poll, which WASI hasn't.
+    repl_module.addImport("runner", runner_module);
+    const repl = b.addExecutable(.{ .name = "northtalk", .root_module = repl_module });
+    // It waits on standard input and sockets with poll, which WASI hasn't.
     if (target.result.os.tag != .wasi) b.installArtifact(repl);
     const run_repl = b.addRunArtifact(repl);
     run_repl.stdio = .inherit;
     run_repl.addPassthruArgs();
-    b.step("repl", "Run the REPL").dependOn(&run_repl.step);
+    b.step("repl", "Run northtalk: the REPL, or a Script file given after --").dependOn(&run_repl.step);
+
+    // Runs northtalk on examples/http/hello.talk over real sockets, and
+    // stops it with SIGINT.
+    const smoke = b.addExecutable(.{ .name = "runner-smoke", .root_module = b.createModule(.{
+        .root_source_file = b.path("src/runner/smoke.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    }) });
+    const run_smoke = b.addRunArtifact(smoke);
+    run_smoke.addArtifactArg(repl);
+    run_smoke.addFileArg(b.path("../../examples/http/hello.talk"));
+    run_smoke.has_side_effects = true;
+    b.step("runner-test", "Run northtalk on examples/http/hello.talk and check its answers").dependOn(&run_smoke.step);
+
+    // The http test kit (corpus/http-kit/) through the native router.
+    const kit_module = b.createModule(.{
+        .root_source_file = b.path("src/runner/http_kit.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    kit_module.addImport("talk-c", c_module);
+    kit_module.addImport("northtalk", core);
+    kit_module.addImport("runner", runner_module);
+    const kit = b.addExecutable(.{ .name = "http-kit", .root_module = kit_module });
+    const run_kit = b.addRunArtifact(kit);
+    run_kit.setCwd(b.path("."));
+    run_kit.has_side_effects = true;
+    b.step("http-kit", "Run the http test kit through the native router").dependOn(&run_kit.step);
 
     const test_step = b.step("test", "Run the Zig Core's tests");
     const tests = b.addTest(.{ .root_module = core });
@@ -128,6 +174,12 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_corpus_tests.step);
     const session_tests = b.addTest(.{ .root_module = session_module });
     test_step.dependOn(&b.addRunArtifact(session_tests).step);
+    if (target.result.os.tag != .wasi) {
+        const runner_tests = b.addTest(.{ .root_module = runner_module });
+        test_step.dependOn(&b.addRunArtifact(runner_tests).step);
+        test_step.dependOn(&run_smoke.step);
+        test_step.dependOn(&run_kit.step);
+    }
 
     // The C API's own tests, compiled as a Host would compile them against
     // talk.h. libc serves only the test program; the Core links none.

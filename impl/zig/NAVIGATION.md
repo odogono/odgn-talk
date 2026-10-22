@@ -178,6 +178,13 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 - Tests and cases: `corpus/sessions/`
 - First check: `cd impl/zig && zig build corpus -- sessions`
 
+## The Script Runner and the HTTP router
+
+- Implementation: [Runner](src/runner/runner.zig), [HTTP router](src/runner/router.zig), [requests](src/runner/request.zig), [`northtalk`](src/repl/main.zig)
+- Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [The HTTP router](../../spec/09-embedding.md#the-http-router), [`http`](../../spec/07-libraries-and-the-standard-library.md#http)
+- Tests and cases: tests in the modules, [`smoke.zig`](src/runner/smoke.zig) on `examples/http/hello.talk`, [`http_kit.zig`](src/runner/http_kit.zig) on `corpus/http-kit/`
+- First check: `cd impl/zig && zig build runner-test http-kit`
+
 ## Store Notification routing and checkpoints
 
 - Implementation: [router](src/notify/router.zig), [`talk.h`](include/talk.h)
