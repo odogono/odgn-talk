@@ -1145,6 +1145,17 @@ with `multiple: true` a subsequence of them. Any other answer ends the call as
 `host error`. A suspending call whose Operation checks its answer keeps its
 arguments until it is answered or the Group is released.
 
+`http` (`talk_http_capability`) is optional, and the Core never reads its
+binding. Before charging the call, the Core raises `invalid serve` for an empty
+name, a prefix without a leading `/` or an effective message that isn't a
+plain Name, and `invalid response` for a `status` that isn't a whole number
+from 100 to 599, a header value that isn't text or a list of texts, or `body`
+with `json`, and for a `json` the `json` Library can't write, both with
+`field` `json`. `serve` hears its effective message, `httpRequest` when
+omitted or Nothing, and an empty options map when omitted; it suspends, and an
+answer that isn't a map of text `host` and whole-number `port` is `host
+error`. `respond` hears `json` as its compact JSON text.
+
 Wait deadlines retain their mathematical microsecond counts, including those
 outside the Clock's years 0001–9999. A valid wait suspends and pays its charge;
 Inspect and the Trace omit an unrepresentable `until`. Unreachable future

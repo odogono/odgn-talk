@@ -10181,10 +10181,10 @@ pub const Group = struct {
                     defer field.release();
                     return g.raise("out of range", &.{ .{ .key = "field", .value = field }, .{ .key = "value", .value = x.value } });
                 },
-                .invalid_watch => |which| {
-                    const field = try model.text(gpa, which);
+                .invalid_field => |x| {
+                    const field = try model.text(gpa, x.field);
                     defer field.release();
-                    return g.raise("invalid watch", &.{.{ .key = "field", .value = field }});
+                    return g.raise(x.code, &.{.{ .key = "field", .value = field }});
                 },
             }
         };

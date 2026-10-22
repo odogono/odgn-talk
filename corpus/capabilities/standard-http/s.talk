@@ -1,0 +1,20 @@
+script variable got = []
+on go
+  ask http to serve "site", "/", "httpRequest", {port: 3000} and wait
+  put it after got
+  ask http to serve "api", "/api" and wait
+  put the port of it after got
+  ask http to unserve "api"
+  put "unserved" after got
+end go
+
+on httpRequest {method: "GET", segments: [], exchange: x}
+  put the closed of x after got
+  ask http to respond x, {body: "hello"}
+  put "root" after got
+end httpRequest
+
+on httpRequest {method: "GET", segments: ["users", id], exchange: x}
+  ask http to respond x, {status: 200, headers: {"x-tag": ["a", "b"]}, json: {id: id}}
+  put id after got
+end httpRequest

@@ -1,0 +1,17 @@
+script variable got = []
+on serve
+  try
+    ask http to serve "site", "/", nothing, {host: "localhost", port: 8080} and wait
+    put it after got
+  catch {code: code}
+    put code after got
+  end try
+end serve
+on respond x
+  try
+    ask http to respond x, {status: 204}
+    put "sent" after got
+  catch {code: code}
+    put code after got
+  end try
+end respond

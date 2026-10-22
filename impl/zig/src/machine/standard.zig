@@ -1,5 +1,5 @@
 //! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale`,
-//! `timer`, `console`, `store`, `sqlite` and `user`, with the declarations the chapter fixes. Each factory takes the
+//! `timer`, `console`, `store`, `sqlite`, `user` and `http`, with the declarations the chapter fixes. Each factory takes the
 //! Host's implementation, one Host function per Operation, and a cost per
 //! Operation. The Core makes the chapter's own checks: option words and
 //! Locale tags before a call, which are charged nothing, and the result rules
@@ -12,11 +12,12 @@ const model = @import("../value.zig");
 const caps = @import("capabilities.zig");
 const grammar = @import("../generated/grammar.zig").grammar;
 const sqlite = @import("sqlite.zig");
+const encoding = @import("../encoding.zig");
 const Value = model.Value;
 const Shape = caps.Shape;
 
 /// The Standard Capabilities this Core defines so far.
-pub const Which = enum { clock, calendar, locale, timer, console, store, sqlite, user };
+pub const Which = enum { clock, calendar, locale, timer, console, store, sqlite, user, http };
 
 /// Each one's Operations, in name order, as its declarations list them.
 pub fn operations(which: Which) []const []const u8 {
@@ -29,6 +30,7 @@ pub fn operations(which: Which) []const []const u8 {
         .store => &.{ "delete", "get", "increment", "keys", "set", "swap", "unwatch", "watch" },
         .sqlite => &.{ "begin", "change", "commit", "query", "rollback" },
         .user => &.{ "choose", "confirm", "enter", "notify" },
+        .http => &.{ "respond", "serve", "unserve" },
     };
 }
 
@@ -227,6 +229,38 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
                 max_pending = 2_147_483_647;
             }
         },
+        .http => if (eq(name, "serve")) {
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            try args.append(gpa, try Kinds.optionalText(gpa));
+            try args.append(gpa, try Shape.optional(gpa, try Kinds.options(gpa, &.{ .{ "host", .text }, .{ "port", .number } })));
+            const address = try gpa.alloc(caps.Field, 2);
+            address[0] = .{ .key = try gpa.dupe(u8, "host"), .shape = try Kinds.kind(gpa, .text) };
+            address[1] = .{ .key = try gpa.dupe(u8, "port"), .shape = try Kinds.kind(gpa, .number) };
+            result = try Shape.map(gpa, address, false);
+            errors = &.{ "invalid serve", "address in use", "bad address" };
+            mode = .suspending;
+            max_pending = 2_147_483_647;
+        } else if (eq(name, "unserve")) {
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            result = try Kinds.kind(gpa, .nothing);
+            errors = &.{"invalid serve"};
+        } else {
+            try args.append(gpa, try Shape.objectOf(gpa, "httpExchange"));
+            // A closed map, every key optional: `headers` an open map whose
+            // values the Core checks itself, and `body` text or Bytes.
+            const fields = try gpa.alloc(caps.Field, 4);
+            const body = try gpa.alloc(*Shape, 2);
+            body[0] = try Kinds.kind(gpa, .text);
+            body[1] = try Kinds.kind(gpa, .bytes);
+            fields[0] = .{ .key = try gpa.dupe(u8, "status"), .shape = try Kinds.kind(gpa, .number), .optional = true };
+            fields[1] = .{ .key = try gpa.dupe(u8, "headers"), .shape = try Shape.map(gpa, try gpa.alloc(caps.Field, 0), true), .optional = true };
+            fields[2] = .{ .key = try gpa.dupe(u8, "body"), .shape = try Shape.oneOf(gpa, body), .optional = true };
+            fields[3] = .{ .key = try gpa.dupe(u8, "json"), .shape = try Kinds.kind(gpa, .any), .optional = true };
+            try args.append(gpa, try Shape.map(gpa, fields, false));
+            result = try Kinds.kind(gpa, .nothing);
+            errors = &.{ "invalid response", "already responded", "exchange closed", "not owner" };
+        },
         .console => if (eq(name, "write")) {
             try args.append(gpa, try Kinds.kind(gpa, .value));
             mode = .fire_and_forget;
@@ -253,7 +287,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{.{ "limit", .text }}
         else if (std.mem.eql(u8, code, "store busy"))
             &.{.{ "key", .text }}
-        else if (std.mem.eql(u8, code, "invalid watch"))
+        else if (std.mem.eql(u8, code, "invalid watch") or std.mem.eql(u8, code, "invalid serve") or std.mem.eql(u8, code, "invalid response"))
             &.{.{ "field", .text }}
         else if (std.mem.eql(u8, code, "wrong kind"))
             &.{ .{ "expected", .text }, .{ "got", .text }, .{ "value", .value } }
@@ -284,7 +318,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .{ .field = "kind", .words = &.{ "unique", "primary key", "not null", "check", "foreign key", "datatype", "trigger", "other" } }
         else
             null;
-        const core = for ([_][]const u8{ "invalid key", "invalid watch", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
+        const core = for ([_][]const u8{ "invalid key", "invalid watch", "invalid serve", "invalid response", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
             if (std.mem.eql(u8, x, code)) break true;
         } else false;
         d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
@@ -314,12 +348,14 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .store => if (eq(name, "keys")) null else beforeStore,
             .sqlite => if (eq(name, "query") or eq(name, "change")) beforeSqlite else null,
             .user => if (eq(name, "choose")) beforeChoose else null,
+            .http => beforeHttp,
             else => null,
         },
         .after = switch (which) {
             .calendar => afterCalendar,
             .locale => afterLocale,
             .user => if (eq(name, "choose")) afterChoose else null,
+            .http => if (eq(name, "serve")) afterServe else null,
             else => null,
         },
     };
@@ -444,9 +480,74 @@ fn beforeStore(a: Allocator, op: *const caps.Operation, args: []const *Value, bi
     _ = binding;
     const watching = std.mem.eql(u8, op.name, "watch") or std.mem.eql(u8, op.name, "unwatch");
     if (!watching) return if (args[0].data.text.len == 0) .invalid_key else null;
-    if (args[0].data.text.len == 0) return .{ .invalid_watch = "name" };
-    if (std.mem.eql(u8, op.name, "watch") and !plainName(effectiveMessage(args))) return .{ .invalid_watch = "message" };
+    if (args[0].data.text.len == 0) return .{ .invalid_field = .{ .code = "invalid watch", .field = "name" } };
+    if (std.mem.eql(u8, op.name, "watch") and !plainName(effectiveMessage(args))) return .{ .invalid_field = .{ .code = "invalid watch", .field = "message" } };
     return null;
+}
+
+/// `http`'s own checks, before the call is charged: `serve`'s and
+/// `unserve`'s name, then `serve`'s prefix and effective message, as a store
+/// watch's; `respond`'s status, header values, then `body` with `json` and a
+/// `json` the `json` Library can't write, both with `field` `json`.
+fn beforeHttp(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    _ = binding;
+    const serve = struct {
+        fn f(field: []const u8) caps.Problem {
+            return .{ .invalid_field = .{ .code = "invalid serve", .field = field } };
+        }
+    }.f;
+    const response = struct {
+        fn f(field: []const u8) caps.Problem {
+            return .{ .invalid_field = .{ .code = "invalid response", .field = field } };
+        }
+    }.f;
+    if (!std.mem.eql(u8, op.name, "respond")) {
+        if (args[0].data.text.len == 0) return serve("name");
+        if (std.mem.eql(u8, op.name, "unserve")) return null;
+        if (!std.mem.startsWith(u8, args[1].data.text, "/")) return serve("prefix");
+        if (!plainName(httpMessage(args))) return serve("message");
+        return null;
+    }
+    const r = args[1];
+    if (r.get("status")) |status| {
+        const n = integerOf(status) orelse return response("status");
+        if (n < 100 or n > 599) return response("status");
+    }
+    if (r.get("headers")) |headers| {
+        for (0..headers.data.map.len) |i| {
+            const v = headers.data.map.at(i).value;
+            const ok = switch (v.data) {
+                .text => true,
+                .list => |xs| for (xs) |x| {
+                    if (x.data != .text) break false;
+                } else true,
+                else => false,
+            };
+            if (!ok) return response("headers");
+        }
+    }
+    if (r.get("json")) |json| {
+        if (r.get("body") != null) return response("json");
+        const written = encoding.encodeJson(a, json) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else response("json");
+        a.free(written);
+    }
+    return null;
+}
+
+/// A `serve` answer: a map with text `host` and whole-number `port`.
+fn afterServe(op: *const caps.Operation, args: []const *Value, result: *const Value) bool {
+    _ = op;
+    _ = args;
+    if (result.data != .map) return false;
+    const host = result.get("host") orelse return false;
+    const port = result.get("port") orelse return false;
+    return host.data == .text and integerOf(port) != null;
+}
+
+/// `serve`'s message, `httpRequest` when omitted or Nothing.
+fn httpMessage(args: []const *Value) []const u8 {
+    if (args.len > 2 and args[2].data == .text) return args[2].data.text;
+    return "httpRequest";
 }
 
 /// `watch`'s message, `storeChanged` when omitted or Nothing.
@@ -623,6 +724,33 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
                     try fresh(gpa, made, try model.text(gpa, "")));
             }
         },
+        .http => if (std.mem.eql(u8, ctx.name, "serve")) {
+            // The name, the prefix, the effective message and the options,
+            // an empty map when omitted or Nothing.
+            try out.appendSlice(gpa, args[0..2]);
+            try out.append(gpa, try fresh(gpa, made, try model.text(gpa, httpMessage(args))));
+            try out.append(gpa, if (args.len > 3 and args[3].data == .map) args[3] else try fresh(gpa, made, try model.map(gpa, &.{})));
+        } else if (std.mem.eql(u8, ctx.name, "respond")) {
+            // The response as given, but `json` as its JSON text.
+            try out.append(gpa, args[0]);
+            const r = args[1];
+            if (r.get("json") == null) {
+                try out.append(gpa, r);
+            } else {
+                const pairs = try gpa.alloc(model.Pair, r.data.map.len);
+                defer gpa.free(pairs);
+                for (pairs, 0..) |*p, i| {
+                    const given = r.data.map.at(i);
+                    p.* = .{ .key = given.key, .value = given.value };
+                    if (std.mem.eql(u8, given.key, "json")) {
+                        const written = encoding.encodeJson(gpa, given.value) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+                        defer gpa.free(written);
+                        p.value = try fresh(gpa, made, try model.text(gpa, written));
+                    }
+                }
+                try out.append(gpa, try fresh(gpa, made, try model.map(gpa, pairs)));
+            }
+        } else try out.appendSlice(gpa, args),
         .store => {
             // Each omitted default: get's and increment's Nothing, keys'
             // empty prefix, and watch's effective message.

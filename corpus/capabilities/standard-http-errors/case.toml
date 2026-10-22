@@ -1,0 +1,24 @@
+# standard-http-errors: the Host fails `serve` with `address in use` or
+# `bad address` and `respond` with `not owner`, `already responded` or
+# `exchange closed`, and the Script catches each. A `serve` answer that isn't
+# a map of text `host` and whole-number `port`, or an undeclared failure,
+# ends the call as `host error` (chapter 7, chapter 9, ADR 0124).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { serve = { fuel = 5 }, unserve = { fuel = 2 }, respond = { fuel = 3 } }
+[[objectKinds]]
+name = "httpExchange"
+props = [{ name = "closed", shape = "boolean", readOnly = true }]
+[[objects]]
+kind = "httpExchange"
+id = "e1"
+props = { closed = "true" }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { http = { ops = "all" } }

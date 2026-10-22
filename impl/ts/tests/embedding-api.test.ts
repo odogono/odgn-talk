@@ -129,6 +129,7 @@ const tsOnly = new Set([
   'consoleCapability',
   'defineCapability',
   'defineObjectKind',
+  'httpCapability',
   'localeCapability',
   'newGroup',
   'restore',

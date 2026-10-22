@@ -545,8 +545,9 @@ pub const Problem = union(enum) {
     mismatch: struct { bad: Mismatch, position: usize, keep: ?*Value = null },
     /// `out of range`, with the field and its value.
     out_of_range: struct { field: []const u8, value: *Value },
-    /// `invalid watch`, with the field that is wrong: `name` or `message`.
-    invalid_watch: []const u8,
+    /// A Core-raised error whose one field, `field`, names what is wrong:
+    /// `invalid watch`, `invalid serve` or `invalid response`.
+    invalid_field: struct { code: []const u8, field: []const u8 },
 };
 
 /// A Segment Coordinator's hooks (embedding/scoped-effects.md).
