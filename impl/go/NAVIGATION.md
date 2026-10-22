@@ -124,6 +124,13 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
 - First check: `go -C impl/go test ./session ./driver`
 
+## Script Runner
+
+- Implementation: [`northtalk app.talk`](cmd/northtalk/run.go), dispatched in [main](cmd/northtalk/main.go)
+- Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [ADR 0126](../../docs/adr/README.md); mirrors [the TS Runner](../../tooling/cli/src/run.ts)
+- Tests and cases: [Runner tests](cmd/northtalk/run_test.go), including [the HTTP example](../../examples/http/hello.talk) under SIGINT
+- First check: `go -C impl/go test ./cmd/northtalk`
+
 ## HTTP router
 
 - Implementation: [`httphost`](httphost/host.go), on `net/http`

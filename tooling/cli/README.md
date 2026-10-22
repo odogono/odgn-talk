@@ -2,9 +2,10 @@
 
 **Session observation:** the [Session observation contract](../../spec/session-observation.md) is implemented here; coordinated release review remains in #370. The REPL gets Declaration Documentation and its prompt handling from the Session Host: a leading `--|` block waits for its declaration, and one before anything else is refused. The language server shares the Core's documentation extraction and Built-in catalogue for hover. `:trace`, `:untrace` and `:fuel` work as in the Session Host, including a multiline `:fuel` Entry ([#438](https://github.com/odogono/odgn-talk/issues/438)). `:describe` and `:apropos` share the Session Host's passive metadata and name discovery ([#437](https://github.com/odogono/odgn-talk/issues/437)). `:inspect` and `%` object Transcript replay use the shared Session Host ([#439](https://github.com/odogono/odgn-talk/issues/439)); new recordings include empty setup even when there are no Host Objects.
 
-The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@northtalk/ts/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@northtalk/tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
+The `northtalk` command: running a Script file, the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@northtalk/ts/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@northtalk/tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
+northtalk [--port <n>] <file.talk> [args…]
 northtalk [repl] [--transcript <file>]
 northtalk replay <transcript> [--trace <file>]
 northtalk fmt [--check] <file>…
@@ -30,6 +31,23 @@ From the repository root, `bun run repl` and `bun run northtalk …` run it with
 From a clean checkout, run `bun install`, then `bun run northtalk fmt script.talk`.
 For Node 22 or later, run `bun run --cwd tooling/cli build`, then
 `node tooling/cli/dist/main.js fmt script.talk`. The REPL remains Bun-only.
+
+## Running a Script
+
+`northtalk app.talk [args…]` runs a Script file, under Bun or in the Node build ([chapter 12, The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner); [ADR 0126](../../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)). A first argument that ends in `.talk`, or names an existing file and isn't a subcommand, is the file.
+
+```sh
+bun run northtalk examples/http/hello.talk
+PORT=8080 bun run northtalk examples/http/hello.talk
+node tooling/cli/dist/main.js --port 0 examples/http/hello.talk
+```
+
+- **Loading:** the file is one Script, named by its basename, with the stdlib Libraries. A load error prints `file:line:column: message` on stderr and exits 1.
+- **Grants**, each under its own name and trimmed to what the Script uses: `console` (`say` writes a line to stdout; `read` takes the next stdin line, and at the end of input the reading Run is cancelled), `clock`, `timer`, `calendar` (bound to `UTC`) and `locale` (bound to `und`) from the runtime's Intl data, an in-memory `store` (`default`), `sqlite` on a database in a temporary directory that is removed at exit, `http` with any address, and `user` only when stdin is a terminal, asking as the REPL does.
+- **Starting:** `start` is Delivered with one argument, the list of the arguments after the file, so the Handler is `on start args`.
+- **Exit:** once there are no live Runs or queued messages, no timers, no Serve Registrations and no open HTTP Exchanges. The code is 0, or 1 when a Run ended with an uncaught error, a Limit Fault or a failed effect, each written to stderr as `file:line:column: uncaught error in <handler>: <code>: <message> <fields>`.
+- **`--port <n>`** before the file, or the `PORT` environment variable, sets the port of every `serve`.
+- **Signals:** the first SIGINT or SIGTERM stops accepting connections, Delivers `stop` (a Script without a `stop` Handler ends that Run `unhandled`), waits up to 5 seconds for open HTTP Exchanges, answers the rest 503, stops the Group and exits 130 or 143. A second signal exits at once.
 
 ## Lints
 
