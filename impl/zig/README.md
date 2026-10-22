@@ -437,6 +437,10 @@ Hosts may opt in to `group-exchanges-v1` to host many Groups in one Session:
 the `Exchange` a Pump, Reload or library replacement pauses in is parked on its
 Group's entry while frames for another Group run, and `drop-group` frees an idle
 Group. See the [contract](../../spec/embedding/group-exchanges.md).
+In both exchange modes, callback results and Trace/release acknowledgements
+must name their exchange's Group. A missing, unknown or mismatched Group is a
+protocol error that leaves the need open for a corrected result, in both JSON
+and binary fields layouts.
 The [contract](../../spec/embedding/paused-crossing-inputs.md#operation-trace-observation-at-a-paused-crossing)
 describes the supported boundary. Message Layer `answer.fuel` now reaches the
 settlement-cost API. A queued settlement remains tracked until consumed, so a

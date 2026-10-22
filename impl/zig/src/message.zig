@@ -4480,7 +4480,11 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
     }
-    switch (s.x.gate(ref, jsonFrame(m), .json)) {
+    const gate = s.x.gate(ref, jsonFrame(m), .json);
+    if ((gate == .result or gate == .trace_result or gate == .release_result) and !resultGroupMatches(s, groupOf(s, msg))) {
+        return protocolError(s.gpa, ref, "the result must address the exchange's Group");
+    }
+    switch (gate) {
         .dispatch => {},
         .admit => |worker_ref| return pausedAdmission(s, msg, ref, m, s.x.paused(worker_ref)),
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
@@ -4688,6 +4692,14 @@ fn jsonFrame(m: []const u8) exchange.Frame {
     };
     for (results) |r| if (std.mem.eql(u8, m, r[0])) return .{ .result = r[1] };
     return .input;
+}
+
+/// Check before consuming a result, including a release holding a final
+/// reply after its worker has finished. This also rejects a missing Group
+/// when per-Group routing left the previously selected exchange loaded.
+fn resultGroupMatches(s: *Session, entry: ?*GroupEntry) bool {
+    const owner = if (s.x.state == .awaiting_release) s.x.releasing() else s.x.entry;
+    return entry != null and entry == owner;
 }
 
 /// A refused frame's protocol error detail, in either layout.
@@ -5823,7 +5835,11 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
         .release_result => .release,
         .op, .prop, .effect, .release => unreachable,
     };
-    switch (s.x.gate(ref, .{ .result = result }, .binary)) {
+    const gate = s.x.gate(ref, .{ .result = result }, .binary);
+    if ((gate == .result or gate == .release_result) and !resultGroupMatches(s, entry)) {
+        return protocolError(s.gpa, ref, "the result must address the exchange's Group");
+    }
+    switch (gate) {
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
         .release_result => return releaseResultReply(s, ref),
         .result => {},
@@ -6428,7 +6444,7 @@ test "worker refusals during a paused callback keep Trace after its return" {
         try std.testing.expectEqualStrings("reentrant call", refused.object.get("err").?.object.get("code").?.string);
         try std.testing.expect(refused.object.get("trace") == null);
     }
-    const completed = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":42}}", .{});
+    const completed = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"result\":42}}", .{});
     const done = try okOf(completed);
     var called = false;
     var refused_count: usize = 0;
@@ -6457,7 +6473,7 @@ test "property Host failure reports retain setter input without a call-failed Tr
         _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":{f}}}", .{ 4, std.json.fmt(source, .{}) }));
         _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[{{\"$object\":[\"box\",\"one\"]}}]}}}}", .{5}));
         _ = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-14T12:00:00Z\"}}", .{6});
-        const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"ref\":6,\"hostError\":\"broken\"}}", .{}));
+        const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":6,\"hostError\":\"broken\"}}", .{}));
         var failures: usize = 0;
         for (done.object.get("reports").?.array.items) |r| {
             if (!std.mem.eql(u8, r.object.get("kind").?.string, "call failed")) continue;
@@ -6551,7 +6567,7 @@ test "paused callback inputs land after the callback record and before conversio
         _ = try pausedFixture(&c, "immediate", "script variable n=0\non go\n put 9 into n\n ask api to read\n put 8 into n\n return n\nend go", false);
         const admitted = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"crossing\"}}", .{7}));
         try std.testing.expect(admitted.object.get("trace") == null);
-        const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,{s}}}", .{answer}));
+        const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,{s}}}", .{answer}));
         try std.testing.expectEqualStrings("stopped", done.object.get("state").?.string);
         var called = false;
         var stopped = false;
@@ -6580,7 +6596,7 @@ test "an Answer and metered charge during Start wait for the next Pump" {
     const charged = try okOf(try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":1}}", .{ 7, id }));
     try std.testing.expectEqualStrings("q1", charged.object.get("request").?.string);
     _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":7}}", .{ 8, id }));
-    const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+    const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"started\":true}}", .{}));
     for (parked.object.get("reports").?.array.items) |r| try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "run end"));
     const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9});
     const end = try runEnd(done);
@@ -6605,7 +6621,7 @@ test "settled deferred calls leave nothing behind and a late answer is still ign
         _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
         const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
         const id = (pumped.object.get("need") orelse return unexpected(pumped)).object.get("call").?.string;
-        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"started\":true}}", .{}));
         _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":41}}", .{ 7, id }));
         const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8});
         try std.testing.expectEqual(@as(i64, 42), (try runEnd(done)).object.get("result").?.integer);
@@ -6637,7 +6653,7 @@ test "paused cancellation and Rewind retain rollback and accounting" {
             const source = if (suspending) "script variable n=0\non go\n put 9 into n\n ask api to read and wait\n put 8 into n\n return n\nend go" else "script variable n=0\non go\n put 9 into n\n ask api to read\n put 8 into n\n return n\nend go";
             _ = try pausedFixture(&c, mode, source, false);
             _ = try okOf(try c.sendRef(7, "{{\"m\":\"{s}\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"s/r1\",\"reason\":\"crossing\"}}", .{ control, 7 }));
-            const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,{s}}}", .{if (suspending) "\"started\":true" else "\"result\":7"}));
+            const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,{s}}}", .{if (suspending) "\"started\":true" else "\"result\":7"}));
             const rewind = std.mem.eql(u8, control, "rewind-run");
             try std.testing.expectEqualStrings(if (rewind) "rewound" else if (std.mem.eql(u8, control, "stop")) "stopped" else "idle", done.object.get("state").?.string);
             const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8}));
@@ -6664,20 +6680,20 @@ test "a different Run's deferred cleanup retains the original Host return until 
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelSlice\":20}}", .{10});
     try std.testing.expectEqualStrings("begin", reply.object.get("need").?.object.get("phase").?.string);
-    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":10,\"status\":\"ok\"}}", .{});
+    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":10,\"status\":\"ok\"}}", .{});
     try std.testing.expectEqualStrings("open", reply.object.get("need").?.object.get("operation").?.string);
-    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":null}}", .{});
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":10,\"result\":null}}", .{});
     try std.testing.expectEqualStrings("read", reply.object.get("need").?.object.get("operation").?.string);
     _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"other\",\"reason\":\"cleanup\"}}", .{11}));
-    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":7}}", .{});
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":10,\"result\":7}}", .{});
     try std.testing.expectEqualStrings("close", reply.object.get("need").?.object.get("operation").?.string);
-    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":null}}", .{});
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":10,\"result\":null}}", .{});
     try std.testing.expectEqualStrings("rollback", reply.object.get("need").?.object.get("phase").?.string);
-    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":10,\"status\":\"ok\"}}", .{});
+    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":10,\"status\":\"ok\"}}", .{});
     try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
     // A callback-generated Stop must be admitted before s executes its next instruction.
     _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"release\"}}", .{12}));
-    const done = try okOf(try c.sendRef(10, "{{\"m\":\"release-result\",\"ref\":10}}", .{}));
+    const done = try okOf(try c.sendRef(10, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":10}}", .{}));
     var calls: usize = 0;
     for (done.object.get("trace").?.array.items) |line| if (std.mem.startsWith(u8, line.string, "call s/r1.c1")) {
         calls += 1;
@@ -6707,7 +6723,7 @@ test "property callbacks admit Stop before valid or invalid return conversion" {
             const refused = try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8});
             try std.testing.expectEqualStrings("reentrant call", refused.object.get("err").?.object.get("code").?.string);
             _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"property\"}}", .{9}));
-            const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"ref\":6,{s}}}", .{outcome}));
+            const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":6,{s}}}", .{outcome}));
             try std.testing.expectEqualStrings("stopped", done.object.get("state").?.string);
             const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{10}));
             try std.testing.expectEqual(@as(i64, 0), inspected.object.get("scripts").?.array.items[0].object.get("vars").?.array.items[0].array.items[1].integer);
@@ -6734,15 +6750,15 @@ test "an immediate op pauses the Pump and resumes on its result" {
     const left = need.object.get("fuelLeft").?.integer;
     try std.testing.expect(left > 0 and left < 1000);
     // A wrong ref and another message are refused; the Pump stays parked.
-    const stray = try c.sendRef(99, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":40}}", .{99});
+    const stray = try c.sendRef(99, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":40}}", .{99});
     try std.testing.expectEqualStrings("protocol error", try errKind(stray));
     const other = try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{7});
     try std.testing.expectEqualStrings("protocol error", try errKind(other));
     const nested = try nestedJson(gpa, 100_000, false);
     defer gpa.free(nested);
-    const rejected = try c.common(0, "{{\"m\":\"op-result\",\"ref\":6,\"result\":{s}", .{nested});
+    const rejected = try c.common(0, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"result\":{s}", .{nested});
     try std.testing.expectEqualStrings("protocol error", try errKind(rejected));
-    const done = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":40,\"charged\":3}}", .{6});
+    const done = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":40,\"charged\":3}}", .{6});
     const end = try runEnd(done);
     try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
     try std.testing.expectEqual(@as(i64, 41), end.object.get("result").?.integer);
@@ -6768,7 +6784,7 @@ test "a suspending op starts, is answered, and completes on the next Pump" {
     const need = pumped.object.get("need").?;
     try std.testing.expectEqualStrings("suspending", need.object.get("mode").?.string);
     const call = need.object.get("call").?.string;
-    const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{6}));
+    const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"started\":true}}", .{6}));
     // Parked, the Run has started but not ended.
     for (parked.object.get("reports").?.array.items) |r|
         try std.testing.expect(!std.mem.eql(u8, "run end", r.object.get("kind").?.string));
@@ -6800,7 +6816,7 @@ test "a Result Target holds a resumed answer and is untouched when the ask raise
         _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"{s}\"}}}}", .{ ref, case[0] }));
         const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ref + 1});
         const call = pumped.object.get("need").?.object.get("call").?.string;
-        _ = try okOf(try c.sendRef(ref + 1, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{ref + 1}));
+        _ = try okOf(try c.sendRef(ref + 1, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"started\":true}}", .{ref + 1}));
         _ = try okOf(try c.sendRef(ref + 2, "{{{s},\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\"}}", .{ case[1], ref + 2, call }));
         var end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ref + 3}));
         if (std.mem.eql(u8, case[0], "keep")) {
@@ -6827,7 +6843,7 @@ test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     const need = pumped.object.get("need").?;
     try std.testing.expectEqualStrings("prop", need.object.get("m").?.string);
     try std.testing.expectEqualStrings("size", need.object.get("prop").?.string);
-    const done = try c.sendRef(6, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":9}}", .{6});
+    const done = try c.sendRef(6, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":{d},\"value\":9}}", .{6});
     try std.testing.expectEqual(@as(i64, 9), (try runEnd(done)).object.get("result").?.integer);
     // Deeply nested source is a load error with its diagnostic.
     const deep = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"deep\",\"source\":\"on deep\\nreturn ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))\\nend deep\\n\"}}", .{7});
@@ -6867,15 +6883,15 @@ test "object-elements-v1: a collection declaration and its prop needs (#1143)" {
     try std.testing.expectEqualStrings("elements", need.object.get("prop").?.string);
     try std.testing.expectEqualStrings("count", need.object.get("op").?.string);
     try std.testing.expect(need.object.get("selector") == null);
-    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":1}}", .{10});
+    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":{d},\"value\":1}}", .{10});
     need = reply.object.get("need").?;
     try std.testing.expectEqualStrings("at", need.object.get("op").?.string);
     try std.testing.expectEqual(@as(i64, -1), need.object.get("selector").?.integer);
-    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":{{\"$object\":[\"rect\",\"r\"]}}}}", .{10});
+    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":{d},\"value\":{{\"$object\":[\"rect\",\"r\"]}}}}", .{10});
     need = reply.object.get("need").?;
     try std.testing.expectEqualStrings("find", need.object.get("op").?.string);
     try std.testing.expectEqualStrings("a", need.object.get("selector").?.string);
-    const done = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":null}}", .{10});
+    const done = try c.sendRef(10, "{{\"m\":\"prop-result\",\"group\":\"g\",\"ref\":{d},\"value\":null}}", .{10});
     const end = try runEnd(done);
     try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
     const items = end.object.get("result").?.array.items;
@@ -7212,7 +7228,7 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"hall\"]}},\"grants\":{{\"api\":{d}}},\"source\":\"on fetch\\n  ask api to fetch 9 and wait\\n  return it\\nend fetch\\n\"}}", .{ 6, grant }));
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{7}));
     _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8})).object.get("need").?;
-    _ = try okOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{8}));
+    _ = try okOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"started\":true}}", .{8}));
     // Later Pumps must not replace the pending Call's original Clock.
     _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00.5Z\"}}", .{80}));
     const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{9}))).object.get("save").?.object.get("$bytes").?.string;
@@ -7266,7 +7282,7 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     const start_need = starting.object.get("need") orelse return unexpected(starting);
     try std.testing.expectEqualStrings("op", start_need.object.get("m").?.string);
     try std.testing.expectEqualStrings(call, start_need.object.get("call").?.string);
-    const waiting = try okOf(try c.sendRef(32, "{{\"m\":\"op-result\",\"ref\":32,\"started\":true}}", .{}));
+    const waiting = try okOf(try c.sendRef(32, "{{\"m\":\"op-result\",\"group\":\"reissued\",\"ref\":32,\"started\":true}}", .{}));
     for (waiting.object.get("reports").?.array.items) |r| try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "run end"));
     const answer_again = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"reissued\",\"call\":\"{s}\",\"value\":42}}", .{ 33, reissued }));
     _ = answer_again;
@@ -7475,7 +7491,7 @@ test "a Host Command's `command` flag is declared, validated and called through 
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
     const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
     _ = pumped.object.get("need") orelse return unexpected(pumped);
-    const end = try runEnd(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":7}}", .{}));
+    const end = try runEnd(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"result\":7}}", .{}));
     try std.testing.expectEqual(@as(i64, 7), end.object.get("result").?.integer);
     // A Library resolves it against its declarations, which carry the flag.
     const frame = "{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"{s}\",\"version\":\"1\",\"source\":\"function f\\n  read\\n  return it\\nend f\\n\",\"declarations\":{{\"api\":{{\"read\":{{\"mode\":\"immediate\",\"command\":{s}}}}}}}}}";
@@ -7511,7 +7527,7 @@ test "Argument Labels are declared, validated and checked through frames (ADR 01
     // The op need is positional, as for `move "a", "b"`.
     const need = pumped.object.get("need") orelse return unexpected(pumped);
     try std.testing.expectEqual(@as(usize, 2), need.object.get("args").?.array.items.len);
-    const end = try runEnd(try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":7,\"result\":\"moved\"}}", .{}));
+    const end = try runEnd(try c.sendRef(7, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":7,\"result\":\"moved\"}}", .{}));
     try std.testing.expectEqualStrings("moved", end.object.get("result").?.string);
     // A Library is checked against its declarations' labels, and they must
     // be valid.
@@ -7582,7 +7598,7 @@ test "standard-capability: the Core answers clock, and console reaches the Host 
     try std.testing.expectEqualStrings("hi", need.object.get("args").?.array.items[0].string);
     const mode = need.object.get("mode").?.string;
     const answer = if (std.mem.eql(u8, mode, "fire-and-forget")) "\"done\":true" else "\"result\":null";
-    const done = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":{d},{s}}}", .{ 10, answer });
+    const done = try c.sendRef(10, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},{s}}}", .{ 10, answer });
     const end = try runEnd(done);
     try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("2026-10-10T12:00:00Z", end.object.get("result").?.object.get("$instant").?.string);
@@ -7610,18 +7626,18 @@ test "Segment lifecycle and scope abandonment reach the Host as effect and op ne
     try std.testing.expectEqualStrings("begin", need.object.get("phase").?.string);
     try std.testing.expectEqualStrings("r", need.object.get("grants").?.array.items[0].string);
     // An effect need takes only an effect-result.
-    try std.testing.expectEqualStrings("protocol error", try errKind(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6})));
-    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{6})));
+    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
     for ([_][]const u8{ "open", "write", "close" }) |op| {
         need = reply.object.get("need") orelse return unexpected(reply);
         try std.testing.expectEqualStrings("op", need.object.get("m").?.string);
         try std.testing.expectEqualStrings(op, need.object.get("operation").?.string);
         try std.testing.expectEqual(std.mem.eql(u8, op, "close"), need.object.get("automatic").?.bool);
-        reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6});
+        reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{6});
     }
     need = reply.object.get("need") orelse return unexpected(reply);
     try std.testing.expectEqualStrings("commit", need.object.get("phase").?.string);
-    const done = try okOf(try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6}));
+    const done = try okOf(try c.sendRef(6, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}", .{6}));
     // The Trace is the corpus case's, byte for byte.
     const expected = [_][]const u8{
         "effect s/r1.s1 grant=r phase=begin status=ok",
@@ -7648,7 +7664,7 @@ test "Segment lifecycle and scope abandonment reach the Host as effect and op ne
     try std.testing.expectEqualStrings("r", need.object.get("grant").?.string);
     try std.testing.expectEqualStrings("stop", need.object.get("reason").?.string);
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{9})));
-    const stopped = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+    const stopped = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":{d}}}", .{8}));
     var stop_seen = false;
     for (stopped.object.get("reports").?.array.items) |r| {
         if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stop_seen = true;
@@ -7672,8 +7688,8 @@ test "a reload's lifecycle crossings reach the Host as needs before its reply" {
     _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
     // The Run opens its scope and is preempted mid-Segment.
     var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\",\"fuelSlice\":40}}", .{6});
-    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
-    const sliced = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6}));
+    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
+    const sliced = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{6}));
     try std.testing.expectEqualStrings("sliced", sliced.object.get("state").?.string);
     // Reloading it abandons the scope and rolls the Segment back first.
     reply = try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"carry variables\",\"source\":\"script variable count = 0\\non go\\nreturn count\\nend go\"}}", .{7});
@@ -7681,11 +7697,11 @@ test "a reload's lifecycle crossings reach the Host as needs before its reply" {
     try std.testing.expectEqualStrings("close", need.object.get("operation").?.string);
     try std.testing.expect(need.object.get("automatic").?.bool);
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{8})));
-    reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{7});
+    reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{7});
     need = reply.object.get("need") orelse return unexpected(reply);
     try std.testing.expectEqualStrings("effect", need.object.get("m").?.string);
     try std.testing.expectEqualStrings("rollback", need.object.get("phase").?.string);
-    const reloaded = try okOf(try c.sendRef(7, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{7}));
+    const reloaded = try okOf(try c.sendRef(7, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}", .{7}));
     try std.testing.expect(reloaded.object.get("reports").? == .array);
     // The Trace is the corpus case's from the abandonment to the stop.
     const expected = [_][]const u8{
@@ -7719,13 +7735,13 @@ test "Library replacement finishes after the importer's release hook" {
     const reply = try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"reset variables\"}}", .{ 8, fresh });
     try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
     try std.testing.expectEqualStrings("reload", reply.object.get("need").?.object.get("reason").?.string);
-    const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+    const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":{d}}}", .{8}));
     try std.testing.expect(done.object.get("reports").? == .array);
     // The importer was reloaded against the new Library, not left stopped.
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     var pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
     try std.testing.expectEqualStrings("touch", pumped.object.get("need").?.object.get("operation").?.string);
-    pumped = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{10});
+    pumped = try c.sendRef(10, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{10});
     try std.testing.expectEqual(@as(i64, 2), (try runEnd(pumped)).object.get("result").?.integer);
 }
 
@@ -7745,14 +7761,14 @@ test "fatal Library replacement waits for release and returns effect state unkno
         _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{8}));
         var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\",\"fuelSlice\":40}}", .{9});
         try std.testing.expectEqualStrings("begin", reply.object.get("need").?.object.get("phase").?.string);
-        reply = try c.sendRef(9, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{9});
+        reply = try c.sendRef(9, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}", .{9});
         try std.testing.expectEqualStrings("write", reply.object.get("need").?.object.get("operation").?.string);
-        _ = try okOf(try c.sendRef(9, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{9}));
+        _ = try okOf(try c.sendRef(9, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}", .{9}));
         reply = try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\"}}", .{ 10, fresh });
         try std.testing.expectEqualStrings("rollback", reply.object.get("need").?.object.get("phase").?.string);
-        reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"{s}\"}}", .{ 10, status });
+        reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"{s}\"}}", .{ 10, status });
         try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
-        const failed = try c.sendRef(10, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{10});
+        const failed = try c.sendRef(10, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":{d}}}", .{10});
         try std.testing.expectEqualStrings("host error", try errKind(failed));
         try std.testing.expectEqualStrings("effect state unknown", failed.object.get("err").?.object.get("code").?.string);
         // The Group keeps its original Library; replacement did not succeed.
@@ -7780,13 +7796,13 @@ test "store reaches the Host as op and effect needs, its Trace the corpus case's
     _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"save\",\"args\":[\"ann\",9]}}}}", .{5}));
     var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-07T12:00:00Z\"}}", .{6});
     const answers = [_]struct { need: []const u8, answer: []const u8 }{
-        .{ .need = "get", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":7}}" },
-        .{ .need = "begin", .answer = "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}" },
-        .{ .need = "set", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}" },
-        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":1}}" },
-        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":{{\"$quantity\":[\"2.5\",\"km\"]}}}}" },
-        .{ .need = "swap", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":true}}" },
-        .{ .need = "commit", .answer = "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}" },
+        .{ .need = "get", .answer = "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":7}}" },
+        .{ .need = "begin", .answer = "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}" },
+        .{ .need = "set", .answer = "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":null}}" },
+        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":1}}" },
+        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":{{\"$quantity\":[\"2.5\",\"km\"]}}}}" },
+        .{ .need = "swap", .answer = "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"result\":true}}" },
+        .{ .need = "commit", .answer = "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":{d},\"status\":\"ok\"}}" },
     };
     inline for (answers) |step| {
         const need = reply.object.get("need") orelse return unexpected(reply);
@@ -7818,7 +7834,7 @@ test "store reaches the Host as op and effect needs, its Trace the corpus case's
     const release = reply.object.get("need") orelse return unexpected(reply);
     try std.testing.expectEqualStrings("release", release.object.get("m").?.string);
     try std.testing.expectEqualStrings("st", release.object.get("grant").?.string);
-    _ = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+    _ = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":{d}}}", .{8}));
 }
 
 test "hello opt-in publishes abandonment on release before a held final reply" {
@@ -7851,7 +7867,7 @@ test "hello opt-in publishes abandonment on release before a held final reply" {
         _ = requested;
         const started = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{6});
         const call = started.object.get("need").?.object.get("call").?.string;
-        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"started\":true}}", .{}));
         const stopped = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{7}));
         _ = stopped;
         const releasing = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{8});
@@ -7861,10 +7877,10 @@ test "hello opt-in publishes abandonment on release before a held final reply" {
             try std.testing.expectEqual(@as(usize, 1), ids.len);
             try std.testing.expectEqualStrings(call, ids[0].string);
         } else try std.testing.expect(releasing.object.get("abandoned") == null);
-        const wrong = try c.sendRef(9, "{{\"m\":\"release-result\",\"ref\":9}}", .{});
+        const wrong = try c.sendRef(9, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":9}}", .{});
         try std.testing.expectEqualStrings("protocol error", try errKind(wrong));
         try std.testing.expect(wrong.object.get("abandoned") == null);
-        const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{}));
+        const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":8}}", .{}));
         const final_ids = done.object.get("abandoned").?.array.items;
         try std.testing.expectEqual(@as(usize, if (early) 0 else 1), final_ids.len);
         if (!early) try std.testing.expectEqualStrings(call, final_ids[0].string);
@@ -7889,7 +7905,7 @@ test "a started call the Core abandons is listed once in abandoned; an answered 
     for (&calls) |*id| {
         const need = reply.object.get("need") orelse return unexpected(reply);
         id.* = need.object.get("call").?.string;
-        reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{7});
+        reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"started\":true}}", .{7});
     }
     try std.testing.expectEqual(@as(usize, 0), (try okOf(reply)).object.get("abandoned").?.array.items.len);
     // The second is answered; the first outlives its maxPending.
@@ -7911,7 +7927,7 @@ fn startMetered(c: *Client, immediate: bool) ![]const u8 {
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{5}));
     const reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
     const call = reply.object.get("need").?.object.get("call").?.string;
-    if (!immediate) _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{6}));
+    if (!immediate) _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"started\":true}}", .{6}));
     return call;
 }
 fn chargeReport(reply: Json) !Json {
@@ -7962,7 +7978,7 @@ test "op-result limit overrides a supplied result and retains its charged prefix
         var c = Client.init(s);
         defer c.deinit();
         _ = try startMetered(&c, true);
-        const reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"limit\":true,\"charged\":{d},\"result\":42}}", .{ 6, prefix });
+        const reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":{d},\"limit\":true,\"charged\":{d},\"result\":42}}", .{ 6, prefix });
         const end = try runEnd(reply);
         try std.testing.expectEqualStrings("limit fault", end.object.get("outcome").?.string);
         var refused_seen = false;
@@ -8023,9 +8039,9 @@ fn crossingParity(crossing: crossing_test.Crossing, control: crossing_test.Contr
             needs += 1;
             try t.expect(needs <= 2);
             warm = if (std.mem.eql(u8, need.object.get("m").?.string, "effect"))
-                try c.sendRef(16, "{{\"m\":\"effect-result\",\"ref\":16,\"status\":\"ok\"}}", .{})
+                try c.sendRef(16, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":16,\"status\":\"ok\"}}", .{})
             else
-                try c.sendRef(16, "{{\"m\":\"op-result\",\"ref\":16,\"result\":7}}", .{});
+                try c.sendRef(16, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":16,\"result\":7}}", .{});
         }
         _ = try okOf(warm);
     }
@@ -8077,7 +8093,7 @@ fn crossingParity(crossing: crossing_test.Crossing, control: crossing_test.Contr
             .refused => unreachable,
         };
         try t.expectEqualStrings(if (is_prop) "prop" else "op", need.object.get("m").?.string);
-        reply = try c.sendRef(8, "{{\"m\":\"{s}-result\",\"ref\":8,{s}}}", .{ if (is_prop) @as([]const u8, "prop") else "op", outcome });
+        reply = try c.sendRef(8, "{{\"m\":\"{s}-result\",\"ref\":8,\"group\":\"g\",{s}}}", .{ if (is_prop) @as([]const u8, "prop") else "op", outcome });
     }
     var releases: usize = 0;
     while (reply.object.get("need")) |need| {
@@ -8085,10 +8101,10 @@ fn crossingParity(crossing: crossing_test.Crossing, control: crossing_test.Contr
         try t.expect(releases <= 2);
         if (std.mem.eql(u8, need.object.get("m").?.string, "effect")) {
             try t.expect(other_run);
-            reply = try c.sendRef(8, "{{\"m\":\"effect-result\",\"ref\":8,\"status\":\"ok\"}}", .{});
+            reply = try c.sendRef(8, "{{\"m\":\"effect-result\",\"group\":\"g\",\"ref\":8,\"status\":\"ok\"}}", .{});
         } else {
             try t.expectEqualStrings("release", need.object.get("m").?.string);
-            reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+            reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":8}}", .{});
         }
     }
     _ = try okOf(reply);
@@ -8162,13 +8178,13 @@ fn joinLimitTrace(observe: bool, limit: usize, members: usize) ![]u8 {
         if (std.mem.eql(u8, need.object.get("m").?.string, "trace")) {
             observations += 1;
             try t.expect(observe and observations <= calls);
-            reply = try c.sendRef(6, "{{\"m\":\"trace-result\",\"ref\":6}}", .{});
+            reply = try c.sendRef(6, "{{\"m\":\"trace-result\",\"group\":\"g\",\"ref\":6}}", .{});
         } else {
             try t.expectEqualStrings("op", need.object.get("m").?.string);
             calls += 1;
             try t.expect(calls <= @min(limit, members));
             try t.expectEqual(@as(i64, @intCast(calls)), need.object.get("args").?.array.items[0].integer);
-            reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{});
+            reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"started\":true}}", .{});
         }
     }
     const done = try okOf(reply);
@@ -8211,15 +8227,15 @@ test "opt-in Operation Trace observation admits controls before result conversio
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\"]}}", .{0}));
     const need = try pausedFixture(&c, "immediate", "script variable n = 0\non go\n put 8 into n\n ask api to read\n return n\nend go", false);
     _ = need;
-    const observed = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":\"wrong Shape\"}}", .{});
+    const observed = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"result\":\"wrong Shape\"}}", .{});
     try std.testing.expectEqualStrings("trace", observed.object.get("need").?.object.get("m").?.string);
     const lines = observed.object.get("trace").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), lines.len);
     try std.testing.expect(std.mem.startsWith(u8, lines[0].string, "call s/r1.c1"));
-    const wrong = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":1}}", .{});
+    const wrong = try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"result\":1}}", .{});
     try std.testing.expectEqualStrings("protocol error", wrong.object.get("err").?.object.get("kind").?.string);
     _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"Trace sink\"}}", .{7}));
-    const done = try c.sendRef(6, "{{\"m\":\"trace-result\",\"ref\":6}}", .{});
+    const done = try c.sendRef(6, "{{\"m\":\"trace-result\",\"group\":\"g\",\"ref\":6}}", .{});
     for ((try okOf(done)).object.get("reports").?.array.items) |r| {
         try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "call failed"));
     }
@@ -8253,7 +8269,7 @@ test "an enqueued answer keeps cancellation observable until its Run consumes it
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"abandoned-before-needs-v1\"]}}", .{0}));
     const need = try pausedFixture(&c, "suspending", "on go\n ask api to read and wait\nend go", false);
     const id = need.object.get("call").?.string;
-    _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+    _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":6,\"started\":true}}", .{}));
     _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":1}}", .{ 7, id }));
     _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{8}));
     const done = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9}));
@@ -8518,7 +8534,7 @@ test "without group-exchanges-v1 one paused Pump holds every Group and drop-grou
     }
     _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"a\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{40})).object.get("need").?;
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"b\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{41})));
-    _ = try runEnd(try c.sendRef(40, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":2}}", .{40}));
+    _ = try runEnd(try c.sendRef(40, "{{\"m\":\"op-result\",\"group\":\"a\",\"ref\":{d},\"result\":2}}", .{40}));
 }
 
 // ------------------------------------- binary Request/Pump exchange tests
@@ -8676,14 +8692,21 @@ const now_2026: i64 = 1791633600;
 
 /// A binary callback result, with an integer `value` if any.
 fn binResult(a: Allocator, c: rp.Callback, ref: i64, outcome: ?[]const u8, value: ?i64) ![]u8 {
+    return binResultGroup(a, c, ref, "g", outcome, value);
+}
+
+fn binResultGroup(a: Allocator, c: rp.Callback, ref: i64, group: ?[]const u8, outcome: ?[]const u8, value: ?i64) ![]u8 {
     var w = rp.Writer.init(a);
+    defer w.deinit();
     try w.header();
     try w.byte(@backingInt(c));
     try w.begin(rp.fields(c), true);
     try w.key("ref");
     try w.int(ref);
-    try w.key("group");
-    try w.ptext("g");
+    if (group) |g| {
+        try w.key("group");
+        try w.ptext(g);
+    }
     if (outcome) |o| {
         try w.key(if (c == .effect_result) "status" else "outcome");
         try w.ptext(o);
@@ -8694,6 +8717,107 @@ fn binResult(a: Allocator, c: rp.Callback, ref: i64, outcome: ?[]const u8, value
     }
     try w.end();
     return w.finish();
+}
+
+/// A refused result must leave the need available for its corrected frame.
+fn resultGroupRefusals(c: *Client, ref: i64, kind: exchange.Result, binary: bool) !void {
+    const a = c.arena.allocator();
+    for ([_]?[]const u8{ "other", "unknown", null }) |group| {
+        const frame = if (binary) blk: {
+            const callback: rp.Callback = switch (kind) {
+                .op => .op_result,
+                .prop => .prop_result,
+                .effect => .effect_result,
+                .release => .release_result,
+                .trace => unreachable,
+            };
+            break :blk try binResultGroup(a, callback, ref, group, if (kind == .release) null else if (kind == .effect) "ok" else if (kind == .prop) "value" else "result", if (kind == .op or kind == .prop) 42 else null);
+        } else blk: {
+            const group_field = if (group) |g| try std.fmt.allocPrint(a, ",\"group\":\"{s}\"", .{g}) else "";
+            break :blk try std.fmt.allocPrint(a, "{{\"m\":\"{s}-result\",\"ref\":{d}{s},\"result\":42,\"value\":42,\"status\":\"ok\"}}", .{ @tagName(kind), ref, group_field });
+        };
+        try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(c, frame)));
+    }
+    if (!binary) for ([_][]const u8{ "null", "7", "{}" }) |group| {
+        const frame = try std.fmt.allocPrint(a, "{{\"m\":\"{s}-result\",\"ref\":{d},\"group\":{s},\"result\":42,\"value\":42,\"status\":\"ok\"}}", .{ @tagName(kind), ref, group });
+        try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(c, frame)));
+    };
+}
+
+test "callback result Groups are checked with and without group-exchanges-v1 (#1492)" {
+    for ([_]bool{ false, true }) |per_group| {
+        for ([_]bool{ false, true }) |binary| {
+            const s = Session.init(std.testing.allocator).?;
+            defer s.deinit();
+            var c = Client.init(s);
+            defer c.deinit();
+            const a = c.arena.allocator();
+            const features = try std.fmt.allocPrint(a, "\"callbacks-fields-v1\",\"crossing-trace-v1\"{s}", .{if (per_group) ",\"group-exchanges-v1\"" else ""});
+            try exchangeFixture(&c, features);
+            _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"other\"}}", .{7}));
+            _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"t\",\"reason\":\"done\"}}", .{8}));
+            var reply = try binReply(&c, "{\"m\":\"pump\",\"ref\":9,\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}");
+            // A release can pause the worker before its first callback.
+            try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+            try resultGroupRefusals(&c, 9, .release, binary);
+            reply = try binReply(&c, try binResult(a, .release_result, 9, null, null));
+            for (0..2) |_| {
+                try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
+                try resultGroupRefusals(&c, 9, .op, binary);
+                reply = try binReply(&c, try binResult(a, .op_result, 9, "result", 7));
+                try std.testing.expectEqualStrings("trace", reply.object.get("need").?.object.get("m").?.string);
+                try resultGroupRefusals(&c, 9, .trace, false);
+                reply = try binReply(&c, "{\"m\":\"trace-result\",\"ref\":9,\"group\":\"g\"}");
+            }
+            try std.testing.expectEqual(@as(i64, 7), (try runEnd(reply)).object.get("result").?.integer);
+            // A release can also hold the final reply after the worker ends.
+            _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"u\",\"reason\":\"done\"}}", .{10}));
+            reply = try binReply(&c, "{\"m\":\"pump\",\"ref\":11,\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}");
+            try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+            try resultGroupRefusals(&c, 11, .release, binary);
+            _ = try okOf(try binReply(&c, try binResult(a, .release_result, 11, null, null)));
+            _ = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{12}));
+        }
+    }
+}
+
+test "property and effect result Groups are checked in both layouts (#1492)" {
+    for ([_]bool{ false, true }) |per_group| {
+        for ([_]bool{ false, true }) |binary| {
+            const s = Session.init(std.testing.allocator).?;
+            defer s.deinit();
+            var c = Client.init(s);
+            defer c.deinit();
+            const a = c.arena.allocator();
+            _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"callbacks-fields-v1\"{s}]}}", .{ 0, if (per_group) ",\"group-exchanges-v1\"" else "" }));
+            _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"segmentLifecycle\":true,\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\",\"segmentBound\":true}}]}}", .{1}));
+            const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+            _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"box\",\"props\":[{{\"name\":\"value\",\"shape\":\"number\"}}]}}", .{3}));
+            inline for (.{ "g", "other" }) |group| {
+                _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"" ++ group ++ "\"}}", .{4}));
+            }
+            _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"box\",\"id\":\"one\"}}", .{5}));
+            _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go o\\n ask api to read\\n return the value of o\\nend go\"}}", .{ 6, grant }));
+            _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[{{\"$object\":[\"box\",\"one\"]}}]}}}}", .{7}));
+            var reply = try binReply(&c, "{\"m\":\"pump\",\"ref\":8,\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}");
+            for ([_]exchange.Result{ .effect, .op, .prop, .effect }) |kind| {
+                try std.testing.expectEqualStrings(@tagName(kind), reply.object.get("need").?.object.get("m").?.string);
+                try resultGroupRefusals(&c, 8, kind, binary);
+                const callback: rp.Callback = switch (kind) {
+                    .effect => .effect_result,
+                    .op => .op_result,
+                    .prop => .prop_result,
+                    else => unreachable,
+                };
+                const frame = if (binary)
+                    try binResult(a, callback, 8, if (kind == .effect) "ok" else if (kind == .prop) "value" else "result", if (kind == .effect) null else 7)
+                else
+                    try std.fmt.allocPrint(a, "{{\"m\":\"{s}-result\",\"ref\":8,\"group\":\"g\",\"result\":7,\"value\":7,\"status\":\"ok\"}}", .{@tagName(kind)});
+                reply = try binReply(&c, frame);
+            }
+            try std.testing.expectEqual(@as(i64, 7), (try runEnd(reply)).object.get("result").?.integer);
+        }
+    }
 }
 
 test "callbacks-fields-v1: op and release needs and their results cross in binary (#1311)" {
@@ -8791,7 +8915,7 @@ test "a paused JSON exchange's refusals, and Pumps paused for Grant releases (#1
     try std.testing.expectEqualStrings("a paused input must address the worker's Group", try refusalOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{9})));
     try std.testing.expectEqualStrings("a worker is waiting for its result", try refusalOf(try c.send("{{\"m\":\"release-result\",\"ref\":{d},\"group\":\"g\"}}", .{9})));
     _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"t\"}},\"message\":{{\"name\":\"idle\"}}}}", .{9}));
-    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":8}}", .{});
     try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
     // Awaiting the op's result: a result under another ref is an input.
     try std.testing.expectEqualStrings("a worker is waiting for its result", try refusalOf(try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"g\",\"result\":1}}", .{9})));
@@ -8804,7 +8928,7 @@ test "a paused JSON exchange's refusals, and Pumps paused for Grant releases (#1
     // A Stop admitted while paused runs when the Pump goes on, after the
     // crossing's Trace, and its release pauses the Pump again.
     _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"u\",\"reason\":\"done\"}}", .{10}));
-    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{});
+    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":8,\"result\":1}}", .{});
     // Awaiting the crossing's Trace.
     try std.testing.expectEqualStrings("trace", reply.object.get("need").?.object.get("m").?.string);
     try std.testing.expectEqualStrings("a crossing is waiting for trace-result", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{})));
@@ -8813,9 +8937,9 @@ test "a paused JSON exchange's refusals, and Pumps paused for Grant releases (#1
     try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
     try std.testing.expectEqualStrings("u", reply.object.get("need").?.object.get("script").?.string);
     try std.testing.expectEqualStrings("the worker ref is reserved for its result", try refusalOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":1}}", .{})));
-    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+    reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"group\":\"g\",\"ref\":8}}", .{});
     try std.testing.expectEqualStrings("op", reply.object.get("need").?.object.get("m").?.string);
-    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":8,\"result\":2}}", .{});
+    reply = try c.sendRef(8, "{{\"m\":\"op-result\",\"group\":\"g\",\"ref\":8,\"result\":2}}", .{});
     while (reply.object.get("need")) |n| {
         try std.testing.expectEqualStrings("trace", n.object.get("m").?.string);
         reply = try c.sendRef(8, "{{\"m\":\"trace-result\",\"ref\":8,\"group\":\"g\"}}", .{});

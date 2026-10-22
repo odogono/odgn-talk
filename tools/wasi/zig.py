@@ -375,7 +375,7 @@ def message_layer(engine, module):
     h.ok("request", group="g", to={"script": "s"}, message={"name": "double", "args": [20]})
     need = h.send("pump", group="g", now=now)["need"]
     assert need["m"] == "op" and need["operation"] == "double" and need["args"] == [20], need
-    done = h.send("op-result", is_result=True, result=40, charged=3)["ok"]
+    done = h.send("op-result", group="g", is_result=True, result=40, charged=3)["ok"]
     ends = [r for r in done["reports"] if r["kind"] == "run end"]
     assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == 41, done
     h.ok(
@@ -418,7 +418,7 @@ def metered_operations(engine, module):
     h.ok("request", group="g", to={"script": "s"}, message={"name": "go"})
     need = h.send("pump", group="g", now=now)["need"]
     call = need["call"]
-    assert h.send("op-result", is_result=True, started=True).get("ok") is not None
+    assert h.send("op-result", group="g", is_result=True, started=True).get("ok") is not None
     assert h.send("save", group="g")["err"]["code"] == "effects pending"
     for fuel in (-1, 1.5, 9007199254740992):
         assert h.send("request-charge", group="g", call=call, fuel=fuel)["err"]["code"] == "invalid value"

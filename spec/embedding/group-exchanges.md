@@ -34,7 +34,11 @@ With the feature, each Group has its own exchange:
   waits for its `resolve-result`, every other frame is refused as without the
   feature, apart from the registrations `restore-bindings-v1` allows.
 
-A result names its Group, as every Group message does. Inline frames from the
+A result names its Group, as every Group message does, with or without this
+feature. A missing, unknown or different Group is a protocol error that leaves
+the paused exchange intact; only a result naming its owning Group and matching
+its ref and kind can resume it. This includes Trace and release acknowledgements.
+Inline frames from the
 [inline transport](inline-inputs.md) still belong to the exporting Group.
 Interim needs, Trace records and `abandoned` notices go to the exchange of the
 Group that made them.
