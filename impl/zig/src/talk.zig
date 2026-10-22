@@ -1415,22 +1415,35 @@ export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions
     return pumpOwned(g, seconds, micros, o, out);
 }
 
+fn pumpState(g: *Group) GroupState {
+    return if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle;
+}
+
 fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
     const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(clock) catch return .invalid_value;
     const options = pumpOptions(o);
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
+    g.group.answered_starting.store(false, .release);
     g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
     // A C Host answers inside its calls, so a crossing pause here is only
     // `defer_crossings`' (a testing aid): take the Pump up again at once.
     while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
+    // An answer given during its Start waits for the next Pump, so run it
+    // now: a Host waiting on events would otherwise never take it (#1509).
+    var fuel = g.group.pump_fuel;
+    while (pumpState(g) == .idle and g.group.answered_starting.swap(false, .acq_rel)) {
+        g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
+        while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
+        fuel += g.group.pump_fuel;
+    }
     const reports = takeReports(g);
     const r = out orelse {
         talk_reports_release(reports);
         return .ok;
     };
-    r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel), .reports = reports };
+    r.* = .{ .state = pumpState(g), .fuel_used = @intCast(fuel), .reports = reports };
     if (g.group.nextInstant()) |deadline| {
         r.has_next_deadline = true;
         r.next_deadline_seconds = deadline.seconds;
@@ -2543,7 +2556,13 @@ fn bridged(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome
     var value: ?*Value = null;
     var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
     switch (b.call(b.context, call, args.ptr, args.len, &value, &failure)) {
-        .answered => return if (value) |v| .{ .value = v } else .broken,
+        .answered => {
+            const v = value orelse return .broken;
+            // A suspending Start may answer with its result: it is the
+            // call's answer, as though given through the call (#1509).
+            if (call.group == null) return .{ .value = v };
+            return if (settle(call, .{ .answer = .{ .value = v, .fuel = 0 } }) == .ok) .started else .broken;
+        },
         .started => return .started,
         .limited => return .limited,
         .broken => return .broken,
@@ -3302,6 +3321,7 @@ fn sqliteCapability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per
 fn settle(c: *Call, with: machine.Resume) HostErrorCode {
     const g: *machine.Group = @ptrCast(@alignCast(c.group orelse return .unknown_call));
     g.settle(c.id, with) catch return .out_of_memory;
+    if (c.starting) g.answered_starting.store(true, .release);
     return .ok;
 }
 

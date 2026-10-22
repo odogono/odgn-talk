@@ -1598,6 +1598,9 @@ pub const Group = struct {
     host_poll: ?*const fn (?*anyopaque) void = null,
     host_poll_context: ?*anyopaque = null,
     host_poll_ticks: u12 = 0,
+    /// A suspending call was answered while its Start ran. The answer
+    /// waits for the next Pump, which a C Host's Pump runs at once (#1509).
+    answered_starting: std.atomic.Value(bool) = .init(false),
     /// Whether `execute` runs simple instructions through `fastSteps`.
     /// Tests turn it off to compare with the general loop.
     fast_steps: bool = true,
