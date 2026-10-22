@@ -402,6 +402,14 @@ _Avoid_: Project, Script Snapshot, saved progress
 To run a Play Session in place, on the Page being edited, with the authoring windows still open. Returning to Edit discards its Play State.
 _Avoid_: preview, test mode, Play mode
 
+**Pause**:
+To freeze a browsing Play Session: its time stops and reader input is ignored, but it can still be inspected and changed from the Message Box.
+_Avoid_: break, suspend, halt
+
+**Step**:
+To advance a paused Play Session by one frame, then pause it again.
+_Avoid_: tick, Pump, Segment
+
 **Message Box**:
 A window in Folio where an author types one line of NorthTalk and runs it at once. While browsing it acts on the Play Session; in Edit it changes the Project as one undoable edit.
 _Avoid_: console, REPL, Message (for the window)
