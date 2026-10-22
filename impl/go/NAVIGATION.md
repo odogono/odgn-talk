@@ -124,6 +124,13 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
 - First check: `go -C impl/go test ./session ./driver`
 
+## HTTP router
+
+- Implementation: [`httphost`](httphost/host.go), on `net/http`
+- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges)
+- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](httphost/kit_test.go)
+- First check: `go -C impl/go test -race ./httphost`
+
 ## Notification router
 
 - Implementation: [router](notify/router.go), [`ScriptNames`](group.go), [Grant accessors](capability.go)
