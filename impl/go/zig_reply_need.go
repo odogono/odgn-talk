@@ -65,6 +65,7 @@ func (b zigReplyReader) zigReadNeed(kind string, need zigReply) zigNeed {
 	f := zigReadCallNeed(need)
 	n.script, n.grant, n.reason, n.operation = zigText(f.script), zigText(f.grant), zigText(f.reason), zigText(f.operation)
 	n.capability, n.call, n.scope, n.run, n.segment = zigText(f.capability), zigText(f.call), zigText(f.scope), zigText(f.run), zigText(f.segment)
+	n.delivery = zigText(f.delivery)
 	n.now, n.nowErr = b.zigNow(f.now)
 	if kind == "effect" {
 		n.phase = zigText(need.get("phase"))
@@ -126,6 +127,7 @@ func (b zigReplyReader) zbReadNeed(p *zbNeed) zigNeed {
 	}
 	n.script, n.grant, n.reason, n.operation = text("script"), text("grant"), text("reason"), text("operation")
 	n.capability, n.call, n.scope, n.run, n.segment, n.phase = text("capability"), text("call"), text("scope"), text("run"), text("segment"), text("phase")
+	n.delivery = text("delivery")
 	if t, ok := zbInstant(v.get("now")); ok {
 		n.now = t
 	} else {
@@ -163,16 +165,16 @@ func (b zigReplyReader) zbDecodeOptional(span []byte) (Value, error) {
 // Operation and release needs share this envelope. Read its spans once rather
 // than walking the whole JSON object again for each Call field.
 type zigCallNeed struct {
-	script, grant, now, reason, operation, capability, args zigReply
-	call, automatic, scope, run, segment, fuelLeft          zigReply
+	script, grant, now, reason, operation, capability, args  zigReply
+	call, automatic, scope, run, segment, fuelLeft, delivery zigReply
 }
 
-var zigCallNeedKeys = []string{"script", "grant", "now", "reason", "operation", "capability", "args", "call", "automatic", "scope", "run", "segment", "fuelLeft"}
+var zigCallNeedKeys = []string{"script", "grant", "now", "reason", "operation", "capability", "args", "call", "automatic", "scope", "run", "segment", "fuelLeft", "delivery"}
 
 func zigReadCallNeed(need zigReply) zigCallNeed {
-	var f [13]zigReply
+	var f [14]zigReply
 	need.lookup(zigCallNeedKeys, f[:])
-	return zigCallNeed{script: f[0], grant: f[1], now: f[2], reason: f[3], operation: f[4], capability: f[5], args: f[6], call: f[7], automatic: f[8], scope: f[9], run: f[10], segment: f[11], fuelLeft: f[12]}
+	return zigCallNeed{script: f[0], grant: f[1], now: f[2], reason: f[3], operation: f[4], capability: f[5], args: f[6], call: f[7], automatic: f[8], scope: f[9], run: f[10], segment: f[11], fuelLeft: f[12], delivery: f[13]}
 }
 
 var zigPropertyNeedKeys = []string{"object", "prop", "value", "op"}

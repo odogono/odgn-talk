@@ -1782,6 +1782,12 @@ pub const Group = struct {
         return out;
     }
 
+    /// The id of the Host Delivery that started a Run, or 0 when a Script's
+    /// message, a Function Value call or the Core started it (ADR 0125).
+    pub fn hostDelivery(d: Delivery) u64 {
+        return if (d.from == null) d.id else 0;
+    }
+
     /// `run started`, as a new Run dispatches, which also places it in the
     /// order of the Group's Runs.
     fn reportRunStarted(g: *Group, s: *const Script, run: *Run) void {
@@ -1794,7 +1800,7 @@ pub const Group = struct {
             .ancestry = g.ancestry(d) catch return,
             .script = r.text(s.name) catch return,
             .run = r.text(run.id) catch return,
-            .delivery = if (d.from == null and d.id > 0) r.id("d", d.id) catch return else "",
+            .delivery = if (hostDelivery(d) > 0) r.id("d", d.id) catch return else "",
             .selector = if (d.function == null) r.text(d.message) catch return else "",
             .function = if (d.function) |f| r.value(f) catch return else null,
             .args = r.valueList(d.args) catch return,
@@ -5855,6 +5861,7 @@ pub const Group = struct {
             const id = id_text.alloc(a, run.id, ".c", run.calls) catch "";
             const segment = g.segmentId(run);
             var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true, .deferrable = deferrable };
+            call.setDelivery(hostDelivery(run.delivery));
             // An allocation refusal already makes the C worker refuse;
             // otherwise keep automatic ids as issued/ineligible too.
             g.waits.registerCall(g.gpa, &g.input_lock, id, false) catch {};
@@ -10228,6 +10235,7 @@ pub const Group = struct {
         const id = try id_text.alloc(a, run.id, ".c", run.calls);
         const left: ?u64 = fuelLeft(run) -| (if (decl.metering != null) before.fuel + run.clause_fuel else decl.cost.fuel);
         var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .owner = g, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "", .request_eligible = decl.mode == .suspending and decl.metering == .read_only, .at_unit = unitName(run, frame), .at_pc = frame.pc - 1, .at_line = ins.position.line, .at_column = ins.position.column };
+        local.setDelivery(hostDelivery(run.delivery));
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
         const suspending = decl.mode == .suspending;

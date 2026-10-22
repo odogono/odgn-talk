@@ -2998,6 +2998,12 @@ export fn talk_call_scope_name(c: *const Call, s: *[*]const u8, len: *usize) voi
     s.* = c.scope.ptr;
     len.* = c.scope.len;
 }
+/// The Host Delivery that started the calling Run, or empty (ADR 0125).
+export fn talk_call_delivery(c: *const Call, s: *[*]const u8, len: *usize) void {
+    const d = c.delivery();
+    s.* = d.ptr;
+    len.* = d.len;
+}
 /// The Group that made the call.
 pub export fn talk_call_group(c: *const Call) ?*Group {
     const g: *machine.Group = @ptrCast(@alignCast(c.owner orelse c.group orelse return null));

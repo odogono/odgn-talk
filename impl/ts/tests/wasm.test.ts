@@ -250,6 +250,33 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     };
   });
 
+  // ADR 0125: a call names the Host Delivery that started its Run, and a
+  // Run a Script's send started has none.
+  both('A call names the Host Delivery that started its Run', (core, nt) => {
+    const seen: string[] = [];
+    const api = core.defineCapability('api', {
+      see: {
+        mode: 'immediate',
+        cost: { fuel: 1 },
+        do: c => {
+          seen.push(`${c.runId} ${c.delivery ?? '-'}`);
+          return nt.nothing;
+        },
+      },
+    });
+    const g = core.newGroup({ name: 'g' });
+    const s = g.load({
+      name: 's',
+      source:
+        'on go\n  ask api to see\n  send again to me\nend go\non again\n  ask api to see\nend again',
+      grants: { api: api.grant('all', undefined) },
+    });
+    const id = s.deliver({ name: 'go' });
+    g.pump(second);
+    expect(seen).toEqual([`s/r1 ${id}`, 's/r2 -']);
+    return seen;
+  });
+
   both(
     'Host Objects: properties, Message Paths and wrong group',
     (core, nt) => {

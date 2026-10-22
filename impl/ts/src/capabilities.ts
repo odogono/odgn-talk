@@ -1049,6 +1049,8 @@ export type Call<B, R = Value> = {
   readonly binding: B;
   /** Draws more Fuel, before the work. Throws LimitReached. */
   charge(fuel: number): void;
+  /** The Host Delivery that started the calling Run; absent when none did (ADR 0125). */
+  readonly delivery?: string;
   fail(e: HostScriptError): void;
   readonly grantName: string;
   readonly group: Group;

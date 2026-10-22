@@ -364,6 +364,7 @@ export interface Call<B, R = Value> {
   readonly segmentId: string;
   readonly scopeName?: string;
   readonly automatic: boolean; // true only for Core-triggered abandonment
+  readonly delivery?: string;  // the Host Delivery that started the Run; absent when none did
   readonly binding: B;
   readonly now: bigint;        // the last observed Clock reading
   readonly signal: AbortSignal; // aborted when the call is abandoned, including by a timeout

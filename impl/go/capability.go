@@ -374,18 +374,23 @@ type Call struct {
 	charge           func(int64) bool // valid only during this Host crossing
 	fuelLeft         func() (int64, bool)
 	scopeName        string
+	delivery         string
 	automatic        bool
 	invalidAutomatic bool
 }
 
-func (c *Call) ID() CallID               { return c.id }
-func (c *Call) ScriptName() string       { return c.scriptName }
-func (c *Call) Group() *Group            { return c.group }
-func (c *Call) RunID() RunID             { return c.runID }
-func (c *Call) GrantName() string        { return c.grantName }
-func (c *Call) SegmentID() string        { return c.segmentID }
-func (c *Call) ScopeName() string        { return c.scopeName }
-func (c *Call) Automatic() bool          { return c.automatic }
+func (c *Call) ID() CallID         { return c.id }
+func (c *Call) ScriptName() string { return c.scriptName }
+func (c *Call) Group() *Group      { return c.group }
+func (c *Call) RunID() RunID       { return c.runID }
+func (c *Call) GrantName() string  { return c.grantName }
+func (c *Call) SegmentID() string  { return c.segmentID }
+func (c *Call) ScopeName() string  { return c.scopeName }
+func (c *Call) Automatic() bool    { return c.automatic }
+
+// Delivery is the id of the Host Delivery that started the Run; empty when
+// none did (ADR 0125).
+func (c *Call) Delivery() string         { return c.delivery }
 func (c *Call) Binding() any             { return c.binding }
 func (c *Call) Now() time.Time           { return c.now }
 func (c *Call) Context() context.Context { return c.context }

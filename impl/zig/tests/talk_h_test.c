@@ -795,6 +795,48 @@ static int revoke_test(void) {
     return bad;
 }
 
+/* What each call to `see` saw as its Delivery, as "<run> [<delivery>]" lines. */
+static char delivery_seen[256];
+static talk_call_end see_delivery(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)args; (void)len; (void)error;
+    const char *run = NULL, *delivery = NULL;
+    size_t run_len = 0, delivery_len = 0;
+    talk_call_run_id(call, &run, &run_len);
+    talk_call_delivery(call, &delivery, &delivery_len);
+    size_t at = strlen(delivery_seen);
+    snprintf(delivery_seen + at, sizeof delivery_seen - at, "%.*s [%.*s]\n", (int)run_len, run, (int)delivery_len, delivery);
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+/* A call names the Host Delivery that started its Run, and a Run a Script's
+ * send started has none (ADR 0125). */
+static int call_delivery_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    delivery_seen[0] = 0;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_operation ops[] = {{"see", 3, NULL, 0, NULL, {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, see_delivery, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false, NULL, NULL, 0}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "api", 3, ops, 1, NULL, 0, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"api", 3, grant}};
+    const char *source = "on go\n  ask api to see\n  send again to me\nend go\non again\n  ask api to see\nend again\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= strcmp(delivery_seen, "s/r1 [d1]\ns/r2 []\n") != 0;
+    if (bad) fprintf(stderr, "%s", delivery_seen);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A lifecycle Operation's Do: what each call saw, as "<scope> <run>
  * <segment> <automatic>" lines. */
 static char lifecycle_seen[512];
@@ -3179,6 +3221,7 @@ int main(void) {
     expect(broadcast_selection_test() == 0, "Broadcast excludes cancelled waits, retains Handlers, and refuses loose limits without consuming ids");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
+    expect(call_delivery_test() == 0, "a call names the Host Delivery that started its Run, and a sent message's Run has none");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");

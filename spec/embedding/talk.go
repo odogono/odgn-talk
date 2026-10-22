@@ -430,6 +430,7 @@ func (c *Call) GrantName() string
 func (c *Call) SegmentID() string
 func (c *Call) ScopeName() string        // empty for an Operation without scope metadata
 func (c *Call) Automatic() bool          // true only for Core-triggered abandonment
+func (c *Call) Delivery() string         // empty when no Host Delivery started the Run
 func (c *Call) Binding() any             // the Grant's binding
 func (c *Call) Now() time.Time           // the last observed Clock reading; never read the Host's own time
 func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop, a timeout)

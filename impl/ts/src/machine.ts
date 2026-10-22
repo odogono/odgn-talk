@@ -800,6 +800,8 @@ export type RunHost = {
   callValue(fn: Value, args: Value[], reply: string): string;
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
+  /** The id of the Host Delivery that started the Run, if one did (ADR 0125). */
+  readonly delivery?: string;
   disableGrant(name: string): void;
   /**
    * The next `random(n)` draw from the Group's generator; `commit` advances
@@ -1158,6 +1160,7 @@ export class Run {
         segmentId: this.segmentId,
         scopeName: scope.name,
         automatic: true,
+        ...(this.host!.delivery ? { delivery: this.host!.delivery } : {}),
         binding: scope.grant.binding,
         scriptName: this.script.name,
         now: this.host!.now,
@@ -1359,6 +1362,7 @@ export class Run {
       grantName,
       segmentId: this.segmentId,
       automatic: false,
+      ...(this.host!.delivery ? { delivery: this.host!.delivery } : {}),
       binding: grant.binding,
       signal: abort.signal,
       get now() {
@@ -4166,6 +4170,7 @@ export class Run {
       segmentId: this.segmentId,
       scopeName,
       automatic: false,
+      ...(host.delivery ? { delivery: host.delivery } : {}),
       binding: grant.binding,
       now: host.now,
       signal: abort.signal,

@@ -763,6 +763,20 @@ pub const Call = struct {
     settlement_consumed: bool = false,
     /// Core-only diagnostic state; never exported to Hosts or saved.
     abandon_reason: ?@import("waits.zig").AbandonReason = null,
+    /// The id of the Host Delivery that started the Run, `d<N>`, held in
+    /// the Call so that a copy keeps it; never traced (ADR 0125).
+    delivery_buf: [24]u8 = undefined,
+    delivery_len: u8 = 0,
+
+    /// Names the Host Delivery that started the Run; 0 for none.
+    pub fn setDelivery(c: *Call, id: u64) void {
+        c.delivery_len = if (id == 0) 0 else @intCast((std.fmt.bufPrint(&c.delivery_buf, "d{d}", .{id}) catch unreachable).len);
+    }
+
+    /// The Host Delivery that started the Run, or empty when none did.
+    pub fn delivery(c: *const Call) []const u8 {
+        return c.delivery_buf[0..c.delivery_len];
+    }
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {

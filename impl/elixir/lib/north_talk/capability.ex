@@ -239,7 +239,8 @@ defmodule NorthTalk.Call do
   `mode`, and `now`, the Pump's Clock reading as `$instant` text. `run` and
   `segment` identify where it was made, `scope` names the Capability Scope a
   lifecycle Operation opens or closes, and `automatic` is `true` for the
-  Core's own abandonment of a scope left open.
+  Core's own abandonment of a scope left open. `delivery` is the delivery id
+  of the Host Delivery that started the Run, or `nil` when none did.
   """
   defstruct [
     :id,
@@ -255,6 +256,7 @@ defmodule NorthTalk.Call do
     :run,
     :segment,
     :scope,
+    :delivery,
     automatic: false
   ]
 end

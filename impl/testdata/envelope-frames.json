@@ -157,8 +157,8 @@
     "name": "op-need",
     "tag": 131,
     "direction": "guest-to-host",
-    "hex": "4e544201018306110307120163120173120172120373656712056772616e74120361706912046563686f1209696d6d6564696174650b80c0f08d888caf060603000404302e303007010502247802120b7472616e73616374696f6e02030a0601120263310601120263320601120365cc81",
-    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"op\",\"call\":\"c\",\"script\":\"s\",\"run\":\"r\",\"segment\":\"seg\",\"grant\":\"grant\",\"capability\":\"api\",\"operation\":\"echo\",\"mode\":\"immediate\",\"now\":\"2026-10-19T12:00:00Z\",\"args\":[null,{\"$dec\":\"0.00\"},{\"$map\":[[\"$x\",true]]}],\"scope\":\"transaction\",\"automatic\":true,\"fuelLeft\":10}}"
+    "hex": "4e544201018306120307120163120173120172120373656712056772616e74120361706912046563686f1209696d6d6564696174650b80c0f08d888caf060603000404302e303007010502247802120b7472616e73616374696f6e02030a120264310601120263310601120263320601120365cc81",
+    "tree": "{\"ref\":7,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"need\":{\"m\":\"op\",\"call\":\"c\",\"script\":\"s\",\"run\":\"r\",\"segment\":\"seg\",\"grant\":\"grant\",\"capability\":\"api\",\"operation\":\"echo\",\"mode\":\"immediate\",\"now\":\"2026-10-19T12:00:00Z\",\"args\":[null,{\"$dec\":\"0.00\"},{\"$map\":[[\"$x\",true]]}],\"scope\":\"transaction\",\"automatic\":true,\"fuelLeft\":10,\"delivery\":\"d1\"}}"
   },
   {
     "name": "prop-need",
