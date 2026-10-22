@@ -308,6 +308,16 @@ The command is `northtalk`, the editor language ID is `northtalk`, and the langu
 
 The LSP, the formatter, the debugger and the Lint engine are one TypeScript tooling stack, under Bun or Node for editors and in a browser worker for the Playground, built on the TS Core's own parser and checker ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)). The Go REPL is the only Go tooling, and has no Lints, formatter or debugger. A Script in a Go Host is debugged by replaying its Trace on the TS Core.
 
+### The Script Runner
+
+`northtalk app.talk [args…]` runs a Script file ([ADR 0126](../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)). Every `northtalk` command does the same: the TS one under Bun or Node, the Go one and the native Zig one. A first argument that ends in `.talk`, or that names an existing file and isn't a subcommand, is the file. With no arguments the command opens the REPL.
+
+- **Loading:** the file is one Script in one Group, with the stdlib Libraries. It is granted, under `GrantsAsUsed`, each Standard Capability the Runner offers, under its own name: `console`, `clock`, `timer`, `calendar`, `locale`, an in-memory `store`, `sqlite` where the runtime has it, `http`, and `user` when standard input is a terminal. The native Zig Runner offers no `calendar` or `locale`. A load error is printed and the command exits 1.
+- **Starting:** the Runner Delivers `start` with one argument, the list of the arguments after the file, as texts. A Script without a `start` Handler simply ends that Run as `unhandled`.
+- **`http`:** the binding allows any address. `--port` before the file, or the `PORT` environment variable, overrides every `serve`'s port.
+- **Exit:** the command exits when the Group has no live Runs, no pending timers, no Serve Registrations and no open HTTP Exchanges. It exits 0, or 1 if any Run ended with an uncaught error, which it writes to standard error.
+- **Signals:** the first SIGINT or SIGTERM stops accepting connections and Delivers `stop`, with no arguments, if the Script has a Handler for it. The Runner waits up to 5 seconds for open HTTP Exchanges, answers any still open with 503, Stops the Group, and exits 130 or 143. A second signal exits at once.
+
 ### The normative line
 
 - **Normative:** the first syntax error and every load-time diagnostic ([chapter 2](02-grammar.md#syntax-errors), [codes](02-grammar.md#load-time-diagnostics)), the display form, the source map ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-source-map)), the lowering, and Session Transcripts.

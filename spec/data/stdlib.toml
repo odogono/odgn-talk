@@ -38,8 +38,8 @@
 #   errors       optional: the Error Codes it declares or the Core raises for it
 
 libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
-capabilities = ["clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user"]
-optional = ["sqlite", "user"]
+capabilities = ["clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http"]
+optional = ["sqlite", "user", "http"]
 
 # ---------------------------------------------------------------------------
 # Built-ins
@@ -1185,3 +1185,27 @@ name = "notify"
 mode = "fire-and-forget"
 call = "notify message [, options]"
 gives = "Shows `message`, with `options`' `title`, without waiting for anyone"
+
+[[operation]]
+capability = "http"
+name = "serve"
+mode = "suspending"
+call = "serve name, prefix [, message [, options]]"
+gives = "`{host, port}` once the Host listens; from then on, each HTTP request whose path the text `prefix` begins delivers `message` to the Script, replacing its Serve Registration called `name`"
+errors = ["invalid serve", "address in use", "bad address"]
+
+[[operation]]
+capability = "http"
+name = "unserve"
+mode = "immediate"
+call = "unserve name"
+gives = "Nothing; removes the Script's Serve Registration called `name` through this Grant, if there is one"
+errors = ["invalid serve"]
+
+[[operation]]
+capability = "http"
+name = "respond"
+mode = "immediate"
+call = "respond exchange, response"
+gives = "Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json`"
+errors = ["invalid response", "already responded", "exchange closed", "not owner"]

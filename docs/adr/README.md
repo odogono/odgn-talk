@@ -125,3 +125,6 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0121: TS Host code types against one embedding interface](0121-ts-host-code-types-against-one-embedding-interface.md)
 - [0122: The TS Core keeps its save format in one module](0122-the-ts-core-keeps-its-save-format-in-one-module.md)
 - [0123: The Zig Core keeps a Run's lifecycle in one module](0123-the-zig-core-keeps-a-runs-lifecycle-in-one-module.md)
+- [0124: `http` is an optional Standard Capability answered by the Run that receives each HTTP Exchange](0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md)
+- [0125: A Host function's Call names the Delivery that started its Run](0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)
+- [0126: A `northtalk` command given a file runs it as a Script Runner](0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)

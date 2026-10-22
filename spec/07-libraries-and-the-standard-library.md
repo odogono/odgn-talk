@@ -883,7 +883,7 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 <!-- generated: stdlib.capabilities -->
 
-The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite` and `user`. `sqlite` and `user` are optional: a Host may choose not to offer them, but a Host that offers one follows every rule this chapter gives for it.
+The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user` and `http`. `sqlite`, `user` and `http` are optional: a Host may choose not to offer them, but a Host that offers one follows every rule this chapter gives for it.
 
 <!-- end -->
 
@@ -891,9 +891,9 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read` and `user`'s `confirm`, `choose` and `enter` are suspending.
+- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read`, `user`'s `confirm`, `choose` and `enter`, and `http`'s `serve` are suspending, and `http`'s `unserve` and `respond` are immediate.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. Chapter 6 says how both kinds are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. The `http` Operations declare `address in use`, `bad address`, `already responded`, `exchange closed` and `not owner`, which the Host fails with, and the Core raises `invalid serve` and `invalid response`. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -1330,6 +1330,89 @@ All five Operations are immediate: a Segment-bound Operation must be, and SQLite
 >   tell user to notify "Tidied", {title: size}
 > end tidy
 > ```
+
+### `http`
+
+<!-- generated: stdlib.capability.http -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `serve name, prefix [, message [, options]]` | suspending | `{host, port}` once the Host listens; from then on, each HTTP request whose path the text `prefix` begins delivers `message` to the Script, replacing its Serve Registration called `name` | `invalid serve`, `address in use`, `bad address` |
+| `unserve name` | immediate | Nothing; removes the Script's Serve Registration called `name` through this Grant, if there is one | `invalid serve` |
+| `respond exchange, response` | immediate | Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json` | `invalid response`, `already responded`, `exchange closed`, `not owner` |
+
+<!-- end -->
+
+`http` lets a Script serve HTTP: it claims a path prefix, receives each matching HTTP request as an ordinary Delivery, and answers it ([ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md)). It is optional. A Host that offers it follows every rule here. Client Operations may join it later.
+
+- **The binding:** the addresses the Grant may listen on. A Host may allow any, fix one, or allow a set, and refuses others with `bad address`. The Script Runner allows any ([chapter 12](12-sessions-and-tooling.md#the-script-runner)).
+- **Shapes:** `name` and `prefix` are text. `message` is an Optional text. `options` is an Optional closed map `{host, port}`, with `host` text and `port` a whole number from 0 to 65535. `exchange` is a Host Object of kind `httpExchange`. `response` is a closed map `{status, headers, body, json}`, every key optional: `status` a whole number, `headers` a map whose values are texts or lists of texts, `body` text or Bytes, and `json` any value the `json` Library can write. Any other key raises `wrong kind`.
+
+#### Serve Registrations
+
+- **Identity:** a Serve Registration belongs to its **owner**, the Group, Script and named Grant, and to its **name**, chosen by the Script, as a store watch does. Its **parameters** are its prefix, its effective message and its address.
+- **`serve`, new name:** registers it, listening on the address if no listener holds it yet, and gives `{host, port}`: the host as the Host listens on it, and the port, which for `port: 0` is the one the Host chose.
+- **`serve`, same parameters:** does nothing more than give the address again.
+- **`serve`, different parameters:** replaces the registration. HTTP Exchanges already delivered are unaffected.
+- **`unserve`:** removes the registration. Unserving a name the owner hasn't registered does nothing. A listener with no registrations left stops listening.
+- **Defaults:** omitting `message`, or passing Nothing, means `httpRequest`. Omitting `host` means the binding's default, and omitting `port` the binding's default port.
+- **Validation:** before charging the call or running the Host function, the Core checks, in order, that the name isn't empty, that the prefix begins with `/`, and that the effective message is a plain Name, as for a store watch's message. A failure raises `invalid serve`, with `field` set to `name`, `prefix` or `message`.
+- **Matching:** registrations on one host and port share a listener. An HTTP request goes to the registration whose prefix is the longest one the request's path begins with, comparing code points. Equal prefixes from two owners are a conflict: the later `serve` fails with `address in use`.
+
+#### HTTP Exchanges
+
+An HTTP request that a registration matches is an **HTTP Exchange**. The Host Delivers it to the owning Script with `Script.Deliver`, named by the registration's effective message, with exactly one argument: a map with these keys, in this order.
+
+| Key | Value |
+| --- | --- |
+| `method` | the method, in uppercase, as text |
+| `path` | the path as received, without the query, as text |
+| `segments` | the path split on `/`, each part percent-decoded, without empty parts, as a list of texts |
+| `query` | a map from each query key to its text, or to a list of texts when the key repeats, all percent-decoded |
+| `headers` | the headers by the [Host conventions](09-embedding.md#host-conventions): lowercase names, repeated values joined with `, `, and `set-cookie` a list |
+| `body` | the body as Bytes, empty when there is none |
+| `exchange` | a Host Object of kind `httpExchange` with one read-only property, `closed`, a boolean |
+
+- **Ownership:** only the Run that Delivery started may `respond`. Any other Run's `respond` fails with `not owner` ([ADR 0125](../docs/adr/0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)). There is no handoff. A Run that wants to wait for something before answering uses `wait for`, `wait` or a suspending call.
+- **`respond exchange, response`** answers it once. `status` defaults to 200 and must be from 100 to 599. A text `body` is sent as UTF-8, and the Host adds `content-type: text/plain; charset=utf-8` unless `headers` has one. A Bytes `body` is sent as it is. `json` is written by the `json` Library's rules, with `content-type: application/json` unless `headers` has one. Giving both `body` and `json`, a `status` out of range, or a header value that isn't text or a list of texts raises `invalid response`, with `field` naming the key, before the Host function runs.
+- **Once:** a second `respond` fails with `already responded`. After the client has gone, `respond` fails with `exchange closed`, and `closed` is `true`. A client going away never cancels the Run.
+
+#### What the Host answers itself
+
+| When | Status |
+| --- | --- |
+| No registration matches the path | 404 |
+| The Delivery's Run ends `unhandled` | 404 |
+| The Run ends with an uncaught error or a Limit Fault, or ends without responding | 500 |
+| The Delivery is refused as `MailboxFull`, the Run is cancelled or dropped, or the Group is stopping | 503 |
+
+The Host logs the error of a 500 and never sends it to the client. It settles these from the Pump's reports ([chapter 9](09-embedding.md#the-http-router)).
+
+- **Saving:** a Host doesn't save a Group with an open HTTP Exchange. After a restore, an exchange's Host Object is gone.
+- **Not offered:** streaming bodies, upgrades such as WebSockets, server-sent events and TLS.
+
+> **Example.**
+>
+> ```talk
+> on start args
+>   ask http to serve "site", "/", "httpRequest", {port: 3000} and wait
+>   say "listening on " & the port of it
+> end start
+>
+> on httpRequest {method: "GET", segments: [], exchange: x}
+>   ask http to respond x, {body: "hello"}
+> end httpRequest
+>
+> on httpRequest {method: "GET", segments: ["users", id], exchange: x}
+>   ask http to respond x, {json: {id: id}}
+> end httpRequest
+>
+> on httpRequest {method: "POST", segments: ["echo"], body: b, exchange: x}
+>   ask http to respond x, {status: 201, body: decodeText(b)}
+> end httpRequest
+> ```
+>
+> A `GET /users/7` runs the second clause. A `DELETE /` matches no clause, so its Run ends `unhandled` and the Host answers 404.
 
 ## Outside parity
 

@@ -150,6 +150,14 @@ _Avoid_: event (unqualified), broadcast (for a source-specific notification)
 A Script's ongoing interest in Notifications from a Host-owned source named by its Grant binding. Sharing a message name alone does not give a Script access to that source's Notifications.
 _Avoid_: listener, callback, channel (for the interest itself)
 
+**Serve Registration**:
+A Script's named claim, made through an `http` Grant, on the HTTP requests whose path begins with a prefix. It is a kind of Subscription; of the registrations on one listener, the longest matching prefix wins.
+_Avoid_: route, listener, mount
+
+**HTTP Exchange**:
+One HTTP request and its response, delivered to the Script whose Serve Registration matched it and answered only by the Run that Delivery started. In prose the inbound side is always an "HTTP request" in full, since a bare Request is the embedding call.
+_Avoid_: request (alone), connection, context
+
 **Reconciliation Marker**:
 A Notification that calls for refreshing a Subscription's whole watched subset from the source's current state when individual change details are unavailable, such as after notification overload or an offline restore.
 _Avoid_: overflow event, dropped notification
@@ -237,6 +245,10 @@ _Avoid_: reset, reload, refresh
 **Shared Link**:
 A Playground URL carrying the Session Script's and user Libraries' sources and, optionally, a Session Transcript, which replays when the link opens.
 _Avoid_: permalink, snapshot, save link
+
+**Script Runner**:
+The Host a `northtalk` command becomes when given a Script file: it loads the file as one Script, grants the Standard Capabilities it offers, Delivers `start` with the command's arguments, and lives while anything can still happen.
+_Avoid_: interpreter, launcher, server
 
 **Session Script**:
 The one ordinary Script a REPL or Playground session builds up, to which every definition the user enters is added.

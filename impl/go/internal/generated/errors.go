@@ -716,5 +716,73 @@ var Errors = ErrorsTable{
 			},
 			Message: "Another prompt is waiting for an answer",
 		},
+		ErrorsTableErrorEntry{
+			Code: "invalid serve",
+			Fields: []string{
+				"field",
+			},
+			RaisedWhen: "An `http` `serve` or `unserve` is given empty text as its name, or `serve` a prefix that doesn't begin with `/` or an effective message that isn't a plain Name; `field` is `name`, `prefix` or `message`, and the Core raises it before the Host function runs",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "A Serve Registration's {field} isn't valid",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "address in use",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `serve` asks for a host and port another listener already holds; the Host raises it",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "That address is already in use",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "bad address",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "That address can't be served",
+		},
+		ErrorsTableErrorEntry{
+			Code: "invalid response",
+			Fields: []string{
+				"field",
+			},
+			RaisedWhen: "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "The response's {field} isn't valid",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "already responded",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `respond` names an HTTP Exchange that has already been answered; the Host raises it",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "That HTTP request has already been answered",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "exchange closed",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `respond` names an HTTP Exchange whose client has gone; the Host raises it",
+			Sources: []string{
+				"ADR 0124",
+			},
+			Message: "The client has gone",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "not owner",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `respond` comes from a Run other than the one the HTTP Exchange's Delivery started; the Host raises it",
+			Sources: []string{
+				"ADR 0124",
+				"ADR 0125",
+			},
+			Message: "Only the Run that received this HTTP request can answer it",
+		},
 	},
 }

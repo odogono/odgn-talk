@@ -383,3 +383,52 @@ fields = []
 raised_when = "A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything"
 sources = ["ADR 0077", "#527"]
 message = "Another prompt is waiting for an answer"
+
+[[error]]
+code = "invalid serve"
+fields = ["field"]
+raised_when = "An `http` `serve` or `unserve` is given empty text as its name, or `serve` a prefix that doesn't begin with `/` or an effective message that isn't a plain Name; `field` is `name`, `prefix` or `message`, and the Core raises it before the Host function runs"
+sources = ["ADR 0124"]
+message = "A Serve Registration's {field} isn't valid"
+
+[[error]]
+code = "address in use"
+fields = []
+raised_when = "An `http` `serve` asks for a host and port another listener already holds; the Host raises it"
+sources = ["ADR 0124"]
+message = "That address is already in use"
+
+[[error]]
+code = "bad address"
+fields = []
+raised_when = "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it"
+sources = ["ADR 0124"]
+message = "That address can't be served"
+
+[[error]]
+code = "invalid response"
+fields = ["field"]
+raised_when = "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs"
+sources = ["ADR 0124"]
+message = "The response's {field} isn't valid"
+
+[[error]]
+code = "already responded"
+fields = []
+raised_when = "An `http` `respond` names an HTTP Exchange that has already been answered; the Host raises it"
+sources = ["ADR 0124"]
+message = "That HTTP request has already been answered"
+
+[[error]]
+code = "exchange closed"
+fields = []
+raised_when = "An `http` `respond` names an HTTP Exchange whose client has gone; the Host raises it"
+sources = ["ADR 0124"]
+message = "The client has gone"
+
+[[error]]
+code = "not owner"
+fields = []
+raised_when = "An `http` `respond` comes from a Run other than the one the HTTP Exchange's Delivery started; the Host raises it"
+sources = ["ADR 0124", "ADR 0125"]
+message = "Only the Run that received this HTTP request can answer it"
