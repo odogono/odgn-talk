@@ -135,3 +135,8 @@ jobs:
         working-directory: impl/ts
         env:
           NORTHTALK_NOTIFY_RUNTIMES: node
+      # The HTTP router is node:http, so it must pass the http kit under Node too.
+      - run: bun test tests/http-runtimes.test.ts
+        working-directory: impl/ts
+        env:
+          NORTHTALK_HTTP_RUNTIMES: node

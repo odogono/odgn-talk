@@ -1,0 +1,97 @@
+# HTTP Exchanges: the Delivery's argument, and what the Host answers itself.
+
+[[case]]
+name = "the request map normalises method, path, segments, query, headers and body"
+script = '''
+use decodeText from bytes
+
+on start
+  ask http to serve "echo", "/" and wait
+  return the port of it
+end start
+
+on httpRequest r
+  put the headers of r into h
+  ask http to respond the exchange of r, {json: {method: the method of r, path: the path of r, segments: the segments of r, query: the query of r, multi: the "x-multi" of h, cookies: the "set-cookie" of h, body: decodeText(the body of r)}}
+end httpRequest
+'''
+steps = [
+  { request = "POST /a%20b//c/?k=1&z=%7E&k=2&e=", headers = { X-Multi = ["p", "q"], Set-Cookie = ["s1", "s2"] }, body = "hi", status = 200, type = "application/json", response = '{"method":"POST","path":"/a%20b//c/","segments":["a b","c"],"query":{"e":"","k":["1","2"],"z":"~"},"multi":"p, q","cookies":["s1","s2"],"body":"hi"}' },
+  { request = "GET /", headers = { X-Multi = "one" }, status = 200, response = '{"method":"GET","path":"/","segments":[],"query":{},"multi":"one","cookies":null,"body":""}' },
+]
+
+[[case]]
+name = "a Run that ends unhandled is 404"
+script = '''
+on start
+  ask http to serve "picky", "/", "picky" and wait
+  return the port of it
+end start
+
+on picky {method: "POST", exchange: x}
+  ask http to respond x, {body: "posted"}
+end picky
+'''
+steps = [
+  { request = "POST /", status = 200, response = "posted" },
+  { request = "GET /", status = 404 },
+]
+
+[[case]]
+name = "a message with no handler is 404"
+script = '''
+on start
+  ask http to serve "nobody", "/", "nobody" and wait
+  return the port of it
+end start
+'''
+steps = [{ request = "GET /", status = 404 }]
+
+[[case]]
+name = "a Run that ends without responding is 500"
+script = '''
+on start
+  ask http to serve "quiet", "/" and wait
+  return the port of it
+end start
+
+on httpRequest r
+  put 1 into n
+end httpRequest
+'''
+steps = [{ request = "GET /", status = 500 }]
+
+[[case]]
+name = "an uncaught error is 500, and its error is never sent"
+script = '''
+on start
+  ask http to serve "broken", "/" and wait
+  return the port of it
+end start
+
+on httpRequest r
+  throw "boom secret"
+end httpRequest
+'''
+steps = [{ request = "GET /", status = 500, excludes = "secret" }]
+
+[[case]]
+name = "a body over the Host's limit is 413 without a Delivery"
+maxBodyBytes = 16
+script = '''
+script variable count = 0
+
+on start
+  ask http to serve "small", "/" and wait
+  return the port of it
+end start
+
+on httpRequest {exchange: x}
+  add 1 to count
+  ask http to respond x, {body: "deliveries " & count}
+end httpRequest
+'''
+steps = [
+  { request = "POST /", body = "this body is longer than sixteen bytes", status = 413 },
+  { request = "POST /", body = "short", status = 200, response = "deliveries 1" },
+]
