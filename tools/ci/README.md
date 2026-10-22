@@ -330,3 +330,9 @@ PR branches must contain the Conventions workflow and adapter. Update existing
 branches from `main` before requiring the check for them. Existing PR branches
 also need the hosted PR workflows and updated Woodpecker routing to avoid
 duplicating Go checks and waiting for the native macOS worker.
+
+`.github/workflows/e2e-http.yml` builds the Bun, Node, Go and native Zig
+`northtalk` runners and runs `bun run e2e:http` ([`../e2e/http.ts`](../e2e/http.ts)),
+which serves `examples/http/hello.talk` from each and checks every route and the
+SIGINT exit. Run it locally with `bun run e2e:http [bun|node|go|zig…]` after
+building the runners as that workflow does.

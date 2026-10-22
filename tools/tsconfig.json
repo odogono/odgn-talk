@@ -16,6 +16,7 @@
     "lints",
     "corpus/restricted-kit.ts",
     "corpus/restricted-intrinsic.test.ts",
-    "envelope"
+    "envelope",
+    "e2e"
   ]
 }
