@@ -86,6 +86,73 @@ func TestScriptRunner(t *testing.T) {
 	check(runIn(t, "", at("echo.talk")), ran{0, "", ""})
 }
 
+// calendar, locale and sqlite give what the TS Runner gives for the same
+// Script.
+func TestRunnerStandardCapabilities(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string // each followed by `say it`, unless it says something itself
+		want  string
+	}{
+		{"calendar", []string{
+			`ask calendar to zone`,
+			`ask calendar to toCivil "2021-03-28T01:30:00Z" as instant, "Europe/London"`,
+			// In the spring gap, `compatible` moves forward past it.
+			`ask calendar to toInstant "2021-03-28T01:30:00" as civil date, "Europe/London"`,
+			// In the autumn overlap, `later` takes the second reading.
+			`ask calendar to toInstant "2021-10-31T01:30:00" as civil date, "later", "Europe/London"`,
+			`ask calendar to offset "2021-07-01T00:00:00Z" as instant, "America/New_York"`,
+			"try\n    ask calendar to zone \"Nowhere/Else\"\n  catch e\n    say the code of e\n  end try",
+		}, "UTC\n2021-03-28T02:30:00\n2021-03-28T01:30:00Z\n2021-10-31T01:30:00Z\n-14400 s\nunknown zone\n"},
+		{"locale", []string{
+			`ask locale to tag`,
+			`ask locale to tag "de-CH"`,
+			`ask locale to rank ["b", "a", "B", "ä"], {sensitivity: "base"}, "de"`,
+			`ask locale to compare "file 10", "file 9", {numeric: true}`,
+			`ask locale to upper "istanbul", "tr"`,
+			`ask locale to monthNames {width: "short"}, "fr"`,
+			`ask locale to dayNames`,
+			`ask locale to numberSymbols "de"`,
+		}, strings.Join([]string{
+			"und",
+			"de",
+			`{a: 1, "ä": 1, b: 2, B: 2}`,
+			"1",
+			"İSTANBUL",
+			`["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]`,
+			`["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]`,
+			`{decimal: ",", group: ".", minus: "-", digits: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"], primaryGroup: 3, secondaryGroup: 3, minGrouping: 1}`,
+			"",
+		}, "\n")},
+		{"sqlite", []string{
+			`ask sqlite to change "create table t (n integer)", []`,
+			`ask sqlite to change "insert into t values (?), (?)", [7, 8]`,
+			`ask sqlite to query "select n from t order by n", []`,
+		}, "{changes: 0, rows: []}\n{changes: 2, rows: []}\n[{n: 7}, {n: 8}]\n"},
+	}
+	dir := t.TempDir()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var source strings.Builder
+			source.WriteString("on start args\n")
+			for _, line := range c.lines {
+				source.WriteString("  " + line + "\n")
+				if !strings.Contains(line, "say ") {
+					source.WriteString("  say it\n")
+				}
+			}
+			source.WriteString("end start\n")
+			file := filepath.Join(dir, c.name+".talk")
+			if err := os.WriteFile(file, []byte(source.String()), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := runIn(t, "", file); got != (ran{0, c.want, ""}) {
+				t.Errorf("got %+v, wanted stdout %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestIsScriptFile(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "app")
 	if err := os.WriteFile(file, nil, 0o644); err != nil {

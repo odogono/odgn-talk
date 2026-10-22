@@ -148,10 +148,17 @@ func runScript(o runOptions, rio runIO) int {
 	grant("clock", def, err, nil)
 	def, err = core.TimerCapability(timers, talk.Costs{"schedule": {}, "cancel": {}})
 	grant("timer", def, err, nil)
+	def, err = core.CalendarCapability(calendar{}, talk.Costs{"today": {}, "now": {}, "toCivil": {}, "toInstant": {}, "offset": {}, "zone": {}})
+	grant("calendar", def, err, "UTC")
+	def, err = core.LocaleCapability(locale{}, talk.Costs{"compare": {}, "rank": {}, "upper": {}, "lower": {}, "numberSymbols": {}, "monthNames": {}, "dayNames": {}, "tag": {}})
+	grant("locale", def, err, "und")
 	def, err = core.StoreCapability(stores, talk.Costs{"watch": {}, "unwatch": {}, "get": {}, "keys": {}, "set": {}, "delete": {}, "increment": {}, "swap": {}})
 	grant("store", def, err, "default")
 	def, err = core.HTTPCapability(h, talk.Costs{"serve": {}, "unserve": {}, "respond": {}})
 	grant("http", def, err, nil)
+	databases := newLazySqlite()
+	def, err = core.SqliteCapability(databases, talk.Costs{"query": {}, "change": {}, "begin": {}, "commit": {}, "rollback": {}}, 0)
+	grant("sqlite", def, err, talk.SqliteBinding{Database: "main", MaxRows: maxRows})
 	if rio.tty {
 		def, err = core.UserCapability(&terminalUser{out: stdout, lines: lines}, talk.Costs{"confirm": {}, "choose": {}, "enter": {}, "notify": {}})
 		grant("user", def, err, nil)
@@ -178,6 +185,7 @@ func runScript(o runOptions, rio runIO) int {
 		}
 		pool.Close()
 		_ = h.Close()
+		_ = databases.close()
 		return 1
 	}
 
@@ -186,6 +194,9 @@ func runScript(o runOptions, rio runIO) int {
 		timers.stop()
 		pool.Close()
 		if err := h.Close(); err != nil {
+			stderr.line(err.Error())
+		}
+		if err := databases.close(); err != nil {
 			stderr.line(err.Error())
 		}
 		return code
