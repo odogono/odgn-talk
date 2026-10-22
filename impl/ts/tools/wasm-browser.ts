@@ -10,7 +10,7 @@
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
+import { bundle, measurePayload } from './payload';
 
 const here = resolve(import.meta.dir);
 const root = resolve(here, '../../..');
@@ -24,38 +24,18 @@ const wasmPath = resolve(
 );
 const talkWasm = readFileSync(wasmPath);
 
-const bundle = async (entry: string): Promise<Uint8Array<ArrayBuffer>> => {
-  const built = await Bun.build({
-    entrypoints: [entry],
-    target: 'browser',
-    minify: true,
-  });
-  if (!built.success) {
-    throw new AggregateError(built.logs, `Bundling ${entry} failed`);
-  }
-  return new Uint8Array(await built.outputs[0]!.arrayBuffer());
-};
-const sizes = (b: Uint8Array) => ({
-  raw: b.length,
-  gzip: gzipSync(b, { level: 9 }).length,
-  brotli: brotliCompressSync(b, {
-    params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
-  }).length,
-});
-
 const pages = {
   ts: await bundle(resolve(here, 'wasm-browser/page-ts.ts')),
   wasm: await bundle(resolve(here, 'wasm-browser/page-wasm.ts')),
 };
 // What a Host ships: the core-switch Host alone, and each whole package.
+const measured = await measurePayload({ wasmPath });
 const payload = {
-  tsHost: sizes(await bundle(resolve(here, '../examples/core-switch/ts.ts'))),
-  wasmHost: sizes(
-    await bundle(resolve(here, '../examples/core-switch/wasm.ts')),
-  ),
-  tsPackage: sizes(await bundle(resolve(here, '../src/index.ts'))),
-  wasmPackage: sizes(await bundle(resolve(here, '../src/wasm/index.ts'))),
-  talkWasm: sizes(talkWasm),
+  tsHost: measured.tsHost,
+  wasmHost: measured.wasmHost,
+  tsPackage: measured.tsPackage,
+  wasmPackage: measured.wasmPackage,
+  talkWasm: measured.talkWasm,
 };
 
 const html = (name: string) =>

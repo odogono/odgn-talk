@@ -118,6 +118,10 @@ _Avoid_: runtime, engine, interpreter (for the whole), VM, port (for a new Core)
 A binding in one Host language that offers the embedding interface over a Core written in another, such as `@northtalk/ts/wasm` over the Zig Core, or the Go and Elixir embeddings. It adds no language behavior: the Core it wraps answers to the spec. A Core's own embedding, such as the TS Core's, isn't a Host Adapter.
 _Avoid_: facade, wrapper, binding (for the whole), reactor (for the adapter rather than the guest)
 
+**Payload**:
+The bytes a Host ships to embed a Core: its code, bundled and minified, and for the Zig Core the reactor beside it. Quoted compressed unless stated.
+_Avoid_: bundle size, footprint, binary size
+
 **Script Group**:
 A set of Scripts driven by one deterministic scheduler, so the order of messages between them is fixed by the spec. A message from outside the group is an input the Host delivers.
 _Avoid_: realm, isolate, shard, cluster

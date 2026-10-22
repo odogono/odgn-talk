@@ -1,0 +1,103 @@
+name: Benchmark page
+
+# Runs the whole Benchmark Suite on a shared runner and lands the page at
+# docs/benchmarks.html, with the run's results under bench/results/, through a
+# PR (#1485). Its timings are advisory, never a gate (ADR 0054). A failed run,
+# such as Fuel differing between the Cores, uploads the page and opens no PR.
+#
+# Approving and merging the PR needs a second identity, since a workflow can't
+# approve its own PR. Once per repository:
+#   - Settings → General: turn on "Allow auto-merge".
+#   - Settings → Actions → General: turn on "Allow GitHub Actions to create
+#     and approve pull requests".
+#   - Add the secret BENCH_PAGE_TOKEN: a fine-grained token for this
+#     repository with Contents and Pull requests read and write.
+# Without the secret the PR is left to merge by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: Samples per Benchmark
+        default: '10'
+      filter:
+        description: Only Benchmarks whose name contains this
+        default: ''
+      only:
+        description: Only these runners, comma-separated (go, ts, zig, peers or a Peer Language)
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: bench-page
+
+jobs:
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      # Installs the CPython pinned in bench/peers/python/.python-version.
+      - uses: astral-sh/setup-uv@v6
+      - uses: ./.github/actions/setup-ts
+      # The reactor, for the Zig Core's Payload.
+      - run: zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+        working-directory: impl/zig
+      - name: Run the Benchmark Suite
+        env:
+          COUNT: ${{ inputs.count }}
+          FILTER: ${{ inputs.filter }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          args=(--count "$COUNT" --html docs/benchmarks.html)
+          if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          bun run bench "${args[@]}"
+      - name: Keep the page of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-page-${{ github.run_id }}
+          path: |
+            docs/benchmarks.html
+            bench/results/
+          if-no-files-found: ignore
+      - name: Open the PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: bench/page-${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COUNT: ${{ inputs.count }}
+          FILTER: ${{ inputs.filter }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
+          git add docs/benchmarks.html bench/results/
+          git commit -m 'docs(repo): Refresh the benchmark page'
+          git push origin "$BRANCH"
+          body="From [run $GITHUB_RUN_ID]($RUN_URL) on \`$GITHUB_SHA\`, with count ${COUNT}${FILTER:+, filter \`$FILTER\`}${ONLY:+, runners \`$ONLY\`}. The timings are advisory (ADR 0054)."
+          url=$(gh pr create --base main --head "$BRANCH" \
+            --title 'docs(repo): Refresh the benchmark page' --body "$body")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Approve and merge the PR
+        env:
+          GH_TOKEN: ${{ secrets.BENCH_PAGE_TOKEN }}
+          URL: ${{ steps.pr.outputs.url }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::No BENCH_PAGE_TOKEN secret, so $URL is left to merge by hand."
+            exit 0
+          fi
+          gh pr review "$URL" --approve
+          gh pr merge "$URL" --squash --auto --delete-branch

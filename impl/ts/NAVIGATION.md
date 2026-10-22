@@ -231,6 +231,13 @@ cover its Preact JSX configuration and the app and browser-test bundles.
 - Tests and cases: [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts)
 - First check: `bun test tooling/fuzz/tests`
 
+## Benchmark page and Payload
+
+- Implementation: [page renderer](../../bench/ts/src/html.ts), [report](../../bench/ts/src/report.ts), [Payload measurement](tools/payload.ts), [workflow](../../.github/workflows/bench-page.yml)
+- Rules: [ADR 0054](../../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md), [the benchmark page](../../bench/README.md#the-benchmark-page)
+- Tests and cases: [page tests](../../bench/ts/tests/html.test.ts), [Payload tests](tests/payload.test.ts)
+- First check: `bun test bench/ts/tests impl/ts/tests/payload.test.ts`
+
 ## Generated tables
 
 - Implementation: [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/)
