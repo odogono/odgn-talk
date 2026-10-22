@@ -474,7 +474,7 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   foreground/background Runs and Session Commands. It consumes Trace records
   to present output; inspection occurs only for explicit inspection commands.
 - `driver/` owns Transcript parsing, recording/replay and terminal interaction;
-  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C. Its
+  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C, and runs Script files. Its
   [Pool](#driver-pool) pumps many Groups on a set of workers.
 - `examples/tenants/` is the [multi-tenant Example Host](examples/tenants/README.md),
   an HTTP server with a Group per tenant, and the recorder of its Trace Cases.
@@ -589,6 +589,23 @@ when cancelling. `driver.ParseTranscript`, `WriteTranscript` and
 real-clock readings and console answers, uses scratch export I/O, and returns
 actual recorded output; the CLI fails if it differs from the original file.
 Help and quit are terminal actions and are not recorded.
+
+### Running a Script file
+
+`northtalk [-port n] app.talk [args...]` runs the file as one Script, named
+for the file, as [chapter 12's Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner)
+and the TS Runner do. A first argument after the flags that ends in `.talk` or
+names an existing file is run; arguments after it, flags included, go to
+`start` as a list of texts. `-port` (or `--port`), else `PORT`, overrides every
+`serve`'s port. Grants, used as needed: `console`, `clock`, `timer`, an
+in-memory `store` named `default`, `http` (any address) and, when stdin is a
+terminal, `user` with the REPL's prompts. The Go Runner has no `calendar` or
+`locale` (the Go module has no implementation of either) and no `sqlite`
+(`sqlite/` is a separate module the CLI doesn't import). It exits 0 when no
+Run, queued message, timer, Serve Registration or open Exchange is left, 1
+after any uncaught error or a load diagnostic (`file:line:col: message`), and
+on SIGINT or SIGTERM Delivers `stop`, stops accepting, waits up to 5 s for open
+Exchanges and exits 130 or 143; a second signal exits at once.
 
 ## Libraries and Standard Library
 

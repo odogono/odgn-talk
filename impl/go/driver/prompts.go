@@ -92,3 +92,11 @@ func promptAnswer(p session.Prompt, line string) (talk.Value, bool) {
 	}
 	return talk.List(items...), true
 }
+
+// PromptLines are the lines the REPL shows for a user prompt; the Script
+// Runner shows the same.
+func PromptLines(p session.Prompt) []string { return promptLines(p) }
+
+// PromptAnswer is the answer a typed line gives a user prompt, or false when
+// the line answers nothing and the question is asked again.
+func PromptAnswer(p session.Prompt, line string) (talk.Value, bool) { return promptAnswer(p, line) }
