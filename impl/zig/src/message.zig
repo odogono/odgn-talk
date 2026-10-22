@@ -1222,7 +1222,7 @@ fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
 fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) objects.Result {
     if (!s.x.canDefer(.prop)) return .broken;
     const gpa = s.gpa;
-    s.x.cross(.{
+    var n: Need = .{
         .kind = .prop,
         .entry = s.x.runningEntry().?,
         .call = &.{},
@@ -1235,12 +1235,20 @@ fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) o
         .scope = &.{},
         .now = .{ .seconds = 0, .micros = 0 },
         .args = &.{},
-        .object_kind = gpa.dupe(u8, o.kind.name) catch return .broken,
-        .object_id = gpa.dupe(u8, o.id) catch return .broken,
-        .prop = gpa.dupe(u8, pc.prop) catch return .broken,
-        .value = if (value) |v| v.retain() else null,
-    });
-    return .deferred;
+        .object_kind = &.{},
+        .object_id = &.{},
+        .prop = &.{},
+    };
+    fill: {
+        n.object_kind = gpa.dupe(u8, o.kind.name) catch break :fill;
+        n.object_id = gpa.dupe(u8, o.id) catch break :fill;
+        n.prop = gpa.dupe(u8, pc.prop) catch break :fill;
+        n.value = if (value) |v| v.retain() else null;
+        s.x.cross(n);
+        return .deferred;
+    }
+    n.release(gpa);
+    return .broken;
 }
 
 /// An Object Collection call (#1143): the interim `prop` need with `prop`
@@ -6805,6 +6813,51 @@ test "a Result Target holds a resumed answer and is untouched when the ask raise
         }
         try std.testing.expectEqual(case[2], end.object.get("result").?.integer);
         ref += 6;
+    }
+}
+
+test "prop needs release partial texts on allocation failure (#1494)" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"name\":\"g\"}}", .{1}));
+    var kind_name = "thing".*;
+    var prop_name = "size".*;
+    const kind: objects.Kind = .{ .name = &kind_name, .props = &.{} };
+    const object = try objects.Object.make(gpa, &kind, "t1", null);
+    defer object.destroy(gpa);
+    var pc: PropContext = .{ .session = s, .kind = &kind_name, .prop = &prop_name };
+    const value = try model.text(gpa, "setter input");
+    defer value.release();
+
+    for ([_]bool{ false, true }) |setting| {
+        // Refuse each of the three text copies, then allow all of them.
+        for (0..4) |fail_index| {
+            var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = fail_index });
+            s.gpa = failing.allocator();
+            defer s.gpa = gpa;
+            s.x.start(s.groupNamed("g").?, .pump);
+            defer s.x.stop(s.gpa);
+            const result = propNeed(s, &pc, object, if (setting) value else null);
+            if (fail_index < 3) {
+                try std.testing.expect(result == .broken);
+                try std.testing.expect(s.x.running.?.need == null);
+                try std.testing.expectEqual(@as(usize, 1), value.references);
+            } else {
+                try std.testing.expect(result == .deferred);
+                const need = s.x.crossing();
+                try std.testing.expectEqualStrings("thing", need.object_kind);
+                try std.testing.expectEqualStrings("t1", need.object_id);
+                try std.testing.expectEqualStrings("size", need.prop);
+                try std.testing.expectEqual(if (setting) value else null, need.value);
+                try std.testing.expectEqual(@as(usize, if (setting) 2 else 1), value.references);
+            }
+            s.x.stop(s.gpa);
+            try std.testing.expectEqual(@as(usize, 1), value.references);
+            try std.testing.expectEqual(failing.allocated_bytes, failing.freed_bytes);
+        }
     }
 }
 
