@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs the branch half of the Conventions job, changelog fragments and ADR
 # numbers against a fresh origin/main (docs/agents/commits.md), then the
-# checks CI's Spec job runs (.github/workflows/spec.yml).
+# checks CI's Spec job runs (.woodpecker/spec.yaml).
 set -e
 git fetch -q origin main || echo "pre-push: fetch failed; checking against the last origin/main" >&2
 bun tools/commits/check.ts branch

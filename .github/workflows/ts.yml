@@ -2,21 +2,10 @@ name: TS Core
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'impl/ts/**'
-      - 'impl/testdata/**'
-      - 'tooling/**'
-      - 'tools/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'package.json'
-      - 'bun.lock'
-      - 'tsconfig.base.json'
-      - '.github/workflows/ts.yml'
-      - '.github/actions/setup-ts/**'
+  # Weekly rather than on every push to main, to save Actions minutes;
+  # Woodpecker runs the Linux checks on main and nightly.
+  schedule:
+    - cron: '3 5 * * 0'
 
 # Independent jobs, so the check takes as long as its slowest part.
 jobs:

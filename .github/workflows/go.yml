@@ -2,19 +2,10 @@ name: Go
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'impl/go/**'
-      - 'impl/zig/**'
-      - 'impl/testdata/**'
-      - 'tools/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/go.yml'
+  # Weekly rather than on every push to main, to save Actions minutes;
+  # Woodpecker runs the Linux checks on main and nightly.
+  schedule:
+    - cron: '43 4 * * 0'
 
 # Independent jobs, so the check takes as long as its slowest part.
 jobs:

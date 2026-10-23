@@ -2,7 +2,10 @@ name: PR native macOS sidecar
 
 on:
   workflow_dispatch:
+  # Only on PRs labelled `macos`, since macOS minutes cost ten times Linux's.
+  # Woodpecker checks the sidecar on Almere for every push to main.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'impl/zig/**'
       - 'impl/testdata/**'
@@ -32,6 +35,7 @@ concurrency:
 
 jobs:
   native-sidecar:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'macos')
     runs-on: macos-15
     timeout-minutes: 30
     steps:

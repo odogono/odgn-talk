@@ -1,0 +1,52 @@
+# The nightly checks, moved off GitHub Actions to save its minutes. Register a
+# cron named `nightly` in the repository's Woodpecker settings, at 03:17 daily.
+# A manual run takes SEED and BUDGET_MINUTES (at most 40) as variables.
+when:
+  - event: cron
+    cron: nightly
+  - event: manual
+
+labels:
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: workspace
+    image: odgn-talk-ci:2026-10-19-2-zig
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      - bun install --frozen-lockfile --network-concurrency 16
+      - bun run unicode:fetch
+
+  # A fresh seed each night. Woodpecker keeps no artifacts, so a finding's
+  # summary and cases go to the log; see tooling/fuzz/README.md to reproduce one.
+  - name: fuzz-campaign
+    image: odgn-talk-ci:2026-10-19-2-zig
+    depends_on: [workspace]
+    commands:
+      - (cd impl/zig && zig build fuzzworker --prefix "$PWD/../../.cache/zig-fuzz")
+      - seed="$${SEED:-$${CI_PIPELINE_CREATED}}"
+      - budget="$${BUDGET_MINUTES:-30}"
+      - echo "seed $seed, budget $budget minutes"
+      - |
+        bun run fuzz campaign --seed "$seed" --budget-ms "$((budget * 60000))" \
+          --output fuzz-findings --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker || {
+          status=$?
+          find fuzz-findings -name summary.json -o -name minimized.json -o -name case.json \
+            | sort | while read -r f; do echo "== $f"; cat "$f"; echo; done
+          exit "$status"
+        }
+
+  # The Zig Core's Linux checks from zig.yml, which Actions now runs weekly.
+  - name: zig-core
+    image: odgn-talk-ci:2026-10-19-2-zig
+    depends_on: [workspace]
+    directory: impl/zig
+    commands:
+      - zig fmt --check .
+      - zig build test --summary all
+      - zig build install corpus
+      - zig build corpus -- --defer-crossings
