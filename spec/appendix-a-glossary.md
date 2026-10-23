@@ -418,6 +418,10 @@ _Avoid_: console, REPL, Message (for the window)
 A window in Folio that, while browsing, shows the Script Variables of the Project's Script, the showing Page's Script and the Scripts of that Page's Elements with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
 _Avoid_: inspector, debugger, watch window
 
+**Watch**:
+An expression an author adds to the Variables window, evaluated in a chosen context each time a paused Play Session changes, with its latest value shown.
+_Avoid_: watch expression, inspector, probe
+
 **Performance window**:
 A window in Folio for inspecting a Play Session's Script workload and frame-message delivery, available in Browse and Present. It keeps the captured results after the session ends.
 _Avoid_: FPS counter, Errors window
