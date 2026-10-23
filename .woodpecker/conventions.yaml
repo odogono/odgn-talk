@@ -1,5 +1,7 @@
 when:
-  - event: [pull_request, pull_request_metadata]
+  - event: pull_request
+  - event: pull_request_metadata
+    evaluate: 'CI_PIPELINE_EVENT_REASON == "edited"'
 
 labels:
   platform: linux/amd64

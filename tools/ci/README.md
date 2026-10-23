@@ -22,7 +22,8 @@ broader matrix on `main` or manually:
   workspace typechecking, generated Lints, CLI/editor/Folio/extension tests,
   builds and Node runtime checks.
 - `.woodpecker/conventions.yaml` runs the existing PR title and changelog
-  checker on PR code updates and metadata edits, with full Git history.
+  checker when a PR opens, its code updates, or its title, body or base branch
+  changes, with full Git history. Assignment and label changes do not rerun it.
 - `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
   SQLite module, reusing the Go build and module caches.
 - `.woodpecker/nightly.yaml` runs the nightly fuzz campaign and the Zig Core's
@@ -67,8 +68,9 @@ its Go step skips PR events because Actions supplies that check.
 | Workflow or worker image | Affected workflows |
 
 Keep Spec on every PR and push to `main`: its lint, generated-file and Markdown
-link checks span the repository. Keep Conventions unfiltered on PR code and
-metadata updates. Spec Markdown remains a Core trigger because tests read prose
+link checks span the repository. Keep Conventions unfiltered by path on PR code
+updates, and rerun it on title, body or base-branch edits (`pull_request_metadata`
+with reason `edited`). Spec Markdown remains a Core trigger because tests read prose
 examples directly. Shared Corpus, fixture and reference-tool inputs also select
 their consumers; filters intentionally prefer an extra check over missing one.
 Each workflow includes its own configuration, and Docker consumers include their
