@@ -96,3 +96,32 @@ in earlier benchmarks. Main-thread times varied by 10% for Element and up to
 
 Filed as #1543 (both games repaint all 200 cells for every changed view) and
 #1544 (sliced Pumps publish half-painted Canvas Drawings).
+
+## After painting only changed cells (#1543)
+
+`paint` now repaints the whole board only after a lock, a line clear or a
+restart, and once every 200 patches so a Canvas Drawing stays well under its
+10,000-command limit. Otherwise it repaints just the cells the piece left and
+the cells it now covers. Canvas Tetris draws those cells over the board,
+empty ones included, without clearing it first. Measured at the same commit
+plus this change, on the same machine:
+
+| Per frame unless stated                | Element (before) | Canvas (before) |
+| -------------------------------------- | ---------------: | --------------: |
+| Fuel, all Runs, headless               |    1,297 (2,597) |     983 (2,620) |
+| Fuel per key, `keyDown` Runs, headless |   8,638 (19,040) |  6,928 (20,041) |
+| Views sent, headless                   |      0.73 (0.72) |     0.64 (1.71) |
+| Board views painted partly drawn, 60 s |            0 (0) |        91 (432) |
+| `frame`s delivered per second, browser |      57.5 (53.3) |     58.0 (52.9) |
+| `frame`s skipped, busy, browser        |         75 (200) |        59 (213) |
+| Fuel, all Runs, browser                |      608 (1,337) |     459 (1,353) |
+| Main thread script ms, browser         |      1.01 (0.99) |     0.38 (0.63) |
+
+A slide now costs 2,892 Fuel for Element and 1,965 for Canvas, and a turn
+3,819 and 2,302, each within one Pump. A soft drop also updates the score,
+for 3,661 and 2,734. The average per key still includes hard drops: each
+one locks the piece and repaints the whole board, at 34,024 and 27,447 Fuel.
+Those repaints account for the remaining partly drawn boards until #1544
+holds a reset Drawing back while its Run is still live. The browser's
+main-thread times varied by 32–57% in this run, so only the direction of
+those rows is reliable.

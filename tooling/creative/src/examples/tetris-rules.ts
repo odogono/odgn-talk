@@ -68,6 +68,15 @@ on colourOf piece
   return item piece of colours
 end colourOf
 
+on holds squares, r, c
+  repeat for each square in squares
+    if item 1 of square = r and item 2 of square = c then
+      return true
+    end if
+  end repeat
+  return false
+end holds
+
 on turnedSquares squares, size, clockwise
   put [] into turned
   repeat for each [r, c] in squares
@@ -81,7 +90,7 @@ on turnedSquares squares, size, clockwise
 end turnedSquares
 `;
 
-export const TETRIS_RULES = `use rows, columns, emptyColour, colours, shapes, boxSizes, linePoints, grid, fits, isFull, dropInterval, colourOf, turnedSquares from tetrisRules
+export const TETRIS_RULES = `use rows, columns, emptyColour, colours, shapes, boxSizes, linePoints, grid, fits, isFull, dropInterval, colourOf, holds, turnedSquares from tetrisRules
 
 script variable board = []
 script variable kind = 0
@@ -96,6 +105,11 @@ script variable lines = 0
 script variable sinceDrop = 0
 script variable playing = false
 script variable changed = false
+-- The falling piece's squares on the board as last painted, and whether the
+-- next paint must repaint every cell.
+script variable painted = []
+script variable whole = true
+script variable patches = 0
 
 on openPage
   restart
@@ -112,6 +126,7 @@ on restart
   put takeFromBag() into nextKind
   hide gameOverAlert
   put true into playing
+  put true into whole
   spawnPiece
   showScore
   paint
@@ -179,6 +194,7 @@ on lockPiece
     put kind into item (pieceLeft + c) of item (pieceTop + r) of board
   end repeat
   clearLines
+  put true into whole
   spawnPiece
 end lockPiece
 
@@ -260,24 +276,49 @@ end keyDown
 
 
 
--- Lay the falling piece over the board. The renderer paints that view.
+-- Lay the falling piece over the board. The renderer paints that view:
+-- every cell after the board changes, else only the cells the piece left
+-- and the cells it covers now.
 on paint
   if not changed then
     return
   end if
   put false into changed
-  put board into view
+  put [] into covered
   if playing then
     repeat for each [r, c] in squares
-      put kind into item (pieceLeft + c) of item (pieceTop + r) of view
+      put [pieceTop + r, pieceLeft + c] into item (the length of covered + 1) of covered
     end repeat
   end if
-  beginPaint
-  repeat for each r in 1..rows
-    repeat for each c in 1..columns
-      paintCell r, c, colourOf(item c of item r of view)
+  -- A Canvas keeps every patch, so start afresh before it nears its limit.
+  if patches >= 200 then
+    put true into whole
+  end if
+  beginPaint whole
+  if whole then
+    put false into whole
+    put 0 into patches
+    put board into view
+    repeat for each [r, c] in covered
+      put kind into item c of item r of view
     end repeat
-  end repeat
+    repeat for each r in 1..rows
+      repeat for each c in 1..columns
+        paintCell r, c, colourOf(item c of item r of view)
+      end repeat
+    end repeat
+  else
+    add 1 to patches
+    repeat for each [r, c] in painted
+      if not holds(covered, r, c) then
+        paintCell r, c, colourOf(item c of item r of board)
+      end if
+    end repeat
+    repeat for each [r, c] in covered
+      paintCell r, c, colourOf(kind)
+    end repeat
+  end if
+  put covered into painted
 end paint
 
 on showPreview
