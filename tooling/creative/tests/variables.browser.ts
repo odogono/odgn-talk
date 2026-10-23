@@ -22,13 +22,17 @@ const until = async (check: () => boolean, message: string) => {
 const node = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const headings = () =>
-  [...document.querySelectorAll('.variables-script h3')].map(
-    h => h.textContent,
-  );
+  [
+    ...document.querySelectorAll(
+      '.variables-script:not(.variables-watches) h3',
+    ),
+  ].map(h => h.textContent);
 const row = (name: string) =>
-  [...document.querySelectorAll<HTMLElement>('.variables-script li')].find(li =>
-    li.querySelector('.name')?.textContent?.endsWith(name),
-  );
+  [
+    ...document.querySelectorAll<HTMLElement>(
+      '.variables-script:not(.variables-watches) li',
+    ),
+  ].find(li => li.querySelector('.name')?.textContent?.endsWith(name));
 const value = (name: string) => row(name)?.querySelector('.value');
 
 const project = createProject('Variables window');
@@ -121,6 +125,66 @@ export const runBrowserTests = async () => {
       () => node('variables-ended').hidden === true,
       'A new session kept the ended note',
     );
+    mode('Edit').click();
+  });
+  await test('Watches evaluate while paused, in their chosen context', async () => {
+    mode('Browse').click();
+    await until(() => value('presses') !== undefined, 'Browse did not start');
+    const add = (text: string, context?: string) => {
+      const input =
+        document.querySelector<HTMLInputElement>('.watch-add input')!;
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (context) {
+        const select =
+          document.querySelector<HTMLSelectElement>('.watch-add select')!;
+        select.value = [...select.options].find(o => o.text === context)!.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      document
+        .querySelector<HTMLButtonElement>('.watch-add button[type=submit]')!
+        .click();
+    };
+    const watchText = (i: number) =>
+      [...document.querySelectorAll<HTMLElement>('li.watch')]
+        .at(i)
+        ?.querySelector('.value')?.textContent ?? '';
+    await until(
+      () =>
+        [
+          ...document.querySelectorAll<HTMLOptionElement>(
+            '.watch-add select option',
+          ),
+        ].some(o => o.text.endsWith('go')),
+      'The loaded contexts never reached the Watches',
+    );
+    const goContext = [
+      ...document.querySelectorAll<HTMLOptionElement>(
+        '.watch-add select option',
+      ),
+    ].find(o => o.text.endsWith('go'))!.text;
+    add('presses * 10', goContext);
+    add('1 + 1');
+    await until(
+      () => document.querySelectorAll('li.watch').length === 2,
+      'The Watches were not added',
+    );
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert(watchText(1) === '—', 'A Watch ran while Play was running');
+    const [, pause] = document.querySelectorAll<HTMLButtonElement>(
+      '#play-controls button',
+    );
+    pause!.click();
+    await until(
+      () => watchText(0) === '0' && watchText(1) === '2',
+      `Watches read ${watchText(0)} and ${watchText(1)}`,
+    );
+    document.querySelector<HTMLButtonElement>('li.watch .remove')!.click();
+    await until(
+      () => document.querySelectorAll('li.watch').length === 1,
+      'A Watch was not removed',
+    );
+    pause!.click();
     mode('Edit').click();
   });
   return results;

@@ -1,7 +1,10 @@
 // The Variables window (#1141): the Script Variables of a browsing Play
 // Session, read-only. It keeps the last values it showed after the session
 // ends, until the next one starts, as the Errors window keeps its list.
+// Its Watches (#1210) are kept across sessions of one Project, and are
+// evaluated by the worker only while Play is paused (ADR 0129).
 import { signal, type Signal } from '@preact/signals';
+import { useState } from 'preact/hooks';
 import { render } from 'preact';
 import { byId } from './dom';
 import {
@@ -10,7 +13,24 @@ import {
   variableRows,
   type VariableRow,
   type VariableScript,
+  type Watch,
+  type WatchResult,
 } from './variables';
+
+/** A context a Watch can run in: a Message Box target of one session. */
+export type WatchContext = { id: number; label: string; session: number };
+
+/** A Watch as the window keeps it; its context may be from an ended session. */
+type ShownWatch = { context?: WatchContext; id: number; text: string };
+
+type Watching = {
+  pageChanged: boolean;
+  paused: boolean;
+  results: ReadonlyMap<number, WatchResult>;
+  session: number;
+  targets: readonly WatchContext[];
+  watches: readonly ShownWatch[];
+};
 
 /** The scripts shown, and how many times each row's value has changed. */
 type Shown = {
@@ -74,18 +94,253 @@ const Row = ({
   );
 };
 
+const contextValue = (context: WatchContext | undefined) =>
+  context ? `${context.session}:${context.id}` : 'default';
+
+const ContextSelect = ({
+  context,
+  label,
+  onChange,
+  session,
+  targets,
+}: {
+  context?: WatchContext;
+  label: string;
+  onChange: (context: WatchContext | undefined) => void;
+  session: number;
+  targets: readonly WatchContext[];
+}) => {
+  const stale =
+    context &&
+    (context.session !== session ||
+      !targets.some(target => target.id === context.id));
+  return (
+    <select
+      aria-label={label}
+      onChange={event => {
+        const value = (event.target as HTMLSelectElement).value;
+        onChange(targets.find(target => contextValue(target) === value));
+      }}
+      value={contextValue(context)}
+    >
+      <option value="default">Default context</option>
+      {targets.map(target => (
+        <option key={target.id} value={contextValue(target)}>
+          {target.label}
+        </option>
+      ))}
+      {stale && (
+        <option value={contextValue(context)}>
+          {context.label} (unavailable)
+        </option>
+      )}
+    </select>
+  );
+};
+
+const WatchRow = ({
+  changes,
+  expanded,
+  onContext,
+  onRemove,
+  onSelect,
+  onToggle,
+  result,
+  session,
+  targets,
+  watch,
+}: {
+  changes: ReadonlyMap<string, number>;
+  expanded: ReadonlySet<string>;
+  onContext: (context: WatchContext | undefined) => void;
+  onRemove: () => void;
+  onSelect: (owner: number) => void;
+  onToggle: (key: string) => void;
+  result?: WatchResult;
+  session: number;
+  targets: readonly WatchContext[];
+  watch: ShownWatch;
+}) => {
+  const rows =
+    result?.state === 'value'
+      ? variableRows(
+          {
+            label: '',
+            script: `watch:${watch.id}`,
+            vars: [[watch.text, result.value]],
+          },
+          expanded,
+        )
+      : [];
+  return (
+    <li className="watch">
+      <div className="watch-head">
+        <ContextSelect
+          context={watch.context}
+          label={`Context of ${watch.text}`}
+          onChange={onContext}
+          session={session}
+          targets={targets}
+        />
+        <button
+          aria-label={`Remove ${watch.text}`}
+          className="remove"
+          onClick={onRemove}
+          type="button"
+        >
+          ×
+        </button>
+      </div>
+      {result?.state === 'value' ? (
+        <ul>
+          {rows.map(row => (
+            <Row
+              changes={changes.get(row.key) ?? 0}
+              key={row.key}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              row={row}
+            />
+          ))}
+        </ul>
+      ) : (
+        <div className="watch-status">
+          <span className="name">{watch.text}</span>{' '}
+          <span className={result?.state === 'error' ? 'value error' : 'value'}>
+            {result === undefined
+              ? '—'
+              : result.state === 'waiting'
+                ? '(waiting)'
+                : result.state === 'unavailable'
+                  ? '(unavailable)'
+                  : result.error}
+          </span>
+        </div>
+      )}
+      {result?.state === 'value' && result.effects && (
+        <p className="watch-effects">⚠ This Watch sent a message.</p>
+      )}
+    </li>
+  );
+};
+
+const WatchesSection = ({
+  changes,
+  expanded,
+  onSelect,
+  onToggle,
+  update,
+  watching,
+}: {
+  changes: ReadonlyMap<string, number>;
+  expanded: ReadonlySet<string>;
+  onSelect: (owner: number) => void;
+  onToggle: (key: string) => void;
+  update: (change: (watches: readonly ShownWatch[]) => ShownWatch[]) => void;
+  watching: Signal<Watching>;
+}) => {
+  const { pageChanged, paused, results, session, targets, watches } =
+    watching.value;
+  const [context, setContext] = useState<WatchContext | undefined>();
+  // Read from the form, which may be submitted before a re-render.
+  const add = (event: Event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const input = form.querySelector('input')!;
+    const chosen = form.querySelector('select')!.value;
+    const text = input.value.trim();
+    if (text) {
+      const added = {
+        id: nextWatch++,
+        text,
+        context: targets.find(target => contextValue(target) === chosen),
+      };
+      update(all => [...all, added]);
+      input.value = '';
+    }
+  };
+  return (
+    <section
+      className={
+        paused
+          ? 'variables-script variables-watches'
+          : 'variables-script variables-watches stale'
+      }
+    >
+      <h3>Watches</h3>
+      <form className="watch-add" onSubmit={add}>
+        <input aria-label="Watch expression" placeholder="Expression" />
+        <ContextSelect
+          context={context}
+          label="Watch context"
+          onChange={setContext}
+          session={session}
+          targets={targets}
+        />
+        <button type="submit">Add</button>
+      </form>
+      <p className="muted" hidden={paused || !watches.length}>
+        Watches update while Play is paused.
+      </p>
+      <p className="watch-effects" hidden={!pageChanged}>
+        ⚠ A Watch changed the Page.
+      </p>
+      <ul>
+        {watches.map(watch => (
+          <WatchRow
+            changes={changes}
+            expanded={expanded}
+            key={watch.id}
+            onContext={next =>
+              // A new id, so the worker treats it as a new Watch.
+              update(all =>
+                all.map(w =>
+                  w.id === watch.id
+                    ? { ...watch, id: nextWatch++, context: next }
+                    : w,
+                ),
+              )
+            }
+            onRemove={() => update(all => all.filter(w => w.id !== watch.id))}
+            onSelect={onSelect}
+            onToggle={onToggle}
+            result={results.get(watch.id)}
+            session={session}
+            targets={targets}
+            watch={watch}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+let nextWatch = 1;
+
 const VariablesPanel = ({
   onSelect,
   onToggle,
   shown,
+  update,
+  watching,
 }: {
   onSelect: (owner: number) => void;
   onToggle: (key: string) => void;
   shown: Signal<Shown>;
+  update: (change: (watches: readonly ShownWatch[]) => ShownWatch[]) => void;
+  watching: Signal<Watching>;
 }) => {
   const { changes, ended, expanded, scripts } = shown.value;
   return (
     <>
+      <WatchesSection
+        changes={changes}
+        expanded={expanded}
+        onSelect={onSelect}
+        onToggle={onToggle}
+        update={update}
+        watching={watching}
+      />
       <p className="muted" hidden={scripts.length > 0} id="variables-empty">
         No Script Variables yet. They appear here while browsing.
       </p>
@@ -124,17 +379,128 @@ export class VariablesWindow {
     expanded: new Set(),
     scripts: [],
   });
+  readonly #watching = signal<Watching>({
+    pageChanged: false,
+    paused: false,
+    results: new Map(),
+    session: 0,
+    targets: [],
+    watches: [],
+  });
   #values = new Map<string, string>();
 
-  constructor(onSelect: (owner: number) => void) {
+  /** `onWatches` hears each change to the list of Watches. */
+  constructor(
+    onSelect: (owner: number) => void,
+    private readonly onWatches: () => void = () => {},
+  ) {
     render(
       <VariablesPanel
         onSelect={onSelect}
         onToggle={key => this.#toggle(key)}
         shown={this.#shown}
+        update={change => {
+          const current = this.#watching.value;
+          this.#watching.value = {
+            ...current,
+            watches: change(current.watches),
+          };
+          this.onWatches();
+        }}
+        watching={this.#watching}
       />,
       byId('variables-panel'),
     );
+  }
+
+  /**
+   * The Watches as the worker runs them in `session`: a context from another
+   * session, or one no longer loaded, is sent as one that cannot be found.
+   */
+  watchesFor(session: number): Watch[] {
+    const { targets, watches } = this.#watching.value;
+    return watches.map(({ context, id, text }) => ({
+      id,
+      text,
+      ...(context === undefined
+        ? {}
+        : {
+            target:
+              context.session === session &&
+              targets.some(target => target.id === context.id)
+                ? context.id
+                : -1,
+          }),
+    }));
+  }
+
+  /** The browsing session's loaded contexts, and whether it is paused. */
+  context(
+    session: number,
+    targets: readonly { id: number; label: string }[],
+    paused: boolean,
+  ): void {
+    const current = this.#watching.value;
+    if (
+      current.session === session &&
+      current.paused === paused &&
+      current.targets.map(t => t.id).join() === targets.map(t => t.id).join()
+    ) {
+      return;
+    }
+    this.#watching.value = {
+      ...current,
+      session,
+      paused,
+      targets: targets.map(({ id, label }) => ({ id, label, session })),
+    };
+  }
+
+  /** Shows the worker's Watch results. */
+  watchResults(results: readonly WatchResult[], pageChanged?: boolean): void {
+    const current = this.#watching.value;
+    const shown = new Map(current.results);
+    for (const result of results) {
+      shown.set(result.id, result);
+    }
+    const values = new Map(this.#values);
+    const changes = new Map(this.#shown.value.changes);
+    for (const result of results) {
+      const watch = current.watches.find(w => w.id === result.id);
+      if (result.state !== 'value' || !watch) {
+        continue;
+      }
+      for (const [key, value] of rowValues([
+        {
+          label: '',
+          script: `watch:${watch.id}`,
+          vars: [[watch.text, result.value]],
+        },
+      ])) {
+        const last = values.get(key);
+        if (last !== undefined && last !== value) {
+          changes.set(key, (changes.get(key) ?? 0) + 1);
+        }
+        values.set(key, value);
+      }
+    }
+    this.#values = values;
+    this.#shown.value = { ...this.#shown.value, changes };
+    this.#watching.value = {
+      ...current,
+      results: shown,
+      ...(pageChanged === undefined ? {} : { pageChanged }),
+    };
+  }
+
+  /** Another Project: its Watches go. */
+  clearWatches(): void {
+    this.#watching.value = {
+      ...this.#watching.value,
+      pageChanged: false,
+      results: new Map(),
+      watches: [],
+    };
   }
 
   get visible(): boolean {
@@ -165,6 +531,12 @@ export class VariablesWindow {
       const last = this.#values.get(key);
       if (last !== undefined && last !== value) {
         changes.set(key, (changes.get(key) ?? 0) + 1);
+      }
+    }
+    // Watch rows keep their values across Script Variable refreshes.
+    for (const [key, value] of this.#values) {
+      if (key.startsWith('["watch:')) {
+        values.set(key, value);
       }
     }
     this.#values = values;
