@@ -2,7 +2,9 @@
 
 Design interview for [#909](https://github.com/odogono/odgn-talk/issues/909).
 Q1–Q5 are agreed. The author confirmed complete shared understanding in Q5;
-the design interview is complete. Corpus implementation remains outstanding.
+the design interview is complete. The corpus additions are implemented on
+`test/issue-909`; verification and human review are tracked in the
+[review package](../reviews/folded-map-keys/README.md).
 
 ## Agreed scope
 
@@ -96,17 +98,21 @@ that paragraph consistent with implementation and review status.
 
 ## Implementation handoff
 
-- **Implemented in:** none for #909.
-- **Remaining work:** implement the agreed executing coverage and documentation
-  cleanup, derive and review expected results/Fuel, verify TS+Zig parity in both
-  replay modes, and obtain human approval of the new expectations. Reconcile
+- **Implemented in:** design PR [#1547](https://github.com/odogono/odgn-talk/pull/1547);
+  the corpus additions and documentation cleanup on `test/issue-909` implement
+  Q2–Q5, with independently derived expected booleans and Fuel in the review
+  package. The implementation is not yet merged.
+- **Remaining work:** obtain human approval of the new expectations and merge
+  the implementation. TS+Zig agreement passed in both replay modes, as did
+  the full Go corpus gate and both full Zig corpus passes. Reconcile
   #909's handoff when implementation and review land.
-- **Required base:** `main`; interview checkout `7317e70d` on
-  `docs/grill-issue-909`. Use the Spec sections linked above.
-- **Approval still needed:** human review of the eventual changes to
-  `corpus/text-model/folded-comparisons/case.trace`. Agreement between Cores
+- **Required base:** `main` containing design PR #1547; implementation starts
+  from `6a32bc56`. Use the Spec sections linked above.
+- **Approval still needed:** the additions to
+  `corpus/text-model/folded-comparisons/case.trace` inventoried in the
+  [review package](../reviews/folded-map-keys/README.md). Agreement between Cores
   does not constitute first-blessing approval.
 
-The confirmed design is this document on branch `docs/grill-issue-909`.
-Implementation must start from a revision containing this handoff, either on
-that branch or on `main` after the documentation PR merges.
+The confirmed design landed in #1547. Follow-up implementation must use a
+revision containing this handoff and preserve the pending review status until
+the new expectation bytes receive human approval.

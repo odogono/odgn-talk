@@ -1,4 +1,4 @@
-# Folded comparison results and logical visit charges (#903).
+# Folded comparison results, exact map keys and logical visit charges (#903, #909).
 kind = "trace"
 [versions]
 language = "1.0-rc.3"

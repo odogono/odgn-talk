@@ -104,12 +104,15 @@ defaults across two extensions and runtime error positions in the extension.
 Current support is described in the [TS](../impl/ts/README.md) and
 [Zig](../impl/zig/README.md#the-machine) guides.
 
-The `text-model/folded-comparisons` Trace Case (#903) covers folded equality,
+The `text-model/folded-comparisons` Trace Case (#903, #909) covers folded equality,
 all four ordering instructions, nested values and Function captures, simple
 Unicode folding, membership, literal tests and folded Character visit charges,
-including shared values. Its first blessing awaits human review. Current
-support is described in the [Zig value guide](../impl/zig/README.md#values-and-ownership).
-Case-sensitive map-key identity has separate Go reconciliation work in #909.
+including shared values. The #909 additions cover exact map-key identity,
+coexisting ASCII and Unicode case variants, NFC keys, nested values, membership
+and early/late missing-key Fuel. The earlier #903 blessing was approved in
+[#912](https://github.com/odogono/odgn-talk/pull/912); the new TS+Zig expectations
+await human review in the [map-key review package](../docs/reviews/folded-map-keys/README.md).
+Current support is described in the [Zig value guide](../impl/zig/README.md#values-and-ownership).
 
 The seven `stdlib/mappings*` Traces and `builtins/collection-comparison-fuel`
 cover checked Mappings, callback restrictions, restoration, resource faults and

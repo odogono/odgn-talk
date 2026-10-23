@@ -41,3 +41,37 @@ on shared
   end repeat
   put [left = right ignoring case, left <= right ignoring case, left is in [right] ignoring case] after log
 end shared
+
+on mapKeys
+  -- Fold values, but preserve exact keys even when their foldings collide.
+  put [{A: "X"} = {A: "x"} ignoring case, {A: "X"} = {A: "x"}] after log
+  put [{A: "X"} = {a: "x"} ignoring case, {A: "X"} = {a: "x"}, {A: "X"} <> {a: "x"} ignoring case] after log
+  put [{A: "X", a: "Y"} = {a: "y", A: "x"} ignoring case, {A: "X", a: "Y"} = {a: "y", A: "x"}] after log
+  -- Values stay attached to their exact keys; also reach a second-entry mismatch.
+  put [{A: "X", a: "Y"} = {A: "y", a: "x"} ignoring case, {A: "X", a: "Y"} = {A: "x", a: "z"} ignoring case] after log
+  put [{A: "X", a: "Y"} = {A: "x"} ignoring case, {A: nothing} = {a: nothing} ignoring case, {A: nothing} = {} ignoring case] after log
+  put [{box: [{inner: {A: "X", a: "Y"}}]} = {box: [{inner: {a: "y", A: "x"}}]} ignoring case, {box: [{inner: {A: "X", a: "Y"}}]} = {box: [{Inner: {a: "y", A: "x"}}]} ignoring case] after log
+  -- All three sigma spellings fold together, but remain three distinct keys.
+  put [{"Σ": "X", "σ": "Y", "ς": "Z"} = {"ς": "z", "Σ": "x", "σ": "y"} ignoring case, {"Σ": "X", "σ": "Y", "ς": "Z"} = {"Σ": "y", "σ": "x", "ς": "z"} ignoring case] after log
+  -- The right key spells e + U+0301; both key Values are NFC é.
+  put [{"é": "X"} = {"é": "x"} ignoring case, {"é": "X"} = {"é": "x"}] after log
+  put [{A: "X"} is in [{a: "x"}, {A: "x"}] ignoring case, {A: "X"} is in [{a: "x"}] ignoring case, {A: "X"} is not in [{a: "x"}] ignoring case] after log
+end mapKeys
+
+on mapKeyEarly
+  put "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" into upper
+  put "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" into lower
+  put {A: upper, keep: upper} into left
+  put {a: lower, keep: lower} into right
+  -- Missing first exact key: scanned = 1, compare costs 2 + ceil(1 / 16) = 3.
+  put left = right ignoring case after log
+end mapKeyEarly
+
+on mapKeyLate
+  put "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" into upper
+  put "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" into lower
+  put {keep: upper, A: upper} into left
+  put {keep: lower, a: lower} into right
+  -- Fold-equal value then missing key: scanned = 1 + 32 + 1 = 34; compare costs 5.
+  put left = right ignoring case after log
+end mapKeyLate
