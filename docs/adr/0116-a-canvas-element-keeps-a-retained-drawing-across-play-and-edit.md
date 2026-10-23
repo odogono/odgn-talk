@@ -8,6 +8,8 @@ Unlike the Playground's canvas ([ADR 0052](0052-canvas-is-a-deterministic-host-c
 
 The transform Operations `push`, `pop`, `translate`, `rotate` and `scale` are ordinary commands in the Drawing ([#1383](https://github.com/odogono/odgn-talk/issues/1383)). `push` saves the current style and transform and `pop` restores them; a `pop` without a matching `push`, or a `push` nested more than 64 deep, is a catchable `invalid canvas argument`. `clear` and `background` also reset the transform and empty the `push` stack, so the reset Drawing is only style commands and replays to the same state. This matches p5.js, which resets the transform at the start of each `draw`, so a Script that starts every `frame` with `background` and then translates still keeps one frame's Drawing. `background` itself fills the whole Canvas, whatever the transform. `rotate` takes radians, clockwise on the Page because the y axis points down, as `arc`, the trigonometric Built-ins, p5.js and Canvas 2D do. Talk has one angle unit, so an angle from `atan2` passes straight to `rotate`.
 
+`polygon` and `polyline` each take a list of points, `[[x, y], …]`, and are one command at 1 Fuel however many points they carry ([#1385](https://github.com/odogono/odgn-talk/issues/1385)). `polygon` is closed and `polyline` is open. Both are filled and stroked with the current style, as p5.js and Canvas 2D fill an open path by closing it implicitly, so a `polyline` drawn after `noFill` is only an outline. A list holds 2 to 1,000 points, and each coordinate is within the usual coordinate limit. Point by point, as p5.js's `beginShape`, `vertex` and `endShape` work, a polygon would cost a command and a Fuel per vertex and run into the 10,000 cap; built from `triangle` and `line`, as before, it could not fill a concave outline cleanly or join its corners. Curves and holes are left out. A later argument or Operation can add them without changing these two.
+
 ## Considered Options
 
 - **A lifetime count reset by `clear`, with no list**, as in the Playground. A game could redraw forever, but nothing could rebuild the picture for the page, for Edit or for the Project file.
@@ -19,10 +21,14 @@ The transform Operations `push`, `pop`, `translate`, `rotate` and `scale` are or
 - **`clear` and `background` keep the transform and `push` stack**, as they keep the style. The reset Drawing would have to carry every `push` and transform still in effect, so a Script that translates each `frame` without `push` would grow towards the cap.
 - **Degrees for canvas angles.** `rotate 90` would be an exact Decimal, but `sin`, `cos` and `atan2` take radians, so a Script would convert at every boundary between the maths and the drawing.
 - **A Grant bound to the Canvas's Owning Script, or a "current canvas" selector.** Each Operation takes the target Canvas Element as its first argument instead, as `elements` takes Elements, so a Page Script can draw into any Canvas it can name without a message each frame or hidden state.
+- **One `shape` Operation with a closed flag**, as p5.js names it. Shape already names a description of accepted values, which the canvas signatures themselves use, and a bare `true` argument reads poorly in a Script.
+- **A flat list of coordinates**, `[x1, y1, x2, y2, …]`. Simpler to check, but an odd count is a mistake the shape of the list cannot show.
+- **Bézier and spline vertices, and holes**, as p5.js's `bezierVertex` and `beginContour`. They would need a kind on each point or a list of rings, roughly doubling validation and the stored form, and nothing in #1144 needs them.
 
 ## Consequences
 
 - The Drawing is stored in the Project file as `{op, args}` commands, checked with the same signatures, validation and limits as the Playground's canvas, which move out of `tooling/stack/src/canvas.ts` into shared exports. Folio's Grant does not use `canvasCapabilities()`.
+- A command's arguments are display-spelled text or, for `polygon` and `polyline`, a list of pairs of display-spelled numbers. Project files written before #1385 hold only text, so they load unchanged.
 - Each canvas Operation is `immediate` and costs 1 Fuel. Commands are not Segment-bound, so a Play stopped part-way through a frame commits the half-drawn Drawing as shown.
 - All other Play State is still discarded on return to Edit. Scripts cannot read a Drawing back, and cloning or duplicating a Canvas copies its Drawing.
 - Each Message Box line in Edit that draws is one undoable edit. Only `clear`, `background` or the Info panel's Clear drawing action removes commands. Clear drawing empties the Drawing completely, so the next command starts from the default style. Nothing marks a Canvas whose Drawing came from Play.
