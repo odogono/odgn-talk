@@ -231,6 +231,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 - Tests: [performance.test.ts](tests/performance.test.ts),
   [play-host.test.ts](tests/play-host.test.ts), and the `performance` browser suite
   on `/performance-test.html`. Run `tetris` for a game integration check.
+- [The Tetris benchmark](tools/bench-tetris.md) plays a scripted, seeded
+  game on Element and Canvas Tetris, headless and in Chromium.
 - First check: `bun test tooling/creative/tests/performance.test.ts tooling/creative/tests/play-host.test.ts`.
 
 ## Canvas Elements and the canvas Grant
