@@ -339,7 +339,7 @@ export const runBrowserTests = async () => {
       document.querySelector<HTMLElement>('#reader')!.hidden,
       `${action} left Play visible`,
     );
-    assert(toggle.textContent === 'Present', `${action} left the Stop button`);
+    assert(toggle.textContent === 'Play', `${action} left the Stop button`);
     assert(
       document.querySelector('#page [data-element="button1"]')!.textContent ===
         'Button',
@@ -567,8 +567,35 @@ end frame`;
     Number(
       document.querySelector('#reader [data-element="counter"]')?.textContent,
     );
+  const [pause, step] = [
+    ...document.querySelectorAll<HTMLButtonElement>('#play-controls button'),
+  ].slice(1);
+  assert(pause!.disabled && step!.disabled, 'Pause or Step enabled in Edit');
   toggle.click();
   await until(() => counter() >= 10);
+  assert(!pause!.disabled && step!.disabled, 'Pause or Step wrong in Present');
+  pause!.click();
+  await until(() => pause!.textContent === 'Resume');
+  const paused = counter();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert(counter() === paused, 'Frames continued while paused');
+  assert(
+    document.querySelector('#reader')!.classList.contains('paused'),
+    'The reader does not show it is paused',
+  );
+  step!.click();
+  await until(() => counter() === paused + 1);
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: "'", metaKey: true, bubbles: true }),
+  );
+  await until(() => counter() === paused + 2);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert(counter() === paused + 2, 'A Step delivered more than one frame');
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: '.', metaKey: true, bubbles: true }),
+  );
+  await until(() => pause!.textContent === 'Pause' && step!.disabled);
+  await until(() => counter() >= paused + 10);
   toggle.click();
   const stopped = document.querySelector(
     '#page [data-element="counter"]',
@@ -581,7 +608,13 @@ end frame`;
   );
   return {
     passed: true,
-    checks: ['frames reach a Page Script', 'no frames in Edit'],
+    checks: [
+      'frames reach a Page Script',
+      'Pause stops frames',
+      'Step and its shortcut deliver one frame each',
+      'Resume continues frames',
+      'no frames in Edit',
+    ],
   };
 };
 

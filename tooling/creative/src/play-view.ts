@@ -39,12 +39,40 @@ const VARIABLES_REFRESH = 100;
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 export const mountPlay = (shell: StackShell): void => {
+  // Play presents the Project; Pause and Step act on any Play Session.
   const toggle = h(
     'button',
-    { type: 'button', 'aria-pressed': 'false' },
-    'Present',
+    {
+      type: 'button',
+      'aria-pressed': 'false',
+      title: 'Play: present the Project',
+    },
+    'Play',
   );
-  byId('menu').append(toggle);
+  const pauseButton = h(
+    'button',
+    {
+      type: 'button',
+      'aria-pressed': 'false',
+      disabled: true,
+      title: 'Pause (⌘.)',
+    },
+    'Pause',
+  );
+  const stepButton = h(
+    'button',
+    { type: 'button', disabled: true, title: "Step one frame (⌘')" },
+    'Step',
+  );
+  byId('menu').append(
+    h(
+      'div',
+      { id: 'play-controls', role: 'group', 'aria-label': 'Play' },
+      toggle,
+      pauseButton,
+      stepButton,
+    ),
+  );
   // Browse and Edit head the Tools window, as HyperCard's browse tool did.
   const browseTool = h(
     'button',
@@ -206,7 +234,7 @@ export const mountPlay = (shell: StackShell): void => {
     args?: string[],
     pageIndex = session?.page.index,
   ) => {
-    if (!session || session.stopped || session.navigating) {
+    if (!session || session.stopped || session.navigating || session.paused) {
       return;
     }
     post({
@@ -261,7 +289,11 @@ export const mountPlay = (shell: StackShell): void => {
     ) {
       return;
     }
+    const wasPaused = session.paused;
     session.apply(response);
+    if (session.paused !== wasPaused) {
+      drawModes();
+    }
     if (response.messageTargets) {
       syncMessage();
     }
@@ -321,6 +353,7 @@ export const mountPlay = (shell: StackShell): void => {
       !session ||
       session.stopped ||
       session.navigating ||
+      session.paused ||
       !element.editable
     ) {
       return;
@@ -517,7 +550,8 @@ export const mountPlay = (shell: StackShell): void => {
     }
     frameRequest = requestAnimationFrame(() => {
       frameRequest = undefined;
-      if (!session || session.stopped) {
+      // A paused session asks again when its Resume's view arrives.
+      if (!session || session.stopped || session.paused) {
         return;
       }
       post({ kind: 'frame', session: sessionId });
@@ -546,8 +580,15 @@ export const mountPlay = (shell: StackShell): void => {
     void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {
-    toggle.textContent = mode === 'present' ? 'Stop' : 'Present';
+    const live = Boolean(session && !session.stopped);
+    const paused = live && session!.paused;
+    toggle.textContent = mode === 'present' ? 'Stop' : 'Play';
     toggle.setAttribute('aria-pressed', String(mode === 'present'));
+    pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+    pauseButton.disabled = !live;
+    stepButton.disabled = !paused;
+    reader.classList.toggle('paused', paused);
     browseTool.setAttribute('aria-pressed', String(mode === 'browse'));
     editTool.setAttribute('aria-pressed', String(mode === undefined));
     document.body.classList.toggle('playing', mode === 'present');
@@ -652,6 +693,24 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   editTool.addEventListener('click', () => leave());
+  /** Pausing releases held keys first, as input while paused is dropped. */
+  const togglePause = () => {
+    if (!session || session.stopped) {
+      return;
+    }
+    if (!session.paused) {
+      releaseKeys();
+      closeText();
+    }
+    post({ kind: session.paused ? 'resume' : 'pause', session: sessionId });
+  };
+  const step = () => {
+    if (session && !session.stopped && session.paused) {
+      post({ kind: 'step', session: sessionId });
+    }
+  };
+  pauseButton.addEventListener('click', togglePause);
+  stepButton.addEventListener('click', step);
   // Choosing an Element tool while browsing returns to Edit to add it.
   byId('tools').addEventListener(
     'click',
@@ -691,6 +750,18 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session || prompts.contains(event.target as Node)) {
       return;
     }
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      (event.key === '.' || event.key === "'") &&
+      !isTyping(event.target)
+    ) {
+      event.preventDefault();
+      if (!event.repeat || event.key === "'") {
+        (event.key === '.' ? togglePause : step)();
+      }
+      return;
+    }
     // While browsing, Esc in the Code Browser or a menu stays with it.
     if (
       event.key === 'Escape' &&
@@ -704,6 +775,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (
       session.stopped ||
       session.navigating ||
+      session.paused ||
       !reader.contains(event.target as Node)
     ) {
       return;

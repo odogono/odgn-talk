@@ -57,7 +57,9 @@ export type PlayRequest =
   | { error?: string; kind: 'soundEnded'; voice: number }
   | { kind: 'inspect'; session: number }
   | { kind: 'variables'; session: number }
-  | { kind: 'stop'; session: number };
+  | { kind: 'stop'; session: number }
+  /** Pause, Resume and Step act on the session's Play clock (ADR 0128). */
+  | { kind: 'pause' | 'resume' | 'step'; session: number };
 
 /** A prompt as the page shows it; its answer names the prompt's id. */
 export type PromptView = UserPrompt & { id: number };
@@ -107,6 +109,8 @@ export type PlayView = {
   /** Whether the Page's Message Path handles each key message. */
   pageHandles: { keyDown: boolean; keyUp: boolean };
   pageIndex: number;
+  /** Whether the session is paused: no time passes and reader input is dropped. */
+  paused: boolean;
   problems: ProblemView[];
   prompt: PromptView | undefined;
   session: number;

@@ -60,7 +60,8 @@ const fixture = () => {
 };
 
 // A host wired straight to a mirror, as the page and worker would be.
-const hosted = (project: Project) => {
+// `clock` is milliseconds, read as both the wall and the performance clock.
+const hosted = (project: Project, clock?: () => number) => {
   const replies: Reply<PlayResponse>[] = [];
   const views: PlayView[] = [];
   let id = 1;
@@ -75,14 +76,18 @@ const hosted = (project: Project) => {
     }),
   );
   // Copied as `postMessage` would, so the mirror never shares the session's objects.
-  const host = new PlayHost(sent => {
-    const reply = structuredClone(sent);
-    replies.push(reply);
-    if (reply.response.kind === 'view') {
-      views.push(reply.response);
-      mirror.apply(reply.response);
-    }
-  });
+  const host = new PlayHost(
+    sent => {
+      const reply = structuredClone(sent);
+      replies.push(reply);
+      if (reply.response.kind === 'view') {
+        views.push(reply.response);
+        mirror.apply(reply.response);
+      }
+    },
+    clock && (() => BigInt(Math.round(clock() * 1000))),
+    clock,
+  );
   const request = (request: PlayRequest) =>
     host.receive({ id: id++, request } satisfies Envelope<PlayRequest>);
   request({
@@ -186,6 +191,76 @@ test('Message Box commands answer once their Run ends', async () => {
     kind: 'message',
     text: '3',
   });
+});
+
+test('a paused session drops frames and reader input, and a Step delivers one frame', async () => {
+  const project = fixture();
+  project.pages[0]!.script =
+    'script variable total = 0\non frame elapsed\n add elapsed to total\n set the label of go to "" & total\nend frame';
+  let ms = 1000;
+  const { mirror, request, element } = hosted(project, () => ms);
+  const label = () => {
+    const go = element('go');
+    return go.kind === 'button' ? go.label : undefined;
+  };
+  await until(() => mirror.wantsFrames);
+  request({ kind: 'frame', session: 1 });
+  await until(() => label() === '0');
+  ms = 1016;
+  request({ kind: 'frame', session: 1 });
+  await until(() => label() === '16');
+  request({ kind: 'pause', session: 1 });
+  await until(() => mirror.paused);
+  ms = 5000;
+  request({ kind: 'frame', session: 1 });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(label()).toBe('16');
+  // One Step is one 60 Hz frame of Play time, however long the pause.
+  request({ kind: 'step', session: 1 });
+  await until(() => label() === '33');
+  expect(mirror.paused).toBe(true);
+  ms = 6000;
+  request({ kind: 'resume', session: 1 });
+  await until(() => !mirror.paused);
+  ms = 6016;
+  request({ kind: 'frame', session: 1 });
+  await until(() => label() === '49');
+});
+
+test('a wait keeps its remaining time across a pause', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'on click\n wait 100 ms\n set the label of me to "done"\nend click';
+  let ms = 0;
+  const { request, element } = hosted(project, () => ms);
+  const label = () => {
+    const go = element('go');
+    return go.kind === 'button' ? go.label : undefined;
+  };
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  ms = 50;
+  request({ kind: 'pause', session: 1 });
+  ms = 1000;
+  request({ kind: 'resume', session: 1 });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  // Play time is 50 ms in, so the wait has 50 ms left.
+  expect(label()).not.toBe('done');
+  ms = 1100;
+  await until(() => label() === 'done');
 });
 
 // A worker whose host runs in-process, except that it can be made to hang.
@@ -647,4 +722,31 @@ test('Variables rows open lists by key and cap them with a more row', () => {
       live: false,
     }),
   ).toBe('(deleted)');
+});
+
+test('the Performance window leaves out paused time', () => {
+  const replies: Reply<PlayResponse>[] = [];
+  let ms = 0;
+  const host = new PlayHost(
+    reply => replies.push(structuredClone(reply)),
+    () => BigInt(ms * 1000),
+    () => ms,
+  );
+  const send = (request: PlayRequest) => host.receive({ id: 1, request });
+  send({
+    kind: 'open',
+    session: 1,
+    project: createProject('Paused'),
+    pageIndex: 0,
+    seed: 0n,
+  });
+  send({ kind: 'performance', session: 1, epoch: 1 });
+  ms = 250;
+  send({ kind: 'pause', session: 1 });
+  ms = 10_250;
+  send({ kind: 'resume', session: 1 });
+  ms = 10_500;
+  send({ kind: 'stop', session: 1 });
+  const last = replies.filter(r => r.response.kind === 'performance').at(-1);
+  expect(last?.response).toMatchObject({ snapshot: { elapsed: 0.5 } });
 });
