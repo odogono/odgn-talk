@@ -9,6 +9,7 @@
     "./lint": "./src/lint.ts",
     "./lsp": "./src/lsp.ts",
     "./debug": "./src/debug.ts",
+    "./pausable-clock": "./src/pausable-clock.ts",
     "./dictionary": "./src/dictionary.ts",
     "./session-driver": "./src/session-driver.ts",
     "./worker-supervisor": "./src/worker-supervisor.ts"
