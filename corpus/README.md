@@ -110,8 +110,9 @@ Unicode folding, membership, literal tests and folded Character visit charges,
 including shared values. The #909 additions cover exact map-key identity,
 coexisting ASCII and Unicode case variants, NFC keys, nested values, membership
 and early/late missing-key Fuel. The earlier #903 blessing was approved in
-[#912](https://github.com/odogono/odgn-talk/pull/912); the new TS+Zig expectations
-await human review in the [map-key review package](../docs/reviews/folded-map-keys/README.md).
+[#912](https://github.com/odogono/odgn-talk/pull/912); the maintainer approved
+the #909 TS+Zig additions on 2026-10-23 in the
+[map-key review package](../docs/reviews/folded-map-keys/README.md).
 Current support is described in the [Zig value guide](../impl/zig/README.md#values-and-ownership).
 
 The seven `stdlib/mappings*` Traces and `builtins/collection-comparison-fuel`

@@ -1,4 +1,3 @@
-# Unblessed: case-variant map-key additions (#909); first blessing awaits human review.
 > load s identity=3ce32771151b294b79578e2ec6f8e764636fc61ff7687861c304dff272307c82
 > deliver d1 to=s message=go
 > pump clock=2026-10-14T00:00:00Z

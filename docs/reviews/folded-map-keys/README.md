@@ -2,13 +2,15 @@
 
 ## Approval status
 
-**Human review pending.** This package covers the additions to
+**First blessing approved on 2026-10-23.** After reviewing this package at
+implementation commit `88d4a6d8a91d82176f912e25912fcd53b5442d58`, the maintainer
+confirmed in the #909 implementation thread: "the package looks fine i approve".
+This approves the additions to
 [`text-model/folded-comparisons/case.trace`](../../../corpus/text-model/folded-comparisons/case.trace)
 for [#909](https://github.com/odogono/odgn-talk/issues/909).
 The earlier #903 expectations received their first blessing in
-[#912](https://github.com/odogono/odgn-talk/pull/912). Approval of the
-[design handoff](../../handoffs/909-case-variant-map-keys.md) does not approve
-these new expectation bytes.
+[#912](https://github.com/odogono/odgn-talk/pull/912). This approval is separate
+from the earlier [design approval](../../handoffs/909-case-variant-map-keys.md).
 
 ## Expected results
 
@@ -84,9 +86,10 @@ length adds no Character scan.
 
 ## Verification
 
-The [SHA-256 inventory](expectations-sha256.txt) identifies the exact Trace bytes
-awaiting human first-blessing approval, including the Unblessed header. When
-approved, remove only that header and record the approval here.
+The [SHA-256 inventory](expectations-sha256.txt) identifies the exact approved
+Trace bytes before removal of the Unblessed header. The inventory was verified
+against the reviewed revision before removing only that header; every Host
+Input and expectation record is unchanged.
 
 Passed on the implementation branch:
 

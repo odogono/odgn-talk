@@ -2,8 +2,9 @@
 
 Design interview for [#909](https://github.com/odogono/odgn-talk/issues/909).
 Q1–Q5 are agreed. The author confirmed complete shared understanding in Q5;
-the design interview is complete. The corpus additions are implemented on
-`test/issue-909`; verification and human review are tracked in the
+the design interview is complete. The corpus additions are implemented in
+PR [#1548](https://github.com/odogono/odgn-talk/pull/1548); verification and
+first-blessing approval are recorded in the
 [review package](../reviews/folded-map-keys/README.md).
 
 ## Agreed scope
@@ -25,9 +26,9 @@ already have authoritative documentation.
   records the rationale for exact keys and explicit case folding.
 - [Chapter 8 rates](../../spec/08-the-abstract-machine-and-the-cost-model.md#rates)
   define comparison visit charges.
-- The existing [Trace Case](../../corpus/text-model/folded-comparisons/case.toml)
-  exercises folded nested values, but its current map probes retain identical
-  keys on both sides.
+- At the interview checkout, the [Trace Case](../../corpus/text-model/folded-comparisons/case.toml)
+  exercised folded nested values, but its map probes retained identical keys
+  on both sides.
 
 Static inspection at `7317e70d` found exact map-key lookup in both Cores and an
 existing Zig unit regression for the original case-variant-key example. No
@@ -99,20 +100,22 @@ that paragraph consistent with implementation and review status.
 ## Implementation handoff
 
 - **Implemented in:** design PR [#1547](https://github.com/odogono/odgn-talk/pull/1547);
-  the corpus additions and documentation cleanup on `test/issue-909` implement
-  Q2–Q5, with independently derived expected booleans and Fuel in the review
-  package. The implementation is not yet merged.
-- **Remaining work:** obtain human approval of the new expectations and merge
-  the implementation. TS+Zig agreement passed in both replay modes, as did
+  implementation PR [#1548](https://github.com/odogono/odgn-talk/pull/1548),
+  with corpus additions and documentation cleanup implementing Q2–Q5 at
+  `88d4a6d8`. The review package records independently derived expected booleans
+  and Fuel, plus the maintainer's first-blessing approval on 2026-10-23.
+  The implementation is not yet merged.
+- **Remaining work:** merge the implementation. TS+Zig agreement passed in both
+  replay modes, as did
   the full Go corpus gate and both full Zig corpus passes. Reconcile
   #909's handoff when implementation and review land.
 - **Required base:** `main` containing design PR #1547; implementation starts
   from `6a32bc56`. Use the Spec sections linked above.
-- **Approval still needed:** the additions to
-  `corpus/text-model/folded-comparisons/case.trace` inventoried in the
-  [review package](../reviews/folded-map-keys/README.md). Agreement between Cores
-  does not constitute first-blessing approval.
+- **Approval still needed:** none. The maintainer approved the additions to
+  `corpus/text-model/folded-comparisons/case.trace` on 2026-10-23; the
+  [review package](../reviews/folded-map-keys/README.md) preserves the approval
+  and exact pre-header-removal inventory.
 
 The confirmed design landed in #1547. Follow-up implementation must use a
-revision containing this handoff and preserve the pending review status until
-the new expectation bytes receive human approval.
+revision containing this handoff. The approved expectation records remain
+unchanged when their Unblessed header is removed.
