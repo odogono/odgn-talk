@@ -4,7 +4,8 @@
 //! the exchange's state between frames and the worker it runs, gates every
 //! frame while the exchange is open, and decides what follows a pause, a
 //! result or a release's acknowledgement. `message.zig` decodes and encodes
-//! frames in each layout and runs the worker from what the module returns.
+//! frames in each layout and runs the worker from what the module returns;
+//! the gate treats both layouts alike (#1496).
 //!
 //! The module never sees the Session. `Parts` names the payloads it holds
 //! and the machine's crossing-pause calls it makes, so its tests run on
@@ -22,10 +23,6 @@ pub const Worker = enum {
 /// A crossing that waits for the Host's result.
 pub const Crossing = enum { op, prop, effect };
 
-/// How a frame crossed: the JSON layout, or the binary fields layout,
-/// whose results have no `trace-result` (ADR 0110).
-pub const Layout = enum { json, binary };
-
 /// A frame as the gate sees it: a result of some kind, or any other input.
 pub const Frame = union(enum) {
     result: Result,
@@ -34,19 +31,17 @@ pub const Frame = union(enum) {
 
 pub const Result = enum { op, prop, effect, trace, release };
 
-/// Why a frame is refused, with the exchange left as it was. Each layout
-/// words these as it did before the module (#1496 would make them agree).
+/// Why a frame is refused, with the exchange left as it was. A result the
+/// exchange isn't waiting for is refused with what it is waiting for.
 pub const Refusal = enum {
     /// A result of another kind than the open need's.
     kind_mismatch,
-    /// Another frame under the paused worker's ref.
+    /// Any other result while a need waits for its result.
     result_pending,
-    /// Anything but `trace-result` under the worker's ref at a Trace pause.
+    /// Any result but `trace-result` under the worker's ref at a Trace pause.
     trace_pending,
-    /// Binary: any result but the release's acknowledgement.
+    /// Any result but the release's acknowledgement.
     release_pending,
-    /// Binary: a result under another ref.
-    wrong_ref,
     /// A result with no exchange open.
     not_open,
     /// Admission: a new input under the paused worker's ref.
@@ -365,10 +360,10 @@ pub fn Exchange(comptime Parts: type) type {
         /// What a frame under `ref`, addressed to `group`, does to the
         /// exchange. A result it would take must address the exchange's
         /// Group, including a release holding a final reply after its
-        /// worker has finished (#1492). JSON and binary differ where they
-        /// did before the module (#1496).
-        pub fn gate(x: *const X, ref: i64, frame: Frame, layout: Layout, group: ?Entry) Gate {
-            const g = x.gateFrame(ref, frame, layout);
+        /// worker has finished (#1492). An input is never refused here:
+        /// while the exchange is open, admission decides it.
+        pub fn gate(x: *const X, ref: i64, frame: Frame, group: ?Entry) Gate {
+            const g = x.gateFrame(ref, frame);
             const owner = switch (g) {
                 .result, .trace_result => x.entry,
                 .release_result => x.releasing(),
@@ -377,29 +372,26 @@ pub fn Exchange(comptime Parts: type) type {
             return if (group != null and group == owner) g else .{ .refuse = .wrong_group };
         }
 
-        fn gateFrame(x: *const X, ref: i64, frame: Frame, layout: Layout) Gate {
-            const binary_result = layout == .binary and frame == .result;
+        fn gateFrame(x: *const X, ref: i64, frame: Frame) Gate {
+            const got = switch (frame) {
+                .input => return switch (x.state) {
+                    .idle => .dispatch,
+                    inline else => |w| .{ .admit = w.ref },
+                },
+                .result => |kind| kind,
+            };
             switch (x.state) {
-                .idle => return if (binary_result) .{ .refuse = .not_open } else .dispatch,
+                .idle => return .{ .refuse = .not_open },
                 .awaiting_release => |w| {
-                    if (isResult(frame, .release) and ref == w.ref) return .release_result;
-                    return if (binary_result) .{ .refuse = .release_pending } else .{ .admit = w.ref };
+                    if (got == .release and ref == w.ref) return .release_result;
+                    return .{ .refuse = .release_pending };
                 },
                 .awaiting_trace => |w| {
-                    if (layout == .binary) {
-                        if (frame == .input) return .{ .admit = w.ref };
-                        return .{ .refuse = if (ref != w.ref) .wrong_ref else .trace_pending };
-                    }
-                    if (ref != w.ref) return .{ .admit = w.ref };
-                    return if (isResult(frame, .trace)) .trace_result else .{ .refuse = .trace_pending };
+                    if (got == .trace and ref == w.ref) return .trace_result;
+                    return .{ .refuse = .trace_pending };
                 },
                 .awaiting_result => |w| {
-                    if (layout == .binary and frame == .input) return .{ .admit = w.ref };
-                    if (ref != w.ref) return if (layout == .binary) .{ .refuse = .wrong_ref } else .{ .admit = w.ref };
-                    const got = switch (frame) {
-                        .input => return .{ .refuse = .result_pending },
-                        .result => |kind| kind,
-                    };
+                    if (ref != w.ref) return .{ .refuse = .result_pending };
                     if (got == resultOf(w.need.kind)) return .{ .result = w.need.kind };
                     return .{ .refuse = switch (got) {
                         .op, .prop, .effect => .kind_mismatch,
@@ -524,13 +516,6 @@ pub fn Exchange(comptime Parts: type) type {
     };
 }
 
-fn isResult(frame: Frame, kind: Result) bool {
-    return switch (frame) {
-        .result => |r| r == kind,
-        .input => false,
-    };
-}
-
 fn resultOf(kind: Crossing) Result {
     return switch (kind) {
         .op => .op,
@@ -640,8 +625,8 @@ test "a need's result resumes the worker that paused, and only that result is ta
     defer g.calls.deinit(gpa);
     var x: TestX = .{};
     defer x.deinit(gpa);
-    try testing.expectEqual(Gate.dispatch, x.gate(7, .{ .result = .op }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .not_open }, x.gate(7, .{ .result = .op }, .binary, &g));
+    try testing.expectEqual(Gate{ .refuse = .not_open }, x.gate(7, .{ .result = .op }, &g));
+    try testing.expectEqual(Gate.dispatch, x.gate(7, .input, &g));
 
     x.start(&g, .work);
     try testing.expect(x.canDefer(.op) and x.canDefer(.effect) and !x.canDefer(.prop));
@@ -650,18 +635,16 @@ test "a need's result resumes the worker that paused, and only that result is ta
     x.stop(gpa);
     try testing.expect(x.open() and !x.canDefer(.op));
 
-    // JSON: a result under another ref is an input; the kind is checked last.
-    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(8, .{ .result = .op }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .kind_mismatch }, x.gate(7, .{ .result = .prop }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .{ .result = .release }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .input, .json, &g));
-    // Binary: the ref is checked first, and an input is always considered.
-    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(8, .{ .result = .op }, .binary, &g));
-    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(7, .input, .binary, &g));
-    try testing.expectEqual(Gate{ .result = .op }, x.gate(7, .{ .result = .op }, .binary, &g));
+    // Any other result is refused with what waits; an input is admission's.
+    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(8, .{ .result = .op }, &g));
+    try testing.expectEqual(Gate{ .refuse = .kind_mismatch }, x.gate(7, .{ .result = .prop }, &g));
+    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(7, .{ .result = .release }, &g));
+    try testing.expectEqual(Gate{ .refuse = .result_pending }, x.gate(8, .{ .result = .trace }, &g));
+    try testing.expectEqual(Gate{ .admit = 7 }, x.gate(7, .input, &g));
+    try testing.expectEqual(Gate{ .result = .op }, x.gate(7, .{ .result = .op }, &g));
     var other: TestGroup = .{};
-    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, .binary, &other));
-    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, .json, null));
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, &other));
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(7, .{ .result = .op }, null));
 
     const r = x.answered(gpa, TestX.Answer.make("41"));
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .work }, r);
@@ -675,7 +658,7 @@ test "a need's result resumes the worker that paused, and only that result is ta
     x.stop(gpa);
 }
 
-test "a Trace pause takes only trace-result, which no binary result is" {
+test "a Trace pause takes only trace-result under the worker ref" {
     const gpa = testing.allocator;
     var g: TestGroup = .{ .trace_pause = true };
     defer g.calls.deinit(gpa);
@@ -684,12 +667,11 @@ test "a Trace pause takes only trace-result, which no binary result is" {
     x.start(&g, .pump);
     try testing.expectEqual(TestX.Pause.trace, x.pause(3));
     x.stop(gpa);
-    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(4, .{ .result = .op }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .json, &g));
-    try testing.expectEqual(Gate.trace_result, x.gate(3, .{ .result = .trace }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .wrong_ref }, x.gate(4, .{ .result = .op }, .binary, &g));
-    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, .binary, &g));
-    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(3, .input, .binary, &g));
+    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(4, .{ .result = .op }, &g));
+    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(3, .{ .result = .op }, &g));
+    try testing.expectEqual(Gate.trace_result, x.gate(3, .{ .result = .trace }, &g));
+    try testing.expectEqual(Gate{ .refuse = .trace_pending }, x.gate(4, .{ .result = .trace }, &g));
+    try testing.expectEqual(Gate{ .admit = 3 }, x.gate(3, .input, &g));
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .pump }, x.traceTaken());
     try expectCalls(&g, &.{ "clearTracePause", "beginAnswer" });
     try testing.expect(!x.open() and !g.trace_pause);
@@ -718,13 +700,12 @@ test "a final reply waits for each release, then ends the exchange" {
     try testing.expect(x.hold(5, heldReply(&g, "final")));
     try testing.expectEqual(&g, x.releasing());
     try testing.expectEqualStrings("a", x.nextRelease().bytes);
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(5, .{ .result = .op }, .json, &g));
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .{ .result = .release }, .json, &g));
-    try testing.expectEqual(Gate{ .refuse = .release_pending }, x.gate(5, .{ .result = .op }, .binary, &g));
-    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .input, .binary, &g));
-    try testing.expectEqual(Gate.release_result, x.gate(5, .{ .result = .release }, .binary, &g));
+    try testing.expectEqual(Gate{ .refuse = .release_pending }, x.gate(5, .{ .result = .op }, &g));
+    try testing.expectEqual(Gate{ .refuse = .release_pending }, x.gate(6, .{ .result = .release }, &g));
+    try testing.expectEqual(Gate{ .admit = 5 }, x.gate(6, .input, &g));
+    try testing.expectEqual(Gate.release_result, x.gate(5, .{ .result = .release }, &g));
     var other: TestGroup = .{};
-    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(5, .{ .result = .release }, .binary, &other));
+    try testing.expectEqual(Gate{ .refuse = .wrong_group }, x.gate(5, .{ .result = .release }, &other));
     try testing.expectEqual(TestX.Acknowledged.next_release, x.releaseAcknowledged(gpa));
     try testing.expectEqualStrings("b", x.nextRelease().bytes);
     var sent = x.releaseAcknowledged(gpa).reply;
@@ -750,7 +731,7 @@ test "a need reply held behind a release leaves its need open" {
     var sent = x.releaseAcknowledged(gpa).reply;
     sent.deinit(gpa);
     try expectCalls(&g, &.{"clearReleasePause"});
-    try testing.expectEqual(Gate{ .result = .effect }, x.gate(9, .{ .result = .effect }, .json, &g));
+    try testing.expectEqual(Gate{ .result = .effect }, x.gate(9, .{ .result = .effect }, &g));
     try testing.expectEqual(&g, x.entry.?);
     try testing.expectEqual(TestX.Resume{ .entry = &g, .worker = .pump }, x.effectAnswered(gpa, .ok));
     x.start(&g, .pump);
