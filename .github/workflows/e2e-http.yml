@@ -11,16 +11,10 @@ on:
       - 'tooling/cli/**'
       - 'tools/e2e/**'
       - '.github/workflows/e2e-http.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'examples/http/**'
-      - 'impl/ts/src/**'
-      - 'impl/go/**'
-      - 'impl/zig/**'
-      - 'tooling/cli/**'
-      - 'tools/e2e/**'
-      - '.github/workflows/e2e-http.yml'
+
+concurrency:
+  group: e2e-http-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Every northtalk runner (Bun, Node, Go, native Zig) serves the HTTP example.

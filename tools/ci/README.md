@@ -9,7 +9,8 @@ broader matrix on `main` or manually:
 - `.github/workflows/pr-go.yml` runs Go vet, tests, race tests and Corpus on
   `ubuntu-latest`, with persistent Go caches between Actions runs.
 - `.github/workflows/pr-macos.yml` builds and checks the Zig sidecar on
-  GitHub-hosted Apple Silicon macOS, so PRs do not wait for Almere.
+  GitHub-hosted Apple Silicon macOS, only for PRs labelled `macos` or run by
+  hand, since macOS minutes cost ten times Linux's.
 - `.woodpecker/linux.yaml` runs TS core tests, its build and Corpus in Linux
   containers. On `main` pushes and manual runs it also runs Go vet, tests, race
   tests and Corpus; affected TS and Go steps run in parallel after bootstrap.
@@ -24,6 +25,10 @@ broader matrix on `main` or manually:
   checker on PR code updates and metadata edits, with full Git history.
 - `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
   SQLite module, reusing the Go build and module caches.
+- `.woodpecker/nightly.yaml` runs the nightly fuzz campaign and the Zig Core's
+  format, test and Corpus checks, on the `nightly` cron registered in the
+  repository's Woodpecker settings (daily at 03:17) or by hand. It uses the
+  `zig` worker image.
 - `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
   the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
   under TypeScript 5.9 and the latest TypeScript.
@@ -33,9 +38,14 @@ campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gate
 and the broader Zig and platform matrix. GitHub Actions keeps that coverage on
 `main` and through manual runs. Go/Zig timing measurements run only on demand.
 
+To save Actions minutes, the Zig, Go, TS, TS-on-WASM and Benchmark Suite
+workflows no longer run on every push to `main`: they run weekly on Sunday
+morning, and by hand. The Spec workflow is gone, since `.woodpecker/spec.yaml`
+runs the same gates. The issue graph's schedule runs every six hours.
+
 Use **Actions → workflow → Run workflow** to run a retained Actions workflow on
 a selected branch before merging when its additional coverage is needed. Release,
-deployment, issue-graph and nightly-fuzz triggers remain separate. The redundant
+deployment and issue-graph triggers remain separate. The redundant
 Actions Conventions workflow is removed; Woodpecker supplies the required check.
 
 ## Selecting checks
@@ -162,6 +172,18 @@ launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.woodpecker.colima.plis
 docker --context colima-woodpecker compose -f ~/woodpecker/compose.linux.yaml stop
 colima stop woodpecker
 ```
+
+### Zig worker image
+
+The nightly pipeline needs Zig. Build this variant on each general Linux Docker
+worker after the default image:
+
+```sh
+docker build -f tools/ci/Dockerfile.zig -t odgn-talk-ci:2026-10-19-2-zig tools/ci
+```
+
+Keep `ZIG_VERSION` in `Dockerfile.zig` aligned with the workflows'
+`mlugg/setup-zig` pin, and use a new image tag when rebuilding.
 
 ### Browser worker image
 

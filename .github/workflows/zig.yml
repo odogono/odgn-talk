@@ -2,21 +2,10 @@ name: Zig Core
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'impl/zig/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'tools/zig/**'
-      - 'tools/unicode/**'
-      - 'tools/wasi/**'
-      - 'tools/sidecar/**'
-      - 'bench/message-layer/elixir/**'
-      - 'impl/elixir/**'
-      - 'tooling/fuzz/**'
-      - '.github/workflows/zig.yml'
+  # Weekly rather than on every push to main, to save Actions minutes;
+  # Woodpecker runs the Linux checks on main and nightly.
+  schedule:
+    - cron: '23 4 * * 0'
 
 jobs:
   # Build the CI targets, then execute on matching runners.

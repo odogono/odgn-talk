@@ -4,18 +4,10 @@ name: TS embedding API on the Zig reactor
 # wasm32-wasi reactor. A change to either side can break the other.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'impl/ts/**'
-      - 'impl/zig/**'
-      - 'spec/**'
-      - '!spec/**/*.md'
-      - 'corpus/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/ts-wasm.yml'
-      - '.github/actions/setup-ts/**'
+  # Weekly rather than on every push to main, to save Actions minutes;
+  # Woodpecker runs the Linux checks on main and nightly.
+  schedule:
+    - cron: '23 5 * * 0'
 
 jobs:
   facade:
