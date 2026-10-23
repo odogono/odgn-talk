@@ -23,6 +23,7 @@ export class PlayMirror implements ReaderTextPlay {
   messageTargets: NonNullable<PlayView['messageTargets']> = [];
   designWidth = 0;
   navigating = false;
+  paused = false;
   stopped = false;
   wantsFrames = false;
   prompt: PromptView | undefined;
@@ -77,6 +78,7 @@ export class PlayMirror implements ReaderTextPlay {
     }
     this.designWidth = view.designWidth;
     this.navigating = view.navigating;
+    this.paused = view.paused;
     this.stopped = view.stopped;
     this.wantsFrames = view.wantsFrames;
     this.prompt = view.prompt;

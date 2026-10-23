@@ -44,7 +44,7 @@ export const runBrowserTests = async () => {
     ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
   ].find(b => b.textContent?.includes('Edit'))!;
   const present = document.querySelector<HTMLButtonElement>(
-    '#menu > button[aria-pressed]',
+    '#menu [aria-pressed]',
   )!;
   assert(node('performance-window').hidden, 'Profiler should start hidden');
   assert(status().includes('No capture'), 'Empty state missing');

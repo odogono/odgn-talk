@@ -401,7 +401,7 @@ To run a Play Session in place, on the Page being edited, with the authoring win
 _Avoid_: preview, test mode, Play mode
 
 **Pause**:
-To freeze a browsing Play Session: its time stops and reader input is ignored, but it can still be inspected and changed from the Message Box.
+To freeze a Play Session in Browse or Present: its time stops and reader input is ignored. While browsing, it can still be inspected and changed from the Message Box.
 _Avoid_: break, suspend, halt
 
 **Step**:

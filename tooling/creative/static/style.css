@@ -1161,3 +1161,28 @@ button:disabled {
 body.playing #performance-window {
   z-index: 100;
 }
+/* Play, Pause and Step, side by side in the header. */
+#play-controls {
+  display: flex;
+  gap: 0.3rem;
+}
+#play-controls [aria-pressed='true'] {
+  background: var(--accent);
+  color: white;
+}
+/* A paused Play Session ignores the reader, and says so. */
+#reader.paused .page {
+  cursor: not-allowed;
+}
+#reader.paused .play-scale::after {
+  content: 'Paused';
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--accent);
+  color: white;
+  font-size: 0.85rem;
+  pointer-events: none;
+  z-index: 1;
+}

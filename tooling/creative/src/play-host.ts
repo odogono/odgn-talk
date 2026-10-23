@@ -103,6 +103,7 @@ export const firstView = (
       keyUp: play.handles(play.page, 'keyUp'),
     },
     navigating: false,
+    paused: false,
     stopped: false,
     wantsFrames: false,
     prompt: undefined,
@@ -111,8 +112,19 @@ export const firstView = (
   };
 };
 
+/** How far a Step moves the Play clock: one frame at 60 Hz, in ms. */
+const STEP = 1000 / 60;
+
 export class PlayHost {
   #session: PlaySession | undefined;
+  #paused = false;
+  #pausedSince = 0;
+  // Paused milliseconds so far, less the time Steps have moved on.
+  #pausedTotal = 0;
+  // Whether the Pumps running now belong to a Step, not the Message Box.
+  #stepping = false;
+  // The Play clock: Host time less paused time, never going back (ADR 0128).
+  readonly #clock: () => bigint;
   #id = 0;
   #performanceTimer: ReturnType<typeof setInterval> | undefined;
   #timer: ReturnType<typeof setTimeout> | undefined;
@@ -140,7 +152,9 @@ export class PlayHost {
     private readonly post: (reply: Reply<PlayResponse>) => void,
     private readonly now: () => bigint = wallClock,
     private readonly performanceNow: () => number = () => performance.now(),
-  ) {}
+  ) {
+    this.#clock = pausableClock(this.now, this.#pausedTime.bind(this));
+  }
 
   receive({ id, request }: Envelope<PlayRequest>): void {
     const reply = (response: PlayResponse) => this.post({ id, response });
@@ -179,7 +193,7 @@ export class PlayHost {
       }
       case 'stop': {
         this.#close();
-        session.stop(this.now());
+        session.stop(this.#clock());
         this.#publishPerformance();
         this.#publish();
         this.#session = undefined;
@@ -187,6 +201,10 @@ export class PlayHost {
         return;
       }
       case 'send': {
+        // Reader input while paused is dropped, not queued.
+        if (this.#paused) {
+          break;
+        }
         // Only a release can name a Page left since its press; its Message
         // Path still leads to any surviving Project Handler.
         const page =
@@ -210,6 +228,7 @@ export class PlayHost {
       case 'text': {
         const element = session.elementsOf().find(e => e.name === request.name);
         if (
+          !this.#paused &&
           request.pageIndex === session.pageIndex &&
           element?.kind === 'text' &&
           element.editable &&
@@ -234,7 +253,29 @@ export class PlayHost {
         break;
       }
       case 'frame': {
-        session.frame(this.now());
+        if (!this.#paused) {
+          session.frame(this.#clock());
+        }
+        break;
+      }
+      case 'pause': {
+        if (!this.#paused) {
+          this.#paused = true;
+          this.#pausedSince = this.performanceNow();
+        }
+        break;
+      }
+      case 'resume': {
+        this.#resumeClock();
+        break;
+      }
+      case 'step': {
+        if (!this.#paused) {
+          break;
+        }
+        this.#pausedTotal -= STEP;
+        this.#stepping = true;
+        session.frame(this.#clock());
         break;
       }
       case 'inspect': {
@@ -286,7 +327,7 @@ export class PlayHost {
   #open(request: Extract<PlayRequest, { kind: 'open' }>): void {
     if (this.#session) {
       this.#close();
-      this.#session.stop(this.now());
+      this.#session.stop(this.#clock());
     }
     this.#id = request.session;
     this.#owners = new Map(
@@ -300,10 +341,13 @@ export class PlayHost {
     this.#problems = 0;
     this.#variablesPumps = -1;
     this.#voices.clear();
+    // A new session starts unpaused; its paused time stays in the clock.
+    this.#resumeClock();
     this.#session = new PlaySession(request.project, request.pageIndex, {
       // A different game each time (ADR 0096).
       seed: request.seed,
-      performanceNow: this.performanceNow,
+      // The Performance window leaves out paused time too.
+      performanceNow: () => this.performanceNow() - this.#pausedTime(),
       soundBackend: this.#relaySound,
     });
     if (request.performanceEpoch !== undefined) {
@@ -326,6 +370,21 @@ export class PlayHost {
       },
     };
   };
+
+  #pausedTime(): number {
+    return (
+      this.#pausedTotal +
+      (this.#paused ? this.performanceNow() - this.#pausedSince : 0)
+    );
+  }
+
+  #resumeClock(): void {
+    if (this.#paused) {
+      this.#pausedTotal += this.performanceNow() - this.#pausedSince;
+      this.#paused = false;
+    }
+    this.#stepping = false;
+  }
 
   #publishPerformance(): void {
     const session = this.#session;
@@ -377,12 +436,18 @@ export class PlayHost {
       if (this.#session !== session) {
         return;
       }
-      const clock = this.now();
-      const result = session.pump(clock);
-      this.#publish();
+      const clock = this.#clock();
+      // While paused, only a Step's Pumps count as frames of work.
+      const result = session.pump(clock, this.#paused && !this.#stepping);
       if (result.state === 'sliced') {
+        this.#publish();
         this.#schedule();
-      } else if (result.nextDeadline !== undefined) {
+        return;
+      }
+      this.#stepping = false;
+      this.#publish();
+      // No time passes while paused, so no deadline can come due.
+      if (!this.#paused && result.nextDeadline !== undefined) {
         this.#schedule(
           Math.min(
             2_147_483_647,
@@ -474,6 +539,7 @@ export class PlayHost {
     const targetsChanged = full || targetKey !== this.#sentTargets;
     this.#sentTargets = targetKey;
     const state = JSON.stringify([
+      this.#paused,
       session.navigating,
       session.stopped,
       session.wantsFrames,
@@ -510,6 +576,7 @@ export class PlayHost {
         elements,
         pageHandles: this.#pageHandles,
         navigating: session.navigating,
+        paused: this.#paused,
         stopped: session.stopped,
         wantsFrames: session.wantsFrames,
         prompt,

@@ -1074,7 +1074,8 @@ export class PlaySession {
   pumps = 0;
 
   /** One bounded turn; the browser schedules another turn only after yielding. */
-  pump(now: bigint) {
+  /** `outOfBand` Pumps, run while paused, stay out of the Pump peaks. */
+  pump(now: bigint, outOfBand = false) {
     this.pumps++;
     if (
       this.#closing &&
@@ -1086,7 +1087,10 @@ export class PlaySession {
       fuelSlice: 1000,
       fuelCap: PUMP_FUEL,
     });
-    this.performance.reports(result.reports, result.fuelUsed);
+    this.performance.reports(
+      result.reports,
+      outOfBand ? undefined : result.fuelUsed,
+    );
     const clones = this.#pendingClones;
     this.#pendingClones = [];
     if (!this.stopped) {
