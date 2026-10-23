@@ -1,6 +1,7 @@
 // ADR 0116: each Operation draws on the Canvas Element it is given first.
 import {
   CANVAS_SIGNATURES,
+  canvasArgument,
   canvasArgumentValues,
   validateCanvasArguments,
   type CanvasCommand,
@@ -56,7 +57,7 @@ export const canvasGrant: GrantDefinition<CanvasState> = {
                 const draw = state.drawingOf(target as HostObject);
                 const values = canvasArgumentValues(args);
                 validateCanvasArguments(op, values);
-                draw({ op, args: values.map(value => value.toString()) });
+                draw({ op, args: values.map(canvasArgument) });
                 return nothing;
               },
             },

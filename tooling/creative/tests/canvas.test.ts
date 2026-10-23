@@ -127,6 +127,61 @@ end tell`,
   ]);
 });
 
+test('polygon and polyline keep their points as one command each', async () => {
+  const play = new PlaySession(fixture());
+  await run(
+    play,
+    `put [] into points
+repeat for each i in 0..2
+  put [...points, [i * 10, 5 - i]] into points
+end repeat
+tell canvas
+  polygon board, points
+  polyline board, [[0, 0], [1.5, 2]]
+end tell`,
+  );
+  expect(play.problems).toEqual([]);
+  expect(drawn(play)).toEqual([
+    [
+      'polygon',
+      [
+        ['0', '5'],
+        ['10', '4'],
+        ['20', '3'],
+      ],
+    ],
+    [
+      'polyline',
+      [
+        ['0', '0'],
+        ['1.5', '2'],
+      ],
+    ],
+  ]);
+});
+
+test('bad points are catchable', async () => {
+  const play = new PlaySession(fixture());
+  for (const call of [
+    'polygon board, [[1, 1]]',
+    'polygon board, [[1, 1], [2]]',
+    'polyline board, [[1, 1], [2, 2000000]]',
+    'polygon board, many',
+  ]) {
+    expect(
+      await run(
+        play,
+        `put [[1, 1]] into many
+repeat 10 times
+  put [...many, ...many] into many
+end repeat
+try\n ask canvas to ${call}\ncatch e\n return e's code\nend try`,
+      ),
+    ).toEqual({ text: 'invalid canvas argument' });
+  }
+  expect(drawn(play)).toEqual([]);
+});
+
 test('bad shape and stroke style arguments are catchable', async () => {
   const play = new PlaySession(fixture());
   for (const call of [
@@ -425,6 +480,16 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
     { op: 'text', args: ['"Score: 10"', '4', '12.5'] },
     { op: 'push', args: [] },
     { op: 'rotate', args: ['-0.5'] },
+    {
+      op: 'polygon',
+      args: [
+        [
+          ['0', '0'],
+          ['10', '0'],
+          ['5', '8.5'],
+        ],
+      ],
+    },
   ];
   const loaded = await readProjectFile(
     await writeProjectFile(project, new Map()),
@@ -436,6 +501,21 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
     [{ op: 'clear', args: [] }],
     [{ op: 'line', args: ['0', '0'] }],
     [{ op: 'pop', args: [] }],
+    [{ op: 'polygon', args: [[['0', '0']]] }],
+    [{ op: 'polygon', args: [[['0', '0'], ['1']]] }],
+    // Numbers, not their display spelling.
+    [
+      {
+        op: 'polyline',
+        args: [
+          [
+            ['0', '0'],
+            [1, 2],
+          ],
+        ],
+      },
+    ] as never,
+    [{ op: 'rectangle', args: [[['0', '0']], '1', '1', '1'] }],
     Array.from({ length: 65 }, () => ({ op: 'push', args: [] })),
     Array.from({ length: 10_001 }, () => ({ op: 'noFill', args: [] })),
   ]) {

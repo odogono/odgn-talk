@@ -2,6 +2,7 @@
 import {
   toValue,
   defineCapability,
+  list,
   shape,
   ScriptError,
   nothing,
@@ -18,7 +19,10 @@ export const CANVAS_LIMITS = {
   text: 4096,
   coordinate: 1_000_000,
   stack: 64,
+  points: 1000,
 } as const;
+/** A `polygon` or `polyline` argument: `[x, y]` pairs (ADR 0116). */
+const pointsShape = shape.listOf(shape.listOf(shape.number));
 /** Each Operation's arguments, shared by the Playground and Folio. */
 export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   size: [shape.number, shape.number],
@@ -46,13 +50,17 @@ export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   translate: [shape.number, shape.number],
   rotate: [shape.number],
   scale: [shape.number, shape.number],
+  polygon: [pointsShape],
+  polyline: [pointsShape],
 };
 const signatures = CANVAS_SIGNATURES;
 /** Accepted `strokeCap` and `strokeJoin` values, as Canvas 2D names them. */
 export const STROKE_CAPS = ['butt', 'round', 'square'] as const;
 export const STROKE_JOINS = ['miter', 'round', 'bevel'] as const;
+/** An argument in display spelling, or a list of points as pairs of them. */
+export type CanvasArgument = string | string[][];
 /** A successful call, its arguments in display spelling. */
-export type CanvasCommand = { args: string[]; op: string };
+export type CanvasCommand = { args: CanvasArgument[]; op: string };
 const invalid = (message: string): never => {
   throw new ScriptError('invalid canvas argument', message);
 };
@@ -60,6 +68,26 @@ const invalid = (message: string): never => {
 /** Drawing arguments as Values: a Host function receives text as a string and a number as a Decimal. */
 export const canvasArgumentValues = (args: readonly unknown[]): Value[] =>
   args.map(arg => toValue(arg));
+
+/** An argument as stored in a command. */
+export const canvasArgument = (value: Value): CanvasArgument =>
+  value.kind === 'list'
+    ? Array.from({ length: value.length }, (_, i) => {
+        const point = value.index(i + 1);
+        return Array.from({ length: point.length }, (_, j) =>
+          point.index(j + 1).toString(),
+        );
+      })
+    : value.toString();
+
+/** A stored argument as the Value it was made from. */
+export const canvasArgumentValue = (arg: CanvasArgument): Value =>
+  typeof arg === 'string'
+    ? readDisplay(arg)
+    : list(...arg.map(point => list(...point.map(n => readDisplay(n)))));
+
+const elements = (value: Value): Value[] =>
+  Array.from({ length: value.length }, (_, i) => value.index(i + 1));
 
 /** Throws a catchable `invalid canvas argument` unless `values` suit `op`. */
 export const validateCanvasArguments = (op: string, values: Value[]): void => {
@@ -69,12 +97,31 @@ export const validateCanvasArguments = (op: string, values: Value[]): void => {
     expected.length !== values.length ||
     values.some((v, i) => {
       const shape = expected[i]!;
-      return shape.k !== 'kind' || v.kind !== shape.kind;
+      return shape.k === 'list'
+        ? v.kind !== 'list'
+        : v.kind !== (shape.k === 'kind' && shape.kind);
     })
   ) {
     invalid('Wrong drawing arguments');
   }
-  values.forEach(value => {
+  const points =
+    op === 'polygon' || op === 'polyline' ? elements(values[0]!) : [];
+  if (
+    (op === 'polygon' || op === 'polyline') &&
+    (points.length < 2 ||
+      points.length > CANVAS_LIMITS.points ||
+      points.some(
+        p =>
+          p.kind !== 'list' ||
+          p.length !== 2 ||
+          elements(p).some(n => n.kind !== 'number'),
+      ))
+  ) {
+    invalid(
+      `Points are a list of 2 to ${CANVAS_LIMITS.points} [x, y] number pairs`,
+    );
+  }
+  [...values, ...points.flatMap(elements)].forEach(value => {
     if (
       value.kind === 'number' &&
       (!Number.isFinite(Number(value.toString())) ||
@@ -195,14 +242,22 @@ export const canvasCommandProblem = (value: unknown): string | undefined => {
     typeof command.op !== 'string' ||
     !Object.hasOwn(signatures, command.op) ||
     !Array.isArray(command.args) ||
-    command.args.some(arg => typeof arg !== 'string')
+    !command.args.every(
+      arg =>
+        typeof arg === 'string' ||
+        (Array.isArray(arg) &&
+          arg.every(
+            point =>
+              Array.isArray(point) && point.every(n => typeof n === 'string'),
+          )),
+    )
   ) {
     return 'expected a drawing command {op, args}';
   }
   try {
     validateCanvasArguments(
       command.op,
-      command.args.map(arg => readDisplay(arg as string)),
+      command.args.map(arg => canvasArgumentValue(arg)),
     );
   } catch (error) {
     return error instanceof ScriptError ? error.message : String(error);
@@ -238,7 +293,7 @@ export const canvasCommands = (
       args.index(i + 1),
     );
     validateCanvasArguments(op, values);
-    commands.push({ op, args: values.map(v => v.toString()) });
+    commands.push({ op, args: values.map(canvasArgument) });
     if (commands.length === CANVAS_LIMITS.commands) {
       break;
     }
@@ -247,17 +302,18 @@ export const canvasCommands = (
 };
 
 /**
- * Paints one shape command with the current fill and stroke, taking its
- * numeric arguments by index. `stroke` is false when stroking is off or the
+ * Paints one shape command with the current fill and stroke, from its stored
+ * arguments. `stroke` is false when stroking is off or the
  * stroke width is zero. Returns false for a command that is not a shape.
  */
 export const paintCanvasShape = (
   context: CanvasRenderingContext2D,
   op: string,
-  n: (i: number) => number,
+  args: readonly (string | readonly (readonly string[])[])[],
   fill: boolean,
   stroke: boolean,
 ): boolean => {
+  const n = (i: number) => Number(args[i]);
   context.beginPath();
   switch (op) {
     case 'point':
@@ -308,6 +364,16 @@ export const paintCanvasShape = (
       break;
     case 'circle':
       context.arc(n(0), n(1), n(2) / 2, 0, 2 * Math.PI);
+      break;
+    case 'polygon':
+    case 'polyline':
+      // An open polyline is still filled, as Canvas 2D closes it to fill.
+      for (const [x, y] of args[0] as readonly (readonly string[])[]) {
+        context.lineTo(Number(x), Number(y));
+      }
+      if (op === 'polygon') {
+        context.closePath();
+      }
       break;
     default:
       return false;

@@ -34,6 +34,7 @@ import barChart from './examples/drawing/bar-chart.talk' with { type: 'text' };
 import spiral from './examples/drawing/spiral.talk' with { type: 'text' };
 import clockFace from './examples/drawing/clock-face.talk' with { type: 'text' };
 import sierpinski from './examples/drawing/sierpinski.talk' with { type: 'text' };
+import star from './examples/drawing/star.talk' with { type: 'text' };
 import fizzbuzz from './examples/classics/fizzbuzz.talk' with { type: 'text' };
 import primes from './examples/classics/primes.talk' with { type: 'text' };
 import fibonacci from './examples/classics/fibonacci.talk' with { type: 'text' };
@@ -305,6 +306,13 @@ export const EXAMPLES: ExampleGroup[] = [
         title: 'Sierpiński carpet',
         launch: 'draw',
         script: sierpinski,
+        draws: true,
+      },
+      {
+        id: 'star',
+        title: 'Star and wave',
+        launch: 'draw',
+        script: star,
         draws: true,
       },
     ],
