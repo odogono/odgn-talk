@@ -7,6 +7,47 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
+### Breaking
+
+- **spec:** The binary Request/Pump map layout, `request-pump-map-v1`, is retired. The Spec defines only the JSON and fields layouts. The Zig guest refuses the feature in `hello` like any unknown feature, and the experimental Go adapter no longer accepts `TALK_ZIG_REQUEST_PUMP=map` (#1334).
+- **ts:** Add external-source Group snapshots with verified Host-supplied Script and extension sources, explicit variables-only recovery, and checkpoint support. Reduce both save modes with shared Grant declarations and compact JSON graphs. Native TS saves now use format 10; format-9 and older saves are no longer readable.
+- **ts:** `@northtalk/ts` and `@northtalk/ts/wasm` export one `Core`, `Group` and `Script` interface, which the TS Core and the Zig Host Adapter both implement, so Host code typed against them switches Cores by its import (ADR 0121). The TS Core's classes are now `TsGroup` and `TsScript`: `Group` is a type only, and the `ScriptHandle` alias is gone. The Abstract Machine's `Script` export is now `CompiledScript`. `newDrivenGroup` takes the Core first, as `newDrivenGroup(core, options)`, and the driver works on either Core, with `close()` waiting for the adapter's Host Promises too. The adapter gains `Script.invoke`, `core.versions` on the TS Core matches it, and it now exports `toValue`, `fromValue`, `talk`, `nowMicros` and `SendFailedReason`.
+- **ts:** Type Capability Host functions from their Shapes (ADR 0120): `do`, `run`, `start` and `fire` take arguments as JS values (`shape.text` as a `string`, `shape.number` as a `Decimal`, and so on), and may return the result's JS form. A Capability with a binding is now defined with `defineCapability<Binding>()(name, ops)`.
+
+### Added
+
+- **spec:** An `ask` may name a Result Target, `ask g to op x into y`, which puts the result into `y` as well as `it` (ADR 0112, #1340).
+- **ts:** The TS Core parses and lowers a Result Target on `ask`: `ask world to lies item into location` puts the answer into `location` as `put it into location` would, and `it` is still set. A Join Member with a Result Target is `not in a join` at its `into` (#1340).
+- **ts:** Add `newDrivenGroup` to `@northtalk/ts/driver` to create a Group already wired to its event-loop driver, so Requests can be awaited immediately (#1417).
+- **ts:** Add `drive.close(reason)` and async disposal to stop a driven Group's Scripts, await Promise-backed Host operation cleanup, and cancel scheduling before releasing application resources (#1418).
+- **ts:** Add `toValue` and `fromValue`, which convert between Script Values and plain JS data. `toValue` refuses a JS `number` unless the Host passes `{ numbers: 'decimal' }` (ADR 0119, #1419).
+- **ts:** Add `Script.invoke(name, ...args)`, which resolves with a Request's answer, `nowMicros()` for manual Pumps, and a `talk` tag that dedents inline NorthTalk source and rejects JS interpolation (#1422).
+- **spec:** Specify the TS embedding's `Script.invoke`, `nowMicros()` and `talk` source tag, renaming the unreleased `Script.call` so `call` keeps meaning a Function Value call (#1423).
+- **spec:** Add the `degrees(x)` and `radians(x)` Built-ins, which convert between radians, Talk's one angle unit, and degrees. Each is correctly rounded to 34 digits like the trigonometric functions, so `radians(180)` is `pi` and `degrees(pi)` is `180` (#1450).
+- **spec:** Add `http`, an optional Standard Capability with which a Script serves HTTP requests itself (`serve`, `unserve`, `respond`), the Script Runner that `northtalk app.talk` becomes, and a `Call`'s delivery id (ADR 0124, ADR 0125, ADR 0126).
+- **ts:** Add `@northtalk/ts/http`, a server-only HTTP router on `node:http` that serves the `http` Standard Capability under Bun and Node: shared listeners, longest-prefix matching, Deliveries per request, answers settled from the Pump's reports, a 1 MiB default body limit answered 413, and graceful drain, with the language-neutral http test kit (ADR 0124).
+- **spec:** Let a one-line `wait for` take a Guard after any timeout, as in `wait for pressed key or 30 s where key = "Y"`, in every Core (ADR 0109, #1247).
+- **spec:** Specify Result Targets on tell-block Operation lines, Command Calls, call statements and waiting sends, including per-member assignment when a Join succeeds (#1350).
+- **ts:** Add combined Request/Pump and Function-call/Pump outcomes on the TS and WASM Cores, retaining requested handles when Pump fails. Negotiate the selected binary Message Layer envelope and publish browser-safe, transferable Value/frame codecs under `@northtalk/ts/message-layer` (ADR 0110, #1256).
+- **ts:** Give a `send failed` `ScriptError` a typed `reason`, such as `cancelled` or `errored`, so a Host can switch on it without decoding `data` (#1421).
+- **ts:** Exchange WASM Operation, property, effect and Grant release callbacks in the negotiated binary fields envelope. Keep JSON compatibility with `createCore({ binaryCallbacks: false })` (#1314).
+
+### Fixed
+
+- **ts:** Support settle-pump frames in the transferable binary codec, preserving queued answers, failure Data and optional late Fuel (#1335).
+- **ts:** Fault a talk.ts Run preempted in a Join at a member's saved call site when its reissued call has its Charge refused, recording the fault as a resumed Stretch (#1413).
+- **ts:** Omit capability and operation fields from restored `call lost` errors, preserving source locations and Join member indexes (#1407).
+
+### Performance
+
+- **ts:** Run simple TS Core instructions through a fast path, with small integers kept as JS numbers, so `core/loop` runs about 7× faster with unchanged Fuel and allocation (#1297).
+- **ts:** Speed up List item replacement in the TS Core without changing Fuel or logical allocation (#1293).
+- **ts:** Reduce messaging and Script lifecycle overhead in the TS Core by skipping Trace formatting and Trace-only state counting when no Trace callback is installed, with unchanged Fuel (#1292).
+- **ts:** Speed up Text Pattern searches by reusing matcher scratch storage, reducing thread allocation and freezing Match map pairs only once (#1294).
+- **ts:** Decode each binary WASM callback Value once, and encode callback results directly from the answer, so binary callbacks are faster than JSON callbacks under both Bun and Node (#1318).
+
 ## [0.1.0] - 2026-10-17
 
 ### Added
