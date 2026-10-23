@@ -122,23 +122,36 @@ export const mountPlay = (shell: StackShell): void => {
     },
   );
   // Clicking an authored Element in the Variables window selects it.
-  const variables = new VariablesWindow(index => {
-    const owner = owners[index];
-    if (!owner || generation !== shell.editor.generation) {
-      return;
+  const variables = new VariablesWindow(
+    index => {
+      const owner = owners[index];
+      if (!owner || generation !== shell.editor.generation) {
+        return;
+      }
+      const project = shell.editor.project;
+      const current = ownerById(project, ownerId(owner));
+      const page = current && scriptPage(project, current);
+      if (!current || !page || 'elements' in current) {
+        return;
+      }
+      const pageIndex = project.pages.indexOf(page);
+      if (pageIndex !== shell.editor.pageIndex) {
+        shell.editor.goToPage(pageIndex);
+      }
+      shell.editor.click(current.name);
+    },
+    () => sendWatches(),
+  );
+  // Watches go to a browsing session; the worker runs them while paused.
+  const sendWatches = () => {
+    if (mode === 'browse' && session && !session.stopped) {
+      post({
+        kind: 'watches',
+        session: sessionId,
+        watches: variables.watchesFor(sessionId),
+      });
     }
-    const project = shell.editor.project;
-    const current = ownerById(project, ownerId(owner));
-    const page = current && scriptPage(project, current);
-    if (!current || !page || 'elements' in current) {
-      return;
-    }
-    const pageIndex = project.pages.indexOf(page);
-    if (pageIndex !== shell.editor.pageIndex) {
-      shell.editor.goToPage(pageIndex);
-    }
-    shell.editor.click(current.name);
-  });
+  };
   let variablesTimer: ReturnType<typeof setInterval> | undefined;
   let variablesAsked = false;
   // Only while the window is open and Play is browsing; the worker answers
@@ -247,6 +260,12 @@ export const mountPlay = (shell: StackShell): void => {
     });
   };
   const receive = (response: PlayResponse) => {
+    if (response.kind === 'watches') {
+      if (response.session === sessionId) {
+        variables.watchResults(response.results, response.pageChanged);
+      }
+      return;
+    }
     if (response.kind === 'performance') {
       profiler.receive(response.session, response.snapshot);
       return;
@@ -291,6 +310,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const wasPaused = session.paused;
     session.apply(response);
+    if (mode === 'browse') {
+      variables.context(sessionId, session.messageTargets, session.paused);
+    }
     if (session.paused !== wasPaused) {
       drawModes();
     }
@@ -671,6 +693,7 @@ export const mountPlay = (shell: StackShell): void => {
     variables.start();
     if (mode === 'browse') {
       variablesTimer = setInterval(refreshVariables, VARIABLES_REFRESH);
+      sendWatches();
       byId('desk').append(toolbar, reader);
     } else {
       document.body.append(toolbar, reader);
@@ -850,6 +873,7 @@ export const mountPlay = (shell: StackShell): void => {
       errors.clear();
       profiler.reset(sessionId);
       captureEpoch = undefined;
+      variables.clearWatches();
     }
     if (!session) {
       return;

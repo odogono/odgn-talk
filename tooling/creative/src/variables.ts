@@ -80,13 +80,11 @@ const isElement = (owner: object): owner is DeepReadonly<Element> =>
  * and its Elements' Scripts, in that order, leaving out Scripts without
  * any. `owners` places authored owners in `scriptOwners(project)`.
  */
-export const variablesOf = (
+/** Encodes a value as the window shows it; `owners` as for `variablesOf`. */
+export const valueEncoder = (
   play: PlaySession,
   owners: ReadonlyMap<unknown, number>,
-): VariableScript[] => {
-  const vars = new Map(
-    play.group.inspect().scripts.map(script => [script.name, script.vars]),
-  );
+): ((value: Value) => VariableValue) => {
   const element = (value: Value): VariableValue | undefined => {
     const object = value.asObject();
     const native = object?.native as DeepReadonly<Element> | undefined;
@@ -109,6 +107,17 @@ export const variablesOf = (
       ...(owner === undefined ? {} : { owner }),
     };
   };
+  return value => encode(value, element);
+};
+
+export const variablesOf = (
+  play: PlaySession,
+  owners: ReadonlyMap<unknown, number>,
+): VariableScript[] => {
+  const vars = new Map(
+    play.group.inspect().scripts.map(script => [script.name, script.vars]),
+  );
+  const encodeValue = valueEncoder(play, owners);
   const ranked: [number, VariableScript][] = [];
   for (const [script, owner] of play.owners) {
     const rank =
@@ -133,13 +142,26 @@ export const variablesOf = (
             : rank === 1
               ? owner.name
               : `${play.page.name} › ${owner.name}`,
-        vars: found.map(([name, value]) => [name, encode(value, element)]),
+        vars: found.map(([name, value]) => [name, encodeValue(value)]),
       },
     ]);
   }
   // A stable sort keeps the Elements in load order.
   return ranked.sort(([a], [b]) => a - b).map(([, script]) => script);
 };
+
+/** A Watch as the page keeps it; `target` is a Message Box target's id. */
+export type Watch = { id: number; target?: number; text: string };
+
+/**
+ * A Watch's latest evaluation. `effects` is set when its Run caused other
+ * Runs, as a message it sent does (ADR 0129).
+ */
+export type WatchResult =
+  | { effects: boolean; id: number; state: 'value'; value: VariableValue }
+  | { id: number; state: 'waiting' }
+  | { error: string; id: number; state: 'error' }
+  | { id: number; state: 'unavailable' };
 
 /** A row the window draws; `depth` 0 is a variable. */
 export type VariableRow = {

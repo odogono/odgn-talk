@@ -131,8 +131,10 @@ export type PendingPrompt = UserPrompt & {
 export type UserNotice = { message: string; title: string };
 
 /** A Message Box command: its result, or why it could not run. */
+/** `delivery` is the Request's, which the Runs it causes carry as their root. */
 export type MessageOutcome =
-  { ok: true; result: Promise<Value> } | { error: string; ok: false };
+  | { delivery: string; ok: true; result: Promise<Value> }
+  | { error: string; ok: false };
 
 export { PUMP_FUEL };
 
@@ -667,24 +669,48 @@ export class PlaySession {
    * Script Variable reads its value instead of sending a message.
    */
   runMessage(command: string, target?: number): MessageOutcome {
+    return this.#run(command, target, false);
+  }
+
+  /** Runs a Watch: one expression, never a statement (ADR 0129). */
+  runWatch(expression: string, target?: number): MessageOutcome {
+    return this.#run(expression, target, true);
+  }
+
+  #run(
+    command: string,
+    target: number | undefined,
+    expression: boolean,
+  ): MessageOutcome {
     if (this.stopped || this.navigating) {
       return { ok: false, error: 'The Page is changing; try again.' };
     }
     if (target !== undefined) {
-      return this.#runTargetedMessage(command, target);
+      return this.#runTargetedMessage(command, target, expression);
+    }
+    // A Watch reruns often, so it keeps its Script while the Page stays.
+    if (expression && this.#watchPage !== this.page) {
+      this.#watchPage = this.page;
+      this.#watchScripts.clear();
     }
     let first: string | undefined;
-    for (const source of [
-      messageSource(command),
-      messageSource(`return ${command}`),
-    ]) {
+    for (const source of expression
+      ? [messageSource(`return ${command}`)]
+      : [messageSource(command), messageSource(`return ${command}`)]) {
       try {
-        const name = this.#loadMessage(source);
+        let name = expression ? this.#watchScripts.get(command) : undefined;
+        if (!name) {
+          name = this.#loadMessage(source);
+          if (expression) {
+            this.#watchScripts.set(command, name);
+          }
+        }
         const request = this.group.script(name)!.request({
           name: 'runMessage',
         });
         return {
           ok: true,
+          delivery: request.id,
           result: request.result.catch((error: unknown) => {
             throw new Error(
               this.#messageErrors.get(name) ??
@@ -757,7 +783,11 @@ export class PlaySession {
     return undefined;
   }
 
-  #runTargetedMessage(command: string, id: number): MessageOutcome {
+  #runTargetedMessage(
+    command: string,
+    id: number,
+    expression: boolean,
+  ): MessageOutcome {
     const entry = [...this.#targets.entries()].find(
       ([, target]) => target.id === id,
     );
@@ -784,7 +814,9 @@ export class PlaySession {
       );
       let first: string | undefined;
       let extended = false;
-      for (const body of [`return ${command}`, command]) {
+      for (const body of expression
+        ? [`return ${command}`]
+        : [`return ${command}`, command]) {
         const source = `on ${handler}\n${body}\nend ${handler}`;
         try {
           // A command cannot escape its wrapper to add Script declarations.
@@ -825,6 +857,7 @@ export class PlaySession {
       this.#commandRequests.set(request.id, outcome);
       return {
         ok: true,
+        delivery: request.id,
         result: request.result
           .catch((error: unknown) => {
             throw new Error(
@@ -843,6 +876,8 @@ export class PlaySession {
   }
 
   #messages = 0;
+  #watchPage: PlaySession['page'] | undefined;
+  #watchScripts = new Map<string, string>();
   #librarySources = new Map<string, DeepReadonly<ProjectLibrary>>();
   #messageErrors = new Map<string, string>();
 

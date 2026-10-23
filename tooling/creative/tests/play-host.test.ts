@@ -750,3 +750,65 @@ test('the Performance window leaves out paused time', () => {
   const last = replies.filter(r => r.response.kind === 'performance').at(-1);
   expect(last?.response).toMatchObject({ snapshot: { elapsed: 0.5 } });
 });
+
+const watchResults = (replies: Reply<PlayResponse>[]) =>
+  new Map(
+    replies.flatMap(reply =>
+      reply.response.kind === 'watches'
+        ? reply.response.results.map(result => [result.id, result] as const)
+        : [],
+    ),
+  );
+
+test('Watches run only while paused, and again after a Message Box line', async () => {
+  const project = fixture();
+  project.script =
+    'script variable score = 3\nfunction poke\n send ping to page1\n return 1\nend poke';
+  project.pages[0]!.script += '\non ping\nend ping';
+  const { mirror, request, replies } = hosted(project);
+  const target = mirror.messageTargets.find(t => t.label === 'project')!.id;
+  const watches = [
+    { id: 1, text: '1 + 2' },
+    { id: 2, text: 'score', target },
+    { id: 3, text: 'put 1 into x' },
+    { id: 4, text: 'poke()', target },
+    { id: 5, text: 'score', target: 9999 },
+  ];
+  request({ kind: 'watches', session: 1, watches });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(watchResults(replies).size).toBe(0);
+  request({ kind: 'pause', session: 1 });
+  await until(() => watchResults(replies).size === 5);
+  const results = watchResults(replies);
+  expect(results.get(1)).toMatchObject({
+    state: 'value',
+    value: { kind: 'plain', text: '3' },
+    effects: false,
+  });
+  expect(results.get(2)).toMatchObject({ state: 'value', effects: false });
+  expect(results.get(3)?.state).toBe('error');
+  expect(results.get(4)).toMatchObject({ state: 'value', effects: true });
+  expect(results.get(5)?.state).toBe('unavailable');
+  request({
+    kind: 'message',
+    session: 1,
+    target,
+    text: 'put 7 into score',
+  });
+  await until(
+    () =>
+      JSON.stringify(watchResults(replies).get(2)) ===
+      JSON.stringify({
+        id: 2,
+        state: 'value',
+        value: { kind: 'plain', text: '7' },
+        effects: false,
+      }),
+  );
+  const count = replies.length;
+  request({ kind: 'resume', session: 1 });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(
+    replies.slice(count).some(reply => reply.response.kind === 'watches'),
+  ).toBe(false);
+});

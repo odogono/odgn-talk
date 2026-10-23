@@ -7,7 +7,7 @@ import { type PerformanceSnapshot } from './performance';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
-import { type VariableScript } from './variables';
+import { type VariableScript, type Watch, type WatchResult } from './variables';
 
 /** Element messages the page sends for reader input. */
 export type ReaderMessage = Extract<
@@ -57,6 +57,8 @@ export type PlayRequest =
   | { error?: string; kind: 'soundEnded'; voice: number }
   | { kind: 'inspect'; session: number }
   | { kind: 'variables'; session: number }
+  /** Replaces the Watches, which are evaluated only while paused (ADR 0129). */
+  | { kind: 'watches'; session: number; watches: Watch[] }
   | { kind: 'stop'; session: number }
   /** Pause, Resume and Step act on the session's Play clock (ADR 0128). */
   | { kind: 'pause' | 'resume' | 'step'; session: number };
@@ -129,5 +131,15 @@ export type PlayResponse =
   | { inspection: string; kind: 'inspection' }
   /** The Variables window's Scripts; absent if no Pump ran since last asked. */
   | { kind: 'variables'; scripts?: VariableScript[] }
+  /**
+   * Watch results that changed, pushed unasked. `pageChanged` is set when the
+   * Watches' Pump changed the Page.
+   */
+  | {
+      kind: 'watches';
+      pageChanged?: boolean;
+      results: WatchResult[];
+      session: number;
+    }
   /** What every pending request gets when the worker is ended. */
   | { kind: 'ended' };

@@ -1186,3 +1186,32 @@ body.playing #performance-window {
   pointer-events: none;
   z-index: 1;
 }
+/* Watches: each one heads its own rows, and is greyed while Play runs. */
+.variables-watches li.watch {
+  display: block;
+  padding: 0.2rem 0;
+}
+.variables-watches .watch-add,
+.variables-watches .watch-head {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.2rem;
+}
+.variables-watches .watch-add input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+}
+.variables-watches .remove {
+  margin-left: auto;
+  padding: 0 0.4rem;
+}
+.variables-watches .error {
+  color: #b00020;
+}
+.variables-watches .watch-effects {
+  color: #8a5a00;
+}
+.variables-watches.stale li.watch {
+  opacity: 0.6;
+}

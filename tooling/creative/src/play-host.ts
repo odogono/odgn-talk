@@ -18,7 +18,13 @@ import {
   type PromptView,
 } from './play-protocol';
 import { scriptOwners } from './script-manifest';
-import { variablesOf } from './variables';
+import {
+  valueEncoder,
+  variablesOf,
+  type Watch,
+  type WatchResult,
+} from './variables';
+import { type Report } from '@northtalk/ts';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
 import { pausableClock } from '@northtalk/tooling/pausable-clock';
@@ -123,6 +129,14 @@ export class PlayHost {
   #pausedTotal = 0;
   // Whether the Pumps running now belong to a Step, not the Message Box.
   #stepping = false;
+  // Watches (ADR 0129): evaluated in their own Pump, only while paused.
+  #watches: Watch[] = [];
+  #watchDue = false;
+  #watching = false;
+  #watchReports: Report[] = [];
+  // Each running Watch's Request, and the Watches whose Run caused others.
+  #watchRuns = new Map<number, string>();
+  #watchEffects = new Set<number>();
   // The Play clock: Host time less paused time, never going back (ADR 0128).
   readonly #clock: () => bigint;
   #id = 0;
@@ -262,7 +276,19 @@ export class PlayHost {
         if (!this.#paused) {
           this.#paused = true;
           this.#pausedSince = this.performanceNow();
+          this.#watchDue = true;
         }
+        break;
+      }
+      case 'watches': {
+        const ids = new Set(request.watches.map(watch => watch.id));
+        for (const id of this.#watchRuns.keys()) {
+          if (!ids.has(id)) {
+            this.#watchRuns.delete(id);
+          }
+        }
+        this.#watches = request.watches;
+        this.#watchDue = this.#paused;
         break;
       }
       case 'resume': {
@@ -275,6 +301,7 @@ export class PlayHost {
         }
         this.#pausedTotal -= STEP;
         this.#stepping = true;
+        this.#watchDue = true;
         session.frame(this.#clock());
         break;
       }
@@ -302,6 +329,7 @@ export class PlayHost {
           reply({ kind: 'message', error: started.error });
           return;
         }
+        this.#watchDue ||= this.#paused;
         this.#schedule();
         void started.result.then(
           value =>
@@ -341,6 +369,12 @@ export class PlayHost {
     this.#problems = 0;
     this.#variablesPumps = -1;
     this.#voices.clear();
+    this.#watches = [];
+    this.#watchDue = false;
+    this.#watching = false;
+    this.#watchReports = [];
+    this.#watchRuns.clear();
+    this.#watchEffects.clear();
     // A new session starts unpaused; its paused time stays in the clock.
     this.#resumeClock();
     this.#session = new PlaySession(request.project, request.pageIndex, {
@@ -370,6 +404,96 @@ export class PlayHost {
       },
     };
   };
+
+  /** Starts each Watch not still running; whether any Run started. */
+  #startWatches(session: PlaySession): boolean {
+    const results: WatchResult[] = [];
+    const encode = valueEncoder(session, this.#owners);
+    let started = false;
+    for (const { id, target, text } of this.#watches) {
+      if (this.#watchRuns.has(id)) {
+        continue;
+      }
+      if (
+        target !== undefined &&
+        !session.messageTargets.some(loaded => loaded.id === target)
+      ) {
+        results.push({ id, state: 'unavailable' });
+        continue;
+      }
+      const outcome = session.runWatch(text, target);
+      if (!outcome.ok) {
+        results.push({ id, state: 'error', error: outcome.error });
+        continue;
+      }
+      started = true;
+      const { delivery } = outcome;
+      this.#watchRuns.set(id, delivery);
+      const settle = (result: WatchResult) => {
+        if (this.#session === session && this.#watchRuns.get(id) === delivery) {
+          this.#watchRuns.delete(id);
+          this.#postWatches([result]);
+        }
+      };
+      outcome.result.then(
+        value =>
+          settle({
+            id,
+            state: 'value',
+            value: encode(value),
+            effects: this.#watchEffects.has(id),
+          }),
+        (error: unknown) =>
+          settle({
+            id,
+            state: 'error',
+            error: error instanceof Error ? error.message : String(error),
+          }),
+      );
+    }
+    this.#postWatches(results);
+    return started;
+  }
+
+  /** Marks Watches still running as waiting, and notes which caused Runs. */
+  #finishWatches(pageChanged: boolean): void {
+    const reports = this.#watchReports;
+    this.#watchReports = [];
+    const results: WatchResult[] = [];
+    for (const [id, delivery] of this.#watchRuns) {
+      const caused = reports.some(
+        report =>
+          report.kind === 'run started' &&
+          report.rootDelivery === delivery &&
+          report.delivery !== delivery,
+      );
+      if (caused) {
+        this.#watchEffects.add(id);
+      } else {
+        this.#watchEffects.delete(id);
+      }
+      const ended = reports.some(
+        report => report.kind === 'run end' && report.delivery === delivery,
+      );
+      if (!ended) {
+        results.push({ id, state: 'waiting' });
+      }
+    }
+    this.#postWatches(results, pageChanged);
+  }
+
+  #postWatches(results: WatchResult[], pageChanged?: boolean): void {
+    if (results.length || pageChanged !== undefined) {
+      this.post({
+        response: {
+          kind: 'watches',
+          session: this.#id,
+          results,
+          ...(pageChanged === undefined ? {} : { pageChanged }),
+        },
+      });
+    }
+  }
 
   #pausedTime(): number {
     return (
@@ -439,13 +563,29 @@ export class PlayHost {
       const clock = this.#clock();
       // While paused, only a Step's Pumps count as frames of work.
       const result = session.pump(clock, this.#paused && !this.#stepping);
+      if (this.#watching) {
+        this.#watchReports.push(...result.reports);
+      }
       if (result.state === 'sliced') {
         this.#publish();
         this.#schedule();
         return;
       }
       this.#stepping = false;
+      if (this.#watching) {
+        this.#watching = false;
+        this.#finishWatches(session.changed);
+      }
       this.#publish();
+      // Once a Step's or the Message Box's Pump ends, Watches get their own.
+      if (this.#paused && this.#watchDue) {
+        this.#watchDue = false;
+        if (this.#startWatches(session)) {
+          this.#watching = true;
+          this.#schedule();
+          return;
+        }
+      }
       // No time passes while paused, so no deadline can come due.
       if (!this.#paused && result.nextDeadline !== undefined) {
         this.#schedule(
