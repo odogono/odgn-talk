@@ -1,4 +1,4 @@
-> load s identity=545d39436ca10c95240c42ad79a4f6214be876f1664896b2d91c71ed4530e437
+> load s identity=3ce32771151b294b79578e2ec6f8e764636fc61ff7687861c304dff272307c82
 > deliver d1 to=s message=go
 > pump clock=2026-10-14T00:00:00Z
 seg s/r1 start delivery=d1 handler=go clause=1 fuel=431 alloc=3043 state=592 end=return
@@ -14,5 +14,20 @@ pumped state=idle fuel=254
 seg s/r3 start delivery=d3 handler=shared clause=1 fuel=5390 alloc=81304 state=960 end=return
 run s/r3 outcome=completed delivery=d3 handler=shared fuel=5390 alloc=81304
 pumped state=idle fuel=5390
+> deliver d4 to=s message=mapKeys
+> pump clock=2026-10-14T00:00:00Z
+seg s/r4 start delivery=d4 handler=mapKeys clause=1 fuel=533 alloc=6779 state=1512 end=return
+run s/r4 outcome=completed delivery=d4 handler=mapKeys fuel=533 alloc=6779
+pumped state=idle fuel=533
+> deliver d5 to=s message=mapKeyEarly
+> pump clock=2026-10-14T00:00:00Z
+seg s/r5 start delivery=d5 handler=mapKeyEarly clause=1 fuel=42 alloc=346 state=1528 end=return
+run s/r5 outcome=completed delivery=d5 handler=mapKeyEarly fuel=42 alloc=346
+pumped state=idle fuel=42
+> deliver d6 to=s message=mapKeyLate
+> pump clock=2026-10-14T00:00:00Z
+seg s/r6 start delivery=d6 handler=mapKeyLate clause=1 fuel=44 alloc=346 state=1544 end=return
+run s/r6 outcome=completed delivery=d6 handler=mapKeyLate fuel=44 alloc=346
+pumped state=idle fuel=44
 > vars
-vars s log=[true, true, false, [false, true, true, true], [false, false, true], [true, true, false, false], [true], [true, true], [true, false], [false, true, false], [true, false], [true, false, false], [false, false], [true, true], [true], [true, true], true, [true, true, true]]
+vars s log=[true, true, false, [false, true, true, true], [false, false, true], [true, true, false, false], [true], [true, true], [true, false], [false, true, false], [true, false], [true, false, false], [false, false], [true, true], [true], [true, true], true, [true, true, true], [true, false], [false, false, true], [true, false], [false, false], [false, false, false], [true, false], [true, false], [true, false], [true, false, true], false, false]
