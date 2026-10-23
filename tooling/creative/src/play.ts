@@ -31,6 +31,7 @@ import {
   type ObjectElements,
   type ObjectKind,
   type PropDef,
+  type PumpResult,
   type Value,
 } from '@northtalk/ts';
 import {
@@ -172,6 +173,10 @@ export class PlaySession {
   // Drawings this session has drawn on, and those changed since last taken.
   #drawings = new Map<DeepReadonly<CanvasElement>, Drawing>();
   #changedDrawings = new Set<DeepReadonly<CanvasElement>>();
+  // Canvases reset by a Run that a Pump cut off, by that Run's id. Their
+  // changes wait until the Run ends or nothing is left to run, so the page
+  // never draws a Drawing cleared but not yet redrawn (ADR 0116).
+  #heldDrawings = new Map<DeepReadonly<CanvasElement>, string>();
   // Each authored Canvas's place in `scriptOwners(project)`.
   #authoredCanvases = new Map<DeepReadonly<Element>, number>();
   #pageElements: ObjectElements<ScriptOwner> = {
@@ -251,12 +256,20 @@ export class PlaySession {
     return this.#drawing(element).changesSince(mark);
   }
 
-  /** The Canvases drawn on, created or cloned since this was last called. */
+  /**
+   * The Canvases drawn on, created or cloned since this was last called,
+   * leaving out those held back until the Run that reset them ends.
+   */
   takeDrawingChanges(): DeepReadonly<CanvasElement>[] {
-    const changed = [...this.#changedDrawings].filter(element =>
-      this.#tree.contains(element),
-    );
-    this.#changedDrawings.clear();
+    const changed: DeepReadonly<CanvasElement>[] = [];
+    for (const element of this.#changedDrawings) {
+      if (!this.#tree.contains(element)) {
+        this.#changedDrawings.delete(element);
+      } else if (!this.#heldDrawings.has(element)) {
+        this.#changedDrawings.delete(element);
+        changed.push(element);
+      }
+    }
     return changed;
   }
 
@@ -426,7 +439,7 @@ export class PlaySession {
         setVisible: (element, visible) => this.#setVisible(element, visible),
       },
       canvas: {
-        drawingOf: object => {
+        drawingOf: (object, runId) => {
           const { element } = this.#element(object.value);
           if (element.kind !== 'canvas') {
             throw new ScriptError('out of domain', 'Not a Canvas Element');
@@ -434,6 +447,9 @@ export class PlaySession {
           return command => {
             this.#drawing(element).add(command);
             this.#changedDrawings.add(element);
+            if (command.op === 'clear' || command.op === 'background') {
+              this.#heldDrawings.set(element, runId);
+            }
           };
         },
       },
@@ -1126,6 +1142,7 @@ export class PlaySession {
       result.reports,
       outOfBand ? undefined : result.fuelUsed,
     );
+    this.#releaseDrawings(result);
     const clones = this.#pendingClones;
     this.#pendingClones = [];
     if (!this.stopped) {
@@ -1220,6 +1237,32 @@ export class PlaySession {
       };
     }
     return result;
+  }
+
+  /**
+   * Releases held Drawings whose Run has ended, or all of them once the Pump
+   * ran out of work rather than Fuel: a Run waiting on time or an answer
+   * shows what it drew so far.
+   */
+  #releaseDrawings(result: Pick<PumpResult, 'reports' | 'state'>): void {
+    if (!this.#heldDrawings.size) {
+      return;
+    }
+    if (result.state !== 'sliced') {
+      this.#heldDrawings.clear();
+      return;
+    }
+    const ended = new Set<string>();
+    for (const report of result.reports) {
+      if (report.kind === 'run accounting' && report.state !== 'live') {
+        ended.add(report.run);
+      }
+    }
+    for (const [element, run] of this.#heldDrawings) {
+      if (ended.has(run)) {
+        this.#heldDrawings.delete(element);
+      }
+    }
   }
 
   stop(now: bigint): void {

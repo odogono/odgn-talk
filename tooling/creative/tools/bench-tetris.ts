@@ -71,12 +71,15 @@ const play = async (create: () => Promise<ExampleContent>): Promise<Result> => {
   const { project } = await create();
   let ms = 0;
   const views: Extract<PlayResponse, { kind: 'view' }>[] = [];
+  // The request each view answered, by its place in `views`.
+  const viewRequests: number[] = [];
   let snapshot: PerformanceSnapshot | undefined;
   const mirror = new PlayMirror(() => {});
   const host = new PlayHost(
     ({ response }) => {
       if (response.kind === 'view') {
         views.push(response);
+        viewRequests.push(id);
         mirror.apply(response);
       } else if (response.kind === 'performance') {
         snapshot = response.snapshot;
@@ -138,17 +141,17 @@ const play = async (create: () => Promise<ExampleContent>): Promise<Result> => {
   const score = text('scoreText');
   const lines = text('linesText');
   await request({ kind: 'stop', session: 1 });
-  // A board reset whose cells arrive in later views: the page painted it
-  // partly drawn in between.
+  // A board reset whose cells arrive in a later view for the same request:
+  // the page painted it partly drawn in between.
   let torn = 0;
-  let open = false;
-  for (const view of views) {
+  let open: number | undefined;
+  for (const [i, view] of views.entries()) {
     const board = view.drawings.find(d => d.name === 'boardCanvas');
     if (board?.reset) {
-      open = true;
-    } else if (board && open) {
+      open = viewRequests[i];
+    } else if (board && open === viewRequests[i]) {
       torn++;
-      open = false;
+      open = undefined;
     }
   }
   const origins = snapshot!.scripts.flatMap(script => script.origins);

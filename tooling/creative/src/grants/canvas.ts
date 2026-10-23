@@ -18,10 +18,13 @@ import { canvasShape, grantAll, type GrantDefinition } from './grant';
 
 export type CanvasState = {
   /**
-   * Where a drawing command for this Canvas Element goes; throws a
-   * ScriptError for any other value.
+   * Where a drawing command for this Canvas Element goes, drawn by the Run
+   * `runId`; throws a ScriptError for any other value.
    */
-  drawingOf(canvas: HostObject): (command: CanvasCommand) => void;
+  drawingOf(
+    canvas: HostObject,
+    runId: string,
+  ): (command: CanvasCommand) => void;
 };
 
 const operations = Object.fromEntries(
@@ -50,11 +53,11 @@ export const canvasGrant: GrantDefinition<CanvasState> = {
             {
               ...operations[op]!,
               do: (
-                _call: Call<unknown>,
+                call: Call<unknown>,
                 target: unknown,
                 ...args: unknown[]
               ) => {
-                const draw = state.drawingOf(target as HostObject);
+                const draw = state.drawingOf(target as HostObject, call.runId);
                 const values = canvasArgumentValues(args);
                 validateCanvasArguments(op, values);
                 draw({ op, args: values.map(canvasArgument) });

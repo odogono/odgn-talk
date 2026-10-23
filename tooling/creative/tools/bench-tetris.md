@@ -125,3 +125,25 @@ Those repaints account for the remaining partly drawn boards until #1544
 holds a reset Drawing back while its Run is still live. The browser's
 main-thread times varied by 32–57% in this run, so only the direction of
 those rows is reliable.
+
+## After holding back reset Drawings (#1544)
+
+When a Pump runs out of Fuel part-way through the Run that cleared a Canvas,
+the Play Session now holds that Canvas's changes back until the Run ends
+([ADR 0116](../../../docs/adr/0116-a-canvas-element-keeps-a-retained-drawing-across-play-and-edit.md)).
+The partly drawn count now covers only resets whose cells arrive in a later
+view for the same request. Earlier views sent between requests belong to the
+next move, not to an unfinished redraw. Under the old Host code this count
+gives 91, the figure in the table above, and with this change it gives 0.
+
+| Per frame unless stated                | Canvas (before) |
+| -------------------------------------- | --------------: |
+| Board views painted partly drawn, 60 s |          0 (91) |
+| Views sent, headless                   |     0.30 (0.64) |
+| View bytes, headless                   |       392 (615) |
+| Views handled, browser                 |     0.14 (0.29) |
+
+Fuel and frame rates are unchanged, since the change sends the same Drawing
+in fewer views. Element Tetris has no Canvas, so its figures are unchanged
+too. The browser's main-thread times varied by 37–89% in this run, so they
+are not compared.

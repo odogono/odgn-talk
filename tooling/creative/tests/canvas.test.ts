@@ -525,3 +525,47 @@ test('the Project file keeps the Drawing and rejects invalid ones', async () => 
     ]);
   }
 });
+
+// ADR 0116: the page never gets a Drawing cleared but not yet redrawn.
+const redraw = (script: string) => {
+  const project = fixture();
+  project.pages[0]!.elements.find(e => e.name === 'go')!.script = script;
+  const play = new PlaySession(project);
+  drain(play);
+  play.takeDrawingChanges();
+  play.send(
+    play.page.elements.find(e => e.name === 'go')!,
+    'click',
+  );
+  return play;
+};
+
+test('a reset Drawing is held back until the Run that reset it ends', () => {
+  const play = redraw(`on click
+  ask canvas to clear board
+  repeat for each i in 1..2000
+    ask canvas to rectangle board, 0, 0, i, 1
+  end repeat
+end click`);
+  const board = canvasOf(play.project);
+  expect(play.problems.map(p => `${p.line}: ${p.message}`)).toEqual([]);
+  expect(play.pump(0n).state).toBe('sliced');
+  expect(drawn(play).length).toBeGreaterThan(0);
+  expect(play.takeDrawingChanges()).toEqual([]);
+  drain(play);
+  expect(play.takeDrawingChanges()).toEqual([board]);
+  expect(play.drawingChangesSince(board)?.commands).toHaveLength(2000);
+});
+
+test('a reset Drawing is released when its Run waits', () => {
+  const play = redraw(`on click
+  ask canvas to clear board
+  ask canvas to rectangle board, 0, 0, 1, 1
+  wait 1000 ms
+  ask canvas to rectangle board, 1, 1, 1, 1
+end click`);
+  drain(play);
+  expect(play.problems).toEqual([]);
+  expect(play.takeDrawingChanges()).toEqual([canvasOf(play.project)]);
+  expect(drawn(play)).toHaveLength(1);
+});

@@ -10,6 +10,8 @@ The transform Operations `push`, `pop`, `translate`, `rotate` and `scale` are or
 
 `polygon` and `polyline` each take a list of points, `[[x, y], …]`, and are one command at 1 Fuel however many points they carry ([#1385](https://github.com/odogono/odgn-talk/issues/1385)). `polygon` is closed and `polyline` is open. Both are filled and stroked with the current style, as p5.js and Canvas 2D fill an open path by closing it implicitly, so a `polyline` drawn after `noFill` is only an outline. A list holds 2 to 1,000 points, and each coordinate is within the usual coordinate limit. Point by point, as p5.js's `beginShape`, `vertex` and `endShape` work, a polygon would cost a command and a Fuel per vertex and run into the 10,000 cap; built from `triangle` and `line`, as before, it could not fill a concave outline cleanly or join its corners. Curves and holes are left out. A later argument or Operation can add them without changing these two.
 
+The page never draws a Drawing that has been reset but not yet redrawn ([#1544](https://github.com/odogono/odgn-talk/issues/1544)). Play runs Scripts in Pumps of at most 5,000 Fuel and publishes a view after each one. When a Pump ends part-way through a Run that ran `clear` or `background`, that Canvas's changes are held back until the Run ends. They are also released when a Pump ends with nothing left to run, so a Run waiting on `wait` or a prompt shows what it has drawn so far, and when Play stops. Other Canvases, and Elements, are published as before. Measured on Canvas Tetris before Tetris repainted only changed cells, sending the reset at once showed 432 emptied or half-drawn boards in 60 s of play ([bench-tetris.md](../../tooling/creative/tools/bench-tetris.md)).
+
 ## Considered Options
 
 - **A lifetime count reset by `clear`, with no list**, as in the Playground. A game could redraw forever, but nothing could rebuild the picture for the page, for Edit or for the Project file.
@@ -23,13 +25,17 @@ The transform Operations `push`, `pop`, `translate`, `rotate` and `scale` are or
 - **A Grant bound to the Canvas's Owning Script, or a "current canvas" selector.** Each Operation takes the target Canvas Element as its first argument instead, as `elements` takes Elements, so a Page Script can draw into any Canvas it can name without a message each frame or hidden state.
 - **One `shape` Operation with a closed flag**, as p5.js names it. Shape already names a description of accepted values, which the canvas signatures themselves use, and a bare `true` argument reads poorly in a Script.
 - **A flat list of coordinates**, `[x1, y1, x2, y2, …]`. Simpler to check, but an odd count is a mistake the shape of the list cannot show.
+- **Publishing a reset Drawing at once**, as before #1544. A redraw larger than one Pump is seen emptied or half drawn, which Scripts could only avoid by fitting every redraw in one Pump.
+- **Holding every view until no Run is left**, not only the reset Canvas's changes. Text, scores and other Canvases would stall behind a long redraw.
+- **An explicit `present` Operation** that publishes the Drawing, as double-buffered APIs do. Every existing Script would need it, and one that forgot would never show anything.
 - **Bézier and spline vertices, and holes**, as p5.js's `bezierVertex` and `beginContour`. They would need a kind on each point or a list of rings, roughly doubling validation and the stored form, and nothing in #1144 needs them.
 
 ## Consequences
 
 - The Drawing is stored in the Project file as `{op, args}` commands, checked with the same signatures, validation and limits as the Playground's canvas, which move out of `tooling/stack/src/canvas.ts` into shared exports. Folio's Grant does not use `canvasCapabilities()`.
 - A command's arguments are display-spelled text or, for `polygon` and `polyline`, a list of pairs of display-spelled numbers. Project files written before #1385 hold only text, so they load unchanged.
-- Each canvas Operation is `immediate` and costs 1 Fuel. Commands are not Segment-bound, so a Play stopped part-way through a frame commits the half-drawn Drawing as shown.
+- Each canvas Operation is `immediate` and costs 1 Fuel. Commands are not Segment-bound, so a Play stopped part-way through a frame commits the half-drawn Drawing, and the page shows it as Play stops.
+- A Run that resets a Canvas and then keeps running without waiting, as a `repeat` that never ends, holds that Canvas's changes until a limit ends it or Play stops.
 - All other Play State is still discarded on return to Edit. Scripts cannot read a Drawing back, and cloning or duplicating a Canvas copies its Drawing.
 - Each Message Box line in Edit that draws is one undoable edit. Only `clear`, `background` or the Info panel's Clear drawing action removes commands. Clear drawing empties the Drawing completely, so the next command starts from the default style. Nothing marks a Canvas whose Drawing came from Play.
 - Tests check the retained list from a headless Play Session, not pixels or a Trace.
