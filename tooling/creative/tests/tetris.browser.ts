@@ -129,20 +129,26 @@ export const runCanvasBrowserTests = async () => {
   await until(() => score() === 'Score: 1');
   edit.click();
   await until(() => drawing() !== previous);
+  // Later rectangles paint over earlier ones: a move repaints the cells the
+  // piece left with the empty colour.
   let colour = EMPTY_COLOUR;
-  let filled = 0;
+  const cells = new Map<string, string>();
   for (const command of drawing()) {
     if (command.op === 'fill') {
       colour = (command.args[0] as string).slice(1, -1);
-    } else if (command.op === 'rectangle' && colour !== EMPTY_COLOUR) {
-      filled++;
-      assert(
-        Number(command.args[1]) < 3 * CELL,
-        'The second Browse kept locked cells from the previous game',
-      );
+    } else if (command.op === 'rectangle') {
+      cells.set(`${command.args[0]},${command.args[1]}`, colour);
     }
   }
-  assert(filled <= 4, 'The second Browse kept cells from the previous game');
+  const filled = [...cells].filter(([, shown]) => shown !== EMPTY_COLOUR);
+  assert(
+    filled.every(([cell]) => Number(cell.split(',')[1]) < 3 * CELL),
+    'The second Browse kept locked cells from the previous game',
+  );
+  assert(
+    filled.length <= 4,
+    'The second Browse kept cells from the previous game',
+  );
   return {
     passed: true,
     checks: [

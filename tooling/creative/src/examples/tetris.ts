@@ -14,7 +14,7 @@ on resetPainting
   put grid(rows, columns, "") into shown
 end resetPainting
 
-on beginPaint
+on beginPaint everyCell
 end beginPaint
 
 on paintCell r, c, colour

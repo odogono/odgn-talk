@@ -8,6 +8,7 @@ import { type ExampleContent } from '../src/examples';
 import { thaw } from '../src/readonly';
 import { CELL, PREVIEW_CELL } from '../src/examples/tetris-layout';
 import { text } from '@northtalk/ts';
+import { CANVAS_LIMITS } from '@northtalk/tooling/canvas';
 
 // A Play Session on Tetris with an explicit clock, as the browser drives it.
 const start = async (
@@ -318,7 +319,7 @@ test('the Canvas preview becomes the next falling piece, with the same shape and
   expect(game.play.problems).toEqual([]);
 });
 
-test('a second Browse clears the retained last game and keeps only one frame of commands', async () => {
+test('a second Browse clears the retained last game', async () => {
   const game = await start(createCanvasTetrisProject);
   for (let i = 0; i < 5; i++) {
     await game.key(' ');
@@ -344,10 +345,30 @@ test('a second Browse clears the retained last game and keeps only one frame of 
   )) {
     const drawing = next.play.drawingOf(canvas);
     expect(drawing.some(command => command.op === 'ellipse')).toBe(false);
-    // Only the falling piece and the next piece are filled.
-    expect(drawing.filter(command => command.op === 'rectangle')).toHaveLength(
-      4,
-    );
   }
+  // Only the falling piece and the next piece are filled.
+  expect(next.filled()).toHaveLength(4);
+  expect(
+    [...next.drawingCells('previewCanvas', PREVIEW_CELL)].filter(
+      ([, colour]) => colour !== EMPTY_COLOUR,
+    ),
+  ).toHaveLength(4);
   expect(next.play.problems).toEqual([]);
+});
+
+test('a piece moved many times keeps the Canvas Drawing well under its limit', async () => {
+  const game = await start(createCanvasTetrisProject);
+  const board = game.play.page.elements.find(e => e.name === 'boardCanvas');
+  if (board?.kind !== 'canvas') {
+    throw new Error('Missing board Canvas');
+  }
+  let longest = 0;
+  for (let i = 0; i < 1000; i++) {
+    await game.key(i % 2 ? 'ArrowLeft' : 'ArrowRight');
+    longest = Math.max(longest, game.play.drawingOf(board).length);
+  }
+  // Every 200 patches the board is drawn whole again from a cleared surface.
+  expect(longest).toBeLessThan(CANVAS_LIMITS.commands / 2);
+  expect(game.filled()).toHaveLength(4);
+  expect(game.play.problems).toEqual([]);
 });

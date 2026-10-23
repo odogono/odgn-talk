@@ -5,10 +5,12 @@ import { TETRIS_LIBRARY, TETRIS_RULES } from './tetris-rules';
 
 export const CANVAS_TETRIS_PROJECT_NAME = 'Canvas Tetris';
 
-// Clear before each changed view and draw only filled cells over the
-// surface's empty fill: the retained Drawing stays one frame of filled cells,
-// including when Browse starts from the previous game's last frame.
+// A whole paint clears the board and draws only filled cells over the
+// surface's empty fill. A patch draws over the cells it changes, empty ones
+// included, so the retained Drawing grows until the next whole paint.
 const CANVAS_PAINTING = `
+script variable fresh = false
+
 on resetPainting
   tell canvas
     clear boardCanvas
@@ -20,8 +22,11 @@ on resetPainting
   end tell
 end resetPainting
 
-on beginPaint
-  ask canvas to clear boardCanvas
+on beginPaint everyCell
+  if everyCell then
+    ask canvas to clear boardCanvas
+  end if
+  put everyCell into fresh
 end beginPaint
 
 on paintCell r, c, colour
@@ -30,6 +35,7 @@ end paintCell
 
 on beginPreview
   ask canvas to clear previewCanvas
+  put true into fresh
 end beginPreview
 
 on previewCell r, c, colour
@@ -37,7 +43,7 @@ on previewCell r, c, colour
 end previewCell
 
 on drawCell surface, r, c, colour, size
-  if colour is emptyColour then
+  if fresh and colour is emptyColour then
     return
   end if
   tell canvas
