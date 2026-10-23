@@ -1,5 +1,6 @@
-import { readDisplay, type Value } from '@northtalk/ts';
+import { type Value } from '@northtalk/ts';
 import {
+  canvasArgumentValue,
   paintCanvasShape,
   type CanvasCommand,
 } from '@northtalk/tooling/canvas';
@@ -70,7 +71,7 @@ export const createCanvasView = (
       previous = [];
     }
     for (const command of commands.slice(previous.length)) {
-      const args = command.args.map(a => readDisplay(a));
+      const args = command.args.map(canvasArgumentValue);
       switch (command.op) {
         case 'size':
           size(numberAt(args, 0), numberAt(args, 1));
@@ -157,7 +158,7 @@ export const createCanvasView = (
           paintCanvasShape(
             context,
             command.op,
-            i => numberAt(args, i),
+            command.args,
             fill,
             stroke && strokeWidth > 0,
           );

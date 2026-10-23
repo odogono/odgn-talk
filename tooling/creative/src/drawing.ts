@@ -86,7 +86,9 @@ export class Drawing {
   constructor(initial: DeepReadonly<CanvasCommand[]>) {
     this.commands = initial.map(command => ({
       op: command.op,
-      args: [...command.args],
+      args: command.args.map(arg =>
+        typeof arg === 'object' ? arg.map(point => [...point]) : arg,
+      ),
     }));
     for (const command of this.commands) {
       this.#note(command);

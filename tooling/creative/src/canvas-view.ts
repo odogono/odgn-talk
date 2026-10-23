@@ -29,7 +29,7 @@ const paint = (
 ) => {
   // Arguments keep their display spelling; the signature fixes their kinds.
   const n = (i: number) => Number(command.args[i]);
-  const t = (i: number) => readDisplay(command.args[i]!).asText()!;
+  const t = (i: number) => readDisplay(command.args[i] as string).asText()!;
   switch (command.op) {
     case 'background':
       context.save();
@@ -101,7 +101,7 @@ const paint = (
   paintCanvasShape(
     context,
     command.op,
-    n,
+    command.args,
     state.fill,
     state.stroke && state.strokeWidth > 0,
   );

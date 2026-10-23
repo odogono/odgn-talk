@@ -52,7 +52,7 @@ const start = async (
     const cells = new Map<string, string>();
     for (const command of play.drawingOf(canvas)) {
       if (command.op === 'fill') {
-        colour = command.args[0]!.slice(1, -1);
+        colour = (command.args[0] as string).slice(1, -1);
       } else if (command.op === 'rectangle') {
         const [x, y, width, height] = command.args.map(Number);
         expect([width, height]).toEqual([size, size]);

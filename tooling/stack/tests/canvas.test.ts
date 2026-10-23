@@ -222,3 +222,42 @@ test('pop needs a matching push, and clear empties the push stack', () => {
   );
   expect(host.input('ask canvas to pop')).toEqual([]);
 });
+
+test('polygon and polyline draw from a list of points', () => {
+  const trace: string[] = [];
+  const host = new SessionHost({
+    now: () => 0n,
+    capabilities: canvasCapabilities,
+    trace: line => trace.push(line),
+  });
+  host.input(':grant canvas canvas');
+  expect(host.input('ask canvas to polygon [[0, 0], [10, 0], [5, 8]]')).toEqual(
+    [],
+  );
+  expect(host.input('ask canvas to polyline [[1, 2]]').join(' ')).toContain(
+    'invalid canvas argument',
+  );
+  expect(canvasCommands(trace, ['canvas'])).toEqual([
+    {
+      op: 'polygon',
+      args: [
+        [
+          ['0', '0'],
+          ['10', '0'],
+          ['5', '8'],
+        ],
+      ],
+    },
+  ]);
+  expect(
+    canvasCommandProblem({
+      op: 'polyline',
+      args: [
+        [
+          ['0', '0'],
+          ['3', '4'],
+        ],
+      ],
+    }),
+  ).toBeUndefined();
+});

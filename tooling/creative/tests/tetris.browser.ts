@@ -133,7 +133,7 @@ export const runCanvasBrowserTests = async () => {
   let filled = 0;
   for (const command of drawing()) {
     if (command.op === 'fill') {
-      colour = command.args[0]!.slice(1, -1);
+      colour = (command.args[0] as string).slice(1, -1);
     } else if (command.op === 'rectangle' && colour !== EMPTY_COLOUR) {
       filled++;
       assert(
