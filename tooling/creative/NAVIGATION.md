@@ -243,7 +243,8 @@ List files with `rg --files tooling/creative` before opening one by name.
   change contract: `changesSince` gives the worker a Drawing's reset or new
   commands, and `ReceivedDrawing` applies them on the page.
 - [grants/canvas.ts](src/grants/canvas.ts): the `canvas` Grant;
-  [play.ts](src/play.ts) keeps each session's Drawings;
+  [play.ts](src/play.ts) keeps each session's Drawings and holds back a
+  reset Drawing while a Pump cuts off the Run that reset it;
   [play-host.ts](src/play-host.ts) sends their changes as `DrawingView`s and
   [play-mirror.ts](src/play-mirror.ts) keeps and commits them.
 - [canvas-view.ts](src/canvas-view.ts): Canvas 2D painting shared by Edit and
