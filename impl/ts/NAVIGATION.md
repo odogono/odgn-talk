@@ -161,12 +161,12 @@ Files, grammar, or lowering.
 - Tests and cases: [driver tests](tests/driver.test.ts), [Host and server tests](examples/webhooks/webhooks.test.ts), [`webhooks` case](../../corpus/examples/webhooks/)
 - First check: `bun test impl/ts/tests/driver.test.ts impl/ts/examples/webhooks`
 
-## `createGroup` and Handler Helpers
+## `createGroup`, Handler and inline Grant Helpers
 
-- Implementation: [shared Group Helper](src/group-helper.ts) (used by `/wasm`), [root wrapper with the default TS Core](src/create-group.ts), [plain-JS Handler calls](src/handlers.ts)
+- Implementation: [shared Group Helper](src/group-helper.ts) (used by `/wasm`), [root wrapper with the default TS Core](src/create-group.ts), [plain-JS Handler calls](src/handlers.ts), [inline Grants](src/inline-grants.ts)
 - Rules: [Driving a TS Group](../../spec/09-embedding.md#driving-a-ts-group), [ADR 0130](../../docs/adr/0130-ts-helpers-convert-plain-js-at-the-boundary.md)
-- Tests and cases: [`createGroup` tests](tests/create-group.test.ts), [Handler Helper tests](tests/handlers.test.ts), [embedding interface test](tests/embedding-api.test.ts)
-- First check: `bun test impl/ts/tests/create-group.test.ts impl/ts/tests/handlers.test.ts`
+- Tests and cases: [`createGroup` tests](tests/create-group.test.ts), [Handler Helper tests](tests/handlers.test.ts), [inline Grant tests](tests/inline-grants.test.ts), [embedding interface test](tests/embedding-api.test.ts)
+- First check: `bun test impl/ts/tests/create-group.test.ts impl/ts/tests/handlers.test.ts impl/ts/tests/inline-grants.test.ts`
 
 ## Save and restore
 

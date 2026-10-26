@@ -23,6 +23,11 @@ export {
   type ScriptWithHandlers,
 } from '../handlers';
 export { InstanceLostError } from './reactor';
+export {
+  inlineGrants,
+  type InlineFunction,
+  type InlineOperation,
+} from '../inline-grants';
 
 export {
   HostError,

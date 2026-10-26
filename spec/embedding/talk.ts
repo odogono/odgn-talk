@@ -1067,6 +1067,22 @@ export declare function autoDrive(group: Group, o?: AutoDriveOptions): Drive;
 // Helpers: @northtalk/ts and @northtalk/ts/wasm (chapter 9, Outside parity)
 // ---------------------------------------------------------------------------
 
+/** Host-supplied argument and result types are not checked at runtime. */
+export type InlineFunction = (...args: never[]) => unknown;
+export type InlineOperation = InlineFunction
+  | { arity?: number; fn: InlineFunction }
+  | { arity?: number; async: InlineFunction; maxPendingMs?: number };
+/**
+ * Defines a Capability per key and grants all Operations, at zero cost, with
+ * value Shapes, no Argument Labels and command: true. Arguments use default
+ * fromValue; results use toValue(result, { numbers: 'integer' }). Conversion
+ * failures raise invalid value in the Script; callback exceptions retain the
+ * ordinary Host callback behavior. Arity is fn.length unless overridden, even
+ * for async functions. An async callback receives the call's AbortSignal last;
+ * its maxPendingMs defaults to the Group's maxWaitMs. Both TS entry points export this Helper.
+ */
+export declare function inlineGrants(capabilities: Readonly<Record<string, Readonly<Record<string, InlineOperation>>>>): Record<string, Grant<void>>;
+
 /** Untyped calls accept plain data and safe-integer JS numbers. */
 export type Handlers = {
   [name: string]: (...args: (PlainValue | number | bigint)[]) => Promise<PlainValue>;
