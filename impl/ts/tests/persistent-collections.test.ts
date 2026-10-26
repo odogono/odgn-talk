@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { compileSource } from '../src/lowering';
 import { deliver, loadScript } from '../src/machine';
 import { newGroup, restore } from '../src/index';
-import { charge, rateOf, sizeOf } from '../src/costs';
+import { cacheBuild, charge, keysContents, rateOf, sizeOf } from '../src/costs';
 import {
   appendTo,
   chunkDelete,
@@ -15,6 +15,8 @@ import {
   dec,
   listValues,
   map,
+  mapLayout,
+  mapOfLayout,
   nothing,
   num,
   range,
@@ -200,6 +202,38 @@ test('persistent Maps preserve key presence, order, aliases and logical sizes', 
   expect(reordered.hasKey('mutated')).toBe(false);
 });
 
+test('map literals built in one pass match maps built key by key', () => {
+  const nested = listValues([text('é'), map([['child', nothing]])]);
+  for (const length of [0, 1, 2, 3, 7, 64, 100]) {
+    // Keys out of sorted order, with a non-NFC spelling.
+    const keys = Array.from({ length }, (_, i) =>
+      i === 1 ? 'e\u0301' : `key-${(i * 37) % 101}`,
+    );
+    const items = keys.map((_, i) => (i % 2 ? nested : num(i)));
+    const layout = mapLayout(keys);
+    const built = mapOfLayout(layout, items);
+    cacheBuild(built, items, keysContents(layout.keys));
+    const expected = map(keys.map((key, i) => [key, items[i]!]));
+    expect(built.entries()).toEqual(expected.entries());
+    expect(sizeOf(built)).toBe(sizeOf(expected));
+    for (const [i, key] of keys.entries()) {
+      expect(built.get(key)).toBe(items[i]!);
+    }
+    expect(built.hasKey('missing')).toBe(false);
+    // Later writes keep the literal's order and ordinals.
+    const edited = setKey(deleteKey(built, 'é'), keys[0] ?? 'new', nested);
+    const reference = setKey(
+      deleteKey(expected, 'é'),
+      keys[0] ?? 'new',
+      nested,
+    );
+    expect(edited.entries()).toEqual(reference.entries());
+    expect(sizeOf(edited)).toBe(sizeOf(reference));
+    expect(mapOfLayout(layout, items).entries()).toEqual(built.entries());
+  }
+  expect(() => mapLayout(['é', 'e\u0301'])).toThrow('Duplicate map key');
+});
+
 const editSource = readFileSync(
   new URL('../../testdata/collection-edits.talk', import.meta.url),
   'utf8',
@@ -233,6 +267,40 @@ test('collection edits keep baseline Fuel, allocation and retained results acros
     expect(script.variables[0]!.equals(original)).toBe(true);
     expect(result.result.toString()).toBe(retained);
   }
+});
+
+test('built literals and collects keep Fuel, allocation and rollback at Limit faults', () => {
+  const script = loadScript(
+    compileSource(
+      `script variable kept = {}
+on build
+  repeat for each i in 1..300 collecting {price: i, tags: [i, "é"], quantity: 2} into rows
+  end repeat
+  repeat for each row in rows collecting row's price * row's quantity into amounts
+  end repeat
+  put {rows: rows, amounts: amounts} into kept
+  return amounts
+end build`,
+      { name: 'test' },
+    ).unit!,
+  );
+  // Figures from main before one-pass literals and edge appends (#1583).
+  for (const [limits, fuel, alloc] of [
+    [{ fuelPerRun: 1500 }, 1496, 328_879],
+    [{ allocPerRun: 20_000 }, 332, 19_966],
+  ] as const) {
+    const run = deliver(script, 'build', [], limits);
+    while (!run.done) {
+      run.step();
+    }
+    expect(run.ended?.kind).toBe('limit fault');
+    expect([run.fuel, run.alloc]).toEqual([fuel, alloc]);
+    expect(script.variables[0]!.mapSize).toBe(0);
+  }
+  const run = deliver(script, 'build', [], {});
+  expect(run.finish().kind).toBe('completed');
+  expect([run.fuel, run.alloc]).toEqual([19_466, 10_776_085]);
+  expect(script.variables[0]!.get('amounts').index(300).toString()).toBe('600');
 });
 
 test('Save/Restore reconstructs persistent collections and the rollback checkpoint', () => {

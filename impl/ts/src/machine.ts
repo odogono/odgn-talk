@@ -17,8 +17,10 @@ import {
   type Reader,
 } from './binary';
 import {
+  cacheBuild,
   charge,
   fixedRates,
+  keysContents,
   partSize,
   rateOf,
   sizeOf,
@@ -28,6 +30,7 @@ import {
 import { integerOf, isInteger } from './decimal';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf } from './code-unit';
+import type { MapLayout } from './map-storage';
 import {
   errorMessages,
   limitDefaults,
@@ -111,6 +114,8 @@ import {
   functionsBelongTo,
   listValues,
   map,
+  mapLayout,
+  mapOfLayout,
   nothing,
   quantity,
   text,
@@ -164,6 +169,22 @@ const UNWIND = rateOf('unwind');
 export const coreRaised = new WeakSet<Value>();
 
 /** A code unit that can't load: a literal pattern past its limit, or a failed initialiser. */
+// A map literal's keys are its Code's constant, so they're checked and
+// arranged once, not on every build.
+const mapLiterals = new WeakMap<Value, { keys: number; layout: MapLayout }>();
+const mapLiteralOf = (keys: Value) => {
+  let literal = mapLiterals.get(keys);
+  if (!literal) {
+    const names = Array.from({ length: keys.length }, (_, i) =>
+      textForm(keys.index(i + 1)),
+    );
+    const layout = mapLayout(names);
+    literal = { layout, keys: keysContents(layout.keys) };
+    mapLiterals.set(keys, literal);
+  }
+  return literal;
+};
+
 export class UnitLoadError extends Error {
   constructor(
     readonly code: 'pattern too large' | 'initialiser failed',
@@ -4799,9 +4820,11 @@ export class Run {
       case Op.List: {
         const n = a as number;
         m.count = n;
-        m.result = listValues(
-          this.frame.stack.slice(this.frame.stack.length - n) as Value[],
-        );
+        const items = this.frame.stack.slice(
+          this.frame.stack.length - n,
+        ) as Value[];
+        m.result = listValues(items);
+        cacheBuild(m.result, items, 0);
         return this.replace(n, rate);
       }
       case Op.ListAppend:
@@ -4822,7 +4845,9 @@ export class Run {
         const values = this.frame.stack.slice(
           this.frame.stack.length - n,
         ) as Value[];
-        m.result = map(values.map((v, i) => [textForm(keys.index(i + 1)), v]));
+        const literal = mapLiteralOf(keys);
+        m.result = mapOfLayout(literal.layout, values);
+        cacheBuild(m.result, values, literal.keys);
         return this.replace(n, rate);
       }
       // Building Bytes

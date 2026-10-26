@@ -33,6 +33,43 @@ const replaceItem = (
   };
 };
 
+/** One item added to the first or last chunk, copying only the edge path:
+ * the shape and keys stay put. Undefined when that chunk is full. */
+const growEdge = (
+  root: Tree<number, readonly Value[]>,
+  item: Value,
+  prepend: boolean,
+): Tree<number, readonly Value[]> | undefined => {
+  const next = prepend ? root.left : root.right;
+  let left = root.left;
+  let right = root.right;
+  let chunk = root.value;
+  if (next) {
+    const grown = growEdge(next, item, prepend);
+    if (!grown) {
+      return undefined;
+    }
+    if (prepend) {
+      left = grown;
+    } else {
+      right = grown;
+    }
+  } else if (chunk.length < chunkSize) {
+    chunk = prepend ? [item, ...chunk] : [...chunk, item];
+  } else {
+    return undefined;
+  }
+  return {
+    key: root.key,
+    value: chunk,
+    span: chunk.length,
+    left,
+    right,
+    height: root.height,
+    total: root.total + 1,
+  };
+};
+
 /** A persistent sequence of small chunks. Growth and point edits copy only a
  * chunk and its AVL path, including when extending a retained older List. */
 export class ListStorage {
@@ -96,6 +133,13 @@ export class ListStorage {
   ): ListStorage {
     if (count === 0) {
       return this;
+    }
+    const grown =
+      count === 1 && this.#root
+        ? growEdge(this.#root, item(0), prepend)
+        : undefined;
+    if (grown) {
+      return new ListStorage(grown, this.#first, this.#last);
     }
     let root = this.#root;
     let first = this.#first;

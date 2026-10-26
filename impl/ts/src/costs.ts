@@ -224,6 +224,31 @@ export const cacheListExtension = (
   known.set(result, partSize('list', result.length, contents));
 };
 
+/** The part of a map's contents its keys add, one term per key. */
+export const keysContents = (keys: readonly string[]): number =>
+  keys.reduce((sum, key) => sum + 16 + encoder.encode(key).length, 0);
+
+/** Seed a newly built List's or map's size from the values it was built of. */
+export const cacheBuild = (
+  result: Value,
+  items: readonly Value[],
+  keys: number,
+): void => {
+  let contents = keys;
+  for (const item of items) {
+    contents += sizeOf(item);
+  }
+  knownContents.set(result, contents);
+  known.set(
+    result,
+    partSize(
+      result.kind,
+      result.kind === 'map' ? result.mapSize : result.length,
+      contents,
+    ),
+  );
+};
+
 /** Seed the logical sizes of point edits from their retained collection. */
 export const cacheMapWrite = (
   result: Value,
