@@ -5,9 +5,10 @@ Your app is the **Host**: it supplies source, sends messages, grants access to
 application services and sets resource limits. The TS Core parses, checks and
 executes the Scripts.
 
-This guide starts with a Handler that adds two numbers, then connects a Script
-to an asynchronous application service. The [language tour](tour.md) introduces
-NorthTalk syntax; the [embedding specification](../spec/09-embedding.md) and
+This guide starts with the Helpers, which take and return plain JS values, then
+covers the full API for Hosts that need typed Shapes, costs or their own
+scheduling. The [language tour](tour.md) introduces NorthTalk syntax; the
+[embedding specification](../spec/09-embedding.md) and
 [TypeScript declarations](../spec/embedding/talk.ts) define the API.
 
 ## Install and run
@@ -19,8 +20,8 @@ npm install @northtalk/ts
 ```
 
 The package contains JavaScript and TypeScript declarations. Use TypeScript 5.9
-or later. The examples below run with Bun, or with Node 24.10 or later after
-compilation to JavaScript. For a new Bun app:
+or later. The examples below run with Bun, or with Node 24.10 or later. For a
+new Bun app:
 
 ```sh
 mkdir northtalk-app
@@ -34,20 +35,138 @@ usual TypeScript build and entry point. The Core also runs in browsers through
 an ESM bundler or import map; load `.talk` source as text through your app's
 asset pipeline. See the [package runtime details](../impl/ts/tools/package/README.md#runtimes).
 
-To try the complete application-service example from this checkout, run these
-commands at the repository root:
+To try the examples from this checkout, run these commands at the repository
+root:
 
 ```sh
 bun install --frozen-lockfile
 bun run unicode:check
+bun impl/ts/examples/helpers/main.ts
 bun impl/ts/examples/embedding/main.ts
 ```
 
-It prints `Hello, Ada!`. The [runnable source](../impl/ts/examples/embedding/main.ts)
-uses the same package imports as an external app; the workspace resolves them
-to the local TS Core.
+The [Helpers example](../impl/ts/examples/helpers/main.ts) is the next section's
+code, and the [application-service example](../impl/ts/examples/embedding/main.ts)
+is [Connect a Script to your application](#connect-a-script-to-your-application)'s.
+Both use the same package imports as an external app; the workspace resolves
+them to the local TS Core.
 
-## Load a Script and call a Handler
+## Start with the Helpers
+
+```ts
+import {
+  createGroup,
+  dec,
+  inlineGrants,
+  talk,
+  type Decimal,
+  type Value,
+} from '@northtalk/ts';
+
+// The Handlers' JS types, which the Host states and nothing checks.
+type Calculator = {
+  greet(name: string): Promise<string>;
+  total(a: number | Value, b: number | Value): Promise<Decimal>;
+};
+
+await using group = createGroup({ name: 'calculator' });
+
+const script = group.load<Calculator>({
+  name: 'main',
+  source: talk`
+    on total a, b
+      return a + b
+    end total
+
+    on greet name
+      shout "Hello, " & name & "!"
+      return it
+    end greet
+  `,
+  grants: inlineGrants({
+    app: { shout: (line: string) => line.toUpperCase() },
+  }),
+});
+
+console.log(String(await script.handlers.total(2, 3))); // 5
+console.log(String(await script.handlers.total(dec('0.1'), dec('0.2')))); // 0.3
+console.log(await script.handlers.greet('Ada')); // HELLO, ADA!
+```
+
+A **Group** owns Script state and schedules its messages. `createGroup` returns
+one already driven from the event loop, so you can await Handlers as soon as a
+Script is loaded. `await using` closes it at scope exit; without that syntax,
+call `await group.close()`. `load` checks and compiles the source synchronously,
+then returns a Script handle. Source contains declarations; executable
+statements go inside Handlers such as `on total`. The `talk` tag strips the
+common indentation so inline source can follow the surrounding code. It rejects
+JS `${…}` values: write NorthTalk interpolation as `\${…}` and its backticks as
+`` \` ``, and pass values as Handler arguments.
+
+`script.handlers.total(2, 3)` sends the Script a `total` Request and resolves
+with its answer. Arguments and answers are plain JS data: strings, booleans,
+`null` for `nothing`, arrays as Lists and plain objects as Maps. Numbers follow
+one rule, because NorthTalk numbers are exact decimals:
+
+- A JS `number` that is a safe integer, or a `bigint`, passes as is.
+- A fraction needs `dec('0.1')`; `handlers.total(0.1, 3)` throws and names `dec()`.
+- A number in an answer is a `Decimal`. Read it with `String(n)`, `n.toBigInt()`
+  or `Number(n)`.
+
+Kinds without a JS form, such as Instants and Quantities, arrive as `Value`s.
+`load<Calculator>` states the Handlers' JS types; nothing checks them at run
+time. Without it, `handlers` is untyped and each Handler may be `undefined`
+under `noUncheckedIndexedAccess`.
+
+Keep a loaded Script handle for subsequent calls. Its `script variable`
+declarations retain state across Handler calls.
+
+Scripts have no ambient access to your app. `inlineGrants` turns plain JS
+functions into **Operations** the Script may call: each outer key names a
+**Capability**, and the Script is granted all its Operations. The Script can
+call one as a Host Command, `shout "Hi"`, or as `ask app to shout "Hi"`; both
+leave the answer in `it`. Arguments arrive converted as answers are, so a
+number is a `Decimal`, and results convert as Handler arguments do. A function
+taking `(a, b)` takes two arguments; give `{ fn, arity }` when its length
+misleads.
+
+For an asynchronous service, mark the function `{ async: fn }`. It receives the
+call's `AbortSignal` as its last argument, and the Script waits for its answer:
+
+```ts
+const grants = inlineGrants({
+  customers: {
+    lookup: {
+      async: (id: string, signal: AbortSignal) => directory.lookup(id, signal),
+      arity: 1,
+    },
+  },
+});
+// In the Script: lookup customerId and wait
+```
+
+`createGroup` takes the Group's `name`, `seed` and `trace`, and the driver's
+options described in [Drive execution](#drive-execution-and-manage-lifetime).
+It uses the process-wide TS Core; pass `core` to use another, such as the Zig
+Core from `@northtalk/ts/wasm`, whose `createGroup` requires it. `handlersOf(script)`
+gives the same `handlers` for a Script loaded any other way.
+
+## Full control
+
+The Helpers cover a Script that takes and returns plain data and calls
+untyped, uncosted Operations. Reach for the API below when you need:
+
+- **Typed Operations:** argument and result Shapes the Core checks, and
+  [ADR 0120](adr/0120-ts-host-functions-take-the-js-forms-of-their-shapes.md)'s per-Shape
+  scalar forms, through `defineCapability`.
+- **Costs, errors and labels:** Operation Fuel costs, declared errors a Script
+  can catch, Argument Labels and an application binding per Grant.
+- **Manual scheduling:** a Group you pump by hand, for a game loop or a
+  deterministic test. `createGroup` already takes the driver's Pump settings.
+- **`Value`s at the boundary:** `script.invoke` and `script.request` take and
+  return `Value`s, such as Instants, or a Request's cancellation signal.
+
+### Drive a Group and call a Handler with Values
 
 ```ts
 import { createCore, num, talk } from '@northtalk/ts';
@@ -68,12 +187,9 @@ console.log(answer.asDecimal()!.toString()); // 5
 await drive.close();
 ```
 
-A **Group** owns Script state and schedules its messages. `load` checks and
-compiles the source synchronously, then returns a Script handle. Source contains
-declarations; executable statements go inside Handlers such as `on total`.
-The `talk` tag strips the common indentation so inline source can follow the
-surrounding code. It rejects JS `${…}` values: write NorthTalk interpolation as
-`\${…}` and its backticks as `` \` ``, and pass values as Request arguments.
+This is the Helpers example's `total` without the Helpers. `newDrivenGroup`
+returns the Group and its driver separately, and `invoke` takes and returns
+`Value`s.
 
 `invoke` queues a Request and resolves with its answer. `request` does the same
 but returns `{ id, result }`, and takes a cancellation signal. `newDrivenGroup` wires
@@ -83,12 +199,11 @@ Pumps for longer work and for a suspending Operation after its answer arrives.
 
 Use `request` when the app needs an answer. Use `deliver` for a message whose
 answer the app does not need; it returns a delivery id and still needs pumping.
-Keep a loaded Script handle for subsequent requests. Its `script variable`
-declarations retain state across Handler calls.
 
-## Convert values at the boundary
+### Convert values at the boundary
 
-Arguments and results are NorthTalk `Value` instances. Construct them explicitly:
+`invoke` and `request` arguments and results are NorthTalk `Value` instances.
+Construct them explicitly:
 
 | TypeScript data | NorthTalk constructor           | Read the result                  |
 | --------------- | ------------------------------- | -------------------------------- |
@@ -100,7 +215,8 @@ Arguments and results are NorthTalk `Value` instances. Construct them explicitly
 | Map             | `record({ name: text('Ada') })` | `value.get('name')`              |
 | No value        | `nothing`                       | `value.kind === 'nothing'`       |
 
-Import constructors from `@northtalk/ts`. Plain JS objects, `null` and `undefined`
+Import constructors from `@northtalk/ts`. `toValue` and `fromValue` convert plain
+JS data as the Helpers do; otherwise plain JS objects, `null` and `undefined`
 cannot be passed as Script values. Accessors such as `asText()` return
 `undefined` for a different kind. Lists use **1-based** indexes.
 
@@ -111,7 +227,7 @@ text, and `encodeJson(value)` produces ordinary JSON for supported kinds.
 `encodeValue`/`decodeValue` instead provide the lossless tagged Value Encoding.
 `toString()` produces the language's display form. See [public values](../impl/ts/README.md#public-values).
 
-## Connect a Script to your application
+### Connect a Script to your application
 
 Scripts have no ambient access to your database, filesystem, network or JS
 objects. Expose an application action as a **Capability Operation**, then give
@@ -211,7 +327,7 @@ the underlying work. For a short synchronous action, use `mode: 'immediate'`
 with a `do` callback returning its result, and call it with `ask …` without
 `and wait`.
 
-## Drive execution and manage lifetime
+### Drive execution and manage lifetime
 
 `newDrivenGroup(core, options)` creates a Group on `core` connected to an
 event-loop driver and returns `{ group, drive }`. It works on either Core, so

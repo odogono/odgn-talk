@@ -132,3 +132,8 @@ jobs:
         working-directory: impl/ts
         env:
           NORTHTALK_HTTP_RUNTIMES: node
+      # The embedding guide's first example must run under Node too.
+      - run: bun test examples/helpers
+        working-directory: impl/ts
+        env:
+          NORTHTALK_EXAMPLE_RUNTIMES: node

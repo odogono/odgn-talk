@@ -2,6 +2,9 @@
 
 For a step-by-step introduction to using this Core in an application, see
 [Embed the TS Core in a TypeScript app](../../docs/embedding-typescript.md).
+It opens with the Helpers, `createGroup`, `script.handlers` and `inlineGrants`,
+which take and return plain JS values ([ADR 0130](../../docs/adr/0130-ts-helpers-convert-plain-js-at-the-boundary.md));
+the [Helpers example](examples/helpers/main.ts) runs that code.
 
 A Result Target, `into name`, retains the answer of an `ask`, a `tell`-block Operation line, a Command Call (including a Host Command), a call statement or a waiting `send` ([ADR 0114](../../docs/adr/0114-result-targets-apply-to-result-producing-calls.md)). It writes the bare Name with put semantics and keeps `it`; `and wait` remains last. Fire-and-forget calls reject targets, and a Message Path Command Call or explicit send needs explicit `and wait`. A Join records each reached member's destination and assigns them in start order only after every answer converts and all completion charges are reserved, so duplicate targets retain the last-started answer and failure writes no member targets. Saves retain the member instruction and its owning frame, including early answers and repeated destinations.
 
