@@ -78,7 +78,6 @@ import {
 } from './patterns';
 import { characters } from './text';
 import {
-  characterBoundaries,
   isWhiteSpace,
   lower,
   normalizeNFC,
@@ -90,6 +89,7 @@ import {
   bytesOf,
   civilOf,
   compareBytes,
+  concatText,
   instantOf,
   dec,
   extendList,
@@ -103,7 +103,9 @@ import {
   quantity,
   quantityOf,
   range,
+  sliceText,
   text,
+  textStorage,
   trimWhiteSpace,
   Value,
   type QuantityRef,
@@ -959,7 +961,10 @@ export const negated = (a: Value): Value => {
   return numberValue(negate(numberOperand(a)));
 };
 export const concat = (a: Value, b: Value): Value =>
-  text(textForm(a) + textForm(b));
+  concatText(
+    a.kind === 'text' ? a : text(textForm(a)),
+    b.kind === 'text' ? b : text(textForm(b)),
+  );
 export const makeRange = (a: Value, b: Value): Value => {
   if (a.kind !== 'number' && a.kind !== 'quantity') {
     throw wrongKind('number', a);
@@ -1206,7 +1211,7 @@ export const property = (
   switch (name) {
     case 'length':
       if (v.kind === 'text') {
-        return integerValue(BigInt(characters(textOf(v)).length));
+        return integerValue(BigInt(textStorage(v).characterCount));
       }
       if (v.kind === 'list') {
         return integerValue(BigInt(v.length));
@@ -1232,7 +1237,11 @@ export const property = (
     case 'items': {
       const d = delimiterText(delimiter);
       if (v.kind === 'text') {
-        return texts(spans(textOf(v), 'item', d).map(s => s.text));
+        return listValues(
+          spans(textOf(v), 'item', d, textStorage(v).characters).map(s =>
+            sliceText(v, s.from, s.to),
+          ),
+        );
       }
       if (v.kind === 'list') {
         return v;
@@ -1249,7 +1258,16 @@ export const property = (
       if (v.kind !== 'text') {
         throw wrongKind('text', v);
       }
-      return texts(spans(textOf(v), singular(name)).map(s => s.text));
+      return name === 'code points'
+        ? texts(spans(textOf(v), 'code point').map(s => s.text))
+        : listValues(
+            spans(
+              textOf(v),
+              singular(name),
+              ',',
+              textStorage(v).characters,
+            ).map(s => sliceText(v, s.from, s.to)),
+          );
     case 'bytes':
       return listValues(
         Array.from(bytesOperand(v), x => integerValue(BigInt(x))),
@@ -1272,7 +1290,7 @@ const delimiterText = (d: Value | null): string => {
   if (d.kind !== 'text') {
     throw wrongKind('text', d);
   }
-  if (!characters(textOf(d)).length) {
+  if (!textOf(d).length) {
     throw outOfRange('delimiter', d);
   }
   return textOf(d);
@@ -1287,7 +1305,7 @@ const spans = (
   s: string,
   kind: string,
   delimiter = ',',
-  units?: string[],
+  units?: readonly string[],
 ): Span[] => {
   if (kind === 'code point') {
     return Array.from(s, (ch, i) => ({ from: i, to: i + 1, text: ch }));
@@ -1390,10 +1408,6 @@ const covered = (index: Index, n: number): [number, number] | null => {
 };
 
 const textKinds = new Set(['character', 'word', 'line', 'item', 'code point']);
-// ASCII scalars each form one Character, except CRLF. Validate the whole
-// input: a non-ASCII suffix can extend the last ASCII scalar's Character.
-// eslint-disable-next-line no-control-regex -- ASCII includes the control scalars.
-const needsCharacterBoundaries = /[^\u0000-\u007f]|\r\n/;
 
 /** One chunk level read, with `scanned`: the units from the start to the chunk's end. */
 export const chunkGet = (
@@ -1407,24 +1421,17 @@ export const chunkGet = (
     const s = textOf(whole);
     const d = delimiterText(delimiter);
     if (kind === 'character') {
-      const boundaries = needsCharacterBoundaries.test(s)
-        ? characterBoundaries(s)
-        : null;
-      const units = boundaries ? boundaries.length - 1 : s.length;
+      const units = textStorage(whole).characterCount;
       const at = covered(index, units);
       return at
         ? {
-            result: text(
-              s.slice(
-                boundaries ? boundaries[at[0] - 1]! : at[0] - 1,
-                boundaries ? boundaries[at[1]]! : at[1],
-              ),
-            ),
+            result: sliceText(whole, at[0] - 1, at[1]),
             scanned: at[1],
           }
         : { result: text(''), scanned: units };
     }
-    const cs = kind === 'code point' ? Array.from(s) : characters(s);
+    const cs =
+      kind === 'code point' ? Array.from(s) : textStorage(whole).characters;
     const units = cs.length;
     if (kind === 'code point') {
       const at = covered(index, units);
@@ -1438,9 +1445,7 @@ export const chunkGet = (
       return { result: text(''), scanned: units };
     }
     return {
-      result: text(
-        cs.slice(chunks[at[0] - 1]!.from, chunks[at[1] - 1]!.to).join(''),
-      ),
+      result: sliceText(whole, chunks[at[0] - 1]!.from, chunks[at[1] - 1]!.to),
       scanned: chunks[at[1] - 1]!.to,
     };
   }
@@ -1486,7 +1491,12 @@ export const chunkThere = (
   const index = indexOf(indexValue);
   const n =
     whole.kind === 'text' && textKinds.has(kind)
-      ? spans(textOf(whole), kind, delimiterText(delimiter)).length
+      ? spans(
+          textOf(whole),
+          kind,
+          delimiterText(delimiter),
+          textStorage(whole).characters,
+        ).length
       : kind === 'item' && whole.kind === 'list'
         ? whole.length
         : kind === 'item' && isIntegerRange(whole)
@@ -1531,7 +1541,7 @@ export const chunkSet = (
   if (whole.kind === 'text' && textKinds.has(kind)) {
     const d = delimiterText(delimiter);
     let s = textOf(whole);
-    let chunks = spans(s, kind, d);
+    let chunks = spans(s, kind, d, textStorage(whole).characters);
     const n = chunks.length;
     const a = fromEnd(index.from, n);
     const b = fromEnd(index.to, n);
@@ -1545,7 +1555,7 @@ export const chunkSet = (
       }
       // Pad with delimiters, or line breaks, up to the chunk written.
       const pad = kind === 'line' ? '\n' : d;
-      const cs = characters(s);
+      const cs = textStorage(whole).characters;
       const ends =
         (kind === 'line' && cs.length > 0 && isLineBreak(cs.at(-1)!)) ||
         (kind === 'item' && s.length > 0 && s.endsWith(d));
@@ -1559,7 +1569,12 @@ export const chunkSet = (
     }
     const lo = Number(a);
     const hi = Number(b);
-    const units = kind === 'code point' ? Array.from(s) : characters(s);
+    const units =
+      kind === 'code point'
+        ? Array.from(s)
+        : s === textOf(whole)
+          ? textStorage(whole).characters
+          : characters(s);
     const from = chunks[lo - 1]!.from;
     const to = hi <= chunks.length ? chunks[hi - 1]!.to : units.length;
     return text(
@@ -1639,7 +1654,8 @@ export const chunkDelete = (
     if (!at) {
       return whole;
     }
-    const units = kind === 'code point' ? Array.from(s) : characters(s);
+    const units =
+      kind === 'code point' ? Array.from(s) : textStorage(whole).characters;
     let from = chunks[at[0] - 1]!.from;
     let to = chunks[at[1] - 1]!.to;
     if (kind === 'word' || kind === 'line' || kind === 'item') {
@@ -1712,9 +1728,7 @@ export const appendTo = (
     return result;
   }
   if (current.kind === 'text') {
-    return text(
-      after ? textOf(current) + textForm(e) : textForm(e) + textOf(current),
-    );
+    return after ? concat(current, e) : concat(e, current);
   }
   throw wrongKind('text', current);
 };
@@ -1839,7 +1853,7 @@ const subjectText = (s: Value) => {
   if (s.kind !== 'text') {
     throw wrongKind('text', s);
   }
-  return characters(textOf(s));
+  return textStorage(s).characters;
 };
 
 // Bytes search as a text literal searches Characters, one position per byte:

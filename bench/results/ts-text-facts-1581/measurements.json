@@ -1,0 +1,1434 @@
+{
+  "metadata": {
+    "issue": "https://github.com/odogono/odgn-talk/issues/1581",
+    "baseline": "915eae6e6c8faf8afd613628d0562baaa398b3cd",
+    "candidate": "uncommitted implementation on feat/issue-1581; source hashes below",
+    "machine": {
+      "cpu": "Apple M5",
+      "os": "darwin",
+      "arch": "arm64",
+      "cores": 10,
+      "memoryGiB": 24
+    },
+    "bun": "1.4.4",
+    "node": "26.12.1",
+    "sourceSha256": {
+      "impl/ts/src/costs.ts": "58356f4c6d42e39bf4adf8a024d05a1e46f9498553feae17a4789332972fd383",
+      "impl/ts/src/operations.ts": "cb1dfd389782ba255562faceb7aa9b4acf70c6c4182c50c03b00b9ab2ba88e87",
+      "impl/ts/src/unicode.ts": "096f226db8498d45c2b2276a04adac6413f12879f9f137880a381312004022f5",
+      "impl/ts/src/values.ts": "ece6c11f1135a4c35dfe1dfc0127127e46178b91a65c54ac19571da4424ea522",
+      "impl/ts/src/text-storage.ts": "66999fb50e55be60c54026a5902daf2a3429fcee172e5bea5a9c2edb3c73a4cd"
+    },
+    "bunMethod": "Three baseline/candidate pairs for text/ and macro/ using bun run bench --only ts --count 5 --no-save. mitata selects sample counts; --count applies to other runners. Values transcribed from CLI tables at their printed precision.",
+    "nodeMethod": "Fresh bundled processes in baseline/candidate then candidate/baseline order; 30 warmup runs and 15 batches of at least 50 ms per workload. Each timed Run checks exact output, Fuel and logical allocation.",
+    "accountingIdentical": true
+  },
+  "bun": [
+    {
+      "pair": 1,
+      "category": "text",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 87.0,
+          "runMedianMs": 0.491,
+          "runMinMs": 0.444,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "49.2 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 95.0,
+          "runMedianMs": 2.972,
+          "runMinMs": 2.542,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "620.3 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 118.2,
+          "runMedianMs": 1.011,
+          "runMinMs": 0.928,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "163.7 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 82.6,
+          "runMedianMs": 1.022,
+          "runMinMs": 0.941,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "203.2 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 111.7,
+          "runMedianMs": 3.994,
+          "runMinMs": 3.677,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "812.3 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "category": "text",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 85.7,
+          "runMedianMs": 0.282,
+          "runMinMs": 0.259,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "35.5 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 92.6,
+          "runMedianMs": 1.651,
+          "runMinMs": 1.552,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "397.6 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 118.7,
+          "runMedianMs": 0.962,
+          "runMinMs": 0.879,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "142.9 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 81.8,
+          "runMedianMs": 0.907,
+          "runMinMs": 0.829,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "209.5 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 110.5,
+          "runMedianMs": 4.014,
+          "runMinMs": 3.706,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "849.6 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "category": "macro",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 193.4,
+          "runMedianMs": 1.972,
+          "runMinMs": 1.871,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "252.7 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 107.8,
+          "runMedianMs": 1.164,
+          "runMinMs": 1.072,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "218.4 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 162.2,
+          "runMedianMs": 0.853,
+          "runMinMs": 0.761,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "74.2 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "category": "macro",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 198.0,
+          "runMedianMs": 1.959,
+          "runMinMs": 1.876,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "211.0 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 109.6,
+          "runMedianMs": 0.624,
+          "runMinMs": 0.58,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "130.8 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 158.0,
+          "runMedianMs": 0.851,
+          "runMinMs": 0.756,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "68.0 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "category": "text",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 79.8,
+          "runMedianMs": 0.476,
+          "runMinMs": 0.431,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "69.7 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 93.6,
+          "runMedianMs": 2.834,
+          "runMinMs": 2.464,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "510.3 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 112.8,
+          "runMedianMs": 0.972,
+          "runMinMs": 0.899,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "159.2 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 82.0,
+          "runMedianMs": 1.01,
+          "runMinMs": 0.922,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "202.7 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 102.4,
+          "runMedianMs": 3.911,
+          "runMinMs": 3.666,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "988.2 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "category": "text",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 83.2,
+          "runMedianMs": 0.281,
+          "runMinMs": 0.258,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "33.2 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 92.8,
+          "runMedianMs": 1.664,
+          "runMinMs": 1.56,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "336.4 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 118.9,
+          "runMedianMs": 0.983,
+          "runMinMs": 0.876,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "162.6 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 80.5,
+          "runMedianMs": 0.896,
+          "runMinMs": 0.833,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "209.8 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 110.1,
+          "runMedianMs": 3.849,
+          "runMinMs": 3.641,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "902.3 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "category": "macro",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 195.6,
+          "runMedianMs": 1.992,
+          "runMinMs": 1.893,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "277.6 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 109.3,
+          "runMedianMs": 1.145,
+          "runMinMs": 1.066,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "214.9 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 163.2,
+          "runMedianMs": 0.884,
+          "runMinMs": 0.769,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "68.0 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "category": "macro",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 196.5,
+          "runMedianMs": 2.034,
+          "runMinMs": 1.909,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "169.7 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 108.2,
+          "runMedianMs": 0.617,
+          "runMinMs": 0.582,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "125.3 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 163.2,
+          "runMedianMs": 0.891,
+          "runMinMs": 0.777,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "88.9 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "category": "text",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 84.4,
+          "runMedianMs": 0.496,
+          "runMinMs": 0.436,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "59.7 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 95.3,
+          "runMedianMs": 2.827,
+          "runMinMs": 2.513,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "607.9 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 116.3,
+          "runMedianMs": 0.99,
+          "runMinMs": 0.925,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "164.2 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 81.5,
+          "runMedianMs": 1.016,
+          "runMinMs": 0.944,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "211.4 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 111.8,
+          "runMedianMs": 3.922,
+          "runMinMs": 3.654,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "848.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "category": "text",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "loadMedianUs": 83.9,
+          "runMedianMs": 0.287,
+          "runMinMs": 0.265,
+          "fuel": 28928,
+          "logicalAlloc": "374.8 KiB",
+          "hostBytes": "35.0 KiB"
+        },
+        {
+          "benchmark": "text/graphemes",
+          "loadMedianUs": 93.2,
+          "runMedianMs": 1.756,
+          "runMinMs": 1.595,
+          "fuel": 43518,
+          "logicalAlloc": "144.1 KiB",
+          "hostBytes": "396.3 KiB"
+        },
+        {
+          "benchmark": "text/index",
+          "loadMedianUs": 117.7,
+          "runMedianMs": 0.985,
+          "runMinMs": 0.901,
+          "fuel": 26640,
+          "logicalAlloc": "49.9 KiB",
+          "hostBytes": "130.4 KiB"
+        },
+        {
+          "benchmark": "text/iterate",
+          "loadMedianUs": 81.3,
+          "runMedianMs": 0.926,
+          "runMinMs": 0.854,
+          "fuel": 30318,
+          "logicalAlloc": "93.0 KiB",
+          "hostBytes": "228.9 KiB"
+        },
+        {
+          "benchmark": "text/patterns",
+          "loadMedianUs": 110.9,
+          "runMedianMs": 3.842,
+          "runMinMs": 3.609,
+          "fuel": 13818,
+          "logicalAlloc": "225.9 KiB",
+          "hostBytes": "857.5 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "category": "macro",
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 196.0,
+          "runMedianMs": 2.048,
+          "runMinMs": 1.876,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "255.8 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 109.0,
+          "runMedianMs": 1.137,
+          "runMinMs": 1.055,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "211.2 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 163.8,
+          "runMedianMs": 0.855,
+          "runMinMs": 0.755,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "83.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "category": "macro",
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 196.4,
+          "runMedianMs": 2.041,
+          "runMinMs": 1.923,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB",
+          "hostBytes": "238.3 KiB"
+        },
+        {
+          "benchmark": "macro/report",
+          "loadMedianUs": 109.3,
+          "runMedianMs": 0.618,
+          "runMinMs": 0.581,
+          "fuel": 86555,
+          "logicalAlloc": "1.2 MiB",
+          "hostBytes": "128.5 KiB"
+        },
+        {
+          "benchmark": "macro/transform",
+          "loadMedianUs": 160.9,
+          "runMedianMs": 0.857,
+          "runMinMs": 0.771,
+          "fuel": 20664,
+          "logicalAlloc": "6.1 MiB",
+          "hostBytes": "64.1 KiB"
+        }
+      ]
+    }
+  ],
+  "node": [
+    {
+      "pair": 1,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "checked": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            516308.4226804124,
+            498706.6831683168,
+            492055.97058823524,
+            493169.94117647037,
+            485519.8252427182,
+            479222.2285714285,
+            482758.4134615387,
+            488508.9029126214,
+            517945.4432989695,
+            504892.4999999997,
+            514298.0408163265,
+            508738.2222222224,
+            509729.3838383839,
+            490576.3921568622,
+            477324.60000000044
+          ],
+          "medianNs": 493169.94117647037
+        },
+        {
+          "benchmark": "text/iterate",
+          "checked": {
+            "alloc": 95272,
+            "fuel": 30318,
+            "outcome": "completed",
+            "result": "1600"
+          },
+          "samplesNs": [
+            1585848.9687500033,
+            1571302.093749999,
+            1558165.4242424264,
+            1592710.937499998,
+            1618985.1935483867,
+            1582993.5000000007,
+            1664401.8709677414,
+            1555895.1818181868,
+            1544579.5454545463,
+            1572010.1212121225,
+            1544871.2121212103,
+            1551497.484848486,
+            1568817.7187500044,
+            1546940.636363636,
+            1553232.3333333298
+          ],
+          "medianNs": 1568817.7187500044
+        },
+        {
+          "benchmark": "text/index",
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            1528776.5151515142,
+            1485947.294117643,
+            1460553.5714285711,
+            1458800.0000000063,
+            1459515.4857142852,
+            1476269.057142859,
+            1456263.1142857105,
+            1459997.6285714288,
+            1478097.600000001,
+            1452653.5714285793,
+            1458278.5714285818,
+            1480559.5142857132,
+            1462724.9999999937,
+            1461385.714285708,
+            1458520.22857142
+          ],
+          "medianNs": 1460553.5714285711
+        },
+        {
+          "benchmark": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            3704306.499999997,
+            3683681.571428581,
+            3665092.214285713,
+            3646080.3571428643,
+            3647690.4999999856,
+            3658755.928571444,
+            3660130.928571432,
+            3652967.285714307,
+            3656601.2142856964,
+            3648190.428571427,
+            3708770.857142878,
+            3697005.9285714407,
+            3567244.400000012,
+            3565180.533333326,
+            3571966.6666666553
+          ],
+          "medianNs": 3656601.2142856964
+        },
+        {
+          "benchmark": "text/graphemes",
+          "checked": {
+            "alloc": 147572,
+            "fuel": 43518,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            3273914.0625000116,
+            3223937.4999999767,
+            3230656.2499999814,
+            3223059.937499983,
+            3222684.8749999986,
+            3275000.0000000056,
+            3216880.18750001,
+            3218109.3750000116,
+            3214974.000000012,
+            3227390.624999998,
+            3232143.250000007,
+            3228111.999999982,
+            3218893.1874999865,
+            3217666.6249999925,
+            3218299.5000000005
+          ],
+          "medianNs": 3223059.937499983
+        },
+        {
+          "benchmark": "macro/transform",
+          "checked": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            1073070.9148936202,
+            1036165.8163265391,
+            1058162.3125000116,
+            1027333.3469387804,
+            1072324.4680851148,
+            1043289.0625000178,
+            1139999.0454545496,
+            1077809.3829787122,
+            1076585.062500006,
+            1034051.8571428573,
+            1072519.4893617067,
+            1055100.7083333463,
+            1028563.7755102044,
+            1021512.4999999899,
+            1018469.9999999974
+          ],
+          "medianNs": 1055100.7083333463
+        },
+        {
+          "benchmark": "macro/report",
+          "checked": {
+            "alloc": 1291900,
+            "fuel": 86555,
+            "outcome": "completed",
+            "result": "2639"
+          },
+          "samplesNs": [
+            977050.4807692339,
+            978153.8461538554,
+            958799.5283018932,
+            978816.5000000111,
+            980176.2692307665,
+            963362.1730769251,
+            978690.71153846,
+            967500.7884615508,
+            1001575.8199999982,
+            1005784.9999999963,
+            985459.9607843185,
+            987243.5961538556,
+            973756.4038461571,
+            987908.5098039237,
+            995881.5294117705
+          ],
+          "medianNs": 978816.5000000111
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "checked": {
+            "alloc": 80270,
+            "fuel": 67042,
+            "outcome": "completed",
+            "result": "3000"
+          },
+          "samplesNs": [
+            3432408.3333333572,
+            3396713.8666666267,
+            3408479.1875000065,
+            3286997.3749999986,
+            3215888.0000000065,
+            3204057.3124999697,
+            3266734.3749999986,
+            3193588.5624999967,
+            3209695.312499946,
+            3280453.1250000084,
+            3187851.5624999865,
+            3201778.625000031,
+            3196596.3124999916,
+            3293874.999999957,
+            3191364.5624999846
+          ],
+          "medianNs": 3215888.0000000065
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "checked": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            284734.14204545453,
+            266056.0691489362,
+            280577.7430167597,
+            272172.55434782605,
+            272621.60326086957,
+            279008.1055555555,
+            283447.50282485876,
+            293738.54970760224,
+            279484.40782122914,
+            275097.5274725274,
+            281271.41340782115,
+            279475.5586592177,
+            281715.82584269636,
+            282241.8089887636,
+            289984.7599999995
+          ],
+          "medianNs": 280577.7430167597
+        },
+        {
+          "benchmark": "text/iterate",
+          "checked": {
+            "alloc": 95272,
+            "fuel": 30318,
+            "outcome": "completed",
+            "result": "1600"
+          },
+          "samplesNs": [
+            1620848.0967741911,
+            1478042.882352942,
+            1462500,
+            1520449.4848484893,
+            1464388.0857142839,
+            1512259.794117647,
+            1463547.628571431,
+            1471801.4705882352,
+            1504116.4411764666,
+            1463167.8571428568,
+            1515050.2352941176,
+            1461023.8000000012,
+            1507589.4705882398,
+            1462286.8857142879,
+            1500263.0857142843
+          ],
+          "medianNs": 1478042.882352942
+        },
+        {
+          "benchmark": "text/index",
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            1475267.1764705852,
+            1477549.0294117685,
+            1337834.4210526322,
+            1255993.7499999988,
+            1281414.5750000023,
+            1261329.1749999975,
+            1256971.8749999993,
+            1246813.0243902435,
+            1243782.5121951168,
+            1255077.074999997,
+            1272078.1249999958,
+            1234411.58536585,
+            1244038.6341463414,
+            1270563.5499999973,
+            1257013.5499999993
+          ],
+          "medianNs": 1257013.5499999993
+        },
+        {
+          "benchmark": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            3383236.1333333207,
+            3470380.5333333244,
+            3363922.2000000095,
+            3392541.6666666633,
+            3374872.1999999965,
+            3356557.312499973,
+            3404444.46666667,
+            3369130.2499999837,
+            3361697.26666667,
+            3380472.1999999858,
+            3408647.199999996,
+            3396461.133333317,
+            3396558.3333333293,
+            3351872.20000001,
+            3384458.3333333503
+          ],
+          "medianNs": 3383236.1333333207
+        },
+        {
+          "benchmark": "text/graphemes",
+          "checked": {
+            "alloc": 147572,
+            "fuel": 43518,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            2567662.4999999832,
+            2558266.6499999957,
+            2622070.85,
+            2550418.7499999944,
+            2576864.5999999987,
+            2560118.749999992,
+            2560722.950000013,
+            2562329.150000005,
+            2604937.5000000056,
+            2575956.250000013,
+            2575600.0000000084,
+            2551475.0000000047,
+            2560937.5,
+            2552620.849999994,
+            2620956.2500000177
+          ],
+          "medianNs": 2562329.150000005
+        },
+        {
+          "benchmark": "macro/transform",
+          "checked": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            1055137.1458333468,
+            1062485.551020417,
+            1035843.5306122503,
+            1081676.425531925,
+            1037313.7755102052,
+            1106966.4999999986,
+            1154869.3181818055,
+            1105427.521739132,
+            1108780.8043478262,
+            1081182.6382978712,
+            1065866.127659571,
+            1054146.7083333298,
+            1056765.3061224502,
+            1051936.624999996,
+            1057234.3750000072
+          ],
+          "medianNs": 1062485.551020417
+        },
+        {
+          "benchmark": "macro/report",
+          "checked": {
+            "alloc": 1291900,
+            "fuel": 86555,
+            "outcome": "completed",
+            "result": "2639"
+          },
+          "samplesNs": [
+            433159.4827586145,
+            428511.7521367516,
+            433145.1206896559,
+            433776.5775862079,
+            436840.81196580594,
+            440439.32456140296,
+            446697.54464285914,
+            436444.56521739374,
+            445830.38053097134,
+            443945.7964601823,
+            453183.9369369377,
+            449759.6696428526,
+            444081.4955752159,
+            445763.64601769747,
+            453037.1621621607
+          ],
+          "medianNs": 443945.7964601823
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "checked": {
+            "alloc": 80270,
+            "fuel": 67042,
+            "outcome": "completed",
+            "result": "3000"
+          },
+          "samplesNs": [
+            3314007.812500051,
+            3289848.937499983,
+            3399346.3749999935,
+            3295958.3749999977,
+            3292651.062499999,
+            3338797.266666673,
+            3369708.374999959,
+            3302505.1875000033,
+            3294455.749999997,
+            3373721.3124999814,
+            3294460.937499991,
+            3277851.562500018,
+            3296895.812499997,
+            3373630.2499999623,
+            3280473.9999999697
+          ],
+          "medianNs": 3296895.812499997
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "checked": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            285839.52571428573,
+            279486.2681564246,
+            272256.7934782608,
+            268019.38502673805,
+            273503.64480874315,
+            279005.55555555556,
+            284324.1022727273,
+            289627.41040462436,
+            273535.9781420764,
+            279576.5810055864,
+            282100.88764044904,
+            278814.1222222224,
+            284777.46368715115,
+            282789.5480225991,
+            284355.1136363638
+          ],
+          "medianNs": 279576.5810055864
+        },
+        {
+          "benchmark": "text/iterate",
+          "checked": {
+            "alloc": 95272,
+            "fuel": 30318,
+            "outcome": "completed",
+            "result": "1600"
+          },
+          "samplesNs": [
+            1505712.0294117648,
+            1483745.1176470574,
+            1444159.5428571417,
+            1472357.8235294146,
+            1455841.6571428552,
+            1473457.1428571404,
+            1450153.5714285702,
+            1477927.7058823537,
+            1423306.6944444394,
+            1462146.428571428,
+            1446570.2285714282,
+            1501357.8235294076,
+            1473148.2941176502,
+            1450851.2000000014,
+            1487299.0294117618
+          ],
+          "medianNs": 1472357.8235294146
+        },
+        {
+          "benchmark": "text/index",
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            1520945.6969697026,
+            1398101.8333333347,
+            1355947.3684210544,
+            1354341.0000000007,
+            1366540.5526315786,
+            1370268.631578944,
+            1345312.5000000012,
+            1338260.9736842022,
+            1357200.459459462,
+            1356791.657894734,
+            1358193.7027026988,
+            1359640.7837837948,
+            1342799.342105273,
+            1432777.3714285677,
+            1390409.7222222162
+          ],
+          "medianNs": 1358193.7027026988
+        },
+        {
+          "benchmark": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            3374888.8666666667,
+            3412313.866666652,
+            3366349.999999996,
+            3370911.066666668,
+            3380411.133333352,
+            3374038.8666666755,
+            3418688.866666677,
+            3319343.7500000014,
+            3388674.999999997,
+            3353783.333333346,
+            3463263.933333352,
+            3466794.46666667,
+            3497149.9999999953,
+            3476886.066666672,
+            3452291.6666666484
+          ],
+          "medianNs": 3388674.999999997
+        },
+        {
+          "benchmark": "text/graphemes",
+          "checked": {
+            "alloc": 147572,
+            "fuel": 43518,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            2649127.210526331,
+            2659217.1052631643,
+            2624941.6999999993,
+            2657664.550000004,
+            2642879.421052648,
+            2614406.250000002,
+            2588766.6500000022,
+            2596681.2499999832,
+            2582427.099999995,
+            2598341.699999992,
+            2644318.7499999795,
+            2577731.2500000107,
+            2641155.684210533,
+            2577752.0999999978,
+            2600681.250000025
+          ],
+          "medianNs": 2614406.250000002
+        },
+        {
+          "benchmark": "macro/transform",
+          "checked": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            1031887.5000000116,
+            1014398.3200000003,
+            1072032.808510638,
+            1031772.1224489792,
+            1050310.7708333347,
+            1043618.062500002,
+            1101095.1086956558,
+            1052273.4375000102,
+            1060993.0624999984,
+            1042007.8124999842,
+            1038534.8571428448,
+            1054887.1458333337,
+            1027734.6938775588,
+            1045604.166666673,
+            1021546.7755101878
+          ],
+          "medianNs": 1043618.062500002
+        },
+        {
+          "benchmark": "macro/report",
+          "checked": {
+            "alloc": 1291900,
+            "fuel": 86555,
+            "outcome": "completed",
+            "result": "2639"
+          },
+          "samplesNs": [
+            441248.1666666664,
+            422747.89915966213,
+            437257.6086956542,
+            421941.17647059023,
+            433366.1779660977,
+            429472.5726495794,
+            426186.44067796576,
+            442004.75438596215,
+            426851.6949152584,
+            440539.8706896512,
+            432304.95689654787,
+            428842.59829060105,
+            446144.3684210536,
+            430560.1794871824,
+            434984.0608695677
+          ],
+          "medianNs": 432304.95689654787
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "checked": {
+            "alloc": 80270,
+            "fuel": 67042,
+            "outcome": "completed",
+            "result": "3000"
+          },
+          "samplesNs": [
+            3241794.249999998,
+            3294747.374999986,
+            3234765.624999966,
+            3245278.68749999,
+            3302966.1874999763,
+            3261658.8749999665,
+            3228265.625000006,
+            3291921.875000014,
+            3315109.374999963,
+            3340055.600000051,
+            3246369.8125000065,
+            3307755.1874999925,
+            3391520.812500005,
+            3260039.0625000275,
+            3279804.687500018
+          ],
+          "medianNs": 3279804.687500018
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "benchmark": "text/build",
+          "checked": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            512530.1836734694,
+            497779.29702970304,
+            492879.9019607844,
+            496507.01980198,
+            488633.4951456311,
+            487291.2621359221,
+            483766.43269230775,
+            486517.3883495145,
+            503726.66999999975,
+            481900.6442307691,
+            483609.7788461532,
+            484316.5096153847,
+            492208.74509803904,
+            488427.18446601933,
+            483901.44230769307
+          ],
+          "medianNs": 488427.18446601933
+        },
+        {
+          "benchmark": "text/iterate",
+          "checked": {
+            "alloc": 95272,
+            "fuel": 30318,
+            "outcome": "completed",
+            "result": "1600"
+          },
+          "samplesNs": [
+            1593113.2812500016,
+            1607479.187500001,
+            1584537.749999999,
+            1584554.6874999988,
+            1584856.7812499965,
+            1575941.4062499956,
+            1596970.0624999988,
+            1578199.218750001,
+            1574658.8750000044,
+            1598664.0624999993,
+            1574261.7187500016,
+            1579531.2500000023,
+            1593234.3750000016,
+            1574971.375000004,
+            1574876.3125000026
+          ],
+          "medianNs": 1584537.749999999
+        },
+        {
+          "benchmark": "text/index",
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            1546406.5454545466,
+            1517742.4242424285,
+            1500107.852941175,
+            1503828.4117647035,
+            1530329.5454545438,
+            1528866.1515151518,
+            1542292.9393939395,
+            1554064.393939398,
+            1493829.6470588204,
+            1482261.029411762,
+            1487884.79411765,
+            1480687.499999998,
+            1481580.8823529338,
+            1476311.294117656,
+            1494748.7647058794
+          ],
+          "medianNs": 1500107.852941175
+        },
+        {
+          "benchmark": "text/patterns",
+          "checked": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            3674047.5714285756,
+            3662398.7857142957,
+            3659568.5000000102,
+            3645624.999999979,
+            3642985.1428571446,
+            3656416.714285732,
+            3660178.5714285597,
+            3645738.071428566,
+            3644163.6428571334,
+            3657050.571428564,
+            3667749.9999999716,
+            3622232.142857131,
+            3763452.3571428615,
+            3546952.7333333343,
+            3542072.199999984
+          ],
+          "medianNs": 3656416.714285732
+        },
+        {
+          "benchmark": "text/graphemes",
+          "checked": {
+            "alloc": 147572,
+            "fuel": 43518,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            3287205.749999998,
+            3239140.6250000047,
+            3288838.499999997,
+            3236723.9374999884,
+            3215348.9374999823,
+            3222645.8124999907,
+            3216734.3749999874,
+            3224640.6250000065,
+            3247166.687499998,
+            3228731.8125000014,
+            3226406.2499999967,
+            3228278.687500023,
+            3229791.687500011,
+            3216184.8750000102,
+            3222377.6249999786
+          ],
+          "medianNs": 3228278.687500023
+        },
+        {
+          "benchmark": "macro/transform",
+          "checked": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            1079435.2765957383,
+            1051174.4791666616,
+            1060056.4166666686,
+            1048738.7083333412,
+            1072380.319148946,
+            1047439.249999987,
+            1125363.8888888923,
+            1084287.2340425604,
+            1085461.8723404277,
+            1045374.1249999856,
+            1076018.6170212927,
+            1082571.8085106348,
+            1036049.3061224383,
+            1011505.0000000155,
+            1036198.9795918426
+          ],
+          "medianNs": 1060056.4166666686
+        },
+        {
+          "benchmark": "macro/report",
+          "checked": {
+            "alloc": 1291900,
+            "fuel": 86555,
+            "outcome": "completed",
+            "result": "2639"
+          },
+          "samplesNs": [
+            995114.3921568705,
+            972427.0961538388,
+            953729.5471698187,
+            973719.5576923079,
+            970522.7924528203,
+            961979.9615384531,
+            971262.019230765,
+            959768.0754716938,
+            975744.4038461577,
+            981993.4705882428,
+            963438.3076923209,
+            981971.392156868,
+            966856.5576923111,
+            984516.3333333331,
+            983921.4807692281
+          ],
+          "medianNs": 972427.0961538388
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "checked": {
+            "alloc": 80270,
+            "fuel": 67042,
+            "outcome": "completed",
+            "result": "3000"
+          },
+          "samplesNs": [
+            3331778.687499991,
+            3254070.312500005,
+            3250622.4374999986,
+            3322684.874999993,
+            3226213.5000000284,
+            3251669.2499999637,
+            3239947.9375000056,
+            3338750.0000000047,
+            3212161.499999979,
+            3257244.812500005,
+            3335302.062499977,
+            3249523.437500045,
+            3220518.2499999977,
+            3255622.4374999944,
+            3342694.4000000125
+          ],
+          "medianNs": 3254070.312500005
+        }
+      ]
+    }
+  ]
+}

@@ -409,6 +409,8 @@ Exact terminating division and bounded integer quotients bypass general rounding
 
 `src/unicode.ts` and `src/text.ts` provide internal foundations for Character segmentation, simple folding, default full case mapping (including final sigma), scalar ordering, NFC joins, whole-Character literal searches, and character/code-point/word/line/item splitting. They are not additions to the public embedding interface. They charge no Fuel outside a Run; the Abstract Machine must charge Cost Model 0 when it calls them. This slice adds no language-level execution or resource-accounting claims.
 
+Text Values keep their ASCII flag, UTF-8 length, Character count and immutable Character views in [`TextStorage`](src/text-storage.ts). Concatenation adds cached measurements, correcting only the join for NFC and Character boundaries, including CRLF, flag pairing, emoji ZWJ and Indic linker context. A contiguous Character slice is already NFC and skips normalization. These caches are private derived data; they do not change Fuel, the Trace, Value Encoding or the save format.
+
 ## Lossless source parsing
 
 ```ts
