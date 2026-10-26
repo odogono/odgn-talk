@@ -4,6 +4,7 @@ import { memoryUsage } from 'bun:jsc';
 import { measure } from './measurement';
 import { type Measurement, statsOf } from './report';
 import { check, Loaded, manifest, selected, sizeOf, sourceOf } from './suite';
+import { measureTooling } from './tooling';
 
 const [filter, smokeFlag] = process.argv.slice(2);
 const smoke = smokeFlag === 'smoke';
@@ -37,4 +38,7 @@ for (const b of manifest().filter(
     runner: 'ts',
   });
 }
+measurements.push(
+  ...(await measureTooling(filter || undefined, options, 'ts')),
+);
 console.log(JSON.stringify(measurements));

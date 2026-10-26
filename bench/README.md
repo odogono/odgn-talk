@@ -36,6 +36,17 @@ WASI embedding benchmarks are outside this suite and are not started.
 
 When the `ts` runner is selected, the report also gives each Core's [Payload](../GLOSSARY.md): the core-switch Example Host bundled for a browser, the whole `@northtalk/ts` entry, and the Zig Core's `@northtalk/ts/wasm` Host with `talk.wasm`, raw, gzip -9 and Brotli-11, measured as in [the browser figures](../docs/research/zig-browser-figures.md). The Zig Core's half needs the reactor built first, with `zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi` in `impl/zig`, and is left out without it.
 
+## Tooling Benchmarks
+
+`tooling/lsp-reanalyse` runs only on the `ts` runner. It times one LSP edit-and-reanalyse cycle: a line of `first.talk` in [`scripts/tooling/lsp-project`](scripts/tooling/lsp-project/) changes, then `analyzeWorkspace` (`tooling/stack/src/lsp/workspace.ts`) parses, checks, lints and lowers the whole project again, as `didChange` does. The project is a Library of 40 functions and two Scripts that import it. Unlike `lifecycle/load-*`, it does no Group setup and runs no Script, so it has no Load, Fuel or parity check. It fails when any document has a syntax error or does not lower. `--filter tooling` selects it.
+
+The `ts` runner measures it on Bun. For a Node figure, build and run its own entry:
+
+```sh
+bun build bench/ts/src/measure-tooling.ts --target node --outdir bench/ts/dist
+node bench/ts/dist/measure-tooling.js [filter] [smoke]
+```
+
 ## The benchmark page
 
 [`docs/benchmarks.html`](../docs/benchmarks.html) shows one run as a single page with no external resources: the Payload, Fuel parity, Cost Model outliers, a bar chart per Benchmark comparing each runner's Run median with its min–max range, and a sortable table of every measurement. Open it from a clone; GitHub shows its source.
