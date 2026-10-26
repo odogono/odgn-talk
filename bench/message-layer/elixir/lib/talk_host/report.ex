@@ -150,7 +150,7 @@ defmodule TalkHost.Report do
     ## Verdict
 
     #{verdict_tables(r["verdicts"])}
-    #{latency_md(r["latency"])}#{api_md(r["api"])}#{containment_md(r["containment"])}#{faults_md(r["faults"])}
+    #{latency_md(r["latency"])}#{crossings_md(r["crossings"])}#{api_md(r["api"])}#{containment_md(r["containment"])}#{faults_md(r["faults"])}
     """
   end
 
@@ -208,6 +208,31 @@ defmodule TalkHost.Report do
     | Transport | median | max | instances |
     | --- | --- | --- | --- |
     #{Enum.join(memory, "\n")}
+    """
+  end
+
+  defp crossings_md(nil), do: ""
+
+  defp crossings_md(c) do
+    rows =
+      for {name, f} <- Enum.sort(c),
+          {label, s} <-
+            [{"Property get", f["property_get"]}, {"Collection `at`", f["element_at"]}] ++
+              Enum.map(f["query"], &{"Query, #{&1["members"]} members (#{&1["needs"]} needs)", &1}) do
+        runs = Enum.map_join(s["runs"], ", ", &us(&1["p50"]))
+
+        "| #{name} | #{label} | #{us(s["p50"])} | #{us(s["p99"])} | #{us(s["mean"])} | #{us(s["min"])} | #{us(s["max"])} | #{s["n"]} | #{runs} |"
+      end
+
+    """
+
+    ## Property crossings
+
+    For [#1572](https://github.com/odogono/odgn-talk/issues/1572). A property get and a collection `at` are the time from the Host receiving one `prop` need to receiving the next, inside one Pump of 100, answered at once. A query is a whole `deliver` and `pump` of `the value of element i of p` for every member, resolved by the Core: one `count`, then an `at` and a `get` per member.
+
+    | Transport | Figure | p50 | p99 | mean | min | max | n | p50 of each run |
+    | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+    #{Enum.join(rows, "\n")}
     """
   end
 

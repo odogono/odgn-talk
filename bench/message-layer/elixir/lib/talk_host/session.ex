@@ -49,7 +49,7 @@ defmodule TalkHost.Session do
     case Transport.exchange(s.transport, JSON.encode!(message)) do
       {:ok, reply} ->
         case JSON.decode!(reply) do
-          %{"need" => need} -> exchange(s, answer(s, need))
+          %{"need" => need} -> exchange(s, in_group(answer(s, need), message))
           reply -> reply
         end
 
@@ -60,6 +60,10 @@ defmodule TalkHost.Session do
         {:lost, reason}
     end
   end
+
+  # An interim result addresses the Group whose exchange asked for it.
+  defp in_group(result, %{"group" => group}), do: Map.put(result, "group", group)
+  defp in_group(result, _), do: result
 
   defp answer(s, %{"m" => "op", "operation" => op} = need) do
     handler = Map.get(s.ops, op) || fn _ -> %{"hostError" => %{"detail" => "no #{op}"}} end

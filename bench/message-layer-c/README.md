@@ -74,6 +74,24 @@ change the sizes.
 - **Memory:** linear memory after `hello`, a Group, a small Script and one Pump,
   as the median and maximum over 20 instances.
 
+## Property crossings
+
+The `crossings` block measures Host Object property and Object Collection
+crossings for [#1572](https://github.com/odogono/odgn-talk/issues/1572), with
+the same runs, samples and warm-up as the threshold figures. The instance
+opts into `object-elements-v1` and defines a `box` with one number property,
+and a `page` whose collection holds 1,000 `rect` members with the same property.
+Every `prop` need is answered at once.
+
+- **Property get:** the time from one `prop` need to the next, inside a Pump
+  of 100 reads of `the value of o`.
+- **Element `at`:** the same for 100 reads of `element i of p`.
+- **Query:** a whole `deliver` and `pump` of a Handler that reads
+  `the value of element i of p` for every member, with the collection
+  reporting 10, 216 or 1,000 members. That is one `count` need, then an `at`
+  and a `get` need per member. `QUERY_SAMPLES`, 200 by default, sets the
+  samples per run after three warm-up queries.
+
 ## Bridge for the fault and containment suites
 
 ```sh

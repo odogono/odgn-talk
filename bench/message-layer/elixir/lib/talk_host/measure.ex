@@ -118,6 +118,159 @@ defmodule TalkHost.Measure do
     %{"instances" => count, "medianBytes" => median(bytes), "maxBytes" => Enum.max(bytes)}
   end
 
+  # Host Object property and Object Collection crossings (#1572), defined as
+  # in bench/message-layer-c/host.c. A `box` has one number property; a
+  # `page` has `rect` members, so `the value of element i of p` is one `at`
+  # and one `get` need.
+  @crossing_source """
+  on props o, n
+    repeat for each i in 1..n
+      put the value of o into v
+    end repeat
+  end props
+
+  on ats p, n
+    repeat for each i in 1..n
+      put element i of p into e
+    end repeat
+  end ats
+
+  on query p
+    put 0 into c
+    repeat for each i in 1..the number of elements of p
+      if the value of element i of p > 0 then
+        add 1 to c
+      end if
+    end repeat
+    return c
+  end query
+  """
+  @max_members 1000
+  @query_sizes [10, 216, 1000]
+
+  @doc """
+  The `prop` need figures: the interval between successive needs for a
+  property `get` and a collection `at`, as `capability_call/2` measures `op`
+  needs, and the whole Pump of a Core-resolved query over 10, 216 and 1,000
+  members: one `count`, then an `at` and a `get` per member.
+  """
+  def crossings(start, opts) do
+    %{
+      "property_get" => need_interval(start, opts, "props", ["box", "b"]),
+      "element_at" => need_interval(start, opts, "ats", ["page", "p"]),
+      "query" => Enum.map(@query_sizes, &query(start, opts, &1))
+    }
+  end
+
+  defp need_interval(start, opts, handler, object) do
+    runs(opts, fn samples ->
+      session = setup_crossings(start, @calls_per_pump)
+      warm = div(opts[:warmup], @calls_per_pump) + 1
+      pumps = div(samples, @calls_per_pump - 1) + 1
+      args = [%{"$object" => object}, @calls_per_pump]
+
+      step = fn _, {s, acc} ->
+        {s, intervals} = prop_pump(s, handler, args)
+        {s, intervals ++ acc}
+      end
+
+      {session, _} = Enum.reduce(1..warm, {session, []}, step)
+      {session, intervals} = Enum.reduce(1..pumps, {session, []}, step)
+      Transport.stop(session.transport)
+      intervals
+    end)
+  end
+
+  defp query(start, opts, members) do
+    count = opts[:query_samples] || 200
+
+    figure =
+      runs(opts, fn _ ->
+        session = setup_crossings(start, members)
+
+        {session, times} =
+          Enum.reduce(-3..count, {session, []}, fn i, {s, acc} ->
+            t0 = System.monotonic_time(:nanosecond)
+            {s, intervals} = prop_pump(s, "query", [%{"$object" => ["page", "p"]}])
+            us = (System.monotonic_time(:nanosecond) - t0) / 1000
+            true = length(intervals) == 2 * members
+            {s, if(i > 0, do: [us | acc], else: acc)}
+          end)
+
+        Transport.stop(session.transport)
+        times
+      end)
+
+    Map.merge(figure, %{"members" => members, "needs" => 2 * members + 1})
+  end
+
+  defp prop_pump(session, handler, args) do
+    Process.put(:prop_times, [])
+    message = %{"name" => handler, "args" => args}
+    {session, _} = Session.ok!(session, "deliver", %{"group" => "g", "to" => %{"script" => "s"}, "message" => message})
+    {session, pump} = Session.ok!(session, "pump", %{"group" => "g", "now" => @now})
+    [%{"outcome" => "completed"}] = Session.run_ends(pump)
+    times = Process.get(:prop_times) |> Enum.reverse()
+    {session, times |> Enum.chunk_every(2, 1, :discard) |> Enum.map(fn [a, b] -> (b - a) / 1000 end)}
+  end
+
+  defp prop(members) do
+    fn need ->
+      Process.put(:prop_times, [System.monotonic_time(:nanosecond) | Process.get(:prop_times, [])])
+
+      case need do
+        %{"op" => "count"} -> %{"value" => members}
+        %{"op" => "at", "selector" => i} when i >= 1 and i <= members -> %{"value" => %{"$object" => ["rect", "r#{i}"]}}
+        %{"prop" => "value"} -> %{"value" => 1}
+      end
+    end
+  end
+
+  defp setup_crossings(start, members) do
+    {:ok, t} = start.()
+    s = Session.new(t, props: prop(members))
+    {s, _} = Session.ok!(s, "hello", %{"protocol" => 1, "features" => ["object-elements-v1"]})
+
+    number = %{
+      "name" => "value",
+      "shape" => "number",
+      "readOnly" => true,
+      "getCost" => %{"fuel" => 1},
+      "setCost" => %{"fuel" => 1}
+    }
+
+    cost = %{"fuel" => 1}
+
+    for kind <- [
+          %{"name" => "box", "props" => [number]},
+          %{"name" => "rect", "props" => [number]},
+          %{
+            "name" => "page",
+            "props" => [],
+            "elements" => %{"shape" => %{"object" => "rect"}, "countCost" => cost, "atCost" => cost, "findCost" => cost}
+          }
+        ],
+        reduce: s do
+      s -> s |> Session.ok!("define-object-kind", kind) |> elem(0)
+    end
+    |> Session.ok!("new-group", %{"group" => "g", "name" => "g"})
+    |> elem(0)
+    |> then(fn s ->
+      objects = [{"box", "b"}, {"page", "p"}] ++ for(i <- 1..@max_members, do: {"rect", "r#{i}"})
+
+      Enum.reduce(objects, s, fn {kind, id}, s ->
+        s |> Session.ok!("object", %{"group" => "g", "kind" => kind, "id" => id}) |> elem(0)
+      end)
+    end)
+    |> Session.ok!("load", %{
+      "group" => "g",
+      "name" => "s",
+      "source" => @crossing_source,
+      "limits" => %{"fuelPerRun" => 100_000_000}
+    })
+    |> elem(0)
+  end
+
   @doc "Starts an instance and loads `source` as Script `s` in Group `g`, with an `api` Grant."
   def setup(start, source, session_opts, limits \\ %{}) do
     {:ok, t} = start.()

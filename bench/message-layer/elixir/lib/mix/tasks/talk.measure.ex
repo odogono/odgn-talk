@@ -4,7 +4,7 @@ defmodule Mix.Tasks.Talk.Measure do
   Measures the Zig Message Layer reactor over Wasmex and the Zig native
   sidecar on an Erlang Port, against the thresholds set in #532.
 
-      mix talk.measure [--quick] [--only latency,api,containment,faults] [--transports wasmex,sidecar,c]
+      mix talk.measure [--quick] [--only latency,api,containment,faults,crossings] [--transports wasmex,sidecar,c]
                        [--no-save] [--build]
       mix talk.measure --render bench/results/<file>.json
 
@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Talk.Measure do
   alias NorthTalk.Transport.Wasi
 
   @mib 1024 * 1024
-  @sections ~w(latency api containment faults)
+  @sections ~w(latency api containment faults crossings)
 
   # spec: https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407
   @thresholds %{
@@ -70,11 +70,22 @@ defmodule Mix.Tasks.Talk.Measure do
 
     sizes =
       if quick,
-        do: [runs: 1, samples: 500, warmup: 100, warmup_instances: 3, instances: 30, memory: 3, reps: 3, mutations: 100],
+        do: [
+          runs: 1,
+          samples: 500,
+          warmup: 100,
+          query_samples: 5,
+          warmup_instances: 3,
+          instances: 30,
+          memory: 3,
+          reps: 3,
+          mutations: 100
+        ],
         else: [
           runs: 3,
           samples: 5_000,
           warmup: 500,
+          query_samples: 200,
           warmup_instances: 20,
           instances: 5_000,
           memory: 20,
@@ -108,6 +119,7 @@ defmodule Mix.Tasks.Talk.Measure do
       |> Map.put("payload", payload())
       |> maybe("latency" in sections and transports != [], "latency", fn -> latency(transports, sizes) end)
       |> maybe("api" in sections, "api", fn -> api(sizes) end)
+      |> maybe("crossings" in sections and transports != [], "crossings", fn -> crossings(transports, sizes) end)
       |> maybe("containment" in sections, "containment", fn -> containment(chosen, sizes) end)
       |> maybe("faults" in sections, "faults", fn -> faults(transports, bridge?, sizes) end)
 
@@ -164,6 +176,13 @@ defmodule Mix.Tasks.Talk.Measure do
       end
 
     Map.put(figures, "compileMs", compile)
+  end
+
+  defp crossings(transports, sizes) do
+    for {name, start} <- transports, into: %{} do
+      IO.puts(:stderr, "crossings: #{name}")
+      {name, Measure.crossings(start, sizes)}
+    end
   end
 
   defp api(sizes) do
