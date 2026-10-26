@@ -1,7 +1,21 @@
 import type { Value } from './values';
-import { find, put, remove, total, values, type Tree } from './persistent-tree';
+import {
+  balanced,
+  find,
+  put,
+  remove,
+  total,
+  values,
+  type Tree,
+} from './persistent-tree';
 
 type Pair = readonly [string, Value];
+
+/** A literal's distinct, normalised keys in order, and their lookup tree. */
+export type MapLayout = {
+  readonly keys: readonly string[];
+  readonly lookup: Tree<string, number> | undefined;
+};
 
 /** Lookup and insertion order have separate persistent trees. Replacing a key
  * keeps its ordinal; deleting and reinserting assigns a new final ordinal. */
@@ -27,6 +41,35 @@ export class MapStorage {
       result = result.set(key, value);
     }
     return result;
+  }
+
+  static layout(keys: readonly string[]): MapLayout {
+    const sorted = keys
+      .map((_, i) => i)
+      .sort((a, b) => (keys[a]! < keys[b]! ? -1 : keys[a]! > keys[b]! ? 1 : 0));
+    return {
+      keys,
+      lookup: balanced(
+        keys.length,
+        i => keys[sorted[i]!]!,
+        i => sorted[i]!,
+      ),
+    };
+  }
+
+  /** One pass over a literal's values: the key tree is shared, and ordinals
+   * are positions, so no `set` rebuilds a path. */
+  static fromLayout(layout: MapLayout, items: readonly Value[]): MapStorage {
+    const { keys } = layout;
+    return new MapStorage(
+      layout.lookup,
+      balanced(
+        keys.length,
+        i => i,
+        i => Object.freeze([keys[i]!, items[i]!] as const),
+      ),
+      keys.length,
+    );
   }
 
   get length(): number {

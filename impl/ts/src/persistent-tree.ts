@@ -166,3 +166,23 @@ export const values = function* <K extends string | number, V>(
     yield* values(t.right);
   }
 };
+/** A balanced tree of `n` single-span nodes whose keys ascend with `i`. */
+export const balanced = <K extends string | number, V>(
+  n: number,
+  key: (i: number) => K,
+  value: (i: number) => V,
+  from = 0,
+): Tree<K, V> | undefined => {
+  if (n <= 0) {
+    return undefined;
+  }
+  const half = n >>> 1;
+  const i = from + half;
+  return node(
+    key(i),
+    value(i),
+    1,
+    balanced(half, key, value, from),
+    balanced(n - half - 1, key, value, i + 1),
+  );
+};

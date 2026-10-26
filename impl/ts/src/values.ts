@@ -1,6 +1,6 @@
 import type { HostObject } from './objects';
 import { ListStorage } from './list-storage';
-import { MapStorage } from './map-storage';
+import { MapStorage, type MapLayout } from './map-storage';
 import {
   checkInstant,
   civilFields,
@@ -861,6 +861,29 @@ export const map = (
     pairs.push([nfc, value]);
   }
   return makeValue('map', MapStorage.copy(pairs));
+};
+/**
+ * Internal: a map literal's keys, normalised and checked once, so each build
+ * of the literal is one pass over its values.
+ */
+export const mapLayout = (keys: readonly string[]): MapLayout => {
+  const nfc = keys.map(normalizeNFC);
+  const seen = new Set<string>();
+  for (const key of nfc) {
+    if (seen.has(key)) {
+      invalidValue(`Duplicate map key: ${displayText(key)}`);
+    }
+    seen.add(key);
+  }
+  return MapStorage.layout(nfc);
+};
+/** Internal: a map literal's values, in its layout's key order. */
+export const mapOfLayout = (
+  layout: MapLayout,
+  items: readonly Value[],
+): Value => {
+  items.forEach(requireValue);
+  return makeValue('map', MapStorage.fromLayout(layout, items));
 };
 export const record = (input: Record<string, Value>): Value => {
   if (
