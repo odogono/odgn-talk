@@ -4204,6 +4204,18 @@ export class TsGroup implements Group {
     charge(run.fuel - fuel0);
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
+    // Write a step's records and settle what it changed.
+    const stepped = () => {
+      run.finishInstruction();
+      this.writeRecords(running, this.active!.records);
+      this.active!.records = run.records.length;
+      if (run.effectStateUnknown) {
+        this.stopUnknownEffects();
+      }
+      selected();
+      charge(run.fuel - last);
+      last = run.fuel;
+    };
     while (
       !run.done &&
       !run.suspended &&
@@ -4211,15 +4223,18 @@ export class TsGroup implements Group {
       !s.stopped &&
       !running.rewound
     ) {
-      // Simple instructions need none of this loop's per-step work once the
-      // clause is selected (a function Run has none), while no debugger
-      // watches them.
+      // Instructions that write no record need none of this loop's per-step
+      // work once the clause is selected (a function Run has none), while no
+      // debugger watches them.
       if (
         (running.selected || running.delivery.fn) &&
         !this.debugController &&
         !machineDebug.get(run)
       ) {
-        run.fastSteps(room());
+        if (run.stepMany(room())) {
+          stepped();
+          continue;
+        }
         charge(run.fuel - last);
         last = run.fuel;
       }
@@ -4270,15 +4285,7 @@ export class TsGroup implements Group {
         debug.fault = null;
         pending();
       }
-      run.finishInstruction();
-      this.writeRecords(running, this.active.records);
-      this.active.records = run.records.length;
-      if (run.effectStateUnknown) {
-        this.stopUnknownEffects();
-      }
-      selected();
-      charge(run.fuel - last);
-      last = run.fuel;
+      stepped();
     }
     let outcome = run.ended;
     if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {

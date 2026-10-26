@@ -78,9 +78,46 @@ end run`,
   end try
   return i
 end run`,
+  // Lists and ranges iterated, keys read, items appended, and functions
+  // called and returned from, with text appended by the general step.
+  collections: `function weigh v, by
+  if v > 2 then return v * by
+  return v
+end weigh
+
+on run n
+  put [] into values
+  repeat for each i in 1..n
+    put i after values
+  end repeat
+  put {a: 2, b: 3} into lookup
+  put "" into word
+  put 0 into total
+  repeat for each v in values
+    add weigh(v, the b of lookup) to total
+    put "x" after word
+  end repeat
+  repeat n times
+    add the a of lookup to total
+  end repeat
+  return [total, word]
+end run`,
+  // Recursion past the call depth limit faults at a call.
+  calls: `function down n
+  if n = 0 then return 0
+  return down(n - 1) + 1
+end down
+
+on run n
+  return down(n * 3)
+end run`,
 };
 
-type Limits = { allocPerRun?: number; fuelPerRun?: number };
+type Limits = {
+  allocPerRun?: number;
+  callDepth?: number;
+  fuelPerRun?: number;
+};
 
 // Deliver `run n` twice and pump to idle, past each deadline: the Trace and
 // Pump results, and the Fuel and allocation every Run spent.
@@ -137,6 +174,13 @@ describe('fast steps', () => {
       }
       for (let slice = 0; slice <= fuel; slice++) {
         same({}, slice);
+      }
+      for (
+        let depth = 1;
+        source.includes('function') && depth <= 3 * n + 2;
+        depth++
+      ) {
+        same({ callDepth: depth });
       }
     });
   }
