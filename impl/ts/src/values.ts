@@ -135,6 +135,8 @@ export let decimalParts: (decimal: Decimal) => Dec;
  */
 export let smallInteger: (decimal: Decimal) => number;
 export let isDecimal: (input: unknown) => input is Decimal;
+/** Internal: owned Map pairs. Never pass these arrays to a Host. */
+export let ownedMapPairs: (value: Value) => Pairs | undefined;
 
 export class Decimal {
   // A small integer keeps its JS number and makes its text and parts on
@@ -154,7 +156,7 @@ export class Decimal {
     this.#canonical = canonical;
     this.#parts = parts && frozenParts(parts);
     this.#small = small;
-    Object.freeze(this);
+    Object.preventExtensions(this);
   }
   static {
     isDecimal = (input): input is Decimal =>
@@ -195,17 +197,20 @@ export class Decimal {
 /** Immutable, opaque value. Host code uses the named constructors. */
 export class Value {
   readonly #data: Payload;
-  readonly kind: Kind;
+  readonly #kind: Kind;
   private constructor(token: symbol, kind: Kind, payload: Payload) {
     if (token !== valueToken) {
       invalidValue('Use a named Value constructor');
     }
-    this.kind = kind;
+    this.#kind = kind;
     this.#data = payload;
-    Object.freeze(this);
+    // Private fields hold the state; prevent Host code from shadowing its reads.
+    Object.preventExtensions(this);
   }
   static {
     makeValue = (kind, payload) => new Value(valueToken, kind, payload);
+    ownedMapPairs = value =>
+      value.#kind === 'map' ? (value.#data as MapStorage).pairs() : undefined;
     editListValue = (current, i, value) =>
       makeValue('list', (current.#data as ListStorage).set(i, value));
     editMapValue = (current, key, value) => {
@@ -226,6 +231,9 @@ export class Value {
   }
   static isValue(input: unknown): input is Value {
     return typeof input === 'object' && input !== null && #data in input;
+  }
+  get kind(): Kind {
+    return this.#kind;
   }
   /** Returns the text payload, or undefined for kinds other than text. */
   asText(): string | undefined {
@@ -324,9 +332,9 @@ export class Value {
       ? ((this.#data as MapStorage).get(nfc) ?? nothing)
       : nothing;
   }
-  /** Internal: the frozen pairs themselves, without copying. */
+  /** A detached view, including copies of the individual pairs. */
   mapPairs(): Pairs | undefined {
-    return this.kind === 'map' ? (this.#data as MapStorage).pairs() : undefined;
+    return this.kind === 'map' ? this.entries() : undefined;
   }
   get mapSize(): number {
     return this.kind === 'map' ? (this.#data as MapStorage).length : 0;
@@ -828,7 +836,7 @@ export const listWithItem = (
 ): Value => editListValue(v, i, value);
 /**
  * Internal: a Map with one normalised key set, or removed when `value` is
- * undefined. The other pairs are already checked and frozen, so they're shared.
+ * undefined. Other pairs are already checked and privately owned, so they are shared.
  */
 export const mapWithEntry = (
   m: Value,
@@ -858,7 +866,7 @@ export const map = (
       invalidValue(`Duplicate map key: ${displayText(nfc)}`);
     }
     seen.add(nfc);
-    // MapStorage owns and freezes its pairs; this validation buffer stays local.
+    // MapStorage owns its pairs; this validation buffer stays local.
     pairs.push([nfc, value]);
   }
   return makeValue('map', MapStorage.copy(pairs));

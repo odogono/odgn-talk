@@ -190,7 +190,15 @@ test('persistent Maps preserve key presence, order, aliases and logical sizes', 
     }
     const sibling = setKey(actual, 'new', nothing);
     expect(sibling.entries().at(-1)).toEqual(['new', nothing]);
+    for (const exposed of [actual.entries(), actual.mapPairs()!]) {
+      if (exposed.length) {
+        Reflect.set(exposed[0]!, 0, 'changed');
+        Reflect.set(exposed[0]!, 1, nothing);
+        Reflect.set(exposed, 0, ['replaced', nothing]);
+      }
+    }
     expect(actual.entries()).toEqual([...entries]);
+    expect(sibling.entries()).toEqual([...entries, ['new', nothing]]);
   }
   const normalized = setKey(setKey(value, 'e\u0301', nothing), 'é', nested);
   expect(normalized.mapSize).toBe(value.mapSize + 1);

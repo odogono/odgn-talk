@@ -2,215 +2,215 @@
 import type { Charge, Measured } from '../costs';
 import type { Value } from '../values';
 type Measure = (code: number, value: Value | undefined) => number;
-export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Charge)[] => [
+export const makeCostRates = (measure: Measure): readonly ((m: Measured, into?: Charge) => Charge)[] => [
   // const
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // stack
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // slot
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // store-var
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // jump
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // branch
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // operator
-  (m) => ({ fuel: 2, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // arithmetic
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(9, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(9, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // power
-  (m) => ({ fuel: 8 + Math.ceil((2 * measure(9, m.result)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8 + Math.ceil((2 * measure(9, m.result)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // concat
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.result)) / 16), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.result)) / 16); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // compare
-  (m) => ({ fuel: 2 + Math.ceil((1 * (m.scanned ?? 0)) / 16), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2 + Math.ceil((1 * (m.scanned ?? 0)) / 16); into.alloc = 0; return into; },
   // member
-  (m) => ({ fuel: 2 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = 0; return into; },
   // convert
-  (m) => ({ fuel: 4 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(4, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(4, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // search
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.steps ?? 0)) / 1); into.alloc = 0; return into; },
   // get-key
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // get-element
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.input)) / 8), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.input)) / 8); into.alloc = 0; return into; },
   // count-elements
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // property
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(7, m.result)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(7, m.result)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // chunk-get
-  (m) => ({ fuel: 3 + Math.ceil((1 * (m.scanned ?? 0)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * (m.scanned ?? 0)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // chunk-set
-  (m) => ({ fuel: 4 + Math.ceil((1 * measure(4, m.result)) / 8) + Math.ceil((1 * measure(7, m.result)) / 8), alloc: Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * measure(4, m.result)) / 8) + Math.ceil((1 * measure(7, m.result)) / 8); into.alloc = Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1); return into; },
   // set-key
-  (m) => ({ fuel: 4 + Math.ceil((1 * measure(8, m.result)) / 16), alloc: 8 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * measure(8, m.result)) / 16); into.alloc = 8 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1); return into; },
   // append
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.result)) / 16), alloc: 8 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.result)) / 16); into.alloc = 8 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1); return into; },
   // set-property
-  (m) => ({ fuel: 10 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 32), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 32); into.alloc = 0; return into; },
   // list
-  (m) => ({ fuel: 2 + Math.ceil((1 * (m.count ?? 0)) / 1) + Math.ceil((1 * measure(7, m.result)) / 16), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2 + Math.ceil((1 * (m.count ?? 0)) / 1) + Math.ceil((1 * measure(7, m.result)) / 16); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // map
-  (m) => ({ fuel: 2 + Math.ceil((2 * (m.count ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2 + Math.ceil((2 * (m.count ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // make-pattern
-  (m) => ({ fuel: 20 + Math.ceil((2 * measure(12, m.result)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 20 + Math.ceil((2 * measure(12, m.result)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // bytes-field
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(6, m.input)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(6, m.input)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // match
-  (m) => ({ fuel: 6 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 6 + Math.ceil((1 * (m.steps ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // iterate
-  (m) => ({ fuel: 2, alloc: 24 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 24; return into; },
   // next
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // make-closure
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.count ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.count ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // call
-  (m) => ({ fuel: 8, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = 0; return into; },
   // restricted-refusal
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // clause
-  (m) => ({ fuel: 4, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = 0; return into; },
   // return
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // test
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // bin-field
-  (m) => ({ fuel: 2 + Math.ceil((1 * measure(6, m.result)) / 8) + Math.ceil((1 * measure(4, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2 + Math.ceil((1 * measure(6, m.result)) / 8) + Math.ceil((1 * measure(4, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // throw
-  (m) => ({ fuel: 10, alloc: 48 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = 48; return into; },
   // unwind
-  (m) => ({ fuel: Math.ceil((4 * (m.frames ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = Math.ceil((4 * (m.frames ?? 0)) / 1); into.alloc = 0; return into; },
   // capability
-  (m) => ({ fuel: 10 + Math.ceil((1 * (m.declared ?? 0)) / 1) + Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 32), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10 + Math.ceil((1 * (m.declared ?? 0)) / 1) + Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 32); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // send
-  (m) => ({ fuel: 20 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 32), alloc: Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 20 + Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 32); into.alloc = Math.ceil((1 * (m.inputSize ?? measure(1, m.input))) / 1); return into; },
   // wait
-  (m) => ({ fuel: 10, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = 0; return into; },
   // join
-  (m) => ({ fuel: 10 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10 + Math.ceil((1 * (m.steps ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // timeout
-  (m) => ({ fuel: 2, alloc: 40 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 40; return into; },
   // builtin.min
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.max
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.codePoint
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.fromCodePoint
-  (m) => ({ fuel: 4, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.upper
-  (m) => ({ fuel: 4 + Math.ceil((1 * measure(4, m.x?.[0])) / 4) + Math.ceil((1 * measure(4, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * measure(4, m.x?.[0])) / 4) + Math.ceil((1 * measure(4, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.lower
-  (m) => ({ fuel: 4 + Math.ceil((1 * measure(4, m.x?.[0])) / 4) + Math.ceil((1 * measure(4, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * measure(4, m.x?.[0])) / 4) + Math.ceil((1 * measure(4, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.offset
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.steps ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.isDisposed
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // builtin.objectKind
-  (m) => ({ fuel: 2, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.rangeStart
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // builtin.rangeEnd
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // builtin.kindOf
-  (m) => ({ fuel: 2, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.conforms
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.check
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.explain
-  (m) => ({ fuel: 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4 + Math.ceil((1 * (m.scanned ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.functionArity
-  (m) => ({ fuel: 2, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.functionName
-  (m) => ({ fuel: 2, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.abs
-  (m) => ({ fuel: 3, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.floor
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.ceiling
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.truncate
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(9, m.x?.[0])) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.round
-  (m) => ({ fuel: 5 + Math.ceil((1 * measure(9, m.result)) / 8), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 5 + Math.ceil((1 * measure(9, m.result)) / 8); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.sqrt
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.exp
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.ln
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.log10
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.power
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.sin
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.cos
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.tan
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.asin
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.acos
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.atan
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.atan2
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.degrees
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.radians
-  (m) => ({ fuel: 60, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.random
-  (m) => ({ fuel: 4, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.fromFloat64
-  (m) => ({ fuel: 8, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.fromFloat32
-  (m) => ({ fuel: 8, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.toFloat64
-  (m) => ({ fuel: 8, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.toFloat32
-  (m) => ({ fuel: 8, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.year
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.month
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.day
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.hour
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.minute
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.second
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.microsecond
-  (m) => ({ fuel: 3, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
   // builtin.weekday
-  (m) => ({ fuel: 4, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = 0; return into; },
   // builtin.dayOfYear
-  (m) => ({ fuel: 4, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = 0; return into; },
   // builtin.isoWeek
-  (m) => ({ fuel: 6, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 6; into.alloc = 0; return into; },
   // builtin.isoWeekYear
-  (m) => ({ fuel: 6, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 6; into.alloc = 0; return into; },
   // builtin.hasTime
-  (m) => ({ fuel: 2, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // builtin.toCivil
-  (m) => ({ fuel: 10, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.toInstant
-  (m) => ({ fuel: 10, alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // catch-accept
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // catch-next
-  (m) => ({ fuel: 1, alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // choose-offer
-  (m) => ({ fuel: 8 + Math.ceil((1 * (m.count ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8 + Math.ceil((1 * (m.count ?? 0)) / 1); into.alloc = 0; return into; },
   // builtin.offerAvailable
-  (m) => ({ fuel: 3 + Math.ceil((1 * measure(5, m.x?.[0])) / 16), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(5, m.x?.[0])) / 16); into.alloc = 0; return into; },
   // offer-lookup
-  (m) => ({ fuel: Math.ceil((4 * (m.frames ?? 0)) / 1), alloc: 0 }),
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = Math.ceil((4 * (m.frames ?? 0)) / 1); into.alloc = 0; return into; },
 ];
 export const leafSize = (v: Value, measure: Measure): number | undefined => {
   switch (v.kind as string) {

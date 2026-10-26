@@ -5,7 +5,7 @@ import { leafSize, makeCostRates } from './generated/costs';
 import { characters } from './text';
 import { scalarCount } from './unicode';
 import { digitsOf, integerOf, isInteger } from './decimal';
-import { decimalParts, type Value } from './values';
+import { decimalParts, ownedMapPairs, type Value } from './values';
 
 /** What one charge measures: its subjects and the instruction's own counts. */
 export type Measured = {
@@ -22,6 +22,13 @@ export type Measured = {
   steps?: number;
   /** A Built-in's arguments, x1, x2, …, defaults included. */
   x?: readonly Value[];
+};
+/** Clears every count and subject so `m` can measure the next instruction. */
+export const resetMeasured = (m: Measured): void => {
+  m.count = m.declared = m.frames = m.inputSize = undefined;
+  m.resultSize = m.scanned = m.steps = undefined;
+  m.input = m.result = undefined;
+  m.x = undefined;
 };
 /** A compiled term: `[measure, subject, factor, divisor]`, by code. */
 type Formula = readonly (readonly number[])[];
@@ -189,13 +196,11 @@ const contentsOf = (v: Value): number => {
       if (cached !== undefined) {
         return cached;
       }
-      const total = v
-        .mapPairs()!
-        .reduce(
-          (sum, [key, value]) =>
-            sum + 16 + encoder.encode(key).length + sizeOf(value),
-          0,
-        );
+      const total = ownedMapPairs(v)!.reduce(
+        (sum, [key, value]) =>
+          sum + 16 + encoder.encode(key).length + sizeOf(value),
+        0,
+      );
       knownContents.set(v, total);
       return total;
     }
@@ -329,7 +334,7 @@ const childrenOf = (v: Value): Value[] => {
     case 'list':
       return Array.from({ length: v.length }, (_, i) => v.index(i + 1));
     case 'map':
-      return v.entries().map(([, value]) => value);
+      return ownedMapPairs(v)!.map(([, value]) => value);
     case 'range': {
       const { from, to } = v.asRange()!;
       return [from, to];
@@ -377,11 +382,15 @@ export const fixedRates = (): (Charge | undefined)[] =>
 /** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */
 export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;
 
-/** A rate's Fuel and allocation, over what the instruction worked on. */
-export const charge = (rate: number, measured: Measured = noCounts): Charge => {
+/** A rate's Fuel and allocation. `into` lets a Run reuse its private scratch. */
+export const charge = (
+  rate: number,
+  measured: Measured = noCounts,
+  into?: Charge,
+): Charge => {
   const compiled = compiledRates[rate];
   if (!compiled) {
     throw new Error(`No Cost Model rate ${rate}`);
   }
-  return compiled(measured);
+  return compiled(measured, into);
 };

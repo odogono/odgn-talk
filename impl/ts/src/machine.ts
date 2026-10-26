@@ -23,6 +23,7 @@ import {
   keysContents,
   partSize,
   rateOf,
+  resetMeasured,
   sizeOf,
   type Charge,
   type Measured,
@@ -1001,6 +1002,19 @@ const isBoolean = (item: Item | undefined): boolean =>
 const smallAt = (item: Item | undefined): number =>
   isValue(item) ? smallOf(item) : Number.NaN;
 
+// Shrinking length is expensive on JavaScriptCore, even for a single operand.
+const drop = (stack: Item[], n: number): void => {
+  for (let i = 0; i < n; i++) {
+    stack.pop();
+  }
+};
+const next = (frame: Frame): void => {
+  frame.pc++;
+};
+const jump = (frame: Frame, pc: number): void => {
+  frame.pc = pc;
+};
+
 // Scheduler callbacks last only for one step and are never saved with a Run.
 const clauseChargeCallbacks = new WeakMap<Run, () => void>();
 
@@ -1305,6 +1319,7 @@ export class Run {
   private outcome: Outcome | null = null;
   private entryError: 'wrong arity' | null = null;
   private m: Measured = {};
+  private instructionCharge: Charge = { alloc: 0, fuel: 0 };
   private clause = 0;
   /** Its entry dispatch reached the Fallback Handler's clauses (ADR 0064). */
   private viaFallback = false;
@@ -2007,7 +2022,7 @@ export class Run {
     }
     const { frame, entry } = block;
     frame.pc = entry.target;
-    frame.stack.length = entry.depth;
+    drop(frame.stack, frame.stack.length - entry.depth);
     frame.clauseCharge = false;
     this.frames = [frame];
   }
@@ -2267,9 +2282,10 @@ export class Run {
       return;
     }
     const frame = this.frame;
-    const own = charge(rate, measured);
+    const own =
+      fixedCharges[rate] ?? charge(rate, measured, this.instructionCharge);
     this.payAmount(
-      own.fuel + (frame.clauseCharge ? charge(CLAUSE).fuel : 0),
+      own.fuel + (frame.clauseCharge ? fixedCharges[CLAUSE]!.fuel : 0),
       own.alloc + allocation,
     );
   }
@@ -2345,7 +2361,9 @@ export class Run {
     const frame = this.frame;
     const ins = frame.code.unit.code[frame.pc]!;
     const rate = ins.rate;
-    this.m = {};
+    // Counts and subjects are instruction-local, including after a resumption.
+    const m = this.m;
+    resetMeasured(m);
     const resumption = this.resumption;
     this.resumption = null;
     try {
@@ -2400,7 +2418,9 @@ export class Run {
         throw error;
       }
     } finally {
-      clauseChargeCallbacks.delete(this);
+      if (clausePaid) {
+        clauseChargeCallbacks.delete(this);
+      }
     }
     this.finishInstruction();
   }
@@ -2484,10 +2504,11 @@ export class Run {
           const holds = ordered(opcode, x, y);
           // A branch that follows takes the outcome without a Boolean,
           // when it too has room and can be paid.
-          const next = instructions[pc + 1]!;
-          const branch = fixedCharges[next.rate];
+          const following = instructions[pc + 1]!;
+          const branch = fixedCharges[following.rate];
           if (
-            (next.opcode === Op.BranchFalse || next.opcode === Op.BranchTrue) &&
+            (following.opcode === Op.BranchFalse ||
+              following.opcode === Op.BranchTrue) &&
             branch &&
             fuel + cost.fuel < end &&
             fuel + cost.fuel + branch.fuel <= fuelLimit &&
@@ -2495,10 +2516,10 @@ export class Run {
           ) {
             fuel += cost.fuel + branch.fuel;
             alloc += cost.alloc + branch.alloc;
-            stack.length -= 2;
+            drop(stack, 2);
             pc =
-              holds === (next.opcode === Op.BranchTrue)
-                ? (next.operands[0] as number)
+              holds === (following.opcode === Op.BranchTrue)
+                ? (following.operands[0] as number)
                 : pc + 2;
             continue;
           }
@@ -2556,8 +2577,8 @@ export class Run {
           }
           break;
         default:
-          stack.length -= 2;
-          stack.push(result!);
+          stack.pop();
+          stack[stack.length - 1] = result!;
       }
       pc++;
     }
@@ -2572,10 +2593,12 @@ export class Run {
       return;
     }
     // An abandoned call is written after the raise that reports it.
-    for (const id of this.abandoning) {
-      this.records.push({ kind: 'abandon', id });
+    if (this.abandoning.length) {
+      for (const id of this.abandoning) {
+        this.records.push({ kind: 'abandon', id });
+      }
+      this.abandoning = [];
     }
-    this.abandoning = [];
   }
 
   /** TS tooling: a resumption consumes the suspension instruction, not a new statement. */
@@ -3494,7 +3517,7 @@ export class Run {
     const guard = this.activeEntries(this.frame).find(e => e.kind !== 'offer');
     const at = this.record(error, ins, guard?.kind === 'guard');
     if (guard?.kind === 'guard') {
-      this.frame.stack.length = guard.depth;
+      drop(this.frame.stack, this.frame.stack.length - guard.depth);
       this.frame.pc = guard.target;
       return;
     }
@@ -3868,7 +3891,7 @@ export class Run {
       this.frame.stack.length - count,
     ) as Value[];
     const context = this.recoveries.at(-1)!;
-    this.frame.stack.length -= count;
+    drop(this.frame.stack, count);
     const attempt = ++this.offerAttempt;
     this.records.push({
       kind: 'offer-chosen',
@@ -4304,7 +4327,7 @@ export class Run {
       } else {
         // The Host has consumed the operands. Retain the call, not another
         // copy of its arguments on the frame's operand stack.
-        this.frame.stack.length -= args.length;
+        drop(this.frame.stack, args.length);
         this.suspend({ k: 'ask', call: ctx, abort, ms });
       }
       return nothing;
@@ -4530,12 +4553,6 @@ export class Run {
     }
     const [a, b, c] = ins.operands;
     const m = this.m;
-    const next = () => {
-      frame.pc++;
-    };
-    const jump = (label: number) => {
-      frame.pc = label;
-    };
     const code = frame.code;
     const unit = code.unit;
     switch (ins.opcode) {
@@ -4544,32 +4561,32 @@ export class Run {
         const value = code.constant(a as number);
         this.pay(rate);
         frame.stack.push(value);
-        return next();
+        return next(frame);
       }
       case Op.Pop:
         this.pay(rate);
         frame.stack.pop();
-        return next();
+        return next(frame);
       case Op.Load:
         this.pay(rate);
         frame.stack.push(frame.locals[a as number]!);
-        return next();
+        return next(frame);
       case Op.Store:
         this.pay(rate);
         frame.locals[a as number] = this.pop();
-        return next();
+        return next(frame);
       case Op.Move:
         this.pay(rate);
         frame.locals[b as number] = frame.locals[a as number]!;
-        return next();
+        return next(frame);
       case Op.LoadVar:
         this.pay(rate);
         frame.stack.push(this.script.variables[a as number]!);
-        return next();
+        return next(frame);
       case Op.StoreVar:
         this.pay(rate);
         this.script.variables[a as number] = this.pop();
-        return next();
+        return next(frame);
       case Op.LoadDefinition:
         this.pay(rate);
         frame.stack.push(
@@ -4578,19 +4595,21 @@ export class Run {
             this.script.home ?? this.script,
           ),
         );
-        return next();
+        return next(frame);
       case Op.StoreDefinition:
         this.pay(rate);
         code.definitions[a as number] = this.pop();
-        return next();
+        return next(frame);
 
       // Control
       case Op.Jump:
         this.pay(rate);
-        return jump(a as number);
+        return jump(frame, a as number);
       case Op.BranchNotNothing:
         this.pay(rate);
-        return this.peek().kind !== 'nothing' ? jump(a as number) : next();
+        return this.peek().kind !== 'nothing'
+          ? jump(frame, a as number)
+          : next(frame);
       case Op.BranchFalse:
       case Op.BranchTrue:
       case Op.CheckBoolean: {
@@ -4600,12 +4619,12 @@ export class Run {
         }
         this.pay(rate);
         if (ins.opcode === Op.CheckBoolean) {
-          return next();
+          return next(frame);
         }
         this.pop();
         return v.asBool() === (ins.opcode === Op.BranchTrue)
-          ? jump(a as number)
-          : next();
+          ? jump(frame, a as number)
+          : next(frame);
       }
       case Op.Not: {
         const v = this.peek();
@@ -4692,7 +4711,7 @@ export class Run {
           m.result = this.getProperty(this.peek(), a as string, rate);
           frame.stack.pop();
           frame.stack.push(m.result);
-          return next();
+          return next(frame);
         }
         m.result = getKey(this.peek(), a as string);
         return this.replace(1, rate);
@@ -4705,27 +4724,27 @@ export class Run {
         const name = computed ? keyText(this.peek(2)) : (a as string);
         this.setProperty(o, name, v, rate);
         this.popN(computed ? 3 : 2);
-        return next();
+        return next(frame);
       }
       case Op.GetKeyComputed:
         if (this.peek().kind === 'object') {
           m.result = this.getProperty(this.peek(), keyText(this.peek(1)), rate);
-          frame.stack.length -= 2;
+          drop(frame.stack, 2);
           frame.stack.push(m.result);
-          return next();
+          return next(frame);
         }
         m.result = getKey(this.peek(), keyText(this.peek(1)));
         return this.replace(2, rate);
       case Op.GetElement:
         m.result = this.getElement(this.peek(1), this.peek(), rate);
-        frame.stack.length -= 2;
+        drop(frame.stack, 2);
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       case Op.CountElements:
         m.result = this.countElements(this.peek(), rate);
         frame.stack.pop();
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       case Op.Property:
         m.input = this.peek();
         m.result = property(a as string, m.input);
@@ -4777,7 +4796,7 @@ export class Run {
         m.scanned = chunkGet(a as string, index, whole, d).scanned;
         this.pay(rate);
         this.popN(delimited ? 3 : 2);
-        return there ? next() : jump(b as number);
+        return there ? next(frame) : jump(frame, b as number);
       }
       case Op.TestKey:
       case Op.TestKeyComputed: {
@@ -4788,7 +4807,7 @@ export class Run {
         );
         this.pay(rate);
         this.popN(computed ? 2 : 1);
-        return there ? next() : jump((computed ? a : b) as number);
+        return there ? next(frame) : jump(frame, (computed ? a : b) as number);
       }
       case Op.SetKey:
         m.input = this.peek();
@@ -4876,19 +4895,19 @@ export class Run {
         this.pay(rate);
         this.pop();
         if (v.kind !== 'bytes') {
-          return jump(a as number);
+          return jump(frame, a as number);
         }
         frame.stack.push({ k: 'reader', bytes: v.bytesView()!, at: 0 });
-        return next();
+        return next(frame);
       }
       case Op.BinLiteral: {
         const r = this.reader();
         this.pay(rate);
         if (!readLiteral(r, code.constant(a as number))) {
           frame.stack.pop();
-          return jump(b as number);
+          return jump(frame, b as number);
         }
-        return next();
+        return next(frame);
       }
       case Op.BinInt: {
         const r = this.reader();
@@ -4896,11 +4915,11 @@ export class Run {
         this.pay(rate);
         if (!m.result) {
           frame.stack.pop();
-          return jump(b as number);
+          return jump(frame, b as number);
         }
         readInt(r, a as string);
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       }
       case Op.BinBits: {
         const r = this.reader();
@@ -4910,11 +4929,11 @@ export class Run {
         this.pay(rate);
         if (!values) {
           frame.stack.pop();
-          return jump(c as number);
+          return jump(frame, c as number);
         }
         readBits(r, widths);
         frame.stack.push(...values);
-        return next();
+        return next(frame);
       }
       case Op.BinBytes: {
         const size = this.peek();
@@ -4925,11 +4944,11 @@ export class Run {
         frame.stack.pop();
         if (!m.result) {
           frame.stack.pop();
-          return jump(b as number);
+          return jump(frame, b as number);
         }
         r.at = probe.at;
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       }
       case Op.BinRest: {
         const r = this.reader();
@@ -4937,16 +4956,16 @@ export class Run {
         this.pay(rate);
         frame.stack.pop();
         if (!m.result) {
-          return jump(b as number);
+          return jump(frame, b as number);
         }
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       }
       case Op.BinEnd: {
         const r = this.reader();
         this.pay(rate);
         frame.stack.pop();
-        return r.at === r.bytes.length ? next() : jump(a as number);
+        return r.at === r.bytes.length ? next(frame) : jump(frame, a as number);
       }
 
       case Op.MakePattern: {
@@ -4994,16 +5013,16 @@ export class Run {
         this.pay(rate);
         this.popN(2);
         frame.stack.push(replacement);
-        return next();
+        return next(frame);
       }
       case Op.ReplaceNext: {
         const r = frame.stack.at(-1) as Replacement;
         this.pay(rate);
         if (r.at >= r.matches.length) {
-          return jump(a as number);
+          return jump(frame, a as number);
         }
         frame.stack.push(r.matches[r.at]!);
-        return next();
+        return next(frame);
       }
       case Op.ReplacePut: {
         const piece = this.peek();
@@ -5012,7 +5031,7 @@ export class Run {
         this.pop();
         r.pieces.push(textForm(piece));
         r.at++;
-        return next();
+        return next(frame);
       }
       case Op.ReplaceEnd: {
         const r = frame.stack.at(-1) as Replacement;
@@ -5027,7 +5046,7 @@ export class Run {
         this.pay(rate);
         frame.stack.pop();
         frame.stack.push(m.result);
-        return next();
+        return next(frame);
       }
       case Op.MakeClosure: {
         const body = unit.bodies[a as number]!;
@@ -5062,13 +5081,13 @@ export class Run {
         if (object) {
           this.pay(rate);
           frame.stack.push(object);
-          return next();
+          return next(frame);
         }
         // A Script is named, and its send checks the Group holds it
         // (chapter 5, Naming a Script).
         this.pay(rate);
         frame.stack.push({ k: 'receiver', name });
-        return next();
+        return next(frame);
       }
       case Op.Me: {
         // The object the Script owns, or Nothing (chapter 5, `me`). A Script
@@ -5085,18 +5104,18 @@ export class Run {
             ? { k: 'receiver', name: this.script.name }
             : me,
         );
-        return next();
+        return next(frame);
       }
       case Op.Ask:
       case Op.Tell: {
         const n = c as number;
         const args = this.popArgs(n);
         const result = this.capability(a as string, b as string, args, rate);
-        frame.stack.length -= n;
+        drop(frame.stack, n);
         if (ins.opcode === Op.Ask) {
           frame.stack.push(result);
         }
-        return next();
+        return next(frame);
       }
       case Op.Wait: {
         const us = waitUs(this.peek());
@@ -5171,7 +5190,7 @@ export class Run {
         this.checkDeadline();
         this.checkScopeBoundary();
         this.pay(rate);
-        frame.stack.length -= count;
+        drop(frame.stack, count);
         this.suspend(sus);
         return;
       }
@@ -5179,13 +5198,13 @@ export class Run {
         this.checkScopeBoundary();
         this.pay(rate);
         this.join = { frame, members: [], replies: [], start: frame.pc };
-        return next();
+        return next(frame);
       case Op.JoinAsk: {
         this.joinWidth();
         const n = c as number;
         this.capability(a as string, b as string, this.popArgs(n), rate, true);
-        frame.stack.length -= n;
-        return next();
+        drop(frame.stack, n);
+        return next(frame);
       }
       case Op.JoinEnd: {
         const members = this.join!.members;
@@ -5195,7 +5214,7 @@ export class Run {
           this.pay(rate);
           this.join = null;
           frame.stack.push(m.result);
-          return next();
+          return next(frame);
         }
         // Raising here, with the Join open, abandons its members.
         this.checkDeadline();
@@ -5292,7 +5311,7 @@ export class Run {
         const reached = up
           ? this.host!.sendUp(message, args, id)
           : this.host!.send(target!, message, args, id);
-        frame.stack.length -= spread ? 3 : n + (up ? 0 : 1) + (named ? 1 : 0);
+        drop(frame.stack, spread ? 3 : n + (up ? 0 : 1) + (named ? 1 : 0));
         const object = typeof target === 'object' && target ? target : null;
         if (reached === null) {
           // Past the last Owning Script: `unhandled`, and nothing to wait on.
@@ -5309,7 +5328,7 @@ export class Run {
               true,
             );
           }
-          return next();
+          return next(frame);
         }
         this.records.push({
           kind: 'send',
@@ -5320,7 +5339,7 @@ export class Run {
           ...(join ? { join: true } : {}),
         });
         if (!id) {
-          return next();
+          return next(frame);
         }
         this.calls++;
         if (join) {
@@ -5332,7 +5351,7 @@ export class Run {
             ms: this.limits.maxWaitMs,
             at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1000n,
           });
-          return next();
+          return next(frame);
         }
         this.suspend({ k: 'send', id, to: reached, message, args });
         return;
@@ -5355,7 +5374,7 @@ export class Run {
       case Op.Target:
         this.pay(rate);
         frame.stack.push(this.target);
-        return next();
+        return next(frame);
 
       // Calls
       case Op.Call: {
@@ -5364,7 +5383,7 @@ export class Run {
           this.frame.stack.length - (b as number),
         ) as Value[];
         this.callBody(code, body, this.fillDefaults(code, body, args));
-        frame.stack.length -= b as number;
+        drop(frame.stack, b as number);
         return;
       }
       case Op.CallImport: {
@@ -5378,7 +5397,7 @@ export class Run {
           body,
           this.fillDefaults(target.code, body, args),
         );
-        frame.stack.length -= b as number;
+        drop(frame.stack, b as number);
         return;
       }
       case Op.CallHandler:
@@ -5399,7 +5418,7 @@ export class Run {
           throw new LimitFaultError('callDepth', frame.pc);
         }
         this.pay(CALL);
-        frame.stack.length -= n;
+        drop(frame.stack, n);
         this.dispatch({ clauses, code: target.code, next: 0, args });
         return;
       }
@@ -5430,7 +5449,7 @@ export class Run {
               ? this.lookupOffer(name.asText()!)
               : { frames: 0 };
           this.pay(OFFER_LOOKUP, { frames: found.frames });
-          frame.stack.length -= n;
+          drop(frame.stack, n);
           frame.stack.push(bool(!!('offer' in found && found.offer)));
           frame.pc++;
           return;
@@ -5479,7 +5498,7 @@ export class Run {
           const id = `${this.id}.c${this.calls + 1}`;
           const to = this.host!.callValue(fn, args, id);
           this.calls++;
-          frame.stack.length -= n + 1;
+          drop(frame.stack, n + 1);
           this.records.push({ kind: 'send', id, to, fn, args });
           this.suspend({ k: 'call-value', id, to, fn, args });
           return;
@@ -5487,7 +5506,7 @@ export class Run {
         const filled =
           body.kind === 'lambda' ? args : this.fillDefaults(home, body, args);
         this.callBody(home, body, filled);
-        frame.stack.length -= n + 1;
+        drop(frame.stack, n + 1);
         const callee = this.frame;
         callee.restricted ||= ins.opcode === Op.CallRestricted;
         ref.captures.forEach(([, v], i) => {
@@ -5529,13 +5548,13 @@ export class Run {
         const ok = equals(this.peek(), code.constant(a as number), fold).equal;
         this.pay(rate);
         this.pop();
-        return ok ? next() : jump(target);
+        return ok ? next(frame) : jump(frame, target);
       }
       case Op.TestEqual: {
         const ok = equals(this.peek(1), this.peek(), false).equal;
         this.pay(rate);
         this.popN(2);
-        return ok ? next() : jump(a as number);
+        return ok ? next(frame) : jump(frame, a as number);
       }
       case Op.TestList:
       case Op.TestListAtLeast: {
@@ -5546,7 +5565,7 @@ export class Run {
           (ins.opcode === Op.TestList ? v.length === n : v.length >= n);
         this.pay(rate);
         this.pop();
-        return ok ? next() : jump(b as number);
+        return ok ? next(frame) : jump(frame, b as number);
       }
       case Op.ListItem:
         m.result = this.peek().index(a as number);
@@ -5565,7 +5584,7 @@ export class Run {
         const ok = this.peek().kind === 'map';
         this.pay(rate);
         this.pop();
-        return ok ? next() : jump(a as number);
+        return ok ? next(frame) : jump(frame, a as number);
       }
       case Op.MapGet: {
         const v = this.peek();
@@ -5573,10 +5592,10 @@ export class Run {
         this.pay(rate);
         this.pop();
         if (!there) {
-          return jump(b as number);
+          return jump(frame, b as number);
         }
         frame.stack.push(v.get(a as string));
-        return next();
+        return next(frame);
       }
       case Op.MatchWhole:
       case Op.MatchSearch: {
@@ -5593,10 +5612,10 @@ export class Run {
         this.pay(rate);
         this.popN(2);
         if (!out.result) {
-          return jump(target);
+          return jump(frame, target);
         }
         frame.stack.push(out.result);
-        return next();
+        return next(frame);
       }
 
       // Loops
@@ -5613,12 +5632,12 @@ export class Run {
             ? { ...enclosing }
             : { k: 'deadline', at, after: msOf(us) },
         );
-        return next();
+        return next(frame);
       }
       case Op.TimeoutEnd:
         this.pay(rate);
         frame.stack.pop();
-        return next();
+        return next(frame);
       case Op.Iterate: {
         const v = this.peek();
         let iterator: Iterator;
@@ -5648,7 +5667,7 @@ export class Run {
         this.pay(rate);
         this.pop();
         frame.stack.push(iterator);
-        return next();
+        return next(frame);
       }
       case Op.IterateTimes: {
         const v = this.peek();
@@ -5670,17 +5689,17 @@ export class Run {
           at: 0,
           count: Number(n),
         });
-        return next();
+        return next(frame);
       }
       case Op.Next: {
         const it = frame.stack.at(-1) as Iterator;
         this.pay(rate);
         if (it.at >= it.count) {
-          return jump(a as number);
+          return jump(frame, a as number);
         }
         it.at++;
         frame.stack.push(iteratorItem(it.source, it.at));
-        return next();
+        return next(frame);
       }
 
       // Errors
@@ -5750,8 +5769,13 @@ export class Run {
   private replace(n: number, rate: number) {
     this.pay(rate);
     const frame = this.frame;
-    frame.stack.length -= n;
-    frame.stack.push(this.m.result!);
+    const stack = frame.stack;
+    if (n) {
+      drop(stack, n - 1);
+      stack[stack.length - 1] = this.m.result!;
+    } else {
+      stack.push(this.m.result!);
+    }
     frame.pc++;
   }
 }

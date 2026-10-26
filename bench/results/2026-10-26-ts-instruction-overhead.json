@@ -1,0 +1,1849 @@
+{
+  "metadata": {
+    "date": "2026-10-26",
+    "issue": 1580,
+    "baselineRef": "origin/main",
+    "baseline": "915eae6e6c8faf8afd613628d0562baaa398b3cd",
+    "candidate": "chore/issue-1580 working tree (before commit)",
+    "machine": {
+      "os": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M5",
+      "cores": 10,
+      "memoryGiB": 24
+    },
+    "bun": "1.4.4",
+    "node": "v26.12.1",
+    "order": "Before core/macro/collections, then after core/macro/collections; repeated 3 times. Node before/after repeated 3 times separately.",
+    "sampling": "mitata automatic samples; first pair uses --count 5 --no-save CLI; two further pairs use frozen before/after bundles of measure-ts.ts with identical sampling defaults. No tests/builds ran concurrently with timings.",
+    "nodeSampling": "50 warmup Runs, then 9 batches of 200 validated Runs per process; median of batch means.",
+    "bundleSha256": {
+      "measure-before.mjs": "81ccd4fcfc5c3b6be00c2f3299c55f41746fc066f56d3ec45fb264fa06e6eb71",
+      "measure-after.mjs": "ca5e5f8ca48b42027ff3f519605efcf2a725de3bdc52c1e2763ce68e56ef35f1",
+      "fib-before.mjs": "d362d910269356c9e36d7b5f1b1d84b12a3dd3c315f8934c1accd5dcdaf4d403",
+      "fib-after.mjs": "8b860af52811e96579ddc037ee2ba3dd636fd81ab310adbaadab3e7ae2b25288"
+    }
+  },
+  "bun": [
+    {
+      "round": 1,
+      "variant": "before",
+      "family": "core",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter core/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| core/calls | ts | 128.8 | 0.948 | 0.888 | 46018 | 20.6 | 31.3 KiB | 32.8 KiB |  |\n| core/fib | ts | 123.6 | 0.631 | 0.583 | 46365 | 13.6 | 46.2 KiB | 30.4 KiB |  |\n| core/fib@slice=10 | ts | 92.1 | 3.566 | 3.178 | 46365 | 76.9 | 46.2 KiB | 185.9 KiB |  |\n| core/fib@slice=100 | ts | 78.8 | 0.981 | 0.898 | 46365 | 21.2 | 46.2 KiB | 13.5 KiB |  |\n| core/fib@slice=1000 | ts | 80.3 | 0.700 | 0.646 | 46365 | 15.1 | 46.2 KiB | 0 B |  |\n| core/fib@slice=10000 | ts | 77.2 | 0.662 | 0.618 | 46365 | 14.3 | 46.2 KiB | 0 B |  |\n| core/lambdas | ts | 161.2 | 1.186 | 1.124 | 58027 | 20.4 | 62.6 KiB | 92.4 KiB |  |\n| core/loop | ts | 107.7 | 0.372 | 0.345 | 48016 | 7.8 | 62.5 KiB | 33.1 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.5 KiB | 179.6 KiB | 616.6 KiB |\n| TS Core: @northtalk/ts | 152.0 KiB | 179.0 KiB | 615.1 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\n- core/fib@slice=10 on ts: 76.9 ns/Fuel, 4.3\u00d7 the median\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "core/calls",
+          "run": {
+            "medianNs": 948000.0
+          },
+          "fuel": 46018
+        },
+        {
+          "benchmark": "core/fib",
+          "run": {
+            "medianNs": 631000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "run": {
+            "medianNs": 3566000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "run": {
+            "medianNs": 981000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "run": {
+            "medianNs": 700000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "run": {
+            "medianNs": 662000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/lambdas",
+          "run": {
+            "medianNs": 1186000.0
+          },
+          "fuel": 58027
+        },
+        {
+          "benchmark": "core/loop",
+          "run": {
+            "medianNs": 372000.0
+          },
+          "fuel": 48016
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "before",
+      "family": "macro",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter macro/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| macro/game-tick | ts | 186.2 | 2.023 | 1.906 | 67042 | 30.2 | 78.4 KiB | 231.9 KiB |  |\n| macro/report | ts | 94.7 | 1.147 | 1.033 | 86555 | 13.2 | 1.2 MiB | 254.3 KiB |  |\n| macro/transform | ts | 159.5 | 0.886 | 0.775 | 20664 | 42.9 | 6.1 MiB | 76.4 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.5 KiB | 179.6 KiB | 616.6 KiB |\n| TS Core: @northtalk/ts | 152.0 KiB | 179.0 KiB | 615.1 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\nNone.\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "run": {
+            "medianNs": 2023000.0000000002
+          },
+          "fuel": 67042
+        },
+        {
+          "benchmark": "macro/report",
+          "run": {
+            "medianNs": 1147000.0
+          },
+          "fuel": 86555
+        },
+        {
+          "benchmark": "macro/transform",
+          "run": {
+            "medianNs": 886000.0
+          },
+          "fuel": 20664
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "before",
+      "family": "collections",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter collections/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| collections/iterate | ts | 187.3 | 1.533 | 1.448 | 89459 | 17.1 | 195.6 KiB | 81.7 KiB |  |\n| collections/list-append | ts | 169.3 | 1.863 | 1.677 | 52056 | 35.8 | 78.3 KiB | 183.3 KiB |  |\n| collections/list-build | ts | 102.2 | 0.340 | 0.312 | 19091 | 17.8 | 2.9 MiB | 35.0 KiB |  |\n| collections/list-update | ts | 185.3 | 0.835 | 0.764 | 28553 | 29.2 | 23.8 KiB | 192.6 KiB |  |\n| collections/map-build | ts | 140.5 | 0.534 | 0.492 | 14094 | 37.9 | 24.3 KiB | 87.3 KiB |  |\n| collections/map-update | ts | 160.4 | 0.446 | 0.369 | 8056 | 55.4 | 12.1 KiB | 91.7 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.5 KiB | 179.6 KiB | 616.6 KiB |\n| TS Core: @northtalk/ts | 152.0 KiB | 179.0 KiB | 615.1 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\nNone.\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "collections/iterate",
+          "run": {
+            "medianNs": 1533000.0
+          },
+          "fuel": 89459
+        },
+        {
+          "benchmark": "collections/list-append",
+          "run": {
+            "medianNs": 1863000.0
+          },
+          "fuel": 52056
+        },
+        {
+          "benchmark": "collections/list-build",
+          "run": {
+            "medianNs": 340000.0
+          },
+          "fuel": 19091
+        },
+        {
+          "benchmark": "collections/list-update",
+          "run": {
+            "medianNs": 835000.0
+          },
+          "fuel": 28553
+        },
+        {
+          "benchmark": "collections/map-build",
+          "run": {
+            "medianNs": 534000.0
+          },
+          "fuel": 14094
+        },
+        {
+          "benchmark": "collections/map-update",
+          "run": {
+            "medianNs": 446000.0
+          },
+          "fuel": 8056
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "family": "core",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e-dirty` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter core/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| core/calls | ts | 129.1 | 0.824 | 0.783 | 46018 | 17.9 | 31.3 KiB | 49.1 KiB |  |\n| core/fib | ts | 110.0 | 0.622 | 0.569 | 46365 | 13.4 | 46.2 KiB | 42.3 KiB |  |\n| core/fib@slice=10 | ts | 86.5 | 3.765 | 3.227 | 46365 | 81.2 | 46.2 KiB | 142.6 KiB |  |\n| core/fib@slice=100 | ts | 75.4 | 0.903 | 0.854 | 46365 | 19.5 | 46.2 KiB | 9.7 KiB |  |\n| core/fib@slice=1000 | ts | 75.1 | 0.630 | 0.609 | 46365 | 13.6 | 46.2 KiB | 0 B |  |\n| core/fib@slice=10000 | ts | 73.2 | 0.602 | 0.584 | 46365 | 13.0 | 46.2 KiB | 681 B |  |\n| core/lambdas | ts | 138.0 | 1.040 | 0.988 | 58027 | 17.9 | 62.6 KiB | 91.4 KiB |  |\n| core/loop | ts | 99.0 | 0.362 | 0.345 | 48016 | 7.5 | 62.5 KiB | 26.2 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.8 KiB | 179.9 KiB | 619.4 KiB |\n| TS Core: @northtalk/ts | 152.2 KiB | 179.2 KiB | 617.8 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\n- core/fib@slice=10 on ts: 81.2 ns/Fuel, 5.2\u00d7 the median\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "core/calls",
+          "run": {
+            "medianNs": 824000.0
+          },
+          "fuel": 46018
+        },
+        {
+          "benchmark": "core/fib",
+          "run": {
+            "medianNs": 622000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "run": {
+            "medianNs": 3765000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "run": {
+            "medianNs": 903000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "run": {
+            "medianNs": 630000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "run": {
+            "medianNs": 602000.0
+          },
+          "fuel": 46365
+        },
+        {
+          "benchmark": "core/lambdas",
+          "run": {
+            "medianNs": 1040000.0
+          },
+          "fuel": 58027
+        },
+        {
+          "benchmark": "core/loop",
+          "run": {
+            "medianNs": 362000.0
+          },
+          "fuel": 48016
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "family": "macro",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e-dirty` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter macro/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| macro/game-tick | ts | 192.6 | 1.532 | 1.434 | 67042 | 22.9 | 78.4 KiB | 138.7 KiB |  |\n| macro/report | ts | 107.7 | 1.123 | 1.047 | 86555 | 13.0 | 1.2 MiB | 250.0 KiB |  |\n| macro/transform | ts | 161.3 | 0.570 | 0.512 | 20664 | 27.6 | 6.1 MiB | 72.0 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.8 KiB | 179.9 KiB | 619.4 KiB |\n| TS Core: @northtalk/ts | 152.2 KiB | 179.2 KiB | 617.8 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\nNone.\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "macro/game-tick",
+          "run": {
+            "medianNs": 1532000.0
+          },
+          "fuel": 67042
+        },
+        {
+          "benchmark": "macro/report",
+          "run": {
+            "medianNs": 1123000.0
+          },
+          "fuel": 86555
+        },
+        {
+          "benchmark": "macro/transform",
+          "run": {
+            "medianNs": 570000.0
+          },
+          "fuel": 20664
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "family": "collections",
+      "runner": "suite CLI",
+      "report": "# Benchmark results, 2026-10-26\n\nCommit `ts-v0.2.0-11-g915eae6e-dirty` on Apple M5 (10 cores, 24 GiB), darwin arm64.\nVersions: bun 1.4.4, cost model 0, language 1.0-rc.3.\nSettings: count 5, filter collections/, runners ts, smoke false.\n\n| Benchmark | Runner | Load median (\u00b5s) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |\n| - | - | -: | -: | -: | -: | -: | -: | -: | -: |\n| collections/iterate | ts | 203.7 | 1.354 | 1.273 | 89459 | 15.1 | 195.6 KiB | 12.1 KiB |  |\n| collections/list-append | ts | 168.7 | 1.606 | 1.423 | 52056 | 30.9 | 78.3 KiB | 218.8 KiB |  |\n| collections/list-build | ts | 109.1 | 0.339 | 0.291 | 19091 | 17.7 | 2.9 MiB | 47.1 KiB |  |\n| collections/list-update | ts | 180.8 | 0.870 | 0.744 | 28553 | 30.5 | 23.8 KiB | 199.3 KiB |  |\n| collections/map-build | ts | 141.7 | 0.450 | 0.409 | 14094 | 31.9 | 24.3 KiB | 69.6 KiB |  |\n| collections/map-update | ts | 180.0 | 0.350 | 0.257 | 8056 | 43.4 | 12.1 KiB | 51.2 KiB |  |\n\n## Payload\n\nWhat a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.\n\n| Payload | Brotli | gzip -9 | Raw |\n| - | -: | -: | -: |\n| TS Core: Example Host | 152.8 KiB | 179.9 KiB | 619.4 KiB |\n| TS Core: @northtalk/ts | 152.2 KiB | 179.2 KiB | 617.8 KiB |\n\n## Fuel parity\n\nEvery Benchmark used the same Fuel on each Core.\n\n## Cost Model outliers\n\nBenchmarks whose ns/Fuel is more than 3\u00d7 their runner's median. These are advisory: any reweighting goes through the Spec.\n\nNone.\n\n",
+      "medianPrecisionNs": 1000,
+      "measurements": [
+        {
+          "benchmark": "collections/iterate",
+          "run": {
+            "medianNs": 1354000.0
+          },
+          "fuel": 89459
+        },
+        {
+          "benchmark": "collections/list-append",
+          "run": {
+            "medianNs": 1606000.0
+          },
+          "fuel": 52056
+        },
+        {
+          "benchmark": "collections/list-build",
+          "run": {
+            "medianNs": 339000.0
+          },
+          "fuel": 19091
+        },
+        {
+          "benchmark": "collections/list-update",
+          "run": {
+            "medianNs": 870000.0
+          },
+          "fuel": 28553
+        },
+        {
+          "benchmark": "collections/map-build",
+          "run": {
+            "medianNs": 450000.0
+          },
+          "fuel": 14094
+        },
+        {
+          "benchmark": "collections/map-update",
+          "run": {
+            "medianNs": 350000.0
+          },
+          "fuel": 8056
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "family": "core",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "fuel": 48016,
+          "hostBytes": 39474.349241998876,
+          "load": {
+            "maxNs": 1659250,
+            "medianNs": 108834,
+            "minNs": 83458,
+            "samples": 5422
+          },
+          "logicalAlloc": 64000,
+          "run": {
+            "maxNs": 1058041,
+            "medianNs": 380458,
+            "minNs": 358708,
+            "samples": 1789
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib",
+          "fuel": 46365,
+          "hostBytes": 25463.25131440589,
+          "load": {
+            "maxNs": 1934458,
+            "medianNs": 150250,
+            "minNs": 108417,
+            "samples": 4237
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1747000,
+            "medianNs": 687041,
+            "minNs": 599792,
+            "samples": 958
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "fuel": 46365,
+          "hostBytes": 195885.17647058822,
+          "load": {
+            "maxNs": 1836500,
+            "medianNs": 106875,
+            "minNs": 84959,
+            "samples": 5971
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 9066791,
+            "medianNs": 4476979.5,
+            "minNs": 3854292,
+            "samples": 138
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 3838458,
+            "medianNs": 96667,
+            "minNs": 81750,
+            "samples": 5454
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 3845667,
+            "medianNs": 1168917,
+            "minNs": 1075958,
+            "samples": 525
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 1619833,
+            "medianNs": 94666,
+            "minNs": 81709,
+            "samples": 6582
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 7649834,
+            "medianNs": 819979,
+            "minNs": 750042,
+            "samples": 612
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 1163750,
+            "medianNs": 92083,
+            "minNs": 79875,
+            "samples": 7027
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 2526250,
+            "medianNs": 771624.5,
+            "minNs": 707625,
+            "samples": 808
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/calls",
+          "fuel": 46018,
+          "hostBytes": 79525.9014084507,
+          "load": {
+            "maxNs": 2411083,
+            "medianNs": 154166,
+            "minNs": 135666,
+            "samples": 4059
+          },
+          "logicalAlloc": 32072,
+          "run": {
+            "maxNs": 3494459,
+            "medianNs": 1121792,
+            "minNs": 1010917,
+            "samples": 569
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/lambdas",
+          "fuel": 58027,
+          "hostBytes": 91029.78411405295,
+          "load": {
+            "maxNs": 3274666,
+            "medianNs": 191687.5,
+            "minNs": 165416,
+            "samples": 3256
+          },
+          "logicalAlloc": 64120,
+          "run": {
+            "maxNs": 3241208,
+            "medianNs": 1347458,
+            "minNs": 1243083,
+            "samples": 493
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "family": "macro",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "macro/transform",
+          "fuel": 20664,
+          "hostBytes": 139845.6795131846,
+          "load": {
+            "maxNs": 4128958,
+            "medianNs": 200333,
+            "minNs": 160417,
+            "samples": 2333
+          },
+          "logicalAlloc": 6418202,
+          "run": {
+            "maxNs": 6971917,
+            "medianNs": 1122521,
+            "minNs": 974416,
+            "samples": 502
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/report",
+          "fuel": 86555,
+          "hostBytes": 205263.18260869564,
+          "load": {
+            "maxNs": 2850875,
+            "medianNs": 127000,
+            "minNs": 103667,
+            "samples": 4073
+          },
+          "logicalAlloc": 1291900,
+          "run": {
+            "maxNs": 4070125,
+            "medianNs": 1414312.5,
+            "minNs": 1312417,
+            "samples": 468
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "fuel": 67042,
+          "hostBytes": 288203.2413793103,
+          "load": {
+            "maxNs": 2903750,
+            "medianNs": 233917,
+            "minNs": 196625,
+            "samples": 2653
+          },
+          "logicalAlloc": 80270,
+          "run": {
+            "maxNs": 10956500,
+            "medianNs": 2517375,
+            "minNs": 2288000,
+            "samples": 241
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "family": "collections",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "collections/list-build",
+          "fuel": 19091,
+          "hostBytes": 56442.03318250377,
+          "load": {
+            "maxNs": 1884334,
+            "medianNs": 125166,
+            "minNs": 98250,
+            "samples": 4483
+          },
+          "logicalAlloc": 3022112,
+          "run": {
+            "maxNs": 6297542,
+            "medianNs": 418625,
+            "minNs": 362125,
+            "samples": 1335
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-append",
+          "fuel": 52056,
+          "hostBytes": 221976.86021505378,
+          "load": {
+            "maxNs": 2602375,
+            "medianNs": 191667,
+            "minNs": 146417,
+            "samples": 3079
+          },
+          "logicalAlloc": 80200,
+          "run": {
+            "maxNs": 11117583,
+            "medianNs": 2037708.5,
+            "minNs": 1821167,
+            "samples": 286
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-build",
+          "fuel": 14094,
+          "hostBytes": 74316.35906642729,
+          "load": {
+            "maxNs": 2198208,
+            "medianNs": 149750,
+            "minNs": 130875,
+            "samples": 4264
+          },
+          "logicalAlloc": 24920,
+          "run": {
+            "maxNs": 7366000,
+            "medianNs": 554708,
+            "minNs": 498875,
+            "samples": 1125
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-update",
+          "fuel": 28553,
+          "hostBytes": 157461.16962843295,
+          "load": {
+            "maxNs": 2414041,
+            "medianNs": 211749.5,
+            "minNs": 169000,
+            "samples": 3038
+          },
+          "logicalAlloc": 24328,
+          "run": {
+            "maxNs": 16728500,
+            "medianNs": 930375,
+            "minNs": 805833,
+            "samples": 631
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-update",
+          "fuel": 8056,
+          "hostBytes": 85821.00432900432,
+          "load": {
+            "maxNs": 2619500,
+            "medianNs": 168916,
+            "minNs": 141042,
+            "samples": 3818
+          },
+          "logicalAlloc": 12432,
+          "run": {
+            "maxNs": 15512500,
+            "medianNs": 443791.5,
+            "minNs": 384000,
+            "samples": 1396
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/iterate",
+          "fuel": 89459,
+          "hostBytes": 155606.538071066,
+          "load": {
+            "maxNs": 3142958,
+            "medianNs": 196750,
+            "minNs": 163167,
+            "samples": 3270
+          },
+          "logicalAlloc": 200319,
+          "run": {
+            "maxNs": 5033625,
+            "medianNs": 1686917,
+            "minNs": 1557917,
+            "samples": 399
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "family": "core",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "fuel": 48016,
+          "hostBytes": 33495.3625498008,
+          "load": {
+            "maxNs": 1749250,
+            "medianNs": 117708,
+            "minNs": 90375,
+            "samples": 4961
+          },
+          "logicalAlloc": 64000,
+          "run": {
+            "maxNs": 1094583,
+            "medianNs": 383354.5,
+            "minNs": 360250,
+            "samples": 1766
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib",
+          "fuel": 46365,
+          "hostBytes": 24279.71065493646,
+          "load": {
+            "maxNs": 2594167,
+            "medianNs": 154208.5,
+            "minNs": 113916,
+            "samples": 4030
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1631292,
+            "medianNs": 654771,
+            "minNs": 605000,
+            "samples": 1026
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "fuel": 46365,
+          "hostBytes": 115418.49681528662,
+          "load": {
+            "maxNs": 1537417,
+            "medianNs": 110083,
+            "minNs": 92375,
+            "samples": 5788
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 6430167,
+            "medianNs": 3970167,
+            "minNs": 3476958,
+            "samples": 161
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "fuel": 46365,
+          "hostBytes": 1234.245199409158,
+          "load": {
+            "maxNs": 1296291,
+            "medianNs": 88000,
+            "minNs": 74667,
+            "samples": 7242
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 2073542,
+            "medianNs": 987125,
+            "minNs": 888125,
+            "samples": 674
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "fuel": 46365,
+          "hostBytes": 87.8969957081545,
+          "load": {
+            "maxNs": 1014000,
+            "medianNs": 84833,
+            "minNs": 73125,
+            "samples": 7716
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1774333,
+            "medianNs": 722146,
+            "minNs": 665792,
+            "samples": 928
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 1213167,
+            "medianNs": 91042,
+            "minNs": 76292,
+            "samples": 7088
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1511791,
+            "medianNs": 643041.5,
+            "minNs": 577209,
+            "samples": 1062
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/calls",
+          "fuel": 46018,
+          "hostBytes": 68302.81794195251,
+          "load": {
+            "maxNs": 1653542,
+            "medianNs": 136083,
+            "minNs": 117416,
+            "samples": 4832
+          },
+          "logicalAlloc": 32072,
+          "run": {
+            "maxNs": 2132042,
+            "medianNs": 881875,
+            "minNs": 820042,
+            "samples": 765
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/lambdas",
+          "fuel": 58027,
+          "hostBytes": 86197.50632911392,
+          "load": {
+            "maxNs": 2240750,
+            "medianNs": 176166,
+            "minNs": 148625,
+            "samples": 3713
+          },
+          "logicalAlloc": 64120,
+          "run": {
+            "maxNs": 2470959,
+            "medianNs": 1084083,
+            "minNs": 982666,
+            "samples": 630
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "family": "macro",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "macro/transform",
+          "fuel": 20664,
+          "hostBytes": 102184.48421052631,
+          "load": {
+            "maxNs": 2097375,
+            "medianNs": 164541.5,
+            "minNs": 133792,
+            "samples": 3466
+          },
+          "logicalAlloc": 6418202,
+          "run": {
+            "maxNs": 9653875,
+            "medianNs": 688292,
+            "minNs": 565583,
+            "samples": 774
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/report",
+          "fuel": 86555,
+          "hostBytes": 305671.34530938126,
+          "load": {
+            "maxNs": 2658958,
+            "medianNs": 102750,
+            "minNs": 84458,
+            "samples": 5891
+          },
+          "logicalAlloc": 1291900,
+          "run": {
+            "maxNs": 3888417,
+            "medianNs": 1257416,
+            "minNs": 1087250,
+            "samples": 513
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "fuel": 67042,
+          "hostBytes": 218905.50993377483,
+          "load": {
+            "maxNs": 1916250,
+            "medianNs": 183875,
+            "minNs": 144583,
+            "samples": 3517
+          },
+          "logicalAlloc": 80270,
+          "run": {
+            "maxNs": 8040000,
+            "medianNs": 1771146,
+            "minNs": 1604542,
+            "samples": 312
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "family": "collections",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "collections/list-build",
+          "fuel": 19091,
+          "hostBytes": 51055.86329460014,
+          "load": {
+            "maxNs": 4917750,
+            "medianNs": 123792,
+            "minNs": 90750,
+            "samples": 3873
+          },
+          "logicalAlloc": 3022112,
+          "run": {
+            "maxNs": 8495458,
+            "medianNs": 364333,
+            "minNs": 298542,
+            "samples": 1477
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-append",
+          "fuel": 52056,
+          "hostBytes": 186561.65042979943,
+          "load": {
+            "maxNs": 2421958,
+            "medianNs": 187000,
+            "minNs": 158875,
+            "samples": 3293
+          },
+          "logicalAlloc": 80200,
+          "run": {
+            "maxNs": 14429292,
+            "medianNs": 1627437.5,
+            "minNs": 1415625,
+            "samples": 350
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-build",
+          "fuel": 14094,
+          "hostBytes": 50947.90150913424,
+          "load": {
+            "maxNs": 2280250,
+            "medianNs": 147229.5,
+            "minNs": 119166,
+            "samples": 4174
+          },
+          "logicalAlloc": 24920,
+          "run": {
+            "maxNs": 12607125,
+            "medianNs": 463000,
+            "minNs": 405875,
+            "samples": 1267
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-update",
+          "fuel": 28553,
+          "hostBytes": 175246.0766961652,
+          "load": {
+            "maxNs": 2625583,
+            "medianNs": 209979,
+            "minNs": 178917,
+            "samples": 3042
+          },
+          "logicalAlloc": 24328,
+          "run": {
+            "maxNs": 8748375,
+            "medianNs": 791749.5,
+            "minNs": 691792,
+            "samples": 688
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-update",
+          "fuel": 8056,
+          "hostBytes": 62123.903244837755,
+          "load": {
+            "maxNs": 2792542,
+            "medianNs": 173667,
+            "minNs": 150917,
+            "samples": 3575
+          },
+          "logicalAlloc": 12432,
+          "run": {
+            "maxNs": 6947042,
+            "medianNs": 311167,
+            "minNs": 274625,
+            "samples": 1711
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/iterate",
+          "fuel": 89459,
+          "hostBytes": 57025.29182879377,
+          "load": {
+            "maxNs": 3111583,
+            "medianNs": 197854.5,
+            "minNs": 166417,
+            "samples": 3164
+          },
+          "logicalAlloc": 200319,
+          "run": {
+            "maxNs": 1760500,
+            "medianNs": 1320791,
+            "minNs": 1198000,
+            "samples": 515
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "family": "core",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "fuel": 48016,
+          "hostBytes": 34314.98712446352,
+          "load": {
+            "maxNs": 2228666,
+            "medianNs": 110667,
+            "minNs": 86250,
+            "samples": 5186
+          },
+          "logicalAlloc": 64000,
+          "run": {
+            "maxNs": 1209625,
+            "medianNs": 406542,
+            "minNs": 381875,
+            "samples": 1644
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib",
+          "fuel": 46365,
+          "hostBytes": 41194.59335624284,
+          "load": {
+            "maxNs": 2139250,
+            "medianNs": 156042,
+            "minNs": 113375,
+            "samples": 4032
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1901583,
+            "medianNs": 749541,
+            "minNs": 667125,
+            "samples": 883
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "fuel": 46365,
+          "hostBytes": 124564.87943262412,
+          "load": {
+            "maxNs": 1758750,
+            "medianNs": 117041,
+            "minNs": 94625,
+            "samples": 5397
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 7312250,
+            "medianNs": 4533042,
+            "minNs": 3784208,
+            "samples": 142
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "fuel": 46365,
+          "hostBytes": 866.8783068783068,
+          "load": {
+            "maxNs": 1352916,
+            "medianNs": 99625,
+            "minNs": 80250,
+            "samples": 6285
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 2576750,
+            "medianNs": 1147916,
+            "minNs": 1046166,
+            "samples": 567
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "fuel": 46365,
+          "hostBytes": 1861.8181818181818,
+          "load": {
+            "maxNs": 1379791,
+            "medianNs": 93583,
+            "minNs": 79208,
+            "samples": 6857
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1996084,
+            "medianNs": 801041,
+            "minNs": 733167,
+            "samples": 835
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "fuel": 46365,
+          "hostBytes": 38.460093896713616,
+          "load": {
+            "maxNs": 1395417,
+            "medianNs": 93667,
+            "minNs": 81250,
+            "samples": 6840
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 2010208,
+            "medianNs": 783083,
+            "minNs": 722584,
+            "samples": 849
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/calls",
+          "fuel": 46018,
+          "hostBytes": 58244.77486910995,
+          "load": {
+            "maxNs": 1986875,
+            "medianNs": 152291,
+            "minNs": 134916,
+            "samples": 4251
+          },
+          "logicalAlloc": 32072,
+          "run": {
+            "maxNs": 3091000,
+            "medianNs": 1136292,
+            "minNs": 1037458,
+            "samples": 575
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/lambdas",
+          "fuel": 58027,
+          "hostBytes": 109315.15789473684,
+          "load": {
+            "maxNs": 2707584,
+            "medianNs": 193750,
+            "minNs": 167416,
+            "samples": 3318
+          },
+          "logicalAlloc": 64120,
+          "run": {
+            "maxNs": 3092416,
+            "medianNs": 1334353.5,
+            "minNs": 1233792,
+            "samples": 494
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "family": "macro",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "macro/transform",
+          "fuel": 20664,
+          "hostBytes": 135532.5409252669,
+          "load": {
+            "maxNs": 2951875,
+            "medianNs": 183104.5,
+            "minNs": 153375,
+            "samples": 3102
+          },
+          "logicalAlloc": 6418202,
+          "run": {
+            "maxNs": 6377750,
+            "medianNs": 1037479.5,
+            "minNs": 881542,
+            "samples": 570
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/report",
+          "fuel": 86555,
+          "hostBytes": 252209.22553191488,
+          "load": {
+            "maxNs": 2223958,
+            "medianNs": 115166,
+            "minNs": 98792,
+            "samples": 5352
+          },
+          "logicalAlloc": 1291900,
+          "run": {
+            "maxNs": 4099084,
+            "medianNs": 1374812.5,
+            "minNs": 1249375,
+            "samples": 476
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "fuel": 67042,
+          "hostBytes": 226323.65019011407,
+          "load": {
+            "maxNs": 3260041,
+            "medianNs": 232083,
+            "minNs": 190375,
+            "samples": 2627
+          },
+          "logicalAlloc": 80270,
+          "run": {
+            "maxNs": 10028083,
+            "medianNs": 2301084,
+            "minNs": 2153417,
+            "samples": 269
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "family": "collections",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "collections/list-build",
+          "fuel": 19091,
+          "hostBytes": 62402.29521829522,
+          "load": {
+            "maxNs": 2115958,
+            "medianNs": 115958,
+            "minNs": 88625,
+            "samples": 5051
+          },
+          "logicalAlloc": 3022112,
+          "run": {
+            "maxNs": 5643042,
+            "medianNs": 394500,
+            "minNs": 344125,
+            "samples": 1455
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-append",
+          "fuel": 52056,
+          "hostBytes": 229749.87072243346,
+          "load": {
+            "maxNs": 2701083,
+            "medianNs": 179959,
+            "minNs": 144916,
+            "samples": 3401
+          },
+          "logicalAlloc": 80200,
+          "run": {
+            "maxNs": 14594166,
+            "medianNs": 2100750,
+            "minNs": 1908834,
+            "samples": 267
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-build",
+          "fuel": 14094,
+          "hostBytes": 70641.34228187919,
+          "load": {
+            "maxNs": 2615917,
+            "medianNs": 160000,
+            "minNs": 129083,
+            "samples": 3905
+          },
+          "logicalAlloc": 24920,
+          "run": {
+            "maxNs": 7413416,
+            "medianNs": 592103.5,
+            "minNs": 534833,
+            "samples": 1056
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-update",
+          "fuel": 28553,
+          "hostBytes": 144684.89020771513,
+          "load": {
+            "maxNs": 2661250,
+            "medianNs": 209833.5,
+            "minNs": 182334,
+            "samples": 3048
+          },
+          "logicalAlloc": 24328,
+          "run": {
+            "maxNs": 16040667,
+            "medianNs": 888145.5,
+            "minNs": 742000,
+            "samples": 678
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-update",
+          "fuel": 8056,
+          "hostBytes": 123308.47948511665,
+          "load": {
+            "maxNs": 2866084,
+            "medianNs": 167583,
+            "minNs": 138291,
+            "samples": 3789
+          },
+          "logicalAlloc": 12432,
+          "run": {
+            "maxNs": 15871708,
+            "medianNs": 476417,
+            "minNs": 432458,
+            "samples": 1255
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/iterate",
+          "fuel": 89459,
+          "hostBytes": 61792.14479638009,
+          "load": {
+            "maxNs": 3837833,
+            "medianNs": 204459,
+            "minNs": 157500,
+            "samples": 3075
+          },
+          "logicalAlloc": 200319,
+          "run": {
+            "maxNs": 4599709,
+            "medianNs": 1543584,
+            "minNs": 1392208,
+            "samples": 445
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "family": "core",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "fuel": 48016,
+          "hostBytes": 41077.975636766336,
+          "load": {
+            "maxNs": 1785541,
+            "medianNs": 103500,
+            "minNs": 79458,
+            "samples": 5712
+          },
+          "logicalAlloc": 64000,
+          "run": {
+            "maxNs": 1147959,
+            "medianNs": 376500,
+            "minNs": 339541,
+            "samples": 1811
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib",
+          "fuel": 46365,
+          "hostBytes": 42601.73346897253,
+          "load": {
+            "maxNs": 1535875,
+            "medianNs": 141250,
+            "minNs": 109916,
+            "samples": 4585
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1792333,
+            "medianNs": 657666,
+            "minNs": 621583,
+            "samples": 989
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "fuel": 46365,
+          "hostBytes": 146040.0987654321,
+          "load": {
+            "maxNs": 1644667,
+            "medianNs": 109500,
+            "minNs": 91333,
+            "samples": 5823
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 5997083,
+            "medianNs": 3907458,
+            "minNs": 3418584,
+            "samples": 168
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "fuel": 46365,
+          "hostBytes": 5944.847605224963,
+          "load": {
+            "maxNs": 1307959,
+            "medianNs": 86792,
+            "minNs": 72708,
+            "samples": 7385
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1987709,
+            "medianNs": 970625,
+            "minNs": 910208,
+            "samples": 685
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 1176708,
+            "medianNs": 86167,
+            "minNs": 73125,
+            "samples": 7446
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1939500,
+            "medianNs": 744458,
+            "minNs": 685583,
+            "samples": 863
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "fuel": 46365,
+          "hostBytes": 0,
+          "load": {
+            "maxNs": 1277209,
+            "medianNs": 89708,
+            "minNs": 76958,
+            "samples": 7199
+          },
+          "logicalAlloc": 47328,
+          "run": {
+            "maxNs": 1924959,
+            "medianNs": 697416.5,
+            "minNs": 652000,
+            "samples": 946
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/calls",
+          "fuel": 46018,
+          "hostBytes": 62934.70752089137,
+          "load": {
+            "maxNs": 2177667,
+            "medianNs": 150542,
+            "minNs": 129125,
+            "samples": 4274
+          },
+          "logicalAlloc": 32072,
+          "run": {
+            "maxNs": 2379875,
+            "medianNs": 941917,
+            "minNs": 856375,
+            "samples": 722
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "core/lambdas",
+          "fuel": 58027,
+          "hostBytes": 68253.12106135987,
+          "load": {
+            "maxNs": 2200083,
+            "medianNs": 177416,
+            "minNs": 156000,
+            "samples": 3690
+          },
+          "logicalAlloc": 64120,
+          "run": {
+            "maxNs": 2567208,
+            "medianNs": 1110854,
+            "minNs": 1040667,
+            "samples": 606
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "family": "macro",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "macro/transform",
+          "fuel": 20664,
+          "hostBytes": 122187.01803051318,
+          "load": {
+            "maxNs": 2310250,
+            "medianNs": 175687.5,
+            "minNs": 147542,
+            "samples": 3118
+          },
+          "logicalAlloc": 6418202,
+          "run": {
+            "maxNs": 9726000,
+            "medianNs": 735584,
+            "minNs": 636000,
+            "samples": 731
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/report",
+          "fuel": 86555,
+          "hostBytes": 261358.0038387716,
+          "load": {
+            "maxNs": 2216250,
+            "medianNs": 110083,
+            "minNs": 90708,
+            "samples": 5605
+          },
+          "logicalAlloc": 1291900,
+          "run": {
+            "maxNs": 4102750,
+            "medianNs": 1256062.5,
+            "minNs": 1136958,
+            "samples": 530
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "fuel": 67042,
+          "hostBytes": 193018.51685393258,
+          "load": {
+            "maxNs": 2136333,
+            "medianNs": 207875,
+            "minNs": 168125,
+            "samples": 3090
+          },
+          "logicalAlloc": 80270,
+          "run": {
+            "maxNs": 27540167,
+            "medianNs": 1629958.5,
+            "minNs": 1474584,
+            "samples": 364
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "family": "collections",
+      "runner": "bundled measure-ts.ts",
+      "measurements": [
+        {
+          "benchmark": "collections/list-build",
+          "fuel": 19091,
+          "hostBytes": 58829.17616912236,
+          "load": {
+            "maxNs": 1835458,
+            "medianNs": 117250,
+            "minNs": 88250,
+            "samples": 4800
+          },
+          "logicalAlloc": 3022112,
+          "run": {
+            "maxNs": 8404125,
+            "medianNs": 356542,
+            "minNs": 309375,
+            "samples": 1584
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-append",
+          "fuel": 52056,
+          "hostBytes": 198956.0124610592,
+          "load": {
+            "maxNs": 2778583,
+            "medianNs": 179958,
+            "minNs": 135208,
+            "samples": 3395
+          },
+          "logicalAlloc": 80200,
+          "run": {
+            "maxNs": 16008959,
+            "medianNs": 1734958,
+            "minNs": 1561916,
+            "samples": 327
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-build",
+          "fuel": 14094,
+          "hostBytes": 56449.71179039301,
+          "load": {
+            "maxNs": 2326208,
+            "medianNs": 148333,
+            "minNs": 112791,
+            "samples": 4296
+          },
+          "logicalAlloc": 24920,
+          "run": {
+            "maxNs": 13053875,
+            "medianNs": 431375,
+            "minNs": 388584,
+            "samples": 1385
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/list-update",
+          "fuel": 28553,
+          "hostBytes": 182596.4886877828,
+          "load": {
+            "maxNs": 2507375,
+            "medianNs": 200667,
+            "minNs": 173417,
+            "samples": 3244
+          },
+          "logicalAlloc": 24328,
+          "run": {
+            "maxNs": 9102833,
+            "medianNs": 817875,
+            "minNs": 684417,
+            "samples": 669
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/map-update",
+          "fuel": 8056,
+          "hostBytes": 57957.37202553685,
+          "load": {
+            "maxNs": 2947500,
+            "medianNs": 168750,
+            "minNs": 143000,
+            "samples": 3820
+          },
+          "logicalAlloc": 12432,
+          "run": {
+            "maxNs": 6320084,
+            "medianNs": 320875,
+            "minNs": 266791,
+            "samples": 1733
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "collections/iterate",
+          "fuel": 89459,
+          "hostBytes": 80334.5,
+          "load": {
+            "maxNs": 3125583,
+            "medianNs": 184916,
+            "minNs": 153417,
+            "samples": 3481
+          },
+          "logicalAlloc": 200319,
+          "run": {
+            "maxNs": 2630291,
+            "medianNs": 1336791.5,
+            "minNs": 1259625,
+            "samples": 500
+          },
+          "runner": "ts"
+        }
+      ]
+    }
+  ],
+  "node": [
+    {
+      "round": 1,
+      "variant": "before",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1157932.5,
+        1135443.75,
+        1126967.085,
+        1127174.7949999997,
+        1130275.21,
+        1118432.9200000002,
+        1105111.25,
+        1139716.0399999996,
+        1104328.5449999995
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1093410.835,
+        1109288.9600000002,
+        1457925.2050000003,
+        1404748.1250000002,
+        1362708.1250000002,
+        1201858.7500000002,
+        1198266.2500000002,
+        1438875.8299999994,
+        1505201.0399999993
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1169251.04,
+        1297074.585,
+        1256461.2499999998,
+        1305643.1249999998,
+        1273394.3750000002,
+        1176272.0850000004,
+        1161687.915,
+        1164992.4999999995,
+        1137160.2099999995
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1047813.96,
+        1039550.2050000002,
+        1019450.6249999995,
+        997373.7499999999,
+        1194850.4200000002,
+        1132607.7099999997,
+        1048213.7499999999,
+        1106320.6249999995,
+        1052982.4999999993
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1221277.295,
+        1191009.79,
+        1173022.5000000002,
+        1173304.5799999996,
+        1189487.5000000002,
+        1161437.915,
+        1293425.8299999998,
+        1303213.5399999993,
+        1199990.8350000011
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "runtime": "v26.12.1",
+      "expected": {
+        "alloc": 47328,
+        "fuel": 46365,
+        "outcome": "completed",
+        "result": "610"
+      },
+      "samplesNs": [
+        1049945.21,
+        1044846.0400000002,
+        1037862.2949999998,
+        1084283.54,
+        1012931.0399999997,
+        1036566.6699999997,
+        1030848.33,
+        1014585.2100000002,
+        1003733.5400000006
+      ]
+    }
+  ]
+}
