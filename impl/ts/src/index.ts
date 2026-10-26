@@ -121,6 +121,11 @@ export {
 export type { Core, Group, Script } from './embedding';
 export { handlersOf, type Handlers, type ScriptWithHandlers } from './handlers';
 export {
+  inlineGrants,
+  type InlineFunction,
+  type InlineOperation,
+} from './inline-grants';
+export {
   exportManifest,
   type ManifestSpec,
   type MessageDecl,

@@ -125,6 +125,12 @@ describe('the embedding interface matches spec/embedding/talk.ts', () => {
       parametersOf(spec, 'handlersOf'),
     );
   });
+
+  test('inlineGrants Helper', () => {
+    expect(parametersOf(parse('src/inline-grants.ts'), 'inlineGrants')).toEqual(
+      parametersOf(spec, 'inlineGrants'),
+    );
+  });
 });
 
 // Exports of @northtalk/ts that @northtalk/ts/wasm leaves out on purpose: the

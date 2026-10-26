@@ -654,6 +654,33 @@ Scripts loaded by `createGroup` have `handlers.<name>(...args)`: arguments pass 
 
 `group.load<{ total(a: number, b: number): Promise<Decimal> }>(options)` lets the Host state the type of `handlers`; nothing checks that declaration at runtime. By default, arguments are `PlainValue | number | bigint` and answers are `PlainValue`. With TypeScript's `noUncheckedIndexedAccess`, default Handler reads need a non-null assertion, such as `script.handlers.go!()`. `handlersOf<T>(script)`, exported by both entry points, provides the same calls for any shared `Script`, using its existing driver or Host Pump loop. `script.invoke` continues to take and return `Value`s.
 
+`inlineGrants` exposes plain JS functions as Operations, alongside ordinary Grants:
+
+```ts
+import { createGroup, inlineGrants, type Decimal } from '@northtalk/ts';
+
+await using group = createGroup({ name: 'demo' });
+const script = group.load({
+  name: 'main',
+  grants: inlineGrants({
+    math: { sum: (a: Decimal, b: Decimal) => Number(a) + Number(b) },
+    api: {
+      fetch: {
+        arity: 1,
+        async: (id: string, signal: AbortSignal) =>
+          fetch(`/items/${id}`, { signal }).then(response => response.text()),
+      },
+    },
+  }),
+  source: 'on go\n  sum 10, 10\n  return it\nend go',
+});
+console.log(String(await script.handlers.go!())); // 20
+```
+
+Each outer key defines a Capability and grants all its Operations. Spread the result beside real Grants when mixing them. Arguments have `shape.value` and pass through default `fromValue`: numbers arrive as `Decimal`s, maps as plain objects, and kinds without a JS form stay `Value`s. Results pass through `toValue(result, { numbers: 'integer' })`, so safe-integer JS numbers, bigints, plain data and Values work; a fractional JS number fails the call with `invalid value`, naming `dec()` or `{ numbers: 'decimal' }`. A callback's thrown `ScriptError` reaches the Script with its fields; other exceptions keep ordinary Host callback failure behavior.
+
+A plain function, or `{ fn, arity }`, is immediate. `{ async: fn, arity?, maxPendingMs? }` suspends and receives the call's `AbortSignal` after the Script arguments; abandonment aborts it. Its pending limit defaults to the Group's `maxWaitMs`. Arity is always `fn.length` unless overridden, so supply `arity` when the signal parameter, default parameters or rest parameters change that count. Operations cost zero Fuel beyond call instructions, have no Argument Labels and are Host Commands: `ask math to sum 10, 10` and `sum 10, 10` both answer in `it`; write `fetch id and wait` for a suspending one. Existing argument-count, Reserved Word and ambiguous-command checks apply. Both TS entry points export this Helper, which works over the TS Core and Zig Host Adapter.
+
 For a Host that owns the Clock and Pump loop, use `newGroup` directly:
 
 ```ts
