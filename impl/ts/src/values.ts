@@ -227,6 +227,7 @@ export class Value {
   static isValue(input: unknown): input is Value {
     return typeof input === 'object' && input !== null && #data in input;
   }
+  /** Returns the text payload, or undefined for kinds other than text. */
   asText(): string | undefined {
     return this.kind === 'text' ? (this.#data as string) : undefined;
   }
