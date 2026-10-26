@@ -125,7 +125,7 @@ let editMapValue: (
   key: string,
   value: Value | undefined,
 ) => Value;
-let makeDecimal: (canonical: string, parts: Dec) => Decimal;
+let makeDecimal: (canonical: string | undefined, parts: Dec) => Decimal;
 let makeSmallDecimal: (n: number) => Decimal;
 /** Internal: a Decimal's cached, immutable arithmetic representation. */
 export let decimalParts: (decimal: Decimal) => Dec;
@@ -137,8 +137,8 @@ export let smallInteger: (decimal: Decimal) => number;
 export let isDecimal: (input: unknown) => input is Decimal;
 
 export class Decimal {
-  // A small integer keeps its JS number and makes its text and parts on
-  // first use; every other Decimal has both from the start.
+  // Arithmetic results make their text on first use. Small integers also
+  // defer their BigInt parts until arithmetic needs them.
   #canonical: string | undefined;
   #parts: Dec | undefined;
   readonly #small: number;
@@ -178,7 +178,9 @@ export class Decimal {
     smallInteger = decimal => decimal.#small;
   }
   toString(): string {
-    return (this.#canonical ??= String(this.#small));
+    return (this.#canonical ??= this.#parts
+      ? formatDec(this.#parts)
+      : String(this.#small));
   }
   toBigInt(): bigint {
     const parts = decimalParts(this);
@@ -645,7 +647,7 @@ export const smallNumber = (n: number): Value =>
   makeValue('number', makeSmallDecimal(n + 0));
 
 export const canonicalNumber = (parts: Dec): Value =>
-  makeValue('number', makeDecimal(formatDec(parts), parts));
+  makeValue('number', makeDecimal(undefined, parts));
 
 /** ECMAScript's shortest round-trip digits, expanded without rounding. */
 export const num = (n: number | bigint): Value => {

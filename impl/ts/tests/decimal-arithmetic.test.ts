@@ -3,6 +3,7 @@ import {
   ArithmeticError,
   divide,
   div,
+  digitsOf,
   mod,
   parseDec,
   type Dec,
@@ -13,6 +14,36 @@ import { decimalParts } from '../src/values';
 
 const tiny = (coefficient: string, exponent = 6176) =>
   '0.' + '0'.repeat(exponent - coefficient.length) + coefficient;
+const count = (coefficient: bigint) =>
+  digitsOf({ coefficient, exponent: 0, negative: false });
+
+test('digit counts stay exact around powers of ten and beyond JS number range', () => {
+  expect(count(0n)).toBe(1);
+  for (const exponent of [
+    ...Array.from({ length: 80 }, (_, i) => i + 1),
+    307,
+    308,
+    309,
+    615,
+    616,
+    617,
+    6176,
+    6210,
+    100_000,
+  ]) {
+    const power = 10n ** BigInt(exponent);
+    expect(count(power - 1n)).toBe(exponent);
+    expect(count(power)).toBe(exponent + 1);
+    expect(count(power + 1n)).toBe(exponent + 1);
+  }
+  let n = 1n;
+  for (let i = 0; i < 500; i++) {
+    n =
+      (n * 6_364_136_223_846_793_005n + 1_442_695_040_888_963_407n) %
+      10n ** 100n;
+    expect(count(n)).toBe(n.toString().length);
+  }
+});
 
 const cases = [
   [divide, '1', '8', '0.125'],

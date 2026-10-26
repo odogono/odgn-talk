@@ -41,9 +41,26 @@ export const formatDec = ({ coefficient, exponent, negative }: Dec): string => {
   return `${negative && coefficient !== 0n ? '-' : ''}${digits}`;
 };
 
-const digitCount = (n: bigint) => (n === 0n ? 0 : n.toString().length);
 const POWERS = Array.from({ length: 70 }, (_, i) => 10n ** BigInt(i));
 const pow10 = (n: number) => POWERS[n] ?? 10n ** BigInt(n);
+export const digitCount = (n: bigint): number => {
+  if (n === 0n) {
+    return 0;
+  }
+  const approximate = Number(n);
+  if (Number.isFinite(approximate)) {
+    const digits = Math.floor(Math.log10(approximate)) + 1;
+    // The estimate can round across a power of ten. BigInt comparisons keep
+    // digit counts exact at the boundary, even above JS integer precision.
+    return n < pow10(digits - 1)
+      ? digits - 1
+      : n >= pow10(digits)
+        ? digits + 1
+        : digits;
+  }
+  // Aligned operands and integer powers can exceed the JS number range.
+  return n.toString().length;
+};
 /** Whether a Dec fits chapter 3's limits, so it needs no further checks. */
 export const withinLimits = (d: Dec): boolean =>
   d.coefficient < LIMIT && d.exponent >= MIN_EXPONENT && d.exponent <= 0;
@@ -149,19 +166,29 @@ export const add = (a: Dec, b: Dec): Dec => {
   return exact(sum < 0n, sum < 0n ? -sum : sum, e) ?? signed(sum, 1n, e, e);
 };
 export const subtract = (a: Dec, b: Dec): Dec => add(a, negate(b));
+// Multiplying or dividing by exactly 1 preserves a checked cohort. Unchecked
+// inputs still take the operation: even an identity factor can round those.
+const unchangedByOne = (a: Dec, b: Dec): boolean =>
+  b.coefficient === 1n &&
+  b.exponent === 0 &&
+  !b.negative &&
+  withinLimits(a) &&
+  (!a.negative || a.coefficient !== 0n);
 export const multiply = (a: Dec, b: Dec): Dec =>
-  exact(
-    a.negative !== b.negative,
-    a.coefficient * b.coefficient,
-    a.exponent + b.exponent,
-  ) ??
-  result(
-    a.negative !== b.negative,
-    a.coefficient * b.coefficient,
-    1n,
-    a.exponent + b.exponent,
-    a.exponent + b.exponent,
-  );
+  unchangedByOne(a, b)
+    ? a
+    : (exact(
+        a.negative !== b.negative,
+        a.coefficient * b.coefficient,
+        a.exponent + b.exponent,
+      ) ??
+      result(
+        a.negative !== b.negative,
+        a.coefficient * b.coefficient,
+        1n,
+        a.exponent + b.exponent,
+        a.exponent + b.exponent,
+      ));
 
 // Try an exact quotient at the ideal exponent first. For a fractional quotient,
 // one scaled division tests termination within the available precision. This
@@ -217,6 +244,9 @@ const exactQuotient = (
 export const divide = (a: Dec, b: Dec): Dec => {
   if (b.coefficient === 0n) {
     throw new ArithmeticError('division by zero');
+  }
+  if (unchangedByOne(a, b)) {
+    return a;
   }
   const negative = a.negative !== b.negative;
   const ideal = a.exponent - b.exponent;

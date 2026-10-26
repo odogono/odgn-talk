@@ -1,7 +1,25 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { arithmetic, negated, numberValue } from '../src/operations';
+import { digitsOf } from '../src/decimal';
 import { decimalParts } from '../src/values';
 import { dec, decodeValue, encodeValue, num, readDisplay } from '../src/index';
+
+test('arithmetic defers BigInt formatting until text is requested, then caches it', () => {
+  const format = spyOn(BigInt.prototype, 'toString');
+  try {
+    const value = arithmetic('add', dec('2.50'), dec('0.25'));
+    const decimal = value.asDecimal()!;
+    expect(digitsOf(decimalParts(decimal))).toBe(3);
+    expect(format).not.toHaveBeenCalled();
+    expect(decimal.toString()).toBe('2.75');
+    expect(format).toHaveBeenCalledTimes(1);
+    expect(decimal.toString()).toBe('2.75');
+    expect(encodeValue(value)).toBe('{"$dec":"2.75"}');
+    expect(format).toHaveBeenCalledTimes(1);
+  } finally {
+    format.mockRestore();
+  }
+});
 
 test('Number construction and readers retain exact, immutable decimal parts', () => {
   for (const [source, canonical, coefficient, exponent, negative] of [
