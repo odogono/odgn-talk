@@ -31,13 +31,16 @@ jobs:
         working-directory: tooling/creative
 
   # The packed tarball, installed outside the workspace as npm consumers get it:
-  # under Node 22 and Bun, unbundled in Chromium, and against TypeScript 5.9 and
+  # under Node 24.10.0 and Bun, unbundled in Chromium, and against TypeScript 5.9 and
   # the latest TypeScript.
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
       - run: bunx playwright install --with-deps chromium-headless-shell
         working-directory: impl/ts
       - run: bun run build && bun run package:check
@@ -114,7 +117,7 @@ jobs:
       # kit under Node. setAuthorizer needs Node 24.10 or later.
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.10.0
       - run: bun test tests/sqlite-runtimes.test.ts
         working-directory: impl/ts
         env:

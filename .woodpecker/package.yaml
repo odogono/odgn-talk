@@ -40,7 +40,7 @@ steps:
       - bun run unicode:check
 
   - name: package
-    image: odgn-talk-ci:2026-10-19-2-browser
+    image: odgn-talk-ci:2026-10-26-node24-10-0-browser
     directory: impl/ts
     commands:
       - bunx playwright install chromium-headless-shell

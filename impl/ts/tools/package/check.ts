@@ -41,7 +41,7 @@ writeFileSync(
   join(scratch, 'package.json'),
   JSON.stringify({ private: true, type: 'module' }),
 );
-run('npm', ['install', '--no-audit', '--no-fund', tarball]);
+run('npm', ['install', '--engine-strict', '--no-audit', '--no-fund', tarball]);
 console.log(`Packed and installed @northtalk/ts ${version} in ${scratch}`);
 
 console.log(`node: ${run('node', ['node.js'])}`);
