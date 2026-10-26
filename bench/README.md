@@ -187,6 +187,10 @@ The [TS accounting measurements](results/2026-10-15-ts-costs.md) retain the
 paired Run timings, separate CPU/heap evidence and four-runner Load/Run spread
 for [#942](https://github.com/odogono/odgn-talk/issues/942).
 
+The [TS instruction overhead measurements](results/2026-10-26-ts-instruction-overhead.md)
+record three main/candidate pairs for every `core/*`, `macro/*` and `collections/*`
+workload, plus Node Fibonacci samples, for [#1580](https://github.com/odogono/odgn-talk/issues/1580).
+
 The two bundles share the current sources except that the before bundle reads
 `impl/ts/src/costs.ts` from the named revision. Both bundles run in one process;
 each workload warms up for 20 Runs per variant, then runs three rounds of seven

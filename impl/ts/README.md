@@ -398,6 +398,13 @@ Text is checked for lone surrogates and normalized to NFC at construction. Lists
 
 Integer-range iteration derives its start from the cached Decimal parts and builds items through the checked internal integer constructor. A weak cache keyed by the immutable range keeps that start outside saved state; restored sources rebuild it on their first `Next`. Iterator source, position, Fuel and logical sizes retain their chapter 8 representation.
 
+`Value` and `Decimal` keep their state in private fields and prevent extension,
+so a Host cannot replace their accessors or shadow `kind`. Map storage owns its
+pairs and shares them between persistent versions. Host reads through `entries()`
+or `mapPairs()` copy both the outer array and each pair; the Cost Model reads the
+owned pairs through an internal module function. Instruction charging reuses
+Run-local scratch without changing Fuel, logical allocation or saved state.
+
 Exact terminating division and bounded integer quotients bypass general rounding; remainders use one operand alignment and already fit the precision bound. Division that needs rounding retains the general half-even path, including subnormals and overflow checks. These paths preserve the operator's ideal exponent and trailing zeros.
 
 `src/unicode.ts` and `src/text.ts` provide internal foundations for Character segmentation, simple folding, default full case mapping (including final sigma), scalar ordering, NFC joins, whole-Character literal searches, and character/code-point/word/line/item splitting. They are not additions to the public embedding interface. They charge no Fuel outside a Run; the Abstract Machine must charge Cost Model 0 when it calls them. This slice adds no language-level execution or resource-accounting claims.

@@ -44,11 +44,11 @@ export const emitTsCosts = (model: CompiledCostModel): string => {
     "import type { Charge, Measured } from '../costs';\n" +
     "import type { Value } from '../values';\n" +
     'type Measure = (code: number, value: Value | undefined) => number;\n' +
-    'export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Charge)[] => [\n' +
+    'export const makeCostRates = (measure: Measure): readonly ((m: Measured, into?: Charge) => Charge)[] => [\n' +
     model.rates
       .map(
         ({ key, fuel, alloc }) =>
-          `  // ${key}\n  (m) => ({ fuel: ${expression(fuel)}, alloc: ${expression(alloc)} }),\n`,
+          `  // ${key}\n  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = ${expression(fuel)}; into.alloc = ${expression(alloc)}; return into; },\n`,
       )
       .join('') +
     '];\n' +

@@ -204,11 +204,15 @@ for (const [i, rate] of costModel.rates.entries()) {
       }
       cases.push({ input: v, result: v, x: [v], inputSize: 0, resultSize: 0 });
     }
+    const into = { alloc: -1, fuel: -1 };
     for (const m of cases) {
-      expect(charge(i, m)).toEqual({
+      const expected = {
         fuel: evaluate(rate.fuel, m),
         alloc: evaluate(rate.alloc, m),
-      });
+      };
+      expect(charge(i, m)).toEqual(expected);
+      expect(charge(i, m, into)).toBe(into);
+      expect(into).toEqual(expected);
     }
     expect(rateOf(rate.key)).toBe(i);
   });

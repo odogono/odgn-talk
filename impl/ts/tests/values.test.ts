@@ -33,7 +33,13 @@ test('public text values are scalar NFC and immutable', () => {
   expect(value.length).toBe(0); // The Host accessor is list length, not text length.
   expect(value.equals(text('é'))).toBe(true);
   expect(value.equals(text('É'))).toBe(false);
-  expect(Object.isFrozen(value)).toBe(true);
+  expect(Reflect.set(value, 'kind', 'number')).toBe(false);
+  expect(Reflect.set(value, 'asText', () => 'changed')).toBe(false);
+  expect(Reflect.defineProperty(value, 'kind', { value: 'number' })).toBe(
+    false,
+  );
+  expect(value.kind).toBe('text');
+  expect(value.asText()).toBe('é');
   for (const s of ['\ud800', 'a\udfff', null, undefined, 1]) {
     invalid(() => text(s as string));
   }
@@ -92,6 +98,16 @@ test('lists and maps snapshot inputs, normalize keys and preserve insertion orde
   entries[0]![1] = nothing;
   expect(value.entries().map(([k]) => k)).toEqual(['2', '1', 'é']);
   expect(value.get('2').asText()).toBe('two');
+  // Even the internal-looking method on the public class must detach pairs.
+  const exposed = value.mapPairs()!;
+  expect(Reflect.set(exposed[0]!, 0, 'changed')).toBe(true);
+  expect(Reflect.set(exposed[0]!, 1, nothing)).toBe(true);
+  expect(Reflect.set(exposed, 1, ['replaced', nothing])).toBe(true);
+  expect(value.entries()).toEqual([
+    ['2', text('two')],
+    ['1', text('one')],
+    ['é', text('accent')],
+  ]);
   expect(value.get('e\u0301').asText()).toBe('accent');
   value.entries()[0]![1] = nothing;
   expect(value.get('2').asText()).toBe('two');
@@ -197,6 +213,23 @@ test('decimal constructors preserve digits and refuse values that need rounding'
       .asDecimal()!
       .toBigInt(),
   ).toBe(9_007_199_254_740_993n);
+});
+
+test('Decimal state and lazy caches cannot be changed through Host accessors', () => {
+  for (const [value, expected] of [
+    [num(7), '7'],
+    [dec('2.50'), '2.50'],
+  ] as const) {
+    const decimal = value.asDecimal()!;
+    expect(Reflect.set(decimal, 'coefficient', 0n)).toBe(false);
+    expect(Reflect.set(decimal, 'toString', () => '0')).toBe(false);
+    expect(
+      Reflect.defineProperty(decimal, 'toString', { value: () => '0' }),
+    ).toBe(false);
+    expect(decimal.toString()).toBe(expected);
+    expect(value.toString()).toBe(expected);
+    expect(decimal.toNumberLossy()).toBe(Number(expected));
+  }
 });
 
 test('readers reject malformed, duplicate and unsupported values', () => {

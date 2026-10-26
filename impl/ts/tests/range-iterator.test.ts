@@ -129,8 +129,9 @@ test('internal integer results retain exact encoding and immutable wrappers', ()
     const value = integerValue(n);
     expect(encodeValue(value)).toBe(encodeValue(dec(String(n))));
     expect(value.toString()).toBe(String(n));
-    expect(Object.isFrozen(value)).toBe(true);
-    expect(Object.isFrozen(value.asDecimal())).toBe(true);
+    expect(Reflect.set(value, 'kind', 'text')).toBe(false);
+    expect(Reflect.set(value.asDecimal()!, 'toString', () => '0')).toBe(false);
+    expect(value.toString()).toBe(String(n));
   }
   // The checked internal constructor keeps its general validation fallback.
   expect(() => integerValue(10n ** 34n)).toThrow();

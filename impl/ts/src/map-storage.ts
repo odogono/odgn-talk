@@ -83,7 +83,7 @@ export class MapStorage {
     return found ? find(this.#order, found.value)!.value[1] : undefined;
   }
   pairs(): readonly Pair[] {
-    this.#pairs ??= Object.freeze([...values(this.#order)]);
+    this.#pairs ??= [...values(this.#order)];
     return this.#pairs;
   }
   set(key: string, value: Value | undefined): MapStorage {
@@ -98,7 +98,7 @@ export class MapStorage {
         : this;
     }
     const ordinal = found?.value ?? this.#next;
-    const pair = Object.freeze([key, value] as const);
+    const pair = [key, value] as const;
     return new MapStorage(
       found ? this.#keys : put(this.#keys, key, ordinal),
       put(this.#order, ordinal, pair),
