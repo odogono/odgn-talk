@@ -259,6 +259,7 @@ static cJSON *pump(host *h, int *calls) {
     if (!cJSON_IsArray(args) || cJSON_GetArraySize(args) != 1) fail("wrong echo args");
     req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "m", "op-result");
+    cJSON_AddStringToObject(req, "group", "g");
     cJSON_AddNumberToObject(req, "ref", field(reply, "ref")->valueint);
     cJSON_AddNumberToObject(req, "charged", 0);
     // Decode with cJSON, then encode anew, preserving Value Encoding tags.
@@ -461,6 +462,7 @@ static int call_pump(host *h, int calls, double *out, int room) {
     last = now;
     req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "m", "op-result");
+    cJSON_AddStringToObject(req, "group", "g");
     cJSON_AddNumberToObject(req, "ref", field(reply, "ref")->valueint);
     cJSON_AddNumberToObject(req, "charged", 0);
     cJSON_AddItemToObject(req, "result", cJSON_Duplicate(cJSON_GetArrayItem(field(need, "args"), 0), 1));
@@ -560,6 +562,184 @@ static cJSON *memory_figure(measure *m) {
   cJSON_AddNumberToObject(out, "medianBytes", bytes[m->memory / 2]);
   cJSON_AddNumberToObject(out, "maxBytes", bytes[m->memory - 1]);
   free(bytes);
+  return out;
+}
+
+// Host Object property and Object Collection crossings (#1572). A `box` has
+// one number property; a `page` has `rect` members, each with a number
+// property, so `the value of element i of p` is one `at` and one `get` need.
+static const char *crossing_source =
+  "on props o, n\n  repeat for each i in 1..n\n    put the value of o into v\n"
+  "  end repeat\nend props\n"
+  "on ats p, n\n  repeat for each i in 1..n\n    put element i of p into e\n"
+  "  end repeat\nend ats\n"
+  "on query p\n  put 0 into c\n  repeat for each i in 1..the number of elements of p\n"
+  "    if the value of element i of p > 0 then\n      add 1 to c\n    end if\n"
+  "  end repeat\n  return c\nend query\n";
+static const int query_sizes[] = {10, 216, 1000};
+#define MAX_MEMBERS 1000
+
+static void object(host *h, const char *kind, const char *id) {
+  cJSON *req = group_request(h, "object");
+  cJSON_AddStringToObject(req, "kind", kind);
+  cJSON_AddStringToObject(req, "id", id);
+  ok(h, req);
+}
+
+// hello with `object-elements-v1`, the three Object Kinds, Group `g`, one
+// `box`, one `page` and its members, and Script `s` with a large Fuel budget.
+static void setup_crossings(host *h) {
+  cJSON *req = request(h, "hello");
+  cJSON_AddNumberToObject(req, "protocol", 1);
+  cJSON_AddItemToObject(req, "features", cJSON_Parse("[\"object-elements-v1\"]"));
+  ok(h, req);
+  const char *kinds[] = {
+    "{\"name\":\"box\",\"props\":[{\"name\":\"value\",\"shape\":\"number\",\"readOnly\":true,"
+    "\"getCost\":{\"fuel\":1},\"setCost\":{\"fuel\":1}}]}",
+    "{\"name\":\"rect\",\"props\":[{\"name\":\"value\",\"shape\":\"number\",\"readOnly\":true,"
+    "\"getCost\":{\"fuel\":1},\"setCost\":{\"fuel\":1}}]}",
+    "{\"name\":\"page\",\"props\":[],\"elements\":{\"shape\":{\"object\":\"rect\"},"
+    "\"countCost\":{\"fuel\":1},\"atCost\":{\"fuel\":1},\"findCost\":{\"fuel\":1}}}"};
+  for (int i = 0; i < 3; ++i) {
+    req = cJSON_Parse(kinds[i]);
+    cJSON_AddStringToObject(req, "m", "define-object-kind");
+    cJSON_AddNumberToObject(req, "ref", ++h->ref);
+    ok(h, req);
+  }
+  req = group_request(h, "new-group");
+  cJSON_AddStringToObject(req, "name", "g");
+  ok(h, req);
+  object(h, "box", "b");
+  object(h, "page", "p");
+  char id[16];
+  for (int i = 1; i <= MAX_MEMBERS; ++i) {
+    snprintf(id, sizeof id, "r%d", i);
+    object(h, "rect", id);
+  }
+  req = group_request(h, "load");
+  cJSON_AddStringToObject(req, "name", "s");
+  cJSON_AddStringToObject(req, "source", crossing_source);
+  cJSON_AddNumberToObject(cJSON_AddObjectToObject(req, "limits"), "fuelPerRun", 100000000);
+  ok(h, req);
+}
+
+static cJSON *object_arg(const char *kind, const char *id) {
+  cJSON *o = cJSON_CreateObject(), *pair = cJSON_AddArrayToObject(o, "$object");
+  cJSON_AddItemToArray(pair, cJSON_CreateString(kind));
+  cJSON_AddItemToArray(pair, cJSON_CreateString(id));
+  return o;
+}
+
+// Delivers `name` and Pumps it to its `run end`, answering every `prop` need
+// at once: a `get` with 1, a `count` with `members` and an `at` with that
+// member. Appends the intervals between successive needs to `out`, and
+// returns the whole Pump's microseconds; `needs` counts the needs.
+static double prop_pump(host *h, const char *name, cJSON *args, int members, int *needs,
+                        double *out, int room, int *kept) {
+  deliver(h, "s", name, args);
+  cJSON *req = group_request(h, "pump");
+  cJSON_AddStringToObject(req, "now", "2026-10-10T12:00:00Z");
+  double start = seconds(), last = 0;
+  cJSON *reply = send_request(h, req), *need;
+  *needs = 0;
+  while ((need = cJSON_GetObjectItemCaseSensitive(reply, "need"))) {
+    double now = seconds();
+    if ((*needs)++ && out && *kept < room) out[(*kept)++] = (now - last) * 1e6;
+    last = now;
+    if (!is(field(need, "m"), "prop")) fail("unexpected interim request");
+    cJSON *op = cJSON_GetObjectItemCaseSensitive(need, "op");
+    req = cJSON_CreateObject();
+    cJSON_AddStringToObject(req, "m", "prop-result");
+    cJSON_AddStringToObject(req, "group", "g");
+    cJSON_AddNumberToObject(req, "ref", field(reply, "ref")->valueint);
+    if (!op) {
+      cJSON_AddNumberToObject(req, "value", 1);
+    } else if (is(op, "count")) {
+      cJSON_AddNumberToObject(req, "value", members);
+    } else if (is(op, "at")) {
+      int i = field(need, "selector")->valueint;
+      if (i < 1 || i > members) fail("member out of range");
+      char id[16];
+      snprintf(id, sizeof id, "r%d", i);
+      cJSON_AddItemToObject(req, "value", object_arg("rect", id));
+    } else {
+      fail("unexpected collection op");
+    }
+    cJSON_Delete(reply);
+    reply = send_request(h, req);
+  }
+  double us = (seconds() - start) * 1e6;
+  require_ok(reply);
+  run_end(reply, "completed");
+  cJSON_Delete(reply);
+  return us;
+}
+
+static cJSON *loop_args(cJSON *receiver, int n) {
+  cJSON *args = cJSON_CreateArray();
+  cJSON_AddItemToArray(args, receiver);
+  if (n) cJSON_AddItemToArray(args, cJSON_CreateNumber(n));
+  return args;
+}
+
+// The interval from one `prop` need to the next inside a Pump of 100, as the
+// Capability call figure measures `op` needs.
+static cJSON *need_interval(measure *m, const char *handler, const char *kind, const char *id) {
+  const int per = 100;
+  cJSON *runs = cJSON_CreateArray();
+  double *samples = malloc((size_t)m->samples * sizeof(double));
+  if (!samples) fail("allocation failed");
+  for (int r = 0; r < m->runs; ++r) {
+    host h = open_host(m->engine, m->linker, m->module);
+    setup_crossings(&h);
+    int needs, kept = 0;
+    for (int i = 0; i < m->warmup / per + 1; ++i)
+      prop_pump(&h, handler, loop_args(object_arg(kind, id), per), per, &needs, NULL, 0, &kept);
+    kept = 0;
+    while (kept < m->samples) {
+      prop_pump(&h, handler, loop_args(object_arg(kind, id), per), per, &needs, samples, m->samples, &kept);
+      if (needs != per) fail("wrong number of prop needs");
+    }
+    cJSON_AddItemToArray(runs, summarize(samples, kept));
+    wasmtime_store_delete(h.store);
+  }
+  free(samples);
+  return median_run(runs);
+}
+
+// Option A of docs/research/host-resolved-element-queries.md: a whole
+// `count`, then `at` and `get` per member, Pumped to its `run end`.
+static cJSON *query_figure(measure *m, int members, int samples) {
+  cJSON *runs = cJSON_CreateArray();
+  double *times = malloc((size_t)samples * sizeof(double));
+  if (!times) fail("allocation failed");
+  for (int r = 0; r < m->runs; ++r) {
+    host h = open_host(m->engine, m->linker, m->module);
+    setup_crossings(&h);
+    int needs, kept = 0;
+    for (int i = -3; i < samples; ++i) {
+      double us = prop_pump(&h, "query", loop_args(object_arg("page", "p"), 0), members, &needs, NULL, 0, &kept);
+      if (needs != 2 * members + 1) fail("wrong number of query needs");
+      if (i >= 0) times[i] = us;
+    }
+    cJSON_AddItemToArray(runs, summarize(times, samples));
+    wasmtime_store_delete(h.store);
+  }
+  free(times);
+  cJSON *figure = median_run(runs);
+  cJSON_AddNumberToObject(figure, "members", members);
+  cJSON_AddNumberToObject(figure, "needs", 2 * members + 1);
+  return figure;
+}
+
+static cJSON *crossings(measure *m) {
+  cJSON *out = cJSON_CreateObject();
+  cJSON_AddItemToObject(out, "property_get", need_interval(m, "props", "box", "b"));
+  cJSON_AddItemToObject(out, "element_at", need_interval(m, "ats", "page", "p"));
+  cJSON *queries = cJSON_AddArrayToObject(out, "query");
+  int samples = setting("QUERY_SAMPLES", 200);
+  for (size_t i = 0; i < sizeof query_sizes / sizeof *query_sizes; ++i)
+    cJSON_AddItemToArray(queries, query_figure(m, query_sizes[i], samples));
   return out;
 }
 
@@ -772,6 +952,7 @@ int main(int argc, char **argv) {
   measure m = {engine, linker, module, setting("RUNS", 3), setting("THRESHOLD_SAMPLES", 5000),
                setting("WARMUP", 500), setting("THRESHOLD_INSTANCES", 5000), setting("MEMORY_INSTANCES", 20)};
   cJSON_AddItemToObject(out, "thresholds", thresholds(&m));
+  cJSON_AddItemToObject(out, "crossings", crossings(&m));
   faults(h, cJSON_AddObjectToObject(out, "fault_checks"));
   cJSON_AddNumberToObject(out, "linear_memory_after_workloads_bytes", (double)wasmtime_memory_data_size(h->ctx, &h->memory));
   char *text = cJSON_Print(out);

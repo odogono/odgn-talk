@@ -14,6 +14,7 @@ cd bench/message-layer/elixir
 mix deps.get
 mix talk.measure --build                # builds .cache/ artifacts, measures, writes bench/results/
 mix talk.measure --only latency,api     # remeasures one section into the day's results file
+mix talk.measure --only crossings       # property and collection crossings (#1572)
 mix talk.measure --quick                # checks the harness; saves nothing, and its figures mean nothing
 mix talk.measure --transports c         # measures some transports: wasmex, sidecar, c
 mix talk.measure --render <file>.json   # rewrites a saved run's Markdown
@@ -38,6 +39,7 @@ It needs Elixir 1.18 or later, Zig 0.17.0. The sidecar's memory containment runs
 | Pump | A `deliver` then a `pump` of an empty Handler, until its `run end`. |
 | Instantiation | From a compiled module (Wasmex) or process spawn (sidecar) to the `hello` reply. Compile time is reported separately. |
 | Memory per instance | Linear memory (Wasmex) or RSS (sidecar), after `hello`, a Group, a small Script and one Pump. |
+| Property crossings | The `crossings` section, for [#1572](https://github.com/odogono/odgn-talk/issues/1572): the time between successive `prop` needs for a property get and a collection `at`, as for a Capability call, and a whole Core-resolved query reading one property of every member of a 10, 216 or 1,000 member Object Collection. Defined as in the [C Host](../../message-layer-c/README.md#property-crossings). |
 | Through the Elixir API | The `api` section: `request/5` of an empty Handler, one immediate callback inside a Run, and a Request waiting on a deferred Operation, through [`NorthTalk`](../../../impl/elixir/) over Wasmex, with linear memory and owner heap per owner. No #532 threshold applies. |
 | Memory containment | Scripts that grow a List, double a text, or grow a Script Variable, until they fault. They run under the default limits with a 128 MiB cap, then under the conformance minimums with a 1 GiB cap. The cap is `Wasmex.StoreLimits` for Wasmex, the Store limiter for the C Host, and `docker run --memory` for the sidecar. |
 | Script faults | Fuel, allocation, Persistent State and call depth Limit Faults, a full mailbox, `throw`, run-time errors and Operation failures. Then pathological sources, 2,000 seeded mutations of the corpus's Scripts, and malformed frames. A lost instance is recorded against its input and replaced, and each case ends with a health check. |
