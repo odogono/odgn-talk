@@ -6,9 +6,11 @@ import {
   verifyFile,
 } from '../../../tools/unicode/generate';
 import unicode from '../../../spec/data/unicode.toml';
+import { concatText, text, textStorage } from '../src/values';
 import {
   assertScalarText,
   normalizeNFC,
+  joinNFC,
   characterBoundaries,
   simpleFold,
   upper,
@@ -124,6 +126,34 @@ test('NFC passes all five columns of the pinned NormalizationTest', () => {
   expect(count).toBeGreaterThan(19_000);
 });
 
+test('NFC joins and cached Character counts agree at every split of the pinned normalization cases', () => {
+  const encoder = new TextEncoder();
+  for (const raw of rows('NormalizationTest.txt')) {
+    const line = raw.split('#')[0]!.trim();
+    if (!line || line.startsWith('@')) {
+      continue;
+    }
+    const columns = line.split(';').slice(0, 5).map(hexText);
+    for (const [column, input] of columns.entries()) {
+      const expected = columns[column < 3 ? 1 : 3]!;
+      const points = Array.from(input);
+      for (let i = 1; i < points.length; i++) {
+        const left = text(points.slice(0, i).join(''));
+        const right = text(points.slice(i).join(''));
+        expect(joinNFC(left.asText()!, right.asText()!).text).toBe(expected);
+        const result = concatText(left, right);
+        expect(result.asText()).toBe(expected);
+        expect(textStorage(result).characterCount).toBe(
+          characterBoundaries(expected).length - 1,
+        );
+        expect(textStorage(result).utf8Length).toBe(
+          encoder.encode(expected).length,
+        );
+      }
+    }
+  }
+});
+
 test("NFC leaves every scalar absent from NormalizationTest's first column unchanged", () => {
   const listed = new Set<number>();
   for (const raw of rows('NormalizationTest.txt')) {
@@ -162,6 +192,19 @@ test('Character boundaries pass every pinned GraphemeBreakTest row', () => {
     expect(characterBoundaries(input), `grapheme line ${i + 1}`).toEqual(
       boundaries,
     );
+    const points = Array.from(input);
+    const expected = normalizeNFC(input);
+    for (let split = 1; split < points.length; split++) {
+      const result = concatText(
+        text(points.slice(0, split).join('')),
+        text(points.slice(split).join('')),
+      );
+      expect(result.asText(), `grapheme join line ${i + 1}`).toBe(expected);
+      expect(
+        textStorage(result).characterCount,
+        `grapheme count line ${i + 1}`,
+      ).toBe(characterBoundaries(expected).length - 1);
+    }
     count++;
   }
   expect(count).toBeGreaterThan(500);

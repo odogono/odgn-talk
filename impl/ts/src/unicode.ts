@@ -251,6 +251,68 @@ const compose = (a: number, b: number): number | undefined => {
 // NFC or composes with what follows, so such text is already in NFC.
 const belowCombining = /^[^\u0300-\uFFFF]*$/;
 
+// A starter which cannot compose backwards is an NFC boundary. Check the
+// first scalar of its canonical decomposition, including Hangul V and T.
+const backwardComposing = new Set(
+  Array.from(composition.keys(), key => key % 0x11_00_00),
+);
+const nfcBoundaryBefore = (cp: number): boolean => {
+  while (decomposition.has(cp)) {
+    cp = decomposition.get(cp)![0]!;
+  }
+  return (
+    combiningClass(cp) === 0 &&
+    !backwardComposing.has(cp) &&
+    !(cp >= VBASE && cp < VBASE + VCOUNT) &&
+    !(cp > TBASE && cp < TBASE + TCOUNT)
+  );
+};
+const utf8 = new TextEncoder();
+
+/** Join two scalar NFC strings, normalizing only the affected seam. */
+export const joinNFC = (
+  left: string,
+  right: string,
+): { text: string; utf8Delta: number } => {
+  if (
+    !left.length ||
+    !right.length ||
+    nfcBoundaryBefore(right.codePointAt(0)!)
+  ) {
+    return { text: left + right, utf8Delta: 0 };
+  }
+  let from = left.length;
+  // Include the last starter: its decomposition may expose a combining mark
+  // which reorders with a leading mark on the right.
+  while (from > 0) {
+    from--;
+    const unit = left.charCodeAt(from);
+    if (unit >= 0xdc_00 && unit <= 0xdf_ff) {
+      from--;
+    }
+    if (combiningClass(left.codePointAt(from)!) === 0) {
+      break;
+    }
+  }
+  let to = 0;
+  while (to < right.length) {
+    const cp = right.codePointAt(to)!;
+    if (nfcBoundaryBefore(cp)) {
+      break;
+    }
+    to += cp > 0xff_ff ? 2 : 1;
+  }
+  const seam = left.slice(from) + right.slice(0, to);
+  const normalized = normalizeNFC(seam);
+  return {
+    text: left.slice(0, from) + normalized + right.slice(to),
+    utf8Delta:
+      normalized === seam
+        ? 0
+        : utf8.encode(normalized).length - utf8.encode(seam).length,
+  };
+};
+
 export const normalizeNFC = (s: string): string => {
   if (typeof s === 'string' && belowCombining.test(s)) {
     return s;
@@ -304,10 +366,61 @@ export const normalizeNFC = (s: string): string => {
 
 const control = (p: string) => p === 'Control' || p === 'CR' || p === 'LF';
 
+/** End of the leading scalars whose grapheme state can depend on a join. */
+export const characterJoinEnd = (s: string): number => {
+  let end = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    end += ch.length;
+    const current = lookup(grapheme, cp, 'Other');
+    const indic = lookup(indicTable, cp, 'None');
+    // After any other scalar every state variable in characterBoundaries is
+    // independent of the left piece. Include its complete Character too.
+    if (
+      current !== 'Extend' &&
+      current !== 'ZWJ' &&
+      current !== 'Regional_Indicator' &&
+      indic !== 'Extend'
+    ) {
+      break;
+    }
+  }
+  return end;
+};
+
+// eslint-disable-next-line no-control-regex -- ASCII controls are ASCII too.
+const asciiOnly = /^[\u0000-\u007f]*$/;
+export const isASCII = (s: string): boolean => asciiOnly.test(s);
+
+/** Slices `s` at Character boundaries from characterBoundaries. */
+export const charactersAt = (
+  s: string,
+  boundaries: readonly number[],
+): string[] => {
+  const result = new Array<string>(boundaries.length - 1);
+  for (let i = 0; i < result.length; i++) {
+    result[i] = s.slice(boundaries[i], boundaries[i + 1]);
+  }
+  return result;
+};
+
 /** UTF-16 offsets for slicing storage, including both ends; positions count the intervals. */
 export const characterBoundaries = (s: string): number[] => {
   assertScalarText(s);
   const boundaries = [0];
+  // ASCII has no Extend, Prepend, Indic or emoji state. CRLF is its one
+  // multi-scalar Character, including when surrounded by other controls.
+  if (isASCII(s)) {
+    for (let i = 1; i < s.length; i++) {
+      if (s.charCodeAt(i - 1) !== 13 || s.charCodeAt(i) !== 10) {
+        boundaries.push(i);
+      }
+    }
+    if (s.length) {
+      boundaries.push(s.length);
+    }
+    return boundaries;
+  }
   let offset = 0,
     previous = '',
     regionalCount = 0;

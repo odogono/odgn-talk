@@ -1,6 +1,7 @@
 import type { HostObject } from './objects';
 import { ListStorage } from './list-storage';
 import { MapStorage, type MapLayout } from './map-storage';
+import { TextStorage } from './text-storage';
 import {
   checkInstant,
   civilFields,
@@ -92,7 +93,7 @@ type Payload =
   | PatternRef
   | undefined
   | boolean
-  | string
+  | TextStorage
   | Decimal
   | ListStorage
   | MapStorage
@@ -137,6 +138,9 @@ export let smallInteger: (decimal: Decimal) => number;
 export let isDecimal: (input: unknown) => input is Decimal;
 /** Internal: owned Map pairs. Never pass these arrays to a Host. */
 export let ownedMapPairs: (value: Value) => Pairs | undefined;
+/** Internal: immutable Text storage and its cached derived facts. */
+export let textStorage: (value: Value) => TextStorage;
+let textValue: (storage: TextStorage) => Value;
 
 export class Decimal {
   // A small integer keeps its JS number and makes its text and parts on
@@ -211,6 +215,8 @@ export class Value {
     makeValue = (kind, payload) => new Value(valueToken, kind, payload);
     ownedMapPairs = value =>
       value.#kind === 'map' ? (value.#data as MapStorage).pairs() : undefined;
+    textStorage = value => value.#data as TextStorage;
+    textValue = storage => makeValue('text', storage);
     editListValue = (current, i, value) =>
       makeValue('list', (current.#data as ListStorage).set(i, value));
     editMapValue = (current, key, value) => {
@@ -237,7 +243,7 @@ export class Value {
   }
   /** Returns the text payload, or undefined for kinds other than text. */
   asText(): string | undefined {
-    return this.kind === 'text' ? (this.#data as string) : undefined;
+    return this.kind === 'text' ? (this.#data as TextStorage).text : undefined;
   }
   asBool(): boolean | undefined {
     return this.kind === 'boolean' ? (this.#data as boolean) : undefined;
@@ -378,6 +384,10 @@ export class Value {
         case 'nothing':
           break;
         case 'text':
+          if (left.asText() !== right.asText()) {
+            return false;
+          }
+          break;
         case 'boolean':
         case 'instant':
           if (left.#data !== right.#data) {
@@ -503,7 +513,7 @@ export class Value {
           output.push(next.asDecimal()!.toString());
           break;
         case 'text':
-          output.push(displayText(next.#data as string));
+          output.push(displayText(next.asText()!));
           break;
         case 'list': {
           output.push('[');
@@ -587,7 +597,14 @@ export const bool = (b: boolean): Value => {
   }
   return makeValue('boolean', b);
 };
-export const text = (s: string): Value => makeValue('text', normalizeNFC(s));
+export const text = (s: string): Value =>
+  textValue(new TextStorage(normalizeNFC(s)));
+/** Internal: concatenate normalized Text Values without rescanning ASCII. */
+export const concatText = (left: Value, right: Value): Value =>
+  textValue(textStorage(left).concat(textStorage(right)));
+/** Internal: a contiguous slice at Character boundaries is already NFC. */
+export const sliceText = (value: Value, from: number, to: number): Value =>
+  textValue(textStorage(value).slice(from, to));
 
 export const trimWhiteSpace = (s: string): string => {
   const boundaries = characterBoundaries(s);

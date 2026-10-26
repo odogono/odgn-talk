@@ -2,10 +2,9 @@
 // formulas, the logical sizes of values, and the measures they're taken over.
 import { costMeasure, costModel, costSubject } from './generated/machine';
 import { leafSize, makeCostRates } from './generated/costs';
-import { characters } from './text';
 import { scalarCount } from './unicode';
 import { digitsOf, integerOf, isInteger } from './decimal';
-import { decimalParts, ownedMapPairs, type Value } from './values';
+import { decimalParts, ownedMapPairs, textStorage, type Value } from './values';
 
 /** What one charge measures: its subjects and the instruction's own counts. */
 export type Measured = {
@@ -73,11 +72,11 @@ const measureOf = (measure: number, v: Value | undefined): number => {
     case CONTENTS:
       return contentsOf(v);
     case CHARACTERS:
-      return v.kind === 'text' ? characters(v.asText()!).length : 0;
+      return v.kind === 'text' ? textStorage(v).characterCount : 0;
     case SCALARS:
       return v.kind === 'text' ? scalarCount(v.asText()!) : 0;
     case UTF8:
-      return v.kind === 'text' ? encoder.encode(v.asText()!).length : 0;
+      return v.kind === 'text' ? textStorage(v).utf8Length : 0;
     case ITEMS:
       return itemsOf(v);
     case ENTRIES:

@@ -4,17 +4,14 @@ import { invalidValue } from './errors';
 import {
   assertScalarText,
   characterBoundaries,
+  charactersAt,
   isWhiteSpace,
   normalizeNFC,
   simpleFold,
 } from './unicode';
 
-export const characters = (s: string): string[] => {
-  const boundaries = characterBoundaries(s);
-  return boundaries
-    .slice(0, -1)
-    .map((from, i) => s.slice(from, boundaries[i + 1]));
-};
+export const characters = (s: string): string[] =>
+  charactersAt(s, characterBoundaries(s));
 export const joinText = (...pieces: string[]): string =>
   normalizeNFC(pieces.join(''));
 
