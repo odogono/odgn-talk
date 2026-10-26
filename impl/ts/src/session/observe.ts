@@ -2,7 +2,7 @@
 // traced Runs and Fuel Measurements, read only from public Run accounting
 // reports. It never inspects the Group.
 import type { Report } from '../group';
-import { validComputedMessageName } from '../selectors';
+import { validStaticMessageName } from '../selectors';
 import { traceValue } from '../trace';
 import { listValues, nothing, text } from '../values';
 
@@ -47,10 +47,6 @@ const fuelRow = (m: Measurement) => {
   ])}`;
 };
 
-// A full Selector, as a static `send` could name a message.
-export const selectorText = (s: string) =>
-  validComputedMessageName(s, s.includes(':') ? s.split(':').length - 1 : 0);
-
 export class Observation {
   private filters = new Set<string>();
   // Each traced Run's message Selector.
@@ -73,7 +69,7 @@ export class Observation {
   /** `:trace` and `:untrace`. */
   trace(name: 'trace' | 'untrace', rest: string): string[] | null {
     const selector = rest.trim();
-    if (selector && !selectorText(selector)) {
+    if (selector && !validStaticMessageName(selector)) {
       return null;
     }
     if (name === 'untrace') {

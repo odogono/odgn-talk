@@ -14,7 +14,7 @@ import type { SyntaxElement, SyntaxNode } from '../syntax';
 import { lower } from '../unicode';
 import { text, type Value } from '../values';
 import { viewSource } from '../view';
-import { selectorText } from './observe';
+import { validStaticMessageName } from '../selectors';
 import { valueRows } from './inspect';
 
 /** One declaration of the session source, as `:describe` reads it. */
@@ -210,7 +210,7 @@ const describeTarget = (
   rest: string,
 ): { plain: boolean; target: Target } => {
   if (!rest.startsWith('{')) {
-    if (!selectorText(rest)) {
+    if (!validStaticMessageName(rest)) {
       names.refuse('bad arguments');
     }
     return { plain: true, target: { name: rest, origin: 'session' } };

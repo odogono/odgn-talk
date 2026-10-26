@@ -119,6 +119,12 @@ describe('the embedding interface matches spec/embedding/talk.ts', () => {
       );
     }
   });
+
+  test('handlersOf Helper', () => {
+    expect(parametersOf(parse('src/handlers.ts'), 'handlersOf')).toEqual(
+      parametersOf(spec, 'handlersOf'),
+    );
+  });
 });
 
 // Exports of @northtalk/ts that @northtalk/ts/wasm leaves out on purpose: the

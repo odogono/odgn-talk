@@ -38,3 +38,6 @@ export const validComputedMessageName = (
   message.includes(':')
     ? validMessageSelector(message, arity)
     : name(message) && message !== 'all' && !reserved.has(message);
+/** A Name or full Selector a static `send` could write, its arity from its colons. */
+export const validStaticMessageName = (message: string): boolean =>
+  validComputedMessageName(message, message.split(':').length - 1);
