@@ -5815,8 +5815,10 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
     const ref = (rp.intOf(spans[0] orelse return protocolError(s.gpa, 0, "no ref")) catch null) orelse return protocolError(s.gpa, 0, "no ref");
     s.active_ref = ref;
     const group = rp.ptextOf(spans[1] orelse return protocolError(s.gpa, ref, "no group")) catch return protocolError(s.gpa, ref, "malformed binary frame");
-    const entry = s.groupNamed(group) orelse return protocolError(s.gpa, ref, "an unknown group");
-    if (s.group_exchanges and s.restoring == null) s.x.load(entry);
+    // As in `handleMessage`: a waiting restore refuses first, and the gate
+    // refuses a result naming an unknown Group as it does another Group's.
+    const named = s.groupNamed(group);
+    if (s.group_exchanges and s.restoring == null) if (named) |e| s.x.load(e);
     if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
     const result: exchange.Result = switch (c) {
         .op_result => .op,
@@ -5825,12 +5827,14 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
         .release_result => .release,
         .op, .prop, .effect, .release => unreachable,
     };
-    switch (s.x.gate(ref, .{ .result = result }, entry)) {
+    switch (s.x.gate(ref, .{ .result = result }, named)) {
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
         .release_result => return releaseResultReply(s, ref),
         .result => {},
         .dispatch, .admit, .trace_result => unreachable,
     }
+    // The gate takes a result only from the exchange's own Group.
+    const entry = named.?;
     if (c == .effect_result) {
         const given = if (spans[2]) |x| rp.ptextOf(x) catch "unknown" else "unknown";
         const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
@@ -5857,9 +5861,7 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
         answer.kind = .fail;
         binFailure(s, entry, spans[4], spans[5], spans[3], &answer) catch |e| {
             if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
-            const charged = answer.charged;
-            answer.release(s.gpa);
-            answer = .{ .kind = .host_error, .charged = charged };
+            answer.kind = .host_error;
         };
     } else if (std.mem.eql(u8, outcome, "hostError")) {
         answer.kind = .host_error;
@@ -5880,7 +5882,15 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
 fn binFailure(s: *Session, entry: *GroupEntry, code: ?[]const u8, message: ?[]const u8, data: ?[]const u8, answer: *Answer) (Allocator.Error || Invalid)!void {
     const c = rp.ptextOf(code orelse return error.InvalidValue) catch return error.InvalidValue;
     answer.code = try s.gpa.dupe(u8, c);
+    errdefer {
+        s.gpa.free(answer.code);
+        answer.code = "";
+    }
     if (message) |m| answer.message = try s.gpa.dupe(u8, rp.ptextOf(m) catch return error.InvalidValue);
+    errdefer if (answer.message) |m| {
+        s.gpa.free(m);
+        answer.message = null;
+    };
     if (data) |d| {
         entry.wrong_group = false;
         answer.data = binary_value.decode(s.gpa, d, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
@@ -8755,6 +8765,7 @@ fn binResultGroup(a: Allocator, c: rp.Callback, ref: i64, group: ?[]const u8, ou
 /// A refused result must leave the need available for its corrected frame.
 fn resultGroupRefusals(c: *Client, ref: i64, kind: exchange.Result, binary: bool) !void {
     const a = c.arena.allocator();
+    var other: []const u8 = "";
     for ([_]?[]const u8{ "other", "unknown", null }) |group| {
         const frame = if (binary) blk: {
             const callback: rp.Callback = switch (kind) {
@@ -8769,7 +8780,11 @@ fn resultGroupRefusals(c: *Client, ref: i64, kind: exchange.Result, binary: bool
             const group_field = if (group) |g| try std.fmt.allocPrint(a, ",\"group\":\"{s}\"", .{g}) else "";
             break :blk try std.fmt.allocPrint(a, "{{\"m\":\"{s}-result\",\"ref\":{d}{s},\"result\":42,\"value\":42,\"status\":\"ok\"}}", .{ @tagName(kind), ref, group_field });
         };
-        try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(c, frame)));
+        const reply = try binReply(c, frame);
+        try std.testing.expectEqualStrings("protocol error", try errKind(reply));
+        // An unknown Group is refused as another Group is, in both layouts (#1569).
+        const g = group orelse continue;
+        if (std.mem.eql(u8, g, "other")) other = try refusalOf(reply) else try std.testing.expectEqualStrings(other, try refusalOf(reply));
     }
     if (!binary) for ([_][]const u8{ "null", "7", "{}" }) |group| {
         const frame = try std.fmt.allocPrint(a, "{{\"m\":\"{s}-result\",\"ref\":{d},\"group\":{s},\"result\":42,\"value\":42,\"status\":\"ok\"}}", .{ @tagName(kind), ref, group });
@@ -9025,6 +9040,51 @@ test "a paused binary exchange refuses results as JSON does (#1496)" {
     _ = try okOf(try binReply(&c, try binResult(a, .release_result, 9, null, null)));
     // With nothing open, a binary result is not a message the Session knows.
     try std.testing.expectEqualStrings("unknown or unsupported message", try refusalOf(try binReply(&c, try binResult(a, .op_result, 9, "result", 1))));
+}
+
+test "a waiting restore refuses a result before checking its Group, in both layouts (#1569)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"callbacks-fields-v1\",\"group-exchanges-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\"}}]}}", .{2}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{3}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n  ask api to read\\nend go\\n\"}}", .{ 5, grant }));
+    const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{6}))).object.get("save").?.object.get("$bytes").?.string;
+    const asked = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g2\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 7, save });
+    try std.testing.expectEqualStrings("resolve", (asked.object.get("need") orelse return unexpected(asked)).object.get("m").?.string);
+    for ([_][]const u8{ "g", "unknown" }) |group| {
+        const waiting = "a restore is waiting for its resolve-result";
+        try std.testing.expectEqualStrings(waiting, try refusalOf(try binReply(&c, try binResultGroup(a, .op_result, 8, group, "result", 1))));
+        try std.testing.expectEqualStrings(waiting, try refusalOf(try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"{s}\",\"result\":1}}", .{ 8, group })));
+    }
+    _ = try okOf(try c.sendRef(7, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[]}}", .{ 7, grant }));
+}
+
+test "a binary fail frees its code when its message cannot be copied (#1569)" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    const a = std.testing.allocator;
+    var spans: [2][]u8 = undefined;
+    for ([_][]const u8{ "E", "a message" }, &spans) |text, *span| {
+        var w = rp.Writer.init(a);
+        defer w.deinit();
+        try w.ptext(text);
+        span.* = try w.finish();
+    }
+    defer for (spans) |span| a.free(span);
+    // The code's copy succeeds and the message's fails.
+    var failing: std.testing.FailingAllocator = .init(a, .{ .fail_index = 1 });
+    const gpa = s.gpa;
+    s.gpa = failing.allocator();
+    defer s.gpa = gpa;
+    var answer: Answer = .{ .kind = .fail };
+    try std.testing.expectError(error.OutOfMemory, binFailure(s, undefined, spans[0], spans[1], null, &answer));
+    try std.testing.expectEqualStrings("", answer.code);
+    try std.testing.expectEqual(null, answer.message);
 }
 
 /// A settle-pump with one settlement of `call`, or with `outcome` malformed.
