@@ -46,7 +46,9 @@ test.each([
       parseDec('1.000000000000000000000000000000001'),
       parseDec('0.0000000000000000000000000000000001'),
       parseDec('0.00'),
+      { coefficient: 0n, exponent: -2, negative: true },
       { coefficient: 1n, exponent: -6176, negative: false },
+      { coefficient: 1n, exponent: 1, negative: false },
       // A noncanonical cohort that multiplication by one must round.
       { coefficient: 10n ** 34n, exponent: -34, negative: false },
     ]) {
@@ -70,6 +72,19 @@ test.each([
     }
   },
 );
+
+test('identity conversions round an unchecked exponent below the value limit', () => {
+  const value = { coefficient: 5n, exponent: -6177, negative: false };
+  const unit = parseUnit('m');
+  const one = parseDec('1');
+  expect(toBase(value, unit)).toEqual(multiply(value, one));
+  expect(fromBase(value, unit)).toEqual(divide(value, one));
+  expect(toBase(value, unit)).toEqual({
+    coefficient: 0n,
+    exponent: -6176,
+    negative: false,
+  });
+});
 
 test('a Quantity owns frozen slots without freezing caller-owned data', () => {
   const slots = [{ unit: 'cm', exponent: 1 }];

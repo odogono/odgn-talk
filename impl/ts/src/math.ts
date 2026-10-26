@@ -12,13 +12,13 @@ import {
   integerOf,
   roundRatio,
   type Dec,
+  digitCount,
 } from './decimal';
 
 const ZERO: Dec = { negative: false, coefficient: 0n, exponent: 0 };
 const ONE: Dec = { negative: false, coefficient: 1n, exponent: 0 };
 const ten = (n: number) => 10n ** BigInt(n);
 const abs = (n: bigint) => (n < 0n ? -n : n);
-const digitCount = (n: bigint) => (n === 0n ? 0 : abs(n).toString().length);
 const bitLength = (n: bigint) => (n === 0n ? 0 : n.toString(2).length);
 const signedOf = (x: Dec) => (x.negative ? -x.coefficient : x.coefficient);
 // The position of x's leading digit: 1 for 1 to 9.99…, 0 for 0.1 to 0.99….
@@ -244,14 +244,14 @@ const ERR = 1000n;
 // e^w for w at scale q: 10^k × e^(w - k ln 10).
 const expScaled = (w: bigint, q: number): Approx => {
   const k = BigInt(Math.floor(Number(w / ten(q - 6)) / 1e6 / Math.LN10));
-  const g = q + digitCount(k) + 2;
+  const g = q + digitCount(abs(k)) + 2;
   const r = (w * ten(g - q) - k * ln10(g)) / ten(g - q);
   return { v: expFixed(r, q), scale: q - Number(k), err: ERR };
 };
 // ln x at scale q, for x > 0: ln of x's digits read as 1 to 10, plus n ln 10.
 const lnScaled = (x: Dec, q: number): bigint => {
   const n = BigInt(magnitude(x) - 1);
-  const g = q + digitCount(n) + 2;
+  const g = q + digitCount(abs(n)) + 2;
   const m = fixed({ ...x, exponent: 1 - digitCount(x.coefficient) }, g);
   return (lnFixed(m, g) + n * ln10(g)) / ten(g - q);
 };

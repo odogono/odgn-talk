@@ -1,0 +1,888 @@
+{
+  "issue": 1582,
+  "baseline": "915eae6e6c8faf8afd613628d0562baaa398b3cd",
+  "machine": {
+    "cpu": "Apple M5",
+    "cores": 10,
+    "memory": "24 GiB",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O"
+  },
+  "bun": "1.4.4",
+  "node": "v26.12.1",
+  "bunMethod": "Three sequential before/after pairs; each runs bun run bench --only ts --count 5 --no-save separately for numbers/ and macro/game-tick. Summary is median of process Run medians. The TS mitata runner chooses its own sample count; --count applies to other suite runners.",
+  "nodeMethod": {
+    "pairs": 2,
+    "order": "before, after, before, after",
+    "warmupMsPerWorkload": 300,
+    "samples": 7,
+    "minMsPerSample": 100,
+    "summary": "median of the two process medians",
+    "entry": "bench/ts/src/suite.ts: Loaded and check, full-size manifest workloads; bun build --target=node with import.meta.dir defined as the absolute bench/ts/src path"
+  },
+  "sourceSha256": {
+    "before": {
+      "values.ts": "514210be60fd72e8a7e246178b018ec04bacd94f8f5598855dc03d8a2b8dbdf6",
+      "decimal.ts": "b86143ed180a40c264cb826256dfc0cc2cc9ebee27c3730659045d4a1d198fe7",
+      "units.ts": "184060c385752a8e68baa02a982d15a568808cc6f6766e31ea93d1f5e4c6ca5e"
+    },
+    "after": {
+      "values.ts": "c5fc01a40c0b224e6b0c332cef50c89f560ffb192f17b0e88d71ca18e95e3ebb",
+      "decimal.ts": "bff9d4c8347b30d38eacf6db2ef365bc181219a84689e9fc0874e09e812d8860",
+      "units.ts": "a8780381140f80e86cad8043c01ba9537f9b4f8dea670d141aeb5b7061c22070"
+    }
+  },
+  "summary": [
+    {
+      "benchmark": "numbers/add",
+      "bun": {
+        "before": {
+          "mediansMs": [
+            0.89,
+            0.897,
+            0.873
+          ],
+          "medianMs": 0.89
+        },
+        "after": {
+          "mediansMs": [
+            0.779,
+            0.78,
+            0.773
+          ],
+          "medianMs": 0.779
+        },
+        "changePercent": -12.471910112359552
+      },
+      "node": {
+        "before": {
+          "mediansMs": [
+            1.3214073421052632,
+            1.454126217391304
+          ],
+          "medianMs": 1.3877667797482838
+        },
+        "after": {
+          "mediansMs": [
+            1.2356157407407409,
+            1.1933749999999992
+          ],
+          "medianMs": 1.21449537037037
+        },
+        "changePercent": -12.485628846753494
+      }
+    },
+    {
+      "benchmark": "numbers/divide",
+      "bun": {
+        "before": {
+          "mediansMs": [
+            0.932,
+            0.939,
+            0.944
+          ],
+          "medianMs": 0.939
+        },
+        "after": {
+          "mediansMs": [
+            0.792,
+            0.788,
+            0.798
+          ],
+          "medianMs": 0.792
+        },
+        "changePercent": -15.654952076677308
+      },
+      "node": {
+        "before": {
+          "mediansMs": [
+            1.4094301549295754,
+            1.346303880000002
+          ],
+          "medianMs": 1.3778670174647887
+        },
+        "after": {
+          "mediansMs": [
+            1.3128035714285684,
+            1.3796266891891853
+          ],
+          "medianMs": 1.346215130308877
+        },
+        "changePercent": -2.2971656012312214
+      }
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "bun": {
+        "before": {
+          "mediansMs": [
+            0.757,
+            0.728,
+            0.723
+          ],
+          "medianMs": 0.728
+        },
+        "after": {
+          "mediansMs": [
+            0.581,
+            0.599,
+            0.6
+          ],
+          "medianMs": 0.599
+        },
+        "changePercent": -17.719780219780223
+      },
+      "node": {
+        "before": {
+          "mediansMs": [
+            1.1044212417582406,
+            1.0824565376344097
+          ],
+          "medianMs": 1.0934388896963252
+        },
+        "after": {
+          "mediansMs": [
+            1.0429079791666684,
+            1.106783428571429
+          ],
+          "medianMs": 1.0748457038690487
+        },
+        "changePercent": -1.700432095701332
+      }
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "bun": {
+        "before": {
+          "mediansMs": [
+            0.884,
+            0.896,
+            0.895
+          ],
+          "medianMs": 0.895
+        },
+        "after": {
+          "mediansMs": [
+            0.777,
+            0.768,
+            0.845
+          ],
+          "medianMs": 0.777
+        },
+        "changePercent": -13.184357541899438
+      },
+      "node": {
+        "before": {
+          "mediansMs": [
+            1.2764794303797478,
+            1.3609999999999993
+          ],
+          "medianMs": 1.3187397151898734
+        },
+        "after": {
+          "mediansMs": [
+            1.3108457792207788,
+            1.1939985119047596
+          ],
+          "medianMs": 1.252422145562769
+        },
+        "changePercent": -5.028859665271845
+      }
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "bun": {
+        "before": {
+          "mediansMs": [
+            2.242,
+            2.232,
+            2.119
+          ],
+          "medianMs": 2.232
+        },
+        "after": {
+          "mediansMs": [
+            2.116,
+            2.091,
+            2.266
+          ],
+          "medianMs": 2.116
+        },
+        "changePercent": -5.197132616487455
+      },
+      "node": {
+        "before": {
+          "mediansMs": [
+            3.9602708461538545,
+            3.7224012222222207
+          ],
+          "medianMs": 3.8413360341880374
+        },
+        "after": {
+          "mediansMs": [
+            3.898636192307689,
+            3.881660481481487
+          ],
+          "medianMs": 3.8901483368945877
+        },
+        "changePercent": 1.2707116032578014
+      }
+    }
+  ],
+  "bunRuns": [
+    {
+      "pair": 1,
+      "version": "before",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 104.5,
+          "runMedianMs": 0.89,
+          "runMinMs": 0.826,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 79.7,
+          "runMedianMs": 0.932,
+          "runMinMs": 0.862,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 87.5,
+          "runMedianMs": 0.757,
+          "runMinMs": 0.684,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 106.8,
+          "runMedianMs": 0.884,
+          "runMinMs": 0.809,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 202.9,
+          "runMedianMs": 2.242,
+          "runMinMs": 1.9,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "version": "after",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 104.0,
+          "runMedianMs": 0.779,
+          "runMinMs": 0.693,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 80.4,
+          "runMedianMs": 0.792,
+          "runMinMs": 0.734,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 86.4,
+          "runMedianMs": 0.581,
+          "runMinMs": 0.537,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 105.7,
+          "runMedianMs": 0.777,
+          "runMinMs": 0.692,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 205.1,
+          "runMedianMs": 2.116,
+          "runMinMs": 1.835,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "version": "before",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 104.4,
+          "runMedianMs": 0.897,
+          "runMinMs": 0.837,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 78.5,
+          "runMedianMs": 0.939,
+          "runMinMs": 0.879,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 87.0,
+          "runMedianMs": 0.728,
+          "runMinMs": 0.671,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 106.1,
+          "runMedianMs": 0.896,
+          "runMinMs": 0.812,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 221.1,
+          "runMedianMs": 2.232,
+          "runMinMs": 1.94,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "version": "after",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 107.0,
+          "runMedianMs": 0.78,
+          "runMinMs": 0.719,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 81.7,
+          "runMedianMs": 0.788,
+          "runMinMs": 0.737,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 86.8,
+          "runMedianMs": 0.599,
+          "runMinMs": 0.555,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 106.4,
+          "runMedianMs": 0.768,
+          "runMinMs": 0.698,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 203.9,
+          "runMedianMs": 2.091,
+          "runMinMs": 1.866,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "version": "before",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 103.5,
+          "runMedianMs": 0.873,
+          "runMinMs": 0.824,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 80.7,
+          "runMedianMs": 0.944,
+          "runMinMs": 0.863,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 87.0,
+          "runMedianMs": 0.723,
+          "runMinMs": 0.664,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 107.5,
+          "runMedianMs": 0.895,
+          "runMinMs": 0.828,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 201.0,
+          "runMedianMs": 2.119,
+          "runMinMs": 1.9,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "version": "after",
+      "measurements": [
+        {
+          "benchmark": "numbers/add",
+          "loadMedianUs": 105.8,
+          "runMedianMs": 0.773,
+          "runMinMs": 0.724,
+          "fuel": 26030,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/divide",
+          "loadMedianUs": 79.5,
+          "runMedianMs": 0.798,
+          "runMinMs": 0.75,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "loadMedianUs": 86.5,
+          "runMedianMs": 0.6,
+          "runMinMs": 0.555,
+          "fuel": 18031,
+          "logicalAlloc": "31.4 KiB"
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "loadMedianUs": 111.2,
+          "runMedianMs": 0.845,
+          "runMinMs": 0.72,
+          "fuel": 14579,
+          "logicalAlloc": "39.1 KiB"
+        },
+        {
+          "benchmark": "macro/game-tick",
+          "loadMedianUs": 214.1,
+          "runMedianMs": 2.266,
+          "runMinMs": 1.945,
+          "fuel": 67042,
+          "logicalAlloc": "78.4 KiB"
+        }
+      ]
+    }
+  ],
+  "nodeRuns": [
+    {
+      "pair": 1,
+      "version": "before",
+      "runtime": "v26.12.1",
+      "measurements": [
+        {
+          "name": "numbers/add",
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000",
+          "samplesMs": [
+            1.2888616538461537,
+            1.317135285714286,
+            1.3571632837837848,
+            1.3214073421052632,
+            1.4119706619718324,
+            1.3361177733333336,
+            1.302200220779219
+          ],
+          "medianMs": 1.3214073421052632
+        },
+        {
+          "name": "numbers/multiply",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "5005000",
+          "samplesMs": [
+            1.1280327640449435,
+            1.0689654255319163,
+            1.1044212417582406,
+            1.0319626288659793,
+            1.0743417553191474,
+            1.2128955783132533,
+            1.170705918604651
+          ],
+          "medianMs": 1.1044212417582406
+        },
+        {
+          "name": "numbers/divide",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "500500",
+          "samplesMs": [
+            1.4055868055555532,
+            1.4991096764705925,
+            1.4870073529411778,
+            1.5090324705882414,
+            1.4094301549295754,
+            1.378984797297298,
+            1.3023820389610403
+          ],
+          "medianMs": 1.4094301549295754
+        },
+        {
+          "name": "numbers/quantity",
+          "alloc": 40088,
+          "fuel": 14579,
+          "outcome": "completed",
+          "result": "125250",
+          "samplesMs": [
+            1.456691420289855,
+            1.2104647857142883,
+            1.2764794303797478,
+            1.2507588499999998,
+            1.1837323529411738,
+            1.7732830517241398,
+            1.320855519480515
+          ],
+          "medianMs": 1.2764794303797478
+        },
+        {
+          "name": "macro/game-tick",
+          "alloc": 80270,
+          "fuel": 67042,
+          "outcome": "completed",
+          "result": "3000",
+          "samplesMs": [
+            3.9602708461538545,
+            4.033015000000014,
+            3.8731201923077117,
+            4.194338541666677,
+            4.050663359999999,
+            3.8959839615384646,
+            3.906225961538439
+          ],
+          "medianMs": 3.9602708461538545
+        }
+      ]
+    },
+    {
+      "pair": 1,
+      "version": "after",
+      "runtime": "v26.12.1",
+      "measurements": [
+        {
+          "name": "numbers/add",
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000",
+          "samplesMs": [
+            1.2263780487804876,
+            1.2155702771084338,
+            1.2205223536585372,
+            1.2356157407407409,
+            1.241529320987655,
+            1.2669388227848102,
+            1.2801561139240494
+          ],
+          "medianMs": 1.2356157407407409
+        },
+        {
+          "name": "numbers/multiply",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "5005000",
+          "samplesMs": [
+            1.0429079791666684,
+            1.0345111752577305,
+            1.0902513586956537,
+            1.0272257653061239,
+            1.0262053571428573,
+            1.0855676559139777,
+            1.3046185897435902
+          ],
+          "medianMs": 1.0429079791666684
+        },
+        {
+          "name": "numbers/divide",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "500500",
+          "samplesMs": [
+            1.4016820684931515,
+            1.3128035714285684,
+            1.375211178082188,
+            1.286547012820509,
+            1.3038836623376624,
+            1.2936298076923112,
+            1.3314134155844108
+          ],
+          "medianMs": 1.3128035714285684
+        },
+        {
+          "name": "numbers/quantity",
+          "alloc": 40088,
+          "fuel": 14579,
+          "outcome": "completed",
+          "result": "125250",
+          "samplesMs": [
+            1.3365833333333346,
+            1.319895828947366,
+            1.3212746710526302,
+            1.3108457792207788,
+            1.1799872470588257,
+            1.1945886627906983,
+            1.153041195402301
+          ],
+          "medianMs": 1.3108457792207788
+        },
+        {
+          "name": "macro/game-tick",
+          "alloc": 80270,
+          "fuel": 67042,
+          "outcome": "completed",
+          "result": "3000",
+          "samplesMs": [
+            4.10572664000003,
+            3.859009615384646,
+            3.914655461538447,
+            4.008768360000031,
+            3.8688958461538485,
+            3.898636192307689,
+            3.8663781923077156
+          ],
+          "medianMs": 3.898636192307689
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "version": "before",
+      "runtime": "v26.12.1",
+      "measurements": [
+        {
+          "name": "numbers/add",
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000",
+          "samplesMs": [
+            1.330354157894737,
+            1.467580304347825,
+            1.6309348064516136,
+            1.454126217391304,
+            1.4504631594202897,
+            1.3709012465753423,
+            1.47113888405797
+          ],
+          "medianMs": 1.454126217391304
+        },
+        {
+          "name": "numbers/multiply",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "5005000",
+          "samplesMs": [
+            1.3636914459459482,
+            1.0739033617021263,
+            1.1145314777777762,
+            1.071007095744681,
+            1.0575520833333343,
+            1.0824565376344097,
+            1.2589302125000017
+          ],
+          "medianMs": 1.0824565376344097
+        },
+        {
+          "name": "numbers/divide",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "500500",
+          "samplesMs": [
+            1.3353866666666667,
+            1.3557861066666677,
+            1.346303880000002,
+            1.3631385135135183,
+            1.3611002162162145,
+            1.3274797105263145,
+            1.3050817142857105
+          ],
+          "medianMs": 1.346303880000002
+        },
+        {
+          "name": "numbers/quantity",
+          "alloc": 40088,
+          "fuel": 14579,
+          "outcome": "completed",
+          "result": "125250",
+          "samplesMs": [
+            1.3043024935064904,
+            1.3557708243243245,
+            1.2739773164556982,
+            1.7933399122807077,
+            1.553402553846151,
+            1.5070833432835828,
+            1.3609999999999993
+          ],
+          "medianMs": 1.3609999999999993
+        },
+        {
+          "name": "macro/game-tick",
+          "alloc": 80270,
+          "fuel": 67042,
+          "outcome": "completed",
+          "result": "3000",
+          "samplesMs": [
+            3.7224012222222207,
+            3.713520037037058,
+            3.6800208214285703,
+            3.6394836071428602,
+            3.808337962962974,
+            4.0468516399999865,
+            3.853387807692308
+          ],
+          "medianMs": 3.7224012222222207
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "version": "after",
+      "runtime": "v26.12.1",
+      "measurements": [
+        {
+          "name": "numbers/add",
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000",
+          "samplesMs": [
+            1.2947895256410256,
+            1.2009345238095235,
+            1.19078225,
+            1.1987579404761899,
+            1.1933749999999992,
+            1.187675494117648,
+            1.173787302325581
+          ],
+          "medianMs": 1.1933749999999992
+        },
+        {
+          "name": "numbers/multiply",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "5005000",
+          "samplesMs": [
+            1.0310471938775492,
+            0.9964826732673261,
+            1.106783428571429,
+            1.0999778043478259,
+            1.1712010581395351,
+            1.2426965061728408,
+            1.2936634615384601
+          ],
+          "medianMs": 1.106783428571429
+        },
+        {
+          "name": "numbers/divide",
+          "alloc": 32104,
+          "fuel": 18031,
+          "outcome": "completed",
+          "result": "500500",
+          "samplesMs": [
+            1.3796266891891853,
+            1.4307500000000022,
+            1.353746621621618,
+            1.557180123076922,
+            1.5486218000000007,
+            1.3493344533333342,
+            1.3245756578947379
+          ],
+          "medianMs": 1.3796266891891853
+        },
+        {
+          "name": "numbers/quantity",
+          "alloc": 40088,
+          "fuel": 14579,
+          "outcome": "completed",
+          "result": "125250",
+          "samplesMs": [
+            1.3281222631578957,
+            1.1939985119047596,
+            1.1830269529411774,
+            1.22816716666667,
+            1.1506170337078698,
+            1.1405060898876431,
+            1.3634402368421064
+          ],
+          "medianMs": 1.1939985119047596
+        },
+        {
+          "name": "macro/game-tick",
+          "alloc": 80270,
+          "fuel": 67042,
+          "outcome": "completed",
+          "result": "3000",
+          "samplesMs": [
+            3.9375673076923214,
+            3.8940705384615493,
+            3.723998444444415,
+            3.91397992592593,
+            3.7834181851851976,
+            3.881660481481487,
+            3.7878148148148387
+          ],
+          "medianMs": 3.881660481481487
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "tsTests": {
+      "passCount": 6599,
+      "skipCount": 75,
+      "failCount": 0
+    },
+    "corpusCases": 468,
+    "baselineArithmeticComparisons": 8500
+  }
+}
