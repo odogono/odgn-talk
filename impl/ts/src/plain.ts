@@ -27,8 +27,11 @@ export type PlainValue =
   | Map<string, PlainValue>;
 
 export type ToValueOptions = {
-  /** `decimal` reads a JS number through `num`; the default refuses it. */
-  numbers?: 'refuse' | 'decimal';
+  /**
+   * `integer` reads safe integers through `num`; `decimal` uses `num` for
+   * any JS number. The default refuses JS numbers.
+   */
+  numbers?: 'refuse' | 'integer' | 'decimal';
 };
 
 export type FromValueOptions = {
@@ -49,7 +52,7 @@ export const toValue = (
   plain: unknown,
   options: ToValueOptions = {},
 ): Value => {
-  const decimalNumbers = options.numbers === 'decimal';
+  const numberMode = options.numbers;
   const open = new Set<object>();
   const convert = (input: unknown): Value => {
     switch (typeof input) {
@@ -62,10 +65,17 @@ export const toValue = (
       case 'bigint':
         return num(input);
       case 'number':
-        return decimalNumbers
+        if (numberMode === 'integer') {
+          return Number.isSafeInteger(input)
+            ? num(input)
+            : invalidValue(
+                "A JS number must be a safe integer; use dec() or { numbers: 'decimal' }",
+              );
+        }
+        return numberMode === 'decimal'
           ? num(input)
           : invalidValue(
-              "A JS number needs { numbers: 'decimal' }, or num() or dec()",
+              "A JS number needs { numbers: 'integer' } or { numbers: 'decimal' }, or num() or dec()",
             );
       case 'object':
         break;
