@@ -1,6 +1,6 @@
 # TS Hosts may convert plain JS values by one stated rule
 
-The TS embedding API adds `toValue(plain, options?)` and `fromValue(value, options?)`. They convert between Script Values and plain JS data in one call, so a Host no longer wraps each argument in a constructor and reads each result with `asDecimal()!`. Both are thin layers over the named constructors and accessors, and follow a fixed table, so ADR 0030's guarantees still hold: every conversion follows a spec rule, input the value model can't hold is refused with `invalid value`, and nothing is clamped, rounded or replaced. Only JS `number` is ambiguous. `toValue` refuses it unless the Host passes `{ numbers: 'decimal' }`, which applies `num`'s shortest round-trip rule. A JSON-shaped float therefore never becomes a decimal unless the Host asks for it. We chose this over throwing accessors (`expectText()`) alone because these accessors remove the `!` but still need one call per field. A Host with nested data would end up writing this conversion itself, and each Host's version would differ.
+The TS embedding API adds `toValue(plain, options?)` and `fromValue(value, options?)`. They convert between Script Values and plain JS data in one call, so a Host no longer wraps each argument in a constructor and reads each result with `asDecimal()!`. Both are thin layers over the named constructors and accessors, and follow a fixed table, so ADR 0030's guarantees still hold: every conversion follows a spec rule, input the value model can't hold is refused with `invalid value`, and nothing is clamped, rounded or replaced. Only JS `number` is ambiguous. `toValue` refuses it by default. The Host can pass `{ numbers: 'decimal' }`, which applies `num`'s shortest round-trip rule, or `{ numbers: 'integer' }`, which accepts only safe integers (ADR 0130). A JSON-shaped float therefore never becomes a decimal unless the Host asks for it. We chose this over throwing accessors (`expectText()`) alone because these accessors remove the `!` but still need one call per field. A Host with nested data would end up writing this conversion itself, and each Host's version would differ.
 
 ## Considered Options
 
@@ -16,7 +16,7 @@ The TS embedding API adds `toValue(plain, options?)` and `fromValue(value, optio
   - a `Value` unchanged, so a Host can mix plain data and built Values
   - `null` and `undefined` as Nothing (the named constructors still refuse them)
   - a boolean, a string (refused if it has a lone surrogate, normalised to NFC), a `bigint`, a `Decimal`, and a `Uint8Array` (copied)
-  - a `number` only with `{ numbers: 'decimal' }`, through `num`
+  - a `number` through `num` with `{ numbers: 'decimal' }`, or only a safe integer with `{ numbers: 'integer' }` ([ADR 0130](0130-ts-helpers-convert-plain-js-at-the-boundary.md)); the latter refuses fractional, unsafe and non-finite numbers with `invalid value` naming `dec()` and `{ numbers: 'decimal' }`. The default stays `'refuse'`.
   - an array as a list, with holes read as Nothing
   - a plain object, by `record`'s rules (integer-like keys refused), and a `Map` with text keys, by `map`'s rules
   - Anything else is refused: `Date`, functions, symbols, class instances, other typed arrays, and cyclic data.

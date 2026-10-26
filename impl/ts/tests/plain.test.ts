@@ -66,10 +66,52 @@ test('toValue builds Values from plain data', () => {
 });
 
 test('toValue refuses JS numbers unless asked', () => {
+  invalid(() => toValue(3));
+  invalid(() => toValue(3, { numbers: 'refuse' }));
   invalid(() => toValue(0.1));
   invalid(() => toValue({ a: [1] }));
   expect(toValue(0.1, { numbers: 'decimal' }).equals(dec('0.1'))).toBe(true);
   invalid(() => toValue(Number.NaN, { numbers: 'decimal' }));
+});
+
+test('toValue integer mode accepts exactly safe-integer JS numbers', () => {
+  for (const n of [
+    3,
+    0,
+    -0,
+    -3,
+    Number.MIN_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER,
+  ]) {
+    expect(toValue(n, { numbers: 'integer' }).equals(num(n))).toBe(true);
+  }
+  expect(toValue(-0, { numbers: 'integer' }).equals(num(0))).toBe(true);
+  for (const n of [
+    0.5,
+    -0.5,
+    2 ** 53,
+    -(2 ** 53),
+    Number.NaN,
+    Infinity,
+    -Infinity,
+  ]) {
+    const convert = () => toValue(n, { numbers: 'integer' });
+    invalid(convert);
+    expect(convert).toThrow('dec()');
+    expect(convert).toThrow("{ numbers: 'decimal' }");
+  }
+});
+
+test('toValue integer mode applies throughout arrays, objects and Maps', () => {
+  expect(
+    toValue(
+      { items: [3, new Map([['count', -2]])] },
+      { numbers: 'integer' },
+    ).equals(record({ items: list(num(3), map([['count', num(-2)]])) })),
+  ).toBe(true);
+  for (const nested of [[0.5], { count: 0.5 }, new Map([['count', 0.5]])]) {
+    invalid(() => toValue(nested, { numbers: 'integer' }));
+  }
 });
 
 test('toValue refuses anything the table does not name', () => {

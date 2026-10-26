@@ -157,10 +157,13 @@ export declare function record(o: Record<string, Value>): Value;
  * Plain JS data to a Value by the named constructors (ADR 0119). A Value
  * passes through; null and undefined are nothing; arrays are lists, holes
  * nothing; plain objects follow record(); a Map follows map(). A JS number
- * throws unless numbers is "decimal", which applies num(). Anything else,
- * including Date, class instances and cyclic data, throws invalid value.
+ * throws by default; numbers "integer" applies num() to safe integers only,
+ * while "decimal" applies num() to any number. Other numbers in "integer"
+ * mode throw invalid value naming dec() and { numbers: 'decimal' }.
+ * Anything else, including Date, class instances and cyclic data, throws
+ * invalid value.
  */
-export declare function toValue(plain: unknown, options?: { numbers?: "refuse" | "decimal" }): Value;
+export declare function toValue(plain: unknown, options?: { numbers?: "refuse" | "integer" | "decimal" }): Value;
 export type PlainValue =
   | null | boolean | string | Decimal | Uint8Array | Value
   | PlainValue[] | { [key: string]: PlainValue } | Map<string, PlainValue>;
