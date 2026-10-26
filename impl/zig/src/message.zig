@@ -26,6 +26,7 @@ const analysis = @import("analysis.zig");
 const binary_value = @import("binary_value.zig");
 const rp = @import("request_pump.zig");
 const exchange = @import("exchange.zig");
+const need_fields = @import("need.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -1554,111 +1555,26 @@ fn groupOf(s: *Session, msg: Json) ?*GroupEntry {
     return s.groupNamed(name);
 }
 
-fn modeName(m: caps.Mode) []const u8 {
-    return switch (m) {
-        .immediate => "immediate",
-        .suspending => "suspending",
-        .fire_and_forget => "fire-and-forget",
-    };
-}
-
 /// The `need` reply a paused Pump gets.
 fn needReply(s: *Session, ref: i64) []u8 {
     if (s.callbacks) return binNeed(s, ref) catch oomReply();
     const n = s.x.openNeed();
     var o = Out.init(s.gpa);
     defer o.deinit();
-    o.raw("{\"ref\":") catch {};
-    o.int(ref) catch {};
-    o.raw(",\"need\":{") catch {};
-    switch (n.kind) {
-        .op => {
-            o.raw("\"m\":\"op\",\"call\":") catch {};
-            o.text(n.call) catch {};
-            o.raw(",\"script\":") catch {};
-            o.text(n.script) catch {};
-            o.raw(",\"run\":") catch {};
-            o.text(n.run) catch {};
-            o.raw(",\"segment\":") catch {};
-            o.text(n.segment) catch {};
-            o.raw(",\"grant\":") catch {};
-            o.text(n.grant) catch {};
-            o.raw(",\"capability\":") catch {};
-            o.text(n.capability) catch {};
-            o.raw(",\"operation\":") catch {};
-            o.text(n.operation) catch {};
-            o.raw(",\"mode\":") catch {};
-            o.text(modeName(n.mode)) catch {};
-            o.raw(",\"now\":") catch {};
-            o.instant(s.gpa, n.now) catch {};
-            o.raw(",\"args\":[") catch {};
-            for (n.args, 0..) |v, i| {
-                if (i > 0) o.raw(",") catch {};
-                o.value(v) catch {};
-            }
-            o.raw("]") catch {};
-            if (n.scope.len > 0) {
-                o.raw(",\"scope\":") catch {};
-                o.text(n.scope) catch {};
-            }
-            o.raw(",\"automatic\":") catch {};
-            o.raw(if (n.automatic) "true" else "false") catch {};
-            if (n.fuel_left) |left| {
-                o.raw(",\"fuelLeft\":") catch {};
-                o.int(left) catch {};
-            }
-            if (n.delivery.len > 0) {
-                o.raw(",\"delivery\":") catch {};
-                o.text(n.delivery) catch {};
-            }
-        },
-        .effect => {
-            o.raw("\"m\":\"effect\",\"script\":") catch {};
-            o.text(n.script) catch {};
-            o.raw(",\"run\":") catch {};
-            o.text(n.run) catch {};
-            o.raw(",\"segment\":") catch {};
-            o.text(n.segment) catch {};
-            o.raw(",\"grant\":") catch {};
-            o.text(n.grant) catch {};
-            o.raw(",\"grants\":[") catch {};
-            for (n.grants, 0..) |g, i| {
-                if (i > 0) o.raw(",") catch {};
-                o.text(g) catch {};
-            }
-            o.raw("]") catch {};
-            if (n.coordinator) |c| {
-                o.raw(",\"coordinator\":") catch {};
-                o.text(c) catch {};
-            }
-            o.raw(",\"phase\":") catch {};
-            o.text(@tagName(n.phase)) catch {};
-            o.raw(",\"now\":") catch {};
-            o.instant(s.gpa, n.now) catch {};
-        },
-        .prop => {
-            o.raw("\"m\":\"prop\",\"object\":{\"$object\":[") catch {};
-            o.text(n.object_kind) catch {};
-            o.raw(",") catch {};
-            o.text(n.object_id) catch {};
-            o.raw("]},\"prop\":") catch {};
-            o.text(n.prop) catch {};
-            if (n.value) |v| {
-                o.raw(",\"value\":") catch {};
-                o.value(v) catch {};
-            }
-            if (n.op) |op| {
-                o.raw(",\"op\":") catch {};
-                o.text(op) catch {};
-            }
-            if (n.selector) |v| {
-                o.raw(",\"selector\":") catch {};
-                o.value(v) catch {};
-            }
-        },
-    }
-    o.raw("}}") catch {};
+    jsonNeed(&o, ref, @tagName(n.kind), n, need_fields.fields) catch return oomReply();
     return o.finish() catch oomReply();
+}
+
+/// `{"ref":…,"need":{"m":…,…}}`, the need's fields written by `write`.
+fn jsonNeed(o: *Out, ref: i64, m: []const u8, n: anytype, comptime write: anytype) Allocator.Error!void {
+    try o.raw("{\"ref\":");
+    try o.int(ref);
+    try o.raw(",\"need\":{\"m\":");
+    try o.text(m);
+    var j: JsonFields = .{ .o = o };
+    j.started[0] = true;
+    try write(&j, n);
+    try o.raw("}}");
 }
 
 /// The Reports a Pump made, taken from the Group, as chapter 9 encodes them.
@@ -1725,7 +1641,7 @@ fn outcomeWord(outcome: machine.report.Outcome) []const u8 {
 }
 
 /// Each Report's fields, in order, written once for both layouts. `e` is a
-/// `JsonReport` or a `BinReport`: an encoder with `key`, `text`, `int`,
+/// `JsonFields` or a `BinFields`: an encoder with `key`, `text`, `int`,
 /// `boolean`, `texts`, `value` (a Value Encoding field), `plain` (an error
 /// record, never core-marked), `map`/`endMap` and `list`/`item`/`endList`.
 fn reportFields(e: anytype, report: machine.report.Report, climbed: bool) Allocator.Error!void {
@@ -1975,131 +1891,166 @@ fn ancestryFields(e: anytype, a: machine.report.Ancestry) Allocator.Error!void {
     try optionalField(e, "parentCall", a.parent_call);
 }
 
-/// The JSON layout's Report encoder: an object led by its `kind`.
-const JsonReport = struct {
+/// The JSON layout's field encoder, for Reports and Needs: an object led
+/// by its `kind` or `m`.
+const JsonFields = struct {
     o: *Out,
     /// Whether the open container at each depth has an entry yet.
     started: [8]bool = @splat(false),
     depth: usize = 0,
 
-    fn open(j: *JsonReport, s: []const u8) Allocator.Error!void {
+    pub fn open(j: *JsonFields, s: []const u8) Allocator.Error!void {
         try j.o.raw(s);
         j.depth += 1;
         j.started[j.depth] = false;
     }
 
-    fn close(j: *JsonReport, s: []const u8) Allocator.Error!void {
+    pub fn close(j: *JsonFields, s: []const u8) Allocator.Error!void {
         j.depth -= 1;
         try j.o.raw(s);
     }
 
-    fn entry(j: *JsonReport) Allocator.Error!void {
+    pub fn entry(j: *JsonFields) Allocator.Error!void {
         if (j.started[j.depth]) try j.o.raw(",");
         j.started[j.depth] = true;
     }
 
-    fn key(j: *JsonReport, comptime name: []const u8) Allocator.Error!void {
+    pub fn key(j: *JsonFields, comptime name: []const u8) Allocator.Error!void {
         const first = !j.started[j.depth];
         j.started[j.depth] = true;
         try j.o.raw(if (first) "\"" ++ name ++ "\":" else ",\"" ++ name ++ "\":");
     }
 
-    fn text(j: *JsonReport, s: []const u8) Allocator.Error!void {
+    pub fn text(j: *JsonFields, s: []const u8) Allocator.Error!void {
         try j.o.text(s);
     }
 
-    fn int(j: *JsonReport, n: i128) Allocator.Error!void {
+    pub fn int(j: *JsonFields, n: i128) Allocator.Error!void {
         try j.o.int(n);
     }
 
-    fn boolean(j: *JsonReport, b: bool) Allocator.Error!void {
+    pub fn boolean(j: *JsonFields, b: bool) Allocator.Error!void {
         try j.o.raw(if (b) "true" else "false");
     }
 
-    fn texts(j: *JsonReport, xs: []const []const u8) Allocator.Error!void {
+    pub fn texts(j: *JsonFields, xs: []const []const u8) Allocator.Error!void {
         try textList(j.o, xs);
     }
 
-    fn value(j: *JsonReport, v: *const Value) Allocator.Error!void {
+    pub fn value(j: *JsonFields, v: *const Value) Allocator.Error!void {
         try reportValue(j.o, v);
     }
 
-    fn plain(j: *JsonReport, v: *const Value) Allocator.Error!void {
+    pub fn plain(j: *JsonFields, v: *const Value) Allocator.Error!void {
         j.o.valueWith(v, false) catch |e| switch (e) {
             error.NotEncodable => try j.o.raw("null"),
             error.OutOfMemory => return error.OutOfMemory,
         };
     }
 
-    fn map(j: *JsonReport) Allocator.Error!void {
+    pub fn map(j: *JsonFields) Allocator.Error!void {
         try j.open("{");
     }
 
-    fn endMap(j: *JsonReport) Allocator.Error!void {
+    pub fn endMap(j: *JsonFields) Allocator.Error!void {
         try j.close("}");
     }
 
-    fn list(j: *JsonReport, _: usize) Allocator.Error!void {
+    pub fn list(j: *JsonFields, _: usize) Allocator.Error!void {
         try j.open("[");
     }
 
-    fn item(j: *JsonReport) Allocator.Error!void {
+    pub fn item(j: *JsonFields) Allocator.Error!void {
         try j.entry();
     }
 
-    fn endList(j: *JsonReport) Allocator.Error!void {
+    pub fn endList(j: *JsonFields) Allocator.Error!void {
         try j.close("]");
     }
+
+    pub fn instant(j: *JsonFields, t: model.dates.Instant) Allocator.Error!void {
+        try j.o.instant(j.o.buf.allocator, t);
+    }
+
+    /// A Host Object reference: `{"$object":[kind,id]}`.
+    pub fn object(j: *JsonFields, kind: []const u8, id: []const u8) Allocator.Error!void {
+        try j.o.raw("{\"$object\":[");
+        try j.o.text(kind);
+        try j.o.raw(",");
+        try j.o.text(id);
+        try j.o.raw("]}");
+    }
+
+    /// A prop setter needs no flag: its `value` is present.
+    pub fn setter(_: *JsonFields) Allocator.Error!void {}
 };
 
-/// The fields layout's Report encoder: a positional record after its tag.
-const BinReport = struct {
+/// The fields layout's field encoder, for Reports and Needs: a positional
+/// record after its tag.
+const BinFields = struct {
     w: *rp.Writer,
     s: *Session,
 
-    fn key(b: BinReport, comptime name: []const u8) Allocator.Error!void {
+    pub fn key(b: BinFields, comptime name: []const u8) Allocator.Error!void {
         try b.w.key(name);
     }
 
-    fn text(b: BinReport, s: []const u8) Allocator.Error!void {
+    pub fn text(b: BinFields, s: []const u8) Allocator.Error!void {
         try b.w.ptext(s);
     }
 
-    fn int(b: BinReport, n: i128) Allocator.Error!void {
+    pub fn int(b: BinFields, n: i128) Allocator.Error!void {
         try b.w.int(n);
     }
 
-    fn boolean(b: BinReport, v: bool) Allocator.Error!void {
+    pub fn boolean(b: BinFields, v: bool) Allocator.Error!void {
         try b.w.boolean(v);
     }
 
-    fn texts(b: BinReport, xs: []const []const u8) Allocator.Error!void {
+    pub fn texts(b: BinFields, xs: []const []const u8) Allocator.Error!void {
         try b.w.ptexts(xs);
     }
 
-    fn value(b: BinReport, v: *const Value) Allocator.Error!void {
+    pub fn value(b: BinFields, v: *const Value) Allocator.Error!void {
         try binValue(b.w, b.s, v, b.s.core_errors);
     }
 
-    fn plain(b: BinReport, v: *const Value) Allocator.Error!void {
+    pub fn plain(b: BinFields, v: *const Value) Allocator.Error!void {
         try binValue(b.w, b.s, v, false);
     }
 
-    fn map(b: BinReport) Allocator.Error!void {
+    pub fn map(b: BinFields) Allocator.Error!void {
         try b.w.begin(&.{}, false);
     }
 
-    fn endMap(b: BinReport) Allocator.Error!void {
+    pub fn endMap(b: BinFields) Allocator.Error!void {
         try b.w.end();
     }
 
-    fn list(b: BinReport, n: usize) Allocator.Error!void {
+    pub fn list(b: BinFields, n: usize) Allocator.Error!void {
         try b.w.list(n);
     }
 
-    fn item(_: BinReport) Allocator.Error!void {}
+    pub fn item(_: BinFields) Allocator.Error!void {}
 
-    fn endList(_: BinReport) Allocator.Error!void {}
+    pub fn endList(_: BinFields) Allocator.Error!void {}
+
+    pub fn instant(b: BinFields, t: model.dates.Instant) Allocator.Error!void {
+        try b.w.instant(t);
+    }
+
+    /// A Host Object reference: its kind and id as a list.
+    pub fn object(b: BinFields, kind: []const u8, id: []const u8) Allocator.Error!void {
+        try b.w.list(2);
+        try b.w.ptext(kind);
+        try b.w.ptext(id);
+    }
+
+    /// `set` tells a setter from a getter, since Nothing is absent.
+    pub fn setter(b: BinFields) Allocator.Error!void {
+        try b.w.key("set");
+        try b.w.boolean(true);
+    }
 };
 
 fn reportKind(report: machine.report.Report) rp.Report {
@@ -2109,7 +2060,7 @@ fn reportKind(report: machine.report.Report) rp.Report {
 }
 
 fn writeReport(o: *Out, report: machine.report.Report, climbed: bool) Allocator.Error!void {
-    var j: JsonReport = .{ .o = o };
+    var j: JsonFields = .{ .o = o };
     try o.raw("{\"kind\":");
     try o.text(reportKind(report).kind());
     j.started[0] = true;
@@ -2281,17 +2232,7 @@ fn releaseNeed(s: *Session, ref: i64) []u8 {
     }
     var o = Out.init(s.gpa);
     defer o.deinit();
-    o.raw("{\"ref\":") catch {};
-    o.int(ref) catch {};
-    o.raw(",\"need\":{\"m\":\"release\",\"script\":") catch {};
-    o.text(r.script) catch {};
-    o.raw(",\"grant\":") catch {};
-    o.text(r.grant) catch {};
-    o.raw(",\"reason\":") catch {};
-    o.text(@tagName(r.reason)) catch {};
-    o.raw(",\"now\":") catch {};
-    o.instant(s.gpa, r.now) catch {};
-    o.raw("}}") catch {};
+    jsonNeed(&o, ref, "release", r, need_fields.releaseFields) catch return oomReply();
     return withAbandoned(s, s.x.releasing(), o.finish() catch return oomReply(), .outer);
 }
 
@@ -4925,7 +4866,7 @@ fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed:
     const kind = reportKind(report);
     try w.byte(@backingInt(kind));
     try w.begin(rp.fields(kind), true);
-    try reportFields(BinReport{ .w = w, .s = s }, report, climbed);
+    try reportFields(BinFields{ .w = w, .s = s }, report, climbed);
     try w.end();
 }
 
@@ -5672,14 +5613,6 @@ fn binNoticed(s: *Session, entry: *GroupEntry, reply: []const u8) Allocator.Erro
     return w.finish();
 }
 
-fn binNeedValue(s: *Session, w: *rp.Writer, v: *const Value) Allocator.Error!void {
-    // A Value the Core can't encode crosses as Nothing, as in Reports.
-    w.value(v, binOptions(s, s.core_errors)) catch |e| switch (e) {
-        error.OutOfMemory => return error.OutOfMemory,
-        error.InvalidValue => try w.nothing(),
-    };
-}
-
 /// The binary `need` a paused Pump gets: an op, prop or effect frame.
 fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
     const n = s.x.openNeed();
@@ -5688,6 +5621,11 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
         .prop => .prop,
         .effect => .effect,
     };
+    return binNeedFrame(s, ref, c, n, need_fields.fields);
+}
+
+/// A binary callback `c` under `ref`, the need's fields written by `write`.
+fn binNeedFrame(s: *Session, ref: i64, c: rp.Callback, n: anytype, comptime write: anytype) Allocator.Error![]u8 {
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
     try w.out.ensureTotalCapacity(s.gpa, 160);
@@ -5696,112 +5634,14 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
     try w.begin(rp.fields(c), true);
     try w.key("ref");
     try w.int(ref);
-    switch (n.kind) {
-        .op => {
-            try w.key("call");
-            try w.ptext(n.call);
-            try w.key("script");
-            try w.ptext(n.script);
-            try w.key("run");
-            try w.ptext(n.run);
-            try w.key("segment");
-            try w.ptext(n.segment);
-            try w.key("grant");
-            try w.ptext(n.grant);
-            try w.key("capability");
-            try w.ptext(n.capability);
-            try w.key("operation");
-            try w.ptext(n.operation);
-            try w.key("mode");
-            try w.ptext(modeName(n.mode));
-            try w.key("now");
-            try w.instant(n.now);
-            try w.key("args");
-            try w.list(n.args.len);
-            for (n.args) |v| try binNeedValue(s, &w, v);
-            if (n.scope.len > 0) {
-                try w.key("scope");
-                try w.ptext(n.scope);
-            }
-            try w.key("automatic");
-            try w.boolean(n.automatic);
-            if (n.fuel_left) |left| {
-                try w.key("fuelLeft");
-                try w.int(left);
-            }
-            if (n.delivery.len > 0) {
-                try w.key("delivery");
-                try w.ptext(n.delivery);
-            }
-        },
-        .effect => {
-            try w.key("script");
-            try w.ptext(n.script);
-            try w.key("run");
-            try w.ptext(n.run);
-            try w.key("segment");
-            try w.ptext(n.segment);
-            try w.key("grant");
-            try w.ptext(n.grant);
-            try w.key("grants");
-            try w.list(n.grants.len);
-            for (n.grants) |g| try w.ptext(g);
-            if (n.coordinator) |co| {
-                try w.key("coordinator");
-                try w.ptext(co);
-            }
-            try w.key("phase");
-            try w.ptext(@tagName(n.phase));
-            try w.key("now");
-            try w.instant(n.now);
-        },
-        .prop => {
-            try w.key("object");
-            try w.list(2);
-            try w.ptext(n.object_kind);
-            try w.ptext(n.object_id);
-            try w.key("prop");
-            try w.ptext(n.prop);
-            if (n.value) |v| {
-                // `set` tells a setter from a getter, since Nothing is absent.
-                try w.key("set");
-                try w.boolean(true);
-                try w.key("value");
-                try binNeedValue(s, &w, v);
-            }
-            if (n.op) |op| {
-                try w.key("op");
-                try w.ptext(op);
-            }
-            if (n.selector) |v| {
-                try w.key("selector");
-                try binNeedValue(s, &w, v);
-            }
-        },
-    }
+    try write(BinFields{ .w = &w, .s = s }, n);
     try w.end();
     return w.finish();
 }
 
 /// A binary Grant `release` need.
 fn binRelease(s: *Session, ref: i64, r: Release) Allocator.Error![]u8 {
-    var w = rp.Writer.init(s.gpa);
-    defer w.deinit();
-    try w.header();
-    try w.byte(@backingInt(rp.Callback.release));
-    try w.begin(rp.fields(rp.Callback.release), true);
-    try w.key("ref");
-    try w.int(ref);
-    try w.key("script");
-    try w.ptext(r.script);
-    try w.key("grant");
-    try w.ptext(r.grant);
-    try w.key("reason");
-    try w.ptext(@tagName(r.reason));
-    try w.key("now");
-    try w.instant(r.now);
-    try w.end();
-    return w.finish();
+    return binNeedFrame(s, ref, .release, r, need_fields.releaseFields);
 }
 
 /// A binary callback result: validated whole, then gated as handleFrame
