@@ -131,3 +131,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0127: The Zig Message Layer keeps an Exchange's lifecycle in one module](0127-the-zig-message-layer-keeps-an-exchanges-lifecycle-in-one-module.md)
 - [0128: Folio pauses a Play Session on a virtual Host clock](0128-folio-pauses-a-play-session-on-a-virtual-host-clock.md)
 - [0129: Folio evaluates Watches only while a Play Session is paused](0129-folio-evaluates-watches-only-while-a-play-session-is-paused.md)
+- [0130: TS Helpers convert plain JS at the boundary](0130-ts-helpers-convert-plain-js-at-the-boundary.md)
