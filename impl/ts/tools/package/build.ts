@@ -21,11 +21,8 @@ await build({
   platform: 'neutral',
   target: 'es2022',
   dts: true,
-  // Declaration bundling drops the driver's source-level lib reference.
-  banner: ({ fileName }) =>
-    fileName === 'driver.d.ts'
-      ? { dts: '/// <reference lib="esnext.disposable" />' }
-      : undefined,
+  // Declaration bundling drops the source-level lib references the lifetime Helpers need.
+  banner: { dts: '/// <reference lib="esnext.disposable" />' },
   outDir: dist,
   clean: true,
   deps: { neverBundle: [/^node:/] },

@@ -10,6 +10,11 @@ export {
   type WasmSource,
 } from './core';
 export { WasmGroup, WasmScript } from './group';
+export {
+  createGroup,
+  type CreateGroupOptions,
+  type DrivenGroup,
+} from '../group-helper';
 export type { Versions } from '../versions';
 export type { Core, Group, Script } from '../embedding';
 export { InstanceLostError } from './reactor';

@@ -7,6 +7,7 @@ import {
   type Group,
   type Value,
   createCore,
+  createGroup,
 } from '@northtalk/ts';
 import {
   encodeBinaryValue,
@@ -23,7 +24,11 @@ import { SessionHost } from '@northtalk/ts/session';
 import type { buildSetupGroup } from '@northtalk/ts/setup';
 import type { openSqliteDatabase } from '@northtalk/ts/sqlite';
 import type { encodeContents } from '@northtalk/ts/store';
-import type { createCore as createWasmCore } from '@northtalk/ts/wasm';
+import {
+  createGroup as createWasmGroup,
+  type createCore as createWasmCore,
+  type Core,
+} from '@northtalk/ts/wasm';
 
 export type Modules = [
   DebugController,
@@ -71,4 +76,12 @@ export const disposeDrivenGroup = async () => {
     name: 'dispose-types',
   }).drive;
   await drive.idle();
+};
+
+export const disposeCreatedGroups = async (core: Core) => {
+  await using group = createGroup({ name: 'created-types' });
+  await using wasmGroup = createWasmGroup({ name: 'wasm-types', core });
+  const shared: Group = group;
+  await wasmGroup.close('Finished');
+  return shared.name;
 };

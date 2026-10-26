@@ -64,7 +64,7 @@ export const newDrivenGroup = <G extends Group>(
 const MAX_DELAY_MS = 2 ** 31 - 1;
 
 // Older browser runtimes can still call close() explicitly.
-const asyncDispose: typeof Symbol.asyncDispose =
+export const asyncDispose: typeof Symbol.asyncDispose =
   Symbol.asyncDispose ?? Symbol.for('Symbol.asyncDispose');
 
 const timeoutDeadline =

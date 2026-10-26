@@ -161,6 +161,13 @@ Files, grammar, or lowering.
 - Tests and cases: [driver tests](tests/driver.test.ts), [Host and server tests](examples/webhooks/webhooks.test.ts), [`webhooks` case](../../corpus/examples/webhooks/)
 - First check: `bun test impl/ts/tests/driver.test.ts impl/ts/examples/webhooks`
 
+## `createGroup` lifetime Helper
+
+- Implementation: [shared Helper](src/group-helper.ts) (used by `/wasm`), [root wrapper with the default TS Core](src/create-group.ts)
+- Rules: [Driving a TS Group](../../spec/09-embedding.md#driving-a-ts-group), [ADR 0130](../../docs/adr/0130-ts-helpers-convert-plain-js-at-the-boundary.md)
+- Tests and cases: [`createGroup` tests](tests/create-group.test.ts), [embedding interface test](tests/embedding-api.test.ts)
+- First check: `bun test impl/ts/tests/create-group.test.ts`
+
 ## Save and restore
 
 - Implementation: [save format](src/group-snapshot.ts) (saved record, versions and checks, reference table), [snapshot graph and `saveFormatVersion`](src/snapshot.ts), [Group](src/group.ts) (save refusal, Trace, rebuild on restore). The boundary follows [ADR 0122](../../docs/adr/0122-the-ts-core-keeps-its-save-format-in-one-module.md).
