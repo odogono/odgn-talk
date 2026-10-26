@@ -6,7 +6,7 @@ The sources are William R. Cook's [AppleScript paper](https://www.cs.utexas.edu/
 
 ## Recommendation
 
-**Specify Option A, Core-side resolution, as the meaning of every element query, and keep Option B, Host-declared bulk resolution, as a later opt-in that must give the same answer.** Apple's own design had the same split: its library resolved paths and tests generically through per-object callbacks, and an application could opt in to resolving whose tests itself and decline any one of them. The split carries over well. The reason for Apple's design, a 1/60 s process switch per message, does not apply in-process, and it applies only weakly behind the Message Layer at Folio's scale. The bulk path also brings a problem Apple never had to solve: Apple let each application interpret comparisons itself, while NorthTalk needs the Host's answer to equal the Core's, with NFC text and decimal numbers. Nothing measured yet says Option B is needed. Build A, measure a real query behind the Message Layer, and decide B on those figures.
+**Specify Option A, Core-side resolution, as the meaning of every element query, and keep Option B, Host-declared bulk resolution, as a later opt-in that must give the same answer.** Apple's own design had the same split: its library resolved paths and tests generically through per-object callbacks, and an application could opt in to resolving whose tests itself and decline any one of them. The split carries over well. The reason for Apple's design, a 1/60 s process switch per message, does not apply in-process, and it applies only weakly behind the Message Layer at Folio's scale. The bulk path also brings a problem Apple never had to solve: Apple let each application interpret comparisons itself, while NorthTalk needs the Host's answer to equal the Core's, with NFC text and decimal numbers. The [measurements](prop-crossing-measurements.md) don't show Option B is needed at Folio's scale. Build A, and decide B only when a Wasmex or sidecar Host has a query over hundreds of members on a latency-sensitive path.
 
 ## What Apple Events did, and why
 
@@ -63,9 +63,9 @@ The Object Kind's `elements` declaration adds an optional `select` callback with
 | Capability call p50, Elixir Host on the native Go sidecar (historical, retired Go Core) | 25.0 µs | [Message Layer measurements](message-layer-measurements.md#results) |
 | Bare export call: Bun, Wasmex | 0.01 µs, 17–29 µs | [Message Layer spike](message-layer.md) |
 
-None of these times a `prop` need. The measurements say so: "Suspending Operations, `prop` needs, restore and the Message Layer's unsupported messages aren't timed" ([fog](message-layer-measurements.md#fog)). The Capability call figure is the closest stand-in, since an interim `prop` need has the same shape as an `op` need, but that is an assumption. No note measures an in-process property getter on either Core.
+These figures predate any timing of a `prop` need, so this note first used the Capability call as a stand-in. [The property crossing measurements](prop-crossing-measurements.md) (#1572) have since timed them: a property get costs 2.5 µs on the C Host, 10.1 µs on the Elixir Host's Zig sidecar and 42.0 µs on Wasmex, no more than a Capability call on any of them.
 
-On that assumption, `every element of p whose fill is "red"` over Tetris's 216 rectangles makes 433 crossings under A. That is about 3.2 ms on the C Host and about 24 ms on Wasmex, against one or two crossings under B. The Wasmex figure exceeds a 16.7 ms frame at 60 Hz. The C figure fits, but not as a per-frame habit. In-process, the export call itself is 0.01 µs, so A's cost is the Core's own per-element work, which B does not remove.
+Measured, `the value of element i of p` over 216 members, 433 crossings under A, takes 1.27 ms on the C Host, 4.4 ms on the sidecar and 21.8 ms on Wasmex, against one or two crossings under B. The stand-in had estimated about 3.2 ms and 24 ms. The Wasmex figure exceeds a 16.7 ms frame at 60 Hz. The C figure fits, but not as a per-frame habit. In-process, the TS Core's property read is about a microsecond including its loop, so A's cost is mostly the Core's own per-element work, which B does not remove.
 
 ## When it isn't worth it
 
@@ -83,4 +83,4 @@ On that assumption, `every element of p whose fill is "red"` over Tetris's 216 r
 5. Does `the last element … whose` walk forward, as ADR 0074 requires for values, or backward through negative `At`? Backward is cheaper, but the condition then runs on different members, which is visible when it fails.
 6. Do range selectors for elements reuse `..` ranges, which are a Value kind and currently a `wrong kind` selector, or a spelling closer to AppleScript's `from … to`?
 7. Should a decline be per query, like `errAEEventNotHandled`, or only declared per Object Kind?
-8. Before any of this, which Host actually needs B? Name the Message Layer Host and collection size, and time a `prop` need there.
+8. Before any of this, which Host actually needs B? Name the Message Layer Host and collection size. The [measurements](prop-crossing-measurements.md) price A there: about 0.1 ms per member on Wasmex, 0.02 ms on the sidecar and 0.006 ms on the C Host.
