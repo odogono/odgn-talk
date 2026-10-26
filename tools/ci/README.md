@@ -31,7 +31,7 @@ broader matrix on `main` or manually:
   repository's Woodpecker settings (daily at 03:17) or by hand. It uses the
   `zig` worker image.
 - `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
-  the workspace, and checks Node 22, Bun, unbundled Chromium and declarations
+  the workspace, and checks Node 24.10.0, Bun, unbundled Chromium and declarations
   under TypeScript 5.9 and the latest TypeScript.
 
 The PR workflows do not yet cover the complete Actions matrix, including fuzz
@@ -93,15 +93,15 @@ Build this image on each Linux Docker worker before enabling the workflow:
 
 ```sh
 docker build -t odgn-talk-ci:2026-10-19-2 tools/ci
-docker build --build-arg NODE_VERSION=24 -t odgn-talk-ci:2026-10-19-2-node24 tools/ci
+docker build --build-arg NODE_VERSION=24.10.0 -t odgn-talk-ci:2026-10-26-node24-10-0 tools/ci
 ```
 
 Both images contain Bun 1.4.2 with its `bunx` entry point, Go 1.27.2 and the C
 compiler needed for Go race tests. The default image uses Node 22 for parity with
-the Actions stack and CLI jobs. The `node24` image is used only for the required
-SQLite and notification
-runtime tests; SQLite's authorizer requires Node 24.10 or later. Change a tag in
-both the build command and workflows whenever its image changes. Woodpecker
+the Actions stack and CLI jobs. The `node24-10-0` image pins the package's
+minimum Node version for the required SQLite, HTTP and notification runtime
+kits; SQLite's authorizer requires Node 24.10 or later. Change a tag in both
+the build command and workflows whenever its image changes. Woodpecker
 uses existing local images by default.
 
 The TS and tooling suites have a 30-second default per-test timeout to
@@ -189,15 +189,19 @@ Keep `ZIG_VERSION` in `Dockerfile.zig` aligned with the workflows'
 
 ### Browser worker image
 
-After building the default Linux image, build the browser variant on each
+After building the Node 24.10.0 Linux image, build the browser variant on each
 general Linux Docker worker before enabling the package workflow:
 
 ```sh
-docker build -f tools/ci/Dockerfile.browser -t odgn-talk-ci:2026-10-19-2-browser tools/ci
+docker build -f tools/ci/Dockerfile.browser --build-arg BASE_IMAGE=odgn-talk-ci:2026-10-26-node24-10-0 -t odgn-talk-ci:2026-10-26-node24-10-0-browser tools/ci
 ```
 
 It adds Playwright's Chromium headless shell and system dependencies to the
-Node 22 image. `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` makes the installed
+Node 24.10.0 image. Build the floor base and browser images on both taito
+(`linux/amd64`) and almere-linux (`linux/arm64`) before enabling the workflow
+references. On almere, add `--context colima-woodpecker` to both Docker commands.
+The shared Node 22 images and unrelated CLI and tooling jobs stay unchanged.
+`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` makes the installed
 browser available to the workspace's Playwright package. The workflow's install
 command ensures that the browser revision matches the locked workspace version;
 with the matching image, it reuses the installed browser without downloading it.

@@ -30,7 +30,14 @@ const bundled = async () => {
 };
 
 const runtimes = {
-  node: (script: string, ...args: string[]) => ['node', script, ...args],
+  // SQLite is experimental at the supported Node 24.10.0 floor. Keep its
+  // expected warning out of the kit's otherwise-empty stderr assertion.
+  node: (script: string, ...args: string[]) => [
+    'node',
+    '--disable-warning=ExperimentalWarning',
+    script,
+    ...args,
+  ],
 };
 const supported = (name: string) => {
   if (!Bun.which(name)) {

@@ -29,17 +29,19 @@ A Host can create a Group ready to pump from the event loop with `newDrivenGroup
 
 ## Subpaths
 
-| Import                  | Holds                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `@northtalk/ts`         | Values, Groups, Scripts, Libraries, Capabilities, Object Kinds, save and restore, and the parser and checker |
-| `@northtalk/ts/session` | The Session Host, for a REPL or playground, and Session Transcripts                                          |
-| `@northtalk/ts/driver`  | `newDrivenGroup` and `autoDrive`, which pump a Group from the event loop                                     |
-| `@northtalk/ts/store`   | The Store Standard Capability                                                                                |
-| `@northtalk/ts/notify`  | The Store notification router                                                                                |
-| `@northtalk/ts/sqlite`  | A `sqlite` implementation on `node:sqlite`, for server Hosts                                                 |
-| `@northtalk/ts/wasm`    | The same embedding API over the Zig Core's WebAssembly reactor                                               |
-| `@northtalk/ts/setup`   | Group setup shared by Sessions and Trace replay. Tooling surface                                             |
-| `@northtalk/ts/debug`   | Debugger hooks. Tooling surface                                                                              |
+| Import                        | Holds                                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `@northtalk/ts`               | Values, Groups, Scripts, Libraries, Capabilities, Object Kinds, save and restore, and the parser and checker |
+| `@northtalk/ts/session`       | The Session Host, for a REPL or playground, and Session Transcripts                                          |
+| `@northtalk/ts/driver`        | `newDrivenGroup` and `autoDrive`, which pump a Group from the event loop                                     |
+| `@northtalk/ts/store`         | The Store Standard Capability                                                                                |
+| `@northtalk/ts/notify`        | The Store notification router                                                                                |
+| `@northtalk/ts/sqlite`        | A `sqlite` implementation on `node:sqlite`, for server Hosts                                                 |
+| `@northtalk/ts/http`          | The HTTP router on `node:http`, for server Hosts                                                             |
+| `@northtalk/ts/message-layer` | Binary Value and frame codecs for the Message Layer                                                          |
+| `@northtalk/ts/wasm`          | The same embedding API over the Zig Core's WebAssembly reactor                                               |
+| `@northtalk/ts/setup`         | Group setup shared by Sessions and Trace replay. Tooling surface                                             |
+| `@northtalk/ts/debug`         | Debugger hooks. Tooling surface                                                                              |
 
 The tooling surfaces serve editors, debuggers and REPLs. They aren't part of the Spec's embedding API, and may change in any minor release while the package is `0.x`.
 
@@ -49,8 +51,8 @@ The tooling surfaces serve editors, debuggers and REPLs. They aren't part of the
 
 The package is ESM only, with no dependencies.
 
-- **Browsers:** every subpath except `./sqlite`. The modules load unbundled through an import map, as well as through a bundler.
-- **Node 22 or later, and Bun.** `./sqlite` needs Node 24.10 or later, or Bun.
+- **Browsers:** every subpath except `./sqlite` and `./http`, including `./notify`. The modules load unbundled through an import map, as well as through a bundler.
+- **Node 24.10 or later, and Bun.** The Node minimum applies to every entry point, including applications using only the Core.
 - **TypeScript 5.9 or later**, for the declarations.
 
 `coreVersions` reports the language, Cost Model, Unicode and save-format versions this release implements. The package version follows semver for its embedding API.

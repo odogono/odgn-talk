@@ -23,7 +23,7 @@ export const manifest = (source: Source, subpaths: readonly Subpath[]) => ({
   },
   bugs: 'https://github.com/odogono/odgn-talk/issues',
   keywords: ['northtalk', 'scripting', 'language', 'interpreter', 'embedding'],
-  engines: { node: '>=22' },
+  engines: { node: '>=24.10' },
   sideEffects: false,
   exports: Object.fromEntries([
     ...subpaths.map(subpath => {

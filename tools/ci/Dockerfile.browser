@@ -1,4 +1,5 @@
-FROM odgn-talk-ci:2026-10-19-2
+ARG BASE_IMAGE=odgn-talk-ci:2026-10-19-2
+FROM ${BASE_IMAGE}
 
 # Keep this version aligned with playwright in bun.lock. Rebuild under a new
 # image tag when either the base image or Playwright changes.

@@ -72,7 +72,7 @@ steps:
       - bun run build
 
   - name: node-runtimes
-    image: odgn-talk-ci:2026-10-19-2-node24
+    image: odgn-talk-ci:2026-10-26-node24-10-0
     directory: impl/ts
     environment:
       NORTHTALK_SQLITE_RUNTIMES: node
