@@ -638,17 +638,17 @@ Core tests run every text-model seed case's Script through the machine and repro
 An event-loop Host can create a Group ready to run Requests:
 
 ```ts
-import { createCore } from '@northtalk/ts';
-import { newDrivenGroup } from '@northtalk/ts/driver';
+import { createGroup } from '@northtalk/ts';
 
-const { group, drive } = newDrivenGroup(createCore(), { name: 'demo' });
+await using group = createGroup({ name: 'demo' });
 const script = group.load({
   name: 'main',
   source: 'on go\n  return 7\nend go',
 });
 console.log((await script.invoke('go')).toString()); // 7
-await drive.close();
 ```
+
+`createGroup` uses the process-wide TS Core by default, or a supplied `core`. The `/wasm` export requires the Core returned by its asynchronous `createCore`. It forwards all `newDrivenGroup` options and extends the shared Group with `close(reason?)` and async disposal, using the driver's shutdown behavior below.
 
 For a Host that owns the Clock and Pump loop, use `newGroup` directly:
 

@@ -113,6 +113,11 @@ export { encodeValue } from './encoding';
 export { decodeJson, encodeJson } from './json';
 export { coreVersions, type Versions } from './versions';
 export { createCore, type TsCore } from './core';
+export {
+  createGroup,
+  type CreateGroupOptions,
+  type DrivenGroup,
+} from './create-group';
 export type { Core, Group, Script } from './embedding';
 export {
   exportManifest,

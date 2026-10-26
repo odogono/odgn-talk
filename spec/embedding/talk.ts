@@ -1062,3 +1062,17 @@ export type DrivenGroupOptions = Omit<GroupOptions, "onReady"> & AutoDriveOption
 export declare function newDrivenGroup(core: Pick<Core, "newGroup">, o: DrivenGroupOptions): { drive: Drive; group: Group };
 /** For an existing Group whose onReady calls the returned driver's ready method. */
 export declare function autoDrive(group: Group, o?: AutoDriveOptions): Drive;
+
+// ---------------------------------------------------------------------------
+// Lifetime Helper: @northtalk/ts and @northtalk/ts/wasm (chapter 9, Outside parity)
+// ---------------------------------------------------------------------------
+
+export type DrivenGroup = Group & Pick<Drive, "close" | typeof Symbol.asyncDispose>;
+/** Root export: omitting core lazily requests the process-wide TS Core. */
+export type CreateGroupOptions = DrivenGroupOptions & { core?: Core };
+/**
+ * Creates a driven Group with the driver's close and async disposal semantics.
+ * The /wasm export requires core: its options are DrivenGroupOptions & { core: Core }.
+ * Core, Group and Script themselves gain no members (ADR 0130).
+ */
+export declare function createGroup(o: CreateGroupOptions): DrivenGroup;

@@ -111,6 +111,14 @@ describe('the embedding interface matches spec/embedding/talk.ts', () => {
       expect(parametersOf(driver, name)).toEqual(parametersOf(spec, name));
     });
   }
+
+  test('createGroup Helper', () => {
+    for (const file of ['src/create-group.ts', 'src/group-helper.ts']) {
+      expect(parametersOf(parse(file), 'createGroup')).toEqual(
+        parametersOf(spec, 'createGroup'),
+      );
+    }
+  });
 });
 
 // Exports of @northtalk/ts that @northtalk/ts/wasm leaves out on purpose: the
