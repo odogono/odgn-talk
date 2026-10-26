@@ -119,6 +119,7 @@ export {
   type DrivenGroup,
 } from './create-group';
 export type { Core, Group, Script } from './embedding';
+export { handlersOf, type Handlers, type ScriptWithHandlers } from './handlers';
 export {
   exportManifest,
   type ManifestSpec,

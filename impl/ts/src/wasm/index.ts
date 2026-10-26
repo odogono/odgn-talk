@@ -17,6 +17,11 @@ export {
 } from '../group-helper';
 export type { Versions } from '../versions';
 export type { Core, Group, Script } from '../embedding';
+export {
+  handlersOf,
+  type Handlers,
+  type ScriptWithHandlers,
+} from '../handlers';
 export { InstanceLostError } from './reactor';
 
 export {

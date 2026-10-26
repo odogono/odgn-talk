@@ -161,12 +161,12 @@ Files, grammar, or lowering.
 - Tests and cases: [driver tests](tests/driver.test.ts), [Host and server tests](examples/webhooks/webhooks.test.ts), [`webhooks` case](../../corpus/examples/webhooks/)
 - First check: `bun test impl/ts/tests/driver.test.ts impl/ts/examples/webhooks`
 
-## `createGroup` lifetime Helper
+## `createGroup` and Handler Helpers
 
-- Implementation: [shared Helper](src/group-helper.ts) (used by `/wasm`), [root wrapper with the default TS Core](src/create-group.ts)
+- Implementation: [shared Group Helper](src/group-helper.ts) (used by `/wasm`), [root wrapper with the default TS Core](src/create-group.ts), [plain-JS Handler calls](src/handlers.ts)
 - Rules: [Driving a TS Group](../../spec/09-embedding.md#driving-a-ts-group), [ADR 0130](../../docs/adr/0130-ts-helpers-convert-plain-js-at-the-boundary.md)
-- Tests and cases: [`createGroup` tests](tests/create-group.test.ts), [embedding interface test](tests/embedding-api.test.ts)
-- First check: `bun test impl/ts/tests/create-group.test.ts`
+- Tests and cases: [`createGroup` tests](tests/create-group.test.ts), [Handler Helper tests](tests/handlers.test.ts), [embedding interface test](tests/embedding-api.test.ts)
+- First check: `bun test impl/ts/tests/create-group.test.ts impl/ts/tests/handlers.test.ts`
 
 ## Save and restore
 

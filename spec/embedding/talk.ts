@@ -1064,15 +1064,31 @@ export declare function newDrivenGroup(core: Pick<Core, "newGroup">, o: DrivenGr
 export declare function autoDrive(group: Group, o?: AutoDriveOptions): Drive;
 
 // ---------------------------------------------------------------------------
-// Lifetime Helper: @northtalk/ts and @northtalk/ts/wasm (chapter 9, Outside parity)
+// Helpers: @northtalk/ts and @northtalk/ts/wasm (chapter 9, Outside parity)
 // ---------------------------------------------------------------------------
 
-export type DrivenGroup = Group & Pick<Drive, "close" | typeof Symbol.asyncDispose>;
+/** Untyped calls accept plain data and safe-integer JS numbers. */
+export type Handlers = {
+  [name: string]: (...args: (PlainValue | number | bigint)[]) => Promise<PlainValue>;
+};
+/** T describes handlers without runtime checking. */
+export type ScriptWithHandlers<T = Handlers> = Script & { readonly handlers: T };
+/**
+ * Converts each argument with toValue(arg, { numbers: 'integer' }), invokes the
+ * message and converts its answer with default fromValue options. Conversion
+ * failures reject with invalid value naming the one-based argument position;
+ * invoke rejections pass through unchanged. The Host must still drive the Group.
+ * Symbols, then, Object.prototype names and invalid message names read undefined.
+ */
+export declare function handlersOf<T = Handlers>(script: Script): T;
+export type DrivenGroup = Omit<Group, "load"> & Pick<Drive, "close" | typeof Symbol.asyncDispose> & {
+  load<T = Handlers>(o: LoadOptions): ScriptWithHandlers<T>;
+};
 /** Root export: omitting core lazily requests the process-wide TS Core. */
 export type CreateGroupOptions = DrivenGroupOptions & { core?: Core };
 /**
  * Creates a driven Group with the driver's close and async disposal semantics.
  * The /wasm export requires core: its options are DrivenGroupOptions & { core: Core }.
- * Core, Group and Script themselves gain no members (ADR 0130).
+ * Loaded Scripts have handlers; Core, Group and Script themselves gain no members (ADR 0130).
  */
 export declare function createGroup(o: CreateGroupOptions): DrivenGroup;

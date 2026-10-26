@@ -645,10 +645,14 @@ const script = group.load({
   name: 'main',
   source: 'on go\n  return 7\nend go',
 });
-console.log((await script.invoke('go')).toString()); // 7
+console.log(String(await script.handlers.go())); // 7
 ```
 
 `createGroup` uses the process-wide TS Core by default, or a supplied `core`. The `/wasm` export requires the Core returned by its asynchronous `createCore`. It forwards all `newDrivenGroup` options and extends the shared Group with `close(reason?)` and async disposal, using the driver's shutdown behavior below.
+
+Scripts loaded by `createGroup` have `handlers.<name>(...args)`: arguments pass through `toValue(arg, { numbers: 'integer' })`, then `invoke`, and answers through default `fromValue`. A number answer is a `Decimal`, a map a plain object; Instants and other kinds without a plain JS form stay `Value`s. Safe-integer JS numbers work as arguments; fractional or unsafe numbers reject with `invalid value`, naming the one-based argument position and `dec()` or `{ numbers: 'decimal' }` as the fix. Script errors pass through unchanged. `then`, symbols, `Object.prototype` names and invalid message names read as `undefined`; a valid but undeclared name rejects as `invoke` does. Selectors use brackets, such as `script.handlers['move:to:'](2, 3)`.
+
+`group.load<{ total(a: number, b: number): Promise<Decimal> }>(options)` lets the Host state the type of `handlers`; nothing checks that declaration at runtime. By default, arguments are `PlainValue | number | bigint` and answers are `PlainValue`. With TypeScript's `noUncheckedIndexedAccess`, default Handler reads need a non-null assertion, such as `script.handlers.go!()`. `handlersOf<T>(script)`, exported by both entry points, provides the same calls for any shared `Script`, using its existing driver or Host Pump loop. `script.invoke` continues to take and return `Value`s.
 
 For a Host that owns the Clock and Pump loop, use `newGroup` directly:
 
