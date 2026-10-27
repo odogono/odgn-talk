@@ -132,3 +132,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0128: Folio pauses a Play Session on a virtual Host clock](0128-folio-pauses-a-play-session-on-a-virtual-host-clock.md)
 - [0129: Folio evaluates Watches only while a Play Session is paused](0129-folio-evaluates-watches-only-while-a-play-session-is-paused.md)
 - [0130: TS Helpers convert plain JS at the boundary](0130-ts-helpers-convert-plain-js-at-the-boundary.md)
+- [0131: The Zig Message Layer describes each Need and result once](0131-the-zig-message-layer-describes-each-need-and-result-once.md)

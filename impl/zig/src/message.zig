@@ -26,7 +26,7 @@ const analysis = @import("analysis.zig");
 const binary_value = @import("binary_value.zig");
 const rp = @import("request_pump.zig");
 const exchange = @import("exchange.zig");
-const need_fields = @import("need.zig");
+const need_codec = @import("need.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -107,8 +107,6 @@ const GroupEntry = struct {
     /// Trace lines not yet carried by a reply, from the sink.
     pending_trace: std.ArrayList([]u8) = .empty,
     inline_trace: ?InlineTrace = null,
-    /// Whether the last value read held another Group's Function Value.
-    wrong_group: bool = false,
     /// The calls the Host answered `started`, or adopted, and hasn't
     /// answered or failed: those the Core abandons are listed in the next
     /// reply's `abandoned`, once.
@@ -216,24 +214,7 @@ const GroupEntry = struct {
     }
 };
 
-/// What an `op-result` or `prop-result` brought back, for the re-made
-/// call to consume.
-const Answer = struct {
-    kind: enum { result, started, done, fail, limit, host_error },
-    value: ?*Value = null,
-    code: []const u8 = "",
-    message: ?[]const u8 = null,
-    data: ?*Value = null,
-    charged: u64 = 0,
-
-    pub fn release(a: *Answer, gpa: Allocator) void {
-        if (a.value) |v| v.release();
-        if (a.data) |v| v.release();
-        if (a.code.len > 0) gpa.free(a.code);
-        if (a.message) |m| gpa.free(m);
-        a.* = undefined;
-    }
-};
+const Answer = need_codec.Answer;
 
 /// The crossing a Pump paused at, until its result comes back.
 const Need = struct {
@@ -680,8 +661,7 @@ fn resolveObject(context: ?*anyopaque, kind: []const u8, id: []const u8) model.E
 
 /// Reads a Value Encoding held in a parsed frame, against `entry`'s
 /// Group (or no Group, for `add`).
-fn decodeValue(gpa: Allocator, j: Json, entry: ?*GroupEntry) model.Error!*Value {
-    if (entry) |e| e.wrong_group = false;
+fn decodeValue(gpa: Allocator, j: Json, entry: ?*GroupEntry) encoding.DecodeError!*Value {
     return encoding.decodeParsed(gpa, j, resolverOf(entry));
 }
 
@@ -694,11 +674,13 @@ fn resolverOf(entry: ?*GroupEntry) display.Resolver {
     };
 }
 
-/// The host error for a value `decodeValue` refused.
-fn decodeError(e: model.Error, entry: ?*GroupEntry) talk.HostErrorCode {
-    if (e == error.OutOfMemory) return .out_of_memory;
-    if (entry) |x| if (x.wrong_group) return .wrong_group;
-    return .invalid_value;
+/// Both Value layouts preserve the resolver's typed refusal.
+fn decodeError(e: anyerror) talk.HostErrorCode {
+    return switch (e) {
+        error.OutOfMemory => .out_of_memory,
+        error.WrongGroup => .wrong_group,
+        else => .invalid_value,
+    };
 }
 
 /// The Session whose frame `handle` is reading, which writes Function
@@ -781,7 +763,7 @@ const token_core_errors = true;
 
 /// Reads a `$function` token against `context`'s Group: another Group's is
 /// `wrong group`, and anything this layer didn't write is invalid.
-fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, token: []const u8) model.Error!*Value {
+fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, token: []const u8) encoding.DecodeError!*Value {
     _ = home;
     _ = shown;
     const e: *GroupEntry = @ptrCast(@alignCast(context orelse return error.InvalidValue));
@@ -793,10 +775,7 @@ fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, to
     const parsed = std.json.parseFromSlice(Json, gpa, raw, .{ .parse_numbers = false }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
     const g = asText(field(parsed.value, "g")) orelse return error.InvalidValue;
-    if (!std.mem.eql(u8, g, e.name)) {
-        e.wrong_group = true;
-        return error.InvalidValue;
-    }
+    if (!std.mem.eql(u8, g, e.name)) return error.WrongGroup;
     const index = asU64(field(parsed.value, "f") orelse return error.InvalidValue) orelse return error.InvalidValue;
     const functions = e.group.group.functions.items;
     if (index >= functions.len) return error.InvalidValue;
@@ -1561,19 +1540,19 @@ fn needReply(s: *Session, ref: i64) []u8 {
     const n = s.x.openNeed();
     var o = Out.init(s.gpa);
     defer o.deinit();
-    jsonNeed(&o, ref, @tagName(n.kind), n, need_fields.fields) catch return oomReply();
+    jsonNeed(&o, ref, @tagName(n.kind), n) catch return oomReply();
     return o.finish() catch oomReply();
 }
 
-/// `{"ref":…,"need":{"m":…,…}}`, the need's fields written by `write`.
-fn jsonNeed(o: *Out, ref: i64, m: []const u8, n: anytype, comptime write: anytype) Allocator.Error!void {
+/// `{"ref":…,"need":{"m":…,…}}`, the need's fields as need.zig lists them.
+fn jsonNeed(o: *Out, ref: i64, m: []const u8, n: anytype) Allocator.Error!void {
     try o.raw("{\"ref\":");
     try o.int(ref);
     try o.raw(",\"need\":{\"m\":");
     try o.text(m);
     var j: JsonFields = .{ .o = o };
     j.started[0] = true;
-    try write(&j, n);
+    try need_codec.needFields(&j, n);
     try o.raw("}}");
 }
 
@@ -2232,7 +2211,7 @@ fn releaseNeed(s: *Session, ref: i64) []u8 {
     }
     var o = Out.init(s.gpa);
     defer o.deinit();
-    jsonNeed(&o, ref, "release", r, need_fields.releaseFields) catch return oomReply();
+    jsonNeed(&o, ref, "release", r) catch return oomReply();
     return withAbandoned(s, s.x.releasing(), o.finish() catch return oomReply(), .outer);
 }
 
@@ -2252,83 +2231,33 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     }
 }
 
-/// `effect-result`: `status` of `ok`, `failed` or `unknown`; anything
-/// else is `unknown`, as is a malformed reply. The re-made hook takes it.
-fn answerEffect(s: *Session, msg: Json, ref: i64) []u8 {
-    const given = asText(field(msg, "status")) orelse "unknown";
-    const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
-    return resumeEffect(s, ref, status);
+/// Parses a JSON result only after the frame has passed the exchange gate.
+fn answerNeed(s: *Session, msg: Json, ref: i64, kind: exchange.Result) []u8 {
+    const entry = if (kind == .release) null else s.x.openNeed().entry;
+    const result = need_codec.readJson(s.gpa, kind, msg, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |err| return resultError(s, ref, err, switch (kind) {
+        .prop => "a prop-result with no outcome",
+        .op => "an op-result with no outcome",
+        else => unreachable,
+    });
+    return resumeResult(s, ref, result);
 }
 
-fn resumeEffect(s: *Session, ref: i64, status: caps.EffectStatus) []u8 {
-    return goOn(s, ref, s.x.effectAnswered(s.gpa, status));
-}
-
-/// An error Data map's value, from a result's `fail`/`error` object.
-fn failureOf(s: *Session, entry: ?*GroupEntry, j: Json, answer: *Answer) (Allocator.Error || Invalid)!void {
-    const code = asText(field(j, "code")) orelse return error.InvalidValue;
-    answer.code = try s.gpa.dupe(u8, code);
-    errdefer {
-        s.gpa.free(answer.code);
-        answer.code = "";
-    }
-    if (asText(field(j, "message"))) |m| answer.message = try s.gpa.dupe(u8, m);
-    errdefer if (answer.message) |m| {
-        s.gpa.free(m);
-        answer.message = null;
-    };
-    if (field(j, "data")) |d| if (d != .null) {
-        answer.data = decodeValue(s.gpa, d, entry) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+/// Both layout parsers return one result, then one mapping owns the Answer.
+fn resumeResult(s: *Session, ref: i64, result: need_codec.Result) []u8 {
+    return switch (result) {
+        .callback => |callback| resumeNeed(s, ref, need_codec.answer(s.gpa, callback) catch return hostError(s.gpa, ref, .out_of_memory)),
+        .effect => |status| goOn(s, ref, s.x.effectAnswered(s.gpa, status)),
+        .release => releaseResultReply(s, ref),
     };
 }
 
-/// Answers the paused Pump's need and resumes it.
-fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
-    const entry = s.x.openNeed().entry;
-    var answer: Answer = .{ .kind = .host_error };
-    if (field(msg, "charged")) |v| {
-        answer.charged = asU64(v) orelse return hostError(s.gpa, ref, .invalid_value);
-        if (answer.charged > 9_007_199_254_740_991) return hostError(s.gpa, ref, .invalid_value);
-    }
-    if (is_prop) {
-        if (field(msg, "value")) |v| {
-            answer.kind = .result;
-            answer.value = decodeValue(s.gpa, v, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
-        } else if (field(msg, "ok") != null) {
-            answer.kind = .done;
-        } else if (field(msg, "fail")) |f| {
-            answer.kind = .fail;
-            failureOf(s, entry, f, &answer) catch |e| {
-                if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
-                answer.kind = .host_error;
-            };
-        } else if (field(msg, "hostError") != null) {
-            answer.kind = .host_error;
-        } else return protocolError(s.gpa, ref, "a prop-result with no outcome");
-    } else {
-        // `limit` comes first: a successful reply cannot override a latched
-        // refusal (spec/embedding/metered-operations.md).
-        if (field(msg, "limit")) |v| {
-            if (!(asBool(v) orelse false)) return hostError(s.gpa, ref, .invalid_value);
-            answer.kind = .limit;
-        } else if (field(msg, "result")) |v| {
-            answer.kind = .result;
-            answer.value = decodeValue(s.gpa, v, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
-        } else if (field(msg, "started") != null) {
-            answer.kind = .started;
-        } else if (field(msg, "done") != null) {
-            answer.kind = .done;
-        } else if (field(msg, "fail")) |f| {
-            answer.kind = .fail;
-            failureOf(s, entry, f, &answer) catch |e| {
-                if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
-                answer.kind = .host_error;
-            };
-        } else if (field(msg, "hostError") != null) {
-            answer.kind = .host_error;
-        } else return protocolError(s.gpa, ref, "an op-result with no outcome");
-    }
-    return resumeNeed(s, ref, answer);
+fn resultError(s: *Session, ref: i64, err: anyerror, no_outcome: []const u8) []u8 {
+    return switch (err) {
+        error.NoOutcome => protocolError(s.gpa, ref, no_outcome),
+        error.UnknownOutcome => protocolError(s.gpa, ref, "a callback result with an unknown outcome"),
+        error.Malformed => protocolError(s.gpa, ref, "malformed binary frame"),
+        else => hostError(s.gpa, ref, decodeError(err)),
+    };
 }
 
 /// Hands the paused Pump its need's answer and resumes it.
@@ -2953,7 +2882,7 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
                 for (args[0..made]) |v| v.release();
                 s.gpa.free(args);
                 args = &.{};
-                return hostError(s.gpa, ref, decodeError(e, entry));
+                return hostError(s.gpa, ref, decodeError(e));
             };
             made += 1;
         }
@@ -3087,14 +3016,14 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         const emessage = asText(field(e, "message"));
         var data: ?*Value = null;
         if (field(e, "data")) |d| if (d != .null) {
-            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err, entry));
+            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err));
         };
         defer if (data) |d| d.release();
         const failure: talk.ScriptError = .{ .code = ecode.ptr, .code_len = ecode.len, .message = if (emessage) |m| m.ptr else null, .message_len = if (emessage) |m| m.len else 0, .data = data };
         break :blk Direct.callFail(c, &failure);
     } else blk: {
         const vj = field(msg, "value") orelse return hostError(s.gpa, ref, .invalid_value);
-        const v = decodeValue(s.gpa, vj, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+        const v = decodeValue(s.gpa, vj, entry) catch |e| return hostError(s.gpa, ref, decodeError(e));
         defer v.release();
         const fuel = if (field(msg, "fuel")) |f| asInt(f) orelse return hostError(s.gpa, ref, .invalid_value) else 0;
         if (fuel < 0 or fuel > 9_007_199_254_740_991) return hostError(s.gpa, ref, .invalid_value);
@@ -4025,13 +3954,13 @@ fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
     defer if (data) |v| v.release();
     var failure: talk.ScriptError = undefined;
     if (field(given, "answer")) |j| {
-        answer = decodeValue(s.gpa, j, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+        answer = decodeValue(s.gpa, j, entry) catch |e| return hostError(s.gpa, ref, decodeError(e));
         st.answer = answer;
     } else if (field(given, "fail")) |e| {
         const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
         const emessage = asText(field(e, "message"));
         if (field(e, "data")) |d| if (d != .null) {
-            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err, entry));
+            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err));
         };
         failure = .{ .code = ecode.ptr, .code_len = ecode.len, .message = if (emessage) |m| m.ptr else null, .message_len = if (emessage) |m| m.len else 0, .data = data };
         st.fail = &failure;
@@ -4055,7 +3984,7 @@ fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
 /// and `limits`.
 fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-    const f = decodeValue(s.gpa, field(msg, "fn") orelse return hostError(s.gpa, ref, .invalid_value), entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+    const f = decodeValue(s.gpa, field(msg, "fn") orelse return hostError(s.gpa, ref, .invalid_value), entry) catch |e| return hostError(s.gpa, ref, decodeError(e));
     defer f.release();
     var args: std.ArrayList(*Value) = .empty;
     defer {
@@ -4065,7 +3994,7 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
     if (field(msg, "args")) |given| {
         if (given != .array) return hostError(s.gpa, ref, .invalid_value);
         for (given.array.items) |item| {
-            const v = decodeValue(s.gpa, item, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+            const v = decodeValue(s.gpa, item, entry) catch |e| return hostError(s.gpa, ref, decodeError(e));
             args.append(s.gpa, v) catch {
                 v.release();
                 return hostError(s.gpa, ref, .out_of_memory);
@@ -4441,9 +4370,13 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
         .dispatch => {},
         .admit => |worker_ref| return pausedAdmission(s, msg, ref, m, s.x.paused(worker_ref)),
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
-        .result => |kind| return if (kind == .effect) answerEffect(s, msg, ref) else answerNeed(s, msg, ref, kind == .prop),
+        .result => |kind| return answerNeed(s, msg, ref, switch (kind) {
+            .op => .op,
+            .prop => .prop,
+            .effect => .effect,
+        }),
         .trace_result => return goOn(s, ref, s.x.traceTaken()),
-        .release_result => return releaseResultReply(s, ref),
+        .release_result => return answerNeed(s, msg, ref, .release),
     }
     // The binding may have refused a worker while this export was still
     // running, then reached this boundary before servicing its queued frame.
@@ -5392,8 +5325,7 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
                 const name = rp.ptextOf(span) catch return malformedFrame(s, ref);
                 in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, &in, .invalid_value) };
             } else {
-                entry.wrong_group = false;
-                const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
+                const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, decodeError(e));
                 defer v.release();
                 if (v.data != .object) return refuse.code(s, &in, .invalid_value);
                 in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, &in, .invalid_value) };
@@ -5408,8 +5340,7 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
         in.limits = (overrideOfBinary(mf[2]) catch return malformedFrame(s, ref));
     } else if (m == .call or m == .call_pump) {
         const span = g.get("fn") orelse return refuse.code(s, &in, .invalid_value);
-        entry.wrong_group = false;
-        in.function = binary_value.decode(s.gpa, span, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, binDecodeError(e, entry));
+        in.function = binary_value.decode(s.gpa, span, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, &in, decodeError(e));
         if (readArgs(s, entry, g.get("args"), &in.args)) |code| return refuse.code(s, &in, code);
         in.limits = (overrideOfBinary(g.get("limits")) catch return malformedFrame(s, ref));
     }
@@ -5429,13 +5360,6 @@ fn readBinary(s: *Session, payload: []const u8) BinRead {
 
 fn malformedFrame(s: *Session, ref: i64) BinRead {
     return .{ .reply = protocolError(s.gpa, ref, "malformed binary frame") };
-}
-
-/// The host error for a binary Value decodeValue's rules refuse.
-fn binDecodeError(e: anyerror, entry: *GroupEntry) talk.HostErrorCode {
-    if (e == error.OutOfMemory) return .out_of_memory;
-    if (entry.wrong_group) return .wrong_group;
-    return .invalid_value;
 }
 
 /// Reads a Pump's Clock and Fuel options; the refusal code, or null.
@@ -5479,10 +5403,9 @@ fn readSettlements(s: *Session, entry: *GroupEntry, span: ?[]const u8, out: *[]S
         }
         var value: ?*Value = null;
         if (f[2] != null or !fail) {
-            entry.wrong_group = false;
             value = binary_value.decode(s.gpa, f[2] orelse &.{rp.tag.nothing}, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| {
                 abandonSettlements(s.gpa, list, made);
-                return binDecodeError(e, entry);
+                return decodeError(e);
             };
         }
         list[made] = .{ .call = id, .group = &entry.group.group, .fail = fail, .value = value, .fuel = fuel, .code = code, .message = message };
@@ -5525,11 +5448,10 @@ fn readArgs(s: *Session, entry: *GroupEntry, span: ?[]const u8, out: *[]*Value) 
     const args = s.gpa.alloc(*Value, items.len) catch return .out_of_memory;
     var made: usize = 0;
     for (items, args) |item, *slot| {
-        entry.wrong_group = false;
         slot.* = binary_value.decode(s.gpa, item, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| {
             for (args[0..made]) |v| v.release();
             s.gpa.free(args);
-            return binDecodeError(e, entry);
+            return decodeError(e);
         };
         made += 1;
     }
@@ -5621,11 +5543,11 @@ fn binNeed(s: *Session, ref: i64) Allocator.Error![]u8 {
         .prop => .prop,
         .effect => .effect,
     };
-    return binNeedFrame(s, ref, c, n, need_fields.fields);
+    return binNeedFrame(s, ref, c, n);
 }
 
-/// A binary callback `c` under `ref`, the need's fields written by `write`.
-fn binNeedFrame(s: *Session, ref: i64, c: rp.Callback, n: anytype, comptime write: anytype) Allocator.Error![]u8 {
+/// A binary callback `c` under `ref`, the need's fields as need.zig lists them.
+fn binNeedFrame(s: *Session, ref: i64, c: rp.Callback, n: anytype) Allocator.Error![]u8 {
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
     try w.out.ensureTotalCapacity(s.gpa, 160);
@@ -5634,14 +5556,14 @@ fn binNeedFrame(s: *Session, ref: i64, c: rp.Callback, n: anytype, comptime writ
     try w.begin(rp.fields(c), true);
     try w.key("ref");
     try w.int(ref);
-    try write(BinFields{ .w = &w, .s = s }, n);
+    try need_codec.needFields(BinFields{ .w = &w, .s = s }, n);
     try w.end();
     return w.finish();
 }
 
 /// A binary Grant `release` need.
 fn binRelease(s: *Session, ref: i64, r: Release) Allocator.Error![]u8 {
-    return binNeedFrame(s, ref, .release, r, need_fields.releaseFields);
+    return binNeedFrame(s, ref, .release, r);
 }
 
 /// A binary callback result: validated whole, then gated as handleFrame
@@ -5669,72 +5591,11 @@ fn handleCallbackResult(s: *Session, c: rp.Callback, payload: []const u8) []u8 {
     };
     switch (s.x.gate(ref, .{ .result = result }, named)) {
         .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
-        .release_result => return releaseResultReply(s, ref),
-        .result => {},
+        .release_result, .result => {},
         .dispatch, .admit, .trace_result => unreachable,
     }
-    // The gate takes a result only from the exchange's own Group.
-    const entry = named.?;
-    if (c == .effect_result) {
-        const given = if (spans[2]) |x| rp.ptextOf(x) catch "unknown" else "unknown";
-        const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
-        return resumeEffect(s, ref, status);
-    }
-    var answer: Answer = .{ .kind = .host_error };
-    if (spans[6]) |x| {
-        answer.charged = rp.uintOf(x) catch return hostError(s.gpa, ref, .invalid_value);
-        if (answer.charged > 9_007_199_254_740_991) return hostError(s.gpa, ref, .invalid_value);
-    }
-    const outcome = rp.ptextOf(spans[2] orelse return protocolError(s.gpa, ref, "a callback result with no outcome")) catch return protocolError(s.gpa, ref, "malformed binary frame");
-    const decode = struct {
-        fn value(s_: *Session, e: *GroupEntry, span: ?[]const u8) anyerror!*Value {
-            const x = span orelse return model.scalar(s_.gpa, .nothing);
-            e.wrong_group = false;
-            return binary_value.decode(s_.gpa, x, .{ .resolver = resolverOf(e), .function_metadata = s_.function_metadata });
-        }
-    };
-    const is_prop = c == .prop_result;
-    if (std.mem.eql(u8, outcome, if (is_prop) "value" else "result")) {
-        answer.kind = .result;
-        answer.value = decode.value(s, entry, spans[3]) catch |e| return hostError(s.gpa, ref, binDecodeError(e, entry));
-    } else if (std.mem.eql(u8, outcome, "fail")) {
-        answer.kind = .fail;
-        binFailure(s, entry, spans[4], spans[5], spans[3], &answer) catch |e| {
-            if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
-            answer.kind = .host_error;
-        };
-    } else if (std.mem.eql(u8, outcome, "hostError")) {
-        answer.kind = .host_error;
-    } else if (is_prop and std.mem.eql(u8, outcome, "ok")) {
-        answer.kind = .done;
-    } else if (!is_prop and std.mem.eql(u8, outcome, "started")) {
-        answer.kind = .started;
-    } else if (!is_prop and std.mem.eql(u8, outcome, "done")) {
-        answer.kind = .done;
-    } else if (!is_prop and std.mem.eql(u8, outcome, "limit")) {
-        answer.kind = .limit;
-    } else return protocolError(s.gpa, ref, "a callback result with an unknown outcome");
-    return resumeNeed(s, ref, answer);
-}
-
-/// A binary `fail`: its code and optional message as protocol text, and
-/// its optional Data as a Value.
-fn binFailure(s: *Session, entry: *GroupEntry, code: ?[]const u8, message: ?[]const u8, data: ?[]const u8, answer: *Answer) (Allocator.Error || Invalid)!void {
-    const c = rp.ptextOf(code orelse return error.InvalidValue) catch return error.InvalidValue;
-    answer.code = try s.gpa.dupe(u8, c);
-    errdefer {
-        s.gpa.free(answer.code);
-        answer.code = "";
-    }
-    if (message) |m| answer.message = try s.gpa.dupe(u8, rp.ptextOf(m) catch return error.InvalidValue);
-    errdefer if (answer.message) |m| {
-        s.gpa.free(m);
-        answer.message = null;
-    };
-    if (data) |d| {
-        entry.wrong_group = false;
-        answer.data = binary_value.decode(s.gpa, d, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
-    }
+    const decoded = need_codec.readFields(s.gpa, result, spans[0..names.len], .{ .resolver = resolverOf(named.?), .function_metadata = s.function_metadata }) catch |err| return resultError(s, ref, err, "a callback result with no outcome");
+    return resumeResult(s, ref, decoded);
 }
 
 // ---------------------------------------------------------- wasm exports
@@ -8902,29 +8763,6 @@ test "a waiting restore refuses a result before checking its Group, in both layo
         try std.testing.expectEqualStrings(waiting, try refusalOf(try c.send("{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"{s}\",\"result\":1}}", .{ 8, group })));
     }
     _ = try okOf(try c.sendRef(7, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[]}}", .{ 7, grant }));
-}
-
-test "a binary fail frees its code when its message cannot be copied (#1569)" {
-    const s = Session.init(std.testing.allocator).?;
-    defer s.deinit();
-    const a = std.testing.allocator;
-    var spans: [2][]u8 = undefined;
-    for ([_][]const u8{ "E", "a message" }, &spans) |text, *span| {
-        var w = rp.Writer.init(a);
-        defer w.deinit();
-        try w.ptext(text);
-        span.* = try w.finish();
-    }
-    defer for (spans) |span| a.free(span);
-    // The code's copy succeeds and the message's fails.
-    var failing: std.testing.FailingAllocator = .init(a, .{ .fail_index = 1 });
-    const gpa = s.gpa;
-    s.gpa = failing.allocator();
-    defer s.gpa = gpa;
-    var answer: Answer = .{ .kind = .fail };
-    try std.testing.expectError(error.OutOfMemory, binFailure(s, undefined, spans[0], spans[1], null, &answer));
-    try std.testing.expectEqualStrings("", answer.code);
-    try std.testing.expectEqual(null, answer.message);
 }
 
 /// A settle-pump with one settlement of `call`, or with `outcome` malformed.
