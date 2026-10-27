@@ -3,6 +3,7 @@ import { createElement, createPage, createProject } from '../src/model';
 import { StackEditor } from '../src/editing';
 import { PlaySession } from '../src/play';
 import { runProjectTests } from '../src/test-runner';
+import { groupElement } from '../src/tree/rules';
 
 // A Page whose button flips a label and whose `frame` counts time, and a
 // second Page to go to.
@@ -161,4 +162,24 @@ test('Test Scripts are edited like Libraries, with history', () => {
     name: 'rules.test',
     source: 'on testA\nend testA\n',
   });
+});
+
+test('the Harness reaches Elements inside a Group', async () => {
+  const tested = project(`use assertEqual from test
+on testNested
+  ask harness to click "nestedFlip" and wait
+  ask harness to property "text", "nestedLabel"
+  assertEqual(it, "flipped")
+end testNested
+`);
+  const page = tested.pages[0]!;
+  page.elements = [
+    groupElement('panel', [
+      createElement('button', 'nestedFlip'),
+      createElement('text', 'nestedLabel'),
+    ]),
+  ];
+  page.script =
+    'on click\n  set the text of nestedLabel to "flipped"\nend click\n';
+  expect((await runProjectTests(tested)).map(r => r.problems)).toEqual([[]]);
 });

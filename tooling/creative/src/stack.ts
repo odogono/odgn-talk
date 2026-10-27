@@ -297,6 +297,7 @@ export type StackShell = {
   onRedraw(listener: () => void): void;
   openLibrary(id: number, line?: number): void;
   openScript(owner: ScriptOwner, line?: number): void;
+  openTestScript(id: number, line?: number): void;
   readOnly: boolean;
   redraw(): void;
   /**
@@ -1197,6 +1198,7 @@ export const mountStack = (
     },
     openScript: (owner, line) => scripts.open(owner, line),
     openLibrary: (id, line) => scripts.openLibrary(id, line),
+    openTestScript: (id, line) => scripts.openTestScript(id, line),
     setPlaying(mode) {
       finishFieldEdit();
       stopPreview();

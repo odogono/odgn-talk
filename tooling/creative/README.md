@@ -269,6 +269,7 @@ by [`runProjectTests`](src/test-runner.ts) as `northtalk test` runs one
   - `ask harness to frame 16 ms and wait` moves the Clock on and delivers one `frame`.
   - `ask harness to advance 2 s and wait` moves the Clock on without a `frame`.
   - `ask harness to goTo "ending" and wait` changes Page.
+  - `ask harness to page` reads the current Page's name.
   - `ask harness to property "text", "scoreText"` reads an Element's
     `text`, `visible`, or any other text, number or yes/no property.
     Each `wait` returns once everything the input started has finished.
@@ -289,6 +290,26 @@ page, not in the Play worker, so a test that loops for a long time holds up
 the editor until its Pump limit ends it.
 
 Both Tetris Example Projects ship `game.test`.
+
+**Record Test**, beside Browse, writes a Recorded Test from what you do
+([ADR 0134](../../docs/adr/0134-folio-records-a-play-through-as-a-generated-test-script.md)):
+
+- It restarts Browse on the first Page with the seed 0, where every test
+  starts. Choose it again, or Edit, to stop.
+- Your keys and clicks become `key` and `click` calls, with the time between
+  them as 16 ms `frame` calls, a run of them in a `repeat` loop. A Project
+  with no `frame` Handler gets `advance` instead. Paused time isn't recorded.
+- Typing into reader-editable text and answers to `ask user` aren't replayed:
+  a `-- not recorded` comment marks each, and Errors says so. Hovering isn't
+  recorded either, so `pointerEnter` and `pointerLeave` Handlers don't run in
+  the replay.
+- It ends by checking the current Page (`ask harness to page`), each Text
+  Element's `text`, and the `visible` of each Element whose visibility
+  differs from the authored Project. The expected values come from replaying
+  the input headless, so the new test passes; if that replay ends differently
+  from what you saw, Errors says so.
+- It is added to `recorded.test` as `testRecording1`, `testRecording2` and so
+  on, and the Code Browser opens at it, ready to rename or edit.
 
 ### Script Recipes
 
