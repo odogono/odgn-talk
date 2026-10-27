@@ -1,0 +1,3588 @@
+{
+  "revision": "40b76697f661eb5e9d08a1938a6b0bc310035b64",
+  "date": "2026-10-27",
+  "machine": "Apple M5, 10 cores, 24 GiB, darwin arm64",
+  "versions": {
+    "bun": "1.4.4 (5d9cc0f4f)",
+    "node": "v26.12.1",
+    "zig": "0.17.0"
+  },
+  "trial": {
+    "description": "Local checker phases extracted into closures; not retained in runtime code",
+    "beforeSha256": "b90c5a814b8945e5dfd6b0ac54a71306c06aa0ea52956dc69c8740ba3d594404",
+    "trialSha256": "2a5f3270aed8db17c5d1ec7a4db028959cfa3bfa18fb5069715415dcbf8a67d5"
+  },
+  "profiles": [
+    {
+      "benchmark": "lifecycle/load-large",
+      "workload": [
+        {
+          "benchmark": "lifecycle/load-large",
+          "checked": {
+            "alloc": 16742,
+            "fuel": 4609,
+            "outcome": "completed",
+            "result": "1291"
+          },
+          "loads": 124
+        }
+      ],
+      "samples": 3009,
+      "functions": [
+        {
+          "function": "(root)",
+          "file": "",
+          "inclusiveSamples": 3009,
+          "selfSamples": 0,
+          "inclusivePercent": 100.0
+        },
+        {
+          "function": "(module)",
+          "file": "measure-load.ts",
+          "inclusiveSamples": 3003,
+          "selfSamples": 0,
+          "inclusivePercent": 99.80059820538385
+        },
+        {
+          "function": "load",
+          "file": "group.ts",
+          "inclusiveSamples": 2997,
+          "selfSamples": 3,
+          "inclusivePercent": 99.6011964107677
+        },
+        {
+          "function": "Loaded",
+          "file": "suite.ts",
+          "inclusiveSamples": 2997,
+          "selfSamples": 0,
+          "inclusivePercent": 99.6011964107677
+        },
+        {
+          "function": "load",
+          "file": "measure-load.ts",
+          "inclusiveSamples": 2919,
+          "selfSamples": 0,
+          "inclusivePercent": 97.00897308075773
+        },
+        {
+          "function": "prepare",
+          "file": "library.ts",
+          "inclusiveSamples": 2467,
+          "selfSamples": 1,
+          "inclusivePercent": 81.98737121967432
+        },
+        {
+          "function": "checkSource",
+          "file": "checker.ts",
+          "inclusiveSamples": 2420,
+          "selfSamples": 1,
+          "inclusivePercent": 80.42539049518112
+        },
+        {
+          "function": "checkParsed",
+          "file": "checker.ts",
+          "inclusiveSamples": 1674,
+          "selfSamples": 1008,
+          "inclusivePercent": 55.63310069790628
+        },
+        {
+          "function": "generatorResume",
+          "file": "",
+          "inclusiveSamples": 884,
+          "selfSamples": 82,
+          "inclusivePercent": 29.37853107344633
+        },
+        {
+          "function": "runTask",
+          "file": "tasks.ts",
+          "inclusiveSamples": 882,
+          "selfSamples": 4,
+          "inclusivePercent": 29.312063808574276
+        },
+        {
+          "function": "next",
+          "file": "",
+          "inclusiveSamples": 846,
+          "selfSamples": 1,
+          "inclusivePercent": 28.11565304087737
+        },
+        {
+          "function": "parseSource",
+          "file": "parser.ts",
+          "inclusiveSamples": 745,
+          "selfSamples": 0,
+          "inclusivePercent": 24.759056164838817
+        },
+        {
+          "function": "loadPrepared",
+          "file": "group.ts",
+          "inclusiveSamples": 525,
+          "selfSamples": 0,
+          "inclusivePercent": 17.44765702891326
+        },
+        {
+          "function": "loadOrReject",
+          "file": "library.ts",
+          "inclusiveSamples": 525,
+          "selfSamples": 0,
+          "inclusivePercent": 17.44765702891326
+        },
+        {
+          "function": "lowerTree",
+          "file": "lowering.ts",
+          "inclusiveSamples": 424,
+          "selfSamples": 0,
+          "inclusivePercent": 14.091060152874709
+        },
+        {
+          "function": "peek",
+          "file": "parser.ts",
+          "inclusiveSamples": 355,
+          "selfSamples": 4,
+          "inclusivePercent": 11.797939514788967
+        },
+        {
+          "function": "fill",
+          "file": "parser.ts",
+          "inclusiveSamples": 351,
+          "selfSamples": 3,
+          "inclusivePercent": 11.665004985044865
+        },
+        {
+          "function": "lexAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 332,
+          "selfSamples": 105,
+          "inclusivePercent": 11.033565968760385
+        },
+        {
+          "function": "viewSource",
+          "file": "view.ts",
+          "inclusiveSamples": 268,
+          "selfSamples": 182,
+          "inclusivePercent": 8.906613492854769
+        },
+        {
+          "function": "lex",
+          "file": "lexer.ts",
+          "inclusiveSamples": 189,
+          "selfSamples": 116,
+          "inclusivePercent": 6.281156530408774
+        },
+        {
+          "function": "checkSuspension",
+          "file": "suspension.ts",
+          "inclusiveSamples": 99,
+          "selfSamples": 4,
+          "inclusivePercent": 3.2901296111665004
+        },
+        {
+          "function": "factsOf",
+          "file": "suspension.ts",
+          "inclusiveSamples": 95,
+          "selfSamples": 80,
+          "inclusivePercent": 3.1571950814223997
+        },
+        {
+          "function": "map",
+          "file": "",
+          "inclusiveSamples": 89,
+          "selfSamples": 49,
+          "inclusivePercent": 2.9577932868062478
+        },
+        {
+          "function": "check",
+          "file": "suite.ts",
+          "inclusiveSamples": 84,
+          "selfSamples": 0,
+          "inclusivePercent": 2.7916251246261217
+        },
+        {
+          "function": "filter",
+          "file": "",
+          "inclusiveSamples": 80,
+          "selfSamples": 69,
+          "inclusivePercent": 2.6586905948820205
+        },
+        {
+          "function": "checkControl",
+          "file": "control.ts",
+          "inclusiveSamples": 78,
+          "selfSamples": 73,
+          "inclusivePercent": 2.59222333000997
+        },
+        {
+          "function": "wordPrimary",
+          "file": "parser.ts",
+          "inclusiveSamples": 71,
+          "selfSamples": 17,
+          "inclusivePercent": 2.3595879029577933
+        },
+        {
+          "function": "finish",
+          "file": "lowering.ts",
+          "inclusiveSamples": 70,
+          "selfSamples": 51,
+          "inclusivePercent": 2.326354270521768
+        },
+        {
+          "function": "checkDecisions",
+          "file": "decisions.ts",
+          "inclusiveSamples": 64,
+          "selfSamples": 0,
+          "inclusivePercent": 2.1269524759056164
+        },
+        {
+          "function": "convert",
+          "file": "view.ts",
+          "inclusiveSamples": 63,
+          "selfSamples": 61,
+          "inclusivePercent": 2.093718843469591
+        },
+        {
+          "function": "decisionFacts",
+          "file": "decisions.ts",
+          "inclusiveSamples": 62,
+          "selfSamples": 62,
+          "inclusivePercent": 2.060485211033566
+        },
+        {
+          "function": "checkConstructs",
+          "file": "constructs.ts",
+          "inclusiveSamples": 56,
+          "selfSamples": 31,
+          "inclusivePercent": 1.8610834164174144
+        },
+        {
+          "function": "push",
+          "file": "",
+          "inclusiveSamples": 48,
+          "selfSamples": 48,
+          "inclusivePercent": 1.5952143569292123
+        },
+        {
+          "function": "trivia",
+          "file": "lexer.ts",
+          "inclusiveSamples": 48,
+          "selfSamples": 31,
+          "inclusivePercent": 1.5952143569292123
+        },
+        {
+          "function": "expr",
+          "file": "lowering.ts",
+          "inclusiveSamples": 46,
+          "selfSamples": 14,
+          "inclusivePercent": 1.5287470920571617
+        },
+        {
+          "function": "block",
+          "file": "parser.ts",
+          "inclusiveSamples": 45,
+          "selfSamples": 7,
+          "inclusivePercent": 1.4955134596211366
+        },
+        {
+          "function": "statement",
+          "file": "lowering.ts",
+          "inclusiveSamples": 43,
+          "selfSamples": 11,
+          "inclusivePercent": 1.429046194749086
+        },
+        {
+          "function": "skipNL",
+          "file": "parser.ts",
+          "inclusiveSamples": 42,
+          "selfSamples": 1,
+          "inclusivePercent": 1.3958125623130608
+        },
+        {
+          "function": "pop",
+          "file": "",
+          "inclusiveSamples": 41,
+          "selfSamples": 41,
+          "inclusivePercent": 1.3625789298770357
+        },
+        {
+          "function": "atWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 40,
+          "selfSamples": 4,
+          "inclusivePercent": 1.3293452974410103
+        },
+        {
+          "function": "expressionValue",
+          "file": "parser.ts",
+          "inclusiveSamples": 39,
+          "selfSamples": 3,
+          "inclusivePercent": 1.296111665004985
+        },
+        {
+          "function": "nodes",
+          "file": "checker.ts",
+          "inclusiveSamples": 37,
+          "selfSamples": 18,
+          "inclusivePercent": 1.2296444001329345
+        },
+        {
+          "function": "at",
+          "file": "",
+          "inclusiveSamples": 36,
+          "selfSamples": 36,
+          "inclusivePercent": 1.1964107676969093
+        },
+        {
+          "function": "leave",
+          "file": "parser.ts",
+          "inclusiveSamples": 35,
+          "selfSamples": 21,
+          "inclusivePercent": 1.163177135260884
+        },
+        {
+          "function": "atOperatorWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 34,
+          "selfSamples": 1,
+          "inclusivePercent": 1.1299435028248588
+        },
+        {
+          "function": "isWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 33,
+          "selfSamples": 33,
+          "inclusivePercent": 1.0967098703888336
+        },
+        {
+          "function": "loadScript",
+          "file": "machine.ts",
+          "inclusiveSamples": 33,
+          "selfSamples": 3,
+          "inclusivePercent": 1.0967098703888336
+        },
+        {
+          "function": "cloneObject",
+          "file": "",
+          "inclusiveSamples": 33,
+          "selfSamples": 33,
+          "inclusivePercent": 1.0967098703888336
+        },
+        {
+          "function": "",
+          "file": "checker.ts",
+          "inclusiveSamples": 31,
+          "selfSamples": 28,
+          "inclusivePercent": 1.030242605516783
+        },
+        {
+          "function": "checkEffects",
+          "file": "effects.ts",
+          "inclusiveSamples": 31,
+          "selfSamples": 0,
+          "inclusivePercent": 1.030242605516783
+        },
+        {
+          "function": "operationUses",
+          "file": "effects.ts",
+          "inclusiveSamples": 31,
+          "selfSamples": 31,
+          "inclusivePercent": 1.030242605516783
+        },
+        {
+          "function": "postfix",
+          "file": "parser.ts",
+          "inclusiveSamples": 31,
+          "selfSamples": 2,
+          "inclusivePercent": 1.030242605516783
+        },
+        {
+          "function": "primaryAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 30,
+          "selfSamples": 2,
+          "inclusivePercent": 0.9970089730807578
+        },
+        {
+          "function": "ifStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 28,
+          "selfSamples": 0,
+          "inclusivePercent": 0.9305417082087072
+        },
+        {
+          "function": "next",
+          "file": "parser.ts",
+          "inclusiveSamples": 28,
+          "selfSamples": 11,
+          "inclusivePercent": 0.9305417082087072
+        },
+        {
+          "function": "comparison",
+          "file": "parser.ts",
+          "inclusiveSamples": 26,
+          "selfSamples": 12,
+          "inclusivePercent": 0.8640744433366567
+        },
+        {
+          "function": "emit",
+          "file": "lowering.ts",
+          "inclusiveSamples": 26,
+          "selfSamples": 26,
+          "inclusivePercent": 0.8640744433366567
+        },
+        {
+          "function": "unary",
+          "file": "parser.ts",
+          "inclusiveSamples": 26,
+          "selfSamples": 3,
+          "inclusivePercent": 0.8640744433366567
+        },
+        {
+          "function": "Script",
+          "file": "machine.ts",
+          "inclusiveSamples": 24,
+          "selfSamples": 1,
+          "inclusivePercent": 0.7976071784646062
+        },
+        {
+          "function": "",
+          "file": "machine.ts",
+          "inclusiveSamples": 24,
+          "selfSamples": 12,
+          "inclusivePercent": 0.7976071784646062
+        },
+        {
+          "function": "checkLibraryNeeds",
+          "file": "library.ts",
+          "inclusiveSamples": 23,
+          "selfSamples": 23,
+          "inclusivePercent": 0.7643735460285809
+        },
+        {
+          "function": "Code",
+          "file": "machine.ts",
+          "inclusiveSamples": 23,
+          "selfSamples": 0,
+          "inclusivePercent": 0.7643735460285809
+        },
+        {
+          "function": "codeIdentity",
+          "file": "library.ts",
+          "inclusiveSamples": 22,
+          "selfSamples": 0,
+          "inclusivePercent": 0.7311399135925557
+        },
+        {
+          "function": "container",
+          "file": "parser.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 2,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "mark",
+          "file": "checker.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 21,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "sha256",
+          "file": "sha256.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 19,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "isOp",
+          "file": "parser.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 21,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "additive",
+          "file": "parser.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 2,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "enter",
+          "file": "parser.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 20,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "power",
+          "file": "parser.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 2,
+          "inclusivePercent": 0.6979062811565304
+        },
+        {
+          "function": "Map",
+          "file": "",
+          "inclusiveSamples": 20,
+          "selfSamples": 20,
+          "inclusivePercent": 0.6646726487205051
+        },
+        {
+          "function": "endOfStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 4,
+          "inclusivePercent": 0.6646726487205051
+        },
+        {
+          "function": "mapKey",
+          "file": "parser.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 2,
+          "inclusivePercent": 0.6646726487205051
+        },
+        {
+          "function": "simpleStatementAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 8,
+          "inclusivePercent": 0.6646726487205051
+        },
+        {
+          "function": "endBlock",
+          "file": "parser.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 3,
+          "inclusivePercent": 0.6646726487205051
+        },
+        {
+          "function": "patternPrimary",
+          "file": "parser.ts",
+          "inclusiveSamples": 18,
+          "selfSamples": 7,
+          "inclusivePercent": 0.5982053838484547
+        },
+        {
+          "function": "conversion",
+          "file": "parser.ts",
+          "inclusiveSamples": 18,
+          "selfSamples": 2,
+          "inclusivePercent": 0.5982053838484547
+        },
+        {
+          "function": "and",
+          "file": "parser.ts",
+          "inclusiveSamples": 18,
+          "selfSamples": 1,
+          "inclusivePercent": 0.5982053838484547
+        },
+        {
+          "function": "",
+          "file": "lowering.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 13,
+          "inclusivePercent": 0.5649717514124294
+        },
+        {
+          "function": "add",
+          "file": "lexer.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 16,
+          "inclusivePercent": 0.5649717514124294
+        },
+        {
+          "function": "tryStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 6,
+          "inclusivePercent": 0.5649717514124294
+        },
+        {
+          "function": "depthAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 10,
+          "inclusivePercent": 0.5649717514124294
+        },
+        {
+          "function": "Parser",
+          "file": "parser.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 0,
+          "inclusivePercent": 0.5317381189764041
+        },
+        {
+          "function": "Lexer",
+          "file": "lexer.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 14,
+          "inclusivePercent": 0.5317381189764041
+        },
+        {
+          "function": "some",
+          "file": "",
+          "inclusiveSamples": 16,
+          "selfSamples": 10,
+          "inclusivePercent": 0.5317381189764041
+        },
+        {
+          "function": "multiplicative",
+          "file": "parser.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 5,
+          "inclusivePercent": 0.5317381189764041
+        },
+        {
+          "function": "chunkLevel",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 6,
+          "inclusivePercent": 0.4985044865403789
+        },
+        {
+          "function": "pattern",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 2,
+          "inclusivePercent": 0.4985044865403789
+        },
+        {
+          "function": "get",
+          "file": "",
+          "inclusiveSamples": 15,
+          "selfSamples": 15,
+          "inclusivePercent": 0.4985044865403789
+        },
+        {
+          "function": "primary",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 2,
+          "inclusivePercent": 0.4985044865403789
+        },
+        {
+          "function": "tokens",
+          "file": "checker.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 5,
+          "inclusivePercent": 0.4985044865403789
+        },
+        {
+          "function": "not",
+          "file": "parser.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 3,
+          "inclusivePercent": 0.4652708541043536
+        },
+        {
+          "function": "find",
+          "file": "",
+          "inclusiveSamples": 14,
+          "selfSamples": 7,
+          "inclusivePercent": 0.4652708541043536
+        },
+        {
+          "function": "func",
+          "file": "parser.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 3,
+          "inclusivePercent": 0.43203722166832836
+        },
+        {
+          "function": "the",
+          "file": "parser.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 2,
+          "inclusivePercent": 0.43203722166832836
+        },
+        {
+          "function": "at",
+          "file": "parser.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 13,
+          "inclusivePercent": 0.43203722166832836
+        },
+        {
+          "function": "la2",
+          "file": "parser.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 0,
+          "inclusivePercent": 0.43203722166832836
+        },
+        {
+          "function": "repeat",
+          "file": "parser.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 1,
+          "inclusivePercent": 0.3988035892323031
+        },
+        {
+          "function": "tok",
+          "file": "lexer.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 12,
+          "inclusivePercent": 0.3988035892323031
+        },
+        {
+          "function": "readDisplay",
+          "file": "readers.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 0,
+          "inclusivePercent": 0.3988035892323031
+        },
+        {
+          "function": "isName",
+          "file": "checker.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 12,
+          "inclusivePercent": 0.3988035892323031
+        },
+        {
+          "function": "endSuffix",
+          "file": "parser.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 0,
+          "inclusivePercent": 0.3988035892323031
+        },
+        {
+          "function": "statement",
+          "file": "parser.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 2,
+          "inclusivePercent": 0.36556995679627785
+        },
+        {
+          "function": "function",
+          "file": "lowering.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 3,
+          "inclusivePercent": 0.36556995679627785
+        },
+        {
+          "function": "value",
+          "file": "readers.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 0,
+          "inclusivePercent": 0.36556995679627785
+        },
+        {
+          "function": "atEnd",
+          "file": "parser.ts",
+          "inclusiveSamples": 10,
+          "selfSamples": 0,
+          "inclusivePercent": 0.33233632436025257
+        },
+        {
+          "function": "atom",
+          "file": "readers.ts",
+          "inclusiveSamples": 10,
+          "selfSamples": 1,
+          "inclusivePercent": 0.33233632436025257
+        },
+        {
+          "function": "get",
+          "file": "checker.ts",
+          "inclusiveSamples": 10,
+          "selfSamples": 10,
+          "inclusivePercent": 0.33233632436025257
+        },
+        {
+          "function": "range",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 4,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "concat",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 2,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "checkComparison",
+          "file": "constructs.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 1,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "lower",
+          "file": "lowering.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 4,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "statementLine",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 1,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "load",
+          "file": "lowering.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 0,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "source",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 1,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "mapLiteral",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 0,
+          "inclusivePercent": 0.29910269192422734
+        },
+        {
+          "function": "recover",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 8,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "checkMap",
+          "file": "constructs.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 2,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "has",
+          "file": "suspension.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 7,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "expr",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 2,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "ignoringCase",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 6,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "T",
+          "file": "lexer.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 0,
+          "inclusivePercent": 0.26586905948820205
+        },
+        {
+          "function": "has",
+          "file": "",
+          "inclusiveSamples": 7,
+          "selfSamples": 7,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "put",
+          "file": "lowering.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 4,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "update",
+          "file": "lowering.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 1,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "constant",
+          "file": "lowering.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 5,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "numberText",
+          "file": "canonical.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 3,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "or",
+          "file": "parser.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 4,
+          "inclusivePercent": 0.2326354270521768
+        },
+        {
+          "function": "advanceDebugPump",
+          "file": "group.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 0,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "pumpAtClock",
+          "file": "group.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 1,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "pump",
+          "file": "suite.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 0,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "propertyOrKey",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 2,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "sort",
+          "file": "",
+          "inclusiveSamples": 6,
+          "selfSamples": 3,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "raw",
+          "file": "",
+          "inclusiveSamples": 6,
+          "selfSamples": 6,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "continues",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 6,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "checkNumber",
+          "file": "constructs.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 5,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "forEach",
+          "file": "",
+          "inclusiveSamples": 6,
+          "selfSamples": 1,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "simpleStatement",
+          "file": "view.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 3,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "call",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 1,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "listLiteral",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 1,
+          "inclusivePercent": 0.19940179461615154
+        },
+        {
+          "function": "turn",
+          "file": "group.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 0,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "ifStatement",
+          "file": "lowering.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 2,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "literalDigits",
+          "file": "values.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 5,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "declaration",
+          "file": "parser.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 2,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "expectWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 0,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "repeat",
+          "file": "lowering.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 2,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "store",
+          "file": "lowering.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 0,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "isName",
+          "file": "parser.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 5,
+          "inclusivePercent": 0.16616816218012628
+        },
+        {
+          "function": "from",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 2,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "block",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "step",
+          "file": "machine.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "stepMany",
+          "file": "machine.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "startsExpr",
+          "file": "parser.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "rangeEnd",
+          "file": "readers.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "textPieces",
+          "file": "readers.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "tryStatement",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "nodes",
+          "file": "constructs.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "normalizeNFC",
+          "file": "unicode.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 3,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "declarationDocs",
+          "file": "documentation.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "push",
+          "file": "machine.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 2,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "Run",
+          "file": "machine.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "returnNothing",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "value",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "performIteration",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "name",
+          "file": "parser.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 2,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "set",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.13293452974410103
+        },
+        {
+          "function": "execute",
+          "file": "machine.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "unitEntry",
+          "file": "units.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "recoveryBody",
+          "file": "recovery.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "dec",
+          "file": "values.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "",
+          "file": "suspension.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "layout",
+          "file": "lowering.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 1,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "subPattern",
+          "file": "lowering.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 1,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "lookup",
+          "file": "checker.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "span",
+          "file": "checker.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "tryStatement",
+          "file": "view.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "/\\d/",
+          "file": "",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "",
+          "file": "documentation.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 1,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "handler",
+          "file": "view.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 2,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "defaultExpression",
+          "file": "parser.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "arithmetic",
+          "file": "lowering.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "",
+          "file": "view.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "handler",
+          "file": "parser.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "/^[A-Z_a-z]\\w*/",
+          "file": "",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.09970089730807577
+        },
+        {
+          "function": "gc",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "",
+          "file": "lib.mjs",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "(module)",
+          "file": "lib.mjs",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "(module)",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "UnitLowering",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "BodyLowering",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "leaveBody",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "finish",
+          "file": "machine.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "fastSteps",
+          "file": "machine.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "firstLeaf",
+          "file": "constructs.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "the",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "copyDataProperties",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "comparison",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "makeDecimal",
+          "file": "values.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "Decimal",
+          "file": "values.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "of",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "bindName",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "checkDelimited",
+          "file": "constructs.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "/[\\u0000-\\u001f\"\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]/",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "displayText",
+          "file": "values.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "handler",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "assertScalarText",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "pattern",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "textDisplay",
+          "file": "canonical.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "nested",
+          "file": "parser.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "initialiser",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "flatIntoArrayWithCallback",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "reportDecisionCalls",
+          "file": "decisions.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "simpleStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "fn",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "temp",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "startOf",
+          "file": "checker.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "slot",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.06646726487205051
+        },
+        {
+          "function": "mapping",
+          "file": "unicode.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "unpack",
+          "file": "unicode.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "unicode.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "(module)",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "(module)",
+          "file": "code-unit.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "leaves",
+          "file": "constructs.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "rotr",
+          "file": "sha256.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "hostFor",
+          "file": "group.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "smallNumber",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "makeSmallDecimal",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "where",
+          "file": "lexer.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "preventExtensions",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "parameter",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "control.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "slotOf",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "constructs.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "/^[^\\u0300-\\uFFFF]*$/",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "DisplayReader",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "Reader",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "scopeLocals",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "entries",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "text",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "primary",
+          "file": "view.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "ifStatement",
+          "file": "view.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "isToken",
+          "file": "view.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "words",
+          "file": "view.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "codeFor",
+          "file": "machine.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "/[*/^]/",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "resetMeasured",
+          "file": "costs.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "Set",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "rateOf",
+          "file": "costs.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "messageName",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "newScope",
+          "file": "checker.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "release",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "splice",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "",
+          "file": "decisions.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "match",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "patternPrimary",
+          "file": "view.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "leave",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "get buffer",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "characterBoundaries",
+          "file": "unicode.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "trimWhiteSpace",
+          "file": "values.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "newBody",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        },
+        {
+          "function": "appendCollected",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03323363243602526
+        }
+      ]
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "workload": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "checked": {
+            "alloc": 0,
+            "fuel": 7,
+            "outcome": "completed",
+            "result": "1"
+          },
+          "loads": 56141
+        }
+      ],
+      "samples": 2852,
+      "functions": [
+        {
+          "function": "(root)",
+          "file": "",
+          "inclusiveSamples": 2852,
+          "selfSamples": 0,
+          "inclusivePercent": 100.0
+        },
+        {
+          "function": "(module)",
+          "file": "measure-load.ts",
+          "inclusiveSamples": 2842,
+          "selfSamples": 2,
+          "inclusivePercent": 99.64936886395512
+        },
+        {
+          "function": "Loaded",
+          "file": "suite.ts",
+          "inclusiveSamples": 2827,
+          "selfSamples": 2,
+          "inclusivePercent": 99.1234221598878
+        },
+        {
+          "function": "load",
+          "file": "measure-load.ts",
+          "inclusiveSamples": 2825,
+          "selfSamples": 8,
+          "inclusivePercent": 99.05329593267882
+        },
+        {
+          "function": "load",
+          "file": "group.ts",
+          "inclusiveSamples": 2784,
+          "selfSamples": 18,
+          "inclusivePercent": 97.61570827489481
+        },
+        {
+          "function": "prepare",
+          "file": "library.ts",
+          "inclusiveSamples": 2137,
+          "selfSamples": 9,
+          "inclusivePercent": 74.92987377279103
+        },
+        {
+          "function": "checkSource",
+          "file": "checker.ts",
+          "inclusiveSamples": 1835,
+          "selfSamples": 0,
+          "inclusivePercent": 64.34081346423562
+        },
+        {
+          "function": "checkParsed",
+          "file": "checker.ts",
+          "inclusiveSamples": 1027,
+          "selfSamples": 464,
+          "inclusivePercent": 36.00981767180926
+        },
+        {
+          "function": "runTask",
+          "file": "tasks.ts",
+          "inclusiveSamples": 932,
+          "selfSamples": 57,
+          "inclusivePercent": 32.67882187938289
+        },
+        {
+          "function": "generatorResume",
+          "file": "",
+          "inclusiveSamples": 876,
+          "selfSamples": 56,
+          "inclusivePercent": 30.715287517531557
+        },
+        {
+          "function": "parseSource",
+          "file": "parser.ts",
+          "inclusiveSamples": 796,
+          "selfSamples": 1,
+          "inclusivePercent": 27.91023842917251
+        },
+        {
+          "function": "loadPrepared",
+          "file": "group.ts",
+          "inclusiveSamples": 589,
+          "selfSamples": 12,
+          "inclusivePercent": 20.652173913043477
+        },
+        {
+          "function": "loadOrReject",
+          "file": "library.ts",
+          "inclusiveSamples": 576,
+          "selfSamples": 1,
+          "inclusivePercent": 20.196353436185134
+        },
+        {
+          "function": "",
+          "file": "group.ts",
+          "inclusiveSamples": 375,
+          "selfSamples": 46,
+          "inclusivePercent": 13.14866760168303
+        },
+        {
+          "function": "lowerTree",
+          "file": "lowering.ts",
+          "inclusiveSamples": 369,
+          "selfSamples": 6,
+          "inclusivePercent": 12.9382889200561
+        },
+        {
+          "function": "peek",
+          "file": "parser.ts",
+          "inclusiveSamples": 342,
+          "selfSamples": 1,
+          "inclusivePercent": 11.991584852734922
+        },
+        {
+          "function": "fill",
+          "file": "parser.ts",
+          "inclusiveSamples": 341,
+          "selfSamples": 10,
+          "inclusivePercent": 11.956521739130435
+        },
+        {
+          "function": "lexAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 331,
+          "selfSamples": 97,
+          "inclusivePercent": 11.605890603085554
+        },
+        {
+          "function": "next",
+          "file": "",
+          "inclusiveSamples": 331,
+          "selfSamples": 4,
+          "inclusivePercent": 11.605890603085554
+        },
+        {
+          "function": "codeIdentity",
+          "file": "library.ts",
+          "inclusiveSamples": 226,
+          "selfSamples": 34,
+          "inclusivePercent": 7.924263674614306
+        },
+        {
+          "function": "viewSource",
+          "file": "view.ts",
+          "inclusiveSamples": 213,
+          "selfSamples": 98,
+          "inclusivePercent": 7.468443197755961
+        },
+        {
+          "function": "lex",
+          "file": "lexer.ts",
+          "inclusiveSamples": 198,
+          "selfSamples": 91,
+          "inclusivePercent": 6.9424964936886395
+        },
+        {
+          "function": "sha256",
+          "file": "sha256.ts",
+          "inclusiveSamples": 192,
+          "selfSamples": 101,
+          "inclusivePercent": 6.732117812061711
+        },
+        {
+          "function": "skipNL",
+          "file": "parser.ts",
+          "inclusiveSamples": 160,
+          "selfSamples": 1,
+          "inclusivePercent": 5.610098176718092
+        },
+        {
+          "function": "map",
+          "file": "",
+          "inclusiveSamples": 130,
+          "selfSamples": 61,
+          "inclusivePercent": 4.55820476858345
+        },
+        {
+          "function": "handler",
+          "file": "parser.ts",
+          "inclusiveSamples": 130,
+          "selfSamples": 8,
+          "inclusivePercent": 4.55820476858345
+        },
+        {
+          "function": "loadScript",
+          "file": "machine.ts",
+          "inclusiveSamples": 116,
+          "selfSamples": 4,
+          "inclusivePercent": 4.0673211781206176
+        },
+        {
+          "function": "block",
+          "file": "parser.ts",
+          "inclusiveSamples": 98,
+          "selfSamples": 18,
+          "inclusivePercent": 3.4361851332398317
+        },
+        {
+          "function": "source",
+          "file": "parser.ts",
+          "inclusiveSamples": 92,
+          "selfSamples": 4,
+          "inclusivePercent": 3.225806451612903
+        },
+        {
+          "function": "trivia",
+          "file": "lexer.ts",
+          "inclusiveSamples": 85,
+          "selfSamples": 62,
+          "inclusivePercent": 2.9803646563814867
+        },
+        {
+          "function": "lower",
+          "file": "lowering.ts",
+          "inclusiveSamples": 75,
+          "selfSamples": 4,
+          "inclusivePercent": 2.6297335203366057
+        },
+        {
+          "function": "finish",
+          "file": "lowering.ts",
+          "inclusiveSamples": 74,
+          "selfSamples": 66,
+          "inclusivePercent": 2.594670406732118
+        },
+        {
+          "function": "makeBinding",
+          "file": "checker.ts",
+          "inclusiveSamples": 74,
+          "selfSamples": 73,
+          "inclusivePercent": 2.594670406732118
+        },
+        {
+          "function": "convert",
+          "file": "view.ts",
+          "inclusiveSamples": 73,
+          "selfSamples": 55,
+          "inclusivePercent": 2.55960729312763
+        },
+        {
+          "function": "checkDecisions",
+          "file": "decisions.ts",
+          "inclusiveSamples": 68,
+          "selfSamples": 5,
+          "inclusivePercent": 2.3842917251051894
+        },
+        {
+          "function": "checkControl",
+          "file": "control.ts",
+          "inclusiveSamples": 63,
+          "selfSamples": 45,
+          "inclusivePercent": 2.208976157082749
+        },
+        {
+          "function": "cloneObject",
+          "file": "",
+          "inclusiveSamples": 63,
+          "selfSamples": 63,
+          "inclusivePercent": 2.208976157082749
+        },
+        {
+          "function": "copyDataProperties",
+          "file": "",
+          "inclusiveSamples": 59,
+          "selfSamples": 59,
+          "inclusivePercent": 2.0687237026647964
+        },
+        {
+          "function": "filter",
+          "file": "",
+          "inclusiveSamples": 58,
+          "selfSamples": 48,
+          "inclusivePercent": 2.0336605890603088
+        },
+        {
+          "function": "",
+          "file": "checker.ts",
+          "inclusiveSamples": 55,
+          "selfSamples": 28,
+          "inclusivePercent": 1.9284712482468442
+        },
+        {
+          "function": "forEach",
+          "file": "",
+          "inclusiveSamples": 54,
+          "selfSamples": 23,
+          "inclusivePercent": 1.8934081346423561
+        },
+        {
+          "function": "",
+          "file": "lowering.ts",
+          "inclusiveSamples": 53,
+          "selfSamples": 29,
+          "inclusivePercent": 1.8583450210378682
+        },
+        {
+          "function": "checkSuspension",
+          "file": "suspension.ts",
+          "inclusiveSamples": 51,
+          "selfSamples": 8,
+          "inclusivePercent": 1.788218793828892
+        },
+        {
+          "function": "from",
+          "file": "",
+          "inclusiveSamples": 50,
+          "selfSamples": 3,
+          "inclusivePercent": 1.753155680224404
+        },
+        {
+          "function": "endBlock",
+          "file": "parser.ts",
+          "inclusiveSamples": 49,
+          "selfSamples": 1,
+          "inclusivePercent": 1.7180925666199158
+        },
+        {
+          "function": "isWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 43,
+          "selfSamples": 43,
+          "inclusivePercent": 1.5077138849929874
+        },
+        {
+          "function": "factsOf",
+          "file": "suspension.ts",
+          "inclusiveSamples": 41,
+          "selfSamples": 30,
+          "inclusivePercent": 1.4375876577840112
+        },
+        {
+          "function": "Parser",
+          "file": "parser.ts",
+          "inclusiveSamples": 40,
+          "selfSamples": 1,
+          "inclusivePercent": 1.402524544179523
+        },
+        {
+          "function": "",
+          "file": "suite.ts",
+          "inclusiveSamples": 40,
+          "selfSamples": 0,
+          "inclusivePercent": 1.402524544179523
+        },
+        {
+          "function": "newGroup",
+          "file": "group.ts",
+          "inclusiveSamples": 40,
+          "selfSamples": 2,
+          "inclusivePercent": 1.402524544179523
+        },
+        {
+          "function": "performIteration",
+          "file": "",
+          "inclusiveSamples": 39,
+          "selfSamples": 39,
+          "inclusivePercent": 1.367461430575035
+        },
+        {
+          "function": "TsGroup",
+          "file": "group.ts",
+          "inclusiveSamples": 38,
+          "selfSamples": 2,
+          "inclusivePercent": 1.332398316970547
+        },
+        {
+          "function": "atWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 38,
+          "selfSamples": 4,
+          "inclusivePercent": 1.332398316970547
+        },
+        {
+          "function": "wordPrimary",
+          "file": "parser.ts",
+          "inclusiveSamples": 38,
+          "selfSamples": 8,
+          "inclusivePercent": 1.332398316970547
+        },
+        {
+          "function": "simpleStatementAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 38,
+          "selfSamples": 7,
+          "inclusivePercent": 1.332398316970547
+        },
+        {
+          "function": "Lexer",
+          "file": "lexer.ts",
+          "inclusiveSamples": 36,
+          "selfSamples": 28,
+          "inclusivePercent": 1.262272089761571
+        },
+        {
+          "function": "pattern",
+          "file": "parser.ts",
+          "inclusiveSamples": 35,
+          "selfSamples": 2,
+          "inclusivePercent": 1.2272089761570828
+        },
+        {
+          "function": "checkLibraryNeeds",
+          "file": "library.ts",
+          "inclusiveSamples": 35,
+          "selfSamples": 14,
+          "inclusivePercent": 1.2272089761570828
+        },
+        {
+          "function": "checkConstructs",
+          "file": "constructs.ts",
+          "inclusiveSamples": 33,
+          "selfSamples": 24,
+          "inclusivePercent": 1.1570827489481066
+        },
+        {
+          "function": "atAnyMessage",
+          "file": "parser.ts",
+          "inclusiveSamples": 32,
+          "selfSamples": 0,
+          "inclusivePercent": 1.1220196353436185
+        },
+        {
+          "function": "flatMap",
+          "file": "",
+          "inclusiveSamples": 32,
+          "selfSamples": 25,
+          "inclusivePercent": 1.1220196353436185
+        },
+        {
+          "function": "Map",
+          "file": "",
+          "inclusiveSamples": 31,
+          "selfSamples": 31,
+          "inclusivePercent": 1.0869565217391304
+        },
+        {
+          "function": "Run",
+          "file": "machine.ts",
+          "inclusiveSamples": 30,
+          "selfSamples": 1,
+          "inclusivePercent": 1.0518934081346423
+        },
+        {
+          "function": "endOfStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 30,
+          "selfSamples": 4,
+          "inclusivePercent": 1.0518934081346423
+        },
+        {
+          "function": "leave",
+          "file": "parser.ts",
+          "inclusiveSamples": 29,
+          "selfSamples": 26,
+          "inclusivePercent": 1.0168302945301544
+        },
+        {
+          "function": "atOperatorWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 28,
+          "selfSamples": 3,
+          "inclusivePercent": 0.9817671809256662
+        },
+        {
+          "function": "handler",
+          "file": "lowering.ts",
+          "inclusiveSamples": 28,
+          "selfSamples": 4,
+          "inclusivePercent": 0.9817671809256662
+        },
+        {
+          "function": "find",
+          "file": "",
+          "inclusiveSamples": 28,
+          "selfSamples": 24,
+          "inclusivePercent": 0.9817671809256662
+        },
+        {
+          "function": "next",
+          "file": "parser.ts",
+          "inclusiveSamples": 26,
+          "selfSamples": 8,
+          "inclusivePercent": 0.9116409537166901
+        },
+        {
+          "function": "statement",
+          "file": "parser.ts",
+          "inclusiveSamples": 26,
+          "selfSamples": 1,
+          "inclusivePercent": 0.9116409537166901
+        },
+        {
+          "function": "decisionFacts",
+          "file": "decisions.ts",
+          "inclusiveSamples": 25,
+          "selfSamples": 12,
+          "inclusivePercent": 0.876577840112202
+        },
+        {
+          "function": "",
+          "file": "sha256.ts",
+          "inclusiveSamples": 25,
+          "selfSamples": 24,
+          "inclusivePercent": 0.876577840112202
+        },
+        {
+          "function": "",
+          "file": "machine.ts",
+          "inclusiveSamples": 25,
+          "selfSamples": 16,
+          "inclusivePercent": 0.876577840112202
+        },
+        {
+          "function": "Set",
+          "file": "",
+          "inclusiveSamples": 24,
+          "selfSamples": 24,
+          "inclusivePercent": 0.8415147265077139
+        },
+        {
+          "function": "add",
+          "file": "lexer.ts",
+          "inclusiveSamples": 23,
+          "selfSamples": 23,
+          "inclusivePercent": 0.8064516129032258
+        },
+        {
+          "function": "endSuffix",
+          "file": "parser.ts",
+          "inclusiveSamples": 23,
+          "selfSamples": 2,
+          "inclusivePercent": 0.8064516129032258
+        },
+        {
+          "function": "importsOf",
+          "file": "lowering.ts",
+          "inclusiveSamples": 22,
+          "selfSamples": 3,
+          "inclusivePercent": 0.7713884992987378
+        },
+        {
+          "function": "Script",
+          "file": "machine.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 6,
+          "inclusivePercent": 0.7363253856942497
+        },
+        {
+          "function": "initialiser",
+          "file": "lowering.ts",
+          "inclusiveSamples": 21,
+          "selfSamples": 7,
+          "inclusivePercent": 0.7363253856942497
+        },
+        {
+          "function": "finish",
+          "file": "machine.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 2,
+          "inclusivePercent": 0.7012622720897616
+        },
+        {
+          "function": "BodyLowering",
+          "file": "lowering.ts",
+          "inclusiveSamples": 20,
+          "selfSamples": 1,
+          "inclusivePercent": 0.7012622720897616
+        },
+        {
+          "function": "newBody",
+          "file": "lowering.ts",
+          "inclusiveSamples": 19,
+          "selfSamples": 19,
+          "inclusivePercent": 0.6661991584852734
+        },
+        {
+          "function": "declarationsOf",
+          "file": "group.ts",
+          "inclusiveSamples": 19,
+          "selfSamples": 2,
+          "inclusivePercent": 0.6661991584852734
+        },
+        {
+          "function": "step",
+          "file": "machine.ts",
+          "inclusiveSamples": 18,
+          "selfSamples": 5,
+          "inclusivePercent": 0.6311360448807855
+        },
+        {
+          "function": "UnitLowering",
+          "file": "lowering.ts",
+          "inclusiveSamples": 18,
+          "selfSamples": 12,
+          "inclusivePercent": 0.6311360448807855
+        },
+        {
+          "function": "sort",
+          "file": "",
+          "inclusiveSamples": 18,
+          "selfSamples": 18,
+          "inclusivePercent": 0.6311360448807855
+        },
+        {
+          "function": "conversion",
+          "file": "parser.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 9,
+          "inclusivePercent": 0.5960729312762973
+        },
+        {
+          "function": "additive",
+          "file": "parser.ts",
+          "inclusiveSamples": 17,
+          "selfSamples": 12,
+          "inclusivePercent": 0.5960729312762973
+        },
+        {
+          "function": "layout",
+          "file": "lowering.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 3,
+          "inclusivePercent": 0.5610098176718092
+        },
+        {
+          "function": "name",
+          "file": "parser.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 3,
+          "inclusivePercent": 0.5610098176718092
+        },
+        {
+          "function": "entries",
+          "file": "",
+          "inclusiveSamples": 16,
+          "selfSamples": 16,
+          "inclusivePercent": 0.5610098176718092
+        },
+        {
+          "function": "handler",
+          "file": "view.ts",
+          "inclusiveSamples": 16,
+          "selfSamples": 8,
+          "inclusivePercent": 0.5610098176718092
+        },
+        {
+          "function": "enter",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 15,
+          "inclusivePercent": 0.5259467040673211
+        },
+        {
+          "function": "get buffer",
+          "file": "",
+          "inclusiveSamples": 15,
+          "selfSamples": 15,
+          "inclusivePercent": 0.5259467040673211
+        },
+        {
+          "function": "emit",
+          "file": "lowering.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 15,
+          "inclusivePercent": 0.5259467040673211
+        },
+        {
+          "function": "range",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 9,
+          "inclusivePercent": 0.5259467040673211
+        },
+        {
+          "function": "declaration",
+          "file": "parser.ts",
+          "inclusiveSamples": 15,
+          "selfSamples": 10,
+          "inclusivePercent": 0.5259467040673211
+        },
+        {
+          "function": "check",
+          "file": "suite.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 0,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "statement",
+          "file": "lowering.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 7,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "Code",
+          "file": "machine.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 5,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "messageName",
+          "file": "parser.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 2,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "not",
+          "file": "parser.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 3,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "declarationDocs",
+          "file": "documentation.ts",
+          "inclusiveSamples": 14,
+          "selfSamples": 0,
+          "inclusivePercent": 0.4908835904628331
+        },
+        {
+          "function": "expr",
+          "file": "lowering.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 7,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "execute",
+          "file": "machine.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 11,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "multiplicative",
+          "file": "parser.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 12,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "checkSuffixes",
+          "file": "control.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 13,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "T",
+          "file": "lexer.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 0,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "tok",
+          "file": "lexer.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 13,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "nodes",
+          "file": "checker.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 2,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "",
+          "file": "documentation.ts",
+          "inclusiveSamples": 13,
+          "selfSamples": 3,
+          "inclusivePercent": 0.45582047685834504
+        },
+        {
+          "function": "reportDecisionCalls",
+          "file": "decisions.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 3,
+          "inclusivePercent": 0.42075736325385693
+        },
+        {
+          "function": "syntaxSelector",
+          "file": "syntax.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 3,
+          "inclusivePercent": 0.42075736325385693
+        },
+        {
+          "function": "comparison",
+          "file": "parser.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 10,
+          "inclusivePercent": 0.42075736325385693
+        },
+        {
+          "function": "tokens",
+          "file": "checker.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 3,
+          "inclusivePercent": 0.42075736325385693
+        },
+        {
+          "function": "concat",
+          "file": "parser.ts",
+          "inclusiveSamples": 12,
+          "selfSamples": 5,
+          "inclusivePercent": 0.42075736325385693
+        },
+        {
+          "function": "chunkLevel",
+          "file": "parser.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 7,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "isName",
+          "file": "checker.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 11,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "unary",
+          "file": "parser.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 2,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "returnNothing",
+          "file": "lowering.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 0,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "push",
+          "file": "machine.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 6,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "or",
+          "file": "parser.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 6,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "",
+          "file": "view.ts",
+          "inclusiveSamples": 11,
+          "selfSamples": 11,
+          "inclusivePercent": 0.3856942496493689
+        },
+        {
+          "function": "at",
+          "file": "",
+          "inclusiveSamples": 10,
+          "selfSamples": 10,
+          "inclusivePercent": 0.3506311360448808
+        },
+        {
+          "function": "encode",
+          "file": "",
+          "inclusiveSamples": 10,
+          "selfSamples": 10,
+          "inclusivePercent": 0.3506311360448808
+        },
+        {
+          "function": "slot",
+          "file": "lowering.ts",
+          "inclusiveSamples": 10,
+          "selfSamples": 10,
+          "inclusivePercent": 0.3506311360448808
+        },
+        {
+          "function": "defaultExpression",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 2,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "isName",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 9,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "checkEffects",
+          "file": "effects.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 6,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "flatIntoArrayWithCallback",
+          "file": "",
+          "inclusiveSamples": 9,
+          "selfSamples": 2,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "constant",
+          "file": "lowering.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 5,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "primaryAt",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 9,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "expr",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 1,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "DataView",
+          "file": "",
+          "inclusiveSamples": 9,
+          "selfSamples": 9,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "patternPrimary",
+          "file": "parser.ts",
+          "inclusiveSamples": 9,
+          "selfSamples": 6,
+          "inclusivePercent": 0.3155680224403927
+        },
+        {
+          "function": "arrayIteratorNextHelper",
+          "file": "",
+          "inclusiveSamples": 8,
+          "selfSamples": 5,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "recover",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 8,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "resolveHostCommands",
+          "file": "effects.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 2,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "simpleStatement",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 2,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "fill",
+          "file": "",
+          "inclusiveSamples": 8,
+          "selfSamples": 8,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "and",
+          "file": "parser.ts",
+          "inclusiveSamples": 8,
+          "selfSamples": 5,
+          "inclusivePercent": 0.2805049088359046
+        },
+        {
+          "function": "primary",
+          "file": "parser.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 1,
+          "inclusivePercent": 0.24544179523141654
+        },
+        {
+          "function": "padStart",
+          "file": "",
+          "inclusiveSamples": 7,
+          "selfSamples": 7,
+          "inclusivePercent": 0.24544179523141654
+        },
+        {
+          "function": "leaveBody",
+          "file": "lowering.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 3,
+          "inclusivePercent": 0.24544179523141654
+        },
+        {
+          "function": "",
+          "file": "lexer.ts",
+          "inclusiveSamples": 7,
+          "selfSamples": 7,
+          "inclusivePercent": 0.24544179523141654
+        },
+        {
+          "function": "set",
+          "file": "",
+          "inclusiveSamples": 6,
+          "selfSamples": 6,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "seedState",
+          "file": "random.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 0,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "step",
+          "file": "random.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 6,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "readDisplay",
+          "file": "readers.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 0,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "checkComparison",
+          "file": "constructs.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 2,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "postfix",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 5,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "power",
+          "file": "parser.ts",
+          "inclusiveSamples": 6,
+          "selfSamples": 4,
+          "inclusivePercent": 0.21037868162692847
+        },
+        {
+          "function": "codeFor",
+          "file": "machine.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1753155680224404
+        },
+        {
+          "function": "block",
+          "file": "lowering.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 5,
+          "inclusivePercent": 0.1753155680224404
+        },
+        {
+          "function": "load",
+          "file": "lowering.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 1,
+          "inclusivePercent": 0.1753155680224404
+        },
+        {
+          "function": "TextEncoder",
+          "file": "",
+          "inclusiveSamples": 5,
+          "selfSamples": 5,
+          "inclusivePercent": 0.1753155680224404
+        },
+        {
+          "function": "value",
+          "file": "readers.ts",
+          "inclusiveSamples": 5,
+          "selfSamples": 1,
+          "inclusivePercent": 0.1753155680224404
+        },
+        {
+          "function": "(module)",
+          "file": "unicode.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "values",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "statementLine",
+          "file": "parser.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 1,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "comparison",
+          "file": "view.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "typedArrayViewLength",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "/^[A-Z_a-z]\\w*/",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "has",
+          "file": "suspension.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "parameters",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "typedArrayViewIsDetached",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "mark",
+          "file": "checker.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "tail",
+          "file": "lowering.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 0,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "newScope",
+          "file": "checker.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "raw",
+          "file": "",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "startOf",
+          "file": "checker.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "span",
+          "file": "checker.ts",
+          "inclusiveSamples": 4,
+          "selfSamples": 4,
+          "inclusivePercent": 0.1402524544179523
+        },
+        {
+          "function": "advanceDebugPump",
+          "file": "group.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "pumpAtClock",
+          "file": "group.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 1,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "pump",
+          "file": "suite.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "push",
+          "file": "",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "operationUses",
+          "file": "effects.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "",
+          "file": "suspension.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "fromEntries",
+          "file": "",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "get",
+          "file": "checker.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "propertyChecks",
+          "file": "objects.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 2,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "nodes",
+          "file": "constructs.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "expressionValue",
+          "file": "parser.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "declaration",
+          "file": "view.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "SegmentParticipant",
+          "file": "",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "",
+          "file": "parser.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "docBlock",
+          "file": "documentation.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "docLine",
+          "file": "documentation.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "match",
+          "file": "readers.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 3,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "atom",
+          "file": "readers.ts",
+          "inclusiveSamples": 3,
+          "selfSamples": 0,
+          "inclusivePercent": 0.10518934081346423
+        },
+        {
+          "function": "ranges",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "mapping",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "unpack",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "checkDelimited",
+          "file": "constructs.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 1,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "",
+          "file": "syntax.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "some",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "assertScalarText",
+          "file": "unicode.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "labelled",
+          "file": "parser.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "scopeLocals",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "guarded",
+          "file": "lowering.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "simpleStatement",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "primary",
+          "file": "view.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "declaration",
+          "file": "checker.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 0,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "",
+          "file": "decisions.ts",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "findIndex",
+          "file": "",
+          "inclusiveSamples": 2,
+          "selfSamples": 2,
+          "inclusivePercent": 0.07012622720897616
+        },
+        {
+          "function": "anonymous",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "node:perf_hooks",
+          "file": "node:perf_hooks",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "gc",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "",
+          "file": "lib.mjs",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "(module)",
+          "file": "lib.mjs",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "(module)",
+          "file": "machine.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "oneOf",
+          "file": "capabilities.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "(module)",
+          "file": "sqlite-capability.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "(module)",
+          "file": "core.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "Uint8Array",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "run",
+          "file": "suite.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "turn",
+          "file": "group.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "flushAccounting",
+          "file": "group.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "has",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "slice",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "now",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "get",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "link",
+          "file": "machine.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "pop",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "recoveryBody",
+          "file": "recovery.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "peek",
+          "file": "machine.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "DisplayReader",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "Reader",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "constant",
+          "file": "machine.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "expectWord",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "reverse",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "startsExpr",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "cloneObject",
+          "file": "lexer.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "/\\d/",
+          "file": "",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "childNode",
+          "file": "control.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 0,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "checkConversion",
+          "file": "constructs.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "cloneObject",
+          "file": "control.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "continues",
+          "file": "parser.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "emptyAccounting",
+          "file": "run-accounting.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "peek",
+          "file": "readers.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        },
+        {
+          "function": "slotOf",
+          "file": "lowering.ts",
+          "inclusiveSamples": 1,
+          "selfSamples": 1,
+          "inclusivePercent": 0.03506311360448808
+        }
+      ]
+    }
+  ]
+}

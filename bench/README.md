@@ -260,6 +260,24 @@ bun run bench:profile lifecycle/load-large [--top 25]
 
 It prints the TS Core's hottest functions by self time, with file and line, leaving out mitata and native frames. The full Markdown profile, with call trees and per-function details, is saved under `.cache/profiles/`, and the command prints its path. Profiles include the runner's warm-up, so take timings from [`bench:compare`](#comparing-a-branch-with-main) rather than from a profile.
 
+For a Load-only profile without timed Runs or heap sampling, select one workload:
+
+```sh
+bun --cpu-prof --cpu-prof-dir=.cache/profiles bench/ts/src/measure-load.ts lifecycle/load-large profile
+```
+
+The `profile` mode verifies the workload once, then Loads it for five seconds,
+using a fresh Group and Script name each time. Omit `profile` for mitata Load
+timings; the default filter is `lifecycle/load`. This entry also runs on Node:
+
+```sh
+bun build bench/ts/src/measure-load.ts --target node --outdir bench/ts/dist
+node bench/ts/dist/measure-load.js lifecycle/load
+```
+
+The [#1599 scope report](../docs/research/ts-load-front-end-scope-1599.md)
+records the Load gap, profiles and frontend options.
+
 The Go runner is an ordinary `testing.B` benchmark, so the Go tools work on it directly:
 
 ```sh

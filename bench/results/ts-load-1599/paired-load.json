@@ -1,0 +1,218 @@
+[
+  {
+    "pair": 1,
+    "variant": "baseline",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 12197375,
+          "medianNs": 39000,
+          "minNs": 25208,
+          "samples": 8237
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 44939250,
+          "medianNs": 29455146,
+          "minNs": 18545666,
+          "samples": 18
+        }
+      }
+    ]
+  },
+  {
+    "pair": 1,
+    "variant": "trial",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 11820750,
+          "medianNs": 55709,
+          "minNs": 23333,
+          "samples": 7563
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 36416542,
+          "medianNs": 24399667,
+          "minNs": 17302500,
+          "samples": 21
+        }
+      }
+    ]
+  },
+  {
+    "pair": 2,
+    "variant": "trial",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 12027875,
+          "medianNs": 50250,
+          "minNs": 24167,
+          "samples": 7357
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 36729083,
+          "medianNs": 22509166.5,
+          "minNs": 14599041,
+          "samples": 24
+        }
+      }
+    ]
+  },
+  {
+    "pair": 2,
+    "variant": "baseline",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 11301833,
+          "medianNs": 37750,
+          "minNs": 24792,
+          "samples": 9274
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 40529125,
+          "medianNs": 26038958,
+          "minNs": 17628834,
+          "samples": 19
+        }
+      }
+    ]
+  },
+  {
+    "pair": 3,
+    "variant": "baseline",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 7872542,
+          "medianNs": 43875,
+          "minNs": 23125,
+          "samples": 8783
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 43533584,
+          "medianNs": 28213541.5,
+          "minNs": 19874750,
+          "samples": 18
+        }
+      }
+    ]
+  },
+  {
+    "pair": 3,
+    "variant": "trial",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "checked": {
+          "alloc": 0,
+          "fuel": 7,
+          "outcome": "completed",
+          "result": "1"
+        },
+        "load": {
+          "maxNs": 14307000,
+          "medianNs": 55604.5,
+          "minNs": 23459,
+          "samples": 6664
+        }
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "load": {
+          "maxNs": 34647375,
+          "medianNs": 23938166,
+          "minNs": 15370083,
+          "samples": 22
+        }
+      }
+    ]
+  }
+]
