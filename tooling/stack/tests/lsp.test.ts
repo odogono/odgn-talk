@@ -1743,3 +1743,33 @@ test('hover on a Handler or function head shows its Fuel estimate (#1606)', () =
     request('textDocument/hover', at(9, 8))?.contents.value ?? '',
   ).not.toContain('Fuel estimate');
 });
+test('northtalk.fuelCaps changes the hover’s Fuel Bound and refuses a bad cap (#1610)', () => {
+  const { request, sent, server } = setup(
+    'on demo\n repeat for each u in [1, 2]\n  put u into x\n end repeat\nend demo',
+  );
+  const bound = () =>
+    /Fuel Bound: ([\d,]+)/.exec(
+      request('textDocument/hover', at(0, 4))?.contents.value ?? '',
+    )?.[1];
+  const before = bound();
+  server.handle({
+    jsonrpc: '2.0',
+    method: 'workspace/didChangeConfiguration',
+    params: { settings: { northtalk: { fuelCaps: { collection: 10 } } } },
+  });
+  expect(Number(bound()!.replaceAll(',', ''))).toBeLessThan(
+    Number(before!.replaceAll(',', '')),
+  );
+  expect(request('textDocument/hover', at(0, 4))?.contents.value).toContain(
+    'collections ≤ 10 items',
+  );
+  server.handle({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'workspace/didChangeConfiguration',
+    params: { settings: { northtalk: { fuelCaps: { text: -1 } } } },
+  });
+  expect(JSON.stringify(sent.at(-1))).toContain(
+    'northtalk.fuelCaps.text must be a whole number',
+  );
+});

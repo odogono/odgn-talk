@@ -6,7 +6,7 @@ import { EditorView, type KeyBinding } from '@codemirror/view';
 import { northtalkEditor, type LanguageHooks } from '@northtalk/editor/editor';
 import { LspClient } from '@northtalk/editor/lsp-client';
 import { floatingWindow, type FloatingWindow } from './windows';
-import { type scriptManifest } from './script-manifest';
+import { languageConfiguration, type scriptManifest } from './script-manifest';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 
 type HostManifest = ReturnType<typeof scriptManifest>;
@@ -47,7 +47,7 @@ export const languageServer = (): LanguageServer => {
   return {
     lsp,
     configure(manifest, sources) {
-      const configuration = { manifest, sources };
+      const configuration = languageConfiguration(manifest, sources);
       const key = JSON.stringify(configuration);
       if (key !== configured) {
         configured = key;

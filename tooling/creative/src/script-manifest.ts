@@ -10,6 +10,8 @@ import {
   type SyntaxNode,
 } from '@northtalk/ts';
 import { manifestGrants } from './grants';
+import { PUMP_FUEL } from './grants/elements';
+import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = DeepReadonly<Project | Page | Element>;
@@ -177,3 +179,16 @@ export const scriptManifest = (
     messages: scriptMessages(owner.script ?? ''),
   };
 };
+
+/**
+ * Folio's language-server configuration: the Manifest, the sources, and the
+ * Fuel each Pump spends per frame, so a Fuel Bound over one frame says so.
+ */
+export const languageConfiguration = (
+  manifest: ReturnType<typeof scriptManifest>,
+  sources?: WorkspaceConfiguration['sources'],
+): WorkspaceConfiguration => ({
+  manifest,
+  ...(sources ? { sources } : {}),
+  fuelFrame: PUMP_FUEL,
+});
