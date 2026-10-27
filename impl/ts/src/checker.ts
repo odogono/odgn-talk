@@ -209,8 +209,13 @@ const parsedSyntax = (root: SyntaxNode): SyntaxNode => {
 export const checkSyntax = (
   syntax: SyntaxNode,
   options: CheckOptions = {},
+): SemanticResult => checkParsed(parsedSyntax(syntax), options);
+
+// `syntax` holds no Error node: a non-recovering parse never builds one.
+const checkParsed = (
+  syntax: SyntaxNode,
+  options: CheckOptions,
 ): SemanticResult => {
-  syntax = parsedSyntax(syntax);
   const scopes: Scope[] = [];
   const newScope = (kind: Scope['kind'], parent: Scope | null): Scope => {
     const scope: Scope = {
@@ -234,12 +239,30 @@ export const checkSyntax = (
     first: Token | undefined;
     group: SyntaxNode | null;
     last: Token | undefined;
+    /** The next record whose element starts at the same position. */
+    next: Context | undefined;
     parameter: boolean;
     parent: SyntaxNode | null;
     pattern: boolean;
     scope: Scope;
   };
-  const context = new Map<SyntaxElement, Context>();
+  // Records are found by their element's start offset: a node shares it only
+  // with the few elements it begins with, so a short chain beats a Map.
+  const at = new Array<Context | undefined>(syntax.end + 1).fill(undefined);
+  const startOf = (element: SyntaxElement) =>
+    element.kind === 'node' ? element.start : element.pos;
+  const context = {
+    get(element: SyntaxElement | undefined): Context | undefined {
+      if (!element) {
+        return undefined;
+      }
+      let info = at[startOf(element)];
+      while (info && info.element !== element) {
+        info = info.next;
+      }
+      return info;
+    },
+  };
   const ordered: Context[] = [];
   const work: Context[] = [
     {
@@ -253,6 +276,7 @@ export const checkSyntax = (
       first: undefined,
       last: undefined,
       converted: null,
+      next: undefined,
     },
   ];
   while (work.length) {
@@ -310,6 +334,7 @@ export const checkSyntax = (
           first: undefined,
           last: undefined,
           converted: null,
+          next: undefined,
         });
       }
     }
@@ -319,8 +344,13 @@ export const checkSyntax = (
     current.binary = binary;
     current.pattern = pattern;
     current.parameter = parameter;
-    context.set(element, current);
+    const start = startOf(element);
+    current.next = at[start];
+    at[start] = current;
   }
+  // Walking the preorder backwards reaches a node just after its children,
+  // which are then on top of `done`, the first child uppermost.
+  const done: Context[] = [];
   // Cache token bounds bottom-up; no recursive walk or repeated subtree scans.
   for (let i = ordered.length - 1; i >= 0; i--) {
     const info = ordered[i]!;
@@ -330,14 +360,15 @@ export const checkSyntax = (
         info.first = info.last = element;
       }
     } else {
-      for (const child of element.children) {
-        const bounds = context.get(child)!;
+      for (let n = element.children.length; n > 0; n--) {
+        const bounds = done.pop()!;
         info.first ??= bounds.first;
         if (bounds.last) {
           info.last = bounds.last;
         }
       }
     }
+    done.push(info);
   }
   const sites = new Map<Token, Site>();
   // A `wait for`'s bare `from` Names, which a Library may not use (ADR 0113).
@@ -1257,9 +1288,11 @@ export const checkSyntax = (
       }
     }
   }
+  done.length = 0;
   for (let i = ordered.length - 1; i >= 0; i--) {
     const info = ordered[i]!;
     const { element } = info;
+    done.push(info);
     if (element.kind === 'token') {
       if (element.t === 'nl' || element.t === 'eof' || element.t === 'error') {
         continue;
@@ -1272,16 +1305,18 @@ export const checkSyntax = (
         span: span(element),
       };
     } else {
-      const { first: start, last: end } = info;
-      if (!start && element !== syntax) {
-        continue;
-      }
+      done.pop();
       const children: SemanticElement[] = [];
-      for (const child of element.children) {
-        const result = context.get(child)!.converted;
+      for (let n = element.children.length; n > 0; n--) {
+        const result = done.pop()!.converted;
         if (result) {
           children.push(result);
         }
+      }
+      done.push(info);
+      const { first: start, last: end } = info;
+      if (!start && element !== syntax) {
+        continue;
       }
       info.converted = {
         kind: 'node',
@@ -1299,7 +1334,7 @@ export const checkSyntax = (
       };
     }
   }
-  const root = context.get(syntax)!.converted as SemanticNode;
+  const root = ordered[0]!.converted as SemanticNode;
   const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
     diagnostics.push({ code, span: at.span, message: `${code}: ${at.text}` });
   checkControl(
@@ -1373,5 +1408,5 @@ export const checkSource = (
   const parsed = parseSource(source);
   return parsed.error
     ? { error: parsed.error, tree: null, ok: false, diagnostics: [] }
-    : { error: null, ...checkSyntax(parsed.tree, options) };
+    : { error: null, ...checkParsed(parsed.tree, options) };
 };
