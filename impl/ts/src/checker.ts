@@ -357,6 +357,11 @@ const checkParsed = (
   // which are then on top of `done`, the first child uppermost.
   const done: Context[] = [];
   // Cache token bounds bottom-up; no recursive walk or repeated subtree scans.
+  // Build the semantic nodes in the same walk. A token's slot is filled once
+  // every site is marked, since a site turns it into a Name.
+  const slots: SemanticElement[][] = [];
+  const slotTokens: Token[] = [];
+  const slotIndexes: number[] = [];
   for (let i = ordered.length - 1; i >= 0; i--) {
     const info = ordered[i]!;
     const { element } = info;
@@ -365,12 +370,41 @@ const checkParsed = (
         info.first = info.last = element;
       }
     } else {
+      const children: SemanticElement[] = [];
       for (let n = element.children.length; n > 0; n--) {
-        const bounds = done.pop()!;
-        info.first ??= bounds.first;
-        if (bounds.last) {
-          info.last = bounds.last;
+        const child = done.pop()!;
+        info.first ??= child.first;
+        if (child.last) {
+          info.last = child.last;
         }
+        const converted = child.element;
+        if (converted.kind === 'token') {
+          if (converted.t !== 'error' && child.first) {
+            slots.push(children);
+            slotTokens.push(converted);
+            slotIndexes.push(children.length);
+            children.push(null!);
+          }
+        } else if (child.converted) {
+          children.push(child.converted);
+        }
+      }
+      const { first: start, last: end } = info;
+      if (start || element === syntax) {
+        info.converted = {
+          kind: 'node',
+          rule: element.rule,
+          scope: info.scope.id,
+          children,
+          span: start
+            ? {
+                start: start.pos,
+                end: end!.end,
+                line: start.line,
+                col: start.col,
+              }
+            : { start: element.start, end: element.end, line: 1, col: 1 },
+        };
       }
     }
     done.push(info);
@@ -1307,51 +1341,16 @@ const checkParsed = (
       }
     }
   }
-  done.length = 0;
-  for (let i = ordered.length - 1; i >= 0; i--) {
-    const info = ordered[i]!;
-    const { element } = info;
-    done.push(info);
-    if (element.kind === 'token') {
-      if (element.t === 'nl' || element.t === 'eof' || element.t === 'error') {
-        continue;
-      }
-      info.converted = sites.get(element)?.name ?? {
-        kind: 'token',
-        type: element.t,
-        text: element.v,
-        raw: element.raw,
-        span: span(element),
-      };
-    } else {
-      done.pop();
-      const children: SemanticElement[] = [];
-      for (let n = element.children.length; n > 0; n--) {
-        const result = done.pop()!.converted;
-        if (result) {
-          children.push(result);
-        }
-      }
-      done.push(info);
-      const { first: start, last: end } = info;
-      if (!start && element !== syntax) {
-        continue;
-      }
-      info.converted = {
-        kind: 'node',
-        rule: element.rule,
-        scope: info.scope.id,
-        children,
-        span: start
-          ? {
-              start: start.pos,
-              end: end!.end,
-              line: start.line,
-              col: start.col,
-            }
-          : { start: element.start, end: element.end, line: 1, col: 1 },
-      };
-    }
+  for (let i = 0; i < slots.length; i++) {
+    const children = slots[i]!;
+    const token = slotTokens[i]!;
+    children[slotIndexes[i]!] = sites.get(token)?.name ?? {
+      kind: 'token',
+      type: token.t as SemanticToken['type'],
+      text: token.v,
+      raw: token.raw,
+      span: span(token),
+    };
   }
   const root = ordered[0]!.converted as SemanticNode;
   const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
