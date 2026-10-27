@@ -506,7 +506,7 @@ A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first ite
 ### Writing keys
 
 - **The value under a key** is replaced, keeping its place, or the key is added last.
-- **Not a map:** writing a key of anything but a map raises `wrong kind` with `expected` `"map"`. That includes Nothing and a Host Object, whose properties are written only with `set`.
+- **Not a map:** writing a key of anything but a map raises `wrong kind` with `expected` `"map"`. That includes Nothing and a Host Object, whose properties are written only with `set`, so `put`, `add`, `subtract`, `multiply` and `divide` never write one.
 
 > **Example.**
 >
@@ -528,15 +528,15 @@ A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first ite
 - **`put e after c`** and **`put e before c`**: if `c` holds a list, `e` becomes its last or first element, as one element. If `c` holds text, the text form of `e` is joined on, as `&` does. Anything else raises `wrong kind` with `expected` `"text"`.
 - **`put ...e after c`** and **`before`** splice the elements of the list `e` into the list `c`. Either one not being a list raises `wrong kind` with `expected` `"list"`.
 - **`let p be e`** matches `e` against the pattern `p` and binds its names, or raises `no match`.
-- **`set c to e`** writes a whole property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
+- **`set c to e`** writes a property of a Host Object. The computed keys and indexes of `c` are evaluated first, then `e`, left to right. Then `c` is walked from its root, and the property is the last step whose receiver is a Host Object. If no step has one, `wrong kind` is raised with `expected` `"object"`. When that step is the last one, the Host's `Set` writes `e` as the whole property ([chapter 9](09-embedding.md)). Otherwise the property is read with its `Get`, `e` is put into the rest of the path in that value by the rules of `put` ([Writing keys](#writing-keys), [Writing chunks](#writing-chunks)), and the result is written with one `Set`. So `set the isLocked of the door of me to true` is short for `set the door of me to merge(the door of me, {isLocked: true})`, and a step through a missing key raises `wrong kind` before any `Set`. The walk, the `Get` and the `Set` are one Host Crossing for where a Stop, cancel or rewind lands ([chapter 9](09-embedding.md#threads-and-the-input-queue)) ([ADR 0135](../docs/adr/0135-set-writes-a-path-below-a-host-object-property-as-one-crossing.md)). For the property, a read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
 
 A `set` property target may be rooted in a Name, `me`, `it` or `the target`,
 with only keys and chunks along the path. Rooted in `me`, `it` or `the target`,
-its final step must be a key. Parentheses, quoted keys and computed keys follow the same rules for every
+its first step must be a key. Parentheses, quoted keys and computed keys follow the same rules for every
 root. Intermediate keys and chunks read the receiving Object: for example,
 `set the label of item 2 of it to "Open"` works when that item is a Host Object.
-`set item 2 of the tags of it to "new"` is `not a container`: `set` does not
-read, modify and write back a property's contents.
+`set item 2 of the tags of it to "new"` reads `tags`, replaces its item 2 and
+writes `tags` back.
 
 These property writes do not replace the root binding. Bare `me`, `it` and
 `the target`, and Containers rooted in them for `put`, arithmetic, `delete`
