@@ -1350,20 +1350,18 @@ class Parser {
       if (propertyTarget) {
         path.push('ObjectElement');
       }
+      // An implicit root needs a key level along the path.
+      let keyed = false;
       while (root && path.includes(root.k)) {
+        keyed ||= root.k === 'Key';
         root = root.k === 'Group' ? (root.e as Node) : (root.of ?? root.base);
-      }
-      let outer = e;
-      while (outer.k === 'Group') {
-        outer = outer.e as Node;
       }
       const implicitRoot =
         root?.k === 'Target' ||
         (root?.k === 'Const' && (root.v === 'me' || root.v === 'it'));
       if (
         !root ||
-        (root.k !== 'Name' &&
-          !(propertyTarget && outer.k === 'Key' && implicitRoot))
+        (root.k !== 'Name' && !(propertyTarget && keyed && implicitRoot))
       ) {
         throw new ParseError(
           t,
