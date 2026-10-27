@@ -3,6 +3,7 @@ import { createTetrisProject } from '../src/examples/tetris';
 import { COLUMNS, EMPTY_COLOUR, ROWS } from '../src/examples/tetris-rules';
 import { PUMP_FUEL } from '../src/play';
 import { PlayHarness } from '../src/play-harness';
+import { runProjectTests } from '../src/test-runner';
 import { type Project } from '../src/model';
 import { createCanvasTetrisProject } from '../src/examples/tetris-canvas';
 import { type ExampleContent } from '../src/examples';
@@ -338,3 +339,15 @@ test('a piece moved many times keeps the Canvas Drawing well under its limit', a
   expect(game.filled()).toHaveLength(4);
   expect(game.play.problems).toEqual([]);
 });
+
+for (const create of [createTetrisProject, createCanvasTetrisProject]) {
+  test(`${create.name} ships a Test Script whose tests pass`, async () => {
+    const { project } = await create();
+    const results = await runProjectTests(project);
+    expect(results.map(r => [r.test, r.problems])).toEqual([
+      ['testSoftDropScoresOne', []],
+      ['testHardDropScoresTwoARow', []],
+      ['testRestartStartsAgain', []],
+    ]);
+  });
+}

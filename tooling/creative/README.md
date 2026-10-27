@@ -149,12 +149,13 @@ size-dependent Fuel before effects, including copied content. Invalid or
 unaffordable moves, clones and deletes leave the operation unapplied. Collection
 callbacks use maintained indexes, each costing 1 Fuel and 0 allocation.
 
-Projects save as `.folio` format 3, with ordered nested members, Page-relative
-leaf coordinates, retained empty-group positions and Project Library source.
-Bounds, lookup indexes and session ids are derived rather than saved. Existing
-format-1 and format-2 Projects migrate with an empty Library collection. Browser
-storage and earlier versions use the same representation. Older Folio readers
-refuse format 3 instead of silently dropping Libraries.
+Projects save as `.folio` format 4, with ordered nested members, Page-relative
+leaf coordinates, retained empty-group positions, Project Library source and
+Test Scripts. Bounds, lookup indexes and session ids are derived rather than
+saved. Existing format-1 and format-2 Projects migrate with an empty Library
+collection, and format-3 Projects with no Test Scripts. Browser storage and
+earlier versions use the same representation. Older Folio readers refuse
+format 4 instead of silently dropping Test Scripts.
 
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.
@@ -245,6 +246,40 @@ one in another Project, create a Library there and paste its source, doing the
 same for any custom dependencies. These are independent copies; there are no
 external dependencies, automatic updates or author-managed Library versions.
 The ownership rationale is in the [Project Libraries ADR](../../docs/adr/0118-folio-projects-own-their-libraries-as-independent-source-copies.md).
+
+### Test Scripts
+
+A Project-level Script whose name is an identifier and then `.test`, such as
+`game.test`, is a Test Script ([ADR 0133](../../docs/adr/0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)).
+It is saved in the Project's file and never loaded by Play. Each of its
+parameterless Handlers named `test` and then a capital is a Test Handler, run
+by [`runProjectTests`](src/test-runner.ts) as `northtalk test` runs one
+(ADR 0056):
+
+- Each test gets a fresh Play Session on the first Page with the seed 0,
+  after `startPlay`, `openPage` and one `frame`. An optional `on setup` runs
+  first.
+- The Test Script reaches Pages by name and `project`, only by message. It
+  may not `extend` the Scripts under test.
+- `use assert, assertEqual from test` imports the Test Library. A Project
+  Library named `test` hides it, so every test fails until it is renamed.
+- The Folio Harness, granted to the Test Script only:
+  - `ask harness to key "ArrowLeft" and wait` sends `keyDown`, then `keyUp`, to the Page.
+  - `ask harness to click "restartButton" and wait` clicks an Element of the current Page.
+  - `ask harness to frame 16 ms and wait` moves the Clock on and delivers one `frame`.
+  - `ask harness to advance 2 s and wait` moves the Clock on without a `frame`.
+  - `ask harness to goTo "ending" and wait` changes Page.
+  - `ask harness to property "text", "scoreText"` reads an Element's
+    `text`, `visible`, or any other text, number or yes/no property.
+    Each `wait` returns once everything the input started has finished.
+- The Clock moves only on `frame` and `advance`, or when the test waits with
+  nothing else able to run, as in `northtalk test`.
+- A test passes when its Run completes and no Run in the Play Session
+  errors. Events the Harness sends may go unhandled, as a reader's clicks do.
+- A failure is placed at the line that raised it in the Test Script,
+  including a failed assertion, else at the Test Handler.
+
+Both Tetris Example Projects ship `game.test`.
 
 ### Script Recipes
 
@@ -1172,7 +1207,9 @@ classic 16-colour palette, and a bomb alert for Game Over. The window frame,
 score text, New Game button and Game Over Group remain ordinary Elements in
 both versions, beside or above the game surfaces.
 
-Unit tests drive the game on an explicit clock through `frame` and `keyDown`:
+Both ship the Test Script `game.test`, which plays through the Folio Harness
+as a reader would. Unit tests drive the game through the
+[Play harness](src/play-harness.ts), on an explicit clock through `frame` and `keyDown`:
 spawning, moving, turning, gravity, drops, a four-line clear, a level-up and
 game over in both versions. Canvas checks read the retained Drawing rather
 than pixels, and also check the preview and a fresh second Browse.

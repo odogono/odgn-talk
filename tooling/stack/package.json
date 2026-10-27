@@ -12,6 +12,7 @@
     "./pausable-clock": "./src/pausable-clock.ts",
     "./dictionary": "./src/dictionary.ts",
     "./session-driver": "./src/session-driver.ts",
+    "./test-script": "./src/test-script.ts",
     "./worker-supervisor": "./src/worker-supervisor.ts"
   },
   "scripts": {

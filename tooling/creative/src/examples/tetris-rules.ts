@@ -334,3 +334,35 @@ on showScore
   set the text of linesText to "Lines: " & lines
 end showScore
 `;
+
+/**
+ * The Test Script both Tetris Example Projects ship (ADR 0133). It plays
+ * the game only as a reader can, with keys, clicks and time.
+ */
+export const TETRIS_TESTS = {
+  name: 'game.test',
+  source: `use assert, assertEqual from test
+
+on testSoftDropScoresOne
+  ask harness to key "ArrowDown" and wait
+  ask harness to property "text", "scoreText"
+  assertEqual(it, "Score: 1")
+end testSoftDropScoresOne
+
+on testHardDropScoresTwoARow
+  ask harness to key " " and wait
+  ask harness to property "text", "scoreText"
+  assert(it is not "Score: 0", "a hard drop scores")
+  ask harness to property "text", "linesText"
+  assertEqual(it, "Lines: 0")
+end testHardDropScoresTwoARow
+
+on testRestartStartsAgain
+  ask harness to key " " and wait
+  ask harness to click "restartButton" and wait
+  ask harness to frame 1 ms and wait
+  ask harness to property "text", "scoreText"
+  assertEqual(it, "Score: 0")
+end testRestartStartsAgain
+`,
+};
