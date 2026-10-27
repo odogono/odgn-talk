@@ -33,7 +33,18 @@ The hook lets through `fixup!`, `squash!` and `amend!` commits, and the merge an
 
 ## When a changelog fragment is needed
 
-A PR whose title is `feat`, `fix` or `perf`, or marks a breaking change, adds a fragment under `changelog/unreleased/` whose type and scope match the title. [The fragment format](../../changelog/README.md) describes the file. There is no way to skip this: a change with nothing worth recording has the wrong type, so retitle it.
+A PR whose title is `feat`, `fix` or `perf`, or marks a breaking change, adds a fragment under `changelog/unreleased/` whose type and scope match the title. The file name is any slug, such as `lsp-incremental-reanalysis.md`:
+
+```md
+---
+type: perf
+scope: tools
+---
+
+Make LSP reanalysis after an edit about 4× faster by redoing only what changed.
+```
+
+Copy `type` and `scope` from your PR title, and leave `scope` out when the title has none. Write the entry for a reader of the changelog. [The fragment format](../../changelog/README.md) covers `breaking: true`. There is no way to skip this: a change with nothing worth recording has the wrong type, so retitle it.
 
 To see the unreleased changelog, run `bun run changelog`.
 
