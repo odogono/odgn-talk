@@ -134,7 +134,9 @@ database in the same Segment raises `segment participant conflict`.
 The package's `@northtalk/ts/sqlite` entry point supplies the database
 implementation, while `@northtalk/ts` supplies the Core's factory. This example
 imports the local sources so it can run directly from this checkout. It uses a
-temporary database and runs one handler to completion. From the repository
+temporary database, since `openSqliteDatabase` refuses an in-memory one: its
+read-only connection relies on WAL, which needs a file. It runs one handler to
+completion. From the repository
 root, run `bun install`, save it as `sqlite-example.ts`, then run
 `bun sqlite-example.ts`.
 
@@ -143,7 +145,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newGroup, parseInstant, sqliteCapability } from './impl/ts/src/index';
-import { openSqliteDatabase, sqliteDatabases } from './impl/ts/src/sqlite/index';
+import {
+  openSqliteDatabase,
+  sqliteDatabases,
+} from './impl/ts/src/sqlite/index';
 
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-sqlite-'));
 const db = openSqliteDatabase(join(directory, 'notes.sqlite'));
