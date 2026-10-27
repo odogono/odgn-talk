@@ -1,0 +1,6 @@
+script variable n = 0
+on go
+  put 1 into n
+  ask api to ping
+  put 2 into n
+end go
