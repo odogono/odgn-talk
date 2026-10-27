@@ -1,0 +1,291 @@
+{
+  "base": "01864c1f",
+  "date": "2026-10-27",
+  "machine": "Apple M5, 10 cores, 24 GiB, darwin arm64",
+  "versions": {
+    "bun": "1.4.4 (5d9cc0f4f)",
+    "node": "v26.12.1",
+    "zig": "0.17.0"
+  },
+  "method": "Three alternating pairs of bundled ordinary measure-ts.ts workers, no concurrent test/build jobs; Node Load-only spot-check; macro and tooling single pairs; separate five-second Load-only CPU profile. Fresh Group/name for every Load.",
+  "sources": {
+    "impl/ts/src/parser.ts": {
+      "before": "a0bb983a07ec72deb38b6e1f8addadf3d253c76846d3047a48534a67ea085b85",
+      "after": "2a48e63e23e2c72f0183ac7ed73dc1581785d1b11bc800acd061266b8ee85290"
+    },
+    "impl/ts/src/checker.ts": {
+      "before": "b90c5a814b8945e5dfd6b0ac54a71306c06aa0ea52956dc69c8740ba3d594404",
+      "after": "4c6851f591037a1deee442fc13e630de95189ead422a70b13d43ace67fe9d097"
+    },
+    "impl/ts/src/library.ts": {
+      "before": "e38d246ff0089e501125dbf827d521b83b06efbd68ba281adc5a3f6d9ff5c1ad",
+      "after": "5fb5fceb0c51179c091aeecc73625d9ffb0372ae523494cdf30dfce45780b20a"
+    },
+    "impl/ts/src/lowering.ts": {
+      "before": "320c99e22a795a268f21ef5050896d3131abf332172ff9fec12d3df7d63a3a60",
+      "after": "5022ef44512889f803d97479400861e5abc02106f18b847b3c536c1f74453dcd"
+    }
+  },
+  "profile": {
+    "workload": [
+      {
+        "benchmark": "lifecycle/load-large",
+        "checked": {
+          "alloc": 16742,
+          "fuel": 4609,
+          "outcome": "completed",
+          "result": "1291"
+        },
+        "loads": 220
+      }
+    ],
+    "samples": 2736,
+    "functions": [
+      {
+        "function": "(root)",
+        "file": "",
+        "inclusiveSamples": 2736,
+        "selfSamples": 0,
+        "inclusivePercent": 100.0
+      },
+      {
+        "function": "(module)",
+        "file": "measure-load.ts",
+        "inclusiveSamples": 2729,
+        "selfSamples": 0,
+        "inclusivePercent": 99.74415204678363
+      },
+      {
+        "function": "Loaded",
+        "file": "suite.ts",
+        "inclusiveSamples": 2723,
+        "selfSamples": 0,
+        "inclusivePercent": 99.52485380116958
+      },
+      {
+        "function": "load",
+        "file": "group.ts",
+        "inclusiveSamples": 2723,
+        "selfSamples": 1,
+        "inclusivePercent": 99.52485380116958
+      },
+      {
+        "function": "load",
+        "file": "measure-load.ts",
+        "inclusiveSamples": 2655,
+        "selfSamples": 0,
+        "inclusivePercent": 97.03947368421052
+      },
+      {
+        "function": "prepare",
+        "file": "library.ts",
+        "inclusiveSamples": 2295,
+        "selfSamples": 0,
+        "inclusivePercent": 83.88157894736842
+      },
+      {
+        "function": "checkParsedSource",
+        "file": "checker.ts",
+        "inclusiveSamples": 1281,
+        "selfSamples": 0,
+        "inclusivePercent": 46.82017543859649
+      },
+      {
+        "function": "checkParsed",
+        "file": "checker.ts",
+        "inclusiveSamples": 1281,
+        "selfSamples": 793,
+        "inclusivePercent": 46.82017543859649
+      },
+      {
+        "function": "runTask",
+        "file": "tasks.ts",
+        "inclusiveSamples": 1138,
+        "selfSamples": 8,
+        "inclusivePercent": 41.59356725146199
+      },
+      {
+        "function": "generatorResume",
+        "file": "",
+        "inclusiveSamples": 1134,
+        "selfSamples": 95,
+        "inclusivePercent": 41.44736842105263
+      },
+      {
+        "function": "next",
+        "file": "",
+        "inclusiveSamples": 1089,
+        "selfSamples": 4,
+        "inclusivePercent": 39.80263157894737
+      },
+      {
+        "function": "checkSourceForLoad",
+        "file": "checker.ts",
+        "inclusiveSamples": 966,
+        "selfSamples": 0,
+        "inclusivePercent": 35.30701754385965
+      },
+      {
+        "function": "parseSourceTree",
+        "file": "parser.ts",
+        "inclusiveSamples": 966,
+        "selfSamples": 0,
+        "inclusivePercent": 35.30701754385965
+      },
+      {
+        "function": "peek",
+        "file": "parser.ts",
+        "inclusiveSamples": 433,
+        "selfSamples": 3,
+        "inclusivePercent": 15.826023391812866
+      },
+      {
+        "function": "fill",
+        "file": "parser.ts",
+        "inclusiveSamples": 430,
+        "selfSamples": 22,
+        "inclusivePercent": 15.716374269005849
+      },
+      {
+        "function": "loadPrepared",
+        "file": "group.ts",
+        "inclusiveSamples": 425,
+        "selfSamples": 2,
+        "inclusivePercent": 15.533625730994151
+      },
+      {
+        "function": "loadOrReject",
+        "file": "library.ts",
+        "inclusiveSamples": 423,
+        "selfSamples": 0,
+        "inclusivePercent": 15.460526315789474
+      },
+      {
+        "function": "lexAt",
+        "file": "parser.ts",
+        "inclusiveSamples": 404,
+        "selfSamples": 105,
+        "inclusivePercent": 14.76608187134503
+      },
+      {
+        "function": "lowerTree",
+        "file": "lowering.ts",
+        "inclusiveSamples": 295,
+        "selfSamples": 0,
+        "inclusivePercent": 10.782163742690058
+      },
+      {
+        "function": "lex",
+        "file": "lexer.ts",
+        "inclusiveSamples": 259,
+        "selfSamples": 140,
+        "inclusivePercent": 9.466374269005849
+      },
+      {
+        "function": "viewSource",
+        "file": "view.ts",
+        "inclusiveSamples": 118,
+        "selfSamples": 70,
+        "inclusivePercent": 4.312865497076023
+      },
+      {
+        "function": "leave",
+        "file": "parser.ts",
+        "inclusiveSamples": 112,
+        "selfSamples": 107,
+        "inclusivePercent": 4.093567251461988
+      },
+      {
+        "function": "map",
+        "file": "",
+        "inclusiveSamples": 110,
+        "selfSamples": 50,
+        "inclusivePercent": 4.02046783625731
+      },
+      {
+        "function": "wordPrimary",
+        "file": "parser.ts",
+        "inclusiveSamples": 87,
+        "selfSamples": 16,
+        "inclusivePercent": 3.1798245614035086
+      },
+      {
+        "function": "finish",
+        "file": "lowering.ts",
+        "inclusiveSamples": 86,
+        "selfSamples": 65,
+        "inclusivePercent": 3.1432748538011697
+      },
+      {
+        "function": "trivia",
+        "file": "lexer.ts",
+        "inclusiveSamples": 82,
+        "selfSamples": 52,
+        "inclusivePercent": 2.997076023391813
+      },
+      {
+        "function": "block",
+        "file": "parser.ts",
+        "inclusiveSamples": 81,
+        "selfSamples": 12,
+        "inclusivePercent": 2.960526315789474
+      },
+      {
+        "function": "check",
+        "file": "suite.ts",
+        "inclusiveSamples": 74,
+        "selfSamples": 0,
+        "inclusivePercent": 2.7046783625730995
+      },
+      {
+        "function": "skipNL",
+        "file": "parser.ts",
+        "inclusiveSamples": 71,
+        "selfSamples": 1,
+        "inclusivePercent": 2.595029239766082
+      },
+      {
+        "function": "checkSuspension",
+        "file": "suspension.ts",
+        "inclusiveSamples": 64,
+        "selfSamples": 4,
+        "inclusivePercent": 2.3391812865497075
+      },
+      {
+        "function": "expr",
+        "file": "lowering.ts",
+        "inclusiveSamples": 61,
+        "selfSamples": 19,
+        "inclusivePercent": 2.22953216374269
+      },
+      {
+        "function": "filter",
+        "file": "",
+        "inclusiveSamples": 60,
+        "selfSamples": 44,
+        "inclusivePercent": 2.192982456140351
+      },
+      {
+        "function": "factsOf",
+        "file": "suspension.ts",
+        "inclusiveSamples": 58,
+        "selfSamples": 33,
+        "inclusivePercent": 2.1198830409356724
+      },
+      {
+        "function": "expressionValue",
+        "file": "parser.ts",
+        "inclusiveSamples": 55,
+        "selfSamples": 7,
+        "inclusivePercent": 2.010233918128655
+      },
+      {
+        "function": "atWord",
+        "file": "parser.ts",
+        "inclusiveSamples": 54,
+        "selfSamples": 8,
+        "inclusivePercent": 1.9736842105263157
+      }
+    ]
+  }
+}

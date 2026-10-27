@@ -3,7 +3,7 @@
 // that imports it. A unit's code identity covers the identities of the
 // Libraries it imports directly.
 import {
-  checkSource,
+  checkSourceForLoad,
   type CheckResult,
   type CheckOptions,
   type ExistingName,
@@ -211,7 +211,7 @@ export const prepare = (
   existing?: Readonly<Record<string, ExistingName>>,
   properties?: Pick<CheckOptions, 'objectProperties' | 'ownerProperties'>,
 ) => {
-  const checked = checkSource(source, {
+  const checked = checkSourceForLoad(source, {
     unit,
     existing,
     objects,

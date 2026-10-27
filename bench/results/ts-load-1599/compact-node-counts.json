@@ -1,0 +1,1 @@
+[{"benchmark":"lifecycle/load-small","full":{"nodes":26,"tokens":12},"compact":{"nodes":12,"tokens":12}},{"benchmark":"lifecycle/load-large","full":{"nodes":16728,"tokens":4859},"compact":{"nodes":4818,"tokens":4859}}]

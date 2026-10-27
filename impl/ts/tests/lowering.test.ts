@@ -9,6 +9,7 @@ import {
   defineCapability,
   disassemble,
   exportsOf,
+  lowerTree,
   LoweringError,
   newGroup,
   parseInstant,
@@ -218,14 +219,24 @@ const compileFile = (path: string): CodeUnit => {
   let grants: Parameters<typeof compileSource>[1]['grants'];
   let objects: string[] = [];
   for (;;) {
-    const result = compileSource(source, {
+    const options: Parameters<typeof compileSource>[1] = {
       name: basename(path, '.talk'),
       unit,
       objects,
       libraries,
       grants,
-    });
+    };
+    const result = compileSource(source, options);
+    // Strict compilation may compact syntax; the public full-tree path is an
+    // independent check on diagnostics and every emitted instruction/slot.
+    const full = checkSource(source, options);
+    expect(result.error).toEqual(full.error);
+    expect(result.diagnostics).toEqual(full.diagnostics);
     if (result.unit) {
+      expect(full.ok).toBe(true);
+      expect(disassemble(result.unit)).toBe(
+        disassemble(lowerTree(full.tree!, options)),
+      );
       return result.unit;
     }
     // Targets on immediate Host Commands need the case's declaration modes.

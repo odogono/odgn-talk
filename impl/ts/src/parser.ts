@@ -162,6 +162,25 @@ type ParseFrame = {
 // never delegates through the native stack, so syntax depth has no JS limit.
 type ParseTask<T> = Task<T>;
 
+// Strict compilation does not need precedence wrappers with no operator.
+// Keep the lossless public/tooling parse unchanged, using the same recognizer.
+const TRANSPARENT_EXPRESSIONS = new Set<SyntaxRule>([
+  'Default',
+  'Or',
+  'And',
+  'Not',
+  'Comparison',
+  'Concat',
+  'Range',
+  'Additive',
+  'Multiplicative',
+  'Power',
+  'Unary',
+  'Conversion',
+  'ChunkLevel',
+  'Postfix',
+]);
+
 class Parser {
   lx: Lexer;
   tree!: SyntaxNode;
@@ -184,13 +203,20 @@ class Parser {
 
   private leave(frame: ParseFrame): void {
     this.frames.pop();
-    const node: SyntaxNode = {
-      kind: 'node',
-      rule: frame.rule,
-      children: frame.children,
-      start: frame.start,
-      end: this.offset,
-    };
+    const only = frame.children[0];
+    const node: SyntaxNode =
+      this.compact &&
+      TRANSPARENT_EXPRESSIONS.has(frame.rule) &&
+      frame.children.length === 1 &&
+      only?.kind === 'node'
+        ? only
+        : {
+            kind: 'node',
+            rule: frame.rule,
+            children: frame.children,
+            start: frame.start,
+            end: this.offset,
+          };
     if (this.frames.length) {
       this.frames.at(-1)!.children.push(node);
     } else {
@@ -213,6 +239,7 @@ class Parser {
   constructor(
     src: string | Lexer,
     private readonly recovering = false,
+    private readonly compact = false,
   ) {
     this.lx = typeof src === 'string' ? new Lexer(src) : src;
   }
@@ -3368,8 +3395,8 @@ export type ParseResult =
   { error: null; tree: SyntaxNode } | { error: ParseError; tree: null };
 
 /** Parse a Script or Library. Invalid scalar source throws HostError. */
-export const parseSource = (source: string): ParseResult => {
-  const parser = new Parser(source);
+const parseSourceTree = (source: string, compact: boolean): ParseResult => {
+  const parser = new Parser(source, false, compact);
   try {
     runTask(parser.source());
     return { tree: parser.tree, error: null };
@@ -3380,6 +3407,14 @@ export const parseSource = (source: string): ParseResult => {
     throw error;
   }
 };
+
+/** Public parsing retains every production and token. */
+export const parseSource = (source: string): ParseResult =>
+  parseSourceTree(source, false);
+
+/** Internal strict compilation may omit operator-free precedence wrappers. */
+export const parseSourceForLoad = (source: string): ParseResult =>
+  parseSourceTree(source, true);
 
 /** A lossless tooling parse, including malformed regions as Error nodes. */
 export type RecoveringParseResult = {

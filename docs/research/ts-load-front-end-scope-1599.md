@@ -11,8 +11,10 @@ it does not satisfy fresh-Group Load acceptance.
 
 This completes the profiling and scope-decision step of
 [#1599](https://github.com/odogono/odgn-talk/issues/1599), not its performance target.
-No Core optimization is retained in this branch. The benchmark harness and raw
-evidence below make the decision reproducible.
+The profiling checkpoint `01864c1f` retained no Core optimization. The benchmark
+harness and raw evidence below make that decision reproducible. Subsequent
+[compact-compilation results](../../bench/results/ts-load-1599/compact-frontend.md)
+record the retained implementation and remaining gap.
 
 ## Measurements
 
@@ -161,7 +163,7 @@ For the rejected experiment, build the Load-only entry with `--target bun` into
 recorded base, build `bench/ts/dist/trial-load.js`, then reverse the patch. Run
 these two bundles in fresh Bun processes, alternating order per pair. Keep
 bundles directly in `bench/ts/dist` so the suite's relative fixture lookup works.
-The patch changes only `impl/ts/src/checker.ts`; this branch leaves that file
+The patch changes only `impl/ts/src/checker.ts`; the profiling checkpoint leaves that file
 identical to the base.
 
 ## Architecture findings
@@ -188,7 +190,7 @@ The focused opportunities above are hypotheses grounded in the [checker context/
 
 **Why incremental LSP work does not settle fresh Load.** `analyzeWorkspace` currently reuses matching unversioned standard-workspace documents, parses other sources recoveringly, and repeats Library checking until export contracts/suspension summaries stabilize. This is a separate entry point from `Group.load`; incremental workspace dependency tracking could reduce repeated editor analysis without changing Core preparation. It may share useful infrastructure, but fresh-source Load has no prior edit tree to reuse. [Workspace reuse and checking](../../tooling/stack/src/lsp/workspace.ts#L61), [Core preparation](../../impl/ts/src/library.ts#L204).
 
-**Recommendation and objections.** Admit broader parser/checker work now, including collecting shared facts and reducing intermediate representations, before committing to a fully fused single-pass rewrite. Establish stage-specific allocations and end-to-end Load effects for concrete candidates, then use measured results to choose whether deeper fusion is warranted. Objections: local changes may leave too much representation/traversal overhead; shared-fact work can approach rewrite complexity; maintaining two recognition paths risks drift; deferring fusion can duplicate effort if the final design discards those structures. Conversely, a fused scan still owes forward binding, suspension solving and normative output, so calling it “single pass” does not establish a performance outcome. The parent's overlapping profile percentages cannot be added as independent savings or used to prove the 5× target reachable or impossible.
+**Recommendation and objections.** Admit broader parser/checker work now, including collecting shared facts and reducing intermediate representations, before committing to a fully fused single-pass rewrite. Establish stage-specific allocations and end-to-end Load effects for concrete candidates, then use measured results to choose whether deeper fusion is warranted. Objections: local changes may leave too much representation/traversal overhead; shared-fact work can approach rewrite complexity; maintaining two recognition paths risks drift; deferring fusion can duplicate effort if the final design discards those structures. Conversely, a fused scan still owes forward binding, suspension solving and normative output, so calling it “single pass” does not establish a performance outcome. The overlapping profile percentages cannot be added as independent savings or used to prove the 5× target reachable or impossible.
 
 ## Validation of this report and harness
 
@@ -198,4 +200,4 @@ The focused opportunities above are hypotheses grounded in the [checker context/
 - The Load-only entry ran successfully under Bun and the Node bundle.
 - Ordinary TS/Zig Load and macro runs verified expected results and Fuel parity.
 - `bun run docs:check` resolved links in all 953 Markdown files; `git diff --check` passed.
-- The rejected patch is archived only; Core source is unchanged from the measured base.
+- At the profiling checkpoint, the rejected patch was archived only and Core source was unchanged from the measured base.

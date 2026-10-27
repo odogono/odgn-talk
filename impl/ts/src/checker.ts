@@ -6,7 +6,12 @@ import { checkEffects, resolveHostCommands, type GrantDecls } from './effects';
 import { checkSuspension } from './suspension';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
-import { parseSource, type ParseError } from './parser';
+import {
+  parseSource,
+  parseSourceForLoad,
+  type ParseError,
+  type ParseResult,
+} from './parser';
 import type {
   Binding,
   BindingKind,
@@ -1401,12 +1406,21 @@ const checkParsed = (
   };
 };
 
+const checkParsedSource = (
+  parsed: ParseResult,
+  options: CheckOptions,
+): CheckResult =>
+  parsed.error
+    ? { error: parsed.error, tree: null, ok: false, diagnostics: [] }
+    : { error: null, ...checkParsed(parsed.tree, options) };
+
 export const checkSource = (
   source: string,
   options: CheckOptions = {},
-): CheckResult => {
-  const parsed = parseSource(source);
-  return parsed.error
-    ? { error: parsed.error, tree: null, ok: false, diagnostics: [] }
-    : { error: null, ...checkParsed(parsed.tree, options) };
-};
+): CheckResult => checkParsedSource(parseSource(source), options);
+
+/** Internal compilation path; public semantic trees retain all productions. */
+export const checkSourceForLoad = (
+  source: string,
+  options: CheckOptions = {},
+): CheckResult => checkParsedSource(parseSourceForLoad(source), options);

@@ -2,6 +2,7 @@ import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { checkSourceForLoad } from '../src/checker';
 import {
   checkSyntax,
   parseSource,
@@ -50,6 +51,9 @@ for (const part of broken.split(/^-- case: /m).slice(1)) {
       ? `${result.error.code} at ${result.error.tok.line}:${result.error.tok.col}`
       : 'parses';
     expect(actual).toBe(expected);
+    const compiled = checkSourceForLoad(source);
+    expect(compiled.error?.code).toBe(result.error?.code);
+    expect(compiled.error?.tok).toEqual(result.error?.tok);
     const recovered = parseSourceRecovering(source);
     expect(recovered.error).toEqual(result.error);
     expect(syntaxText(recovered.tree)).toBe(source);
