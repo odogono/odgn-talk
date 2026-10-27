@@ -200,10 +200,41 @@ class Estimator {
           terms.push({ at: at(pc), key: 'call', term: `the call to ${name}` });
         }
       }
+      // Work the lowering doesn't show: another body's event tests and an
+      // offer action reached by transfer.
+      if (op === 'wait-for' || op === 'wait-for-any') {
+        terms.push({ at: at(pc), key, term: 'its event tests' });
+      } else if (op === 'choose-offer') {
+        terms.push({ at: at(pc), key, term: 'the chosen action' });
+      }
       low.push(min);
       high.push(max);
     }
     const index = (pc: number) => pc - body.start;
+    // An Error raised in a catch, finally or guard range goes to its target.
+    // The raising instruction may not have paid, so the edge leaves before it.
+    const raises: number[][] = [];
+    for (let pc = body.start; pc < body.end; pc++) {
+      raises.push(
+        unit.unwind
+          .filter(
+            u =>
+              u.kind !== 'offer' &&
+              u.start <= pc &&
+              pc < u.end &&
+              pc < u.target &&
+              u.target < body.end,
+          )
+          .map(u => u.target),
+      );
+    }
+    // Catch search charges `unwind` for the frames it leaves, at no
+    // instruction's rate.
+    for (const u of unit.unwind) {
+      if (u.kind === 'catch' && body.start <= u.start && u.start < body.end) {
+        terms.push({ at: at(u.start), key: 'unwind', term: '4 * frames' });
+      }
+    }
     // Forward edges only: a backward edge closes a loop.
     const edges: number[][] = [];
     const backs: [from: number, to: number][] = [];
@@ -231,11 +262,17 @@ class Estimator {
       const i = index(pc);
       const exits = ends.has(unit.code[pc]!.op) && unit.code[pc]!.op !== 'jump';
       const out = edges[i]!.map(index);
-      toMin[i] =
-        low[i]! + (exits ? 0 : Math.min(Infinity, ...out.map(t => toMin[t]!)));
+      const caught = raises[i]!.map(index);
+      toMin[i] = Math.min(
+        low[i]! + (exits ? 0 : Math.min(Infinity, ...out.map(t => toMin[t]!))),
+        ...caught.map(t => toMin[t]!),
+      );
       toMax[i] =
         high[i]! +
-        (exits ? 0 : Math.max(-Infinity, ...out.map(t => toMax[t]!)));
+        Math.max(
+          exits ? 0 : Math.max(-Infinity, ...out.map(t => toMax[t]!)),
+          ...caught.map(t => toMax[t]!),
+        );
     }
     for (const [from, to] of backs) {
       const most = new Map([[from, high[index(from)]!]]);
