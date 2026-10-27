@@ -25,7 +25,7 @@ console.log((await reply.result).toString()); // 5
 await drive.close();
 ```
 
-A Host can create a Group ready to pump from the event loop with `newDrivenGroup`, or use `newGroup` and drive it with its own `pump` loop. Before releasing application resources, `await drive.close()` stops Scripts and awaits Promise-backed Operation cleanup. The driver also supports async disposal with `await using`.
+A Host can create a Group ready to pump from the event loop with `newDrivenGroup`, or use `newGroup` and drive it with its own `pump` loop. Before releasing application resources, `await drive.close()` stops Scripts and awaits Promise-backed Operation cleanup. A suspending Operation's `run` must honour `call.signal` and settle once it aborts; a Promise that never settles keeps close pending unless the driver's `closeTimeoutMs` bounds the wait. The driver also supports async disposal with `await using`.
 
 ## Subpaths
 

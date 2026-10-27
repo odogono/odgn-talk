@@ -1034,11 +1034,21 @@ export declare function changed(before?: Value, after?: Value): boolean;
 // These declarations belong to the helper module, not the Core package root.
 // ---------------------------------------------------------------------------
 
+/** A suspending call whose Host run Promise had not settled when close stopped waiting. */
+export interface PendingOperation {
+  readonly callId: string;
+  readonly grantName: string;
+  readonly scriptName: string;
+}
 export interface AutoDriveOptions {
+  /** Bounds close's wait for run Promises, in milliseconds; then close reports and resolves. Defaults to no bound. */
+  closeTimeoutMs?: number;
   /** Epoch microseconds; defaults to Date.now(). Readings never go backwards. */
   clock?: () => bigint;
   /** A Pump that threw. The driver keeps going. */
   onError?: (error: unknown) => void;
+  /** The calls still pending when closeTimeoutMs expired; their late results are ignored. */
+  onCloseTimeout?: (pending: PendingOperation[]) => void;
   /** Called after each Pump returns; may make worker calls. */
   onPump?: (result: PumpResult) => void;
   pump?: PumpOptions;
@@ -1046,7 +1056,7 @@ export interface AutoDriveOptions {
   setDeadline?: (at: bigint, fire: () => void) => () => void;
 }
 export interface Drive {
-  /** Stops all loaded Scripts, drains, waits for run Promises, then stops scheduling. */
+  /** Stops all loaded Scripts, drains, waits for run Promises (bounded by closeTimeoutMs), then stops scheduling. */
   close(reason?: string): Promise<void>;
   /** Equivalent to close(), with the default reason "Host shutdown". */
   [Symbol.asyncDispose](): Promise<void>;

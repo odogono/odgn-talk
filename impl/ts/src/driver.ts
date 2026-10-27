@@ -9,11 +9,25 @@
 import { nowMicros } from './dates';
 import type { Group } from './embedding';
 import type { GroupOptions, PumpOptions, PumpResult } from './group';
-import { waitForOperations } from './operation-promises';
+import {
+  type PendingOperation,
+  pendingOperations,
+  waitForOperations,
+} from './operation-promises';
+
+export type { PendingOperation };
 
 export type AutoDriveOptions = {
   /** Epoch microseconds. The default reads `Date.now()`; readings never go backwards. */
   clock?: () => bigint;
+  /**
+   * Bounds how long close waits for Host `run` Promises, in milliseconds.
+   * Close then stops waiting, reports the calls still pending to
+   * `onCloseTimeout` and resolves. The default waits indefinitely.
+   */
+  closeTimeoutMs?: number;
+  /** The calls still pending when `closeTimeoutMs` expired. Their late results are ignored. */
+  onCloseTimeout?: (pending: PendingOperation[]) => void;
   /** A Pump that threw, such as a `clock backwards` HostError. The driver keeps going. */
   onError?: (error: unknown) => void;
   /** Each Pump's result, as soon as it returns. It may make worker calls, such as Reload after a `rewound` Pump. */
@@ -30,7 +44,11 @@ export type AutoDriveOptions = {
 export type Drive = {
   /** Closes with the default reason, "Host shutdown". */
   [Symbol.asyncDispose](): Promise<void>;
-  /** Stops all Scripts, drains, awaits Host run Promises, then cancels scheduling. */
+  /**
+   * Stops all Scripts, drains, awaits Host run Promises, then cancels scheduling.
+   * Without `closeTimeoutMs`, a `run` Promise that ignores its aborted
+   * `call.signal` and never settles keeps close pending.
+   */
   close(reason?: string): Promise<void>;
   /** Resolves once no Pump is scheduled or running. A Group waiting only on a deadline counts as settled. */
   idle(): Promise<void>;
@@ -199,6 +217,29 @@ export const autoDrive = (group: Group, o: AutoDriveOptions = {}): Drive => {
         }
       };
     });
+    // False when closeTimeoutMs expires first.
+    const operationsSettled = async (): Promise<boolean> => {
+      const ms = o.closeTimeoutMs;
+      if (ms === undefined) {
+        await waitForOperations(group);
+        return true;
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<false>(resolve => {
+        timer = setTimeout(
+          () => resolve(false),
+          Math.min(Math.max(ms, 0), MAX_DELAY_MS),
+        );
+      });
+      try {
+        return await Promise.race([
+          waitForOperations(group).then(() => true as const),
+          expired,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
     const drain = async () => {
       try {
         for (const name of group.scriptNames()) {
@@ -209,7 +250,11 @@ export const autoDrive = (group: Group, o: AutoDriveOptions = {}): Drive => {
         if (!closing) {
           return;
         }
-        await waitForOperations(group);
+        if (!(await operationsSettled())) {
+          o.onCloseTimeout?.(pendingOperations(group));
+          finishClose?.();
+          return;
+        }
         if (!closing) {
           return;
         }

@@ -4515,7 +4515,7 @@ export class Run {
       .catch((error: unknown) =>
         this.host!.fail(call.id, null, hostDetail(error)),
       );
-    trackOperation(call.group, forwarded);
+    trackOperation(call.group, call, forwarded);
   }
 
   // A Host Crossing records the call/property and acknowledgement before

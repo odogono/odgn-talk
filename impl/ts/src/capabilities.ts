@@ -1102,6 +1102,10 @@ export type SuspendingOp<
 > = OpBase<A, R> & {
   maxPendingMs?: number;
   mode: 'suspending';
+  /**
+   * Must honour `call.signal` and settle once it aborts: `drive.close()`
+   * awaits every `run` Promise, including abandoned calls, with no timeout.
+   */
   run?(
     call: Call<B, PlainResult<R>>,
     ...args: PlainArgs<A>
