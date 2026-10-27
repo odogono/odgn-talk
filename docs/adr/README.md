@@ -136,3 +136,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0132: TS Load targets 10× the Zig Core without a single-pass front end](0132-ts-load-targets-10x-zig-without-a-single-pass-front-end.md)
 - [0133: Folio tests a Project with Test Scripts and a Folio Harness](0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)
 - [0134: Folio records a play-through as a generated Test Script](0134-folio-records-a-play-through-as-a-generated-test-script.md)
+- [0135: `set` writes a path below a Host Object property as one crossing](0135-set-writes-a-path-below-a-host-object-property-as-one-crossing.md)
