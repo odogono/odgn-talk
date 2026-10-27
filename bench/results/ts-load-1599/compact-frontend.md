@@ -181,3 +181,28 @@ measurements. Suite runs gave large Load 10.8× and 11.9× of Zig, with TS at
 about 12.1 ms against about 9.5 ms on the quieter machine earlier, so they are
 not evidence for the ratio. Whether large Load is within 10× needs a rerun on
 an idle machine.
+
+## Idle-machine recheck
+
+At load averages of 1–2, three suite runs with `--only ts,zig --count 5`:
+
+| Load | TS | Zig | TS / Zig |
+| --- | ---: | ---: | ---: |
+| small | 18.5 / 19.0 / 19.3 µs | 2.8 / 3.3 / 3.3 µs | 6.6× / 5.8× / 5.8× |
+| large | 6.31 / 6.66 / 6.73 ms | 0.784 / 0.765 / 0.771 ms | 8.1× / 8.7× / 8.7× |
+
+One macro run: game-tick 95.1 / 13.2 µs (7.2×), report 54.7 / 7.7 µs (7.1×),
+transform 87.0 / 13.0 µs (6.7×).
+
+`bun run bench:compare origin/main --filter lifecycle/load --rounds 3 --node`
+against `d61c535b`, medians of round medians with non-overlapping ranges:
+
+| Runtime | Load | `main` | This branch | Change |
+| --- | --- | ---: | ---: | ---: |
+| Bun | small | 0.025 ms | 0.019 ms | −21.7% |
+| Bun | large | 12.4 ms | 6.82 ms | −44.8% |
+| Node | small | 0.022 ms | 0.017 ms | −20.7% |
+| Node | large | 12.9 ms | 6.02 ms | −53.2% |
+
+Run times were unchanged (within ±1.3%). Every Load workload is within the 10×
+target of [ADR 0132](../../../docs/adr/0132-ts-load-targets-10x-zig-without-a-single-pass-front-end.md).
