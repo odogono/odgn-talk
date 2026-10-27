@@ -630,6 +630,14 @@ _Avoid_: exception table, handler table (a Handler is something else), landing p
 A Host-set amount of Fuel after which a Run is preempted at the next instruction boundary, e.g. once per game tick. Fuel spent past the end of a slice is carried as debt into the next one.
 _Avoid_: quantum, time slice (unqualified), tick budget
 
+**Fuel Estimate**:
+An advisory account of the Fuel a Handler or function would use, worked out from its lowering and the Cost Model without running it: fixed bounds, a cost per pass of each loop, and the terms that depend on values. A Run is always charged by the Cost Model, never by its estimate.
+_Avoid_: cost estimate, static cost, gas estimate
+
+**Fuel Bound**:
+The most Fuel a Handler or function can use under stated caps on value sizes and loop iterations, worked out from its Fuel Estimate. A Run that stays within the caps never uses more.
+_Avoid_: total estimate, worst case (unqualified)
+
 **Preemption**:
 Stopping a Run at an instruction boundary once its Fuel Slice is spent, so other work can run. The Run later continues from the same point in the same Segment, starting a new Stretch.
 _Avoid_: yield, interrupt
