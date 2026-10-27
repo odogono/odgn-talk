@@ -6,7 +6,7 @@
 # Allocation Budget makes the same build a Limit Fault rather than a Host
 # error (spec chapter 6, Limits).
 
-> load deep identity=48b8e0721d92cdc64846e98cc84f5fdb380b510e15be02901f1d1ef4f14e7090
+> load deep identity=4e236526509fd21d879a6d15369989d4627ec787cec686e556a46bccafa648df
 > deliver d1 to=deep message=build args=[1000]
 > pump clock=2026-09-30T09:00:00Z
 seg deep/r1 start delivery=d1 handler=build clause=1 fuel=30311 alloc=77182209 state=65120 end=return

@@ -1,13 +1,13 @@
 # value-paths: one Delivery writes, removes and tests through Value Paths.
 
-> load paths identity=11a2866862bff4ebf3aecf4d64e49699240f650c9884a97f0bbb129023730276
+> load paths identity=bd46a178aa3ec8d6b2b1315559cafa0b079f0a6d6931b38ce9b12b17a0cbf91f
 > deliver d1 to=paths message=go
 > pump clock=2026-10-27T09:00:00Z
 raise paths/r1 code="wrong kind" at=map:329 pos=109:3
 raise paths/r1 code="out of domain" at=json:1561 pos=309:3
-seg paths/r1 start delivery=d1 handler=go clause=1 fuel=18411 alloc=48867 state=2288 end=return
-run paths/r1 outcome=completed delivery=d1 handler=go fuel=18411 alloc=48867
-pumped state=idle fuel=18411
+seg paths/r1 start delivery=d1 handler=go clause=1 fuel=18575 alloc=49601 state=2288 end=return
+run paths/r1 outcome=completed delivery=d1 handler=go fuel=18575 alloc=49601
+pumped state=idle fuel=18575
 
 > vars
 vars paths found=[{door: {isLocked: true, code: nothing}, lights: [1, 2, 3]}, {door: {isLocked: false, code: nothing}, lights: [1, 2, 3, nothing, 9]}, {door: {isLocked: false, code: nothing}, lights: [2, 3]}, {door: {isLocked: false, code: nothing}, lights: [1, 2, 3]}, [true, false, false]] failed=[{code: "wrong kind", expected: "map", got: "nothing", value: nothing, path: ["window"], at: {unit: "paths", handler: "go", line: 17, column: 9}}, {code: "out of domain", function: "pointerPath", value: "door", at: {unit: "paths", handler: "go", line: 22, column: 9}}]

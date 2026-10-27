@@ -347,6 +347,20 @@ pub const errors: ErrorsTable = .{
             .message = "Invalid {format} at Character {offset}",
         },
         .{
+            .code = "can't patch",
+            .fields = &.{
+                "index",
+                "op",
+                "path",
+                "reason",
+            },
+            .raised_when = "An operation of `applyPatch`'s JSON Patch is invalid, misses its target or fails its test",
+            .sources = &.{
+                "ADR 0137",
+            },
+            .message = "JSON Patch operation {index} ({op} at {path}) failed: {reason}",
+        },
+        .{
             .code = "unknown zone",
             .fields = &.{
                 "zone",

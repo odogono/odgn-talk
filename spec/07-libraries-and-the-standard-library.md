@@ -787,6 +787,7 @@ work and active callback boundaries; no additional snapshot format is needed.
 | `decodeJson(t)` | The value the JSON text `t` holds | `can't decode` |
 | `encodeJson(v)` | The value `v` as compact JSON text | `not encodable` |
 | `pointerPath(t)` | The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position |  |
+| `applyPatch(doc, patch)` | `doc` with the RFC 6902 JSON Patch `patch`, a list of operations, applied in order | `can't patch` |
 
 <!-- end -->
 
@@ -819,6 +820,11 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 > **Example.** `encodeJson({name: "Ann", scores: [2.50, nothing]})` gives the text `{"name":"Ann","scores":[2.50,null]}`, and `decodeJson` of that text gives the map back. `encodeJson({total: 5 kg})` raises `not encodable` with `kind` `"quantity"` and `path` `["total"]`.
 
 - **JSON Pointer, `pointerPath(t)`:** gives the Value Path that the RFC 6901 JSON Pointer text `t` names, so a pointer is used with the `map` Library's path functions rather than as a second path syntax. `""` gives `[]`. Otherwise `t` starts with `/`, and each reference token between slashes is one step, with `~1` read as `/` and `~0` as `~`. A token of digits with no leading zero is an array index and gives the integer one past it, since positions count from 1, and any other token gives its text, the empty token included. Text that doesn't start with `/`, or a `~` not followed by `0` or `1`, raises `out of domain`. So `pointerPath("/lines/0/sku")` gives `["lines", 1, "sku"]`, and a map key written in digits can't be reached through a pointer.
+- **JSON Patch, `applyPatch(doc, patch)`:** applies the RFC 6902 operations of the list `patch`, a value such as `decodeJson` gives, to `doc` in order and gives the result. Inside a patch the RFC's rules hold rather than the `map` path functions' ([ADR 0137](../docs/adr/0137-json-patch-follows-rfc-6902-rather-than-value-path-writes.md)):
+  - **Operations** are maps with `op`, `path` and, as the RFC says, `value` or `from`. A `value` member may hold Nothing, which is JSON `null`. Other members are ignored.
+  - **Pointers** resolve against the value they reach: a token is a key on a map and, written as an array index, a position on a list, counted from 0 as JSON counts. `-` names the place past a list's end, only for `add`. A map key that holds Nothing is present.
+  - **`add`** puts a map key, or inserts into a list and moves the later items up. **`remove`** and **`replace`** need their target to exist. **`move`** removes from `from` and adds at `path`, **`copy`** adds a copy, and **`test`** compares with `=`. The empty pointer `""` is `doc` itself.
+  - **Failures** raise `can't patch` with `index`, the operation's 1-based position in `patch`, its `op` and `path` as given, and a `reason`: `"invalid operation"` for a malformed operation, `"invalid pointer"`, `"missing target"` for a target or parent that isn't there, `"test failed"` and `"move into itself"`. `doc` is a value, so a failed patch leaves nothing half done.
 
 ## `date`
 
