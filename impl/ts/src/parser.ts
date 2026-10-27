@@ -459,7 +459,9 @@ class Parser {
         start = tok.end;
         continue;
       }
-      return { ...tok, leadingTrivia: [...trivia, ...tok.leadingTrivia] };
+      return trivia.length
+        ? { ...tok, leadingTrivia: [...trivia, ...tok.leadingTrivia] }
+        : tok;
     }
   }
 

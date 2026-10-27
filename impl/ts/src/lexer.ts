@@ -111,7 +111,31 @@ export class Lexer {
   }
 
   // Lines and columns are 1-based, and a column counts Unicode scalar values.
+  // Lexing moves forward, so the last line found usually holds `pos`.
+  private lastLine = 0;
+
   where(pos: number): { col: number; line: number } {
+    const starts = this.lineStarts;
+    let lo = this.lastLine;
+    if (!(
+      starts[lo]! <= pos &&
+      (lo + 1 === starts.length || pos < starts[lo + 1]!)
+    )) {
+      lo = this.findLine(pos);
+      this.lastLine = lo;
+    }
+    const start = starts[lo]!;
+    const col =
+      pos -
+      start +
+      1 -
+      (this.surrogateOffsets.length
+        ? this.surrogatesBefore(pos) - this.surrogatesBefore(start)
+        : 0);
+    return { line: lo + 1, col };
+  }
+
+  private findLine(pos: number): number {
     let lo = 0;
     let hi = this.lineStarts.length - 1;
     while (lo < hi) {
@@ -122,13 +146,7 @@ export class Lexer {
         hi = mid - 1;
       }
     }
-    const start = this.lineStarts[lo]!;
-    const col =
-      pos -
-      start +
-      1 -
-      (this.surrogatesBefore(pos) - this.surrogatesBefore(start));
-    return { line: lo + 1, col };
+    return lo;
   }
 
   private surrogatesBefore(pos: number): number {

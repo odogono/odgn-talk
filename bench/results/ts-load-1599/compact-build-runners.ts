@@ -4,7 +4,17 @@ import { execFileSync } from 'node:child_process';
 
 const base = process.argv[2] ?? '01864c1f';
 const baseline = new Map(
-  ['parser', 'checker', 'library', 'lowering'].map(name => [
+  [
+    'parser',
+    'checker',
+    'library',
+    'lowering',
+    'lexer',
+    'suspension',
+    'decisions',
+    'control',
+    'constructs',
+  ].map(name => [
     `impl/ts/src/${name}.ts`,
     execFileSync('git', ['show', `${base}:impl/ts/src/${name}.ts`], {
       encoding: 'utf8',
@@ -28,7 +38,7 @@ for (const { entry, target } of builds) {
                   build.onLoad(
                     {
                       filter:
-                        /\/impl\/ts\/src\/(parser|checker|library|lowering)\.ts$/,
+                        /\/impl\/ts\/src\/(parser|checker|library|lowering|lexer|suspension|decisions|control|constructs)\.ts$/,
                     },
                     args => ({
                       contents: [...baseline].find(([path]) =>
