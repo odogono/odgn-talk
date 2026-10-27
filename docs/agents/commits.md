@@ -39,7 +39,7 @@ To see the unreleased changelog, run `bun run changelog`.
 
 To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking. `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
 
-Then bump `core` in `impl/ts/src/versions.ts` to `ts/0.1.1`, merge both, and push the `ts-v0.1.1` tag from `main`. The `TS publish` workflow (`.github/workflows/ts-publish.yml`) checks the tag matches the built version, runs the tarball checks and publishes with npm trusted publishing.
+Then bump `core` in `impl/ts/src/versions.ts` to `ts/0.1.1`, merge both, and push the `ts-v0.1.1` tag from `main`. The `TS publish` workflow (`.github/workflows/ts-publish.yml`) checks the tag matches the built version, runs the tarball checks and publishes with npm trusted publishing. It then runs the tests of [`odogono/northtalk-ts-example`](https://github.com/odogono/northtalk-ts-example) against the published version under Node 24.10, the latest Node and Bun; a failed `verify` job means the release is broken.
 
 To check a PR the way CI does, run:
 
