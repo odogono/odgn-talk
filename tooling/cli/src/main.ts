@@ -155,7 +155,7 @@ const main = async (args: string[]): Promise<number> => {
       throw new Error(usage);
     }
     const { runTests } = await import('./test');
-    return runTests(rest.length ? rest : ['.'], { manifest, only });
+    return await runTests(rest.length ? rest : ['.'], { manifest, only });
   }
   if (command === 'help' || command === '--help' || command === '-h') {
     console.log(usage);

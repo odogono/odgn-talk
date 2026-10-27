@@ -45,6 +45,11 @@ import {
   testHandlersOf,
   type TestHandler,
 } from '@northtalk/tooling/test-script';
+import {
+  ProjectFileError,
+  readProjectFile,
+} from '@northtalk/creative/project-file';
+import { runProjectTests } from '@northtalk/creative/test-runner';
 import { differs, replayFile } from './replay';
 
 const LIBRARY_VERSION = '1';
@@ -71,10 +76,10 @@ type Timer = {
 };
 
 /** Runs every test under the paths, and returns the exit code. */
-export const runTests = (
+export const runTests = async (
   paths: readonly string[],
   options: TestOptions = {},
-): number => {
+): Promise<number> => {
   const manifest = options.manifest
     ? readManifest(readFileSync(options.manifest, 'utf8'))
     : null;
@@ -106,6 +111,12 @@ export const runTests = (
     }
   };
   for (const file of files) {
+    if (file.endsWith('.folio')) {
+      for (const outcome of await folioTests(file, options.only)) {
+        report(outcome.ok, outcome.lines);
+      }
+      continue;
+    }
     if (file.endsWith('.transcript')) {
       if (options.only && !file.includes(options.only)) {
         continue;
@@ -131,8 +142,10 @@ export const runTests = (
   return failed ? 1 : 0;
 };
 
-// Test Scripts and Session Transcripts: a file as given, or every one in a
-// directory, skipping dot directories and node_modules.
+// Test Scripts, Session Transcripts and Folio Projects: a file as given, or
+// every one in a directory, skipping dot directories and node_modules.
+const TESTED = ['.test.talk', '.transcript', '.folio'];
+const tested = (name: string) => TESTED.some(suffix => name.endsWith(suffix));
 const discover = (path: string): string[] => {
   let stats;
   try {
@@ -141,8 +154,10 @@ const discover = (path: string): string[] => {
     throw new Error(`${path}: no such file or directory`);
   }
   if (stats.isFile()) {
-    if (!path.endsWith('.test.talk') && !path.endsWith('.transcript')) {
-      throw new Error(`${path} is neither a Test Script nor a Transcript`);
+    if (!tested(path)) {
+      throw new Error(
+        `${path} is not a Test Script, a Transcript or a Folio Project`,
+      );
     }
     return [path];
   }
@@ -151,7 +166,7 @@ const discover = (path: string): string[] => {
     .flatMap(e =>
       e.isDirectory()
         ? discover(join(path, e.name))
-        : e.name.endsWith('.test.talk') || e.name.endsWith('.transcript')
+        : tested(e.name)
           ? [join(path, e.name)]
           : [],
     );
@@ -160,6 +175,40 @@ const discover = (path: string): string[] => {
 const indent = (lines: readonly string[]) => lines.map(line => `  ${line}`);
 
 type Outcome = { lines: string[]; ok: boolean };
+
+// Every Test Handler of a Folio Project's Test Scripts, run as Folio's Run
+// Tests runs them (ADR 0133).
+const folioTests = async (
+  file: string,
+  only: string | undefined,
+): Promise<Outcome[]> => {
+  let project;
+  try {
+    project = (await readProjectFile(readFileSync(file))).project;
+  } catch (error) {
+    if (!(error instanceof ProjectFileError)) {
+      throw error;
+    }
+    return [{ ok: false, lines: [`FAIL ${file}`, `  ${error.message}`] }];
+  }
+  const results = await runProjectTests(
+    project,
+    (script, test) => !only || `${file} ${script} ${test}`.includes(only),
+  );
+  return results.map(r =>
+    r.ok
+      ? { ok: true, lines: [`ok ${file} ${r.script.name} ${r.test}`] }
+      : {
+          ok: false,
+          lines: [
+            `FAIL ${file}#${r.script.name}:${r.at.line}:${r.at.col}${
+              r.test ? ` ${r.test}` : ''
+            }`,
+            ...indent(r.problems.flatMap(p => p.split('\n'))),
+          ],
+        },
+  );
+};
 
 // Every Test Handler in one Test Script, each in a fresh Group.
 const testScript = (

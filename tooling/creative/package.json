@@ -2,6 +2,10 @@
   "name": "@northtalk/creative",
   "private": true,
   "type": "module",
+  "exports": {
+    "./project-file": "./src/project-file.ts",
+    "./test-runner": "./src/test-runner.ts"
+  },
   "scripts": {
     "typecheck": "tsc",
     "test": "bun test tests",

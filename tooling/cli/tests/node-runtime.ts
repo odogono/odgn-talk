@@ -9,6 +9,8 @@ import {
   verifyLspInvalidConfiguration,
 } from './lsp-integration';
 import { coreVersions } from '@northtalk/ts';
+import { writeProjectFile } from '@northtalk/creative/project-file';
+import { createTetrisProject } from '../../creative/src/examples/tetris';
 import { verifyHttpExample, verifyScriptRunner } from './run-integration';
 
 // Node 22/24 warn about the bundled node:sqlite import. Child processes
@@ -38,6 +40,17 @@ try {
   );
   assert.equal(beginner.status, 0, beginner.stderr);
   assert.match(beginner.stdout, /warning \[prefer-explicit-end]/);
+  // A Folio Project's Test Scripts run headless under Node too.
+  const folio = join(directory, 'tetris.folio');
+  writeFileSync(
+    folio,
+    await writeProjectFile((await createTetrisProject()).project, new Map()),
+  );
+  const folioTests = spawnSync(process.execPath, [main, 'test', folio], {
+    encoding: 'utf8',
+  });
+  assert.equal(folioTests.status, 0, folioTests.stdout + folioTests.stderr);
+  assert.match(folioTests.stdout, /3 passed, 0 failed\n$/u);
   const manifest = join(directory, 'host.talk-manifest.json');
   writeFileSync(
     manifest,

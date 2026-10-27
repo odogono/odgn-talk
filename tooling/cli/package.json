@@ -12,6 +12,7 @@
     "test:node": "bun build tests/node-runtime.ts --target node --outfile dist/node-runtime.mjs && node dist/node-runtime.mjs"
   },
   "dependencies": {
+    "@northtalk/creative": "workspace:*",
     "@northtalk/ts": "workspace:*",
     "@northtalk/tooling": "workspace:*"
   }

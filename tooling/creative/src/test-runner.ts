@@ -48,6 +48,8 @@ export type TestResult = {
 /** Every Test Handler in the Project's Test Scripts, in order. */
 export const runProjectTests = async (
   project: DeepReadonly<Project>,
+  /** Picks the Test Handlers to run, by Test Script and Handler name. */
+  select: (script: string, test: string) => boolean = () => true,
 ): Promise<TestResult[]> => {
   const results: TestResult[] = [];
   for (const script of project.testScripts) {
@@ -64,7 +66,7 @@ export const runProjectTests = async (
       continue;
     }
     const { setup, tests } = testHandlersOf(parsed.tree);
-    for (const test of tests) {
+    for (const test of tests.filter(t => select(script.name, t.name))) {
       const run = new TestRun(project, script, test);
       const problems = await run.run(setup);
       results.push({

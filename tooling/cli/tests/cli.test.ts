@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { coreVersions } from '@northtalk/ts';
+import { writeProjectFile } from '@northtalk/creative/project-file';
+import { createTetrisProject } from '../../creative/src/examples/tetris';
 
 const main = resolve(import.meta.dir, '../src/main.ts');
 const corpus = resolve(import.meta.dir, '../../../corpus/sessions');
@@ -752,4 +754,56 @@ test('the REPL continues labelled calls using the loaded Handler first word', ()
   );
   expect(code).toBe(0);
   expect(stdout).toBe('knighte4\n');
+});
+
+// A directory holding Tetris as a `.folio`, with a failing Test Script
+// added, and a damaged `.folio` beside it.
+const folioDir = async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-folio-'));
+  const { project } = await createTetrisProject();
+  project.testScripts.push({
+    name: 'broken.test',
+    source: [
+      'use assertEqual from test',
+      'on testScoreStartsHigh',
+      '  ask harness to property "text", "scoreText"',
+      '  assertEqual(it, "Score: 100")',
+      'end testScoreStartsHigh',
+      '',
+    ].join('\n'),
+  });
+  writeFileSync(
+    join(dir, 'tetris.folio'),
+    await writeProjectFile(project, new Map()),
+  );
+  return dir;
+};
+
+test('test runs the Test Scripts of every Folio Project under a path', async () => {
+  const dir = await folioDir();
+  const file = join(dir, 'tetris.folio');
+  writeFileSync(join(dir, 'damaged.folio'), 'not a zip');
+  const { code, stdout } = run(['test', dir]);
+  expect(code).toBe(1);
+  const lines = stdout.split('\n');
+  expect(lines[0]).toStartWith(`FAIL ${join(dir, 'damaged.folio')}`);
+  expect(lines).toContain(`ok ${file} game.test testSoftDropScoresOne`);
+  expect(stdout).toContain(
+    `FAIL ${file}#broken.test:4:3 testScoreStartsHigh\n  broken.test testScoreStartsHigh errored: {code: "assertion failed", expected: "Score: 100", actual: "Score: 0"}\n`,
+  );
+  expect(stdout).toEndWith('3 passed, 2 failed\n');
+});
+
+test('test --only picks single Test Handlers in a Folio Project', async () => {
+  const dir = await folioDir();
+  const { code, stdout } = run([
+    'test',
+    '--only',
+    'testSoftDrop',
+    join(dir, 'tetris.folio'),
+  ]);
+  expect(stdout).toBe(
+    `ok ${join(dir, 'tetris.folio')} game.test testSoftDropScoresOne\n1 passed, 0 failed\n`,
+  );
+  expect(code).toBe(0);
 });
