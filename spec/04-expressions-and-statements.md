@@ -532,7 +532,7 @@ A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first ite
 
 A `set` property target may be rooted in a Name, `me`, `it` or `the target`,
 with only keys and chunks along the path. Rooted in `me`, `it` or `the target`,
-its first step must be a key. Parentheses, quoted keys and computed keys follow the same rules for every
+its path must have a key. Parentheses, quoted keys and computed keys follow the same rules for every
 root. Intermediate keys and chunks read the receiving Object: for example,
 `set the label of item 2 of it to "Open"` works when that item is a Host Object.
 `set item 2 of the tags of it to "new"` reads `tags`, replaces its item 2 and

@@ -15,6 +15,7 @@ pub const Opcode = enum(u8) {
     me,
     target,
     jump,
+    hold,
     branch_not_nothing,
     branch_false,
     branch_true,

@@ -1,0 +1,11 @@
+-- paths.talk: `set` through a property's value (ADR 0135, chapter 8).
+-- Part of the set-paths case.
+
+on setting button, k, xs
+  set the label of button to "OK"
+  set the (k) of the panel of button to 5
+  set the isLocked of the door of me to true
+  set item 2 of the tags of it to "new"
+  set the label of item 2 of xs to "x"
+  set the x of the (k) of the pos of me to 1
+end setting

@@ -10,7 +10,7 @@ A Host that keeps structured data, such as an Entity Component System, exposes i
 - **`put` stays an error:** `put` into a Host Object key, and `add`, `subtract`, `multiply` and `divide`, which are defined as `put`, still raise `wrong kind`. So every write that reaches a Host is a visible `set`.
 
 - **Evaluation order and the property:** a `set` evaluates its computed keys and indexes, then its value, left to right, and only then walks its path from the root. The property is the last step whose receiver is a Host Object, which can only be known at run time. Nothing in the walk can suspend, so the walk, the `Get` and the `Set` are one landing unit. This changes the order for an existing `set` whose path and value both cross to the Host, which used to read the path first.
-- **Lowering:** a new property read opens a hold that the next `Set` closes, and a landing made inside it is delayed until the `Set`, or until the `set` raises. Its instruction data lands with the Cores, as in [ADR 0057](0057-a-send-may-compute-its-message-name.md).
+- **Lowering:** a `hold` instruction, after the value, opens a hold that the next `set-property` or a raise closes. A landing made inside it waits until then, and no Fuel Slice preempts the Run inside it. On the way back up the path, each key level tests its whole with `is-kind object` and branches to its own `set-property`. The walk can't know which read is the property's until the write, so a dedicated property read wouldn't do.
 - **ADR 0085:** this supersedes ADR 0085's exclusion of property read/modify/write.
 
 We made the pair one crossing because the author writes one statement. A Stop landing between the `Get` and the `Set` would drop a write that the Script reads as a single effect.

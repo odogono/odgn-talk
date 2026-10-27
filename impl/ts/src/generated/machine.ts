@@ -126,6 +126,14 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "hold",
+    "cost": "jump",
+    "operands": [],
+    "pops": 0,
+    "pushes": 0,
+    "suspends": false
+  },
+  {
     "name": "branch-not-nothing",
     "cost": "branch",
     "operands": [
