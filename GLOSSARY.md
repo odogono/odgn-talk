@@ -324,6 +324,10 @@ _Avoid_: test case (the Corpus has cases), test method
 The Capability only a Test Script is granted, through which it answers the calls the Scripts under test make, reads the calls they made, and moves the Clock on.
 _Avoid_: mock framework, fixture, test double
 
+**Folio Harness**:
+The Harness given to a Test Script in a Folio Project, which can also press keys, click Elements, deliver `frame`, read Element properties and change Page.
+_Avoid_: check Script, Play harness
+
 **Test Library**:
 The Library a Test Script imports its assertions from. It is supplied by the tooling that runs the test, and is not part of the Standard Library.
 _Avoid_: assert library, test framework
