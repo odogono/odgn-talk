@@ -21,6 +21,7 @@ import {
   definition,
   formatting,
   hover,
+  type FuelSettings,
   nameAt,
   references,
   rename,
@@ -28,6 +29,7 @@ import {
   suspensionHints,
   type ClientFeatures,
 } from './lsp/features';
+import { defaultFuelCaps, type FuelCaps } from './fuel';
 import { dictionaryOf, dictionaryText } from './dictionary';
 import {
   offsetAt,
@@ -50,6 +52,10 @@ export type {
 } from './lsp/protocol';
 export { libraryUri, type WorkspaceSource } from './lsp/workspace';
 export type WorkspaceConfiguration = {
+  /** Caps for the hover's Fuel Bound; any left out keep their defaults. */
+  fuelCaps?: Partial<FuelCaps>;
+  /** The Fuel a Host's Pump spends each frame, for the Fuel Bound's note. */
+  fuelFrame?: number | null;
   manifest?: unknown;
   manifestError?: string | null;
   profile?: LintProfile;
@@ -70,6 +76,28 @@ const clientFeatures = (capabilities: unknown): ClientFeatures => {
     snippets: item?.snippetSupport === true,
   };
 };
+// The default caps with each one given replaced; a cap is a whole number.
+const fuelCaps = (value: unknown): FuelCaps => {
+  const given = value && typeof value === 'object' ? record(value) : null;
+  const caps = { ...defaultFuelCaps };
+  for (const key of Object.keys(caps) as (keyof FuelCaps)[]) {
+    const cap = given?.[key];
+    if (cap === undefined) {
+      continue;
+    }
+    if (!Number.isSafeInteger(cap) || (cap as number) < 0) {
+      throw new RpcError(
+        -32_602,
+        `northtalk.fuelCaps.${key} must be a whole number`,
+      );
+    }
+    caps[key] = cap as number;
+  }
+  if (!given) {
+    throw new RpcError(-32_602, 'northtalk.fuelCaps must be an object');
+  }
+  return caps;
+};
 export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   let initialized = false;
   let shutdown = false;
@@ -77,6 +105,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   let manifest: HostManifest | null = null;
   let manifestError: string | null = null;
   let profile: LintProfile = 'standard';
+  let fuel: FuelSettings = { caps: defaultFuelCaps };
   let sources: readonly WorkspaceSource[] = [];
   let client: ClientFeatures = { markdown: false, snippets: false };
   const open = new Map<string, Document>();
@@ -128,6 +157,15 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
     if (configuration.profile) {
       profile = configuration.profile;
     }
+    if (configuration.fuelCaps) {
+      fuel = { ...fuel, caps: fuelCaps(configuration.fuelCaps) };
+    }
+    if ('fuelFrame' in configuration) {
+      fuel = {
+        caps: fuel.caps,
+        ...(configuration.fuelFrame ? { frame: configuration.fuelFrame } : {}),
+      };
+    }
     if (open.size) {
       refresh();
     }
@@ -146,6 +184,9 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
         );
       }
       profile = config.profile;
+    }
+    if (config.fuelCaps !== undefined) {
+      fuel = { ...fuel, caps: fuelCaps(config.fuelCaps) };
     }
   };
   const dispatch = (method: string, raw: unknown): unknown => {
@@ -329,7 +370,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
       case 'textDocument/completion':
         return completion(analysis, offset, manifest, analyses, client);
       case 'textDocument/hover':
-        return hover(analyses, analysis, offset, manifest, client);
+        return hover(analyses, analysis, offset, manifest, client, fuel);
       case 'textDocument/signatureHelp':
         return signatureHelp(analysis, offset, manifest);
       case 'textDocument/definition':

@@ -18,7 +18,12 @@ import {
   type OperationSpec,
   type Setup,
 } from '../../../impl/ts/src/setup';
-import { estimateFuel, type FuelEstimate } from '../src/fuel';
+import {
+  boundFuel,
+  estimateFuel,
+  type FuelBound,
+  type FuelEstimate,
+} from '../src/fuel';
 
 type Case = Setup & {
   kind: string;
@@ -44,7 +49,10 @@ const estimatesOf = (dir: string, spec: Case) => {
   } catch {
     return null;
   }
-  const out = new Map<string, FuelEstimate[]>();
+  const out = new Map<
+    string,
+    { bounds: FuelBound[]; estimates: FuelEstimate[] }
+  >();
   for (const s of spec.scripts ?? []) {
     // The case's own Operations, by Grant; a Standard Capability's are left
     // out, so a Script calling one may lower differently and is skipped below.
@@ -87,14 +95,16 @@ const estimatesOf = (dir: string, spec: Case) => {
     }
     try {
       const unit = lowerTree(checked.tree, { name: s.name });
-      out.set(
-        s.name,
-        estimateFuel(
-          loadScript(unit, {}, linksOf(imports)) as never,
-          (grant, op) =>
-            granted.get(grant)?.find(o => o.name === op)?.cost?.fuel,
-        ),
-      );
+      const code = loadScript(unit, {}, linksOf(imports)) as never;
+      const declared = (grant: string, op: string) =>
+        granted.get(grant)?.find(o => o.name === op)?.cost?.fuel;
+      out.set(s.name, {
+        bounds: boundFuel(code, undefined, declared, (grant, op) => {
+          const found = granted.get(grant)?.find(o => o.name === op);
+          return found && (found.result ? shapeOf(found.result) : null);
+        }),
+        estimates: estimateFuel(code, declared),
+      });
     } catch {
       continue;
     }
@@ -102,9 +112,10 @@ const estimatesOf = (dir: string, spec: Case) => {
   return out;
 };
 
-test('blessed corpus Runs fall within their Handlers’ Fuel estimates', async () => {
+test('blessed corpus Runs fall within their Handlers’ Fuel estimates and bounds', async () => {
   let lower = 0;
   let exact = 0;
+  let bounded = 0;
   const wrong: string[] = [];
   for await (const path of new Glob('**/case.toml').scan(corpus)) {
     const dir = dirname(join(corpus, path));
@@ -120,18 +131,18 @@ test('blessed corpus Runs fall within their Handlers’ Fuel estimates', async (
     if (lines.some(l => /^> (reload|extend|restore)/.test(l))) {
       continue;
     }
-    const estimates = estimatesOf(dir, spec);
-    if (!estimates) {
+    const units = estimatesOf(dir, spec);
+    if (!units) {
       continue;
     }
     for (const line of lines) {
       const m = completed.exec(line);
-      const clauses = m
-        ? estimates
-            .get(m[1]!)
-            ?.filter(e => e.kind === 'handler' && e.name === m[2])
-        : undefined;
-      if (!m || !clauses?.length) {
+      const unit = m ? units.get(m[1]!) : undefined;
+      const picked = (unit?.estimates ?? []).flatMap((e, i) =>
+        e.kind === 'handler' && e.name === m![2] ? [i] : [],
+      );
+      const clauses = picked.map(i => unit!.estimates[i]!);
+      if (!m || !clauses.length) {
         continue;
       }
       const fuel = Number(m[3]);
@@ -150,11 +161,25 @@ test('blessed corpus Runs fall within their Handlers’ Fuel estimates', async (
           wrong.push(`${where}: ${fuel} > ${max}`);
         }
       }
+      // Under the default caps, which the corpus's values stay inside except
+      // in limits/, whose cases build values past any cap on purpose.
+      const bounds = picked.map(i => unit!.bounds[i]!);
+      if (
+        !where.startsWith('limits/') &&
+        bounds.every(b => b.kind === 'bounded')
+      ) {
+        const most = Math.max(...bounds.map(b => b.fuel));
+        bounded++;
+        if (fuel > most) {
+          wrong.push(`${where}: ${fuel} > bound ${most}`);
+        }
+      }
     }
   }
   expect(wrong).toEqual([]);
-  // Guards the loader: of 956 completed corpus Runs, 528 were checked and 64
-  // exactly when this was written (#1606).
+  // Guards the loader: of 956 completed corpus Runs, 528 were checked, 64
+  // exactly (#1606) and 268 against their Fuel Bound (#1610) when written.
   expect(lower).toBeGreaterThanOrEqual(500);
   expect(exact).toBeGreaterThanOrEqual(60);
+  expect(bounded).toBeGreaterThanOrEqual(250);
 });

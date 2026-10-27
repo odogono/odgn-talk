@@ -83,6 +83,9 @@ export const manifestGrant = (definition: GrantDefinition<never>) => ({
     name,
     args: (op.args ?? []).map(shapeData),
     mode: op.mode,
+    ...(op.cost
+      ? { cost: { fuel: op.cost.fuel, alloc: op.cost.alloc ?? 0 } }
+      : {}),
     ...(op.result ? { result: shapeData(op.result) } : {}),
     ...(op.maxPendingMs === undefined ? {} : { maxPending: op.maxPendingMs }),
     ...(op.errors?.length

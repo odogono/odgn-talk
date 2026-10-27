@@ -14,7 +14,19 @@ import {
 } from '@northtalk/ts';
 import { builtinDocs } from '@northtalk/ts/session';
 import { formatSource } from '../format';
-import { estimateFuel, fuelText, type FuelEstimate } from '../fuel';
+import {
+  boundFuel,
+  defaultFuelCaps,
+  estimateFuel,
+  fuelBoundText,
+  fuelText,
+  type FuelBound,
+  type FuelCaps,
+  type FuelEstimate,
+} from '../fuel';
+
+/** The caps a hover's Fuel Bound assumes, and a Host's Fuel per frame. */
+export type FuelSettings = { caps: FuelCaps; frame?: number };
 import {
   bindingKey,
   elements,
@@ -858,16 +870,22 @@ const whoseHover = (analysis: Analysis, offset: number) => {
 
 const fuelEstimates = new WeakMap<
   object,
-  { estimates: FuelEstimate[]; manifest: HostManifest | null }
+  {
+    bounds: FuelBound[];
+    caps: FuelCaps;
+    estimates: FuelEstimate[];
+    manifest: HostManifest | null;
+  }
 >();
 /**
- * The Fuel estimate (#1606) of the Handler Clause or function whose head
- * declares `name`, from the analysis's loaded unit.
+ * The Fuel Estimate (#1606) and Fuel Bound (#1610) of the Handler Clause or
+ * function whose head declares `name`, from the analysis's loaded unit.
  */
 const fuelAt = (
   analysis: Analysis,
   name: SemanticName,
   manifest: HostManifest | null,
+  { caps, frame }: FuelSettings,
 ): string | undefined => {
   const loaded = analysis.loaded;
   if (name.role !== 'declaration' || !loaded) {
@@ -884,24 +902,30 @@ const fuelAt = (
     return undefined;
   }
   let cached = fuelEstimates.get(loaded);
-  if (cached?.manifest !== manifest) {
+  if (cached?.manifest !== manifest || cached.caps !== caps) {
+    const declared = (grant: string, op: string) =>
+      manifest?.grants.get(grant)?.get(op)?.cost?.fuel;
     cached = {
-      estimates: estimateFuel(
-        loaded,
-        (grant, op) => manifest?.grants.get(grant)?.get(op)?.cost?.fuel,
-      ),
+      bounds: boundFuel(loaded, caps, declared, (grant, op) => {
+        const operation = manifest?.grants.get(grant)?.get(op);
+        return operation && (operation.result ?? null);
+      }),
+      caps,
+      estimates: estimateFuel(loaded, declared),
       manifest,
     };
     fuelEstimates.set(loaded, cached);
   }
-  const { estimates } = cached;
+  const { bounds, estimates } = cached;
   const text = analysis.document.text;
   const last = rangeAt(text, node.span.end, node.span.end).start.line + 1;
-  const estimate = estimates.find(
+  const at = estimates.findIndex(
     e =>
       e.name === name.text && e.at.line >= node.span.line && e.at.line <= last,
   );
-  return estimate && fuelText(estimate);
+  return at === -1
+    ? undefined
+    : `${fuelText(estimates[at]!)}\n${fuelBoundText(bounds[at]!, estimates[at]!.at.unit, caps, frame)}`;
 };
 export const hover = (
   all: Map<string, Analysis>,
@@ -909,6 +933,7 @@ export const hover = (
   offset: number,
   manifest: HostManifest | null,
   client: ClientFeatures = { markdown: false, snippets: false },
+  fuelSettings: FuelSettings = { caps: defaultFuelCaps },
 ) => {
   const whose = whoseHover(analysis, offset);
   if (whose) {
@@ -1107,7 +1132,7 @@ export const hover = (
         : docs.join('\n\n');
     display = `${display ?? ''}\n\n${documentation}`;
   }
-  const fuel = fuelAt(analysis, name, manifest);
+  const fuel = fuelAt(analysis, name, manifest, fuelSettings);
   if (fuel) {
     display = display ? `${display}\n\n${fuel}` : fuel;
   }

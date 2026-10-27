@@ -34,7 +34,7 @@ export const stdlibFuel = (): string => {
       blocks.push(
         `${library}.${name}\n` +
           (clauses.length
-            ? clauses.map(e => listed(fuelText(e))).join('\n')
+            ? clauses.map(e => listed(fuelText(e, { full: true }))).join('\n')
             : 'a Constant, with no Fuel of its own'),
       );
     }

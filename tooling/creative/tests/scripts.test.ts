@@ -14,7 +14,7 @@ import {
   ELEMENT_KINDS,
 } from '../src/model';
 import { FOLIO_GRANTS } from '../src/grants';
-import { scriptManifest } from '../src/script-manifest';
+import { languageConfiguration, scriptManifest } from '../src/script-manifest';
 import { createLighthouseProject } from '../src/examples/lighthouse';
 import { createTetrisProject } from '../src/examples/tetris';
 
@@ -88,7 +88,7 @@ end click`;
 const language = (manifest: unknown, text: string) => {
   const sent: RpcMessage[] = [];
   const server = createLanguageServer(message => sent.push(message));
-  server.configure({ manifest });
+  server.configure(languageConfiguration(manifest as never));
   server.handle({
     jsonrpc: '2.0',
     id: 1,
@@ -247,26 +247,46 @@ test('Host Commands hide and show are completed, documented and checked, unless 
   ).toHaveLength(1);
 });
 
-test("hover on a Handler head estimates its Fuel with Folio's declared costs (#1606)", () => {
+const hoverAt = (source: string, line: number, character: number): string => {
   const { project, page } = fixture();
   const owner = page.elements.find(e => e.kind === 'button')!;
   const { server, sent, uri, diagnostics } = language(
     scriptManifest(project, owner),
-    'on click\n  hide text1\n  show text1\nend click\n',
+    source,
   );
   expect(diagnostics().filter(d => d.severity === 1)).toEqual([]);
   server.handle({
     jsonrpc: '2.0',
     id: 2,
     method: 'textDocument/hover',
-    params: { textDocument: { uri }, position: { line: 0, character: 3 } },
+    params: { textDocument: { uri }, position: { line, character } },
   });
-  const hover = sent.at(-1)!.result as { contents: { value: string } };
-  // hide and show declare 1 Fuel each in the folio Grant; only their
-  // results' sizes stay open.
-  expect(hover.contents.value).toContain(
-    'Fuel estimate: 25, plus 4 per Handler Clause tried\n' +
-      '+ more with larger values: capability (line 2), capability (line 3)',
+  return (sent.at(-1)!.result as { contents: { value: string } }).contents
+    .value;
+};
+
+test("hover on a Handler head counts Folio's declared costs (#1606, #1610)", () => {
+  // hide and show declare 1 Fuel each in the folio Grant and have no
+  // result, so the bound adds only Nothing's size and one dispatch.
+  expect(
+    hoverAt('on click\n  hide text1\n  show text1\nend click\n', 0, 3),
+  ).toContain(
+    'Fuel estimate: 27, plus 4 per Handler Clause tried\n' +
+      '+ more with larger values: capability (line 2, line 3)\n' +
+      'Fuel Bound: 33\n' +
+      'with text ≤ 256 Characters',
+  );
+});
+
+test("a Fuel Bound over one frame's Pump Fuel says how many frames (#1610)", () => {
+  expect(
+    hoverAt(
+      'on click\n  repeat 400 times\n    hide text1\n  end repeat\nend click\n',
+      0,
+      3,
+    ),
+  ).toMatch(
+    /Fuel Bound: [\d,]+, more than one frame's 5,000 \(it may spread over \d+ frames\)/,
   );
 });
 
