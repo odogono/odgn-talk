@@ -1,12 +1,7 @@
-import type { DeepReadonly } from '../src/readonly';
 import { expect, test } from 'bun:test';
-import {
-  textOf,
-  type Element,
-  type Project,
-  type TextElement,
-} from '../src/model';
+import { textOf, type Project, type TextElement } from '../src/model';
 import { PlaySession } from '../src/play';
+import { PlayHarness } from '../src/play-harness';
 import { readProjectFile, writeProjectFile } from '../src/project-file';
 import { projectForExport } from '../src/images';
 import {
@@ -14,28 +9,6 @@ import {
   LIGHTHOUSE_PROJECT_NAME,
 } from '../src/examples/lighthouse';
 import { scriptNameProblems } from '../src/script-names';
-
-const advance = async (play: PlaySession, now = 0n) => {
-  for (let i = 0; i < 100; i++) {
-    const result = play.pump(now);
-    await Promise.resolve();
-    if (result.state !== 'sliced') {
-      return result;
-    }
-  }
-  throw new Error('Did not become idle');
-};
-
-const element = (play: PlaySession, name: string): DeepReadonly<Element> =>
-  play.page.elements.find(e => e.name === name)!;
-
-const click = async (play: PlaySession, name: string, now = 0n) => {
-  play.send(element(play, name), 'click');
-  await advance(play, now);
-};
-
-const text = (play: PlaySession, name: string): string =>
-  textOf(element(play, name) as TextElement);
 
 test('the sample is a valid three-Page Project with illustrations, sounds and a journal', async () => {
   const { project, assets } = await createLighthouseProject();
@@ -70,66 +43,63 @@ test('the sample is a valid three-Page Project with illustrations, sounds and a 
 test('the mystery plays end to end: clues, dynamic trapdoor, and the Project Script settles it', async () => {
   const { project } = await createLighthouseProject();
   const authored = structuredClone(project);
-  const play = new PlaySession(project);
-  await advance(play);
+  const game = await PlayHarness.start(project);
+  const { play } = game;
   expect(play.problems).toEqual([]);
 
   // Without clues, the ending refuses.
-  await click(play, 'toLighthouse');
-  await click(play, 'toEnding');
-  await click(play, 'solveButton');
-  expect(text(play, 'verdict')).toContain('Still locked');
-  await click(play, 'backToLighthouse');
-  await click(play, 'backToHarbour');
+  await game.click('toLighthouse');
+  await game.click('toEnding');
+  await game.click('solveButton');
+  expect(game.text('verdict')).toContain('Still locked');
+  await game.click('backToLighthouse');
+  await game.click('backToHarbour');
 
   // Clue 1, with its bell, and the waves loop owned by this Page.
-  await click(play, 'examineButton');
-  expect(element(play, 'clueText').visible).toBe(true);
-  expect(element(play, 'examineButton')).toHaveProperty(
+  await game.click('examineButton');
+  expect(game.element('clueText').visible).toBe(true);
+  expect(game.element('examineButton')).toHaveProperty(
     'label',
     'Tide chart examined',
   );
-  await click(play, 'listenButton');
+  await game.click('listenButton');
   expect(play.sounds.playing()).toContainEqual(
     expect.objectContaining({ name: 'waves', loop: true }),
   );
 
   // Leaving stops the Page-owned waves; arriving starts the lamp timer.
-  await click(play, 'toLighthouse');
+  await game.click('toLighthouse');
   expect(play.page.name).toBe('lighthouse');
   expect(play.sounds.playing()).toEqual([]);
-  expect(text(play, 'lampNote')).toBe('The lamp is dark and cold.');
-  await advance(play, 2_000_000n);
-  expect(text(play, 'lampNote')).toContain('swings in a draught');
+  expect(game.text('lampNote')).toBe('The lamp is dark and cold.');
+  await game.frame(2000);
+  expect(game.text('lampNote')).toContain('swings in a draught');
 
   // A stray click is not the trapdoor and reveals nothing.
-  await click(play, 'keyText', 2_000_000n);
-  expect(element(play, 'keyText').visible).toBe(false);
+  await game.click('keyText');
+  expect(game.element('keyText').visible).toBe(false);
 
   // The Page Script creates the trapdoor; its click reaches the Page
   // handler, reveals clue 2, and the trapdoor removes itself.
-  await click(play, 'searchButton', 2_000_000n);
-  expect(element(play, 'searchButton').visible).toBe(false);
-  expect(element(play, 'trapdoor')).toHaveProperty(
-    'label',
-    'Open the trapdoor',
-  );
-  await click(play, 'trapdoor', 2_000_000n);
-  expect(element(play, 'keyText').visible).toBe(true);
+  await game.click('searchButton');
+  expect(game.element('searchButton').visible).toBe(false);
+  expect(game.element('trapdoor')).toHaveProperty('label', 'Open the trapdoor');
+  await game.click('trapdoor');
+  expect(game.element('keyText').visible).toBe(true);
   expect(play.page.elements.map(e => e.name)).not.toContain('trapdoor');
 
   // Revisiting keeps the changed visuals, restarts the Page Script and
   // keeps the Project Script's clues.
-  await click(play, 'backToHarbour', 2_000_000n);
-  expect(element(play, 'clueText').visible).toBe(true);
-  await click(play, 'toLighthouse', 2_000_000n);
-  await advance(play, 4_000_000n);
-  expect(element(play, 'keyText').visible).toBe(true);
-  expect(text(play, 'lampNote')).toContain('swings in a draught');
+  await game.click('backToHarbour');
+  expect(game.element('clueText').visible).toBe(true);
+  await game.click('toLighthouse');
+  await game.frame(2000);
+  expect(game.element('keyText').visible).toBe(true);
+  expect(game.text('lampNote')).toContain('swings in a draught');
 
-  await click(play, 'toEnding', 4_000_000n);
-  await click(play, 'solveButton', 4_000_000n);
-  expect(text(play, 'verdict')).toContain('Mystery solved');
+  await game.click('toEnding');
+  await game.click('solveButton');
+  expect(game.text('verdict')).toContain('Mystery solved');
   expect(play.problems).toEqual([]);
 
   // Nothing above touched the authored Project, and a fresh session
@@ -141,11 +111,12 @@ test('the mystery plays end to end: clues, dynamic trapdoor, and the Project Scr
 
 test('leaving the lamp room early cancels its wait with no late write', async () => {
   const { project } = await createLighthouseProject();
-  const play = new PlaySession(project);
-  await advance(play);
-  await click(play, 'toLighthouse');
-  await click(play, 'backToHarbour', 500_000n);
-  await advance(play, 5_000_000n);
+  const game = await PlayHarness.start(project);
+  const { play } = game;
+  await game.click('toLighthouse');
+  await game.frame(500);
+  await game.click('backToHarbour');
+  await game.frame(4500);
   const lamp = play.project.pages[1]!.elements.find(
     e => e.name === 'lampNote',
   )! as TextElement;
@@ -164,9 +135,9 @@ test('the sample exports, reopens from the file alone and plays the same', async
       ...assets.get(asset.hash)!,
     ]);
   }
-  const play = new PlaySession(loaded.project as Project);
-  await advance(play);
-  await click(play, 'examineButton');
-  expect(element(play, 'clueText').visible).toBe(true);
+  const game = await PlayHarness.start(loaded.project as Project);
+  const { play } = game;
+  await game.click('examineButton');
+  expect(game.element('clueText').visible).toBe(true);
   expect(play.problems).toEqual([]);
 });

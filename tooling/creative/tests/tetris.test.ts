@@ -1,57 +1,28 @@
 import { describe, expect, test } from 'bun:test';
 import { createTetrisProject } from '../src/examples/tetris';
 import { COLUMNS, EMPTY_COLOUR, ROWS } from '../src/examples/tetris-rules';
-import { PlaySession, PUMP_FUEL } from '../src/play';
-import { type Project, textOf } from '../src/model';
+import { PUMP_FUEL } from '../src/play';
+import { PlayHarness } from '../src/play-harness';
+import { type Project } from '../src/model';
 import { createCanvasTetrisProject } from '../src/examples/tetris-canvas';
 import { type ExampleContent } from '../src/examples';
 import { thaw } from '../src/readonly';
 import { CELL, PREVIEW_CELL } from '../src/examples/tetris-layout';
-import { text } from '@northtalk/ts';
 import { CANVAS_LIMITS } from '@northtalk/tooling/canvas';
 
-// A Play Session on Tetris with an explicit clock, as the browser drives it.
-const start = async (
-  create: () => Promise<ExampleContent>,
-  extraHandlers = '',
-) => {
+// Tetris on the Play harness, read back as board cells.
+const start = async (create: () => Promise<ExampleContent>, extend = '') => {
   const { project } = await create();
-  project.pages[0]!.script += extraHandlers;
-  const play = new PlaySession(project);
-  let clock = 0n;
-  const settle = async () => {
-    for (let i = 0; i < 2000; i++) {
-      const result = play.pump(clock);
-      await Promise.resolve();
-      if (result.state !== 'sliced') {
-        return;
-      }
-    }
-    throw new Error('Did not become idle');
-  };
-  await settle();
-  const frame = async (ms: number) => {
-    clock += BigInt(ms) * 1000n;
-    play.frame(clock);
-    await settle();
-  };
-  const key = async (name: string) => {
-    play.send(play.page, 'keyDown', [text(name)]);
-    await settle();
-    await frame(1);
-  };
-  const fill = (name: string) =>
-    (play.page.elements.find(e => e.name === name) as { fill: string }).fill;
+  const game = await PlayHarness.start(project, { extend });
+  const { play } = game;
+  await game.frame(0);
+  const fill = (name: string) => (game.element(name) as { fill: string }).fill;
   // Read what a Canvas would paint, including later rectangles covering
   // earlier ones in the preview. No pixels or Script state are inspected.
   const drawingCells = (name: string, size: number) => {
-    const canvas = play.page.elements.find(e => e.name === name);
-    if (canvas?.kind !== 'canvas') {
-      throw new Error(`Missing Canvas ${name}`);
-    }
     let colour = EMPTY_COLOUR;
     const cells = new Map<string, string>();
-    for (const command of play.drawingOf(canvas)) {
+    for (const command of game.drawingOf(name)) {
       if (command.op === 'fill') {
         colour = (command.args[0] as string).slice(1, -1);
       } else if (command.op === 'rectangle') {
@@ -78,12 +49,16 @@ const start = async (
     }
     return out;
   };
-  const shown = (name: string) => {
-    const element = play.page.elements.find(e => e.name === name)!;
-    return element.kind === 'text' ? textOf(element) : '';
+  const shown = (name: string) => game.text(name);
+  return {
+    play,
+    game,
+    frame: (ms: number) => game.frame(ms),
+    key: (name: string) => game.key(name),
+    filled,
+    shown,
+    drawingCells,
   };
-  await frame(0);
-  return { play, frame, key, filled, shown, settle, drawingCells };
 };
 
 const columnsOf = (cells: string[]) =>
@@ -129,11 +104,7 @@ on testSetUp
 end testSetUp
 `,
   );
-  game.play.group.deliver(game.play.objects.get(game.play.page)!, {
-    name: 'testSetUp',
-    args: [],
-  });
-  await game.settle();
+  await game.game.deliver('testSetUp');
   return game;
 };
 
@@ -191,11 +162,7 @@ on testRotation
 end testRotation
 `,
       );
-      game.play.group.deliver(game.play.objects.get(game.play.page)!, {
-        name: 'testRotation',
-        args: [],
-      });
-      await game.settle();
+      await game.game.deliver('testRotation');
       const before = game.filled().sort();
       expect(before).toEqual(['3,5', '4,4', '4,5', '4,6']);
       await game.key('ArrowUp');
@@ -218,7 +185,7 @@ end testRotation
     });
 
     test('stacking pieces to the top ends the game, and Restart starts again', async () => {
-      const { play, key, shown, filled } = await start(create);
+      const { play, game, key, shown, filled } = await start(create);
       const gameOver = () =>
         play.isVisible(play.elementsOf().find(e => e.name === 'gameOver')!);
       for (let i = 0; i < 40 && !gameOver(); i++) {
@@ -226,8 +193,7 @@ end testRotation
       }
       expect(gameOver()).toBe(true);
       expect(play.problems).toEqual([]);
-      const restart = play.page.elements.find(e => e.name === 'restartButton')!;
-      play.send(restart, 'click');
+      await game.click('restartButton');
       await key('ArrowLeft');
       expect(gameOver()).toBe(false);
       expect(shown('scoreText')).toBe('Score: 0');
