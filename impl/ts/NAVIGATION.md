@@ -31,6 +31,7 @@ Files, grammar, or lowering.
 - Rules: [charging](../../spec/08-the-abstract-machine-and-the-cost-model.md#charging), [Built-in rates](../../spec/08-the-abstract-machine-and-the-cost-model.md#built-in-rates), [cost data](../../spec/data/costs.toml)
 - Tests and cases: [Cost Model parity tests](tests/costs.test.ts), [Built-in cases](../../corpus/builtins/), [lowering tests](tests/lowering.test.ts)
 - First check: `bun test impl/ts/tests/costs.test.ts && bun run corpus:run builtins`
+- Stdlib Fuel: a stdlib edit that changes [the generated snapshot](../../tools/costs/stdlib-fuel.txt) changes the Cost Model. Regenerate it with `bun run stdlib-fuel:generate`, call the change out in the PR, and decide whether `costs.toml` needs a `[[change]]` entry.
 
 ## Recovery, cancellation cleanup and retained state
 
