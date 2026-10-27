@@ -77,8 +77,10 @@ export default [
       'bench/ts/src/main.ts',
       'bench/ts/src/character-indexing-worker.ts',
       'bench/ts/src/measure-peers.ts',
+      'bench/ts/src/compare.ts',
       'bench/ts/src/measure-ts.ts',
       'bench/ts/src/measure-zig.ts',
+      'bench/ts/src/profile.ts',
       'bench/ts/src/render-html.ts',
     ],
     rules: {

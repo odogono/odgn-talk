@@ -7,8 +7,7 @@ name. For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use
 [ADR index](../../docs/adr/README.md).
 
 All commands below run from the repository root; `lint`, `format:check` and
-`check` exist only as root scripts. To measure a change, run `bun run bench --only ts --count 5 --no-save [--filter <text>]` on
-`origin/main` and on the branch, alternating; runs vary by ±5–8%. See the
+`check` exist only as root scripts. To measure a change against `origin/main`, run `bun run bench:compare [--filter <text>] [--node]`; to find hot spots, `bun run bench:profile <filter>` ([comparing](../../bench/README.md#comparing-a-branch-with-main), [profiling](../../bench/README.md#profiling)). See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
