@@ -1,0 +1,26 @@
+-- paths.talk: the value-paths case's Script.
+
+use withPath, withoutPath, hasPath from map
+use decodeJson, pointerPath from json
+
+script variable found = []
+script variable failed = []
+
+on go
+  put decodeJson("""{"door": {"isLocked": false, "code": null}, "lights": [1, 2, 3]}""") into config
+  put withPath(config, pointerPath("/door/isLocked"), true) after found
+  put withPath(config, ["lights", 5], 9) after found
+  put withoutPath(config, pointerPath("/lights/0")) after found
+  put withoutPath(config, ["door", "hinge", "pin"]) after found
+  put [hasPath(config, ["door", "isLocked"]), hasPath(config, ["door", "code"]), hasPath(config, ["lights", 4])] after found
+  try
+    put withPath(config, ["window", "isOpen"], true) into x
+  catch e
+    put e after failed
+  end try
+  try
+    put pointerPath("door") into x
+  catch e
+    put e after failed
+  end try
+end go

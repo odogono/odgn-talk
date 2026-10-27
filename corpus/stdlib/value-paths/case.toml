@@ -1,0 +1,17 @@
+# value-paths: the map Library's `withPath`, `withoutPath` and `hasPath`
+# follow a Value Path through a `decodeJson` result reached by `json`'s
+# `pointerPath`. `withPath` adds a last key and pads a list, and raises
+# `wrong kind` with the path at a missing parent. `withoutPath` removes a key
+# and a list item, and leaves the value unchanged at a missing step. `hasPath`
+# treats a key holding Nothing as missing (spec chapter 7, `map` and `json`;
+# ADR 0136; #1631).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "paths"
+source = "paths.talk"
