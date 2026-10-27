@@ -84,7 +84,7 @@ for (const backend of ['ts', 'wasm'] as const) {
           new RegExp(String.raw`^Argument 2 of ${call}\('hit'\) .*${handlers}`),
         );
       }
-      expect(await script.handlers.hit('a', 'b')).toBe('b');
+      expect(await script.handlers.hit!('a', 'b')).toBe('b');
       const fn = await script.invoke('fn');
       refused(
         () => group.call(fn, [plain]),
