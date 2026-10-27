@@ -1783,5 +1783,13 @@ until the final reply. The retired map layout is refused. Shared
 [`envelope-frames.json`](../testdata/envelope-frames.json) vectors check decoded
 field meanings and exact re-encoded bytes, including specialized Reports and
 nested Values.
+`src/need.zig` describes each op, prop, effect and release Need once for both
+layouts and reads their results into a layout-neutral result before mapping it
+to the worker's Answer. Function resolution returns `error.WrongGroup` directly,
+including from nested Values. Invalid successful Values refuse the frame;
+malformed failure Data makes the callback a Host error. Callback parity tests
+at the module's interface consume the shared vectors and exercise both paths.
+Frame dispatch and the exchange gate stay in `src/message.zig` and
+`src/exchange.zig` ([ADR 0131](../../docs/adr/0131-the-zig-message-layer-describes-each-need-and-result-once.md)).
 The [experiment record](../../docs/research/request-pump-binary.md) records the
 transport implementation and the performance evidence.

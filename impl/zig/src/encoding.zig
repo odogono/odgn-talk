@@ -9,6 +9,8 @@ const Value = model.Value;
 const Json = std.json.Value;
 /// Every refusal the writer can report, including the writer's own failure.
 pub const Error = model.Error || error{WriteFailed};
+/// Value construction and the Group resolver's typed refusal.
+pub const DecodeError = display.ResolveError;
 /// 2^53: integers below it in magnitude are plain JSON numbers, which every
 /// JSON reader holds exactly; larger ones and fractions are `$dec`.
 pub const plain_integer_limit: u128 = 9007199254740992;
@@ -257,7 +259,7 @@ const Building = struct {
 const Start = union(enum) { value: *Value, building: Building };
 
 /// Builds a Value from parsed JSON. Containers wait on a heap stack.
-fn build(a: std.mem.Allocator, root: Json, r: display.Resolver, mode: Mode) model.Error!*Value {
+fn build(a: std.mem.Allocator, root: Json, r: display.Resolver, mode: Mode) DecodeError!*Value {
     var stack: std.ArrayList(Building) = .empty;
     defer {
         for (stack.items) |*b| b.deinit(a);
@@ -334,7 +336,7 @@ fn nextChild(b: *Building, mode: Mode) model.Error!Json {
     return b.children[i];
 }
 
-fn startValue(a: std.mem.Allocator, j: Json, r: display.Resolver, mode: Mode) model.Error!Start {
+fn startValue(a: std.mem.Allocator, j: Json, r: display.Resolver, mode: Mode) DecodeError!Start {
     switch (j) {
         .array => |array| {
             if (array.items.len == 0) return .{ .value = try model.list(a, &.{}) };
@@ -376,7 +378,7 @@ fn fromJsonLeaf(a: std.mem.Allocator, j: Json) model.Error!*Value {
 
 /// A one-member object whose name is a `$` tag other than `$range` or
 /// `$map`. An unknown tag is refused, as a plain object's `$` key is.
-fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.Resolver) model.Error!*Value {
+fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.Resolver) DecodeError!*Value {
     if (std.mem.eql(u8, name, "$dec")) return canonical(a, try model.scalar(a, .{ .number = try model.Decimal.parse(try string(payload)) }), name, payload);
     if (std.mem.eql(u8, name, "$quantity")) {
         const p = try pair(payload);
@@ -439,7 +441,7 @@ fn functionArity(j: Json) model.Error!u64 {
 /// the encoder would not write. JSON white space and string escapes are
 /// syntax, and text is normalised to NFC as `talk_text` does. Host Objects
 /// come from `r`.
-pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Error!*Value {
+pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) DecodeError!*Value {
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
@@ -448,7 +450,7 @@ pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Er
 
 /// Builds a Value directly from a parsed frame, without recursively writing
 /// and reparsing its JSON. The caller owns the JSON; the Value owns its data.
-pub fn decodeParsed(a: std.mem.Allocator, j: Json, r: display.Resolver) model.Error!*Value {
+pub fn decodeParsed(a: std.mem.Allocator, j: Json, r: display.Resolver) DecodeError!*Value {
     return build(a, j, r, .encoding);
 }
 /// Chapter 7's JSON mapping, the one rule for plain JSON that the `json`
@@ -600,7 +602,11 @@ pub fn decodeJson(a: std.mem.Allocator, s: []const u8) model.Error!*Value {
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
-    return build(a, parsed.value, .{}, .plain);
+    return build(a, parsed.value, .{}, .plain) catch |err| switch (err) {
+        // Plain JSON never invokes a Group resolver.
+        error.WrongGroup => unreachable,
+        else => |e| return e,
+    };
 }
 test "lossless encoding, escaping, map tags and strict Base64" {
     const a = std.testing.allocator;

@@ -193,6 +193,9 @@ pub fn string(a: std.mem.Allocator, v: *const Value) Error![]u8 {
     write(&out.writer, v) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
     return out.toOwnedSlice();
 }
+/// A Function token can be valid but belong to another Group.
+pub const ResolveError = model.Error || error{WrongGroup};
+
 /// A Group's lookups for the values a reader cannot build alone. `object`
 /// finds an existing Host Object by kind and id; `function` finds a Function
 /// Value by its display source. Each returns an owned reference; without
@@ -203,7 +206,7 @@ pub const Resolver = struct {
     function: ?*const fn (?*anyopaque, []const u8) model.Error!*Value = null,
     /// The message layer's `{"$function": [home, display, token]}`; the
     /// tag is refused without it.
-    function_token: ?*const fn (?*anyopaque, []const u8, []const u8, []const u8) model.Error!*Value = null,
+    function_token: ?*const fn (?*anyopaque, []const u8, []const u8, []const u8) ResolveError!*Value = null,
     /// The Transcript-only `{"$sessionFunction": handle}` reference;
     /// refused outside Session replay. Returns an owned Function reference.
     session_function: ?*const fn (?*anyopaque, []const u8) model.Error!*Value = null,
