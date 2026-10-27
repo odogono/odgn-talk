@@ -134,3 +134,5 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0130: TS Helpers convert plain JS at the boundary](0130-ts-helpers-convert-plain-js-at-the-boundary.md)
 - [0131: The Zig Message Layer describes each Need and result once](0131-the-zig-message-layer-describes-each-need-and-result-once.md)
 - [0132: TS Load targets 10× the Zig Core without a single-pass front end](0132-ts-load-targets-10x-zig-without-a-single-pass-front-end.md)
+- [0133: Folio tests a Project with Test Scripts and a Folio Harness](0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)
+- [0134: Folio records a play-through as a generated Test Script](0134-folio-records-a-play-through-as-a-generated-test-script.md)

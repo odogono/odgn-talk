@@ -9,7 +9,7 @@ We chose this because ADR 0056 already gives us a black-box test that adds nothi
 ## Considered Options
 
 - **Check Scripts, a new Folio-only test concept:** this would add a second testing vocabulary for no gain.
-- **Recorded play-throughs as the primary test:** brittle golden files that are hard to read as specifications (ADR 0056). They are deferred to a follow-up built on the TS harness.
+- **Recorded play-throughs as the primary test:** brittle golden files that are hard to read as specifications (ADR 0056). They were deferred, and [ADR 0134](0134-folio-records-a-play-through-as-a-generated-test-script.md) later made them generated Test Scripts instead.
 - **Letting tests `extend` the Scripts under test:** easy board setup, but it breaks the boundary ADR 0056 keeps. Authors expose a setup message instead.
 - **Inspecting Canvas drawings from author tests:** this would expose drawing-command encoding as an API. It stays TS-harness-only until there is demand.
 

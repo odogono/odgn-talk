@@ -330,6 +330,10 @@ _Avoid_: mock framework, fixture, test double
 The Harness given to a Test Script in a Folio Project, which can also press keys, click Elements, deliver `frame`, read Element properties and change Page.
 _Avoid_: check Script, Play harness
 
+**Recorded Test**:
+A Test Handler Folio writes from a reader's keys and clicks in Browse and the time between them, ending in assertions about what the reader could see, which are taken from replaying that input.
+_Avoid_: recording, play-through, golden file
+
 **Test Library**:
 The Library a Test Script imports its assertions from. It is supplied by the tooling that runs the test, and is not part of the Standard Library.
 _Avoid_: assert library, test framework
