@@ -1745,7 +1745,7 @@ export class BodyCompiler {
     if (delim) {
       this.expr(delim);
       d = this.temp();
-      this.emit('store', [d]);
+      this.pos(levels.at(-1)!, () => this.emit('store', [d!]));
     }
     this.expr(s.value);
     const v = this.temp();
