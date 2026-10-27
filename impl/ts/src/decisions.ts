@@ -188,24 +188,13 @@ const decisionFacts = (root: SemanticNode) => {
     [];
   const work: {
     deciding: boolean;
-    element: SemanticElement;
+    element: SemanticNode;
     handler: string | null;
   }[] = [{ element: root, deciding: false, handler: null }];
   while (work.length) {
     const current = work.pop()!;
     const { element } = current;
     let { deciding, handler } = current;
-    if (element.kind !== 'node') {
-      // Flow diagnostics point only at veto/pass statements, so other leaves
-      // need no position index (including those in ordinary Functions).
-      if (
-        element.kind === 'token' &&
-        (element.text === 'veto' || element.text === 'pass')
-      ) {
-        leaves.set(`${element.span.line}:${element.span.col}`, element);
-      }
-      continue;
-    }
     if (element.rule === 'Handler') {
       deciding = element.children.some(
         c => c.kind === 'token' && c.text === 'deciding',
@@ -244,7 +233,16 @@ const decisionFacts = (root: SemanticNode) => {
       }
     }
     for (const child of element.children) {
-      work.push({ element: child, deciding, handler });
+      if (child.kind === 'node') {
+        work.push({ element: child, deciding, handler });
+      } else if (
+        child.kind === 'token' &&
+        (child.text === 'veto' || child.text === 'pass')
+      ) {
+        // Flow diagnostics point only at veto/pass statements, so other leaves
+        // need no position index (including those in ordinary Functions).
+        leaves.set(`${child.span.line}:${child.span.col}`, child);
+      }
     }
   }
   return { leaves, called, vetoes };
