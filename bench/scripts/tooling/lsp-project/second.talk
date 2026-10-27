@@ -1,0 +1,28 @@
+-- second: a Script of the LSP Benchmark project that calls steps 21–40.
+
+use step21, step22, step23, step24, step25, step26, step27, step28, step29, step30, step31, step32, step33, step34, step35, step36, step37, step38, step39, step40 from steps
+
+on run n
+  put 0 into total
+  add step21(n) to total
+  add step22(n) to total
+  add step23(n) to total
+  add step24(n) to total
+  add step25(n) to total
+  add step26(n) to total
+  add step27(n) to total
+  add step28(n) to total
+  add step29(n) to total
+  add step30(n) to total
+  add step31(n) to total
+  add step32(n) to total
+  add step33(n) to total
+  add step34(n) to total
+  add step35(n) to total
+  add step36(n) to total
+  add step37(n) to total
+  add step38(n) to total
+  add step39(n) to total
+  add step40(n) to total
+  return total
+end run

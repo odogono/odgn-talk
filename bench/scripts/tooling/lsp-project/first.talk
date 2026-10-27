@@ -1,0 +1,28 @@
+-- first: a Script of the LSP Benchmark project that calls steps 1–20.
+
+use step1, step2, step3, step4, step5, step6, step7, step8, step9, step10, step11, step12, step13, step14, step15, step16, step17, step18, step19, step20 from steps
+
+on run n
+  put 0 into total
+  add step1(n) to total
+  add step2(n) to total
+  add step3(n) to total
+  add step4(n) to total
+  add step5(n) to total
+  add step6(n) to total
+  add step7(n) to total
+  add step8(n) to total
+  add step9(n) to total
+  add step10(n) to total
+  add step11(n) to total
+  add step12(n) to total
+  add step13(n) to total
+  add step14(n) to total
+  add step15(n) to total
+  add step16(n) to total
+  add step17(n) to total
+  add step18(n) to total
+  add step19(n) to total
+  add step20(n) to total
+  return total
+end run
