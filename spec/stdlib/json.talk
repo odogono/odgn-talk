@@ -333,3 +333,50 @@ end needMap
 private function needFunction v
   if v is not a function then wrongKind("function", v)
 end needFunction
+
+-- JSON Pointer -------------------------------------------------------------
+
+--| The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position
+function pointerPath t
+  needText(t)
+  put [] into path
+  if t = "" then return path
+  put the code points of t into cps
+  if item 1 of cps <> "/" then outOfDomain("pointerPath", t)
+  put [] into token
+  put 2 into i
+  repeat while i <= the length of cps
+    put item i of cps into c
+    if c = "/" then
+      put pointerStep(token) after path
+      put [] into token
+    else if c = "~" then
+      add 1 to i
+      put item i of cps into e
+      if e = "0" then
+        put "~" after token
+      else if e = "1" then
+        put "/" after token
+      else
+        outOfDomain("pointerPath", t)
+      end if
+    else
+      put c after token
+    end if
+    add 1 to i
+  end repeat
+  put pointerStep(token) after path
+  return path
+end pointerPath
+
+-- A reference token's step: an array index, digits with no leading zero, is
+-- an integer one past it, and any other token is its text.
+private function pointerStep cps
+  put join(cps) into token
+  if token = "" then return token
+  if the length of cps > 1 and item 1 of cps = "0" then return token
+  repeat for each c in cps
+    if not isDigit(c) then return token
+  end repeat
+  return token as number + 1
+end pointerStep

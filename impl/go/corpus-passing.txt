@@ -453,6 +453,7 @@ stdlib/mappings-restricted
 stdlib/mappings-restore
 stdlib/mappings-limits
 stdlib/mappings-depth
+stdlib/value-paths
 builtins/random
 capabilities/result-targets-load-checks
 result-targets/completion-fuel

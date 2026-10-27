@@ -1,7 +1,7 @@
 # lookup: the first Delivery reads the order and probes the live bulb, the
 # second probes it once disposed. Neither probe makes a `prop` record.
 
-> load orders identity=bfa0f5f9ff572475ba6c7f2ebe2042293d7fac8fd2c615eda4ec7f1ab7c950b5
+> load orders identity=e0f0f30be6b6b0caecd6f34c8fe028e4c831aae5b40b9070b874b34368fe3564
 > deliver d1 to=orders message=go
 > pump clock=2026-09-30T09:00:00Z
 raise orders/r1 code="wrong kind" at=map:329 pos=109:3

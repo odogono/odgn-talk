@@ -1286,6 +1286,58 @@ Fuel estimate: 21..272
     encodeValue (line 255)
     encodeValue (line 263)
 
+json.pointerPath
+Fuel estimate: 30..405
++ 22..30 per pass of the loop at text line 88
++ 24 per pass of the loop at line 378
++ 22..30 per pass of the loop at text line 88
++ 24 per pass of the loop at line 378
++ 41..309 per pass of the loop at line 348
++ more with larger values:
+    list (line 342)
+    compare (line 343)
+    property (line 344)
+    chunk-get (line 345)
+    compare (line 345)
+    list (line 346)
+    property (line 348)
+    compare (line 348)
+    chunk-get (line 349)
+    compare (line 350)
+    list (text line 87)
+    append (text line 89)
+    concat (text line 90)
+    append (text line 90)
+    property (text line 330)
+    compare (text line 331)
+    compare (text line 332)
+    chunk-get (text line 332)
+    arithmetic (text line 333)
+    chunk-get (text line 334)
+    arithmetic (text line 334)
+    concat (text line 334)
+    compare (line 376)
+    property (line 377)
+    compare (line 377)
+    chunk-get (line 377)
+    search (line 230)
+    convert (line 381)
+    arithmetic (line 381)
+    append (line 351)
+    list (line 352)
+    compare (line 353)
+    arithmetic (line 354)
+    chunk-get (line 355)
+    compare (line 356)
+    append (line 357)
+    compare (line 358)
+    append (line 359)
+    append (line 364)
+    arithmetic (line 366)
+    append (line 368)
++ calls not counted:
+    joined (text line 334)
+
 list.all
 Fuel estimate: 47..138
 + 17 per pass of the loop at line 271
@@ -1551,6 +1603,18 @@ Fuel estimate: 37..76
     chunk-get (line 58)
     set-key (line 58)
 
+map.hasPath
+Fuel estimate: 59..98
++ 14..175 per pass of the loop at line 77
++ 33..77 per pass of the loop at line 83
++ more with larger values:
+    list (line 82)
+    compare (line 84)
+    chunk-get (line 90)
+    append (line 92)
+    compare (line 94)
+    compare (line 448)
+
 map.lookup
 Fuel estimate: 44..83
 + 14..175 per pass of the loop at line 77
@@ -1759,6 +1823,28 @@ Fuel estimate: 113..955
     chunk-get (line 219)
     unwind (line 198)
 
+map.withPath
+Fuel estimate: 65..218
++ 14..175 per pass of the loop at line 454
++ more with larger values:
+    list (line 436)
+    property (line 463)
+    compare (line 463)
+    chunk-get (line 464)
+    append (line 466)
+    property (line 469)
+    compare (line 469)
+    arithmetic (line 469)
+    set-key (line 470)
+    property (line 473)
+    compare (line 473)
+    chunk-get (line 473)
+    arithmetic (line 473)
+    chunk-set (line 474)
++ calls not counted:
+    placeAt (line 469)
+    placeAt (line 473)
+
 map.without
 Fuel estimate: 72..150
 + 23..62 per pass of the loop at line 101
@@ -1767,6 +1853,34 @@ Fuel estimate: 72..150
     property (line 21)
     member (line 22)
     set-key (line 22)
+
+map.withoutPath
+Fuel estimate: 69..260
++ 14..175 per pass of the loop at line 454
++ more with larger values:
+    property (line 442)
+    compare (line 442)
+    list (line 443)
+    compare (line 482)
+    chunk-get (line 483)
+    append (line 485)
+    compare (line 488)
+    property (line 489)
+    compare (line 489)
+    set-key (line 490)
+    arithmetic (line 492)
+    set-key (line 492)
+    chunk-get (line 496)
+    compare (line 496)
+    property (line 497)
+    compare (line 497)
+    chunk-set (line 498)
+    chunk-get (line 500)
+    arithmetic (line 500)
+    chunk-set (line 500)
++ calls not counted:
+    removeAt (line 492)
+    removeAt (line 500)
 
 text.format
 Fuel estimate: 82..209

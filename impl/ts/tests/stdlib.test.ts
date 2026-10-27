@@ -164,6 +164,47 @@ describe('the stdlib Libraries', () => {
       'lookup({}, ["a", true])',
       'error {code: "wrong kind", expected: "text", got: "boolean", value: true}',
     ],
+    [
+      '[withPath({a: {b: 1}}, ["a", "c"], 2), withPath({a: [1]}, ["a", 3], 9), withPath({a: [1, 2]}, ["a", -1], 0), withPath(1, [], 2)]',
+      '[{a: {b: 1, c: 2}}, {a: [1, nothing, 9]}, {a: [1, 0]}, 2]',
+    ],
+    [
+      'withPath({}, ["a", "b"], 1)',
+      'error {code: "wrong kind", expected: "map", got: "nothing", value: nothing, path: ["a"]}',
+    ],
+    [
+      'withPath({a: [1]}, ["a", "b"], 1)',
+      'error {code: "wrong kind", expected: "map", got: "list", value: [1], path: ["a"]}',
+    ],
+    [
+      '[withoutPath({a: {b: 1, c: 2}}, ["a", "b"]), withoutPath({a: [1, 2, 3]}, ["a", 2]), withoutPath({a: 1}, ["b", "c"]), withoutPath({a: [1]}, ["a", 5])]',
+      '[{a: {c: 2}}, {a: [1, 3]}, {a: 1}, {a: [1]}]',
+    ],
+    [
+      'withoutPath({a: 1}, [])',
+      'error {code: "out of domain", function: "withoutPath", value: []}',
+    ],
+    [
+      'withoutPath({a: "x"}, ["a", "b"])',
+      'error {code: "wrong kind", expected: "map", got: "text", value: "x", path: ["a"]}',
+    ],
+    [
+      '[hasPath({a: {b: 1}}, ["a", "b"]), hasPath({a: nothing}, ["a"]), hasPath({a: [1]}, ["a", 2])]',
+      '[true, false, false]',
+    ],
+    // json
+    [
+      '[pointerPath(""), pointerPath("/a/0/b"), pointerPath("/a~1b/~0/01/"), pointerPath("/10")]',
+      '[[], ["a", 1, "b"], ["a/b", "~", "01", ""], [11]]',
+    ],
+    [
+      'pointerPath("a")',
+      'error {code: "out of domain", function: "pointerPath", value: "a"}',
+    ],
+    [
+      'pointerPath("/a~2")',
+      'error {code: "out of domain", function: "pointerPath", value: "/a~2"}',
+    ],
     // bytes
     ['[toHex(<<0xDE, 0xAD>>), fromHex("DEad")]', '["dead", <<0xDE, 0xAD>>]'],
     [

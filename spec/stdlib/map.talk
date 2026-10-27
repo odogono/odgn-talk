@@ -427,3 +427,78 @@ private function mappingWrite built, path, value
   end repeat
   return current
 end mappingWrite
+
+-- Writing through a Value Path (ADR 0136) ----------------------------------
+
+--| `m` with `v` at the Value Path `path`
+function withPath m, path, v
+  needPath(path)
+  return placeAt(m, path, 1, v, [])
+end withPath
+
+--| `m` with the key or item at the Value Path `path` removed
+function withoutPath m, path
+  needPath(path)
+  if the length of path = 0 then outOfDomain("withoutPath", path)
+  return removeAt(m, path, 1, [])
+end withoutPath
+
+--| Whether the Value Path `path` locates a value inside `m` that isn't Nothing
+function hasPath m, path
+  return lookup(m, path) is not nothing
+end hasPath
+
+-- A Value Path: a list of texts and integers, checked before any step.
+private function needPath path
+  needList(path)
+  repeat for each step in path
+    if step is a number then needInteger(step)
+    if step is not a number then needText(step)
+  end repeat
+end needPath
+
+-- `c` with `v` written at steps `i` onward of `path`, as `put` writes. A
+-- missing parent is never made, so stepping into it raises.
+private function placeAt c, path, i, v, taken
+  if i > the length of path then return v
+  put item i of path into step
+  put taken into below
+  put step after below
+  if step is a text then
+    if c is not a map then wrongKindAt("map", c, taken)
+    if i < the length of path then put placeAt(the (step) of c, path, i + 1, v, below) into v
+    put v into the (step) of c
+  else
+    if c is not a list then wrongKindAt("list", c, taken)
+    if i < the length of path then put placeAt(item step of c, path, i + 1, v, below) into v
+    put v into item step of c
+  end if
+  return c
+end placeAt
+
+-- `c` with the key or item at steps `i` onward of `path` deleted, as `delete`
+-- deletes. A step that reaches Nothing leaves `c` as it was.
+private function removeAt c, path, i, taken
+  if c is nothing then return c
+  put item i of path into step
+  put taken into below
+  put step after below
+  if step is a text then
+    if c is not a map then wrongKindAt("map", c, taken)
+    if the (step) of c is nothing then return c
+    if i = the length of path then
+      delete the (step) of c
+    else
+      put removeAt(the (step) of c, path, i + 1, below) into the (step) of c
+    end if
+  else
+    if c is not a list then wrongKindAt("list", c, taken)
+    if item step of c is nothing then return c
+    if i = the length of path then
+      delete item step of c
+    else
+      put removeAt(item step of c, path, i + 1, below) into item step of c
+    end if
+  end if
+  return c
+end removeAt

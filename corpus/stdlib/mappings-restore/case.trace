@@ -1,5 +1,5 @@
 
-> load s identity=00686e37f8d36ffa2d62d0618fc8fcde11e0827933e103b261a04308563066a8
+> load s identity=b7dbd7fc74d833c2efaa850298af1c0bedc164f5191148b6132148a6d64450e9
 > deliver d1 to=s message=go
 > pump clock=2026-10-14T00:00:00Z fuel-slice=20
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=20 alloc=192

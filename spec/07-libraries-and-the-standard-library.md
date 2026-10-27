@@ -574,6 +574,9 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 | `fromEntries(pairs)` | The map with the entries of the list of pairs `pairs`, where a later pair wins for a repeated key |  |
 | `mapValues(m, f)` | `m` with each value replaced by what `f` gives for it, keys and order kept |  |
 | `lookup(m, path, default = nothing)` | The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing |  |
+| `withPath(m, path, v)` | `m` with `v` at the Value Path `path` |  |
+| `withoutPath(m, path)` | `m` with the key or item at the Value Path `path` removed |  |
+| `hasPath(m, path)` | Whether the Value Path `path` locates a value inside `m` that isn't Nothing |  |
 | `transform(value, mapping)` | A complete fresh mapped value, or ordered diagnostics without partial output | `invalid mapping` |
 
 <!-- end -->
@@ -593,6 +596,16 @@ supports list positions, and reports a cumulative error path.
   put decodeJson(body) into order
   put lookup(order, ["customer", "address", "city"], "unknown") into city
   put lookup(order, ["lines", -1, "sku"]) into lastSku
+  ```
+
+- **`withPath(m, path, v)`, `withoutPath(m, path)` and `hasPath(m, path)`** take a Value Path as `lookup` does: it is checked before any step, a text step works on a map and an integer step on a list, and a step at anything else raises `wrong kind` with the `path` that reached it. Each gives a new value and never calls the Host ([ADR 0136](../docs/adr/0136-value-path-writes-are-pure-map-functions-that-never-create-parents.md)).
+  - **`withPath`** writes as `put` does. Only the last step may add a key, or pad a list past its end with Nothing. A step through a missing key or Nothing raises `wrong kind` with `expected` `"map"` or `"list"` and `got` `"nothing"`, since a missing parent is never made. An empty `path` gives `v`.
+  - **`withoutPath`** removes as `delete` does: a key leaves its map, and a list item goes and the rest move up. A step that reaches a missing key, a position out of range or Nothing leaves the value as it was. An empty `path` raises `out of domain`.
+  - **`hasPath`** is `lookup(m, path) is not nothing`, so a key that holds Nothing counts as missing.
+
+  ```talk
+  put withPath(config, ["components", "door", "isLocked"], true) into config
+  put withoutPath(config, ["lights", 1]) into config
   ```
 
 ### Checked Mappings
@@ -773,6 +786,7 @@ work and active callback boundaries; no additional snapshot format is needed.
 | --- | --- | --- |
 | `decodeJson(t)` | The value the JSON text `t` holds | `can't decode` |
 | `encodeJson(v)` | The value `v` as compact JSON text | `not encodable` |
+| `pointerPath(t)` | The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position |  |
 
 <!-- end -->
 
@@ -803,6 +817,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
   - A Quantity, range, Civil Date, Instant, Bytes, Text Pattern, Host Object or Function Value raises `not encodable`, with `{kind, path}`: `kind` is its kind name, and `path` the list of keys and 1-based indices that leads to it from `v`, for the first such value in depth-first order. There is no object form for them. A Script converts first: `q as text` gives `"5 kg"`, `q / 1 kg` a plain number, and `formatDate` a date.
 
 > **Example.** `encodeJson({name: "Ann", scores: [2.50, nothing]})` gives the text `{"name":"Ann","scores":[2.50,null]}`, and `decodeJson` of that text gives the map back. `encodeJson({total: 5 kg})` raises `not encodable` with `kind` `"quantity"` and `path` `["total"]`.
+
+- **JSON Pointer, `pointerPath(t)`:** gives the Value Path that the RFC 6901 JSON Pointer text `t` names, so a pointer is used with the `map` Library's path functions rather than as a second path syntax. `""` gives `[]`. Otherwise `t` starts with `/`, and each reference token between slashes is one step, with `~1` read as `/` and `~0` as `~`. A token of digits with no leading zero is an array index and gives the integer one past it, since positions count from 1, and any other token gives its text, the empty token included. Text that doesn't start with `/`, or a `~` not followed by `0` or `1`, raises `out of domain`. So `pointerPath("/lines/0/sku")` gives `["lines", 1, "sku"]`, and a map key written in digits can't be reached through a pointer.
 
 ## `date`
 
