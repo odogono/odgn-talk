@@ -275,7 +275,7 @@ export class SqliteDatabase {
     if (path === '' || path === ':memory:') {
       throw new HostError(
         'invalid value',
-        'A sqlite database is a file, which its connections share',
+        'A sqlite database is a file, which its writer and reader share; for a throwaway database, open a file in a temporary directory',
       );
     }
     if (typeof DatabaseSync.prototype.setAuthorizer !== 'function') {

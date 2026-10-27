@@ -34,6 +34,12 @@ const open = () => {
   };
 };
 
+test('openSqliteDatabase refuses an in-memory database and names a temporary file', () => {
+  for (const path of ['', ':memory:']) {
+    expect(() => openSqliteDatabase(path)).toThrow(/temporary directory/);
+  }
+});
+
 test('the kit has sequences', () => {
   expect(sequences.length).toBeGreaterThan(30);
 });
