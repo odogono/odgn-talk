@@ -181,6 +181,27 @@ const TRANSPARENT_EXPRESSIONS = new Set<SyntaxRule>([
   'Postfix',
 ]);
 
+// Precedence levels for strict compilation's climb, loosest first.
+const LEVEL_RULES: SyntaxRule[] = [
+  'Default',
+  'Or',
+  'And',
+  'Not',
+  'Comparison',
+  'Concat',
+  'Range',
+  'Additive',
+  'Multiplicative',
+  'Power',
+  'Unary',
+];
+const OTHERWISE = 0;
+const NOT = 3;
+const COMPARISON = 4;
+const RANGE = 6;
+const POWER = 9;
+const UNARY = 10;
+
 class Parser {
   lx: Lexer;
   tree!: SyntaxNode;
@@ -2172,6 +2193,9 @@ class Parser {
   }
 
   *defaultExpression(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(OTHERWISE)) as Node;
+    }
     const frame = this.enter('Default');
     try {
       let l = (yield this.or()) as Node;
@@ -2186,6 +2210,9 @@ class Parser {
   }
 
   *or(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(OTHERWISE + 1)) as Node;
+    }
     const frame = this.enter('Or');
     try {
       let l = (yield this.and()) as Node;
@@ -2200,6 +2227,9 @@ class Parser {
   }
 
   *and(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(NOT - 1)) as Node;
+    }
     const frame = this.enter('And');
     try {
       let l = (yield this.not()) as Node;
@@ -2217,6 +2247,9 @@ class Parser {
   }
 
   *not(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(NOT)) as Node;
+    }
     const frame = this.enter('Not');
     try {
       if (this.atWord('not')) {
@@ -2230,9 +2263,20 @@ class Parser {
   }
 
   *comparison(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(COMPARISON)) as Node;
+    }
     const frame = this.enter('Comparison');
     try {
-      const l = (yield this.concat()) as Node;
+      return (yield this.comparisonRest((yield this.concat()) as Node)) as Node;
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // A comparison operator and its right operand, or `l` when none follows.
+  private *comparisonRest(l: Node): ParseTask<Node> {
+    {
       const t = this.peek(0, 'operator');
       let node: Node | null = null;
       if (t.t === 'op' && COMPARISONS.has(t.v)) {
@@ -2336,12 +2380,151 @@ class Parser {
         node.ignoringCase = true;
       }
       return node;
-    } finally {
-      this.leave(frame);
     }
   }
 
+  // Strict compilation parses the precedence levels from `min` in one loop,
+  // building the same compact tree as the per-level productions without a
+  // task per level. An operator wraps the operand already parsed.
+  private *climb(min: number): ParseTask<Node> {
+    const start = this.offset;
+    let left: Node;
+    let cap: number;
+    if (min <= NOT && this.atWord('not')) {
+      const frame = this.enter('Not');
+      try {
+        const op = this.next();
+        left = this.at(op, { k: 'not', e: (yield this.climb(NOT)) as Node });
+      } finally {
+        this.leave(frame);
+      }
+      cap = NOT - 1;
+    } else if (min <= UNARY && this.isOp(this.peek(0), '-')) {
+      const frame = this.enter('Unary');
+      try {
+        const op = this.next();
+        left = this.at(op, { k: 'neg', e: (yield this.climb(UNARY)) as Node });
+      } finally {
+        this.leave(frame);
+      }
+      cap = UNARY - 1;
+    } else {
+      left = (yield this.conversion()) as Node;
+      cap = UNARY - 1;
+    }
+    for (;;) {
+      const level = this.operatorLevel(min, cap);
+      if (level < 0) {
+        return left;
+      }
+      const frame = this.enter(LEVEL_RULES[level]!, 1);
+      frame.start = start;
+      try {
+        if (level === COMPARISON) {
+          left = (yield this.comparisonRest(left)) as Node;
+        } else if (level === RANGE || level === POWER) {
+          const op = this.next('operator');
+          const r = (yield this.climb(
+            level === POWER ? POWER : RANGE + 1,
+          )) as Node;
+          left = this.at(op, { k: op.v, l: left, r });
+        } else {
+          do {
+            const op = this.next('operator');
+            const r = (yield this.climb(level + 1)) as Node;
+            left = this.at(op, {
+              k: level === OTHERWISE ? 'otherwise' : op.v,
+              l: left,
+              r,
+            });
+          } while (this.operatorLevel(level, level) === level);
+        }
+      } finally {
+        this.leave(frame);
+      }
+      cap = level - 1;
+    }
+  }
+
+  // The highest level in [min, cap] whose operator comes next, checked from
+  // the tightest down as the per-level productions check them, or -1.
+  private operatorLevel(min: number, cap: number): number {
+    for (let level = cap; level >= min; level--) {
+      const t = this.peek(0, 'operator');
+      switch (level) {
+        case POWER:
+          if (this.isOp(t, '^')) {
+            return level;
+          }
+          break;
+        case POWER - 1:
+          if (this.isOp(t, '*', '/') || this.isWord(t, 'mod', 'div')) {
+            return level;
+          }
+          break;
+        case RANGE + 1:
+          if (this.isOp(t, '+', '-')) {
+            return level;
+          }
+          break;
+        case RANGE:
+          if (this.isOp(t, '..')) {
+            return level;
+          }
+          break;
+        case COMPARISON + 1:
+          if (this.isOp(t, '&')) {
+            return level;
+          }
+          break;
+        case COMPARISON:
+          if (this.startsComparison(t)) {
+            return level;
+          }
+          break;
+        case NOT - 1:
+          if (
+            this.atOperatorWord('and') &&
+            !this.isWord(this.la2('and-wait'), 'wait')
+          ) {
+            return level;
+          }
+          break;
+        case OTHERWISE + 1:
+          if (this.atOperatorWord('or')) {
+            return level;
+          }
+          break;
+        case OTHERWISE:
+          if (this.atOperatorWord('otherwise')) {
+            return level;
+          }
+          break;
+      }
+    }
+    return -1;
+  }
+
+  // Whether comparisonRest would take an operator at `t`.
+  private startsComparison(t: Token): boolean {
+    return (
+      (t.t === 'op' && COMPARISONS.has(t.v)) ||
+      this.isWord(t, 'is', 'contains', 'matches') ||
+      (this.isWord(t, 'can') &&
+        this.isWord(this.la2('can-be', 'operator'), 'be')) ||
+      (this.isWord(t, 'begins', 'ends') &&
+        this.isWord(this.la2('begins-with', 'operator'), 'with')) ||
+      (this.isWord(t, 'comes') &&
+        this.isWord(this.la2('comes', 'operator'), 'before', 'after')) ||
+      (this.isWord(t, 'does') &&
+        this.isWord(this.la2('does-not', 'operator'), 'not'))
+    );
+  }
+
   *concat(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(COMPARISON + 1)) as Node;
+    }
     const frame = this.enter('Concat');
     try {
       let l = (yield this.range()) as Node;
@@ -2356,6 +2539,9 @@ class Parser {
   }
 
   *range(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(RANGE)) as Node;
+    }
     const frame = this.enter('Range');
     try {
       const l = (yield this.additive()) as Node;
@@ -2370,6 +2556,9 @@ class Parser {
   }
 
   *additive(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(RANGE + 1)) as Node;
+    }
     const frame = this.enter('Additive');
     try {
       let l = (yield this.multiplicative()) as Node;
@@ -2387,6 +2576,9 @@ class Parser {
   }
 
   *multiplicative(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(POWER - 1)) as Node;
+    }
     const frame = this.enter('Multiplicative');
     try {
       let l = (yield this.power()) as Node;
@@ -2404,6 +2596,9 @@ class Parser {
   }
 
   *power(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(POWER)) as Node;
+    }
     const frame = this.enter('Power');
     try {
       const l = (yield this.unary()) as Node;
@@ -2418,6 +2613,9 @@ class Parser {
   }
 
   *unary(): ParseTask<Node> {
+    if (this.compact) {
+      return (yield this.climb(UNARY)) as Node;
+    }
     const frame = this.enter('Unary');
     try {
       if (this.isOp(this.peek(0), '-')) {
