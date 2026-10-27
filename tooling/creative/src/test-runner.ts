@@ -3,13 +3,11 @@
 // nothing here is normative; ADR 0056's runner is `northtalk test`.
 import {
   compileLibrary,
-  defineCapability,
   LoadError,
   map,
   nothing,
   parseSource,
   ScriptError,
-  shape,
   text,
   toValue,
   waitUs,
@@ -23,6 +21,7 @@ import {
   testHandlersOf,
 } from '@northtalk/tooling/test-script';
 import { textOf, type Project, type ProjectTestScript } from './model';
+import { harnessGrant, type HarnessState } from './grants/harness';
 import { PlaySession, unitLabel } from './play';
 import type { DeepReadonly } from './readonly';
 
@@ -31,8 +30,6 @@ const MAX_PUMPS = 100_000;
 // How often a test may move the Clock on to a deadline before it counts as
 // stuck.
 const MAX_STEPS = 10_000;
-// A Harness call waits as long as a suspending call can.
-const FOREVER_MS = 2_147_483_647;
 
 /** A place in a Test Script. */
 export type TestLocation = { col: number; line: number };
@@ -150,7 +147,7 @@ class TestRun {
           ),
           project: this.play.objects.get(this.play.project)!,
         },
-        grants: { harness: harness.grant('all', undefined) },
+        grants: { harness: harnessGrant.grant(harness) },
       });
     } catch (error) {
       if (error instanceof LoadError) {
@@ -325,93 +322,62 @@ class TestRun {
     this.actions.push({ ...(call ? { call } : {}), ...action });
   }
 
-  // ADR 0056's `advance`, plus reader input and read-only Element access.
-  private harness() {
-    const suspending = {
-      mode: 'suspending',
-      maxPendingMs: FOREVER_MS,
-      cost: { fuel: 0 },
-    } as const;
-    return defineCapability<unknown>()('harness', {
-      advance: {
-        ...suspending,
-        args: [shape.quantityKind('exact duration')],
-        start: (call, value) => {
-          this.queue(call, { to: this.now + duration(value) });
-        },
+  // What the Folio Harness does in this test.
+  private harness(): HarnessState {
+    return {
+      advance: (call, value) => {
+        this.queue(call, { to: this.now + duration(value) });
       },
-      frame: {
-        ...suspending,
-        args: [shape.quantityKind('exact duration')],
-        start: (call, value) => {
-          const to = this.now + duration(value);
-          this.queue(call, { to, act: () => this.play.frame(to) });
-        },
+      frame: (call, value) => {
+        const to = this.now + duration(value);
+        this.queue(call, { to, act: () => this.play.frame(to) });
       },
-      key: {
-        ...suspending,
-        args: [shape.text],
-        start: (call, key) => {
-          const args = [text(key)];
-          this.queue(undefined, {
-            act: () => this.play.send(this.play.page, 'keyDown', args),
-          });
-          this.queue(call, {
-            act: () => this.play.send(this.play.page, 'keyUp', args),
-          });
-        },
+      key: (call, key) => {
+        const args = [text(key)];
+        this.queue(undefined, {
+          act: () => this.play.send(this.play.page, 'keyDown', args),
+        });
+        this.queue(call, {
+          act: () => this.play.send(this.play.page, 'keyUp', args),
+        });
       },
-      click: {
-        ...suspending,
-        args: [shape.text],
-        start: (call, name) => {
-          const element = this.element(name);
-          this.queue(call, { act: () => this.play.send(element, 'click') });
-        },
+      click: (call, name) => {
+        const element = this.element(name);
+        this.queue(call, { act: () => this.play.send(element, 'click') });
       },
-      goTo: {
-        ...suspending,
-        args: [shape.text],
-        start: (call, name) => {
-          const index = this.play.project.pages.findIndex(p => p.name === name);
-          if (index < 0) {
-            throw new ScriptError(
-              'no such page',
-              `The Project has no Page ${name}`,
-              map([['name', text(name)]]),
-            );
-          }
-          this.queue(call, { act: () => this.play.goTo(index) });
-        },
-      },
-      property: {
-        mode: 'immediate',
-        args: [shape.text, shape.text],
-        result: shape.any,
-        cost: { fuel: 0 },
-        do: (_call, property, name) => {
-          const element = this.element(name);
-          if (property === 'text' && element.kind === 'text') {
-            return text(textOf(element));
-          }
-          if (property === 'visible') {
-            return toValue(this.play.isVisible(element));
-          }
-          const value = (element as Record<string, unknown>)[property];
-          if (
-            typeof value === 'string' ||
-            typeof value === 'number' ||
-            typeof value === 'boolean'
-          ) {
-            return toValue(value);
-          }
+      goTo: (call, name) => {
+        const index = this.play.project.pages.findIndex(p => p.name === name);
+        if (index < 0) {
           throw new ScriptError(
-            'no such property',
-            `Element ${name} has no property ${property}`,
-            map([['name', text(property)]]),
+            'no such page',
+            `The Project has no Page ${name}`,
+            map([['name', text(name)]]),
           );
-        },
+        }
+        this.queue(call, { act: () => this.play.goTo(index) });
       },
-    });
+      property: (property, name) => {
+        const element = this.element(name);
+        if (property === 'text' && element.kind === 'text') {
+          return text(textOf(element));
+        }
+        if (property === 'visible') {
+          return toValue(this.play.isVisible(element));
+        }
+        const value = (element as Record<string, unknown>)[property];
+        if (
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean'
+        ) {
+          return toValue(value);
+        }
+        throw new ScriptError(
+          'no such property',
+          `Element ${name} has no property ${property}`,
+          map([['name', text(property)]]),
+        );
+      },
+    };
   }
 }

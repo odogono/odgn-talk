@@ -3,45 +3,66 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { DeepReadonly } from './readonly';
-import type { Element, Project, ProjectLibrary } from './model';
+import type {
+  Element,
+  Project,
+  ProjectLibrary,
+  ProjectTestScript,
+} from './model';
+import type { TestResult } from './test-runner';
 import { ownerId, type ScriptOwner } from './script-manifest';
 
-export type CodeSelection = { id: number; kind: 'script' | 'library' };
+export type CodeSelection = {
+  id: number;
+  kind: 'script' | 'library' | 'test';
+};
+/** A named source the Code Browser can rename and delete. */
+export type NamedSource =
+  | { kind: 'library'; source: DeepReadonly<ProjectLibrary> }
+  | { kind: 'test'; source: DeepReadonly<ProjectTestScript> };
+/** The last Run Tests, or that it is running. */
+export type TestRun = { results: TestResult[] } | 'running' | undefined;
 export const sourceKey = (source: CodeSelection): string =>
   `${source.kind}:${source.id}`;
 
 type Props = {
-  library?: DeepReadonly<ProjectLibrary>;
+  named?: NamedSource;
   onDelete(): void;
-  onNew(): void;
+  onNew(kind: NamedSource['kind']): void;
+  onOpenResult(result: TestResult): void;
   onRename(name: string): string | undefined;
+  onRunTests(): void;
   onSelect(source: CodeSelection): void;
   project: DeepReadonly<Project>;
   readOnly: boolean;
   selected: CodeSelection;
+  tests: TestRun;
 };
 
-const LibraryName = ({
-  library,
+const LABELS = { library: 'Library', test: 'Test Script' } as const;
+
+const SourceName = ({
+  named,
   onRename,
   readOnly,
-}: Pick<Props, 'library' | 'onRename' | 'readOnly'>) => {
-  const [name, setName] = useState(library?.name ?? '');
+}: Pick<Props, 'named' | 'onRename' | 'readOnly'>) => {
+  const [name, setName] = useState(named?.source.name ?? '');
   const [error, setError] = useState('');
   useEffect(() => {
-    setName(library?.name ?? '');
+    setName(named?.source.name ?? '');
     setError('');
-  }, [library?.name]);
-  if (!library) {
+  }, [named?.source.name]);
+  if (!named) {
     return null;
   }
   const rename = () => setError(onRename(name.trim()) ?? '');
+  const label = `${LABELS[named.kind]} name`;
   return (
     <div className="library-name">
       <label>
-        Library name
+        {label}
         <input
-          aria-label="Library name"
+          aria-label={label}
           disabled={readOnly}
           onBlur={rename}
           onInput={event => setName(event.currentTarget.value)}
@@ -108,21 +129,88 @@ const Outline = (props: Props) => {
             </li>
           ))}
         </ul>
+        <h3>Tests</h3>
+        <ul>
+          {project.testScripts.map(script => (
+            <li key={script.id}>
+              {sourceButton({ kind: 'test', id: script.id! }, script.name)}
+            </li>
+          ))}
+        </ul>
       </nav>
       <div className="library-actions">
-        <button disabled={props.readOnly} onClick={props.onNew} type="button">
+        <button
+          disabled={props.readOnly}
+          onClick={() => props.onNew('library')}
+          type="button"
+        >
           New Library
         </button>
         <button
-          disabled={props.readOnly || !props.library}
+          disabled={props.readOnly}
+          onClick={() => props.onNew('test')}
+          type="button"
+        >
+          New Test Script
+        </button>
+        <button
+          disabled={props.readOnly || !props.named}
           onClick={props.onDelete}
           type="button"
         >
-          Delete Library
+          Delete {LABELS[props.named?.kind ?? 'library']}
+        </button>
+        <button
+          disabled={!project.testScripts.length || props.tests === 'running'}
+          onClick={props.onRunTests}
+          type="button"
+        >
+          Run Tests
         </button>
       </div>
-      <LibraryName key={props.library?.id} {...props} />
+      <SourceName key={sourceKey(selected)} {...props} />
+      <TestResults {...props} />
     </>
+  );
+};
+
+// Each Test Handler's result; a failure opens its line.
+const TestResults = ({ tests, onOpenResult }: Props) => {
+  if (tests === undefined) {
+    return null;
+  }
+  if (tests === 'running') {
+    return (
+      <p className="test-results" role="status">
+        Running tests…
+      </p>
+    );
+  }
+  const failed = tests.results.filter(r => !r.ok).length;
+  return (
+    <section aria-label="Test results" className="test-results">
+      <p role="status">
+        {tests.results.length
+          ? `${tests.results.length - failed} passed, ${failed} failed`
+          : 'No Test Handlers found'}
+      </p>
+      <ul>
+        {tests.results.map(result => (
+          <li
+            className={result.ok ? 'passed' : 'failed'}
+            key={`${result.script.id}:${result.test}`}
+          >
+            <button onClick={() => onOpenResult(result)} type="button">
+              {result.ok ? '✓' : '✗'} {result.script.name}{' '}
+              {result.test || `line ${result.at.line}`}
+            </button>
+            {result.problems.length > 0 && (
+              <pre>{result.problems.join('\n')}</pre>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 };
 

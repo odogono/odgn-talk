@@ -76,7 +76,9 @@ List files with `rg --files tooling/creative` before opening one by name.
   `settle`, `key`, `click`, `frame(ms)`, `deliver`, `element`, `text`,
   `drawingOf` and an `extend` option.
 - [test-runner.ts](src/test-runner.ts): Run Tests for a Project's Test
-  Scripts and the Folio Harness (ADR 0133); the Test Library and Test
+  Scripts (ADR 0133), with the Folio Harness in
+  [grants/harness.ts](src/grants/harness.ts) and the Code Browser's Tests
+  section in [code-browser-panel.tsx](src/code-browser-panel.tsx); the Test Library and Test
   Handler discovery are shared with `northtalk test` in
   [test-script.ts](../stack/src/test-script.ts). Tests:
   [test-runner.test.ts](tests/test-runner.test.ts).

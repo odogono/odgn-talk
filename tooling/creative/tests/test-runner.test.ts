@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createElement, createPage, createProject } from '../src/model';
+import { StackEditor } from '../src/editing';
 import { PlaySession } from '../src/play';
 import { runProjectTests } from '../src/test-runner';
 
@@ -135,4 +136,29 @@ test('Play never loads a Test Script', async () => {
   expect([...play.owners.keys()].some(name => name.includes('test'))).toBe(
     false,
   );
+});
+
+test('Test Scripts are edited like Libraries, with history', () => {
+  const editor = new StackEditor(createProject('Tested'));
+  let id = 0;
+  editor.edit(({ tree }) => {
+    id = tree.addTestScript('rules.test', 'on testA\nend testA\n').id!;
+  });
+  expect(() =>
+    editor.edit(({ tree }) => tree.renameTestScript(id, 'rules')),
+  ).toThrow('Use a NorthTalk identifier and then .test');
+  editor.edit(({ tree }) => tree.addTestScript('other.test'));
+  expect(() =>
+    editor.edit(({ tree }) => tree.renameTestScript(id, 'other.test')),
+  ).toThrow('Another Test Script already has that name.');
+  editor.edit(({ tree }) => tree.setTestScriptSource(id, ''));
+  editor.edit(({ tree }) => tree.removeTestScript(id));
+  expect(editor.project.testScripts.map(t => t.name)).toEqual(['other.test']);
+  editor.undo();
+  editor.undo();
+  expect(editor.project.testScripts[0]).toMatchObject({
+    id,
+    name: 'rules.test',
+    source: 'on testA\nend testA\n',
+  });
 });

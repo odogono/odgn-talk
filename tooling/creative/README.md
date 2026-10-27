@@ -279,6 +279,15 @@ by [`runProjectTests`](src/test-runner.ts) as `northtalk test` runs one
 - A failure is placed at the line that raised it in the Test Script,
   including a failed assertion, else at the Test Handler.
 
+Choose **New Test Script** in the Code Browser to add one with a Test Handler
+to start from, and rename it in **Test Script name**. Its editor knows the
+Harness and the Test Library. **Run Tests** runs every Test Handler against
+the Project as it is now and lists `passed` and `failed` counts with each
+result and its problems; clicking a result opens its Test Script at the
+failing line. Run Tests works in a read-only Project too. Tests run on the
+page, not in the Play worker, so a test that loops for a long time holds up
+the editor until its Pump limit ends it.
+
 Both Tetris Example Projects ship `game.test`.
 
 ### Script Recipes

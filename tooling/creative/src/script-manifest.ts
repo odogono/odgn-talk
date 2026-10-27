@@ -10,6 +10,9 @@ import {
   type SyntaxNode,
 } from '@northtalk/ts';
 import { manifestGrants } from './grants';
+import { manifestGrant } from './grants/grant';
+import { harnessGrant } from './grants/harness';
+import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
@@ -179,6 +182,29 @@ export const scriptManifest = (
     messages: scriptMessages(owner.script ?? ''),
   };
 };
+
+/**
+ * A Test Script's Manifest (ADR 0133): it reaches Pages by name and the
+ * Project, holds only the Folio Harness, and may import the Test Library.
+ */
+export const testScriptManifest = (
+  project: DeepReadonly<Project>,
+): ReturnType<typeof scriptManifest> => ({
+  kind: 'project',
+  version: '1',
+  language: coreVersions.language,
+  libraries: [
+    ...project.libraries.map(({ name, source }) => ({ name, source })),
+    { name: 'test', source: TEST_LIBRARY },
+  ],
+  objects: [
+    ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
+    { name: 'project', kind: 'project' },
+  ],
+  objectKinds,
+  grants: [manifestGrant(harnessGrant)],
+  messages: [],
+});
 
 /**
  * Folio's language-server configuration: the Manifest, the sources, and the

@@ -651,6 +651,19 @@ button:disabled {
 .library-name [role='status'] {
   color: var(--error);
 }
+.test-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.test-results li.failed button {
+  color: var(--error);
+}
+.test-results pre {
+  font-size: 0.75rem;
+  margin: 0 0 0.3rem 1rem;
+  white-space: pre-wrap;
+}
 @media (max-width: 640px) {
   .code-browser > .code-browser-content {
     flex-direction: column;
