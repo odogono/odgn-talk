@@ -1,0 +1,26 @@
+# Unblessed: Rewind then a shape-changing keep-mailbox Reload (#481); first blessing awaits human review.
+# reload-reshape: a Rewind in a Run's first Segment leaves no frame, so a
+# Reload that keeps the mailbox may change the Script Variables' shape
+# (ADR 0068). The new source drops n and adds total and seen; d1 runs again on
+# the new code as s/r2, against the new variables.
+
+> load s identity=9ef7c9505597341419883ace1f8ff0e809bc220873679e14e72a0adaa832beb8
+> stub api.ping value=1
+> stub api.ping value=2
+> deliver d1 to=s message=go
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.ping args=[] result=1
+> rewind-run s/r1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=17 alloc=0 state=48 end=rewind
+pumped state=rewound fuel=17
+> vars
+vars s n=0
+> reload s carry=yes mailbox=keep source="script variable total = 10" & newline & "script variable seen = false" & newline & "on go" & newline & "ask api to ping" & newline & "put total + it into total" & newline & "put true into seen" & newline & "end go" identity=9f4b75214f2a6dd10e8b7ebc8b72ec1fe826f876aa3489261cd44289953fd914
+stopped s reason="reload"
+> pump clock=2026-10-01T09:00:01Z
+call s/r2.c1 op=api.ping args=[] result=2
+seg s/r2 start delivery=d1 handler=go clause=1 fuel=30 alloc=32 state=24 end=return
+run s/r2 outcome=completed delivery=d1 handler=go fuel=30 alloc=32
+pumped state=idle fuel=30
+> vars
+vars s total=12 seen=true

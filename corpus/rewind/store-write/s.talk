@@ -1,0 +1,4 @@
+on go
+  ask st to set "k", 1
+  ask api to ping
+end go

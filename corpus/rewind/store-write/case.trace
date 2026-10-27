@@ -1,0 +1,33 @@
+# Unblessed: a Rewind rolling back a Store write (#481); first blessing awaits human review.
+# store-write: a Store write is Segment-bound (ADR 0050), so a Rewind landing
+# at the later `ping` in the Run's first Segment rolls it back (ADR 0068). The
+# redispatched Run, s/r2, writes again, and that write commits.
+
+> load s identity=caf6147987ca2de170d006c2b2fb6f36b4aa381643fba1d4d6dbf4df4ca9e47c
+> stub-effect s.st phase=begin status=ok
+> stub store.set value=nothing
+> stub api.ping value=1
+> stub-effect s.st phase=rollback status=ok
+> stub-effect s.st phase=begin status=ok
+> stub store.set value=nothing
+> stub api.ping value=2
+> stub-effect s.st phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-01T09:00:00Z
+effect s/r1.s1 grant=st phase=begin status=ok
+call s/r1.c1 op=st.set args=["k", 1] result=nothing
+call s/r1.c2 op=api.ping args=[] result=1
+> rewind-run s/r1
+effect s/r1.s1 grant=st phase=rollback status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=32 alloc=8 state=32 end=rewind
+pumped state=rewound fuel=32
+> pump clock=2026-10-01T09:00:01Z
+effect s/r2.s1 grant=st phase=begin status=ok
+call s/r2.c1 op=st.set args=["k", 1] result=nothing
+call s/r2.c2 op=api.ping args=[] result=2
+effect s/r2.s1 grant=st phase=commit status=ok
+seg s/r2 start delivery=d1 handler=go clause=1 fuel=37 alloc=24 state=0 end=return
+run s/r2 outcome=completed delivery=d1 handler=go fuel=37 alloc=24
+pumped state=idle fuel=37
+> vars
+vars s

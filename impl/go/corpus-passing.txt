@@ -329,6 +329,8 @@ rewind/message-kinds
 rewind/not-rewindable
 rewind/parked-queued
 rewind/preempted-request
+rewind/reload-reshape
+rewind/store-write
 rewind/unparked-segment-base
 save-restore/overdue-waits-fire-in-deadline-order
 save-restore/preempted-join-keeps-pending-members
