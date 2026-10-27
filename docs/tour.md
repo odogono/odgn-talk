@@ -1,10 +1,10 @@
 # Learn NorthTalk in Y minutes
 
-> This tour is an informative introduction to NorthTalk. The Go and TS Cores run Scripts today; see their [Go](../impl/go/README.md) and [TS](../impl/ts/README.md) guides for current support and limitations. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Section headings name the [ADRs](adr/) behind them. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
+> This tour is an informative introduction to NorthTalk. The TS and Zig Cores run Scripts today, and Go and Elixir Hosts embed the Zig Core; see the [TS](../impl/ts/README.md), [Zig](../impl/zig/README.md), [Go](../impl/go/README.md) and [Elixir](../impl/elixir/README.md) guides for current support and limitations. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Section headings name the [ADRs](adr/) behind them. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
 
-NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go servers, Bun servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
+NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go, Bun, Node and Elixir servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
-Script files end in `.talk`. Try expressions and declarations in the [Playground](https://opendoorgonorth.com/odgn-talk/) or run `bun run repl` from this repository after `bun install`.
+Script files end in `.talk`. Try expressions and declarations in the [Playground](https://opendoorgonorth.com/odgn-talk/) or run `bun run repl` from this repository after `bun install`. `bun run northtalk app.talk` runs a whole Script file: it grants the Standard Capabilities, sends the Script `start` with the command-line arguments, and exits when nothing is left to happen (section 16 has a small server).
 
 The examples below are independent teaching snippets, not one loadable Script. Names such as `approvals`, `storage` and `door` stand for Scripts, Grants or Host Objects supplied by an embedding application; they are not all available in the default REPL.
 
@@ -59,6 +59,8 @@ on valuesTour
   put nothing into nickname
   if nickname is nothing then say "no nickname"
   if "" is empty then say "empty, but still text"
+  -- `otherwise` replaces Nothing, and only Nothing: false, 0 and "" stay.
+  put nickname otherwise "friend" into callMe                -- "friend"
 
   -- Lists and maps.
   put ["apples", "pears", "figs"] into fruit
@@ -68,6 +70,10 @@ on valuesTour
   put person's age into a           -- 34, the same thing written with 's
   put the "full name" of person into fn   -- a quoted key can be any text
   put [...fruit, "plums"] into more -- spread builds a new list
+  put the email of person into email -- a missing key gives Nothing...
+  -- ...but reading a key of Nothing is an error. `optional` reads give
+  -- Nothing instead, and each step that may be missing says so:
+  put the optional city of the address of person otherwise "unknown" into city
 
   -- Value Semantics: changing a value through one name is never visible
   -- through another. Only Host Objects (opaque handles to things the Host
@@ -251,7 +257,7 @@ on chunksTour
   -- lines, and is an error for characters and words.
 end chunksTour
 
--- 7. Units and Quantities (ADR 0022) ------------------------------------------
+-- 7. Units and Quantities (ADR 0022, 0091) ------------------------------------
 
 -- A numeric literal directly followed by a Unit makes a Quantity.
 -- The Unit is part of the value: `5 kg` and `5` are different values.
@@ -270,6 +276,7 @@ on unitsTour
   put 9 degF as degC into warmer    -- 5: temperatures are differences
 
   -- Exact durations: ms, s, min, hr, day, week. Calendar Units: month, year.
+  -- Time is kept to the microsecond.
   put 90 min + 1 day into wait1     -- converts into the left Unit: 1530 min
 
   -- `1 month + 1 day` is an error: a month has no fixed length.
@@ -338,7 +345,7 @@ on labelsTour
 end labelsTour
 -- Labels are part of the message name, not names for optional arguments.
 
--- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026, 0031, 0057, 0064) ------
+-- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026, 0031, 0057, 0064, 0109, 0114)
 
 -- Every Script is an actor with one FIFO mailbox. It never executes two Runs
 -- at the same instant, but a new Run may start while another is suspended.
@@ -349,6 +356,10 @@ on submit order
   send review with order to approvals            -- into its mailbox; go on
   send review with order to approvals and wait   -- suspend until it answers
   if it is "approved" then ship order            -- the answer is in `it`
+  -- A Result Target keeps the answer under a name too, before `and wait`.
+  -- Command Calls, function call statements and `ask` take one as well.
+  send review with order to approvals into verdict and wait
+  if verdict is "approved" then ship order
 end submit
 
 -- Parentheses compute the message name, including labelled Selectors.
@@ -411,6 +422,8 @@ end awaitPayment
 on confirm
   wait for click from okButton or 30 s
   if it is nothing then say "timed out"   -- `it`: the message, or Nothing
+  -- A one-line wait takes a Guard too, after any timeout:
+  wait for pressed key or 10 s where key = "Y"
 end confirm
 
 -- A Decision is the Host asking "may this happen?". A `, deciding` Handler
@@ -426,14 +439,14 @@ on beforeMove m, deciding           -- in the board's Script
   ask replay to record m and wait   -- the move is allowed from here on
 end beforeMove
 
--- 10. Libraries (ADR 0020, 0021, 0022, 0023) ----------------------------------
+-- 10. Libraries (ADR 0020, 0021, 0022, 0023, 0080, 0096, 0099, 0113) ----------
 
 -- A Library is shared code the Host supplies, with no state of its own. Its
 -- code runs inside the caller's Run. An Import names exactly what it brings in.
 -- The Standard Library is seven Libraries written in the language itself:
 use pad, split, join, format from text   -- also: padLeft, repeated, …
 use average, filter, map, reduce, sortBy, any, partition from list
-use merge from map
+use merge, lookup from map
 use toHex from bytes
 use decodeJson from json
 use makeDate, formatDate from date
@@ -448,6 +461,7 @@ on librariesTour body
   put join(split("a b c", " "), "-") into dashed   -- "a-b-c"
   put merge({a: 1}, {b: 2}) into ab
   put decodeJson(body) into data    -- JSON null becomes Nothing
+  put lookup(data, ["rows", 1, "id"], 0) into firstId  -- a path, with a default
   put toHex(<<0x0D, 0x0A>>) into hex
   put celsiusToFahrenheit(20) into f               -- 68
   -- `format` fills a reusable template from a map; backticks interpolate expressions immediately:
@@ -466,7 +480,16 @@ on librariesTour body
   put round(2.345, 2, "half even") into cents      -- 2.34
   put upper("straße") into shout    -- "STRASSE"
   put sqrt(2) * pi into odd         -- correctly rounded to 34 digits
+  put degrees(pi) into halfTurn      -- 180: angles are in radians
+  put min(launch, nextMonth) into sooner   -- min and max take any number of values
+  put random(6) into roll           -- 1 to 6, from the Host's seed: replayable
+
+  -- Shape checks test data against a Shape written as data:
+  put {map: [{key: "name", shape: "text"}, {key: "age", shape: "number"}]} into personShape
+  if conforms(data, personShape) then say "a person"
+  put explain(data, personShape) into problems     -- every mismatch, as a list
 end librariesTour
+-- A Library can also `wait for` messages to the Script whose Run calls it.
 
 -- 11. Errors (ADR 0006, 0017, 0060) -------------------------------------------------
 
@@ -586,12 +609,11 @@ on lambdasTour readings
   -- A Lambda captures the locals it uses by value, and can't change them.
   -- It reads and writes Script Variables live.
   -- The `given … end given` form can suspend. Calling it then says `and wait`.
-  put given url
-    ask http to get url and wait
+  put given key
+    ask storage to load key and wait
     return the status of it
   end given into statusOf
-  statusOf("https://example.com/health") and wait
-  put it into status                -- the result lands in `it`
+  statusOf("health") into status and wait   -- the result: in `it` and `status`
 end lambdasTour
 
 -- 14. Joins and timeouts (ADR 0026, 0073) --------------------------------------------------------
@@ -642,7 +664,7 @@ on encodeMove id, x, y
 end encodeMove
 -- `byte 1 of b` and `bytes 2..5 of b` are chunks. `b as text` decodes UTF-8.
 
--- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0115) -----------
+-- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0094, 0100, 0112, 0115, 0124)
 
 -- Scripts have no ambient I/O. Every effect is an Operation on a Capability
 -- the Host has granted, and the loader checks every call against the Grants.
@@ -652,11 +674,13 @@ on capabilitiesTour key
   put it into started               -- an Instant: a point on the timeline
   ask calendar to today             -- a Civil Date, in the Grant's time zone
   put it into thisDay
-  ask storage to load key and wait  -- a suspending Operation says `and wait`
-  put it into saved
+  ask storage to load key into saved and wait   -- suspending: says `and wait`
   ask locale to compare "a", "B", {sensitivity: "base"}, "de"
   say "hi"                          -- short for: tell console to write "hi"
   set the state of door to "open"   -- `set` writes a Host Object's property
+  -- A Host Object may hold a collection of others, read with `element`:
+  set the fill of element "lamp" of thisPage to "red"
+  put the number of elements of thisPage into n
 end capabilitiesTour
 -- `and wait` must be there exactly when the Operation can suspend. The
 -- loader checks both ways, so a wrong guess fails at load, not at run time.
@@ -687,11 +711,23 @@ on hostCommandLabelsTour
   dock "pass", "red hangar"         -- `dock`: still the Host Command
 end hostCommandLabelsTour
 -- Store writes commit or roll back with the current Segment. They are not
--- one transaction across waits. Optional Grants also include SQLite and
+-- one transaction across waits. Optional Grants also include SQLite, HTTP and
 -- user interaction; a Host must explicitly supply them.
 -- Hosts can declare paired Operations as a Capability Scope. The Core
 -- attempts abandonment if the Run ends with it open, even on a Limit Fault.
 -- Open scopes forbid suspension and Joins; closing a scope is not rollback.
+
+-- The optional `http` Grant serves HTTP. Each request arrives as a message,
+-- and the Run it starts answers it. `northtalk server.talk` runs this as is.
+on start args
+  ask http to serve "api", "/hello" and wait     -- answers {host, port}
+  say "listening on port " & the port of it
+end start
+
+on httpRequest request                           -- the default message name
+  put the name of the query of request otherwise "world" into who
+  ask http to respond the exchange of request, {status: 200, json: {hello: who}}
+end httpRequest
 
 -- 17. Advanced Constructs (ADR 0007, 0011, 0013, 0027, 0060, 0064) ------------
 
@@ -748,7 +784,7 @@ end recoveryTour
 
 - [The REPL and Playground](../README.md#the-repl): run and explore Scripts.
 - [Testing Scripts](../tooling/cli/README.md#testing-scripts): black-box Test Scripts and Transcripts.
-- [Standard Capabilities](../spec/07-libraries-and-the-standard-library.md): Store notifications, SQLite and user interaction.
+- [Standard Capabilities](../spec/07-libraries-and-the-standard-library.md): Store notifications, SQLite, HTTP and user interaction.
 - [`GLOSSARY.md`](../GLOSSARY.md): the glossary.
 - [`docs/adr/`](adr/): every decision and why it was made.
 - [`corpus/examples/orders-pricing/`](../corpus/examples/orders-pricing/): two Scripts talking to each other, as a conformance case.
