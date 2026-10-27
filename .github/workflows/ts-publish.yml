@@ -40,3 +40,55 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm publish ./impl/ts/dist --access public
+
+  # Runs odogono/northtalk-ts-example against the version just published, from
+  # the public registry, under Node and Bun. A failure marks the release broken.
+  verify:
+    needs: publish
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runtime: node, node: '24.10' }
+          - { runtime: node, node: latest }
+          - { runtime: bun, node: latest }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: odogono/northtalk-ts-example
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#ts-v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - if: matrix.runtime == 'bun'
+        uses: oven-sh/setup-bun@v2
+      # The registry can take a while to serve a new version.
+      - name: Wait for the version on the registry
+        run: |
+          for i in $(seq 1 30); do
+            npm view "@northtalk/ts@$VERSION" version && exit 0
+            sleep 10
+          done
+          echo "::error::@northtalk/ts@$VERSION is not on the registry"
+          exit 1
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+      - if: matrix.runtime == 'node'
+        run: |
+          npm ci
+          npm install --no-save "@northtalk/ts@$VERSION"
+          npm ls @northtalk/ts
+          npm test
+          npm run typecheck
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+      - if: matrix.runtime == 'bun'
+        run: |
+          bun install
+          bun add "@northtalk/ts@$VERSION"
+          bun pm ls | grep "@northtalk/ts@$VERSION"
+          bun test
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
