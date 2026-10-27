@@ -747,7 +747,7 @@ Somewhere a value can be put: a variable, or a chain of chunks and keys rooted i
 _Avoid_: slot, lvalue, reference
 
 **Value Path**:
-A list of keys and 1-based positions that locates a value inside nested maps and lists, e.g. `["orders", 1, "total"]`. An error's `path` field is one, and `lookup` follows one.
+A list of keys and 1-based positions that locates a value inside nested maps and lists, e.g. `["orders", 1, "total"]`. An error's `path` field is one, and `lookup`, `withPath`, `withoutPath` and `hasPath` follow one.
 _Avoid_: key path, keypath, path (unqualified; that's a Message Path)
 
 **Selection Path**:
