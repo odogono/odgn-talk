@@ -23,6 +23,7 @@ import {
 import { textOf, type Project, type ProjectTestScript } from './model';
 import { harnessGrant, type HarnessState } from './grants/harness';
 import { PlaySession, unitLabel } from './play';
+import { allElements } from './tree/rules';
 import type { DeepReadonly } from './readonly';
 
 // How many Pumps a test may take before it counts as never settling.
@@ -43,6 +44,66 @@ export type TestResult = {
   script: DeepReadonly<ProjectTestScript>;
   /** The Test Handler's name; empty when the Test Script doesn't load. */
   test: string;
+};
+
+/** What a reader can see at the end of a test (ADR 0134). */
+export type ReaderView = {
+  page: string;
+  /** Each Text Element's text, by name, in order. */
+  texts: [string, string][];
+  /** Each Element whose visibility differs from the authored Project. */
+  visibility: [string, boolean][];
+};
+
+/** What a reader can see in a Play Session or its page-side mirror. */
+export const readerView = (
+  project: DeepReadonly<Project>,
+  play: Pick<PlaySession, 'elementsOf' | 'isVisible'> & {
+    page: { name: string };
+  },
+): ReaderView => {
+  const authored = project.pages.find(p => p.name === play.page.name);
+  const shown = (name: string) =>
+    authored && allElements(authored.elements).find(e => e.name === name);
+  const elements = play.elementsOf();
+  return {
+    page: play.page.name,
+    texts: elements.flatMap(e =>
+      e.kind === 'text' ? [[e.name, textOf(e)] as [string, string]] : [],
+    ),
+    visibility: elements.flatMap(e => {
+      const visible = play.isVisible(e);
+      return shown(e.name)?.visible === visible
+        ? []
+        : [[e.name, visible] as [string, boolean]];
+    }),
+  };
+};
+
+/**
+ * Runs Harness input as one Test Handler, as Run Tests would, and returns
+ * what a reader can then see, or the problems if it failed.
+ */
+export const replayInput = async (
+  project: DeepReadonly<Project>,
+  lines: readonly string[],
+): Promise<{ problems: string[]; view: ReaderView }> => {
+  const script = {
+    name: 'replay.test',
+    source: [
+      'on testReplay',
+      ...lines.map(l => `  ${l}`),
+      'end testReplay',
+      '',
+    ].join('\n'),
+  };
+  const run = new TestRun(project, script, {
+    name: 'testReplay',
+    line: 1,
+    col: 1,
+  });
+  const problems = await run.run(false);
+  return { problems, view: readerView(project, run.play) };
 };
 
 /** Every Test Handler in the Project's Test Scripts, in order. */
@@ -108,7 +169,7 @@ const duration = (value: Value) => {
 class TestRun {
   failedAt: TestLocation | undefined;
   loadFailed = false;
-  private readonly play: PlaySession;
+  readonly play: PlaySession;
   private readonly problems: string[] = [];
   private readonly unit: string;
   private readonly actions: Action[] = [];
@@ -309,7 +370,7 @@ class TestRun {
 
   // The named Element on the current Page.
   private element(name: string) {
-    const element = this.play.page.elements.find(e => e.name === name);
+    const element = this.play.elementsOf().find(e => e.name === name);
     if (!element) {
       throw new ScriptError(
         'no such element',
@@ -358,6 +419,7 @@ class TestRun {
         }
         this.queue(call, { act: () => this.play.goTo(index) });
       },
+      page: () => text(this.play.page.name),
       property: (property, name) => {
         const element = this.element(name);
         if (property === 'text' && element.kind === 'text') {

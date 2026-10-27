@@ -31,6 +31,13 @@ import { paintCanvas } from './canvas-view';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
+import {
+  addRecordedTest,
+  RECORDED_SCRIPT,
+  Recorder,
+  replayRecording,
+} from './recorder';
+import { readerView, type ReaderView } from './test-runner';
 
 /** How often the Variables window reads a browsing session, in ms. */
 const VARIABLES_REFRESH = 100;
@@ -84,6 +91,18 @@ export const mountPlay = (shell: StackShell): void => {
     h('span', { 'aria-hidden': 'true' }, '☞'),
     'Browse',
   );
+  // Record Test (ADR 0134) Browses from a test's start and writes what
+  // the reader does as a Recorded Test.
+  const recordTool = h(
+    'button',
+    {
+      type: 'button',
+      'aria-pressed': 'false',
+      title: 'Record Test: Browse from the first Page and write a test',
+    },
+    h('span', { 'aria-hidden': 'true' }, '●'),
+    'Record Test',
+  );
   const editTool = h(
     'button',
     {
@@ -99,6 +118,7 @@ export const mountPlay = (shell: StackShell): void => {
       'div',
       { id: 'tool-modes', role: 'group', 'aria-label': 'Mode' },
       browseTool,
+      recordTool,
       editTool,
     ),
   );
@@ -190,9 +210,10 @@ export const mountPlay = (shell: StackShell): void => {
   const scaler = h('div', { class: 'play-scale' }, pageNode);
   reader.append(scaler);
   // `user` prompts cover the Page, unscaled, and answering resumes Play.
-  const prompts = mountPlayPrompts(scaler, (prompt, value) =>
-    post({ kind: 'answer', session: sessionId, prompt: prompt.id, value }),
-  );
+  const prompts = mountPlayPrompts(scaler, (prompt, value) => {
+    recorder?.unrecorded('a prompt answer');
+    post({ kind: 'answer', session: sessionId, prompt: prompt.id, value });
+  });
   const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
   toolbar.id = 'play-text-toolbar';
   toolbar.hidden = true;
@@ -208,6 +229,7 @@ export const mountPlay = (shell: StackShell): void => {
   let owners: ReturnType<typeof scriptOwners<DeepReadonly<Project>>> = [];
   let libraries: DeepReadonly<Project['libraries']> = [];
   let mode: PlayMode | undefined;
+  let recorder: Recorder | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
   let generation = 0;
@@ -249,6 +271,15 @@ export const mountPlay = (shell: StackShell): void => {
   ) => {
     if (!session || session.stopped || session.navigating || session.paused) {
       return;
+    }
+    if (recorder && message === 'click' && !('index' in target)) {
+      recorder.click(target.name);
+    } else if (recorder && message === 'keyDown' && args) {
+      if ('index' in target) {
+        recorder.key(args[0]!);
+      } else {
+        recorder.unrecorded('typing');
+      }
     }
     post({
       kind: 'send',
@@ -611,7 +642,11 @@ export const mountPlay = (shell: StackShell): void => {
     pauseButton.disabled = !live;
     stepButton.disabled = !paused;
     reader.classList.toggle('paused', paused);
-    browseTool.setAttribute('aria-pressed', String(mode === 'browse'));
+    browseTool.setAttribute(
+      'aria-pressed',
+      String(mode === 'browse' && !recorder),
+    );
+    recordTool.setAttribute('aria-pressed', String(Boolean(recorder)));
     editTool.setAttribute('aria-pressed', String(mode === undefined));
     document.body.classList.toggle('playing', mode === 'present');
     document.body.classList.toggle('browsing', mode === 'browse');
@@ -625,6 +660,15 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session) {
       return;
     }
+    if (recorder && playing) {
+      void finishRecording(
+        playing,
+        recorder,
+        readerView(playing, session),
+        session.wantsFrames,
+      );
+    }
+    recorder = undefined;
     const ended = session;
     const pageName = session.page.name;
     const browsed = mode === 'browse';
@@ -649,7 +693,7 @@ export const mountPlay = (shell: StackShell): void => {
     }
   };
   let errorsGeneration = shell.editor.generation;
-  const start = (next: PlayMode) => {
+  const start = (next: PlayMode, record = false) => {
     leave();
     errors.clear();
     errorsGeneration = shell.editor.generation;
@@ -659,6 +703,9 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     mode = next;
+    // A Recorded Test starts where every test does: the first Page, seed 0.
+    const pageIndex = record ? 0 : shell.editor.pageIndex;
+    recorder = record ? new Recorder(() => performance.now()) : undefined;
     shell.setPlaying(mode);
     generation = shell.editor.generation;
     playing = shell.editor.project as Project;
@@ -667,7 +714,8 @@ export const mountPlay = (shell: StackShell): void => {
     sessionId++;
     profiler.reset(sessionId);
     captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
-    session = new PlayMirror((element, richText, pageIndex, edit) =>
+    session = new PlayMirror((element, richText, pageIndex, edit) => {
+      recorder?.unrecorded('typing');
       post({
         kind: 'text',
         session: sessionId,
@@ -675,19 +723,19 @@ export const mountPlay = (shell: StackShell): void => {
         name: element.name,
         richText,
         edit,
-      }),
-    );
+      });
+    });
     post({
       kind: 'open',
       ...(captureEpoch === undefined ? {} : { performanceEpoch: captureEpoch }),
       session: sessionId,
       project: playing,
-      pageIndex: shell.editor.pageIndex,
-      // A different game each time (ADR 0096).
-      seed: BigInt(Date.now()),
+      pageIndex,
+      // A different game each time (ADR 0096), unless recording a test.
+      seed: record ? 0n : BigInt(Date.now()),
     });
     // Draw the authored Page at once, as the worker starts its session.
-    session.apply(firstView(playing, shell.editor.pageIndex, sessionId));
+    session.apply(firstView(playing, pageIndex, sessionId));
     syncMessage();
     histories.clear();
     variables.start();
@@ -710,6 +758,58 @@ export const mountPlay = (shell: StackShell): void => {
       start('present');
     }
   });
+  recordTool.addEventListener('click', () => {
+    if (recorder) {
+      leave();
+    } else if (!shell.readOnly) {
+      start('browse', true);
+    }
+  });
+  // Writes the Recorded Test into the Project and opens it.
+  const finishRecording = async (
+    project: Project,
+    recorded: Recorder,
+    seen: ReaderView,
+    frames: boolean,
+  ) => {
+    const recording = await replayRecording(project, recorded, seen, frames);
+    if (shell.readOnly) {
+      return;
+    }
+    let id = 0;
+    let added = { line: 1, name: '', source: '' };
+    shell.editor.edit(({ project: current, tree }) => {
+      const existing = current.testScripts.find(
+        s => s.name === RECORDED_SCRIPT,
+      );
+      added = addRecordedTest(existing?.source, recording.body);
+      if (existing) {
+        tree.setTestScriptSource(existing.id!, added.source);
+        id = existing.id!;
+      } else {
+        id = tree.addTestScript(RECORDED_SCRIPT, added.source).id!;
+      }
+    });
+    shell.redraw();
+    shell.openTestScript(id, added.line);
+    const notes = [
+      ...recording.unrecorded.map(
+        what =>
+          `${added.name} doesn't replay ${what}; a comment marks where it was.`,
+      ),
+      ...(recording.drifted
+        ? [
+            `${added.name}'s replay ended differently from what you saw, so its assertions follow the replay.`,
+          ]
+        : []),
+      ...recording.problems.map(
+        problem => `${added.name} didn't replay cleanly: ${problem}`,
+      ),
+    ];
+    errors.add(
+      notes.map(message => ({ owner: shell.editor.project, message })),
+    );
+  };
   browseTool.addEventListener('click', () => {
     if (mode !== 'browse') {
       start('browse');
@@ -724,6 +824,11 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session.paused) {
       releaseKeys();
       closeText();
+    }
+    if (session.paused) {
+      recorder?.resume();
+    } else {
+      recorder?.pause();
     }
     post({ kind: session.paused ? 'resume' : 'pause', session: sessionId });
   };

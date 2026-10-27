@@ -82,6 +82,10 @@ List files with `rg --files tooling/creative` before opening one by name.
   Handler discovery are shared with `northtalk test` in
   [test-script.ts](../stack/src/test-script.ts). Tests:
   [test-runner.test.ts](tests/test-runner.test.ts).
+- [recorder.ts](src/recorder.ts): Record Test (ADR 0134), which turns
+  Browse input into a Recorded Test; [play-view.ts](src/play-view.ts) feeds
+  it. Tests: [recorder.test.ts](tests/recorder.test.ts),
+  [record.browser.ts](tests/record.browser.ts).
 - Tests: [play.test.ts](tests/play.test.ts),
   [play-host.test.ts](tests/play-host.test.ts),
   [play-text.test.ts](tests/play-text.test.ts),

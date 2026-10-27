@@ -10,6 +10,7 @@ export type HarnessState = {
   frame(call: Call<unknown>, duration: Value): void;
   goTo(call: Call<unknown>, page: string): void;
   key(call: Call<unknown>, key: string): void;
+  page(): Value;
   property(property: string, element: string): Value;
 };
 
@@ -62,6 +63,14 @@ const operations = {
     'Sends `keyDown`, then `keyUp`, to the current Page.',
     'ask harness to key "ArrowLeft" and wait',
   ),
+  page: {
+    mode: 'immediate',
+    args: [],
+    result: shape.text,
+    cost: { fuel: 0 },
+    description: 'The name of the current Page.',
+    examples: ['ask harness to page'],
+  },
   property: {
     mode: 'immediate',
     args: [shape.text, shape.text],
@@ -106,6 +115,12 @@ export const harnessGrant: GrantDefinition<HarnessState> = {
           args: [...operations.key.args],
           examples: [...operations.key.examples],
           start: (call, key) => state.key(call, key),
+        },
+        page: {
+          ...operations.page,
+          args: [],
+          examples: [...operations.page.examples],
+          do: () => state.page(),
         },
         property: {
           ...operations.property,
