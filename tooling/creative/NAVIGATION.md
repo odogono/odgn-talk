@@ -71,6 +71,10 @@ List files with `rg --files tooling/creative` before opening one by name.
   is its entry. [play-protocol.ts](src/play-protocol.ts) lists the messages,
   and [play-mirror.ts](src/play-mirror.ts) is the page's copy of Play State.
 - [play-text.ts](src/play-text.ts): reader-editable text and its history.
+- [play-harness.ts](src/play-harness.ts): the TS Play harness Example
+  Project tests use (ADR 0133): a seeded session on a virtual clock with
+  `settle`, `key`, `click`, `frame(ms)`, `deliver`, `element`, `text`,
+  `drawingOf` and an `extend` option.
 - Tests: [play.test.ts](tests/play.test.ts),
   [play-host.test.ts](tests/play-host.test.ts),
   [play-text.test.ts](tests/play-text.test.ts),
