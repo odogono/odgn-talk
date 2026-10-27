@@ -11,6 +11,7 @@ import {
   nothing,
   num,
   record,
+  requireValue,
   text,
 } from './values';
 
@@ -142,9 +143,7 @@ export const fromValue = (
   v: Value,
   options: FromValueOptions = {},
 ): PlainValue => {
-  if (!Value.isValue(v)) {
-    invalidValue('Expected a Value from a named constructor');
-  }
+  requireValue(v);
   const convert = (value: Value): PlainValue => {
     switch (value.kind) {
       case 'nothing':
