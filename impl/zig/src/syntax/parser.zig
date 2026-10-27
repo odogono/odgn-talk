@@ -849,9 +849,22 @@ const Parser = struct {
         const t = try p.peek(.operand);
         if (!p.startsExpr(t)) return p.failAt(t);
         const e = try p.chunkLevel();
-        var outer = e;
-        while (outer.data == .group) outer = outer.data.group;
-        const key_target = property_target and outer.data == .key;
+        // An implicit root needs a key level along the path.
+        var keyed = false;
+        var level = e;
+        while (true) {
+            level = switch (level.data) {
+                .key => |k| blk: {
+                    keyed = true;
+                    break :blk k.base;
+                },
+                .chunk => |c| c.of,
+                .group => |g| g,
+                .element => |el| el.of,
+                else => break,
+            };
+        }
+        const key_target = property_target and keyed;
         var root = e;
         while (true) {
             root = switch (root.data) {
