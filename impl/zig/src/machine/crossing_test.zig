@@ -420,3 +420,46 @@ test "successful closure is acknowledged before Stop despite an invalid result" 
     try t.expectEqual(@as(usize, 0), host.scope_abandoned);
     try noHostFailure(&g);
 }
+
+// A `set` through a property's value (ADR 0135): a Stop made at the Get
+// lands after the Set, not between them.
+const StateHost = struct {
+    g: *machine.Group,
+    sets: usize = 0,
+
+    fn get(context: ?*anyopaque, gpa: std.mem.Allocator, _: *objects.Object) objects.Result {
+        const h: *StateHost = @ptrCast(@alignCast(context.?));
+        h.g.stopInput("s", "crossing") catch return .broken;
+        const locked = model.scalar(gpa, .{ .bool = false }) catch return .broken;
+        defer locked.release();
+        return .{ .value = model.map(gpa, &.{.{ .key = "isLocked", .value = locked }}) catch return .broken };
+    }
+    fn set(context: ?*anyopaque, gpa: std.mem.Allocator, _: *objects.Object, _: *const model.Value) objects.Result {
+        const h: *StateHost = @ptrCast(@alignCast(context.?));
+        h.sets += 1;
+        return .{ .value = model.scalar(gpa, .nothing) catch return .broken };
+    }
+};
+
+test "a Stop made at a set's Get lands after its Set" {
+    var trace: std.Io.Writer.Allocating = .init(t.allocator);
+    defer trace.deinit();
+    var g: machine.Group = .init(t.allocator, &trace.writer);
+    defer g.deinit();
+    var host: StateHost = .{ .g = &g };
+    const shape = try caps.Shape.kind(t.allocator, .map);
+    defer shape.release();
+    var props = [_]objects.Prop{.{ .name = "state", .shape = shape, .get = .{ .call = StateHost.get, .context = &host }, .set = .{ .call = StateHost.set, .context = &host } }};
+    var kind: objects.Kind = .{ .name = "box", .props = &props };
+    const object = try g.object(&kind, "b", null);
+    const loaded = try g.load("s", "on go o\n  set the isLocked of the state of o to true\nend go\n", .{});
+    try t.expect(loaded == .loaded);
+    var args = [_]*model.Value{object.value.retain()};
+    _ = try g.deliver("s", "go", &args, false);
+    try g.pump(clock);
+    try t.expectEqual(@as(usize, 1), host.sets);
+    const written = trace.written();
+    const set_at = std.mem.indexOf(u8, written, "op=set").?;
+    const stop_at = std.mem.indexOf(u8, written, "> stop ").?;
+    try t.expect(stop_at > set_at);
+}

@@ -363,6 +363,9 @@ pub const Run = struct {
     /// A Stop, cancellation or Rewind that landed while it ran, which ends
     /// its Stretch before its next instruction; a Stop's reason is owned.
     landed: ?union(enum) { stop: []const u8, cancel, rewind } = null,
+    /// Between a `set`'s `hold` and its `set-property` or raise: nothing
+    /// lands and no Fuel Slice preempts it (ADR 0135).
+    holding: bool = false,
 };
 
 /// A Segment's participant: its Segment Coordinator and the Grants enrolled
@@ -1615,6 +1618,9 @@ pub const Group = struct {
     /// callbacks or Script instructions run. Native hooks leave this false.
     release_pause: bool = false,
     landing_paused: bool = false,
+    /// The running Run is inside a `set`'s hold, so inputs made now are
+    /// written where they land.
+    holding: bool = false,
     landing_active: bool = false,
     landing_run: ?*Run = null,
     /// A testing aid: each lifecycle crossing that may defer does so once,
@@ -3057,7 +3063,7 @@ pub const Group = struct {
     fn landedAt(g: *Group, run: *Run) !bool {
         g.flushHeld();
         if (g.trace_pause) return error.Deferred;
-        if (g.landing.items.len == 0) return run.landed != null;
+        if (g.landing.items.len == 0 or run.holding) return run.landed != null;
         try g.land(run);
         return run.landed != null;
     }
@@ -3139,10 +3145,17 @@ pub const Group = struct {
     /// next Host crossing; otherwise the next Pump drains it.
     fn queueLanding(g: *Group, input: Input) !void {
         if (!g.pumping or g.pump_finishing) return g.enqueue(input);
-        try g.landing.append(g.gpa, .{ .input = input, .written = g.held_trace != null, .delayed = g.inline_admitting and g.held_trace == null });
         // Made in a Host function, it is written where it was made, after
-        // the crossing's records.
-        if (g.held_trace != null) g.writeInput(input);
+        // the crossing's records, unless a hold keeps it until it lands.
+        const now = g.held_trace != null and !g.holding;
+        try g.landing.append(g.gpa, .{ .input = input, .written = now, .delayed = g.inline_admitting and g.held_trace == null });
+        if (now) g.writeInput(input);
+    }
+
+    /// Opens or closes a Run's `set` hold (ADR 0135).
+    fn setHold(g: *Group, run: *Run, on: bool) void {
+        run.holding = on;
+        g.holding = on;
     }
 
     /// While a Host function runs inside a Pump, what is written to the
@@ -7559,7 +7572,7 @@ pub const Group = struct {
             };
             // What landed at the last Host crossing, between instructions.
             if (!g.answering_crossing) g.flushHeld();
-            if (!g.answering_crossing and g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) {
+            if (!g.answering_crossing and !run.holding and g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) {
                 g.land(run) catch |e| {
                     if (e != error.Deferred) return e;
                     return .{ .preempted = .crossing };
@@ -7577,7 +7590,7 @@ pub const Group = struct {
                 };
             }
             // Preemption, only between instructions.
-            if (run.base == 0) if (g.preemption(run)) |by| return .{ .preempted = by };
+            if (run.base == 0 and !run.holding) if (g.preemption(run)) |by| return .{ .preempted = by };
             const ins = unitOf(run, frame).code[pc];
             // The instruction may move the frames, so its unit's name is
             // taken first.
@@ -7593,6 +7606,29 @@ pub const Group = struct {
             g.random_pending = null;
             const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
                 error.Raised => blk: {
+                    // A raise closes a hold, and what it held lands before the raise.
+                    if (run.holding) {
+                        g.setHold(run, false);
+                        if (try g.landedAt(run)) {
+                            g.pending_error.?.release();
+                            g.pending_error = null;
+                            if (charged) {
+                                const spent = costs.chargeInstruction(ins.op, &charge);
+                                run.fuel += spent.fuel + run.clause_fuel;
+                                run.alloc += spent.alloc;
+                                run.clause_fuel = 0;
+                            }
+                            charge.release();
+                            return switch (run.landed.?) {
+                                .stop => .stopped,
+                                .rewind => .rewound,
+                                .cancel => cancel: {
+                                    run.landed = null;
+                                    break :cancel g.landedCancel(run);
+                                },
+                            };
+                        }
+                    }
                     const err = g.completeError(run, pc, ins) catch |other| {
                         charge.release();
                         return other;
@@ -7619,6 +7655,7 @@ pub const Group = struct {
                     };
                 },
                 error.GroupStop => {
+                    g.setHold(run, false);
                     // The call that stopped the Group keeps its charge.
                     if (charged) {
                         const spent = costs.chargeInstruction(ins.op, &charge);
@@ -7631,12 +7668,14 @@ pub const Group = struct {
                 },
                 error.LimitFault => {
                     // The instruction's own limit, checked before its charge.
+                    g.setHold(run, false);
                     charge.release();
                     const limit = g.pending_fault.?;
                     g.pending_fault = null;
                     return g.limitFault(run, limit, at_unit, pc, ins);
                 },
                 else => |other| {
+                    g.setHold(run, false);
                     // Refused: the values the measures hold go too.
                     charge.release();
                     return other;
@@ -8739,8 +8778,12 @@ pub const Group = struct {
                 return .{ .vetoed = pop(frame) };
             },
             .send_up, .send_up_wait => return g.send(run, frame, ins, m),
-            .set_property, .set_property_computed => return g.setProperty(run, frame, ins, m),
+            .set_property, .set_property_computed => {
+                g.setHold(run, false);
+                return g.setProperty(run, frame, ins, m);
+            },
             .jump => frame.pc = @intCast(ops[0].int),
+            .hold => g.setHold(run, true),
             .branch_false, .branch_true => {
                 const v = pop(frame);
                 if (v.data != .bool) {
