@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check && bun run lints:check && bun run envelope:check && bun run docs:check && bun run save-format:check",
+    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check && bun run lints:check && bun run stdlib-fuel:check && bun run envelope:check && bun run docs:check && bun run save-format:check",
     "spec:gen": "bun spec/generate.ts",
     "spec:check": "bun spec/generate.ts --check",
     "grammar:check": "bun grammar/check.ts",
@@ -27,6 +27,8 @@
     "release-notes:ts": "bun commits/release-notes.ts",
     "lints:generate": "bun lints/generate.ts",
     "lints:check": "bun lints/generate.ts --check",
+    "stdlib-fuel:generate": "bun costs/stdlib-fuel.ts",
+    "stdlib-fuel:check": "bun costs/stdlib-fuel.ts --check",
     "docs:check": "bun docs/check.ts",
     "issues:graph": "bun issues/update.ts",
     "envelope:generate": "bun envelope/generate.ts",

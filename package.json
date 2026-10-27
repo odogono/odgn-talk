@@ -29,7 +29,7 @@
     "syntax:generate": "bun run --cwd tools syntax:generate",
     "syntax:check": "bun run --cwd tools syntax:check",
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd tools lints:check && bun run --filter '*' test",
+    "test": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd tools lints:check && bun run --cwd tools stdlib-fuel:check && bun run --filter '*' test",
     "build": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd tools lints:check && bun run --cwd impl/ts build && bun run --cwd tooling/stack build && bun run --cwd tooling/cli build && bun run --cwd tooling/playground build && bun run --cwd tooling/creative build",
     "lint": "bunx --bun eslint . --max-warnings 0",
     "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
@@ -51,6 +51,8 @@
     "corpus:bless": "bun tools/corpus/bless.ts",
     "lints:generate": "bun run --cwd tools lints:generate",
     "lints:check": "bun run --cwd tools lints:check",
+    "stdlib-fuel:generate": "bun run --cwd tools stdlib-fuel:generate",
+    "stdlib-fuel:check": "bun run --cwd tools stdlib-fuel:check",
     "envelope:generate": "bun run --cwd tools envelope:generate",
     "envelope:check": "bun run --cwd tools envelope:check"
   },
