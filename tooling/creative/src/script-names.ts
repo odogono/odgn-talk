@@ -19,6 +19,14 @@ export const libraryNameProblem = (name: string): string | undefined => {
   return undefined;
 };
 
+/** A Test Script's name is an identifier and then `.test` (ADR 0133). */
+export const testScriptNameProblem = (name: string): string | undefined => {
+  const stem = name.endsWith('.test') ? name.slice(0, -'.test'.length) : '';
+  return isIdentifierName(stem) && !grammar.reserved.includes(stem)
+    ? undefined
+    : 'Use a NorthTalk identifier and then .test for the Test Script name.';
+};
+
 export const reservedScriptNames: ReadonlySet<string> = new Set([
   ...grammar.reserved,
   '_',

@@ -395,6 +395,52 @@ export const runBrowserTests = async () => {
     );
     shell.setReadOnly(false);
   });
+  await test('Test Scripts create, check, run and link a failure to its line', async () => {
+    const win = windows()[0]!;
+    const button = (label: string) =>
+      [...win.querySelectorAll<HTMLButtonElement>('button')].find(
+        b => b.textContent === label,
+      )!;
+    button('New Test Script').click();
+    const script = shell.editor.project.testScripts[0]!;
+    assert(script.name === 'tests1.test', 'A new Test Script is named');
+    const view = viewOf(win);
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: [
+          'use assertEqual from test',
+          'on testLabel',
+          '  ask harness to click "button1" and wait',
+          '  ask harness to property "label", "button1"',
+          '  assertEqual(it, "nope")',
+          'end testLabel',
+          '',
+        ].join('\n'),
+      },
+    });
+    await until(
+      () =>
+        win.querySelector('.script-problems')!.textContent === '✓ No problems',
+    );
+    button('Run Tests').click();
+    await until(
+      () =>
+        win.querySelector('.test-results [role="status"]')?.textContent ===
+        '0 passed, 1 failed',
+    );
+    shell.openScript(shell.editor.project);
+    win
+      .querySelector<HTMLButtonElement>('.test-results li.failed button')!
+      .click();
+    assert(
+      view.state.doc.lineAt(view.state.selection.main.head).number === 5,
+      'A failure opens its line',
+    );
+    shell.editor.edit(({ tree }) => tree.removeTestScript(script.id!));
+    shell.redraw();
+  });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);
     assert(windows().length === 1, 'Shift-double-click selects text Script');

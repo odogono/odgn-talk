@@ -170,6 +170,18 @@ export type ProjectLibrary = {
   source: string;
 };
 
+/**
+ * A Test Script (ADR 0133): saved with the Project, hidden from Play, and
+ * run by Run Tests against a fresh Play Session for each Test Handler.
+ */
+export type ProjectTestScript = {
+  /** Session-local editor identity; omitted from files and storage. */
+  id?: number;
+  /** An identifier and then `.test`, such as `rules.test`. */
+  name: string;
+  source: string;
+};
+
 export type Project = {
   assets: Asset[];
   /** The Project-wide width every Page is laid out against, in pixels. */
@@ -179,6 +191,7 @@ export type Project = {
   pages: Page[];
   /** The Project Script source. */
   script: string;
+  testScripts: ProjectTestScript[];
 };
 
 export const DEFAULT_DESIGN_WIDTH = 720;
@@ -356,6 +369,7 @@ export const createProject = (name: string): Project => ({
   pages: [createPage('page1')],
   assets: [],
   libraries: [],
+  testScripts: [],
 });
 
 /** A detached copy of a Page or Element without session ids. */
@@ -378,8 +392,8 @@ const withoutIds = <T extends Page | Element>(owner: DeepReadonly<T>): T => {
 /** An independent copy of a Project without the editor's session ids. */
 export const projectWithoutIds = (project: DeepReadonly<Project>): Project => {
   const copy = thaw<Project>(project);
-  for (const library of copy.libraries) {
-    delete library.id;
+  for (const owner of [...copy.libraries, ...copy.testScripts]) {
+    delete owner.id;
   }
   for (const page of copy.pages) {
     delete page.id;

@@ -1,7 +1,7 @@
 import { createProject } from '../model';
 import { type ExampleContent } from './index';
 import { CELL, createTetrisPage, PREVIEW_CELL } from './tetris-layout';
-import { TETRIS_LIBRARY, TETRIS_RULES } from './tetris-rules';
+import { TETRIS_LIBRARY, TETRIS_RULES, TETRIS_TESTS } from './tetris-rules';
 
 export const CANVAS_TETRIS_PROJECT_NAME = 'Canvas Tetris';
 
@@ -57,6 +57,7 @@ end drawCell
 export const createCanvasTetrisProject = async (): Promise<ExampleContent> => {
   const project = createProject(CANVAS_TETRIS_PROJECT_NAME);
   project.libraries = [{ name: 'tetrisRules', source: TETRIS_LIBRARY }];
+  project.testScripts = [{ ...TETRIS_TESTS }];
   project.pages = [createTetrisPage(TETRIS_RULES + CANVAS_PAINTING, 'canvas')];
   return { project, assets: new Map() };
 };

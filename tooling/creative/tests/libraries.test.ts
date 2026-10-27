@@ -151,7 +151,7 @@ test('Library identities and source survive edits, history, files and browser ve
   });
   const serialized = serializeProject(editor.project);
   expect(JSON.stringify(serialized)).not.toContain('"id"');
-  expect(serialized.format).toBe(3);
+  expect(serialized.format).toBe(4);
   const saved = await readProjectFile(
     await writeProjectFile(editor.project, new Map()),
   );

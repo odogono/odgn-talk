@@ -14,6 +14,8 @@ import {
   renderCodeOutline,
   sourceKey,
   type CodeSelection,
+  type NamedSource,
+  type TestRun,
 } from './code-browser-panel';
 import { h } from './dom';
 import type { StackEditor } from './editing';
@@ -24,10 +26,21 @@ import {
   ownerId,
   scriptManifest,
   scriptPage,
+  testScriptManifest,
   type ScriptOwner,
 } from './script-manifest';
+import { runProjectTests } from './test-runner';
 import { containingGroups } from './tree/rules';
 import { bringWindowForward, setWindowOpener } from './windows';
+
+// A new Test Script's source: one Test Handler to start from.
+const NEW_TEST_SCRIPT = `use assert, assertEqual from test
+
+on testSomething
+  ask harness to frame 16 ms and wait
+  assert(true, "describe what should be true")
+end testSomething
+`;
 
 type SavedEditor = {
   scroll: ReturnType<EditorView['scrollSnapshot']>;
@@ -52,6 +65,7 @@ export class CodeBrowser {
   #states = new Map<string, SavedEditor>();
   #editing = new Compartment();
   #syncing = false;
+  #tests: TestRun;
 
   constructor(
     readonly editor: StackEditor,
@@ -69,13 +83,26 @@ export class CodeBrowser {
       ? this.editor.project.libraries.find(l => l.id === this.#selected.id)
       : undefined;
   }
+  #testScript() {
+    return this.#selected.kind === 'test'
+      ? this.editor.project.testScripts.find(t => t.id === this.#selected.id)
+      : undefined;
+  }
+  #named(): NamedSource | undefined {
+    const library = this.#library();
+    if (library) {
+      return { kind: 'library', source: library };
+    }
+    const test = this.#testScript();
+    return test ? { kind: 'test', source: test } : undefined;
+  }
   #owner() {
     return this.#selected.kind === 'script'
       ? ownerById(this.editor.project, this.#selected.id)
       : undefined;
   }
   #text(): string {
-    return this.#library()?.source ?? this.#owner()?.script ?? '';
+    return this.#named()?.source.source ?? this.#owner()?.script ?? '';
   }
 
   #state(server: LanguageServer): EditorState {
@@ -96,6 +123,8 @@ export class CodeBrowser {
               this.editor.edit(({ project, tree }) => {
                 if (source.kind === 'library') {
                   tree.setLibrarySource(source.id, text);
+                } else if (source.kind === 'test') {
+                  tree.setTestScriptSource(source.id, text);
                 } else {
                   const owner = ownerById(project, source.id);
                   if (owner) {
@@ -223,13 +252,37 @@ export class CodeBrowser {
   openLibrary(id: number, line?: number): void {
     this.#show({ kind: 'library', id }, line);
   }
+  openTestScript(id: number, line?: number): void {
+    this.#show({ kind: 'test', id }, line);
+  }
+
+  // Runs every Test Script against the Project as it is now.
+  async #runTests(): Promise<void> {
+    if (this.#tests === 'running') {
+      return;
+    }
+    this.#tests = 'running';
+    this.sync();
+    try {
+      this.#tests = { results: await runProjectTests(this.editor.project) };
+    } finally {
+      if (this.#tests === 'running') {
+        this.#tests = undefined;
+      }
+      this.sync();
+    }
+  }
 
   #show(source: CodeSelection, line?: number): void {
     this.sync();
     if (
       source.kind === 'script'
         ? !ownerById(this.editor.project, source.id)
-        : !this.editor.project.libraries.some(l => l.id === source.id)
+        : !(
+            source.kind === 'library'
+              ? this.editor.project.libraries
+              : this.editor.project.testScripts
+          ).some(l => l.id === source.id)
     ) {
       return;
     }
@@ -295,13 +348,14 @@ export class CodeBrowser {
       this.#window = undefined;
       this.#states.clear();
       this.#selected = { kind: 'script', id: 0 };
+      this.#tests = undefined;
       this.#generation = this.editor.generation;
     }
     const win = this.#window;
     if (!win || this.#syncing) {
       return;
     }
-    if (!this.#owner() && !this.#library()) {
+    if (!this.#owner() && !this.#named()) {
       win.server.lsp.close(this.#uri());
       closeRecipePicker(win.recipes);
       this.#selected = { kind: 'script', id: 0 };
@@ -312,33 +366,50 @@ export class CodeBrowser {
     try {
       const project = this.editor.project;
       const owner = this.#owner();
-      const library = this.#library();
+      const named = this.#named();
       renderCodeOutline(win.outline, {
         project,
-        library,
+        ...(named ? { named } : {}),
         selected: this.#selected,
         readOnly: this.editor.readOnly,
+        tests: this.#tests,
         onSelect: source => this.#show(source),
-        onNew: () => {
+        onRunTests: () => void this.#runTests(),
+        onOpenResult: result =>
+          this.openTestScript(result.script.id!, result.at.line),
+        onNew: kind => {
           let id = 0;
           this.editor.edit(({ tree }) => {
-            id = tree.addLibrary(
-              freshName(
-                'library1',
-                new Set(project.libraries.map(l => l.name)),
-              ),
-            ).id!;
+            id =
+              kind === 'library'
+                ? tree.addLibrary(
+                    freshName(
+                      'library1',
+                      new Set(project.libraries.map(l => l.name)),
+                    ),
+                  ).id!
+                : tree.addTestScript(
+                    `${freshName(
+                      'tests1',
+                      new Set(
+                        project.testScripts.map(t => t.name.slice(0, -5)),
+                      ),
+                    )}.test`,
+                    NEW_TEST_SCRIPT,
+                  ).id!;
           });
           this.redraw();
-          this.openLibrary(id);
+          this.#show({ kind: kind === 'library' ? 'library' : 'test', id });
         },
         onRename: name => {
-          if (!library || this.editor.readOnly) {
+          if (!named || this.editor.readOnly) {
             return undefined;
           }
           try {
             this.editor.edit(({ tree }) =>
-              tree.renameLibrary(library.id!, name),
+              named.kind === 'library'
+                ? tree.renameLibrary(named.source.id!, name)
+                : tree.renameTestScript(named.source.id!, name),
             );
             this.redraw();
             return undefined;
@@ -347,14 +418,18 @@ export class CodeBrowser {
           }
         },
         onDelete: () => {
-          if (library && !this.editor.readOnly) {
-            this.editor.edit(({ tree }) => tree.removeLibrary(library.id!));
+          if (named && !this.editor.readOnly) {
+            this.editor.edit(({ tree }) =>
+              named.kind === 'library'
+                ? tree.removeLibrary(named.source.id!)
+                : tree.removeTestScript(named.source.id!),
+            );
             this.redraw();
           }
         },
       });
-      win.sourceTitle.textContent = library
-        ? `Library “${library.name}”`
+      win.sourceTitle.textContent = named
+        ? `${named.kind === 'library' ? 'Library' : 'Test Script'} “${named.source.name}”`
         : `Script of ${owner === project ? 'Project' : 'elements' in owner! ? 'Page' : 'Element'} “${owner!.name}”`;
       win.addAction.hidden = !owner;
       win.addAction.disabled = this.editor.readOnly;
@@ -399,7 +474,11 @@ export class CodeBrowser {
         library: l.name,
       }));
       win.server.configure(
-        library ? { ...manifest, objects: [], messages: [] } : manifest,
+        named?.kind === 'library'
+          ? { ...manifest, objects: [], messages: [] }
+          : named?.kind === 'test'
+            ? testScriptManifest(project)
+            : manifest,
         sources,
       );
       if (win.view.state.readOnly !== this.editor.readOnly) {

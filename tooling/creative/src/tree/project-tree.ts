@@ -15,10 +15,18 @@ import {
   type Page,
   type Project,
   type ProjectLibrary,
+  type ProjectTestScript,
   type RichText,
   type TextElement,
 } from '../model';
-import { libraryNameProblem, reservedScriptNames } from '../script-names';
+import {
+  libraryNameProblem,
+  reservedScriptNames,
+  testScriptNameProblem,
+} from '../script-names';
+
+type SourceList = 'libraries' | 'testScripts';
+const SOURCE_LABELS = { libraries: 'Library', testScripts: 'Test Script' };
 import {
   allElements,
   checkHierarchy,
@@ -185,8 +193,11 @@ export class ProjectTree {
     checkHierarchy(project.pages.flatMap(page => page.elements));
     this.#project = detached(project) as Project;
     this.#allocateId = allocateId;
-    for (const library of this.#project.libraries) {
-      library.id ??= this.#allocateId?.();
+    for (const source of [
+      ...this.#project.libraries,
+      ...this.#project.testScripts,
+    ]) {
+      source.id ??= this.#allocateId?.();
     }
     for (const page of this.#project.pages) {
       refreshBounds(page.elements);
@@ -824,57 +835,83 @@ export class ProjectTree {
     });
   }
   addLibrary(name: string, source = ''): DeepReadonly<ProjectLibrary> {
+    return this.#addSource('libraries', name, source);
+  }
+  setLibrarySource(id: number, source: string): void {
+    this.#changeSource('libraries', id, { source });
+  }
+  renameLibrary(id: number, name: string): void {
+    this.#changeSource('libraries', id, { name });
+  }
+  removeLibrary(id: number): void {
+    this.#changeSource('libraries', id, undefined);
+  }
+  addTestScript(name: string, source = ''): DeepReadonly<ProjectTestScript> {
+    return this.#addSource('testScripts', name, source);
+  }
+  setTestScriptSource(id: number, source: string): void {
+    this.#changeSource('testScripts', id, { source });
+  }
+  renameTestScript(id: number, name: string): void {
+    this.#changeSource('testScripts', id, { name });
+  }
+  removeTestScript(id: number): void {
+    this.#changeSource('testScripts', id, undefined);
+  }
+  // Libraries and Test Scripts: named sources the Project lists in order.
+  #addSource(
+    key: SourceList,
+    name: string,
+    source: string,
+  ): DeepReadonly<ProjectLibrary | ProjectTestScript> {
     return this.transaction(() => {
-      this.#checkLibraryName(name);
+      this.#checkSourceName(key, name);
       const id =
         this.#allocateId?.() ??
-        Math.max(0, ...this.#project.libraries.map(l => l.id ?? 0)) + 1;
-      this.#field(this.#project, 'libraries', [
-        ...this.#project.libraries,
+        Math.max(0, ...this.#project[key].map(l => l.id ?? 0)) + 1;
+      this.#field(this.#project, key, [
+        ...this.#project[key],
         { id, name, source },
       ]);
-      return this.#project.libraries.at(-1)!;
+      return this.#project[key].at(-1)!;
     });
   }
-  #checkLibraryName(name: string, id?: number): void {
-    const problem = libraryNameProblem(name);
+  #checkSourceName(key: SourceList, name: string, id?: number): void {
+    const problem =
+      key === 'libraries'
+        ? libraryNameProblem(name)
+        : testScriptNameProblem(name);
     if (
       problem ||
-      this.#project.libraries.some(
+      this.#project[key].some(
         l => l.name === name && (id === undefined || l.id !== id),
       )
     ) {
-      throw new TreeError(problem ?? 'Another Library already has that name.');
+      throw new TreeError(
+        problem ?? `Another ${SOURCE_LABELS[key]} already has that name.`,
+      );
     }
   }
-  #changeLibrary(
+  #changeSource(
+    key: SourceList,
     id: number,
     change: Partial<Pick<ProjectLibrary, 'name' | 'source'>> | undefined,
   ): void {
     this.transaction(() => {
-      if (!this.#project.libraries.some(l => l.id === id)) {
-        throw new TreeError('Unknown Library');
+      if (!this.#project[key].some(l => l.id === id)) {
+        throw new TreeError(`Unknown ${SOURCE_LABELS[key]}`);
       }
       if (change?.name !== undefined) {
-        this.#checkLibraryName(change.name, id);
+        this.#checkSourceName(key, change.name, id);
       }
       this.#field(
         this.#project,
-        'libraries',
-        this.#project.libraries.flatMap(l =>
+        key,
+        this.#project[key].flatMap(l =>
           l.id !== id ? [l] : change ? [{ ...l, ...change }] : [],
         ),
       );
     });
-  }
-  setLibrarySource(id: number, source: string): void {
-    this.#changeLibrary(id, { source });
-  }
-  renameLibrary(id: number, name: string): void {
-    this.#changeLibrary(id, { name });
-  }
-  removeLibrary(id: number): void {
-    this.#changeLibrary(id, undefined);
   }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));

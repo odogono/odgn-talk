@@ -112,7 +112,7 @@ test('writing a Project and reading it back gives an equal Project', async () =>
   const json = JSON.parse(
     new TextDecoder().decode(entries.get('project.json')!),
   );
-  expect(json.format).toBe(3);
+  expect(json.format).toBe(4);
   expect(json.pages[0].elements.map((e: { kind: string }) => e.kind)).toEqual([
     'text',
     'image',
@@ -254,7 +254,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 3)',
+    'newer version of the app (format 99; this app reads up to 4)',
   );
 });
 
@@ -384,4 +384,44 @@ test('session ids leave Project JSON and portable file bytes unchanged', async (
   expect(await writeProjectFile(editor.project, new Map())).toEqual(
     await writeProjectFile(project, new Map()),
   );
+});
+
+test('Test Scripts save with the Project, and older files get none', async () => {
+  const project = createProject('Tested');
+  project.testScripts.push({
+    id: 7,
+    name: 'rules.test',
+    source: 'on testNothing\nend testNothing\n',
+  });
+  const read = await readProjectFile(
+    await writeProjectFile(project, new Map()),
+  );
+  expect(read.project.testScripts).toEqual([
+    { name: 'rules.test', source: 'on testNothing\nend testNothing\n' },
+  ]);
+  const { testScripts: _, ...old } = serializeProject(createProject('Old'));
+  expect(migrateProjectJson({ ...old, format: 3 }).testScripts).toEqual([]);
+});
+
+// A Project's JSON with Test Scripts of these names.
+const json = (...names: string[]) =>
+  validateProjectJson({
+    ...serializeProject(createProject('Tested')),
+    testScripts: names.map(name => ({ name, source: '' })),
+  });
+
+test('a Test Script needs an identifier and then .test, once each', () => {
+  expect(json('rules.test')).not.toHaveProperty('issues');
+  for (const name of ['rules', 'two words.test', 'if.test', '.test']) {
+    expect(json(name)).toEqual({
+      issues: [
+        {
+          path: 'testScripts[0].name',
+          message:
+            'Use a NorthTalk identifier and then .test for the Test Script name.',
+        },
+      ],
+    });
+  }
+  expect(json('a.test', 'a.test')).toHaveProperty('issues');
 });

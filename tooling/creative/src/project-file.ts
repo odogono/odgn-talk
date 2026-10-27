@@ -25,10 +25,11 @@ import {
   type TextRun,
 } from './model';
 import { drawingProblem } from './drawing';
+import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 3;
+export const CURRENT_FORMAT = 4;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -453,6 +454,19 @@ export const validateProjectJson = (
     return { name, source: c.str(library.source, `${path}.source`) ?? '' };
   });
   c.unique(libraries, i => `libraries[${i}]`, 'Library');
+  const testScripts = (c.arr(root.testScripts, 'testScripts') ?? []).map(
+    (raw, i) => {
+      const path = `testScripts[${i}]`;
+      const script = c.obj(raw, path) ?? {};
+      const name = c.str(script.name, `${path}.name`) ?? '';
+      const problem = testScriptNameProblem(name);
+      if (problem && typeof script.name === 'string') {
+        c.fail(`${path}.name`, problem);
+      }
+      return { name, source: c.str(script.source, `${path}.source`) ?? '' };
+    },
+  );
+  c.unique(testScripts, i => `testScripts[${i}]`, 'Test Script');
   const project: Project = {
     name: c.str(root.name, 'name') ?? '',
     designWidth: c.num(root.designWidth, 'designWidth', 'positive') ?? 1,
@@ -460,6 +474,7 @@ export const validateProjectJson = (
     pages,
     assets,
     libraries,
+    testScripts,
   };
   if (project.name === '' && typeof root.name === 'string') {
     c.fail('name', 'the Project needs a name');
@@ -527,6 +542,7 @@ export type Migration = (data: Obj) => Obj;
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   1: data => ({ ...data }),
   2: data => ({ ...data, libraries: [] }),
+  3: data => ({ ...data, testScripts: [] }),
 };
 
 /**

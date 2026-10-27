@@ -32,8 +32,6 @@ import {
   type Library,
   type Operation,
   type Report,
-  type SyntaxElement,
-  type SyntaxNode,
   type Value,
   newGroup,
   toValue,
@@ -41,20 +39,14 @@ import {
 import { sourceForm } from '@northtalk/ts/debug';
 import { calendar, locale } from '@northtalk/tooling/builtins';
 import { readManifest, type HostManifest } from '@northtalk/tooling/lint';
+import {
+  errorAt,
+  TEST_LIBRARY,
+  testHandlersOf,
+  type TestHandler,
+} from '@northtalk/tooling/test-script';
 import { differs, replayFile } from './replay';
 
-// The Test Library, supplied by the runner as a Host-supplied Library.
-// Its errors name the Test Script's call, as the stdlib's do.
-const TEST_LIBRARY = `function assert condition, message = "expected true"
-  if condition is not true then throw {code: "assertion failed", message: message}
-  return nothing
-end assert
-
-function assertEqual actual, expected
-  if actual is not expected then throw {code: "assertion failed", expected: expected, actual: actual}
-  return nothing
-end assertEqual
-`;
 const LIBRARY_VERSION = '1';
 // Every test starts at the same instant, under a virtual Clock.
 const EPOCH = parseInstant('2026-01-01T00:00:00Z');
@@ -63,11 +55,10 @@ const MAX_STEPS = 10_000;
 // A harness call waits as long as a suspending call can.
 const FOREVER_MS = 2_147_483_647;
 const IDENTIFIER = /^[A-Z_a-z]\w*$/u;
-const TEST_HANDLER = /^test[A-Z]/u;
 
 export type TestOptions = { manifest?: string; only?: string };
 
-type Test = { col: number; line: number; name: string };
+type Test = TestHandler;
 type Location = { col: number; file: string; line: number };
 type Problem = { at?: Location; text: string };
 type Stub = { error?: Value; value?: Value };
@@ -168,53 +159,6 @@ const discover = (path: string): string[] => {
 
 const indent = (lines: readonly string[]) => lines.map(line => `  ${line}`);
 
-// The Test Handlers a Test Script declares: parameterless Handlers named
-// `test` and then a capital, once each however many clauses they have.
-const testsOf = (tree: SyntaxNode): { setup: boolean; tests: Test[] } => {
-  const seen = new Map<string, Test>();
-  let setup = false;
-  for (const declaration of tree.children) {
-    const handler =
-      declaration.kind === 'node'
-        ? declaration.children.find(
-            (c): c is SyntaxNode => c.kind === 'node' && c.rule === 'Handler',
-          )
-        : undefined;
-    if (!handler) {
-      continue;
-    }
-    const nodes = handler.children.filter(
-      (c): c is SyntaxNode => c.kind === 'node',
-    );
-    const name = nodes.find(n => n.rule === 'MessageName');
-    const word = name && firstToken(name);
-    const on = firstToken(handler);
-    if (!word || !on || nodes.some(n => n.rule === 'Pattern')) {
-      continue;
-    }
-    if (word.v === 'setup') {
-      setup = true;
-    } else if (TEST_HANDLER.test(word.v) && !seen.has(word.v)) {
-      seen.set(word.v, { name: word.v, line: on.line, col: on.col });
-    }
-  }
-  return { setup, tests: [...seen.values()] };
-};
-
-type Token = { col: number; line: number; v: string };
-const firstToken = (element: SyntaxElement): Token | undefined => {
-  if (element.kind !== 'node') {
-    return element as unknown as Token;
-  }
-  for (const child of element.children) {
-    const token = firstToken(child);
-    if (token) {
-      return token;
-    }
-  }
-  return undefined;
-};
-
 type Outcome = { lines: string[]; ok: boolean };
 
 // Every Test Handler in one Test Script, each in a fresh Group.
@@ -234,7 +178,7 @@ const testScript = (
       },
     ];
   }
-  const { setup, tests } = testsOf(parsed.tree);
+  const { setup, tests } = testHandlersOf(parsed.tree);
   const chosen = tests.filter(t => !only || `${file} ${t.name}`.includes(only));
   if (!chosen.length) {
     return [];
@@ -860,23 +804,6 @@ const mockedOperation = (
     );
   }
   return key;
-};
-
-// An error's `at`, which names its Script's call into the Test Library or the
-// stdlib, where its raise is inside them (ADR 0037).
-const errorAt = (error: Value) => {
-  const at = error.kind === 'map' ? error.get('at') : nothing;
-  if (at.kind !== 'map') {
-    return undefined;
-  }
-  const [unit, line, col] = [at.get('unit'), at.get('line'), at.get('column')];
-  return unit.kind === 'text' && line.kind === 'number' && col.kind === 'number'
-    ? {
-        unit: unit.asText()!,
-        line: Number(line.toString()),
-        col: Number(col.toString()),
-      }
-    : undefined;
 };
 
 // An error map as a Host function fails with it, its code and message apart.

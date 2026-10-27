@@ -356,11 +356,7 @@ export class PlaySession {
           this.project.pages.findIndex(
             p => this.#objects.get(p) === page.value.asObject(),
           ),
-        requestPage: index => {
-          if (!this.stopped && !this.#closing) {
-            this.#requestedPage = index;
-          }
-        },
+        requestPage: index => this.goTo(index),
       },
       elements: {
         create: (kind, pageObject, name, charge) => {
@@ -973,6 +969,13 @@ export class PlaySession {
           });
         }
       }
+    }
+  }
+
+  /** Changes Page as a Script's `go to` does, by closing this one first. */
+  goTo(index: number): void {
+    if (!this.stopped && !this.#closing) {
+      this.#requestedPage = index;
     }
   }
 
