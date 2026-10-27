@@ -35,6 +35,7 @@
         "northtalk": "./src/main.ts",
       },
       "dependencies": {
+        "@northtalk/creative": "workspace:*",
         "@northtalk/tooling": "workspace:*",
         "@northtalk/ts": "workspace:*",
       },
@@ -71,6 +72,9 @@
     },
     "tooling/fuzz": {
       "name": "@northtalk/fuzz",
+      "bin": {
+        "northtalk-fuzz": "./src/cli.ts",
+      },
       "dependencies": {
         "@northtalk/ts": "workspace:*",
       },

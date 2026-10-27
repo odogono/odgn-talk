@@ -77,6 +77,7 @@ bun run northtalk test --only testIncrements counter.test.talk
 - **What runs:** each path is a file or a directory searched recursively, skipping dot directories and `node_modules`. The default is `.`. Two kinds of file are tests:
   - A **Test Script** (`*.test.talk`): each parameterless Handler named `test` and then a capital, such as `on testIncrements`, is one test.
   - A **Session Transcript** (`*.transcript`): it is one test, replayed as `northtalk replay` replays it, with its own `:grant` and `:mock` lines.
+  - A **Folio Project** (`*.folio`): each Test Handler of its Test Scripts is one test, run as Folio's **Run Tests** runs it, against a fresh Play Session with the Folio Harness ([ADR 0133](../../docs/adr/0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)). The rest of this section is about `*.test.talk` files. `--manifest` doesn't apply, since Folio's Grants are fixed. Lines read `ok <file> <script> <test>`, or `FAIL <file>#<script>:<line>:<col> <test>` with each problem indented. A file Folio can't read fails once with its message, and a Project with no Test Scripts adds no tests.
 - **The Group:**
   - Every test gets a fresh Script Group.
   - It holds every other `.talk` file in the Test Script's directory, each named by its file stem, and the Test Script itself, named `<stem>Test`.
