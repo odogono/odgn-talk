@@ -153,17 +153,20 @@ export class Lexer {
     spaceBefore: boolean,
     mode: Mode,
     code?: SyntaxErrorCode,
+    leadingTrivia: Trivia[] = [],
   ): Token {
+    const { line, col } = this.where(pos);
     return {
       kind: 'token',
       raw: this.src.slice(pos, end),
-      leadingTrivia: [],
+      leadingTrivia,
       t,
       v,
       code,
       pos,
       end,
-      ...this.where(pos),
+      line,
+      col,
       spaceBefore,
       mode,
     };
@@ -176,12 +179,14 @@ export class Lexer {
     let pos = start;
     const trivia: Trivia[] = [];
     const add = (kind: Trivia['kind'], from: number) => {
+      const { line, col } = this.where(from);
       trivia.push({
         kind,
         pos: from,
         end: pos,
         raw: s.slice(from, pos),
-        ...this.where(from),
+        line,
+        col,
       });
     };
     if (pos === 0 && s.charCodeAt(0) === 0xfe_ff) {
@@ -489,15 +494,8 @@ export class Lexer {
     const { pos, trivia } = this.trivia(start);
     const sp =
       pos > start || pos === 0 || s[pos - 1] === '\n' || s[pos - 1] === '\r';
-    const T = (
-      t: TokType,
-      v: string,
-      len = v.length,
-      code?: SyntaxErrorCode,
-    ) => ({
-      ...this.tok(t, v, pos, pos + len, sp, mode, code),
-      leadingTrivia: trivia,
-    });
+    const T = (t: TokType, v: string, len = v.length, code?: SyntaxErrorCode) =>
+      this.tok(t, v, pos, pos + len, sp, mode, code, trivia);
     if (pos >= s.length) {
       return T('eof', '', 0);
     }
@@ -549,10 +547,16 @@ export class Lexer {
           'unterminated text',
         );
       }
-      return {
-        ...this.tok('str', s.slice(pos + 1, i), pos, i + 1, sp, mode),
-        leadingTrivia: trivia,
-      };
+      return this.tok(
+        'str',
+        s.slice(pos + 1, i),
+        pos,
+        i + 1,
+        sp,
+        mode,
+        undefined,
+        trivia,
+      );
     }
     if (/\d/.test(c)) {
       return T('num', NUMBER.exec(rest)![0]);

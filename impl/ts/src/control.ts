@@ -606,13 +606,18 @@ export const checkControl = (
         }
         // A `finally` block's own loops may still be left by `exit repeat`.
         const cleanup = word(children[index - 1], 'finally');
+        const recovery = recoveryBody(node, index);
         work.push({
           node: child,
-          context: {
-            ...context,
-            ...(cleanup ? { finally: context.loops } : {}),
-            ...(recoveryBody(node, index) ? { recovery: context.loops } : {}),
-          },
+          // Contexts are never mutated, so a child shares an unchanged one.
+          context:
+            cleanup || recovery
+              ? {
+                  ...context,
+                  ...(cleanup ? { finally: context.loops } : {}),
+                  ...(recovery ? { recovery: context.loops } : {}),
+                }
+              : context,
         });
       }
     }

@@ -49,25 +49,38 @@ export const stdlibNames: ReadonlySet<string> = new Set(
   libraryExports.map(entry => entry.library),
 );
 
+// Reloads and reanalysis hash the same sources again, so recent identities are
+// kept, keyed by the hashed text itself. The oldest goes first.
+const identities = new Map<string, string>();
+const identityLimit = 64;
+
 /** A unit's code identity, given its direct imports' identities (chapter 9). */
 export const codeIdentity = (
   unit: 'script' | 'library' | 'extension',
   name: string,
   source: string,
   imports: readonly string[] = [],
-) =>
-  sha256(
-    [
-      'odgn-talk code identity 1',
-      languageVersion,
-      costModel.version,
-      unit,
-      name,
-      ...imports,
-      'source',
-      source,
-    ].join('\n'),
-  );
+) => {
+  const text = [
+    'odgn-talk code identity 1',
+    languageVersion,
+    costModel.version,
+    unit,
+    name,
+    ...imports,
+    'source',
+    source,
+  ].join('\n');
+  let identity = identities.get(text);
+  if (identity === undefined) {
+    identity = sha256(text);
+    if (identities.size >= identityLimit) {
+      identities.delete(identities.keys().next().value!);
+    }
+    identities.set(text, identity);
+  }
+  return identity;
+};
 
 /**
  * A unit's compile cache key: its code identity, plus the Host Commands its
