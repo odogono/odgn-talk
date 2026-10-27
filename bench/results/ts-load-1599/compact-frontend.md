@@ -125,3 +125,41 @@ Repeat Bun pairs in alternating order. Use `macro/` or `tooling/` in place of
 `lifecycle/load` for their spot-checks. Keep bundles directly in `bench/ts/dist`
 for the suite's relative fixture lookup. Build before measuring, and capture
 CPU profiles separately using the Load-only entry documented in the scope report.
+
+## Time-boxed structural prototype
+
+After `c6a6bfdc`, three further commits tested the cheapest structural slices of a
+single-pass front end. Each keeps Fuel, the Trace, code identities and
+diagnostics unchanged.
+
+| Commit | Change | Evidence |
+| --- | --- | --- |
+| `8a04bbd0` | Checker builds per-site token and node lists and the clash token map on demand | Checker-only time 1.95 → 1.78 ms, large |
+| `9565c2f0` | Load path climbs operator precedence in one task instead of a task per level | Three alternating Bun pairs: large 9.97 → 8.87 ms (11%), small 25.6 → 24.0 µs (6%) |
+| `1712dde5` | Checker builds semantic nodes in its bounds walk; Name tokens fill in after binding | Checker-only 2.28 → 1.9 ms; within end-to-end noise |
+
+Precedence climbing produced identical Load trees, node offsets and errors for
+all 817 `.talk` files in the repository. The merged walk produced identical check
+results (tree, scopes and diagnostics) for the same files. Core tests, the Corpus,
+lint and formatting passed.
+
+Together the two structural slices saved about 15% of large Load, below the 25%
+bar set for continuing to a fused front end. Merging site marking and binding
+would change the order in which later passes overwrite sites. Lowering still
+reads a semantic tree that must be allocated.
+[ADR 0132](../../../docs/adr/0132-ts-load-targets-10x-zig-without-a-single-pass-front-end.md)
+records the decision to target 10× and keep a single-pass front end out of scope.
+
+Suite runs with `--only ts,zig --count 5` on the same machine, which was more
+heavily loaded than for the earlier tables:
+
+| Load | TS | Zig | TS / Zig |
+| --- | ---: | ---: | ---: |
+| small | 24.0 µs | 3.6 µs | 6.7× |
+| large (two runs) | 9.53 / 9.52 ms | 0.907 / 0.926 ms | 10.5× / 10.3× |
+| macro/game-tick | 115.0 µs | 15.8 µs | 7.3× |
+| macro/report | 67.3 µs | 8.7 µs | 7.7× |
+| macro/transform | 112.3 µs | 14.9 µs | 7.5× |
+
+A Node Load-only spot-check measured 20.5 µs small and 8.46 ms large.
+Large-Script Load remains just outside 10×.
