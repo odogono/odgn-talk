@@ -163,3 +163,21 @@ heavily loaded than for the earlier tables:
 
 A Node Load-only spot-check measured 20.5 µs small and 8.46 ms large.
 Large-Script Load remains just outside 10×.
+
+## Lexer and semantic-pass follow-ups
+
+| Commit | Change | Evidence |
+| --- | --- | --- |
+| `0a8ff41f` | The lexer reuses the last line for positions; the parser copies a token only when continuation trivia must be merged | In-process interleaved parse and check, large: 7.3%, 9.7%, 8.0% less time |
+| `509e0bf8` | The decision pass indexes only `veto` and `pass` leaves; the suspension pass looks for `and wait` only on statements that take it | Same method, six runs: median about 3% less time |
+
+Both produced identical Load checks, public checks and public parse trees
+for all 817 `.talk` files against the preceding commit. Core tests, the
+Corpus and lint passed. Comment trivia is retained because Load's
+documentation reads it.
+
+Other processes held the machine at load averages of 12–20 during these
+measurements. Suite runs gave large Load 10.8× and 11.9× of Zig, with TS at
+about 12.1 ms against about 9.5 ms on the quieter machine earlier, so they are
+not evidence for the ratio. Whether large Load is within 10× needs a rerun on
+an idle machine.
