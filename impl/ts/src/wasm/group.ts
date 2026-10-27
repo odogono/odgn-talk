@@ -589,6 +589,7 @@ export class WasmGroup implements Group {
         // Tracked as the TS Core tracks it, so a driver's close waits for it.
         trackOperation(
           this,
+          call,
           op.run!(call, ...args)
             .then(v => call.answer(v))
             .catch((error: unknown) => call.fail(error as ScriptError)),

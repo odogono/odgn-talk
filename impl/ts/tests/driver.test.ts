@@ -3,6 +3,7 @@ import {
   autoDrive,
   newDrivenGroup,
   type AutoDriveOptions,
+  type PendingOperation,
 } from '../src/driver';
 import {
   defineCapability,
@@ -328,6 +329,35 @@ describe('Drive.close', () => {
     await closing;
     expect(events).toEqual(['abort', 'cleanup', 'closed']);
     expect(lines.some(l => l.includes('kind=late-answer'))).toBe(true);
+  });
+
+  test('closeTimeoutMs resolves close past a never-settling run and reports it', async () => {
+    let signal: AbortSignal | undefined;
+    const api = defineCapability('api', {
+      fetch: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        // Ignores its signal and never settles.
+        run: call => {
+          signal = call.signal;
+          return new Promise<never>(() => {});
+        },
+      },
+    });
+    const reports: PendingOperation[][] = [];
+    const { drive, script } = driven(
+      'on go\n  ask api to fetch and wait\nend go',
+      { closeTimeoutMs: 10, onCloseTimeout: p => reports.push(p) },
+      { api: api.grant('all', undefined) },
+    );
+    const reply = script.request({ name: 'go', args: [] }).result;
+    await drive.idle();
+    await drive.close();
+    expect(signal?.aborted).toBe(true);
+    await expect(reply).rejects.toHaveProperty('code', 'send failed');
+    expect(reports).toEqual([
+      [{ callId: expect.any(String), grantName: 'api', scriptName: 's' }],
+    ]);
   });
 
   test('awaits previously abandoned Host work but not another Group', async () => {

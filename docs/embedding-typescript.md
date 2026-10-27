@@ -395,7 +395,10 @@ the default reason is `Host shutdown`.
 
 `close()` also waits for `run` Promises already abandoned by cancellation or a
 timeout. Your I/O clients must honor `call.signal`: a Promise that never settles
-keeps close pending, with no automatic timeout. Callback-style `start` Operations
+keeps close pending. To bound the wait, pass `closeTimeoutMs` to the driver:
+once it expires, close calls `onCloseTimeout` with the calls still pending
+(`callId`, `grantName`, `scriptName`) and resolves, ignoring their late results.
+Callback-style `start` Operations
 receive the abort signal, but have no completion Promise to await; the Host must
 finish any further cleanup itself. A Clock, Pump or driver callback failure
 rejects close and stops scheduling; cleanup may be incomplete.
