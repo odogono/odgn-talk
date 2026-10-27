@@ -1,0 +1,19 @@
+# Unblessed: `set` through a property's value (#1626); first blessing awaits human review.
+# set-paths: pins chapter 8's lowering of a longer `set`: the indexes and
+# computed keys, the value's temp, `hold`, the wholes read from the root down,
+# and the write from the leaf back, each key level tested with `is-kind
+# object` and `branch-true` to its own `set-property`.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "paths"
+source = "paths.talk"
+
+[[disassembly]]
+unit = "paths"
+expected = "paths.dis"

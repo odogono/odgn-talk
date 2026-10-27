@@ -1327,6 +1327,12 @@ export class Run {
   fuel = 0;
   alloc = 0;
   charging = true;
+  /**
+   * A `set` through a property's value is between its `hold` and its
+   * `set-property` or raise: crossings there don't land queued inputs, and no
+   * Fuel Slice preempts it (ADR 0135).
+   */
+  holding = false;
   records: RunRecord[] = [];
   /**
    * The Script's Persistent State, measured at the Segment's end without this
@@ -2432,10 +2438,16 @@ export class Run {
       if (error instanceof CrossingInterruptedError) {
         // Cancellation has already installed cleanup, or Stop discarded the Run.
       } else if (error instanceof ScriptError) {
-        this.raiseCore(error, ins, rate);
+        // A raise closes a hold, and what it held lands before the raise.
+        const held = this.holding;
+        this.holding = false;
+        if (!held || !this.host?.crossing?.()) {
+          this.raiseCore(error, ins, rate);
+        }
       } else if (error instanceof ThrownError) {
         this.unwind(error.error, ins);
       } else if (error instanceof LimitFaultError) {
+        this.holding = false;
         this.fault(error.limit, ins);
       } else {
         throw error;
@@ -4528,7 +4540,7 @@ export class Run {
     if (acknowledgement) {
       this.records.push(acknowledgement);
     }
-    if (this.host?.crossing?.()) {
+    if (!this.holding && this.host?.crossing?.()) {
       throw new CrossingInterruptedError();
     }
     this.crossingCall = null;
@@ -4750,6 +4762,10 @@ export class Run {
       case Op.Jump:
         this.pay(rate);
         return jump(frame, a as number);
+      case Op.Hold:
+        this.pay(rate);
+        this.holding = true;
+        return next(frame);
       case Op.BranchNotNothing:
         this.pay(rate);
         return this.peek().kind !== 'nothing'
@@ -4867,6 +4883,7 @@ export class Run {
         const o = this.peek(1);
         const v = this.peek();
         const name = computed ? keyText(this.peek(2)) : (a as string);
+        this.holding = false;
         this.setProperty(o, name, v, rate);
         this.popN(computed ? 3 : 2);
         return next(frame);

@@ -1916,6 +1916,9 @@ const Frame = struct {
     fn set(f: *Frame, first: Tok, target: *const Expr, value: *const Expr) Allocator.Error!void {
         var e = target;
         while (e.data == .group) e = e.data.group;
+        var base = if (e.data == .key) e.data.key.base else e;
+        while (base.data == .group) base = base.data.group;
+        if (e.data == .chunk or base.data == .key or base.data == .chunk) return f.setPath(first, target, value);
         const k = e.data.key;
         if (k.computed) |x| try f.expr(x);
         try f.expr(k.base);
@@ -1923,6 +1926,73 @@ const Frame = struct {
         if (k.computed != null) {
             try f.emit(.set_property_computed, &.{}, first, "");
         } else try f.emit(.set_property, &.{.{ .text = try f.keyText(k.key.?) }}, first, "");
+    }
+
+    /// A `set` below a property (chapter 8): the property is the last key
+    /// level whose whole is a Host Object, found from the leaf back.
+    fn setPath(f: *Frame, first: Tok, target: *const Expr, value: *const Expr) Allocator.Error!void {
+        var lv: std.ArrayList(Level) = .empty;
+        const root = try f.levels(target, &lv);
+        const items = lv.items;
+        try f.indices(items);
+        const delim = try f.delimiter(items);
+        try f.expr(value);
+        const v = try f.temp();
+        try f.store(v, first);
+        try f.emit(.hold, &.{}, first, "");
+        var wholes: std.ArrayList(u32) = .empty;
+        try f.expr(root);
+        const w0 = try f.temp();
+        try f.store(w0, first);
+        try wholes.append(f.l.a, w0);
+        for (items[0 .. items.len - 1]) |level| {
+            try f.readLevel(level, wholes.items[wholes.items.len - 1], delim);
+            const w = try f.temp();
+            try f.store(w, level.expr.pos);
+            try wholes.append(f.l.a, w);
+        }
+        var key: usize = 0;
+        while (items[key].expr.data != .key) key += 1;
+        const end = try f.newLabel();
+        var props: std.ArrayList([2]u32) = .empty;
+        var i = items.len - 1;
+        while (i > key) : (i -= 1) {
+            const level = items[i];
+            const at = level.expr.pos;
+            if (level.expr.data == .key) {
+                const p = try f.newLabel();
+                try props.append(f.l.a, .{ @intCast(i), p });
+                try f.load(wholes.items[i], at);
+                try f.emit(.is_kind, &.{.{ .text = "object" }}, at, "");
+                try f.jump(.branch_true, p, at);
+            }
+            try f.levelOperands(level, wholes.items[i]);
+            try f.load(v, at);
+            try f.setLevel(level, delim);
+            try f.store(v, at);
+        }
+        try f.setProperty(items[key], wholes.items[key], v, end);
+        for (props.items) |entry| {
+            try f.mark(entry[1]);
+            try f.setProperty(items[entry[0]], wholes.items[entry[0]], v, end);
+        }
+        try f.mark(end);
+        for (items) |level| if (level.index) |x| f.release(x);
+        for (wholes.items) |w| f.release(w);
+        f.release(v);
+        if (delim) |d| f.release(d);
+    }
+
+    /// One key level's `set-property`, on its whole, then the jump past the rest.
+    fn setProperty(f: *Frame, level: Level, whole: u32, v: u32, end: u32) Allocator.Error!void {
+        const e = level.expr;
+        const k = e.data.key;
+        try f.levelOperands(level, whole);
+        try f.load(v, e.pos);
+        if (k.computed != null) {
+            try f.emit(.set_property_computed, &.{}, e.pos, "");
+        } else try f.emit(.set_property, &.{.{ .text = try f.keyText(k.key.?) }}, e.pos, "");
+        try f.jump(.jump, end, e.pos);
     }
 
     /// With the pattern and the text on the stack, the replacement loop.

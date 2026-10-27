@@ -1027,10 +1027,10 @@ on t
   set me to 1
 end t
 
--- case: reject set item 2 of the tags of me to 1 (#744)
+-- case: reject set item 2 of me to 1, with no key on its path (#744, #1626)
 -- expect: not a container at 2:7
 on t
-  set item 2 of the tags of me to 1
+  set item 2 of me to 1
 end t
 
 -- case: reject set the length of me to 1 (#744)
@@ -1207,10 +1207,10 @@ on t
   set it to 1
 end t
 
--- case: reject set item 2 of the tags of it to 1 (#744)
+-- case: reject set item 2 of it to 1, with no key on its path (#744, #1626)
 -- expect: not a container at 2:7
 on t
-  set item 2 of the tags of it to 1
+  set item 2 of it to 1
 end t
 
 -- case: reject set the length of it to 1 (#744)
@@ -1387,10 +1387,10 @@ on t
   set the target to 1
 end t
 
--- case: reject set item 2 of the tags of the target to 1 (#744)
+-- case: reject set item 2 of the target to 1, with no key on its path (#744, #1626)
 -- expect: not a container at 2:7
 on t
-  set item 2 of the tags of the target to 1
+  set item 2 of the target to 1
 end t
 
 -- case: reject set the length of the target to 1 (#744)

@@ -4251,7 +4251,7 @@ export class TsGroup implements Group {
       }
       // Selection/parking can fault without stepping an instruction. Finish
       // that deferred fault before a cap or slice may end this stretch.
-      by = machineDebug.get(run)?.pending ? null : preempt();
+      by = machineDebug.get(run)?.pending || run.holding ? null : preempt();
       if (by) {
         break;
       }

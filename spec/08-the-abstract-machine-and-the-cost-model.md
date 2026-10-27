@@ -142,6 +142,7 @@ The operand kinds:
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
 | `jump` | `label` | 0 | 0 | Continues at the label |  |
+| `hold` |  | 0 | 0 | Opens a `set`'s landing hold: a Stop, cancel or rewind made before the next `set-property` or raise lands after it |  |
 | `branch-not-nothing` | `label` | 1 | 1, 1 on a jump | Preserves the top value and continues at the label if it is not Nothing |  |
 | `branch-false` | `label` | 1 | 0 | Pops a boolean and continues at the label if it is false | `wrong kind` |
 | `branch-true` | `label` | 1 | 0 | Pops a boolean and continues at the label if it is true | `wrong kind` |
@@ -626,7 +627,16 @@ The new part depends on the statement:
 The leaf's old value is its index or key temp, the whole above it and its `chunk-get` or `get-key`. A Container that is only a name skips steps 2 to 5, and its old value is its `load`: `add e to x` is ⟦e⟧ `store v`, the `load` of `x`, `load v`, `add` and the `store` of `x`. `put e into x` needs no temp: it is ⟦e⟧ and the `store` of `x`.
 
 - **`delete c`** of a chunk or key is the write above for the Container one level up, with the chain's delimiter. The leaf's index or computed key is evaluated first, into a temp, as step 1. In step 4 every level, the last included, is first tested with `test-chunk`, `test-chunk-delimited`, `test-key` or `test-key-computed`, which jump to a label S after the root's `store` when the level isn't there, so nothing changes ([chapter 4](04-expressions-and-statements.md#delete)). The new part is `load` of the leaf's index temp, `load` of the last level's whole, then ⟦d⟧ for an `item` with `delimited by d`, and `chunk-delete`, `chunk-delete-delimited`, `delete-key` or `delete-key-computed`. `delete x` of a name is `const nothing` and its `store`.
-- **`set the k of o to e`** is ⟦o⟧ ⟦e⟧ `set-property k`, and `set the (k) of o to e` is ⟦k⟧ ⟦o⟧ ⟦e⟧ `set-property-computed`. Parentheses do not change this lowering. The receiver `o` may read `me`, `it` or `the target` and any intermediate keys/chunks; no root store or property-content writeback occurs.
+- **`set the k of o to e`**, where `o` is a Name, `me`, `it` or `the target`, is ⟦o⟧ ⟦e⟧ `set-property k`, and `set the (k) of o to e` is ⟦k⟧ ⟦o⟧ ⟦e⟧ `set-property-computed`. Parentheses do not change this lowering.
+- **A longer `set c to e`,** with levels `l1` to `lk` as above and `lf` the first key level from the root, lowers with no root store ([ADR 0135](../docs/adr/0135-set-writes-a-path-below-a-host-object-property-as-one-crossing.md)):
+  1. Each level's index or computed key, from `lk` back to `l1`, each into a temp, then ⟦e⟧ into a temp `v`.
+  2. `hold`.
+  3. The wholes `w0` to `wk-1`, as step 4 above.
+  4. From `lk` back to `lf+1`: a key level first has `load w(i-1)`, `is-kind object` and `branch-true Pi`. Then each level has its index or key temp, `load w(i-1)`, `load v`, its `chunk-set` or `set-key`, and `store v`.
+  5. At `lf`: its key temp if computed, `load w(f-1)`, `load v`, `set-property` or `set-property-computed`, and `jump D`.
+  6. Each `Pi`: the same as step 5 for level `i`, then `jump D`. At `D`, every temp is released.
+
+  A chunk level never has a Host Object as its receiver, so the levels before `lf` are only read. A `set` with no key level is a load error.
 
 #### `replace`
 

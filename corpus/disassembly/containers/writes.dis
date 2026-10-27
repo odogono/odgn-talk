@@ -21,7 +21,7 @@ bodies
   0 init initialiser () locals 1 0000..0003
   1 handler writing clause 1 (row, k, v) locals 12 0004..0198
   2 handler deleting clause 1 (m, k, x) locals 9 0199..0293
-  3 handler setting clause 1 (button, k) locals 3 0294..0304
+  3 handler setting clause 1 (button, k) locals 7 0294..0326
 code
   0000 4:25 const 0 ; 0
   0001 4:1 store-var 0 ; total
@@ -321,10 +321,32 @@ code
   0295 36:30 const 14 ; "OK"
   0296 36:3 set-property "label"
   0297 37:12 load 2 ; k
-  0298 37:31 load 1 ; button
-  0299 37:18 get-key "panel"
-  0300 37:41 const 13 ; 5
-  0301 37:3 set-property-computed
-  0302 38:1 const 1 ; nothing
-  0303 38:1 return
-  0304 38:1 clause-fail
+  0298 37:7 store 3 ; (3)
+  0299 37:41 const 13 ; 5
+  0300 37:3 store 4 ; (4)
+  0301 37:3 hold
+  0302 37:31 load 1 ; button
+  0303 37:3 store 5 ; (5)
+  0304 37:18 load 5 ; (5)
+  0305 37:18 get-key "panel"
+  0306 37:18 store 6 ; (6)
+  0307 37:7 load 6 ; (6)
+  0308 37:7 is-kind object
+  0309 37:7 branch-true 0319
+  0310 37:7 load 3 ; (3)
+  0311 37:7 load 6 ; (6)
+  0312 37:7 load 4 ; (4)
+  0313 37:7 set-key-computed
+  0314 37:7 store 4 ; (4)
+  0315 37:18 load 5 ; (5)
+  0316 37:18 load 4 ; (4)
+  0317 37:18 set-property "panel"
+  0318 37:18 jump 0324
+  0319 37:7 load 3 ; (3)
+  0320 37:7 load 6 ; (6)
+  0321 37:7 load 4 ; (4)
+  0322 37:7 set-property-computed
+  0323 37:7 jump 0324
+  0324 38:1 const 1 ; nothing
+  0325 38:1 return
+  0326 38:1 clause-fail

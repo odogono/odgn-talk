@@ -790,6 +790,15 @@ class BodyLowering {
         return yield* this.letStatement(s);
       case 'set': {
         const target = s.target;
+        if (
+          target.k === 'chunk' ||
+          ((target.k === 'key' || target.k === 'computed') &&
+            (target.base.k === 'chunk' ||
+              target.base.k === 'key' ||
+              target.base.k === 'computed'))
+        ) {
+          return yield* this.setPath(s);
+        }
         if (target.k === 'computed') {
           yield this.expr(target.key);
         } else if (target.k !== 'key') {
@@ -1685,6 +1694,108 @@ class BodyLowering {
     } else {
       this.emit(at, 'chunk-set', level.kind);
     }
+  }
+
+  // A `set` below a property (chapter 8): the property is the last key level
+  // whose whole is a Host Object, found from the leaf back.
+  *setPath(s: Stmt & { k: 'set' }): Task {
+    const at = s.pos;
+    const levels: Expr[] = [];
+    let root: Expr = s.target;
+    while (root.k === 'chunk' || root.k === 'key' || root.k === 'computed') {
+      levels.unshift(root);
+      root = root.base;
+    }
+    const leafLevel = levels.at(-1)!;
+    const d = leafLevel.k === 'chunk' ? leafLevel.delimiter : null;
+    const index: (number | null)[] = [];
+    for (let i = levels.length - 1; i >= 0; i--) {
+      const level = levels[i]!;
+      if (level.k === 'key') {
+        index[i] = null;
+        continue;
+      }
+      if (level.k === 'chunk') {
+        if (typeof level.index === 'number') {
+          this.constant(level.pos, String(level.index));
+        } else {
+          yield this.expr(level.index);
+        }
+      } else if (level.k === 'computed') {
+        yield this.expr(level.key);
+      }
+      index[i] = this.temp();
+      this.emit(level.pos, 'store', index[i]!);
+    }
+    let dt: number | null = null;
+    if (d) {
+      yield this.expr(d);
+      dt = this.temp();
+      this.emit(leafLevel.pos, 'store', dt);
+    }
+    yield this.expr(s.value);
+    const v = this.temp();
+    this.emit(at, 'store', v);
+    this.emit(at, 'hold');
+    const whole: number[] = [];
+    yield this.expr(root);
+    whole[0] = this.temp();
+    this.emit(at, 'store', whole[0]);
+    for (let i = 0; i < levels.length - 1; i++) {
+      const level = levels[i]!;
+      this.getLevel(level, index[i]!, whole[i]!, dt);
+      whole[i + 1] = this.temp();
+      this.emit(level.pos, 'store', whole[i + 1]!);
+    }
+    const f = levels.findIndex(l => l.k !== 'chunk');
+    if (f < 0) {
+      return this.unsupported(at, '`set` of anything but a key');
+    }
+    const done = this.label();
+    const props: [number, Label][] = [];
+    const property = (i: number) => {
+      const level = levels[i]!;
+      if (level.k === 'computed') {
+        this.emit(level.pos, 'load', index[i]!);
+      }
+      this.emit(level.pos, 'load', whole[i]!);
+      this.emit(level.pos, 'load', v);
+      if (level.k === 'key') {
+        this.emit(level.pos, 'set-property', level.key);
+      } else {
+        this.emit(level.pos, 'set-property-computed');
+      }
+      this.emit(level.pos, 'jump', done);
+    };
+    for (let i = levels.length - 1; i > f; i--) {
+      const level = levels[i]!;
+      if (level.k !== 'chunk') {
+        const p = this.label();
+        props.push([i, p]);
+        this.emit(level.pos, 'load', whole[i]!);
+        this.emit(level.pos, 'is-kind', 'object');
+        this.emit(level.pos, 'branch-true', p);
+      }
+      if (level.k !== 'key') {
+        this.emit(level.pos, 'load', index[i]!);
+      }
+      this.emit(level.pos, 'load', whole[i]!);
+      this.emit(level.pos, 'load', v);
+      this.setLevel(level, dt);
+      this.emit(level.pos, 'store', v);
+    }
+    property(f);
+    for (const [i, p] of props) {
+      this.place(p);
+      property(i);
+    }
+    this.place(done);
+    this.release(
+      ...index.filter((slot): slot is number => slot !== null),
+      ...whole,
+      v,
+      ...(dt === null ? [] : [dt]),
+    );
   }
 
   *put(s: Stmt & { k: 'put' }): Task {

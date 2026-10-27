@@ -254,6 +254,16 @@ pub const machine: MachineTable = .{
             .does = "Continues at the label",
         },
         .{
+            .name = "hold",
+            .group = "control",
+            .operands = &.{},
+            .pops = .{ .int = 0 },
+            .pushes = .{ .int = 0 },
+            .suspends = false,
+            .cost = "jump",
+            .does = "Opens a `set`'s landing hold: a Stop, cancel or rewind made before the next `set-property` or raise lands after it",
+        },
+        .{
             .name = "branch-not-nothing",
             .group = "control",
             .operands = &.{

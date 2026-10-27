@@ -1690,18 +1690,132 @@ export class BodyCompiler {
     while (t.k === 'Group') {
       t = t.e;
     }
-    if (t.k !== 'Key') {
+    // The levels from the root out, and the root they hang from.
+    const levels: Node[] = [];
+    let root: Node = t;
+    while (['Key', 'Chunk', 'OrdinalChunk', 'Group'].includes(root.k)) {
+      if (root.k !== 'Group') {
+        levels.unshift(root);
+      }
+      root =
+        root.k === 'Group' ? root.e : root.k === 'Key' ? root.base : root.of;
+    }
+    if (!levels.some(l => l.k === 'Key')) {
       this.fail(t, "`set` writes a Host Object's property");
     }
-    if (t.computed) {
-      this.expr(t.key);
+    if (levels.length === 1) {
+      if (t.computed) {
+        this.expr(t.key);
+      }
+      this.expr(t.base);
+      this.expr(s.value);
+      this.at(s);
+      this.emit(
+        t.computed ? 'set-property-computed' : 'set-property',
+        t.computed ? [] : [t.key],
+      );
+      return;
     }
-    this.expr(t.base);
+    this.setPath(s, root, levels);
+  }
+
+  // A `set` below a property (chapter 8): the property is the last key
+  // level whose whole is a Host Object, found from the leaf back.
+  setPath(s: Node, root: Node, levels: Node[]) {
+    const idx: (number | null)[] = [];
+    for (let i = levels.length - 1; i >= 0; i--) {
+      const l = levels[i]!;
+      this.pos(l, () => {
+        if (l.k === 'Key' && !l.computed) {
+          return void (idx[i] = null);
+        }
+        if (l.k === 'Chunk') {
+          this.expr(l.index);
+        } else if (l.k === 'OrdinalChunk') {
+          this.constant(String(ORDINAL_INDEX[l.ord]));
+        } else {
+          this.expr(l.key);
+        }
+        idx[i] = this.temp();
+        this.emit('store', [idx[i]!]);
+      });
+    }
+    let d: number | null = null;
+    const delim = levels.at(-1)!.delimiter;
+    if (delim) {
+      this.expr(delim);
+      d = this.temp();
+      this.pos(levels.at(-1)!, () => this.emit('store', [d!]));
+    }
     this.expr(s.value);
-    this.at(s);
-    this.emit(
-      t.computed ? 'set-property-computed' : 'set-property',
-      t.computed ? [] : [t.key],
+    const v = this.temp();
+    const whole: number[] = [];
+    this.pos(s, () => {
+      this.emit('store', [v]);
+      this.emit('hold');
+    });
+    this.expr(root);
+    this.pos(s, () => {
+      whole[0] = this.temp();
+      this.emit('store', [whole[0]]);
+    });
+    for (let i = 0; i < levels.length - 1; i++) {
+      this.pos(levels[i]!, () => {
+        this.getLevel(levels[i]!, idx[i]!, whole[i]!, d);
+        whole[i + 1] = this.temp();
+        this.emit('store', [whole[i + 1]!]);
+      });
+    }
+    const f = levels.findIndex(l => l.k === 'Key');
+    const done = this.label();
+    const props: [number, Label][] = [];
+    const property = (i: number) => {
+      const l = levels[i]!;
+      this.pos(l, () => {
+        if (l.computed) {
+          this.emit('load', [idx[i]!]);
+        }
+        this.emit('load', [whole[i]!]);
+        this.emit('load', [v]);
+        this.emit(
+          l.computed ? 'set-property-computed' : 'set-property',
+          l.computed ? [] : [l.key],
+        );
+        this.emit('jump', [done]);
+      });
+    };
+    for (let i = levels.length - 1; i > f; i--) {
+      const l = levels[i]!;
+      this.pos(l, () => {
+        if (l.k === 'Key') {
+          const p = this.label();
+          props.push([i, p]);
+          this.emit('load', [whole[i]!]);
+          this.emit('is-kind', ['object']);
+          this.emit('branch-true', [p]);
+          if (l.computed) {
+            this.emit('load', [idx[i]!]);
+          }
+        } else {
+          this.emit('load', [idx[i]!]);
+        }
+        this.emit('load', [whole[i]!]);
+        this.emit('load', [v]);
+        this.setLevel(l, d);
+        this.emit('store', [v]);
+      });
+    }
+    property(f);
+    for (const [i, p] of props) {
+      this.place(p);
+      property(i);
+    }
+    this.place(done);
+    this.release(
+      ...(idx.filter(x => x !== null) as number[]),
+      ...whole,
+      v,
+      ...(d === null ? [] : [d]),
     );
   }
 

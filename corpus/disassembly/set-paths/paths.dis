@@ -1,0 +1,148 @@
+unit paths script
+constants
+  0 nothing
+  1 "OK"
+  2 5
+  3 true
+  4 2
+  5 "new"
+  6 "x"
+  7 1
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler setting clause 1 (button, k, xs) locals 9 0002..0133
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 5:20 load 1 ; button
+  0003 5:30 const 1 ; "OK"
+  0004 5:3 set-property "label"
+  0005 6:12 load 2 ; k
+  0006 6:7 store 4 ; (4)
+  0007 6:41 const 2 ; 5
+  0008 6:3 store 5 ; (5)
+  0009 6:3 hold
+  0010 6:31 load 1 ; button
+  0011 6:3 store 6 ; (6)
+  0012 6:18 load 6 ; (6)
+  0013 6:18 get-key "panel"
+  0014 6:18 store 7 ; (7)
+  0015 6:7 load 7 ; (7)
+  0016 6:7 is-kind object
+  0017 6:7 branch-true 0027
+  0018 6:7 load 4 ; (4)
+  0019 6:7 load 7 ; (7)
+  0020 6:7 load 5 ; (5)
+  0021 6:7 set-key-computed
+  0022 6:7 store 5 ; (5)
+  0023 6:18 load 6 ; (6)
+  0024 6:18 load 5 ; (5)
+  0025 6:18 set-property "panel"
+  0026 6:18 jump 0032
+  0027 6:7 load 4 ; (4)
+  0028 6:7 load 7 ; (7)
+  0029 6:7 load 5 ; (5)
+  0030 6:7 set-property-computed
+  0031 6:7 jump 0032
+  0032 7:41 const 3 ; true
+  0033 7:3 store 4 ; (4)
+  0034 7:3 hold
+  0035 7:35 me
+  0036 7:3 store 5 ; (5)
+  0037 7:23 load 5 ; (5)
+  0038 7:23 get-key "door"
+  0039 7:23 store 6 ; (6)
+  0040 7:7 load 6 ; (6)
+  0041 7:7 is-kind object
+  0042 7:7 branch-true 0051
+  0043 7:7 load 6 ; (6)
+  0044 7:7 load 4 ; (4)
+  0045 7:7 set-key "isLocked"
+  0046 7:7 store 4 ; (4)
+  0047 7:23 load 5 ; (5)
+  0048 7:23 load 4 ; (4)
+  0049 7:23 set-property "door"
+  0050 7:23 jump 0055
+  0051 7:7 load 6 ; (6)
+  0052 7:7 load 4 ; (4)
+  0053 7:7 set-property "isLocked"
+  0054 7:7 jump 0055
+  0055 8:12 const 4 ; 2
+  0056 8:7 store 4 ; (4)
+  0057 8:35 const 5 ; "new"
+  0058 8:3 store 5 ; (5)
+  0059 8:3 hold
+  0060 8:29 load 0 ; it
+  0061 8:3 store 6 ; (6)
+  0062 8:17 load 6 ; (6)
+  0063 8:17 get-key "tags"
+  0064 8:17 store 7 ; (7)
+  0065 8:7 load 4 ; (4)
+  0066 8:7 load 7 ; (7)
+  0067 8:7 load 5 ; (5)
+  0068 8:7 chunk-set item
+  0069 8:7 store 5 ; (5)
+  0070 8:17 load 6 ; (6)
+  0071 8:17 load 5 ; (5)
+  0072 8:17 set-property "tags"
+  0073 8:17 jump 0074
+  0074 9:25 const 4 ; 2
+  0075 9:20 store 4 ; (4)
+  0076 9:36 const 6 ; "x"
+  0077 9:3 store 5 ; (5)
+  0078 9:3 hold
+  0079 9:30 load 3 ; xs
+  0080 9:3 store 6 ; (6)
+  0081 9:20 load 4 ; (4)
+  0082 9:20 load 6 ; (6)
+  0083 9:20 chunk-get item
+  0084 9:20 store 7 ; (7)
+  0085 9:7 load 7 ; (7)
+  0086 9:7 load 5 ; (5)
+  0087 9:7 set-property "label"
+  0088 9:7 jump 0089
+  0089 10:21 load 2 ; k
+  0090 10:16 store 4 ; (4)
+  0091 10:44 const 7 ; 1
+  0092 10:3 store 5 ; (5)
+  0093 10:3 hold
+  0094 10:38 me
+  0095 10:3 store 6 ; (6)
+  0096 10:27 load 6 ; (6)
+  0097 10:27 get-key "pos"
+  0098 10:27 store 7 ; (7)
+  0099 10:16 load 4 ; (4)
+  0100 10:16 load 7 ; (7)
+  0101 10:16 get-key-computed
+  0102 10:16 store 8 ; (8)
+  0103 10:7 load 8 ; (8)
+  0104 10:7 is-kind object
+  0105 10:7 branch-true 0122
+  0106 10:7 load 8 ; (8)
+  0107 10:7 load 5 ; (5)
+  0108 10:7 set-key "x"
+  0109 10:7 store 5 ; (5)
+  0110 10:16 load 7 ; (7)
+  0111 10:16 is-kind object
+  0112 10:16 branch-true 0126
+  0113 10:16 load 4 ; (4)
+  0114 10:16 load 7 ; (7)
+  0115 10:16 load 5 ; (5)
+  0116 10:16 set-key-computed
+  0117 10:16 store 5 ; (5)
+  0118 10:27 load 6 ; (6)
+  0119 10:27 load 5 ; (5)
+  0120 10:27 set-property "pos"
+  0121 10:27 jump 0131
+  0122 10:7 load 8 ; (8)
+  0123 10:7 load 5 ; (5)
+  0124 10:7 set-property "x"
+  0125 10:7 jump 0131
+  0126 10:16 load 4 ; (4)
+  0127 10:16 load 7 ; (7)
+  0128 10:16 load 5 ; (5)
+  0129 10:16 set-property-computed
+  0130 10:16 jump 0131
+  0131 11:1 const 0 ; nothing
+  0132 11:1 return
+  0133 11:1 clause-fail

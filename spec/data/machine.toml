@@ -196,6 +196,16 @@ cost = "jump"
 does = "Continues at the label"
 
 [[instruction]]
+name = "hold"
+group = "control"
+operands = []
+pops = 0
+pushes = 0
+suspends = false
+cost = "jump"
+does = "Opens a `set`'s landing hold: a Stop, cancel or rewind made before the next `set-property` or raise lands after it"
+
+[[instruction]]
 name = "branch-not-nothing"
 group = "control"
 operands = ["label"]
