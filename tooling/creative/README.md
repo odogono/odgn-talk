@@ -211,6 +211,9 @@ also binds every Page name. The Manifests describe the `pages`, `elements` and `
 from ADR 0084, the `user` Standard Capability, the `folio` Grant of `hide` and `show` (see [Play](#play)), and the `canvas` Grant; all six are available during Play (see [Sounds](#sounds), [Canvas](#canvas) and [Asking the reader](#asking-the-reader)). Renames and Library edits refresh the selected source’s Manifest and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
+Hovering a Handler's name in its head shows a static Fuel estimate that
+includes the declared costs of Folio's Grants
+([#1606](https://github.com/odogono/odgn-talk/issues/1606)).
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
 properties. Scripts execute only in a Play Session (see [Play](#play)).
 The Manifests include built-in events and each Script's authored message

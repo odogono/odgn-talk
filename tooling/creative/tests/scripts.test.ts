@@ -247,6 +247,29 @@ test('Host Commands hide and show are completed, documented and checked, unless 
   ).toHaveLength(1);
 });
 
+test("hover on a Handler head estimates its Fuel with Folio's declared costs (#1606)", () => {
+  const { project, page } = fixture();
+  const owner = page.elements.find(e => e.kind === 'button')!;
+  const { server, sent, uri, diagnostics } = language(
+    scriptManifest(project, owner),
+    'on click\n  hide text1\n  show text1\nend click\n',
+  );
+  expect(diagnostics().filter(d => d.severity === 1)).toEqual([]);
+  server.handle({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'textDocument/hover',
+    params: { textDocument: { uri }, position: { line: 0, character: 3 } },
+  });
+  const hover = sent.at(-1)!.result as { contents: { value: string } };
+  // hide and show declare 1 Fuel each in the folio Grant; only their
+  // results' sizes stay open.
+  expect(hover.contents.value).toContain(
+    'Fuel estimate: 25, plus 4 per Handler Clause tried\n' +
+      '+ more with larger values: capability (line 2), capability (line 3)',
+  );
+});
+
 test('LSP diagnoses misspelt names and refreshes after renames on each Page', () => {
   const { project, page, other } = fixture();
   const source =

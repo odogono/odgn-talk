@@ -14,6 +14,7 @@ import {
 } from '@northtalk/ts';
 import { builtinDocs } from '@northtalk/ts/session';
 import { formatSource } from '../format';
+import { estimateFuel, fuelText, type FuelEstimate } from '../fuel';
 import {
   bindingKey,
   elements,
@@ -855,6 +856,53 @@ const whoseHover = (analysis: Analysis, offset: number) => {
   };
 };
 
+const fuelEstimates = new WeakMap<
+  object,
+  { estimates: FuelEstimate[]; manifest: HostManifest | null }
+>();
+/**
+ * The Fuel estimate (#1606) of the Handler Clause or function whose head
+ * declares `name`, from the analysis's loaded unit.
+ */
+const fuelAt = (
+  analysis: Analysis,
+  name: SemanticName,
+  manifest: HostManifest | null,
+): string | undefined => {
+  const loaded = analysis.loaded;
+  if (name.role !== 'declaration' || !loaded) {
+    return undefined;
+  }
+  const node = analysis.nodes.find(
+    n =>
+      (n.rule === 'Handler' || n.rule === 'Function') &&
+      semanticElements(n).find(
+        (e): e is SemanticName => e.kind === 'name' && e.role === 'declaration',
+      ) === name,
+  );
+  if (!node) {
+    return undefined;
+  }
+  let cached = fuelEstimates.get(loaded);
+  if (cached?.manifest !== manifest) {
+    cached = {
+      estimates: estimateFuel(
+        loaded,
+        (grant, op) => manifest?.grants.get(grant)?.get(op)?.cost?.fuel,
+      ),
+      manifest,
+    };
+    fuelEstimates.set(loaded, cached);
+  }
+  const { estimates } = cached;
+  const text = analysis.document.text;
+  const last = rangeAt(text, node.span.end, node.span.end).start.line + 1;
+  const estimate = estimates.find(
+    e =>
+      e.name === name.text && e.at.line >= node.span.line && e.at.line <= last,
+  );
+  return estimate && fuelText(estimate);
+};
 export const hover = (
   all: Map<string, Analysis>,
   analysis: Analysis,
@@ -1058,6 +1106,10 @@ export const hover = (
         ? docs.map((doc, i) => `Clause ${i + 1}:\n${doc}`).join('\n\n')
         : docs.join('\n\n');
     display = `${display ?? ''}\n\n${documentation}`;
+  }
+  const fuel = fuelAt(analysis, name, manifest);
+  if (fuel) {
+    display = display ? `${display}\n\n${fuel}` : fuel;
   }
   return display
     ? {
