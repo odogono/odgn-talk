@@ -19,7 +19,12 @@ import {
 } from '@northtalk/ts';
 import { peerRunners } from './runners';
 
-export const scriptsDir = join(import.meta.dir, '..', '..', 'scripts');
+export const scriptsDir = join(
+  import.meta.dir ?? import.meta.dirname,
+  '..',
+  '..',
+  'scripts',
+);
 
 /** One size a Benchmark runs at, and the display form its Run returns. */
 export type Size = { expect: string; n: number };

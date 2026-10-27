@@ -1,0 +1,34 @@
+$ bun bench/ts/src/main.ts --only "ts,zig" --filter lifecycle/load --count "5" --no-save
+Measuring the Zig Core…
+Measuring the TS Core…
+# Benchmark results, 2026-10-27
+
+Commit `ts-v0.2.0-23-g01864c1f-dirty` on Apple M5 (10 cores, 24 GiB), darwin arm64.
+Versions: bun 1.4.4, zig 0.17.0, zig build native safe; C Host zig cc -O2, cost model 0, language 1.0-rc.3.
+Settings: count 5, filter lifecycle/load, runners ts,zig, smoke false.
+
+| Benchmark | Runner | Load median (µs) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |
+| - | - | -: | -: | -: | -: | -: | -: | -: | -: |
+| lifecycle/load-large | ts | 17203.6 | 0.125 | 0.105 | 4609 | 27.1 | 16.3 KiB | 13.5 KiB |  |
+| lifecycle/load-large | zig | 1068.7 | 0.0769 | 0.0766 | 4609 | 16.7 | 16.3 KiB |  |  |
+| lifecycle/load-small | ts | 38.7 | 0.00623 | 0.00481 | 7 | 890.1 | 0 B | 742 B |  |
+| lifecycle/load-small | zig | 3.7 | 0.00166 | 0.00142 | 7 | 237.2 | 0 B |  |  |
+
+## Payload
+
+What a browser Host ships to embed each Core: bundled with `Bun.build --target browser --minify`, compressed with `node:zlib`.
+
+| Payload | Brotli | gzip -9 | Raw |
+| - | -: | -: | -: |
+| TS Core: Example Host | 154.7 KiB | 182.1 KiB | 625.8 KiB |
+| TS Core: @northtalk/ts | 154.3 KiB | 181.4 KiB | 624.3 KiB |
+
+## Fuel parity
+
+Every Benchmark used the same Fuel on each Core.
+
+## Cost Model outliers
+
+Benchmarks whose ns/Fuel is more than 3× their runner's median. These are advisory: any reweighting goes through the Spec.
+
+None.

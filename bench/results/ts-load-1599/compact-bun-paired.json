@@ -1,0 +1,266 @@
+[
+  {
+    "pair": 1,
+    "variant": "before",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 691.3575434296836,
+        "load": {
+          "maxNs": 8589416,
+          "medianNs": 40417,
+          "minNs": 25792,
+          "samples": 8705
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 4834541,
+          "medianNs": 5041,
+          "minNs": 3625,
+          "samples": 69463
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 10193.794166208036,
+        "load": {
+          "maxNs": 41824667,
+          "medianNs": 23045791.5,
+          "minNs": 17214375,
+          "samples": 24
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 12437667,
+          "medianNs": 125000,
+          "minNs": 104667,
+          "samples": 3661
+        },
+        "runner": "ts"
+      }
+    ]
+  },
+  {
+    "pair": 1,
+    "variant": "after",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 544.7202718006795,
+        "load": {
+          "maxNs": 8836459,
+          "medianNs": 36875,
+          "minNs": 22625,
+          "samples": 8872
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 3116041,
+          "medianNs": 4208,
+          "minNs": 2833,
+          "samples": 74244
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 16422.888478776695,
+        "load": {
+          "maxNs": 33752917,
+          "medianNs": 18335417,
+          "minNs": 11337208,
+          "samples": 31
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 12030292,
+          "medianNs": 123104.5,
+          "minNs": 105750,
+          "samples": 3828
+        },
+        "runner": "ts"
+      }
+    ]
+  },
+  {
+    "pair": 2,
+    "variant": "after",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 511.4316136198246,
+        "load": {
+          "maxNs": 11252541,
+          "medianNs": 39458,
+          "minNs": 22167,
+          "samples": 9928
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 3260708,
+          "medianNs": 4042,
+          "minNs": 2708,
+          "samples": 78411
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 23055.962889330684,
+        "load": {
+          "maxNs": 29513875,
+          "medianNs": 18052229.5,
+          "minNs": 11110250,
+          "samples": 34
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 12224958,
+          "medianNs": 128042,
+          "minNs": 107000,
+          "samples": 3052
+        },
+        "runner": "ts"
+      }
+    ]
+  },
+  {
+    "pair": 2,
+    "variant": "before",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 670.7833729619565,
+        "load": {
+          "maxNs": 8713917,
+          "medianNs": 39792,
+          "minNs": 25583,
+          "samples": 9073
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 8802.30712890625,
+          "medianNs": 5062.479736328125,
+          "minNs": 3547.261474609375,
+          "samples": 27
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 12922.83989769821,
+        "load": {
+          "maxNs": 39959792,
+          "medianNs": 23857729,
+          "minNs": 17382083,
+          "samples": 24
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 12754625,
+          "medianNs": 121708,
+          "minNs": 103917,
+          "samples": 3960
+        },
+        "runner": "ts"
+      }
+    ]
+  },
+  {
+    "pair": 3,
+    "variant": "before",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 537.92,
+        "load": {
+          "maxNs": 7363125,
+          "medianNs": 37959,
+          "minNs": 25375,
+          "samples": 9897
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 10026.397705078125,
+          "medianNs": 4622.2431640625,
+          "minNs": 3377.400634765625,
+          "samples": 29
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 9000.305297514436,
+        "load": {
+          "maxNs": 40485584,
+          "medianNs": 27986292,
+          "minNs": 16002334,
+          "samples": 21
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 12545750,
+          "medianNs": 123208,
+          "minNs": 104917,
+          "samples": 4019
+        },
+        "runner": "ts"
+      }
+    ]
+  },
+  {
+    "pair": 3,
+    "variant": "after",
+    "measurements": [
+      {
+        "benchmark": "lifecycle/load-small",
+        "fuel": 7,
+        "hostBytes": 644.7706895517014,
+        "load": {
+          "maxNs": 9619083,
+          "medianNs": 34750,
+          "minNs": 22083,
+          "samples": 9433
+        },
+        "logicalAlloc": 0,
+        "run": {
+          "maxNs": 3014542,
+          "medianNs": 5167,
+          "minNs": 3417,
+          "samples": 66721
+        },
+        "runner": "ts"
+      },
+      {
+        "benchmark": "lifecycle/load-large",
+        "fuel": 4609,
+        "hostBytes": 28826.449071468767,
+        "load": {
+          "maxNs": 30822125,
+          "medianNs": 16609708.5,
+          "minNs": 9668583,
+          "samples": 36
+        },
+        "logicalAlloc": 16742,
+        "run": {
+          "maxNs": 13350500,
+          "medianNs": 126291,
+          "minNs": 106416,
+          "samples": 3589
+        },
+        "runner": "ts"
+      }
+    ]
+  }
+]

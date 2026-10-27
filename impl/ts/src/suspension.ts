@@ -28,6 +28,13 @@ const firstLeaf = (e: SemanticElement): Leaf => {
   return current;
 };
 
+const WAITING_RULES = new Set([
+  'Send',
+  'AskTell',
+  'OperationLine',
+  'SimpleStatement',
+]);
+
 type Facts = {
   /** Calls to a named function or, function-style, to a Handler. */
   calls: { binding: Binding; name: SemanticName; restricted: boolean }[];
@@ -73,7 +80,8 @@ const factsOf = (
         report("can't suspend here", leaf);
       }
     };
-    const waits = has(node, 'AndWait');
+    // Only statements that may end in `and wait` look for it.
+    const waits = WAITING_RULES.has(node.rule) && has(node, 'AndWait');
     switch (node.rule) {
       case 'Wait':
         point(firstLeaf(node));

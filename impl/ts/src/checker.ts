@@ -6,7 +6,12 @@ import { checkEffects, resolveHostCommands, type GrantDecls } from './effects';
 import { checkSuspension } from './suspension';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
-import { parseSource, type ParseError } from './parser';
+import {
+  parseSource,
+  parseSourceForLoad,
+  type ParseError,
+  type ParseResult,
+} from './parser';
 import type {
   Binding,
   BindingKind,
@@ -352,6 +357,11 @@ const checkParsed = (
   // which are then on top of `done`, the first child uppermost.
   const done: Context[] = [];
   // Cache token bounds bottom-up; no recursive walk or repeated subtree scans.
+  // Build the semantic nodes in the same walk. A token's slot is filled once
+  // every site is marked, since a site turns it into a Name.
+  const slots: SemanticElement[][] = [];
+  const slotTokens: Token[] = [];
+  const slotIndexes: number[] = [];
   for (let i = ordered.length - 1; i >= 0; i--) {
     const info = ordered[i]!;
     const { element } = info;
@@ -360,12 +370,41 @@ const checkParsed = (
         info.first = info.last = element;
       }
     } else {
+      const children: SemanticElement[] = [];
       for (let n = element.children.length; n > 0; n--) {
-        const bounds = done.pop()!;
-        info.first ??= bounds.first;
-        if (bounds.last) {
-          info.last = bounds.last;
+        const child = done.pop()!;
+        info.first ??= child.first;
+        if (child.last) {
+          info.last = child.last;
         }
+        const converted = child.element;
+        if (converted.kind === 'token') {
+          if (converted.t !== 'error' && child.first) {
+            slots.push(children);
+            slotTokens.push(converted);
+            slotIndexes.push(children.length);
+            children.push(null!);
+          }
+        } else if (child.converted) {
+          children.push(child.converted);
+        }
+      }
+      const { first: start, last: end } = info;
+      if (start || element === syntax) {
+        info.converted = {
+          kind: 'node',
+          rule: element.rule,
+          scope: info.scope.id,
+          children,
+          span: start
+            ? {
+                start: start.pos,
+                end: end!.end,
+                line: start.line,
+                col: start.col,
+              }
+            : { start: element.start, end: element.end, line: 1, col: 1 },
+        };
       }
     }
     done.push(info);
@@ -509,8 +548,10 @@ const checkParsed = (
     if (element.kind !== 'node' || !siteRules.has(element.rule)) {
       continue;
     }
-    const ts = tokens(element);
-    const ns = nodes(element);
+    let tokenList: Token[] | undefined;
+    let nodeList: SyntaxNode[] | undefined;
+    const ts = () => (tokenList ??= tokens(element));
+    const ns = () => (nodeList ??= nodes(element));
     const head = context.get(element)?.first;
     if (!head) {
       continue;
@@ -519,7 +560,7 @@ const checkParsed = (
       case 'Declaration': {
         if (head.v === 'constant' || head.v === 'script') {
           const name = context.get(
-            ns.find(node => node.rule === 'Name')!,
+            ns().find(node => node.rule === 'Name')!,
           )?.first;
           if (name) {
             declaration(
@@ -533,14 +574,14 @@ const checkParsed = (
       case 'Handler':
       case 'Function': {
         const name = context.get(
-          ns.find(
+          ns().find(
             node =>
               node.rule ===
               (element.rule === 'Handler' ? 'MessageName' : 'Name'),
           )!,
         )?.first;
         if (name) {
-          const parameters = ns.filter(node => node.rule === 'Parameter');
+          const parameters = ns().filter(node => node.rule === 'Parameter');
           declaration(
             name,
             element.rule === 'Handler' ? 'handler' : 'function',
@@ -562,9 +603,9 @@ const checkParsed = (
           }
         }
         if (element.rule === 'Handler') {
-          const during = ts.findIndex(t => t.v === 'during');
-          if (during >= 0 && ts[during + 1]) {
-            mark(ts[during + 1]!, 'binding', true);
+          const during = ts().findIndex(t => t.v === 'during');
+          if (during >= 0 && ts()[during + 1]) {
+            mark(ts()[during + 1]!, 'binding', true);
           }
         }
         break;
@@ -611,7 +652,9 @@ const checkParsed = (
           break;
         }
         const parent = context.get(element)!.parent!;
-        const prefix = tokens(parent)[0];
+        const prefix = parent.children.find(
+          (child): child is Token => child.kind === 'token',
+        );
         if (parent.rule === 'OfferClause' || parent.rule === 'ChooseOffer') {
           mark(head, 'offer');
         } else if (parent.rule === 'MessageName') {
@@ -640,22 +683,22 @@ const checkParsed = (
         break;
       }
       case 'PatternPrimary': {
-        if (isName(head) && !ns.length) {
+        if (isName(head) && !ns().length) {
           mark(head, 'binding', true);
         }
-        for (let index = 1; index < ts.length; index++) {
-          if (ts[index - 1]!.v === '...' && isName(ts[index]!)) {
-            mark(ts[index]!, 'binding', true);
+        for (let index = 1; index < ts().length; index++) {
+          if (ts()[index - 1]!.v === '...' && isName(ts()[index]!)) {
+            mark(ts()[index]!, 'binding', true);
           }
         }
         break;
       }
       case 'Field': {
-        if (ts[1]?.v === ':' && isName(head)) {
+        if (ts()[1]?.v === ':' && isName(head)) {
           mark(head, 'binding', true);
         }
         if (head.v === '...') {
-          const rest = ts.find(isName);
+          const rest = ts().find(isName);
           if (rest) {
             mark(rest, 'binding', true);
           }
@@ -663,7 +706,7 @@ const checkParsed = (
         break;
       }
       case 'Atom': {
-        if (ts[1]?.v === ':') {
+        if (ts()[1]?.v === ':') {
           mark(
             head,
             'capture',
@@ -674,7 +717,12 @@ const checkParsed = (
         break;
       }
       case 'Primary': {
-        if (!sites.has(head) && isName(head) && ts[0] === head && !ns.length) {
+        if (
+          !sites.has(head) &&
+          isName(head) &&
+          ts()[0] === head &&
+          !ns().length
+        ) {
           mark(head, context.get(element)?.binary ? 'binary size' : 'value');
         }
         if (head.t === 'word' && head.v === 'it') {
@@ -686,7 +734,7 @@ const checkParsed = (
         mark(head, 'call');
         break;
       case 'FieldType': {
-        if (['byte', 'bytes', 'bit', 'bits'].includes(ts[1]?.v ?? '')) {
+        if (['byte', 'bytes', 'bit', 'bits'].includes(ts()[1]?.v ?? '')) {
           if (isName(head)) {
             mark(head, 'binary size');
           }
@@ -694,7 +742,7 @@ const checkParsed = (
         break;
       }
       case 'SimpleStatement': {
-        if (ts[0] === head && isName(head) && head.v !== 'next') {
+        if (ts()[0] === head && isName(head) && head.v !== 'next') {
           mark(head, 'command').name.text = syntaxSelector(element, head.v);
         }
         break;
@@ -738,7 +786,7 @@ const checkParsed = (
       case 'AskTell':
       case 'TellBlock': {
         // A bare Grant name is checked against Grants by the later effect pass.
-        const target = ns.find(node => node.rule === 'Expression');
+        const target = ns().find(node => node.rule === 'Expression');
         if (target) {
           let base = target;
           while (nodes(base).length === 1 && tokens(base).length === 0) {
@@ -837,12 +885,17 @@ const checkParsed = (
           : site.token),
     );
   };
-  const firstTokenAt = new Map(
-    ordered
-      .map(info => info.element)
-      .filter((element): element is Token => element.kind === 'token')
-      .map(token => [token.pos, token]),
-  );
+  // Only a name clash needs it, so build it on first use.
+  let firstTokens: Map<number, Token> | undefined;
+  const firstTokenAt = {
+    get: (pos: number) =>
+      (firstTokens ??= new Map(
+        ordered
+          .map(info => info.element)
+          .filter((element): element is Token => element.kind === 'token')
+          .map(token => [token.pos, token]),
+      )).get(pos),
+  };
   for (const { site, kind, importedFrom, contract } of declarationSites) {
     const old = unit.bindings.get(site.name.text);
     const handler = handlers.get(site.name.text);
@@ -1288,51 +1341,16 @@ const checkParsed = (
       }
     }
   }
-  done.length = 0;
-  for (let i = ordered.length - 1; i >= 0; i--) {
-    const info = ordered[i]!;
-    const { element } = info;
-    done.push(info);
-    if (element.kind === 'token') {
-      if (element.t === 'nl' || element.t === 'eof' || element.t === 'error') {
-        continue;
-      }
-      info.converted = sites.get(element)?.name ?? {
-        kind: 'token',
-        type: element.t,
-        text: element.v,
-        raw: element.raw,
-        span: span(element),
-      };
-    } else {
-      done.pop();
-      const children: SemanticElement[] = [];
-      for (let n = element.children.length; n > 0; n--) {
-        const result = done.pop()!.converted;
-        if (result) {
-          children.push(result);
-        }
-      }
-      done.push(info);
-      const { first: start, last: end } = info;
-      if (!start && element !== syntax) {
-        continue;
-      }
-      info.converted = {
-        kind: 'node',
-        rule: element.rule,
-        scope: info.scope.id,
-        children,
-        span: start
-          ? {
-              start: start.pos,
-              end: end!.end,
-              line: start.line,
-              col: start.col,
-            }
-          : { start: element.start, end: element.end, line: 1, col: 1 },
-      };
-    }
+  for (let i = 0; i < slots.length; i++) {
+    const children = slots[i]!;
+    const token = slotTokens[i]!;
+    children[slotIndexes[i]!] = sites.get(token)?.name ?? {
+      kind: 'token',
+      type: token.t as SemanticToken['type'],
+      text: token.v,
+      raw: token.raw,
+      span: span(token),
+    };
   }
   const root = ordered[0]!.converted as SemanticNode;
   const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
@@ -1401,12 +1419,21 @@ const checkParsed = (
   };
 };
 
+const checkParsedSource = (
+  parsed: ParseResult,
+  options: CheckOptions,
+): CheckResult =>
+  parsed.error
+    ? { error: parsed.error, tree: null, ok: false, diagnostics: [] }
+    : { error: null, ...checkParsed(parsed.tree, options) };
+
 export const checkSource = (
   source: string,
   options: CheckOptions = {},
-): CheckResult => {
-  const parsed = parseSource(source);
-  return parsed.error
-    ? { error: parsed.error, tree: null, ok: false, diagnostics: [] }
-    : { error: null, ...checkParsed(parsed.tree, options) };
-};
+): CheckResult => checkParsedSource(parseSource(source), options);
+
+/** Internal compilation path; public semantic trees retain all productions. */
+export const checkSourceForLoad = (
+  source: string,
+  options: CheckOptions = {},
+): CheckResult => checkParsedSource(parseSourceForLoad(source), options);

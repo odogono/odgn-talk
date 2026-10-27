@@ -11,7 +11,11 @@ import {
   splicesOf,
   textDisplay,
 } from './canonical';
-import { checkSource, type CheckOptions, type Diagnostic } from './checker';
+import {
+  checkSourceForLoad,
+  type CheckOptions,
+  type Diagnostic,
+} from './checker';
 import type {
   Body,
   CodeUnit,
@@ -2603,7 +2607,7 @@ export const compileSource = (
   source: string,
   options: CompileOptions,
 ): CompileResult => {
-  const checked = checkSource(source, options);
+  const checked = checkSourceForLoad(source, options);
   if (checked.error || !checked.ok) {
     return {
       error: checked.error,
