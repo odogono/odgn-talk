@@ -1723,3 +1723,23 @@ describe('Argument Labels on Operations (ADR 0115)', () => {
     ).toEqual({ triggerCharacters: [' ', ','] });
   });
 });
+test('hover on a Handler or function head shows its Fuel estimate (#1606)', () => {
+  const { request } = setup(
+    'use twice from maths\non demo\n repeat for each u in [1, 2]\n  ask http to fetch "x" and wait\n end repeat\n return twice(2)\nend demo\nfunction f n\n if n < 1 then return 0\n return f(n - 1)\nend f',
+  );
+  expect(request('textDocument/hover', at(1, 4))?.contents.value).toContain(
+    [
+      'Fuel estimate: 29, plus 4 per Handler Clause tried',
+      '+ 17 per pass of the loop at line 3',
+      // The Manifest declares fetch's 1 Fuel; only its result's size is open.
+      '+ more with larger values: list (line 3), capability (line 4), arithmetic (maths line 3)',
+    ].join('\n'),
+  );
+  expect(request('textDocument/hover', at(7, 9))?.contents.value).toContain(
+    'Fuel estimate: 8..20\n+ more with larger values: compare (line 9), arithmetic (line 10)\n+ calls not counted: f (line 10)',
+  );
+  // A call site is not a head.
+  expect(
+    request('textDocument/hover', at(9, 8))?.contents.value ?? '',
+  ).not.toContain('Fuel estimate');
+});
