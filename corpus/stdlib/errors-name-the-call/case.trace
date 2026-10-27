@@ -3,7 +3,7 @@
 # in the Lambda, at its `/`. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> load checks identity=d9bcbf7477e870814f7acc62448da3b0c1ea4b812425de95e273c50dd7d7a751
+> load checks identity=a8a32e84a2360938e9f03fc10e7a3fa44abbff8d42eec6533ef4d39b3b2cd1b7
 > deliver d1 to=checks message=go
 > deliver d2 to=checks message=parse
 > deliver d3 to=checks message=invert

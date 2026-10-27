@@ -65,6 +65,7 @@ constants
   62 ["present", "path", "failedStep"]
   63 ["rule", "sourcePath", "destinationPath"]
   64 "failedStep"
+  65 "withoutPath"
 definitions
   0 lookup.default
 bodies
@@ -98,6 +99,12 @@ bodies
   27 function mappingLocation (number, rule, selected, position) locals 8 1411..1447
   28 function mappingFailure (location, stage, failure) locals 6 1448..1467
   29 function mappingWrite (built, path, value) locals 11 1468..1556
+  30 function withPath (m, path, v) locals 4 1557..1568
+  31 function withoutPath (m, path) locals 3 1569..1588
+  32 function hasPath (m, path) locals 3 1589..1596
+  33 function needPath (path) locals 3 1597..1620
+  34 function placeAt (c, path, i, v, taken) locals 11 1621..1719
+  35 function removeAt (c, path, i, taken) locals 10 1720..1841
 code
   0000 75:36 const 0 ; nothing
   0001 75:26 store-definition lookup.default
@@ -1656,6 +1663,291 @@ code
   1554 428:3 return
   1555 429:1 const 0 ; nothing
   1556 429:1 return
+  1557 435:12 load 2 ; path
+  1558 435:3 call 33 1 ; needPath
+  1559 435:3 store 0 ; it
+  1560 436:18 load 1 ; m
+  1561 436:21 load 2 ; path
+  1562 436:27 const 4 ; 1
+  1563 436:30 load 3 ; v
+  1564 436:33 list 0
+  1565 436:10 call 34 5 ; placeAt
+  1566 436:3 return
+  1567 437:1 const 0 ; nothing
+  1568 437:1 return
+  1569 441:12 load 2 ; path
+  1570 441:3 call 33 1 ; needPath
+  1571 441:3 store 0 ; it
+  1572 442:20 load 2 ; path
+  1573 442:6 property length
+  1574 442:27 const 16 ; 0
+  1575 442:25 equal
+  1576 442:3 branch-false 1581
+  1577 442:46 const 65 ; "withoutPath"
+  1578 442:61 load 2 ; path
+  1579 442:34 call 11 2 ; outOfDomain
+  1580 442:34 store 0 ; it
+  1581 443:19 load 1 ; m
+  1582 443:22 load 2 ; path
+  1583 443:28 const 4 ; 1
+  1584 443:31 list 0
+  1585 443:10 call 35 4 ; removeAt
+  1586 443:3 return
+  1587 444:1 const 0 ; nothing
+  1588 444:1 return
+  1589 448:17 load 1 ; m
+  1590 448:20 load 2 ; path
+  1591 448:10 call 7 2 ; lookup
+  1592 448:33 const 0 ; nothing
+  1593 448:26 not-equal
+  1594 448:3 return
+  1595 449:1 const 0 ; nothing
+  1596 449:1 return
+  1597 453:12 load 1 ; path
+  1598 453:3 call 15 1 ; needList
+  1599 453:3 store 0 ; it
+  1600 454:27 load 1 ; path
+  1601 454:3 iterate
+  1602 454:3 next 1618
+  1603 454:3 store 2 ; step
+  1604 455:8 load 2 ; step
+  1605 455:13 is-kind number
+  1606 455:5 branch-false 1610
+  1607 455:42 load 2 ; step
+  1608 455:30 call 14 1 ; needInteger
+  1609 455:30 store 0 ; it
+  1610 456:8 load 2 ; step
+  1611 456:13 is-kind number
+  1612 456:13 not
+  1613 456:5 branch-false 1617
+  1614 456:43 load 2 ; step
+  1615 456:34 call 12 1 ; needText
+  1616 456:34 store 0 ; it
+  1617 454:3 jump 1602
+  1618 454:3 pop
+  1619 458:1 const 0 ; nothing
+  1620 458:1 return
+  1621 463:6 load 3 ; i
+  1622 463:24 load 2 ; path
+  1623 463:10 property length
+  1624 463:8 greater
+  1625 463:3 branch-false 1628
+  1626 463:41 load 4 ; v
+  1627 463:34 return
+  1628 464:12 load 3 ; i
+  1629 464:17 load 2 ; path
+  1630 464:7 chunk-get item
+  1631 464:3 store 6 ; step
+  1632 465:7 load 5 ; taken
+  1633 465:3 store 7 ; below
+  1634 466:7 load 6 ; step
+  1635 466:3 store 8 ; (8)
+  1636 466:3 load 7 ; below
+  1637 466:3 load 8 ; (8)
+  1638 466:3 append
+  1639 466:3 store 7 ; below
+  1640 467:6 load 6 ; step
+  1641 467:11 is-kind text
+  1642 467:3 branch-false 1680
+  1643 468:8 load 1 ; c
+  1644 468:10 is-kind map
+  1645 468:10 not
+  1646 468:5 branch-false 1652
+  1647 468:40 const 5 ; "map"
+  1648 468:47 load 1 ; c
+  1649 468:50 load 5 ; taken
+  1650 468:28 call 9 3 ; wrongKindAt
+  1651 468:28 store 0 ; it
+  1652 469:8 load 3 ; i
+  1653 469:26 load 2 ; path
+  1654 469:12 property length
+  1655 469:10 less
+  1656 469:5 branch-false 1668
+  1657 469:53 load 6 ; step
+  1658 469:62 load 1 ; c
+  1659 469:48 get-key-computed
+  1660 469:65 load 2 ; path
+  1661 469:71 load 3 ; i
+  1662 469:75 const 4 ; 1
+  1663 469:73 add
+  1664 469:78 load 4 ; v
+  1665 469:81 load 7 ; below
+  1666 469:40 call 34 5 ; placeAt
+  1667 469:36 store 4 ; v
+  1668 470:9 load 4 ; v
+  1669 470:5 store 8 ; (8)
+  1670 470:21 load 6 ; step
+  1671 470:16 store 9 ; (9)
+  1672 470:5 load 1 ; c
+  1673 470:5 store 10 ; (10)
+  1674 470:16 load 9 ; (9)
+  1675 470:16 load 10 ; (10)
+  1676 470:5 load 8 ; (8)
+  1677 470:16 set-key-computed
+  1678 470:5 store 1 ; c
+  1679 467:3 jump 1716
+  1680 472:8 load 1 ; c
+  1681 472:10 is-kind list
+  1682 472:10 not
+  1683 472:5 branch-false 1689
+  1684 472:41 const 6 ; "list"
+  1685 472:49 load 1 ; c
+  1686 472:52 load 5 ; taken
+  1687 472:29 call 9 3 ; wrongKindAt
+  1688 472:29 store 0 ; it
+  1689 473:8 load 3 ; i
+  1690 473:26 load 2 ; path
+  1691 473:12 property length
+  1692 473:10 less
+  1693 473:5 branch-false 1705
+  1694 473:53 load 6 ; step
+  1695 473:61 load 1 ; c
+  1696 473:48 chunk-get item
+  1697 473:64 load 2 ; path
+  1698 473:70 load 3 ; i
+  1699 473:74 const 4 ; 1
+  1700 473:72 add
+  1701 473:77 load 4 ; v
+  1702 473:80 load 7 ; below
+  1703 473:40 call 34 5 ; placeAt
+  1704 473:36 store 4 ; v
+  1705 474:9 load 4 ; v
+  1706 474:5 store 8 ; (8)
+  1707 474:21 load 6 ; step
+  1708 474:16 store 9 ; (9)
+  1709 474:5 load 1 ; c
+  1710 474:5 store 10 ; (10)
+  1711 474:16 load 9 ; (9)
+  1712 474:16 load 10 ; (10)
+  1713 474:5 load 8 ; (8)
+  1714 474:16 chunk-set item
+  1715 474:5 store 1 ; c
+  1716 476:10 load 1 ; c
+  1717 476:3 return
+  1718 477:1 const 0 ; nothing
+  1719 477:1 return
+  1720 482:6 load 1 ; c
+  1721 482:11 const 0 ; nothing
+  1722 482:8 equal
+  1723 482:3 branch-false 1726
+  1724 482:31 load 1 ; c
+  1725 482:24 return
+  1726 483:12 load 3 ; i
+  1727 483:17 load 2 ; path
+  1728 483:7 chunk-get item
+  1729 483:3 store 5 ; step
+  1730 484:7 load 4 ; taken
+  1731 484:3 store 6 ; below
+  1732 485:7 load 5 ; step
+  1733 485:3 store 7 ; (7)
+  1734 485:3 load 6 ; below
+  1735 485:3 load 7 ; (7)
+  1736 485:3 append
+  1737 485:3 store 6 ; below
+  1738 486:6 load 5 ; step
+  1739 486:11 is-kind text
+  1740 486:3 branch-false 1790
+  1741 487:8 load 1 ; c
+  1742 487:10 is-kind map
+  1743 487:10 not
+  1744 487:5 branch-false 1750
+  1745 487:40 const 5 ; "map"
+  1746 487:47 load 1 ; c
+  1747 487:50 load 4 ; taken
+  1748 487:28 call 9 3 ; wrongKindAt
+  1749 487:28 store 0 ; it
+  1750 488:13 load 5 ; step
+  1751 488:22 load 1 ; c
+  1752 488:8 get-key-computed
+  1753 488:27 const 0 ; nothing
+  1754 488:24 equal
+  1755 488:5 branch-false 1758
+  1756 488:47 load 1 ; c
+  1757 488:40 return
+  1758 489:8 load 3 ; i
+  1759 489:26 load 2 ; path
+  1760 489:12 property length
+  1761 489:10 equal
+  1762 489:5 branch-false 1770
+  1763 490:19 load 5 ; step
+  1764 490:14 store 7 ; (7)
+  1765 490:14 load 7 ; (7)
+  1766 490:7 load 1 ; c
+  1767 490:14 delete-key-computed
+  1768 490:7 store 1 ; c
+  1769 489:5 jump 1789
+  1770 492:25 load 5 ; step
+  1771 492:34 load 1 ; c
+  1772 492:20 get-key-computed
+  1773 492:37 load 2 ; path
+  1774 492:43 load 3 ; i
+  1775 492:47 const 4 ; 1
+  1776 492:45 add
+  1777 492:50 load 6 ; below
+  1778 492:11 call 35 4 ; removeAt
+  1779 492:7 store 7 ; (7)
+  1780 492:67 load 5 ; step
+  1781 492:62 store 8 ; (8)
+  1782 492:7 load 1 ; c
+  1783 492:7 store 9 ; (9)
+  1784 492:62 load 8 ; (8)
+  1785 492:62 load 9 ; (9)
+  1786 492:7 load 7 ; (7)
+  1787 492:62 set-key-computed
+  1788 492:7 store 1 ; c
+  1789 486:3 jump 1838
+  1790 495:8 load 1 ; c
+  1791 495:10 is-kind list
+  1792 495:10 not
+  1793 495:5 branch-false 1799
+  1794 495:41 const 6 ; "list"
+  1795 495:49 load 1 ; c
+  1796 495:52 load 4 ; taken
+  1797 495:29 call 9 3 ; wrongKindAt
+  1798 495:29 store 0 ; it
+  1799 496:13 load 5 ; step
+  1800 496:21 load 1 ; c
+  1801 496:8 chunk-get item
+  1802 496:26 const 0 ; nothing
+  1803 496:23 equal
+  1804 496:5 branch-false 1807
+  1805 496:46 load 1 ; c
+  1806 496:39 return
+  1807 497:8 load 3 ; i
+  1808 497:26 load 2 ; path
+  1809 497:12 property length
+  1810 497:10 equal
+  1811 497:5 branch-false 1819
+  1812 498:19 load 5 ; step
+  1813 498:14 store 7 ; (7)
+  1814 498:14 load 7 ; (7)
+  1815 498:7 load 1 ; c
+  1816 498:14 chunk-delete item
+  1817 498:7 store 1 ; c
+  1818 497:5 jump 1838
+  1819 500:25 load 5 ; step
+  1820 500:33 load 1 ; c
+  1821 500:20 chunk-get item
+  1822 500:36 load 2 ; path
+  1823 500:42 load 3 ; i
+  1824 500:46 const 4 ; 1
+  1825 500:44 add
+  1826 500:49 load 6 ; below
+  1827 500:11 call 35 4 ; removeAt
+  1828 500:7 store 7 ; (7)
+  1829 500:66 load 5 ; step
+  1830 500:61 store 8 ; (8)
+  1831 500:7 load 1 ; c
+  1832 500:7 store 9 ; (9)
+  1833 500:61 load 8 ; (8)
+  1834 500:61 load 9 ; (9)
+  1835 500:7 load 7 ; (7)
+  1836 500:61 chunk-set item
+  1837 500:7 store 1 ; c
+  1838 503:10 load 1 ; c
+  1839 503:3 return
+  1840 504:1 const 0 ; nothing
+  1841 504:1 return
 unwind
   0565..0569 catch -> 0571 depth 2
   0572..0573 guard -> 0587 depth 2

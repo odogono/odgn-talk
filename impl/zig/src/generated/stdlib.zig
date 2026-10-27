@@ -956,6 +956,24 @@ pub const stdlib: StdlibTable = .{
         },
         .{
             .library = "map",
+            .name = "withPath",
+            .call = "withPath(m, path, v)",
+            .gives = "`m` with `v` at the Value Path `path`",
+        },
+        .{
+            .library = "map",
+            .name = "withoutPath",
+            .call = "withoutPath(m, path)",
+            .gives = "`m` with the key or item at the Value Path `path` removed",
+        },
+        .{
+            .library = "map",
+            .name = "hasPath",
+            .call = "hasPath(m, path)",
+            .gives = "Whether the Value Path `path` locates a value inside `m` that isn't Nothing",
+        },
+        .{
+            .library = "map",
             .name = "transform",
             .call = "transform(value, mapping)",
             .gives = "A complete fresh mapped value, or ordered diagnostics without partial output",
@@ -1045,6 +1063,12 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "not encodable",
             },
+        },
+        .{
+            .library = "json",
+            .name = "pointerPath",
+            .call = "pointerPath(t)",
+            .gives = "The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position",
         },
         .{
             .library = "date",
