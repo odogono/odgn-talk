@@ -995,6 +995,29 @@ const iteratorItem = (source: Value | null, at: number): Value => {
   return integerValue(start + BigInt(at - 1));
 };
 
+// An iterator over a List or a whole-number range, else the error `iterate`
+// raises.
+const iteratorOver = (v: Value): Iterator => {
+  if (v.kind === 'list') {
+    return { k: 'iterator', source: v, at: 0, count: v.length };
+  }
+  if (v.kind !== 'range') {
+    throw wrongKind('list', v);
+  }
+  const { from, to } = v.asRange()!;
+  const whole = (x: Value) => isKind(x, 'integer').asBool();
+  if (!whole(from) || !whole(to)) {
+    throw wrongKind('integer', whole(from) ? to : from);
+  }
+  const items = property('length', v);
+  return {
+    k: 'iterator',
+    source: v,
+    at: 0,
+    count: Number(items.asDecimal()!.toString()),
+  };
+};
+
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 const isBoolean = (item: Item | undefined): boolean =>
   isValue(item) && item.kind === 'boolean';
@@ -1018,7 +1041,7 @@ const jump = (frame: Frame, pc: number): void => {
 // Scheduler callbacks last only for one step and are never saved with a Run.
 const clauseChargeCallbacks = new WeakMap<Run, () => void>();
 
-/** Internal: tests turn `Run.fastSteps` off to compare it with `step`. */
+/** Internal: tests turn `Run.fastSteps` and `stepMany` off to compare them with `step`. */
 export const fastPath = { enabled: true };
 
 // Each rate's charge when its formula measures nothing, else undefined.
@@ -2445,13 +2468,13 @@ export class Run {
     ) {
       return;
     }
-    const frame = this.frame;
+    let frame = this.frame;
     if (frame.restricted || frame.clauseCharge) {
       return;
     }
-    const { locals, stack } = frame;
-    const code = frame.code;
-    const instructions = code.unit.code;
+    let { locals, stack, code } = frame;
+    let instructions = code.unit.code;
+    const m = this.m;
     const fuelLimit = this.limits.fuelPerRun;
     const allocLimit = this.limits.allocPerRun;
     const end = this.fuel + room;
@@ -2466,6 +2489,7 @@ export class Run {
       const opcode = ins.opcode;
       let cost: Charge | undefined;
       let result: Value | undefined;
+      let iterator: Iterator | undefined;
       switch (opcode) {
         case Op.Const:
         case Op.Pop:
@@ -2526,6 +2550,55 @@ export class Run {
           result = bool(holds);
           break;
         }
+        case Op.Iterate: {
+          const v = stack.at(-1);
+          if (isValue(v) && (v.kind === 'list' || v.kind === 'range')) {
+            try {
+              iterator = iteratorOver(v);
+            } catch {
+              break;
+            }
+            cost = fixedCharges[ins.rate];
+          }
+          break;
+        }
+        case Op.Next:
+          cost = fixedCharges[ins.rate];
+          break;
+        case Op.GetKey: {
+          const receiver = stack.at(-1);
+          if (isValue(receiver) && receiver.kind === 'map') {
+            cost = fixedCharges[ins.rate];
+          }
+          break;
+        }
+        case Op.Append: {
+          const current = stack.at(-2);
+          const input = stack.at(-1);
+          if (
+            isValue(current) &&
+            isValue(input) &&
+            (current.kind === 'list' || current.kind === 'text')
+          ) {
+            result = appendTo(current, input, 'append');
+            resetMeasured(m);
+            m.input = input;
+            m.result = result;
+            cost = charge(ins.rate, m, this.instructionCharge);
+          }
+          break;
+        }
+        case Op.Call:
+          if (!this.callWouldExceedDepth()) {
+            cost = fixedCharges[CALL];
+          }
+          break;
+        case Op.Return:
+          // The entry frame's return ends a Segment, which `step` checks.
+          if (this.frames.length > 1 && isValue(stack.at(-1))) {
+            cost = fixedCharges[ins.rate];
+          }
+          break;
         case Op.Add:
         case Op.Subtract:
         case Op.Multiply: {
@@ -2576,6 +2649,43 @@ export class Run {
             continue;
           }
           break;
+        case Op.Iterate:
+          stack[stack.length - 1] = iterator!;
+          break;
+        case Op.Next: {
+          const it = stack.at(-1) as Iterator;
+          if (it.at >= it.count) {
+            pc = a as number;
+            continue;
+          }
+          it.at++;
+          stack.push(iteratorItem(it.source, it.at));
+          break;
+        }
+        case Op.GetKey:
+          stack[stack.length - 1] = (stack.at(-1) as Value).get(a as string);
+          break;
+        case Op.Call:
+        case Op.Return: {
+          frame.pc = pc;
+          if (opcode === Op.Call) {
+            const body = code.unit.bodies[a as number]!;
+            const args = stack.slice(stack.length - (b as number)) as Value[];
+            this.push(code, body, this.fillDefaults(code, body, args), null);
+            drop(stack, b as number);
+          } else {
+            const value = stack.at(-1) as Value;
+            this.frames.pop();
+            const caller = this.frame;
+            caller.stack.push(value);
+            caller.pc++;
+          }
+          frame = this.frame;
+          ({ locals, stack, code } = frame);
+          instructions = code.unit.code;
+          pc = frame.pc;
+          continue;
+        }
         default:
           stack.pop();
           stack[stack.length - 1] = result!;
@@ -2585,6 +2695,41 @@ export class Run {
     frame.pc = pc;
     this.fuel = fuel;
     this.alloc = alloc;
+  }
+
+  /**
+   * Run instructions, fast and general, while they spend less than `room`
+   * Fuel and the Group has nothing to do between them: none writes a record
+   * or ends, suspends or cancels the Run. Returns whether any took the
+   * general step, whose aftermath the Group then handles. Like `fastSteps`,
+   * only for a Run whose clause is selected and that no tooling observes.
+   */
+  stepMany(room: number): boolean {
+    if (!fastPath.enabled) {
+      return false;
+    }
+    const end = this.fuel + room;
+    let stepped = false;
+    for (;;) {
+      this.fastSteps(end - this.fuel);
+      const records = this.records.length;
+      if (
+        this.fuel >= end ||
+        this.outcome ||
+        this.suspended ||
+        this.cancellation ||
+        this.clauseChargePending ||
+        this.effectStateUnknown ||
+        !this.frames.length
+      ) {
+        return stepped;
+      }
+      this.step();
+      stepped = true;
+      if (this.records.length !== records || this.abandoning.length) {
+        return stepped;
+      }
+    }
   }
 
   /** Internal: also called after a debug-deferred unwind. */
@@ -5639,31 +5784,7 @@ export class Run {
         frame.stack.pop();
         return next(frame);
       case Op.Iterate: {
-        const v = this.peek();
-        let iterator: Iterator;
-        if (v.kind === 'list') {
-          iterator = {
-            k: 'iterator',
-            source: v,
-            at: 0,
-            count: v.length,
-          };
-        } else if (v.kind === 'range') {
-          const { from, to } = v.asRange()!;
-          const whole = (x: Value) => isKind(x, 'integer').asBool();
-          if (!whole(from) || !whole(to)) {
-            throw wrongKind('integer', whole(from) ? to : from);
-          }
-          const items = property('length', v);
-          iterator = {
-            k: 'iterator',
-            source: v,
-            at: 0,
-            count: Number(items.asDecimal()!.toString()),
-          };
-        } else {
-          throw wrongKind('list', v);
-        }
+        const iterator = iteratorOver(this.peek());
         this.pay(rate);
         this.pop();
         frame.stack.push(iterator);
