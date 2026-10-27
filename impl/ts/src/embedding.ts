@@ -37,7 +37,7 @@ import type { sqliteCapability } from './sqlite-capability';
 import type { storeCapability } from './store-capability';
 import type { userCapability } from './user-capability';
 import type { httpCapability } from './http-capability';
-import type { Value } from './values';
+import { requireArgs, type Value } from './values';
 import type { Versions } from './versions';
 
 /**
@@ -146,4 +146,7 @@ export const invoke = (
   script: Pick<Script, 'request'>,
   name: string,
   args: Value[],
-): Promise<Value> => script.request({ name, args }).result;
+): Promise<Value> => {
+  requireArgs(args, `invoke('${name}')`, name);
+  return script.request({ name, args }).result;
+};

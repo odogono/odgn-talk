@@ -115,6 +115,8 @@ import {
   listValues,
   map,
   nothing,
+  requireArgs,
+  requireValue,
   text,
   Value,
 } from './values';
@@ -3210,6 +3212,11 @@ export class TsGroup implements Group {
   ): Delivery {
     const notify = !this.combinedAdmission;
     this.combinedAdmission = false;
+    requireArgs(
+      m.args ?? [],
+      fn ? 'call' : `${record}('${m.name}')`,
+      fn ? undefined : m.name,
+    );
     const named = typeof to === 'string';
     const toText = named ? to : traceValue(to.handle.value);
     // The Script it routes to at the call, whose mailbox depth it counts
@@ -3357,6 +3364,7 @@ export class TsGroup implements Group {
 
   private queueBroadcast(m: Message, id: string, decision?: Decision) {
     const record = decision ? 'decide-broadcast' : 'broadcast';
+    requireArgs(m.args ?? [], `broadcast('${m.name}')`, m.name);
     if (!validMessageSelector(m.name, m.args?.length ?? 0)) {
       this.recordRefusal(
         recordLine(record, [], messageFields(m), true),
@@ -3397,6 +3405,7 @@ export class TsGroup implements Group {
   ): string {
     const { m, id, decision } = action;
     const record = decision ? 'decide-broadcast' : 'broadcast';
+    requireArgs(m.args ?? [], `broadcast('${m.name}')`, m.name);
     action.recipients = this.scripts
       .filter(
         s =>
@@ -3618,6 +3627,8 @@ export class TsGroup implements Group {
     args: Value[],
     o?: CancellationOptions & { limits?: LimitOverride },
   ): Requested {
+    requireValue(fn);
+    requireArgs(args, 'call');
     const ref = fn.asFunction();
     if (!ref || ref.group !== this.functionGroup) {
       const code = ref ? 'wrong group' : 'invalid value';

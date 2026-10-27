@@ -50,7 +50,7 @@ import {
   type ObjectKind,
   type ObjectState,
 } from '../objects';
-import { map, nothing, Value } from '../values';
+import { map, nothing, requireArgs, Value } from '../values';
 import { binaryValues, decode, encode, encodeAll, type Codec } from './codec';
 import { InstanceLostError } from './reactor';
 import { Session } from './session';
@@ -167,7 +167,7 @@ export class WasmScript implements Script {
       'request-pump',
       () => ({
         to: { script: this.name },
-        message: this.group.messageFrame(m),
+        message: this.group.messageFrame(m, 'requestPump'),
       }),
       now,
       o,
@@ -937,7 +937,8 @@ export class WasmGroup implements Group {
   // ---------------------------------------------------------------------
 
   /** @internal Message data shared with the Script combined operation. */
-  messageFrame(m: Message): Frame {
+  messageFrame(m: Message, call: string): Frame {
+    requireArgs(m.args ?? [], `${call}('${m.name}')`, m.name);
     return {
       name: m.name,
       args: encodeAll(this.#codec, m.args ?? []),
@@ -974,7 +975,7 @@ export class WasmGroup implements Group {
   ): string {
     const ok = this.send(m, {
       ...fields,
-      ...(message ? { message: this.messageFrame(message) } : {}),
+      ...(message ? { message: this.messageFrame(message, m) } : {}),
     });
     this.#ready();
     return textOf(field(ok, 'delivery')) ?? textOf(field(ok, 'broadcast'))!;
@@ -1147,7 +1148,10 @@ export class WasmGroup implements Group {
   ): PumpedRequest {
     return this.combined(
       'request-pump',
-      () => ({ to: this.#target(to), message: this.messageFrame(m) }),
+      () => ({
+        to: this.#target(to),
+        message: this.messageFrame(m, 'requestPump'),
+      }),
       now,
       o,
     );
@@ -1161,11 +1165,14 @@ export class WasmGroup implements Group {
   ): PumpedRequest {
     return this.combined(
       'call-pump',
-      () => ({
-        fn: encode(this.#codec, fn),
-        args: encodeAll(this.#codec, args),
-        limits: o?.limits ? { ...o.limits } : undefined,
-      }),
+      () => {
+        requireArgs(args, 'callPump');
+        return {
+          fn: encode(this.#codec, fn),
+          args: encodeAll(this.#codec, args),
+          limits: o?.limits ? { ...o.limits } : undefined,
+        };
+      },
       now,
       o,
     );
@@ -1326,6 +1333,7 @@ export class WasmGroup implements Group {
     args: Value[],
     o?: CancellationOptions & { limits?: Message['limits'] },
   ): Requested {
+    requireArgs(args, 'call');
     const id = this.queue('call', {
       fn: encode(this.#codec, fn),
       args: encodeAll(this.#codec, args),

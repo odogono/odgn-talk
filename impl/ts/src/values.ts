@@ -585,12 +585,51 @@ export class Value {
   }
 }
 
+// The JS kind a Host passed instead of a Value, for refusal messages.
+export const jsKind = (value: unknown): string => {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (typeof value === 'object') {
+    const name = (value as object).constructor?.name;
+    return name && name !== 'Object' ? `${name} object` : 'object';
+  }
+  return typeof value;
+};
+
 export const requireValue: (
   value: unknown,
 ) => asserts value is Value = value => {
   if (!Value.isValue(value)) {
-    invalidValue('Expected a Value from a named constructor');
+    invalidValue(
+      `Expected a Value from a named constructor, got a JS ${jsKind(value)}; wrap it with text(), num() or toValue()`,
+    );
   }
+};
+
+/**
+ * Refuses a boundary call's argument that isn't a Value, naming the call, the
+ * argument's position and its JS kind. A named Handler also suggests
+ * `script.handlers`, which converts plain JS (ADR 0130).
+ */
+export const requireArgs = (
+  args: readonly unknown[],
+  call: string,
+  handler?: string,
+): void => {
+  args.forEach((arg, i) => {
+    if (!Value.isValue(arg)) {
+      const handlers = handler
+        ? `, or call script.handlers.${handler}(...), which converts plain JS`
+        : '';
+      invalidValue(
+        `Argument ${i + 1} of ${call} is a JS ${jsKind(arg)}, not a Value; wrap it with text(), num() or toValue()${handlers}`,
+      );
+    }
+  });
 };
 export const nothing = makeValue('nothing', undefined);
 export const bool = (b: boolean): Value => {
