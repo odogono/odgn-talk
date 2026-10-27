@@ -1,7 +1,8 @@
 /** Transport-agnostic LSP 3.17 server. Send and workspace data are supplied by
  * a stdio Host or a browser worker; this module has no file/process imports. */
 import {
-  analyzeWorkspace,
+  createWorkspace,
+  type Analysis,
   type Document,
   type WorkspaceSource,
 } from './lsp/workspace';
@@ -79,16 +80,14 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   let sources: readonly WorkspaceSource[] = [];
   let client: ClientFeatures = { markdown: false, snippets: false };
   const open = new Map<string, Document>();
-  let analyses = new Map<
-    string,
-    ReturnType<typeof analyzeWorkspace> extends Map<string, infer A> ? A : never
-  >();
+  const workspace = createWorkspace();
+  let analyses = new Map<string, Analysis>();
   const refresh = () => {
     const documents = new Map(sources.map(source => [source.uri, source]));
     for (const [uri, doc] of open) {
       documents.set(uri, { ...documents.get(uri), ...doc });
     }
-    analyses = analyzeWorkspace([...documents.values()], manifest, profile);
+    analyses = workspace.analyze([...documents.values()], manifest, profile);
     for (const [uri, doc] of open) {
       const diagnostics = [...(analyses.get(uri)?.diagnostics ?? [])];
       if (manifestError) {

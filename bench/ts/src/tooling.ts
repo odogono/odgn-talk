@@ -2,7 +2,7 @@
 // parity check, and only the TS runner. bench/README.md describes each.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyzeWorkspace } from '../../../tooling/stack/src/lsp/workspace';
+import { createWorkspace } from '../../../tooling/stack/src/lsp/workspace';
 import { measure } from './measurement';
 import { type Measurement, statsOf } from './report';
 
@@ -25,8 +25,8 @@ const project = ['steps', 'first', 'second'].map(name => ({
 /**
  * An LSP edit-and-reanalyse cycle: one line of `first.talk` changes, then the
  * whole project is parsed, checked, linted and lowered again, as `didChange`
- * does. Each call alternates the line; every open document has a version,
- * so no Analysis is reused.
+ * does. Each call alternates the line in one LSP workspace, which redoes
+ * only what the edit changed.
  */
 const lspReanalyse = () => {
   const [steps, first, second] = project;
@@ -34,6 +34,7 @@ const lspReanalyse = () => {
     first!.text,
     first!.text.replace('put 0 into total', 'put 1 into total'),
   ];
+  const workspace = createWorkspace();
   let version = 0;
   return () => {
     version++;
@@ -42,7 +43,7 @@ const lspReanalyse = () => {
       { ...first!, text: edits[version % 2]!, version },
       { ...second!, version: 1 },
     ];
-    return analyzeWorkspace(documents, null, 'standard');
+    return workspace.analyze(documents, null, 'standard');
   };
 };
 

@@ -38,7 +38,7 @@ When the `ts` runner is selected, the report also gives each Core's [Payload](..
 
 ## Tooling Benchmarks
 
-`tooling/lsp-reanalyse` runs only on the `ts` runner. It times one LSP edit-and-reanalyse cycle: a line of `first.talk` in [`scripts/tooling/lsp-project`](scripts/tooling/lsp-project/) changes, then `analyzeWorkspace` (`tooling/stack/src/lsp/workspace.ts`) parses, checks, lints and lowers the whole project again, as `didChange` does. The project is a Library of 40 functions and two Scripts that import it. Unlike `lifecycle/load-*`, it does no Group setup and runs no Script, so it has no Load, Fuel or parity check. It fails when any document has a syntax error or does not lower. `--filter tooling` selects it.
+`tooling/lsp-reanalyse` runs only on the `ts` runner. It times one LSP edit-and-reanalyse cycle: a line of `first.talk` in [`scripts/tooling/lsp-project`](scripts/tooling/lsp-project/) changes, then the LSP workspace (`createWorkspace` in `tooling/stack/src/lsp/workspace.ts`) reanalyses it, as `didChange` does: it parses, checks, lints and lowers again only what the edit changed. The project is a Library of 40 functions and two Scripts that import it. Unlike `lifecycle/load-*`, it does no Group setup and runs no Script, so it has no Load, Fuel or parity check. It fails when any document has a syntax error or does not lower. `--filter tooling` selects it.
 
 The `ts` runner measures it on Bun. For a Node figure, build and run its own entry:
 

@@ -57,11 +57,63 @@ export const libraryUri = (name: string) =>
 
 let standardWorkspace: Map<string, Analysis> | undefined;
 
+type Parsed = ReturnType<typeof parseSourceRecovering>;
+/** What one document's last analysis kept, so the next can reuse it. */
+type Entry = {
+  analysis?: { base: Analysis; checked: SemanticResult };
+  /** Each check of this text by the Libraries it imports' export summaries. */
+  checks: Map<string, SemanticResult>;
+  contextual?: { diagnostics: SemanticResult['diagnostics']; key: string };
+  load?: {
+    checked: SemanticResult;
+    diagnostics: LspDiagnostic[];
+    links: (CompiledScript | undefined)[];
+    loaded?: CompiledScript;
+  };
+  parsed: Parsed;
+  text: string;
+};
+type Memo = Map<string, Entry>;
+const importNames = new WeakMap<SemanticResult, string[]>();
+
 /** Rebuild bindings as one snapshot so edits in an imported Library update its consumers. */
 export const analyzeWorkspace = (
   documents: readonly Document[],
   manifest: HostManifest | null,
   profile: LintProfile,
+): Map<string, Analysis> => analyze(documents, manifest, profile, new Map());
+
+/**
+ * An LSP workspace that keeps each document's analysis between calls and
+ * redoes only what an edit changed. Its results match `analyzeWorkspace`.
+ */
+export const createWorkspace = () => {
+  let memo: Memo = new Map();
+  let last: { manifest: HostManifest | null; profile: LintProfile } | undefined;
+  return {
+    analyze: (
+      documents: readonly Document[],
+      manifest: HostManifest | null,
+      profile: LintProfile,
+    ): Map<string, Analysis> => {
+      if (last?.manifest !== manifest || last.profile !== profile) {
+        memo = new Map();
+      }
+      last = { manifest, profile };
+      const next: Memo = new Map();
+      const out = analyze(documents, manifest, profile, memo, next);
+      memo = next;
+      return out;
+    },
+  };
+};
+
+const analyze = (
+  documents: readonly Document[],
+  manifest: HostManifest | null,
+  profile: LintProfile,
+  memo: Memo,
+  next: Memo = new Map(),
 ): Map<string, Analysis> => {
   if (!standardWorkspace && (documents.length || manifest)) {
     standardWorkspace = analyzeWorkspace([], null, 'standard');
@@ -106,14 +158,71 @@ export const analyzeWorkspace = (
       ? { ...existing, document: doc }
       : undefined;
   };
+  const entries = new Map<string, Entry>();
+  for (const [uri, doc] of sources) {
+    if (cached(doc)) {
+      continue;
+    }
+    const previous = memo.get(uri);
+    const entry: Entry =
+      previous?.text === doc.text
+        ? { ...previous, checks: new Map() }
+        : {
+            text: doc.text,
+            parsed: parseSourceRecovering(doc.text),
+            checks: new Map(),
+          };
+    entries.set(uri, entry);
+    next.set(uri, entry);
+  }
   const parsed = new Map(
     [...sources].map(([uri, doc]) => [
       uri,
       cached(doc)
         ? { tree: cached(doc)!.syntax, diagnostics: [] }
-        : parseSourceRecovering(doc.text),
+        : entries.get(uri)!.parsed,
     ]),
   );
+  // A check reads only the export summaries of the Libraries it imports, and
+  // the manifest, which clears the memo when it changes.
+  const importsOf = (result: SemanticResult) => {
+    let imports = importNames.get(result);
+    if (!imports) {
+      imports = semanticElements(result.tree.root)
+        .filter(
+          (e): e is SemanticName => e.kind === 'name' && e.role === 'library',
+        )
+        .map(e => e.text);
+      importNames.set(result, imports);
+    }
+    return imports;
+  };
+  const summaryKey = (imports: readonly string[], libraries: typeof exports) =>
+    JSON.stringify(imports.map(name => libraries[name] ?? null));
+  const memoCheck = (
+    uri: string,
+    libraries: typeof exports,
+    check: () => SemanticResult,
+  ): SemanticResult => {
+    const entry = entries.get(uri)!;
+    const previous = memo.get(uri);
+    if (previous?.text === entry.text) {
+      for (const [key, result] of previous.checks) {
+        if (summaryKey(importsOf(result), libraries) === key) {
+          entry.checks.set(key, result);
+          return result;
+        }
+      }
+    }
+    for (const [key, result] of entry.checks) {
+      if (summaryKey(importsOf(result), libraries) === key) {
+        return result;
+      }
+    }
+    const result = check();
+    entry.checks.set(summaryKey(importsOf(result), libraries), result);
+    return result;
+  };
   let exports: Record<string, Record<string, LibraryExport>> = {};
   const checked = new Map<string, SemanticResult>();
   // Export kinds/contracts are available on the first pass; suspension can
@@ -121,12 +230,15 @@ export const analyzeWorkspace = (
   for (let pass = 0; pass <= libraries.size; pass++) {
     const next: typeof exports = {};
     for (const [name, doc] of libraries) {
+      const libraries = exports;
       const result =
         cached(doc)?.checked ??
-        checkSyntax(parsed.get(doc.uri)!.tree, {
-          unit: 'library',
-          libraries: exports,
-        });
+        memoCheck(doc.uri, libraries, () =>
+          checkSyntax(parsed.get(doc.uri)!.tree, {
+            unit: 'library',
+            libraries,
+          }),
+        );
       checked.set(doc.uri, result);
       next[name] = exportsOf(result.tree);
     }
@@ -146,12 +258,27 @@ export const analyzeWorkspace = (
     const p = parsed.get(document.uri)!;
     const result = document.library
       ? checked.get(document.uri)!
-      : checkSyntax(p.tree, {
-          libraries: exports,
-          ...(manifest
-            ? { grants: grantDeclarations(manifest), objects: manifest.objects }
-            : {}),
-        });
+      : memoCheck(document.uri, exports, () =>
+          checkSyntax(p.tree, {
+            libraries: exports,
+            ...(manifest
+              ? {
+                  grants: grantDeclarations(manifest),
+                  objects: manifest.objects,
+                }
+              : {}),
+          }),
+        );
+    const entry = entries.get(document.uri)!;
+    if (entry.analysis?.checked === result) {
+      const base = entry.analysis.base;
+      out.set(document.uri, {
+        ...base,
+        document,
+        diagnostics: [...base.diagnostics],
+      });
+      continue;
+    }
     const all = semanticElements(result.tree.root);
     const diagnostics: LspDiagnostic[] = [];
     const syntaxError = p.diagnostics[0]?.error;
@@ -230,7 +357,7 @@ export const analyzeWorkspace = (
         message: l.message,
       })),
     );
-    out.set(document.uri, {
+    const base: Analysis = {
       document,
       syntax: p.tree,
       checked: result,
@@ -238,7 +365,9 @@ export const analyzeWorkspace = (
       nodes: all.filter((e): e is SemanticNode => e.kind === 'node'),
       diagnostics,
       lints,
-    });
+    };
+    entry.analysis = { checked: result, base };
+    out.set(document.uri, { ...base, diagnostics: [...diagnostics] });
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -278,11 +407,23 @@ export const analyzeWorkspace = (
         importsReady = false;
       }
     }
+    const entry = entries.get(document.uri)!;
+    const previous = entry.load;
+    const linked = [...links.values()];
     if (
+      importsReady &&
+      previous?.checked === checked &&
+      previous.links.length === linked.length &&
+      previous.links.every((l, i) => l === linked[i])
+    ) {
+      analysis.loaded = previous.loaded;
+      analysis.diagnostics.push(...previous.diagnostics);
+    } else if (
       checked.ok &&
       !parsed.get(document.uri)!.diagnostics.length &&
       importsReady
     ) {
+      const before = analysis.diagnostics.length;
       try {
         analysis.loaded = loadScript(
           lowerTree(checked.tree, {
@@ -312,6 +453,12 @@ export const analyzeWorkspace = (
           });
         }
       }
+      entry.load = {
+        checked,
+        links: linked,
+        loaded: analysis.loaded,
+        diagnostics: analysis.diagnostics.slice(before),
+      };
     }
     visiting.delete(document.uri);
     visited.add(document.uri);
@@ -320,17 +467,31 @@ export const analyzeWorkspace = (
   for (const analysis of out.values()) {
     load(analysis);
   }
+  // A Library checked with the manifest's Grants, for its importers' advice.
+  const contextualOf = (
+    doc: Document,
+    grants: ReturnType<typeof grantDeclarations>,
+  ) => {
+    const entry = entries.get(doc.uri)!;
+    const key = summaryKey(importsOf(checked.get(doc.uri)!), exports);
+    if (entry.contextual?.key !== key) {
+      entry.contextual = {
+        key,
+        diagnostics: checkSyntax(parsed.get(doc.uri)!.tree, {
+          unit: 'library',
+          libraries: exports,
+          grants,
+        }).diagnostics,
+      };
+    }
+    return entry.contextual.diagnostics;
+  };
   if (manifest) {
     const grants = grantDeclarations(manifest);
     const contextual = new Map(
       [...libraries].map(([name, doc]) => [
         name,
-        cached(doc)?.checked.diagnostics ??
-          checkSyntax(parsed.get(doc.uri)!.tree, {
-            unit: 'library',
-            libraries: exports,
-            grants,
-          }).diagnostics,
+        cached(doc)?.checked.diagnostics ?? contextualOf(doc, grants),
       ]),
     );
     for (const analysis of out.values()) {
