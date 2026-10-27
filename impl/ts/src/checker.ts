@@ -514,8 +514,10 @@ const checkParsed = (
     if (element.kind !== 'node' || !siteRules.has(element.rule)) {
       continue;
     }
-    const ts = tokens(element);
-    const ns = nodes(element);
+    let tokenList: Token[] | undefined;
+    let nodeList: SyntaxNode[] | undefined;
+    const ts = () => (tokenList ??= tokens(element));
+    const ns = () => (nodeList ??= nodes(element));
     const head = context.get(element)?.first;
     if (!head) {
       continue;
@@ -524,7 +526,7 @@ const checkParsed = (
       case 'Declaration': {
         if (head.v === 'constant' || head.v === 'script') {
           const name = context.get(
-            ns.find(node => node.rule === 'Name')!,
+            ns().find(node => node.rule === 'Name')!,
           )?.first;
           if (name) {
             declaration(
@@ -538,14 +540,14 @@ const checkParsed = (
       case 'Handler':
       case 'Function': {
         const name = context.get(
-          ns.find(
+          ns().find(
             node =>
               node.rule ===
               (element.rule === 'Handler' ? 'MessageName' : 'Name'),
           )!,
         )?.first;
         if (name) {
-          const parameters = ns.filter(node => node.rule === 'Parameter');
+          const parameters = ns().filter(node => node.rule === 'Parameter');
           declaration(
             name,
             element.rule === 'Handler' ? 'handler' : 'function',
@@ -567,9 +569,9 @@ const checkParsed = (
           }
         }
         if (element.rule === 'Handler') {
-          const during = ts.findIndex(t => t.v === 'during');
-          if (during >= 0 && ts[during + 1]) {
-            mark(ts[during + 1]!, 'binding', true);
+          const during = ts().findIndex(t => t.v === 'during');
+          if (during >= 0 && ts()[during + 1]) {
+            mark(ts()[during + 1]!, 'binding', true);
           }
         }
         break;
@@ -616,7 +618,9 @@ const checkParsed = (
           break;
         }
         const parent = context.get(element)!.parent!;
-        const prefix = tokens(parent)[0];
+        const prefix = parent.children.find(
+          (child): child is Token => child.kind === 'token',
+        );
         if (parent.rule === 'OfferClause' || parent.rule === 'ChooseOffer') {
           mark(head, 'offer');
         } else if (parent.rule === 'MessageName') {
@@ -645,22 +649,22 @@ const checkParsed = (
         break;
       }
       case 'PatternPrimary': {
-        if (isName(head) && !ns.length) {
+        if (isName(head) && !ns().length) {
           mark(head, 'binding', true);
         }
-        for (let index = 1; index < ts.length; index++) {
-          if (ts[index - 1]!.v === '...' && isName(ts[index]!)) {
-            mark(ts[index]!, 'binding', true);
+        for (let index = 1; index < ts().length; index++) {
+          if (ts()[index - 1]!.v === '...' && isName(ts()[index]!)) {
+            mark(ts()[index]!, 'binding', true);
           }
         }
         break;
       }
       case 'Field': {
-        if (ts[1]?.v === ':' && isName(head)) {
+        if (ts()[1]?.v === ':' && isName(head)) {
           mark(head, 'binding', true);
         }
         if (head.v === '...') {
-          const rest = ts.find(isName);
+          const rest = ts().find(isName);
           if (rest) {
             mark(rest, 'binding', true);
           }
@@ -668,7 +672,7 @@ const checkParsed = (
         break;
       }
       case 'Atom': {
-        if (ts[1]?.v === ':') {
+        if (ts()[1]?.v === ':') {
           mark(
             head,
             'capture',
@@ -679,7 +683,12 @@ const checkParsed = (
         break;
       }
       case 'Primary': {
-        if (!sites.has(head) && isName(head) && ts[0] === head && !ns.length) {
+        if (
+          !sites.has(head) &&
+          isName(head) &&
+          ts()[0] === head &&
+          !ns().length
+        ) {
           mark(head, context.get(element)?.binary ? 'binary size' : 'value');
         }
         if (head.t === 'word' && head.v === 'it') {
@@ -691,7 +700,7 @@ const checkParsed = (
         mark(head, 'call');
         break;
       case 'FieldType': {
-        if (['byte', 'bytes', 'bit', 'bits'].includes(ts[1]?.v ?? '')) {
+        if (['byte', 'bytes', 'bit', 'bits'].includes(ts()[1]?.v ?? '')) {
           if (isName(head)) {
             mark(head, 'binary size');
           }
@@ -699,7 +708,7 @@ const checkParsed = (
         break;
       }
       case 'SimpleStatement': {
-        if (ts[0] === head && isName(head) && head.v !== 'next') {
+        if (ts()[0] === head && isName(head) && head.v !== 'next') {
           mark(head, 'command').name.text = syntaxSelector(element, head.v);
         }
         break;
@@ -743,7 +752,7 @@ const checkParsed = (
       case 'AskTell':
       case 'TellBlock': {
         // A bare Grant name is checked against Grants by the later effect pass.
-        const target = ns.find(node => node.rule === 'Expression');
+        const target = ns().find(node => node.rule === 'Expression');
         if (target) {
           let base = target;
           while (nodes(base).length === 1 && tokens(base).length === 0) {
@@ -842,12 +851,17 @@ const checkParsed = (
           : site.token),
     );
   };
-  const firstTokenAt = new Map(
-    ordered
-      .map(info => info.element)
-      .filter((element): element is Token => element.kind === 'token')
-      .map(token => [token.pos, token]),
-  );
+  // Only a name clash needs it, so build it on first use.
+  let firstTokens: Map<number, Token> | undefined;
+  const firstTokenAt = {
+    get: (pos: number) =>
+      (firstTokens ??= new Map(
+        ordered
+          .map(info => info.element)
+          .filter((element): element is Token => element.kind === 'token')
+          .map(token => [token.pos, token]),
+      )).get(pos),
+  };
   for (const { site, kind, importedFrom, contract } of declarationSites) {
     const old = unit.bindings.get(site.name.text);
     const handler = handlers.get(site.name.text);
