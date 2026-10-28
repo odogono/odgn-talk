@@ -602,6 +602,10 @@ _Avoid_: self-contained snapshot
 A Script Snapshot that identifies its Scripts' original and extension code, whose sources the Host supplies on Restore. Full Restore requires the exact identified code.
 _Avoid_: partial snapshot, delta save
 
+**State Fingerprint**:
+A hash, defined by the spec, of a Script Group's state: everything a Script Snapshot holds except the Trace save id counter, with code counted by identity and Host Objects by Object Kind, id, parent and disposal. Two Groups with the same State Fingerprint are in the same state, however and whenever they were saved.
+_Avoid_: snapshot hash, checksum, state hash
+
 **Restore**:
 Rebuilding a Script Group from a Script Snapshot, on the same Core family. Its Host Objects come back as new handles, keeping their Object Kind, id, parent and disposal.
 _Avoid_: load, deserialize, rehydrate
