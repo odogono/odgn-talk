@@ -31,6 +31,7 @@ import {
   type ExampleProject,
 } from './examples';
 import { importSound, isSoundAsset } from './sounds';
+import { fetchProjectFile, fileNameOf } from './open-url';
 import {
   PROJECT_MIMETYPE,
   readProjectFile,
@@ -136,6 +137,8 @@ export type ProjectsDeps = {
   initial: InitialProject;
   lock: EditLock;
   lockDelegate: LockDelegate;
+  /** The `.folio` file URL the page's `?open=` names, if any. */
+  openUrl?: string;
   shell: StackShell;
   storage: ProjectStorage | undefined;
   /** Why storage could not open, when there is none. */
@@ -949,9 +952,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   /**
-   * Opens the Example Project at `/folio/<slug>` (#1676). When an earlier
-   * visit made a copy that still exists, the copy banner offers it or a
-   * fresh one (#1679); otherwise a fresh copy opens straight away.
+   * Opens the Example Project at `/folio/<slug>` (#1676) from the
+   * `.folio` file the build wrote for it.
    */
   const openExampleFile = async (slug: string): Promise<void> => {
     const example = EXAMPLE_PROJECTS.find(e => e.slug === slug);
@@ -959,17 +961,54 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       notice(`There's no Example Project called “${slug}”.`);
       return;
     }
-    const source = `example:${slug}`;
-    const existing = await storage?.copyOf(source).catch(() => undefined);
+    await openSource({
+      source: `example:${slug}`,
+      name: `“${example.name}”`,
+      fileName: `${slug}.folio`,
+      load: async () => {
+        const response = await fetch(exampleFilePath(slug));
+        if (!response.ok) {
+          throw new Error(`the server answered ${response.status}`);
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      },
+    });
+  };
+
+  /** Opens the `.folio` file at `/folio/?open=<url>` (#1677). */
+  const openUrlFile = (url: string): Promise<void> =>
+    openSource({
+      source: `url:${url}`,
+      name: `the Project at ${url}`,
+      fileName: fileNameOf(url),
+      load: () => fetchProjectFile(url),
+    });
+
+  type CopySource = {
+    fileName: string;
+    load: () => Promise<Uint8Array>;
+    /** How notices name what was opened. */
+    name: string;
+    /** The key the copy is remembered under, such as `example:tetris`. */
+    source: string;
+  };
+
+  /**
+   * Opens a Project from a URL (ADR 0141). When an earlier visit made a
+   * copy that still exists, the copy banner offers it or a fresh one
+   * (#1679); otherwise a fresh copy opens straight away.
+   */
+  const openSource = async (from: CopySource): Promise<void> => {
+    const existing = await storage?.copyOf(from.source).catch(() => undefined);
     if (!existing) {
-      await openExampleCopy(example, source);
+      await openFreshCopy(from);
       return;
     }
     byId('copy-banner-text').textContent =
-      `You already have a copy of “${example.name}”.`;
+      `You already have a copy of ${from.name}.`;
     byId('copy-banner').hidden = false;
     copyChoice = {
-      fresh: () => openExampleCopy(example, source),
+      fresh: () => openFreshCopy(from),
       mine: () => openProject(existing),
     };
   };
@@ -984,30 +1023,24 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   byId('open-my-copy').addEventListener('click', () => chooseCopy('mine'));
   byId('open-fresh-copy').addEventListener('click', () => chooseCopy('fresh'));
 
-  /** Imports a fresh copy of an Example Project's file and remembers it. */
-  const openExampleCopy = async (
-    example: ExampleProject,
-    source: string,
-  ): Promise<void> => {
-    const { slug } = example;
-    let bytes: ArrayBuffer;
+  /** Imports a fresh copy of a source's file and remembers it. */
+  const openFreshCopy = async (from: CopySource): Promise<void> => {
+    let bytes: Uint8Array;
     try {
-      const response = await fetch(exampleFilePath(slug));
-      if (!response.ok) {
-        throw new Error(`the server answered ${response.status}`);
-      }
-      bytes = await response.arrayBuffer();
+      bytes = await from.load();
     } catch (error) {
-      notice(`Couldn't open “${example.name}”: ${String(error)}`);
+      notice(
+        `Couldn't open ${from.name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return;
     }
     const id = await importProject(
-      new File([bytes], `${slug}.folio`),
+      new File([bytes as Uint8Array<ArrayBuffer>], from.fileName),
       undefined,
-      `Opened a fresh copy of “${example.name}”. Choose Browse in Tools to try it, then make it your own.`,
+      `Opened a fresh copy of ${from.name}. Choose Browse in Tools to try it, then make it your own.`,
     );
     if (id) {
-      await storage?.setCopyOf(source, id).catch(() => {});
+      await storage?.setCopyOf(from.source, id).catch(() => {});
     }
   };
 
@@ -1369,6 +1402,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   void drawStorageStatus();
   if (deps.exampleSlug) {
     void openExampleFile(deps.exampleSlug);
+  } else if (deps.openUrl) {
+    void openUrlFile(deps.openUrl);
   }
   if (deps.initial.migrated && lock.editing && storage) {
     // Save the migrated model, keeping the old record as an earlier version.

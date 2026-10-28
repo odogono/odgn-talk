@@ -1182,6 +1182,14 @@ still exists, shows a banner with **Open your copy** and **Start fresh**
 instead of adding another one
 ([#1679](https://github.com/odogono/odgn-talk/issues/1679)).
 
+Any `.folio` file on the web opens with
+`https://northtalk.org/folio/?open=<url>`, where `<url>` is the file's
+address, URL-encoded. The host must serve it with CORS, so Folio's page may
+read it. Folio adds a fresh copy, as an import, drops `?open=` from the
+address and remembers the copy the same way. If the file can't be fetched or
+isn't a `.folio` file, a notice says why
+([#1677](https://github.com/odogono/odgn-talk/issues/1677)).
+
 ### The Lighthouse Mystery
 
 **Projects → Open The Lighthouse Mystery** adds a fresh copy of
