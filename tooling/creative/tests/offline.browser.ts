@@ -69,7 +69,12 @@ export const runBrowserTests = async () => {
 
   await test('the service worker keeps the whole app shell', async () => {
     assert('serviceWorker' in navigator, 'this browser has no service workers');
-    await navigator.serviceWorker.ready;
+    // `ready` never settles when the install fails, so bound it.
+    const ready = await Promise.race([
+      navigator.serviceWorker.ready.then(() => true),
+      new Promise<false>(resolve => setTimeout(() => resolve(false), 10_000)),
+    ]);
+    assert(ready, 'no service worker became active within 10 s');
     // Registration happens at page setup; give a just-registered worker
     // a moment to finish installing its shell.
     let shell: string[] = [];
