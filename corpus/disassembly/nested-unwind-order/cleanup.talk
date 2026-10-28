@@ -1,0 +1,13 @@
+-- cleanup.talk: a try inside a finally block, the nested-unwind-order case.
+
+on go
+ try
+  throw "a"
+ finally
+  try
+   throw "b"
+  catch e
+   put 1 into x
+  end try
+ end try
+end go

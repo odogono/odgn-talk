@@ -1,0 +1,26 @@
+# Unblessed: Unwind Table order for a try nested in a catch handler or a finally block (#1738); first blessing awaits human review.
+# nested-unwind-order: pins chapter 8's entry order, nested entries before
+# enclosing ones, for a `try` inside a Recovery policy and a `try` inside a
+# `finally` block's cleanup copy. A nested search's bound relies on it.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "policy"
+source = "policy.talk"
+
+[[scripts]]
+name = "cleanup"
+source = "cleanup.talk"
+
+[[disassembly]]
+unit = "policy"
+expected = "policy.dis"
+
+[[disassembly]]
+unit = "cleanup"
+expected = "cleanup.dis"
