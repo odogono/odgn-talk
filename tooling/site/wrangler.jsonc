@@ -9,7 +9,7 @@
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash",
     // The Go module paths go to src/go-import.ts.
-    "run_worker_first": ["/go", "/go/*", "/go-probe", "/go-probe/*"]
+    "run_worker_first": ["/go", "/go/*"]
   },
   "routes": [{ "pattern": "northtalk.org", "custom_domain": true }]
 }

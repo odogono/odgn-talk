@@ -16,9 +16,6 @@ type Module = {
 export const modules: readonly Module[] = [
   { path: 'go/sqlite', directory: 'impl/go/sqlite' },
   { path: 'go', directory: 'impl/go' },
-  // The #1513 probe. It lives only on an unmerged branch, and the route is
-  // removed once the probe is done.
-  { path: 'go-probe', directory: 'spikes/go-probe' },
 ];
 
 const moduleFor = (pathname: string): Module | undefined => {

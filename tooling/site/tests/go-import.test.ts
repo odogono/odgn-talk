@@ -17,9 +17,6 @@ describe('go get', () => {
     expect(await meta('/go/sqlite?go-get=1', 'go-import')).toBe(
       'northtalk.org/go/sqlite git https://github.com/odogono/odgn-talk impl/go/sqlite',
     );
-    expect(await meta('/go-probe?go-get=1', 'go-import')).toBe(
-      'northtalk.org/go-probe git https://github.com/odogono/odgn-talk spikes/go-probe',
-    );
   });
 
   test('a package path answers with its module', async () => {
@@ -52,7 +49,13 @@ describe('browsers', () => {
 
 describe('other paths', () => {
   test('are not Go module paths', () => {
-    for (const path of ['/gopher', '/go-other', '/learn/tour/', '/']) {
+    for (const path of [
+      '/gopher',
+      '/go-other',
+      '/go-probe',
+      '/learn/tour/',
+      '/',
+    ]) {
       expect(get(`${path}?go-get=1`)).toBeUndefined();
     }
   });
