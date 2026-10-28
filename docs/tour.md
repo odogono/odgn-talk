@@ -439,7 +439,7 @@ on beforeMove m, deciding           -- in the board's Script
   ask replay to record m and wait   -- the move is allowed from here on
 end beforeMove
 
--- 10. Libraries (ADR 0020, 0021, 0022, 0023, 0080, 0096, 0099, 0113) ----------
+-- 10. Libraries (ADR 0020, 0021, 0022, 0023, 0080, 0096, 0099, 0113, 0136) ----
 
 -- A Library is shared code the Host supplies, with no state of its own. Its
 -- code runs inside the caller's Run. An Import names exactly what it brings in.
@@ -462,6 +462,9 @@ on librariesTour body
   put merge({a: 1}, {b: 2}) into ab
   put decodeJson(body) into data    -- JSON null becomes Nothing
   put lookup(data, ["rows", 1, "id"], 0) into firstId  -- a path, with a default
+  put withPath(data, ["meta", "seen"], true) into marked   -- a new map; parents must exist
+  put withoutPath(marked, ["rows", 1]) into trimmed        -- rows after it move up
+  if hasPath(data, ["meta"]) then say "has meta"
   put toHex(<<0x0D, 0x0A>>) into hex
   put celsiusToFahrenheit(20) into f               -- 68
   -- `format` fills a reusable template from a map; backticks interpolate expressions immediately:
@@ -664,7 +667,7 @@ on encodeMove id, x, y
 end encodeMove
 -- `byte 1 of b` and `bytes 2..5 of b` are chunks. `b as text` decodes UTF-8.
 
--- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0094, 0100, 0112, 0115, 0124)
+-- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063, 0094, 0100, 0112, 0115, 0124, 0135, 0138)
 
 -- Scripts have no ambient I/O. Every effect is an Operation on a Capability
 -- the Host has granted, and the loader checks every call against the Grants.
@@ -678,12 +681,20 @@ on capabilitiesTour key
   ask locale to compare "a", "B", {sensitivity: "base"}, "de"
   say "hi"                          -- short for: tell console to write "hi"
   set the state of door to "open"   -- `set` writes a Host Object's property
+  -- `set` also writes a path below a property: one Get, then one Set.
+  set the isLocked of the lock of door to true
   -- A Host Object may hold a collection of others, read with `element`:
   set the fill of element "lamp" of thisPage to "red"
   put the number of elements of thisPage into n
+  -- `the elements of` is a list of them, read once, so loops and `whose` walk it:
+  repeat for each thing in the elements of thisPage
+    say objectKind(thing)
+  end repeat
+  put every element of thisPage whose objectKind(it) is "lamp" into lamps
 end capabilitiesTour
 -- `and wait` must be there exactly when the Operation can suspend. The
 -- loader checks both ways, so a wrong guess fails at load, not at run time.
+-- `put` into a key of a Host Object still raises: every Host write is a `set`.
 
 -- A tell block groups Operations of one Grant; each keeps its declared mode.
 on storeTour
