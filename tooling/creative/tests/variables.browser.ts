@@ -40,7 +40,7 @@ project.pages[0]!.name = 'Home';
 const go = createElement('button', 'go');
 go.script = [
   'script variable presses = 0',
-  'on click',
+  'on click {button: 0}',
   ' put presses + 1 into presses',
   'end click',
 ].join('\n');

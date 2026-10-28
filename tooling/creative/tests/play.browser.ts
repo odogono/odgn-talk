@@ -28,7 +28,8 @@ const until = async (check: () => boolean) => {
 export const runBrowserTests = async () => {
   const project = createProject('Play browser check');
   const button = createElement('button', 'button1');
-  button.script = 'on click\n set the label of me to "Clicked"\nend click';
+  button.script =
+    'on click {button: 0}\n set the label of me to "Clicked"\nend click';
   const input = createElement('text', 'input1');
   if (input.kind === 'text') {
     input.editable = true;
@@ -183,7 +184,7 @@ export const runBrowserTests = async () => {
   );
   toggle.click();
   button.script =
-    'on click\n set the text of input1 to "Authored journal"\nend click';
+    'on click {button: 0}\n set the text of input1 to "Authored journal"\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
   const replaced = document.querySelector<HTMLElement>(
@@ -208,11 +209,11 @@ export const runBrowserTests = async () => {
   toggle.click();
   const second = createPage('page2');
   const back = createElement('button', 'button1');
-  back.script = 'on click\n tell pages to show page1\nend click';
+  back.script = 'on click {button: 0}\n tell pages to show page1\nend click';
   second.elements.push(back);
   project.pages.push(second);
   button.script =
-    'on click\n set the label of me to "Kept"\n tell pages to show page2\nend click';
+    'on click {button: 0}\n set the label of me to "Kept"\n tell pages to show page2\nend click';
   input.script = '';
   shell.editor.replaceProject(project);
   toggle.click();
@@ -250,7 +251,7 @@ export const runBrowserTests = async () => {
   );
   toggle.click();
   button.script =
-    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Finished"\nend click';
+    'on click {button: 0}\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Finished"\nend click';
   input.script =
     'on pointerEnter\n set the text of me to "Responsive"\nend pointerEnter';
   shell.editor.replaceProject(project);
@@ -278,8 +279,8 @@ export const runBrowserTests = async () => {
   project.pages[0]!.script =
     'on openPage\n wait 200 ms\n send leaked to project\nend openPage';
   button.script =
-    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\n send leaked to project\nend click';
-  input.script = 'on click\n tell pages to show page2\nend click';
+    'on click {button: 0}\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\n send leaked to project\nend click';
+  input.script = 'on click {button: 0}\n tell pages to show page2\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
   readerButton().click();
@@ -310,7 +311,7 @@ export const runBrowserTests = async () => {
   project.pages[0]!.script =
     'on openPage\n wait 200 ms\n set the background of me to "rgb(1, 2, 3)"\nend openPage';
   button.script =
-    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\nend click';
+    'on click {button: 0}\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\nend click';
   shell.editor.replaceProject(project);
   const waitingOriginal = structuredClone(project);
   for (const action of ['Stop', 'Escape']) {
@@ -353,7 +354,8 @@ export const runBrowserTests = async () => {
   }
   project.script = '';
   project.pages[0]!.script = '';
-  button.script = 'on click\n repeat forever\n end repeat\nend click';
+  button.script =
+    'on click {button: 0}\n repeat forever\n end repeat\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
   readerButton().click();
@@ -366,7 +368,7 @@ export const runBrowserTests = async () => {
     'Esc did not stop',
   );
   assert(!shell.readOnly, 'Runaway blocked Edit');
-  button.script = 'on click\n put missing into x\nend click';
+  button.script = 'on click {button: 0}\n put missing into x\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
   const findErrorLink = () =>
@@ -419,7 +421,7 @@ export const runBrowserTests = async () => {
   shell.editor.edit(({ project, tree }) => {
     tree.setScript(
       project.pages[0]!.elements.find(e => e.name === button.name)!,
-      'on click\n set the label of me to "Fixed"\nend click',
+      'on click {button: 0}\n set the label of me to "Fixed"\nend click',
     );
   });
   readerButton().click();
@@ -484,14 +486,15 @@ export const runBrowserTests = async () => {
 export const runElementsBrowserTests = async () => {
   const project = createProject('Dynamic Elements');
   const button = createElement('button', 'original');
-  button.script = 'on click\n tell elements to delete me\nend click';
+  button.script =
+    'on click {button: 0}\n tell elements to delete me\nend click';
   project.pages[0]!.elements.push(button);
   project.pages[0]!.script = `on openPage
  ask elements to create "button", thisPage, "made"
  set the label of it to "Created"
  ask elements to clone original
 end openPage
-on click
+on click {button: 0}
  ask elements to find "made", thisPage
  tell elements to delete it
  ask elements to create "button", thisPage, "made"
@@ -661,7 +664,8 @@ export const runKeyBrowserTests = async () => {
   // Space on a focused button clicks it without also reaching the Page.
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to "key " & key\nend keyDown';
-  button.script = 'on click\n set the label of me to "clicked"\nend click';
+  button.script =
+    'on click {button: 0}\n set the label of me to "clicked"\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
   const last = () =>
@@ -832,7 +836,7 @@ end keyDown`;
 export const runUserBrowserTests = async () => {
   const project = createProject('User prompts');
   const button = createElement('button', 'button1');
-  button.script = `on click
+  button.script = `on click {button: 0}
  ask user to confirm "Carry on?" and wait
  put it into carry
  ask user to choose ["Red", "Blue"], {prompt: "Colour"} and wait
@@ -844,7 +848,7 @@ end click`;
   const waiter = createElement('button', 'waiter');
   waiter.top = 110;
   waiter.script =
-    'on click\n ask user to confirm "Pending?" and wait\n set the label of me to "Late"\nend click';
+    'on click {button: 0}\n ask user to confirm "Pending?" and wait\n set the label of me to "Late"\nend click';
   project.pages[0]!.elements.push(button, waiter);
   const shell = mountStack(project);
   mountPlay(shell);

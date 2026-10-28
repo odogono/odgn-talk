@@ -53,7 +53,8 @@ const sampleProject = async () => {
   }
   const button = createElement('button', 'climbButton') as ButtonElement;
   button.label = 'Climb the stairs →';
-  button.script = 'on click\n  tell pages to show cellar\nend click\n';
+  button.script =
+    'on click {button: 0}\n  tell pages to show cellar\nend click\n';
   cellar.elements.push(
     note,
     lamp,
@@ -112,7 +113,7 @@ test('writing a Project and reading it back gives an equal Project', async () =>
   const json = JSON.parse(
     new TextDecoder().decode(entries.get('project.json')!),
   );
-  expect(json.format).toBe(4);
+  expect(json.format).toBe(5);
   expect(json.pages[0].elements.map((e: { kind: string }) => e.kind)).toEqual([
     'text',
     'image',
@@ -254,7 +255,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 4)',
+    'newer version of the app (format 99; this app reads up to 5)',
   );
 });
 

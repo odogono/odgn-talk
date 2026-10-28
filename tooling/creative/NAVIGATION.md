@@ -72,6 +72,11 @@ List files with `rg --files tooling/creative` before opening one by name.
   session and its Pump clock and publishes views; [play.worker.ts](src/play.worker.ts)
   is its entry. [play-protocol.ts](src/play-protocol.ts) lists the messages,
   and [play-mirror.ts](src/play-mirror.ts) is the page's copy of Play State.
+- [pointer.ts](src/pointer.ts): the `click` and `pointerHeld` maps
+  (ADR 0145) and the Harness's default click;
+  [click-migration.ts](src/click-migration.ts) is format 5's rewrite of
+  `on click`, and [click-advice.ts](src/click-advice.ts) the Code Browser's
+  advice about `click` clauses.
 - [play-text.ts](src/play-text.ts): reader-editable text and its history.
 - [play-harness.ts](src/play-harness.ts): the TS Play harness Example
   Project tests use (ADR 0133): a seeded session on a virtual clock with

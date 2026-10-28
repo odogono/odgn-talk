@@ -87,6 +87,7 @@ export type PlayMessage =
   | 'click'
   | 'pointerEnter'
   | 'pointerLeave'
+  | 'pointerHeld'
   | 'keyDown'
   | 'keyUp'
   | 'textChanged'
@@ -99,8 +100,29 @@ type CstNode = {
   v?: string;
 };
 
+// Sources by the messages they handle; `pointerHeld` asks every frame.
+const handlerCache = new Map<string, Map<string, boolean>>();
+const HANDLER_CACHE_LIMIT = 256;
+
 /** Whether a Script's source declares a Handler for `message`. */
 export const definesHandler = (source: string, message: string): boolean => {
+  let known = handlerCache.get(source);
+  if (!known) {
+    if (handlerCache.size >= HANDLER_CACHE_LIMIT) {
+      handlerCache.clear();
+    }
+    known = new Map();
+    handlerCache.set(source, known);
+  }
+  let defines = known.get(message);
+  if (defines === undefined) {
+    defines = declaresHandler(source, message);
+    known.set(message, defines);
+  }
+  return defines;
+};
+
+const declaresHandler = (source: string, message: string): boolean => {
   let tree: CstNode | null;
   try {
     tree = parseSource(source).tree as CstNode | null;

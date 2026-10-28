@@ -6,9 +6,10 @@ import { grantAll, type GrantDefinition } from './grant';
 
 export type HarnessState = {
   advance(call: Call<unknown>, duration: Value): void;
-  click(call: Call<unknown>, element: string): void;
+  click(call: Call<unknown>, element: string, event?: Value | null): void;
   frame(call: Call<unknown>, duration: Value): void;
   goTo(call: Call<unknown>, page: string): void;
+  hold(call: Call<unknown>, element: string, duration: Value): void;
   key(call: Call<unknown>, key: string): void;
   page(): Value;
   property(property: string, element: string): Value;
@@ -30,6 +31,11 @@ const input = (
     examples: [example],
   }) as const;
 const duration = shape.quantityKind('exact duration');
+const clickShape = shape.map({
+  button: { optional: true, shape: shape.number },
+  x: { optional: true, shape: shape.number },
+  y: { optional: true, shape: shape.number },
+});
 
 const operations = {
   advance: {
@@ -40,11 +46,14 @@ const operations = {
     ),
     args: [duration],
   },
-  click: input(
-    [shape.text],
-    'Clicks the named Element of the current Page.',
-    'ask harness to click "restartButton" and wait',
-  ),
+  click: {
+    ...input(
+      [],
+      'Clicks the named Element of the current Page: a primary click at its centre, unless the map gives `button`, `x` or `y`.',
+      'ask harness to click "restartButton" and wait',
+    ),
+    args: [shape.text, shape.optional(clickShape)],
+  },
   frame: {
     ...input(
       [],
@@ -58,6 +67,14 @@ const operations = {
     'Closes the current Page and opens the named one.',
     'ask harness to goTo "ending" and wait',
   ),
+  hold: {
+    ...input(
+      [],
+      'Presses the named Element of the current Page for the duration: `pointerHeld` every 16 ms, then the `click` its release makes.',
+      'ask harness to hold "cell_1_1", 500 ms and wait',
+    ),
+    args: [shape.text, duration],
+  },
   key: input(
     [shape.text],
     'Sends `keyDown`, then `keyUp`, to the current Page.',
@@ -97,7 +114,7 @@ export const harnessGrant: GrantDefinition<HarnessState> = {
           ...operations.click,
           args: [...operations.click.args],
           examples: [...operations.click.examples],
-          start: (call, name) => state.click(call, name),
+          start: (call, name, event) => state.click(call, name, event),
         },
         frame: {
           ...operations.frame,
@@ -109,6 +126,12 @@ export const harnessGrant: GrantDefinition<HarnessState> = {
           args: [...operations.goTo.args],
           examples: [...operations.goTo.examples],
           start: (call, name) => state.goTo(call, name),
+        },
+        hold: {
+          ...operations.hold,
+          args: [...operations.hold.args],
+          examples: [...operations.hold.examples],
+          start: (call, name, value) => state.hold(call, name, value),
         },
         key: {
           ...operations.key,

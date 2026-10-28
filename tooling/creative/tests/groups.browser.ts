@@ -144,7 +144,10 @@ export const runBrowserTests = async () => {
         entry.top = 150;
         tree.insert(group, entry);
       }
-      tree.setScript(project.pages[0]!.elements[0]!, 'on click\n hide me\nend');
+      tree.setScript(
+        project.pages[0]!.elements[0]!,
+        'on click {button: 0}\n hide me\nend',
+      );
     });
     for (const playMode of ['Browse', 'Present']) {
       const present = document.querySelector<HTMLButtonElement>(

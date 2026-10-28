@@ -21,7 +21,8 @@ const project = createProject('Border widths');
 for (const [index, kind] of (['rectangle', 'ellipse'] as const).entries()) {
   const element = createElement(kind, kind);
   element.left += index * 240;
-  element.script = 'on click\n set the thickness of me to 0\nend click';
+  element.script =
+    'on click {button: 0}\n set the thickness of me to 0\nend click';
   project.pages[0]!.elements.push(element);
 }
 export const shell = mountStack(project);

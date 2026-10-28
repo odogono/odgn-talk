@@ -157,13 +157,13 @@ test('recursive Duplicate translates each leaf once, changes every name/id and k
   expect(copied.script).toBe(source.script);
 });
 
-test('format 4 persists nested membership and empty anchors, strips all ids and migrates leaf Projects', async () => {
+test('format 5 persists nested membership and empty anchors, strips all ids and migrates leaf Projects', async () => {
   const editor = new StackEditor(fixture());
   editor.edit(({ project, tree }) => {
     tree.insert(project.pages[0]!, groupElement('empty', []));
   });
   const json = serializeProject(editor.project);
-  expect(json.format).toBe(4);
+  expect(json.format).toBe(5);
   const saved = JSON.stringify(json);
   expect(saved).not.toContain('"id":');
   expect(saved).toContain('emptyPosition');

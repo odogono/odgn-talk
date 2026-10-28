@@ -4,6 +4,7 @@
 import { sourceForm } from '@northtalk/ts/debug';
 import { text } from '@northtalk/ts';
 import type { Project } from './model';
+import type { ClickEvent } from './pointer';
 import type { DeepReadonly } from './readonly';
 import { replayInput, type ReaderView } from './test-runner';
 
@@ -13,11 +14,11 @@ export const FRAME_MS = 16;
 export const RECORDED_SCRIPT = 'recorded.test';
 
 /** Input a Recorded Test can't replay, as its comment names it. */
-export type Unrecorded = 'typing' | 'a prompt answer';
+export type Unrecorded = 'typing' | 'a prompt answer' | 'a held press';
 
 type Event = { at: number } & (
   | { key: string; kind: 'key' }
-  | { kind: 'click'; name: string }
+  | { event: ClickEvent; kind: 'click'; name: string }
   | { kind: 'unrecorded'; what: Unrecorded }
 );
 
@@ -35,8 +36,8 @@ export class Recorder {
     this.events.push({ kind: 'key', key, at: this.#elapsed() });
   }
 
-  click(name: string): void {
-    this.events.push({ kind: 'click', name, at: this.#elapsed() });
+  click(name: string, event: ClickEvent): void {
+    this.events.push({ kind: 'click', name, event, at: this.#elapsed() });
   }
 
   unrecorded(what: Unrecorded): void {
@@ -104,7 +105,10 @@ export const inputLines = (
     if (event.kind === 'key') {
       lines.push(`ask harness to key ${quoted(event.key)} and wait`);
     } else if (event.kind === 'click') {
-      lines.push(`ask harness to click ${quoted(event.name)} and wait`);
+      const { button, x, y } = event.event;
+      lines.push(
+        `ask harness to click ${quoted(event.name)}, {button: ${button}, x: ${x}, y: ${y}} and wait`,
+      );
     } else {
       lines.push(`-- not recorded: ${event.what}`);
     }

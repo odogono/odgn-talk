@@ -21,13 +21,22 @@ const until = async (check: () => boolean) => {
 const project = createProject('Button styles');
 const picture = createElement('rectangle', 'picture');
 Object.assign(picture, { left: 40, top: 310, width: 200, height: 44 });
+picture.script = `on click {button: 2}
+  set the text of status to "secondary"
+end click
+on click {button: 0, x, y}
+  set the text of status to "primary " & x & "," & y
+end click
+on pointerHeld {held} where held > 0
+  set the text of status to "held"
+end pointerHeld`;
 project.pages[0]!.elements.push(picture);
 for (const [index, style] of BUTTON_STYLES.entries()) {
   const button = createElement('button', style);
   Object.assign(button, { style, top: 40 + index * 90, label: style });
   if (style === 'transparent') {
     button.script = `script variable clicks = 0
-on click
+on click {button: 0}
   add 1 to clicks
   set the text of status to "click " & clicks
 end click
@@ -38,7 +47,7 @@ on pointerLeave
   set the text of status to "left"
 end pointerLeave`;
   } else if (style === 'rounded') {
-    button.script = `on click
+    button.script = `on click {button: 0}
   if the style of me is "rounded" then
     set the style of me to "transparent"
   else
@@ -230,6 +239,41 @@ export const runBrowserTests = async () => {
           );
           await until(() => output() === `click ${index + 2}`);
         }
+        const pictured = element('picture', true);
+        const at = pictured.getBoundingClientRect();
+        const scale = at.width / pictured.offsetWidth;
+        pictured.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            detail: 1,
+            clientX: at.x + 10 * scale,
+            clientY: at.y + 20 * scale,
+          }),
+        );
+        await until(() => output() === 'primary 10,20');
+        const menu = new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+        });
+        pictured.dispatchEvent(menu);
+        assert(menu.defaultPrevented, 'Play keeps the context menu away');
+        pictured.dispatchEvent(
+          new MouseEvent('auxclick', { bubbles: true, button: 2, detail: 1 }),
+        );
+        await until(() => output() === 'secondary');
+        pictured.dispatchEvent(
+          new PointerEvent('pointerdown', {
+            bubbles: true,
+            button: 0,
+            isPrimary: true,
+            clientX: at.x + 1,
+            clientY: at.y + 1,
+          }),
+        );
+        await until(() => output() === 'held');
+        pictured.dispatchEvent(
+          new PointerEvent('pointerup', { bubbles: true }),
+        );
         const changing = element('rounded', true);
         changing.click();
         await until(() => changing.classList.contains('button-transparent'));

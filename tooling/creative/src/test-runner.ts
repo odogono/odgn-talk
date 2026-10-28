@@ -23,6 +23,10 @@ import {
 import { textOf, type Project, type ProjectTestScript } from './model';
 import { harnessGrant, type HarnessState } from './grants/harness';
 import { PlaySession, unitLabel } from './play';
+import { clickEvent, harnessClick, pointerValue } from './pointer';
+
+/** How often a Harness `hold` reports `pointerHeld`: one 60 Hz frame. */
+const HELD_STEP_MS = 16;
 import { allElements } from './tree/rules';
 import type { DeepReadonly } from './readonly';
 
@@ -404,9 +408,32 @@ class TestRun {
           act: () => this.play.send(this.play.page, 'keyUp', args),
         });
       },
-      click: (call, name) => {
+      hold: (call, name, value) => {
         const element = this.element(name);
-        this.queue(call, { act: () => this.play.send(element, 'click') });
+        const centre = { x: element.width / 2, y: element.height / 2 };
+        const ms = Number(duration(value) / 1000n);
+        for (let held = HELD_STEP_MS; held <= ms; held += HELD_STEP_MS) {
+          const event = pointerValue({
+            held,
+            ...clickEvent(0, centre.x, centre.y),
+          });
+          this.queue(undefined, {
+            to: this.now + BigInt(held) * 1000n,
+            act: () => this.play.send(element, 'pointerHeld', [event]),
+          });
+        }
+        const event = harnessClick(element);
+        this.queue(call, {
+          to: this.now + BigInt(ms) * 1000n,
+          act: () => this.play.send(element, 'click', [event]),
+        });
+      },
+      click: (call, name, given) => {
+        const element = this.element(name);
+        const event = harnessClick(element, given);
+        this.queue(call, {
+          act: () => this.play.send(element, 'click', [event]),
+        });
       },
       goTo: (call, name) => {
         const index = this.play.project.pages.findIndex(p => p.name === name);

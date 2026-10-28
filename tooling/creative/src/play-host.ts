@@ -27,6 +27,7 @@ import {
 import { type Report } from '@northtalk/ts';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
+import { pointerValue } from './pointer';
 import { pausableClock } from '@northtalk/tooling/pausable-clock';
 
 const wallClock = pausableClock(
@@ -81,6 +82,13 @@ const canvasesOf = (elements: readonly DeepReadonly<Element>[]) =>
  * The view the page draws while the worker opens its session: the showing
  * Page as authored, before any Script has run.
  */
+/** The showing Page's Elements whose Message Path handles `pointerHeld`. */
+const heldElements = (play: PlaySession): string[] =>
+  play
+    .elementsOf()
+    .filter(element => play.handles(element, 'pointerHeld'))
+    .map(element => element.name);
+
 export const firstView = (
   project: Project,
   pageIndex: number,
@@ -108,6 +116,7 @@ export const firstView = (
       keyDown: play.handles(play.page, 'keyDown'),
       keyUp: play.handles(play.page, 'keyUp'),
     },
+    heldElements: heldElements(play),
     navigating: false,
     paused: false,
     stopped: false,
@@ -150,6 +159,7 @@ export class PlayHost {
   #sentState = '';
   #sentTargets = '';
   #pageHandles = { keyDown: false, keyUp: false };
+  #heldElements: string[] = [];
   #edits = new WeakMap<DeepReadonly<Element>, number>();
   #problems = 0;
   // The Pump count when the Variables window last asked.
@@ -230,11 +240,18 @@ export class PlayHost {
           (request.target === undefined
             ? page
             : session.elementsOf(page).find(e => e.name === request.target));
-        if (target) {
+        // A held press reports every frame, so it goes only where handled.
+        if (
+          target &&
+          (request.message !== 'pointerHeld' ||
+            session.handles(target, 'pointerHeld'))
+        ) {
           session.send(
             target,
             request.message,
-            (request.args ?? []).map(arg => text(arg)),
+            (request.args ?? []).map(arg =>
+              typeof arg === 'string' ? text(arg) : pointerValue(arg),
+            ),
           );
         }
         break;
@@ -610,6 +627,9 @@ export class PlayHost {
         keyUp: session.handles(session.page, 'keyUp'),
       };
     }
+    if (full || session.changed) {
+      this.#heldElements = heldElements(session);
+    }
     const elements: PlayView['elements'] = [];
     const order: string[] = [];
     if (full || session.changed) {
@@ -715,6 +735,7 @@ export class PlayHost {
         ...(orderChanged ? { order } : {}),
         elements,
         pageHandles: this.#pageHandles,
+        heldElements: this.#heldElements,
         navigating: session.navigating,
         paused: this.#paused,
         stopped: session.stopped,
