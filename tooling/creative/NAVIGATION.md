@@ -26,7 +26,9 @@ List files with `rg --files tooling/creative` before opening one by name.
   ([browser-tests.ts](tools/browser-tests.ts)) builds every suite, serves
   `dist/` and runs each `run*BrowserTests` export headless in its own fresh
   Chromium context, so the service-worker trap below cannot happen.
-  `--suite play,tetris` runs a subset, `--headed` shows the browser. Once per
+  `--suite play,tetris` runs a subset, `--headed` shows the browser,
+  `--timeout` sets each step's limit and `--run-timeout` (default 300000 ms)
+  fails a run that hangs. Once per
   machine: `bunx playwright install chromium-headless-shell`.
 - Browser suites by hand: with the server running, `bun run --cwd tooling/creative build:browser-tests`
   ([build-browser-tests.ts](tools/build-browser-tests.ts)) rebuilds the app
