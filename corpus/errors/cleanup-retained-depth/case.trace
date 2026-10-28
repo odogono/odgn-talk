@@ -1,0 +1,18 @@
+# Unblessed: retained failed frames during cleanup (#1734); first blessing awaits human review.
+# cleanup-retained-depth: `deep(5)` raises from six `deep` frames above `go`,
+# and nothing catches it. `go`'s `finally` block calls `down(5)` while those
+# six stay retained, so with `callDepth` 8 a call faults: `go`, six retained
+# frames and `down(5)` make 8, and `down(5)`'s own call would pass it.
+
+> load board identity=2ef89f2425b14d215d5b143040566042e99f9a771f33dbfd18d5f7ea422deed8
+
+> request d1 to=board message=go
+> pump clock=2026-09-30T09:00:00Z
+raise board/r1 code="bad" at=board:8 pos=3:5
+fault board/r1 limit=depth at=board:25 pos=12:10
+seg board/r1 start delivery=d1 handler=go clause=1 fuel=176 alloc=207 state=0 end=fault
+run board/r1 outcome=limit-fault delivery=d1 handler=go limit=depth fuel=176 alloc=207
+pumped state=idle fuel=176
+
+> vars
+vars board
