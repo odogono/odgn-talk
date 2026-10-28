@@ -1,18 +1,21 @@
-//! Save and restore (chapter 10): the Zig Core's own save format, which only
-//! the Zig Core reads (ADR 0008).
+//! Save and restore (chapter 10): the save format every Core writes and
+//! reads, so a save restores on either Core (ADR 0144).
 //!
-//! A save is a header, the Group's state as plain data, and the SHA-256 of
-//! everything before it. The state holds every Library by identity, every
-//! Script by its sources and its values, every Run with its frames, error
-//! control and wait, and the Group's queues and counters. Code is never
-//! saved: a restore compiles each Script's sources again, against the
-//! Libraries the Host passes, and checks them against the save before it
-//! trusts a single code position. Pointers between parts are indices, and
-//! the internal values a dispatch activation shares (iterators, readers and
-//! replacements) are saved once and referred to after.
+//! A save is a header followed by tagged sections, each with its own
+//! SHA-256 (`spec/data/save-format.toml`). Sections are written to one
+//! buffer, each hashed once as it ends; the State Fingerprint and the body
+//! digest come from those digests. The state holds every Library by
+//! identity, every Script by its identities, sources and values, every Run
+//! with its frames, error control and wait, and the Group's queues and
+//! counters. Code is never saved: a restore compiles each Script's sources
+//! again, against the Libraries the Host passes, and checks them against the
+//! save before it trusts a single code position. Pointers between parts are
+//! indices, and the internal values a dispatch activation shares (iterators,
+//! readers and replacements) are saved once and referred to after.
 const std = @import("std");
 const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
+const Sha256 = std.crypto.hash.sha2.Sha256;
 const machine = @import("machine.zig");
 const model = @import("../value.zig");
 const display = @import("../display.zig");
@@ -35,9 +38,13 @@ const Frame = machine.Frame;
 const Slot = machine.Slot;
 const Pending = machine.Pending;
 
-const magic = "NTZS";
+const magic = "NTSV";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 17;
+pub const format_version: u32 = 1;
+
+/// The sections, by tag; every one but `sources` is required.
+const Section = enum(u8) { group = 1, libraries, objects, functions, calls, scripts, runs, work, waits, inputs, decisions, accounting, sources };
+const last_required: u8 = @backingInt(Section.accounting);
 
 pub const Error = error{
     InvalidSave,
@@ -61,8 +68,8 @@ const Out = struct {
     }
 
     /// An unsigned LEB128 integer.
-    pub fn int(o: *Out, v: u64) !void {
-        var x = v;
+    pub fn int(o: *Out, v: anytype) !void {
+        var x: u128 = @intCast(v);
         while (true) {
             const low: u8 = @intCast(x & 0x7f);
             x >>= 7;
@@ -71,15 +78,20 @@ const Out = struct {
         }
     }
 
-    fn signed(o: *Out, v: i256) !void {
-        var buf: [32]u8 = undefined;
-        std.mem.writeInt(i256, &buf, v, .little);
-        try o.bytes.appendSlice(o.gpa, &buf);
+    /// A signed LEB128 integer.
+    fn signed(o: *Out, v: anytype) !void {
+        var x: i256 = v;
+        while (true) {
+            const low: u8 = @intCast(x & 0x7f);
+            x >>= 7;
+            if ((x == 0 and low & 0x40 == 0) or (x == -1 and low & 0x40 != 0)) return o.byte(low);
+            try o.byte(low | 0x80);
+        }
     }
 
     fn instant(o: *Out, t: model.dates.Instant) !void {
         try o.signed(t.seconds);
-        try o.int(@intCast(t.micros));
+        try o.int(t.micros);
     }
 
     pub fn flag(o: *Out, b: bool) !void {
@@ -114,6 +126,12 @@ const In = struct {
         return i.bytes[i.pos - 1];
     }
 
+    fn digest(i: *In) Error![32]u8 {
+        if (i.bytes.len - i.pos < 32) return error.InvalidSave;
+        defer i.pos += 32;
+        return i.bytes[i.pos..][0..32].*;
+    }
+
     /// An integer no counter, id or charge of a real save comes near, so
     /// the machine's arithmetic on it never overflows.
     pub fn int(i: *In) Error!u64 {
@@ -123,16 +141,45 @@ const In = struct {
     }
 
     fn wide(i: *In) Error!u64 {
-        var out: u64 = 0;
-        var shift: u7 = 0;
+        return std.math.cast(u64, try i.unsigned(u128)) orelse error.InvalidSave;
+    }
+
+    /// An unsigned LEB128 integer of `T`, in its shortest form.
+    fn unsigned(i: *In, comptime T: type) Error!T {
+        var out: T = 0;
+        var shift: usize = 0;
         while (true) {
             const b = try i.byte();
-            if (shift == 63 and b > 1) return error.InvalidSave;
-            out |= @as(u64, b & 0x7f) << @intCast(shift);
-            if (b & 0x80 == 0) return out;
+            const low: T = b & 0x7f;
+            if (shift >= @bitSizeOf(T) or (low << @intCast(shift)) >> @intCast(shift) != low) return error.InvalidSave;
+            out |= low << @intCast(shift);
+            if (b & 0x80 == 0) {
+                if (b == 0 and shift > 0) return error.InvalidSave;
+                return out;
+            }
             shift += 7;
-            if (shift > 63) return error.InvalidSave;
         }
+    }
+
+    /// A signed LEB128 integer of `T`, in its shortest form.
+    fn signed(i: *In, comptime T: type) Error!T {
+        var out: i256 = 0;
+        var shift: usize = 0;
+        var b: u8 = 0;
+        while (true) {
+            b = try i.byte();
+            if (shift > 256) return error.InvalidSave;
+            out |= @as(i256, b & 0x7f) << @intCast(shift);
+            shift += 7;
+            if (b & 0x80 == 0) break;
+        }
+        // Sign-extend, then refuse a longer form than needed.
+        if (shift < 256 and b & 0x40 != 0) out |= @as(i256, -1) << @intCast(shift);
+        if (shift > 7) {
+            const prev = i.bytes[i.pos - 2];
+            if ((b == 0 and prev & 0x40 == 0) or (b == 0x7f and prev & 0x40 != 0)) return error.InvalidSave;
+        }
+        return std.math.cast(T, out) orelse error.InvalidSave;
     }
 
     fn small(i: *In, comptime T: type) Error!T {
@@ -147,15 +194,8 @@ const In = struct {
         return @intCast(n);
     }
 
-    fn signed(i: *In) Error!i256 {
-        if (i.bytes.len - i.pos < 32) return error.InvalidSave;
-        const v = std.mem.readInt(i256, i.bytes[i.pos..][0..32], .little);
-        i.pos += 32;
-        return v;
-    }
-
     fn instant(i: *In) Error!model.dates.Instant {
-        const seconds = std.math.cast(i64, try i.signed()) orelse return error.InvalidSave;
+        const seconds = try i.signed(i64);
         const micros = try i.int();
         if (micros >= std.time.us_per_s) return error.InvalidSave;
         return .{ .seconds = seconds, .micros = @intCast(micros) };
@@ -196,11 +236,18 @@ const In = struct {
         if (v >= n) return error.InvalidSave;
         return @intCast(v);
     }
+
+    /// The end of a section, which its fields must account for.
+    fn end(i: *In) Error!void {
+        if (i.pos != i.bytes.len) return error.InvalidSave;
+    }
 };
 
 // ---------------------------------------------------------------- values
 
-const Tag = enum(u8) { nothing, bool, text, bytes, list, map, function, object, shown };
+/// A value's tag is its Kind, in talk.h's order, which `save-format.toml`
+/// numbers the same way.
+const Tag = model.Kind;
 
 /// What a save's values refer to: Host Objects and Function Value code, by
 /// their index in the save.
@@ -222,6 +269,36 @@ const Tables = struct {
 /// One step of writing a value: a value, or a map key before its value.
 const WriteStep = union(enum) { value: *const Value, key: []const u8 };
 
+fn marks(v: *const Value) u8 {
+    return @as(u8, @intFromBool(v.core_message)) | @as(u8, @intFromBool(v.script_name)) << 1;
+}
+
+fn decimal(o: *Out, d: model.Decimal) !void {
+    try o.flag(d.negative);
+    try o.int(d.coefficient);
+    try o.signed(d.exponent);
+}
+
+fn civil(o: *Out, f: model.dates.Fields) !void {
+    try o.signed(f.year);
+    try o.int(f.month);
+    try o.int(f.day);
+    try o.flag(f.has_time);
+    if (f.has_time) {
+        try o.int(f.hour);
+        try o.int(f.minute);
+        try o.int(f.second);
+        try o.int(f.microsecond);
+    }
+}
+
+/// A Quantity's Unit as its display form shows it: plural unless the
+/// magnitude is 1 or -1.
+fn unitText(gpa: Allocator, q: model.Quantity) ![]u8 {
+    const one = model.Decimal.order(q.number, model.Decimal.fromInt(@as(i32, 1))) == .eq or model.Decimal.order(q.number, model.Decimal.fromInt(@as(i32, -1))) == .eq;
+    return q.unit.string(gpa, !one) catch error.OutOfMemory;
+}
+
 /// A Script value. Containers push their children on a heap work list, so
 /// a deep value never deepens the native stack.
 fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
@@ -236,26 +313,23 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
             },
             .value => |v| v,
         };
-        var flags: u8 = 0;
-        if (v.core_message) flags |= 1;
-        if (v.script_name) flags |= 2;
+        try o.byte(@intCast(@backingInt(v.kind())));
         switch (v.data) {
-            .nothing => try o.byte(@backingInt(Tag.nothing)),
-            .bool => |b| {
-                try o.byte(@backingInt(Tag.bool));
-                try o.flag(b);
+            .nothing => {},
+            .bool => |b| try o.flag(b),
+            .number => |n| try decimal(o, n),
+            .quantity => |q| {
+                try decimal(o, q.number);
+                const u = try unitText(o.gpa, q);
+                defer o.gpa.free(u);
+                try o.str(u);
             },
             .text => |s| {
-                try o.byte(@backingInt(Tag.text));
-                try o.byte(flags);
+                try o.byte(marks(v));
                 try o.str(s);
             },
-            .bytes => |s| {
-                try o.byte(@backingInt(Tag.bytes));
-                try o.str(s);
-            },
+            .bytes => |s| try o.str(s),
             .list => |items| {
-                try o.byte(@backingInt(Tag.list));
                 try o.int(items.len);
                 try steps.ensureUnusedCapacity(o.gpa, items.len);
                 var i = items.len;
@@ -265,8 +339,7 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
                 }
             },
             .map => |pairs| {
-                try o.byte(@backingInt(Tag.map));
-                try o.byte(flags);
+                try o.byte(marks(v));
                 try o.int(pairs.len);
                 try steps.ensureUnusedCapacity(o.gpa, 2 * pairs.len);
                 var i = pairs.len;
@@ -276,27 +349,22 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
                     steps.appendAssumeCapacity(.{ .key = pairs.at(i).key });
                 }
             },
+            .range => |r| {
+                try steps.ensureUnusedCapacity(o.gpa, 2);
+                steps.appendAssumeCapacity(.{ .value = r.to });
+                steps.appendAssumeCapacity(.{ .value = r.from });
+            },
+            .instant => |x| try o.instant(x),
+            .civil_date => |f| try civil(o, f),
+            .pattern => |s| try o.str(s),
             .function => |f| {
-                try o.byte(@backingInt(Tag.function));
                 // A value this Group didn't make is gone: none of its code.
                 try o.ref(t.functionIndex(f.identity));
                 try o.str(f.display);
                 try o.str(f.home);
                 try steps.append(o.gpa, .{ .value = f.captures });
             },
-            .object => |x| {
-                try o.byte(@backingInt(Tag.object));
-                try o.int(t.objectIndex(x.identity) orelse return error.OutOfMemory);
-            },
-            // Numbers, Quantities, ranges, Instants, dates and Text Patterns
-            // round-trip through the display form.
-            else => {
-                try o.byte(@backingInt(Tag.shown));
-                var shown: std.Io.Writer.Allocating = .init(o.gpa);
-                defer shown.deinit();
-                display.write(&shown.writer, v) catch return error.OutOfMemory;
-                try o.str(shown.written());
-            },
+            .object => |x| try o.int(t.objectIndex(x.identity) orelse return error.OutOfMemory),
         }
     }
 }
@@ -306,6 +374,7 @@ const Reading = struct {
     kind: union(enum) {
         list,
         map: u8,
+        range,
         function: struct { code: ?usize, shown: []const u8, home: []const u8 },
     },
     /// How many children it has; a Function has its captures alone.
@@ -354,6 +423,7 @@ fn readValue(i: *In, gpa: Allocator, t: Tables) Error!*Value {
 fn finish(gpa: Allocator, t: Tables, r: *Reading) Error!*Value {
     switch (r.kind) {
         .list => return model.list(gpa, r.items.items) catch |e| return valueError(e),
+        .range => return model.range(gpa, r.items.items[0], r.items.items[1]) catch |e| return valueError(e),
         .map => |flags| {
             const pairs = try gpa.alloc(model.Pair, r.items.items.len);
             defer gpa.free(pairs);
@@ -373,19 +443,55 @@ fn finish(gpa: Allocator, t: Tables, r: *Reading) Error!*Value {
     }
 }
 
+fn readDecimal(i: *In) Error!model.Decimal {
+    const negative = try i.flag();
+    const coefficient = try i.unsigned(u128);
+    const exponent = try i.signed(i32);
+    if (coefficient >= 10000000000000000000000000000000000 or exponent < -6176 or exponent > 0) return error.InvalidSave;
+    return .{ .negative = negative, .coefficient = coefficient, .exponent = exponent };
+}
+
+fn readCivil(i: *In) Error!model.dates.Fields {
+    var f: model.dates.Fields = .{ .year = try i.signed(c_int), .month = try i.small(c_int), .day = try i.small(c_int) };
+    if (try i.flag()) {
+        f.has_time = true;
+        f.hour = try i.small(c_int);
+        f.minute = try i.small(c_int);
+        f.second = try i.small(c_int);
+        f.microsecond = try i.small(c_int);
+    }
+    model.dates.validate(f) catch return error.InvalidSave;
+    return f;
+}
+
+fn marked(v: *Value, flags: u8) *Value {
+    v.core_message = flags & 1 != 0;
+    v.script_name = flags & 2 != 0;
+    return v;
+}
+
 /// Reads a leaf, an empty container, or opens a container and returns null.
 fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Error!?*Value {
-    const tag = std.enums.fromInt(Tag, try i.byte()) orelse return error.InvalidSave;
+    const tag = std.enums.fromInt(Tag, @as(c_int, try i.byte())) orelse return error.InvalidSave;
     return switch (tag) {
         .nothing => model.scalar(gpa, .nothing),
         .bool => model.scalar(gpa, .{ .bool = try i.flag() }),
+        .number => model.scalar(gpa, .{ .number = try readDecimal(i) }),
+        .quantity => blk: {
+            const n = try readDecimal(i);
+            const unit = try i.str();
+            const v = model.quantity(gpa, n, unit) catch |e| return valueError(e);
+            if (v.data != .quantity or !std.meta.eql(v.data.quantity.number, n)) {
+                v.release();
+                return error.InvalidSave;
+            }
+            break :blk v;
+        },
         .text => blk: {
             const flags = try i.byte();
             if (flags > 3) return error.InvalidSave;
             const v = model.text(gpa, try i.str()) catch |e| return valueError(e);
-            v.core_message = flags & 1 != 0;
-            v.script_name = flags & 2 != 0;
-            break :blk v;
+            break :blk marked(v, flags);
         },
         .bytes => blk: {
             const n = try i.count();
@@ -405,15 +511,24 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
             const n = try i.count();
             if (n == 0) {
                 const v = model.map(gpa, &.{}) catch |e| return valueError(e);
-                v.core_message = flags & 1 != 0;
-                v.script_name = flags & 2 != 0;
-                break :blk v;
+                break :blk marked(v, flags);
             }
             try stack.append(gpa, .{ .kind = .{ .map = flags }, .len = n });
             const top = &stack.items[stack.items.len - 1];
             try top.keys.append(gpa, try i.str());
             break :blk null;
         },
+        .range => blk: {
+            try stack.append(gpa, .{ .kind = .range, .len = 2 });
+            break :blk null;
+        },
+        .instant => blk: {
+            const x = try i.instant();
+            model.dates.validateInstant(x) catch return error.InvalidSave;
+            break :blk model.scalar(gpa, .{ .instant = x });
+        },
+        .civil_date => model.scalar(gpa, .{ .civil_date = try readCivil(i) }),
+        .pattern => @import("../pattern.zig").parse(gpa, try i.str()) catch |e| return valueError(e),
         .function => blk: {
             const code = try i.ref(t.functions.len);
             const shown = try i.str();
@@ -422,30 +537,19 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
             break :blk null;
         },
         .object => t.objects[try i.index(t.objects.len)].value.retain(),
-        .shown => blk: {
-            const v = display.parse(gpa, try i.str(), .{}) catch |e| return valueError(e);
-            switch (v.data) {
-                .number, .quantity, .range, .instant, .civil_date, .pattern => {},
-                else => {
-                    v.release();
-                    return error.InvalidSave;
-                },
-            }
-            break :blk v;
-        },
     };
 }
 
 /// A mathematical deadline, which may lie outside the Instant range.
 fn deadline(i: *In) Error!machine.DeadlineTicks {
-    const at = try i.signed();
+    const at = try i.signed(machine.DeadlineTicks);
     // A 34-digit base duration scaled to microseconds, plus a Clock.
-    if (at != @import("waits.zig").never and @abs(at) > 10000000000000000000000000000000000000000 + 253402300800000000) return error.InvalidSave;
+    if (@abs(at) > 10000000000000000000000000000000000000000 + 253402300800000000) return error.InvalidSave;
     return at;
 }
 
 fn duration(i: *In) Error!machine.DeadlineTicks {
-    const us = try i.signed();
+    const us = try i.signed(machine.DeadlineTicks);
     var n = @abs(us);
     var exponent: i32 = -6;
     while (exponent < 0 and n % 10 == 0) : (exponent += 1) n /= 10;
@@ -730,7 +834,8 @@ const Saving = struct {
         const x = p orelse return s.o.flag(false);
         try s.o.flag(true);
         try s.o.str(x.id);
-        try s.o.signed(x.deadline);
+        try s.o.flag(x.deadline != machine.wait_table.never);
+        if (x.deadline != machine.wait_table.never) try s.o.signed(x.deadline);
         try s.o.int(x.order);
         try s.call(x.call);
         try s.o.str(x.grant);
@@ -790,6 +895,7 @@ const Saving = struct {
     }
 
     fn limits(s: *Saving, l: machine.Limits) !void {
+        try s.o.int(@typeInfo(machine.Limits).@"struct".field_names.len);
         inline for (@typeInfo(machine.Limits).@"struct".field_names) |f| try s.o.int(@field(l, f));
     }
 
@@ -848,8 +954,8 @@ const Saving = struct {
         }
         try s.o.flag(r.clause_body != null);
         if (r.clause_body) |b| {
-            try s.o.int(b);
             try s.unit(r.script, r.clause_unit);
+            try s.o.int(b);
         }
         try s.o.flag(r.fallback);
         try s.o.flag(r.select_at != null);
@@ -873,9 +979,11 @@ const Saving = struct {
     }
 
     fn input(s: *Saving, x: machine.Input) !void {
-        try s.o.byte(@backingInt(std.meta.activeTag(x)));
+        // A charge request has no tag: it refuses the save.
+        if (x == .charge_request) return error.EffectsPending;
+        try s.o.byte(@as(u8, @backingInt(std.meta.activeTag(x))) - 1);
         switch (x) {
-            .charge_request => return error.EffectsPending,
+            .charge_request => unreachable,
             .deliver => |d| {
                 try s.o.str(d.script);
                 try s.delivery(d.delivery);
@@ -935,29 +1043,81 @@ pub fn effectsPending(g: *const Group) bool {
     return false;
 }
 
-/// The State Fingerprint of a save's bytes (ADR 0142): the SHA-256 of the
-/// save without its Trace save id counter or integrity digest. Every other
-/// part of a save is already a function of the state, Host Objects by kind,
-/// id, parent and disposal, so the restored Group's save gives the same.
-pub fn stateFingerprint(bytes: []const u8) error{ InvalidSave, Mismatch }![32]u8 {
-    if (bytes.len < magic.len + 32) return error.InvalidSave;
-    const body = bytes[0 .. bytes.len - 32];
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(body, &digest, .{});
-    if (!std.mem.eql(u8, &digest, bytes[body.len..])) return error.InvalidSave;
-    if (!std.mem.eql(u8, body[0..magic.len], magic)) return error.InvalidSave;
-    var i: In = .{ .bytes = body, .pos = magic.len };
+/// A save's frame: its header fields and where each section's body is.
+const Header = struct {
+    language: []const u8,
+    costs: u64,
+    print: [32]u8,
+    saves: u64,
+    state: [32]u8,
+    /// Each known section's body, by tag; null when it is absent.
+    bodies: [@backingInt(Section.sources) + 1]?[]const u8 = @splat(null),
+};
+
+/// Reads a save's header and section frames, checking the body digest and
+/// that the State Fingerprint matches the section digests. Section bodies
+/// are hashed only when `bodies` is set. Another magic, including this
+/// Core's formats from before ADR 0144, is `invalid save`; this magic at
+/// another version is `Mismatch`.
+fn readFrame(bytes: []const u8, bodies: bool) error{ InvalidSave, Mismatch }!Header {
+    var i: In = .{ .bytes = bytes };
+    if (bytes.len < magic.len or !std.mem.eql(u8, bytes[0..magic.len], magic)) return error.InvalidSave;
+    i.pos = magic.len;
     if ((i.int() catch return error.InvalidSave) != format_version) return error.Mismatch;
-    _ = i.str() catch return error.InvalidSave;
-    _ = i.int() catch return error.InvalidSave;
-    if (i.bytes.len - i.pos < 32) return error.InvalidSave;
-    i.pos += 32;
-    const counter = i.pos;
-    _ = i.int() catch return error.InvalidSave;
-    var h: std.crypto.hash.sha2.Sha256 = .init(.{});
-    h.update(body[0..counter]);
-    h.update(body[i.pos..]);
-    return h.finalResult();
+    var f: Header = .{ .language = undefined, .costs = undefined, .print = undefined, .saves = undefined, .state = undefined };
+    f.language = i.str() catch return error.InvalidSave;
+    f.costs = i.int() catch return error.InvalidSave;
+    f.print = i.digest() catch return error.InvalidSave;
+    f.saves = i.int() catch return error.InvalidSave;
+    f.state = i.digest() catch return error.InvalidSave;
+    var body: Sha256 = .init(.{});
+    body.update(bytes[0..i.pos]);
+    const given = i.digest() catch return error.InvalidSave;
+    var state: Sha256 = .init(.{});
+    const n = i.count() catch return error.InvalidSave;
+    var last: u8 = 0;
+    for (0..n) |_| {
+        const tag = i.byte() catch return error.InvalidSave;
+        const flags = i.byte() catch return error.InvalidSave;
+        const len = i.count() catch return error.InvalidSave;
+        const digest = i.digest() catch return error.InvalidSave;
+        if (tag <= last or flags > 1 or len > i.bytes.len - i.pos) return error.InvalidSave;
+        last = tag;
+        const known = std.enums.fromInt(Section, tag);
+        // A known section's flag must say what it is; an unknown required
+        // one can't be read.
+        if (known) |k| {
+            if ((flags == 1) != (k == .sources)) return error.InvalidSave;
+        } else if (flags == 0) return error.InvalidSave;
+        const content = i.bytes[i.pos..][0..len];
+        i.pos += len;
+        if (bodies or known == null) {
+            var d: [32]u8 = undefined;
+            Sha256.hash(content, &d, .{});
+            if (!std.mem.eql(u8, &d, &digest)) return error.InvalidSave;
+        }
+        if (known) |k| f.bodies[@backingInt(k)] = content;
+        body.update(&.{ tag, flags });
+        body.update(&digest);
+        if (flags == 0) {
+            state.update(&.{tag});
+            state.update(&digest);
+        }
+    }
+    if (i.pos != i.bytes.len) return error.InvalidSave;
+    for (1..last_required + 1) |t| if (f.bodies[t] == null) return error.InvalidSave;
+    if (!std.mem.eql(u8, &body.finalResult(), &given)) return error.InvalidSave;
+    if (!std.mem.eql(u8, &state.finalResult(), &f.state)) return error.InvalidSave;
+    return f;
+}
+
+/// The State Fingerprint of a save's bytes (ADR 0142), read from its header
+/// without decoding its sections: the SHA-256 of each required section's
+/// tag and digest. Every part of a section is a function of the state, Host
+/// Objects by kind, id, parent and disposal, so the restored Group's save
+/// gives the same.
+pub fn stateFingerprint(bytes: []const u8) error{ InvalidSave, Mismatch }![32]u8 {
+    return (try readFrame(bytes, false)).state;
 }
 
 /// A live Group's State Fingerprint: its save's, taken without advancing
@@ -968,6 +1128,9 @@ pub fn liveStateFingerprint(g: *Group, gpa: Allocator) ![32]u8 {
     return stateFingerprint(bytes) catch unreachable;
 }
 
+/// A section being written: where its body starts in `Saving.o`.
+const Written = struct { tag: Section, start: usize, end: usize = 0, digest: [32]u8 = undefined };
+
 /// The save's bytes, which `gpa` owns. Saving changes nothing in the Group
 /// but its save id counter, which the caller has already advanced.
 pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
@@ -977,14 +1140,24 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return error.EffectsPending;
     var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
     defer s.deinit();
-    errdefer s.o.bytes.deinit(gpa);
+    defer s.o.bytes.deinit(gpa);
     const o = &s.o;
-    try o.bytes.appendSlice(gpa, magic);
-    try o.int(format_version);
-    try o.str(version.language);
-    try o.int(cost_model.version);
-    try o.bytes.appendSlice(gpa, &print);
-    try o.int(g.saves);
+    var sections: [@backingInt(Section.sources)]Written = undefined;
+    var n: usize = 0;
+    const Sections = struct {
+        fn begin(list: []Written, at: *usize, out: *Out, tag: Section) void {
+            list[at.*] = .{ .tag = tag, .start = out.bytes.items.len };
+        }
+        fn end(list: []Written, at: *usize, out: *Out) void {
+            const w = &list[at.*];
+            w.end = out.bytes.items.len;
+            Sha256.hash(out.bytes.items[w.start..w.end], &w.digest, .{});
+            at.* += 1;
+        }
+    };
+    // 1: the Group's counters and issued call ids.
+    Sections.begin(&sections, &n, o, .group);
+    try o.str(g.name);
     try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
@@ -993,14 +1166,18 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.charge_counter);
     try o.int(g.random_state);
     try s.waits.writeIssued(gpa, o);
-    // Libraries, by identity.
+    Sections.end(&sections, &n, o);
+    // 2: Libraries, by identity.
+    Sections.begin(&sections, &n, o, .libraries);
     try o.int(g.libraries.items.len);
     for (g.libraries.items) |l| {
         try o.str(l.name);
         try o.str(l.version);
         try o.bytes.appendSlice(gpa, &l.identity);
     }
-    // Host Objects, by kind and id; a parent comes by index.
+    Sections.end(&sections, &n, o);
+    // 3: Host Objects, by kind and id; a parent comes by index.
+    Sections.begin(&sections, &n, o, .objects);
     try o.int(g.objects.items.len);
     for (g.objects.items) |x| {
         try o.str(x.kind.name);
@@ -1009,8 +1186,10 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.flag(x.disposed);
         try o.optStr(x.owner_of);
     }
-    // Function Value code: a stale value's keeps only what it still
+    Sections.end(&sections, &n, o);
+    // 4: Function Value code: a stale value's keeps only what it still
     // answers.
+    Sections.begin(&sections, &n, o, .functions);
     try o.int(g.functions.items.len);
     for (g.functions.items) |f| {
         try o.str(f.home);
@@ -1026,7 +1205,9 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             try o.int(f.body);
         }
     }
-    // The calls a Run still waits on, with their arguments.
+    Sections.end(&sections, &n, o);
+    // 5: the calls a Run still waits on, with their arguments.
+    Sections.begin(&sections, &n, o, .calls);
     try o.int(s.waits.calls.items.len);
     for (s.waits.calls.items) |c| {
         try o.str(c.id);
@@ -1036,6 +1217,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.str(c.segment);
         try o.instant(c.now);
         try s.values(c.args);
+        // Every Zig Host call can be adopted, as a TS `start` call can.
+        try o.flag(c.adoptable);
         try o.int(c.charged);
         // Its call site, where a refused reissue faults (#1068).
         try o.str(c.at_unit);
@@ -1043,14 +1226,15 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.int(c.at_line);
         try o.int(c.at_column);
     }
-    // Each Script, in load order.
+    Sections.end(&sections, &n, o);
+    // 6: each Script, in load order, by its code identities.
+    Sections.begin(&sections, &n, o, .scripts);
     try o.int(g.scripts.items.len);
     for (g.scripts.items) |x| {
         try o.str(x.name);
-        try o.bytes.appendSlice(gpa, &x.identity);
-        try o.str(x.source);
+        try o.bytes.appendSlice(gpa, &machine.codeIdentity(x.name, x.source, .script, x.imports));
         try o.int(x.extensions.items.len);
-        for (x.extensions.items) |e| try o.str(e.source);
+        for (x.extensions.items) |e| try o.bytes.appendSlice(gpa, &e.identity);
         try s.limits(x.limits);
         try o.int(x.grants.len);
         for (x.grants) |sg| {
@@ -1066,7 +1250,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             try o.int(kept);
             for (sg.grant.capability.operations, sg.kept) |op, k| if (k) {
                 try o.str(op.name);
-                try o.byte(@backingInt(op.mode));
+                try o.str(modeName(op.mode));
                 try o.int(op.required());
                 try o.int(op.args.len);
                 try o.flag(op.command);
@@ -1078,15 +1262,19 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         }
         try s.object(x.owner);
         try o.int(x.objects.len);
-        for (x.objects) |n| {
-            try o.str(n.name);
-            try s.object(n.object);
+        for (x.objects) |nm| {
+            try o.str(nm.name);
+            try s.object(nm.object);
         }
         try o.int(x.variableNames().len);
-        for (x.variableNames()) |n| try o.str(n);
+        for (x.variableNames()) |nm| try o.str(nm);
         try s.values(x.variables);
-        try s.values(x.definitions);
-        for (x.extensions.items) |e| try s.values(e.definitions);
+        // The base unit's definitions, then each extension's, as one list.
+        var definitions = x.definitions.len;
+        for (x.extensions.items) |e| definitions += e.definitions.len;
+        try o.int(definitions);
+        for (x.definitions) |v| try s.value(v);
+        for (x.extensions.items) |e| for (e.definitions) |v| try s.value(v);
         try o.int(x.runs);
         try o.int(x.fuel_total);
         try o.int(x.alloc_total);
@@ -1094,13 +1282,19 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.int(x.debt);
         try o.optStr(x.stopped);
     }
-    // Every Run, Script by Script, in each one's live order.
+    Sections.end(&sections, &n, o);
+    // 7: how many Runs each Script has, then every Run, Script by Script,
+    // in each one's live order.
+    Sections.begin(&sections, &n, o, .runs);
     for (g.scripts.items) |x| try s.runs.appendSlice(gpa, x.live.items);
-    for (g.scripts.items) |x| {
-        try o.int(x.live.items.len);
-        for (x.live.items) |r| try s.oneRun(r);
-    }
-    // Each Script's work, in order.
+    try o.int(g.scripts.items.len);
+    for (g.scripts.items) |x| try o.int(x.live.items.len);
+    try o.int(s.runs.items.len);
+    for (s.runs.items) |r| try s.oneRun(r);
+    Sections.end(&sections, &n, o);
+    // 8: each Script's work, in order.
+    Sections.begin(&sections, &n, o, .work);
+    try o.int(g.scripts.items.len);
     for (g.scripts.items) |x| {
         try o.int(x.work.items.len);
         for (x.work.items) |w| switch (w) {
@@ -1114,15 +1308,24 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             },
         };
     }
-    // The waits with deadlines, in the order they were set: each by its Run
-    // and, for a Join Member, its member.
+    Sections.end(&sections, &n, o);
+    // 9: every pending wait, in the order it was set, each by its Run and,
+    // for a Join Member, its member; then the issued Run ids.
+    Sections.begin(&sections, &n, o, .waits);
     try s.waits.writeOrder(o, s.runs.items);
     try o.int(g.ids.items.len);
     for (g.ids.items) |id| try o.str(id);
+    Sections.end(&sections, &n, o);
+    // 10: the Host inputs queued for the next Pump.
+    Sections.begin(&sections, &n, o, .inputs);
     try o.int(g.inputs.items.len);
     for (g.inputs.items) |x| try s.input(x);
-    // Broadcast Decisions some recipient hasn't sealed, by id: a hash map's
-    // order depends on its insertion history, which a restore doesn't keep.
+    Sections.end(&sections, &n, o);
+    // 11: Broadcast Decisions some recipient hasn't sealed, by id: a hash
+    // map's order depends on its insertion history, which a restore
+    // doesn't keep. Then those a variables-only restore left for the first
+    // Pump.
+    Sections.begin(&sections, &n, o, .decisions);
     const open = try sortedKeys(machine.OpenBroadcast, gpa, g.open_broadcasts);
     defer gpa.free(open);
     try o.int(open.len);
@@ -1149,7 +1352,6 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             }
         }
     }
-    // Decisions a variables-only restore left for the first Pump.
     try o.int(g.deferred.items.len);
     for (g.deferred.items) |x| {
         try o.int(x.id);
@@ -1157,8 +1359,10 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.flag(x.mark != null);
         if (x.mark) |m| try s.mark(m);
     }
-    // Run accounting: each root's discarded messages, and the roots whose
-    // work changed since the last report (chapter 9, Run accounting).
+    Sections.end(&sections, &n, o);
+    // 12: Run accounting: each root's discarded messages, and the roots
+    // whose work changed since the last report (chapter 9, Run accounting).
+    Sections.begin(&sections, &n, o, .accounting);
     const discards = try sortedKeys(u64, gpa, g.root_discards);
     defer gpa.free(discards);
     try o.int(discards.len);
@@ -1168,10 +1372,60 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     try o.int(g.changed_roots.count());
     for (g.changed_roots.keys()) |root| try o.int(root);
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(o.bytes.items, &digest, .{});
-    try o.bytes.appendSlice(gpa, &digest);
-    return o.bytes.toOwnedSlice(gpa);
+    Sections.end(&sections, &n, o);
+    // 13: the sources, since this Core writes only Embedded-source
+    // Snapshots.
+    Sections.begin(&sections, &n, o, .sources);
+    try o.int(g.scripts.items.len);
+    for (g.scripts.items) |x| {
+        try o.str(x.source);
+        try o.int(x.extensions.items.len);
+        for (x.extensions.items) |e| try o.str(e.source);
+    }
+    Sections.end(&sections, &n, o);
+
+    // The header, then each section's frame and body.
+    var h: Out = .{ .gpa = gpa };
+    errdefer h.bytes.deinit(gpa);
+    var frames: usize = 0;
+    for (sections[0..n]) |w| frames += 2 + 10 + 32 + (w.end - w.start);
+    try h.bytes.ensureTotalCapacity(gpa, 128 + version.language.len + frames);
+    try h.bytes.appendSlice(gpa, magic);
+    try h.int(format_version);
+    try h.str(version.language);
+    try h.int(cost_model.version);
+    try h.bytes.appendSlice(gpa, &print);
+    try h.int(g.saves);
+    var state: Sha256 = .init(.{});
+    for (sections[0..n]) |w| if (w.tag != .sources) {
+        state.update(&.{@backingInt(w.tag)});
+        state.update(&w.digest);
+    };
+    try h.bytes.appendSlice(gpa, &state.finalResult());
+    var body: Sha256 = .init(.{});
+    body.update(h.bytes.items);
+    for (sections[0..n]) |w| {
+        body.update(&.{ @backingInt(w.tag), @intFromBool(w.tag == .sources) });
+        body.update(&w.digest);
+    }
+    try h.bytes.appendSlice(gpa, &body.finalResult());
+    try h.int(n);
+    for (sections[0..n]) |w| {
+        try h.byte(@backingInt(w.tag));
+        try h.flag(w.tag == .sources);
+        try h.int(w.end - w.start);
+        try h.bytes.appendSlice(gpa, &w.digest);
+        try h.bytes.appendSlice(gpa, o.bytes.items[w.start..w.end]);
+    }
+    return h.bytes.toOwnedSlice(gpa);
+}
+
+fn modeName(m: capabilities.Mode) []const u8 {
+    return switch (m) {
+        .immediate => "immediate",
+        .suspending => "suspending",
+        .fire_and_forget => "fire-and-forget",
+    };
 }
 
 /// A map's keys in ascending order, so a save doesn't depend on hash order.
@@ -1355,6 +1609,7 @@ const Restoring = struct {
     /// A Script's limits, which the Host set, and may set high.
     fn limits(r: *Restoring) Error!machine.Limits {
         var l: machine.Limits = .{};
+        if (try r.i.int() != @typeInfo(machine.Limits).@"struct".field_names.len) return error.InvalidSave;
         inline for (@typeInfo(machine.Limits).@"struct".field_names) |f| {
             @field(l, f) = try r.i.wide();
             if (@field(l, f) > 1 << 62) return error.InvalidSave;
@@ -1465,7 +1720,7 @@ const Restoring = struct {
         p.* = .{ .run = run, .deadline = 0, .order = 0 };
         errdefer r.g.destroyPending(p);
         p.id = try r.kept();
-        p.deadline = try deadline(&r.i);
+        p.deadline = if (try r.i.flag()) try deadline(&r.i) else machine.wait_table.never;
         p.order = try r.i.int();
         p.call = try r.call();
         if (p.call) |c| c.setDelivery(machine.Group.hostDelivery(run.delivery));
@@ -1774,8 +2029,8 @@ const Restoring = struct {
             if (w.join_failed >= j.members.items.len) return error.InvalidSave;
         };
         if (try r.i.flag()) {
-            const body = try r.i.small(u32);
             const library = try r.unit(s);
+            const body = try r.i.small(u32);
             if (!r.skim and body >= s.unitIn(library).bodies.len) return error.InvalidSave;
             x.clause_body = body;
             x.clause_unit = library;
@@ -2000,7 +2255,9 @@ const Restoring = struct {
     fn input(r: *Restoring) Error!machine.Input {
         const a = r.gpa();
         const Tag3 = std.meta.Tag(machine.Input);
-        const t = std.enums.fromInt(Tag3, try r.i.byte()) orelse return error.InvalidSave;
+        const tag = try r.i.byte();
+        if (tag == 255) return error.InvalidSave;
+        const t = std.enums.fromInt(Tag3, tag + 1) orelse return error.InvalidSave;
         return switch (t) {
             .charge_request => error.InvalidSave,
             .deliver => blk: {
@@ -2111,8 +2368,12 @@ fn unbound(context: ?*anyopaque, c: *capabilities.Call, args: []const *Value) ca
 /// text is the Group's `keep`; its values are released unless taken.
 const Saved = struct {
     name: []const u8,
-    /// Its code identity when saved.
+    /// Its code identity when saved, with its extensions'.
     identity: [32]u8,
+    /// Its base unit's identity, and each extension's.
+    base: [32]u8,
+    extension_identities: []const [32]u8,
+    /// Its sources, from the `sources` section.
     source: []const u8,
     extensions: []const []const u8,
     limits: machine.Limits,
@@ -2122,8 +2383,8 @@ const Saved = struct {
     objects: []machine.NamedObject,
     variable_names: []const []const u8,
     variables: []*Value,
+    /// The base unit's definitions, then each extension's.
     definitions: []*Value,
-    extension_definitions: [][]*Value,
     runs: u64,
     fuel_total: u64,
     alloc_total: u64,
@@ -2134,11 +2395,8 @@ const Saved = struct {
     fn release(x: *Saved, gpa: Allocator) void {
         machine.releaseValues(x.variables, gpa);
         machine.releaseValues(x.definitions, gpa);
-        for (x.extension_definitions) |d| machine.releaseValues(d, gpa);
-        gpa.free(x.extension_definitions);
         x.variables = &.{};
         x.definitions = &.{};
-        x.extension_definitions = &.{};
     }
 };
 
@@ -2149,16 +2407,17 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     const a = r.gpa();
     const k = r.keep();
     const i = &r.i;
-    out.* = .{ .name = "", .identity = undefined, .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .extension_definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
+    out.* = .{ .name = "", .identity = undefined, .base = undefined, .extension_identities = &.{}, .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
     errdefer out.release(a);
     out.name = try r.kept();
-    if (i.bytes.len - i.pos < 32) return error.InvalidSave;
-    out.identity = i.bytes[i.pos..][0..32].*;
-    i.pos += 32;
-    out.source = try r.kept();
-    const extensions = try k.alloc([]const u8, try i.count());
-    for (extensions) |*x| x.* = try r.kept();
-    out.extensions = extensions;
+    out.base = try i.digest();
+    out.identity = out.base;
+    const extensions = try k.alloc([32]u8, try i.count());
+    for (extensions) |*x| {
+        x.* = try i.digest();
+        out.identity = machine.extendedIdentity(out.identity, x.*);
+    }
+    out.extension_identities = extensions;
     out.limits = try r.limits();
     const grants = try k.alloc(machine.ScriptGrant, try i.count());
     for (grants) |*sg| {
@@ -2169,7 +2428,10 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
             const ops = try k.alloc(SavedOperation, try i.count());
             for (ops) |*o| {
                 o.name = try r.kept();
-                o.mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave;
+                const mode = try i.str();
+                o.mode = for (std.enums.values(capabilities.Mode)) |m| {
+                    if (std.mem.eql(u8, modeName(m), mode)) break m;
+                } else return error.InvalidSave;
                 o.required = try i.small(usize);
                 o.total = try i.small(usize);
                 o.command = try i.flag();
@@ -2217,9 +2479,6 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     out.variables = try r.values();
     if (out.variables.len != names.len) return error.InvalidSave;
     out.definitions = try r.values();
-    out.extension_definitions = try a.alloc([]*Value, extensions.len);
-    @memset(out.extension_definitions, &.{});
-    for (out.extension_definitions) |*d| d.* = try r.values();
     out.runs = try i.int();
     out.fuel_total = try i.int();
     out.alloc_total = try i.int();
@@ -2256,19 +2515,31 @@ fn buildSaved(r: *Restoring, saved: *const Saved) Error!bool {
 fn fillSaved(r: *Restoring, s: *Script, saved: *Saved) Error!void {
     if (saved.variables.len != s.variableNames().len) return error.InvalidSave;
     for (saved.variable_names, s.variableNames()) |x, y| if (!std.mem.eql(u8, x, y)) return error.InvalidSave;
-    if (saved.definitions.len != s.unit.definitions.len) return error.InvalidSave;
-    if (saved.extension_definitions.len != s.extensions.items.len) return error.InvalidSave;
-    for (saved.extension_definitions, s.extensions.items) |d, x| if (d.len != x.unit.definitions.len) return error.InvalidSave;
+    var total = s.unit.definitions.len;
+    for (s.extensions.items) |x| total += x.unit.definitions.len;
+    if (saved.definitions.len != total) return error.InvalidSave;
     const a = r.gpa();
+    // Each extension's definitions are its own slice, taken out of the
+    // saved list before the base unit keeps the rest.
+    const parts = try a.alloc([]*Value, s.extensions.items.len);
+    var made: usize = 0;
+    defer a.free(parts);
+    errdefer for (parts[0..made]) |p| a.free(p);
+    var at = s.unit.definitions.len;
+    for (s.extensions.items, parts) |x, *p| {
+        p.* = try a.dupe(*Value, saved.definitions[at..][0..x.unit.definitions.len]);
+        made += 1;
+        at += x.unit.definitions.len;
+    }
+    const base = try a.dupe(*Value, saved.definitions[0..s.unit.definitions.len]);
     machine.releaseValues(s.variables, a);
     machine.releaseValues(s.definitions, a);
     s.variables = saved.variables;
-    s.definitions = saved.definitions;
-    for (saved.extension_definitions, s.extensions.items) |d, x| x.definitions = d;
-    a.free(saved.extension_definitions);
+    s.definitions = base;
+    for (parts, s.extensions.items) |p, x| x.definitions = p;
+    a.free(saved.definitions);
     saved.variables = &.{};
     saved.definitions = &.{};
-    saved.extension_definitions = &.{};
     s.debt = saved.debt;
     if (saved.stopped) |x| s.stopped = try a.dupe(u8, x);
 }
@@ -2295,23 +2566,26 @@ fn rebuildSaved(r: *Restoring, saved: *const Saved) Error!*Script {
 /// doesn't match is `.mismatch`. Either way the caller ends `g`, which then
 /// holds nothing the Host must release.
 pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) Error!Outcome {
-    if (bytes.len < magic.len + 32) return error.InvalidSave;
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], &digest, .{});
-    if (!std.mem.eql(u8, &digest, bytes[bytes.len - 32 ..])) return error.InvalidSave;
-    var r: Restoring = .{ .i = .{ .bytes = bytes[0 .. bytes.len - 32] }, .g = g, .options = options, .tables = undefined, .libraries = &.{} };
+    const header = readFrame(bytes, true) catch return error.InvalidSave;
+    var r: Restoring = .{ .i = undefined, .g = g, .options = options, .tables = undefined, .libraries = &.{} };
     defer r.deinit();
     const i = &r.i;
     const a = g.gpa;
-    if (!std.mem.eql(u8, bytes[0..magic.len], magic)) return error.InvalidSave;
-    i.pos = magic.len;
-    if (try i.int() != format_version) return error.InvalidSave;
-    const language = try i.str();
-    const costs_version = try i.int();
-    if (i.bytes.len - i.pos < 32) return error.InvalidSave;
-    const saved_print = i.bytes[i.pos..][0..32].*;
-    i.pos += 32;
-    g.saves = try i.int();
+    const language = header.language;
+    const costs_version = header.costs;
+    const saved_print = header.print;
+    g.saves = header.saves;
+    // Each section is read whole, its fields accounting for every byte.
+    const sectionAt = struct {
+        fn at(h: *const Header, in: *In, tag: Section) Error!void {
+            if (in.bytes.len > 0 or in.pos > 0) try in.end();
+            in.* = .{ .bytes = h.bodies[@backingInt(tag)].? };
+        }
+    }.at;
+    r.i = .{ .bytes = &.{} };
+    try sectionAt(&header, i, .group);
+    // The saved name is a record: the Host names the restored Group.
+    _ = try i.str();
     g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
@@ -2320,6 +2594,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.charge_counter = try i.int();
     g.random_state = try i.wide();
     try g.waits.importIssued(a, i);
+    try sectionAt(&header, i, .libraries);
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) {
         r.mismatch = true;
         r.fixed = true;
@@ -2354,6 +2629,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         }
     }
     // Host Objects, resolved once the save is known to be good.
+    try sectionAt(&header, i, .objects);
     const object_count = try i.count();
     const parents = try a.alloc(?usize, object_count);
     defer a.free(parents);
@@ -2383,6 +2659,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     for (g.objects.items) |o| if (o.wouldCycle(o.parent)) return error.InvalidSave;
     // Function Value code; a live one's unit is placed once the Scripts
     // are built.
+    try sectionAt(&header, i, .functions);
     const code_count = try i.count();
     const Place = struct { tag: UnitTag = .own, index: usize = 0, name: []const u8 = "", body: u32 = 0, live: bool = false };
     const places = try a.alloc(Place, code_count);
@@ -2426,6 +2703,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }
     r.tables = .{ .objects = g.objects.items, .functions = g.functions.items };
     // The calls Runs wait on.
+    try sectionAt(&header, i, .calls);
     const calls = try a.alloc(*capabilities.Call, try i.count());
     defer a.free(calls);
     for (calls) |*c| {
@@ -2440,6 +2718,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         model.dates.validateInstant(x.now) catch return error.InvalidSave;
         if (machine.micros(x.now) > machine.micros(g.clock)) return error.InvalidSave;
         x.args = try r.values();
+        x.adoptable = try i.flag();
         x.charged = try i.int();
         x.at_unit = try r.kept();
         x.at_pc = try i.small(u32);
@@ -2449,6 +2728,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }
     r.calls = calls;
     // The Scripts, read whole, then compiled again as first compiled.
+    try sectionAt(&header, i, .scripts);
     const script_count = try i.count();
     const saved = try a.alloc(Saved, script_count);
     var read: usize = 0;
@@ -2459,6 +2739,22 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     for (saved) |*x| {
         try readSaved(&r, x);
         read += 1;
+    }
+    try i.end();
+    // Their sources. An External-source Snapshot can't be restored here: a
+    // missing bundle, so a mismatch whatever the policy (chapter 10).
+    const sources = header.bodies[@backingInt(Section.sources)] orelse {
+        if (g.trace) |w| w.print("> restore from=s{d} fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{ g.saves, saved_print }) catch {};
+        return .mismatch;
+    };
+    r.i = .{ .bytes = sources };
+    if (try i.count() != saved.len) return error.InvalidSave;
+    for (saved) |*x| {
+        x.source = try r.kept();
+        const extensions = try r.keep().alloc([]const u8, try i.count());
+        if (extensions.len != x.extension_identities.len) return error.InvalidSave;
+        for (extensions) |*e| e.* = try r.kept();
+        x.extensions = extensions;
     }
     for (saved) |*x| if (!try buildSaved(&r, x)) {
         r.mismatch = true;
@@ -2523,12 +2819,23 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     };
     // Every Run, Script by Script; a changed Script's are read only to be
     // discarded.
-    for (g.scripts.items, reloading) |s, c| {
+    try sectionAt(&header, i, .runs);
+    if (try i.count() != g.scripts.items.len) return error.InvalidSave;
+    const per_script = try a.alloc(usize, g.scripts.items.len);
+    defer a.free(per_script);
+    var total_runs: usize = 0;
+    for (per_script) |*n| {
+        n.* = try i.count();
+        total_runs += n.*;
+    }
+    if (try i.count() != total_runs) return error.InvalidSave;
+    for (g.scripts.items, reloading, per_script) |s, c, n| {
         r.skim = c;
-        const n = try i.count();
         for (0..n) |_| try r.oneRun(s);
     }
     r.skim = variables_only;
+    try sectionAt(&header, i, .work);
+    if (try i.count() != g.scripts.items.len) return error.InvalidSave;
     for (g.scripts.items) |s| {
         const n = try i.count();
         try s.work.ensureTotalCapacity(a, n);
@@ -2546,6 +2853,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         };
     }
     // The waits, in the order they were set, each once.
+    try sectionAt(&header, i, .waits);
     try g.waits.importOrder(a, i, r.runs.items);
     const ids = try i.count();
     for (0..ids) |_| {
@@ -2555,6 +2863,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             return e;
         };
     }
+    try sectionAt(&header, i, .inputs);
     const inputs = try i.count();
     for (0..inputs) |_| {
         const x = try r.input();
@@ -2564,6 +2873,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             return e;
         };
     }
+    try sectionAt(&header, i, .decisions);
     const open = try i.count();
     for (0..open) |_| {
         const id = try i.int();
@@ -2598,6 +2908,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         const mark = if (try i.flag()) try r.mark() else null;
         g.deferred.appendAssumeCapacity(.{ .id = id, .broadcast = broadcast, .mark = mark });
     }
+    try sectionAt(&header, i, .accounting);
     const discards = try i.count();
     for (0..discards) |_| {
         const root = try i.int();
@@ -2973,11 +3284,10 @@ test "prior snapshot layouts are refused" {
     defer g.deinit();
     const bytes = try save(&g, gpa, try g.groupFingerprint());
     defer gpa.free(bytes);
-    for ([_]u8{ 8, 9, 10, 11 }) |old| {
-        // These versions have one-byte LEB128 headers. Give the otherwise
-        // valid save a legacy header and a matching integrity digest.
+    // Format 17, the Zig Core's last before ADR 0144, and others.
+    @memcpy(bytes[0..magic.len], "NTZS");
+    for ([_]u8{ 8, 11, 17 }) |old| {
         bytes[magic.len] = old;
-        std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
         for ([_]bool{ false, true }) |variables_only| {
             var restored: Group = .init(gpa, null);
             defer restored.deinit();
@@ -3045,6 +3355,10 @@ test "pending Calls retain their crossing Clock and Segment through restore" {
             const again = try save(&copy, gpa, try copy.groupFingerprint());
             defer gpa.free(again);
             try testing.expectEqualSlices(u8, bytes, again);
+            // A TS `run` call, which a TS save marks, can't be adopted.
+            restored.adoptable = false;
+            if (how == .adopt) try testing.expectError(error.NotAdoptable, copy.settleRestored(call.id, how, null));
+            restored.adoptable = true;
             try copy.settleRestored(call.id, how, null);
             try testing.expectEqual(original, restored.now);
             try copy.pumpWith(resumed, if (join) 1 else 0, 0);
@@ -3102,7 +3416,7 @@ test "a save from language 1.0-rc.2 is a mismatch, refused or restored variables
     try testing.expectEqual(previous.len, version.language.len);
     const at = std.mem.indexOf(u8, old, version.language).?;
     @memcpy(old[at..][0..previous.len], previous);
-    std.crypto.hash.sha2.Sha256.hash(old[0 .. old.len - 32], old[old.len - 32 ..][0..32], .{});
+    reseal(old);
     var refused: Group = .init(gpa, null);
     defer refused.deinit();
     var none: Result = .{};
@@ -3264,9 +3578,8 @@ test "a corrupt or hostile save is refused, never a crash" {
     while (n < good.len) : (n += 1) {
         for ([_]u8{ 0x01, 0x80, 0xff }) |flip| {
             @memcpy(bad, good);
-            if (n >= good.len - 32) continue;
             bad[n] ^= flip;
-            std.crypto.hash.sha2.Sha256.hash(bad[0 .. bad.len - 32], bad[bad.len - 32 ..][0..32], .{});
+            reseal(bad);
             // Both policies: a variables-only restore reads Runs only to
             // discard them.
             for ([_]bool{ false, true }) |variables_only| {
@@ -3377,10 +3690,58 @@ fn richGroup(gpa: Allocator) !Group {
     return g;
 }
 
+/// Makes a changed save's digests good again, as a hostile save would:
+/// each section's, the State Fingerprint and the body digest. Bytes whose
+/// frames no longer parse are left as they are.
+fn reseal(bytes: []u8) void {
+    var i: In = .{ .bytes = bytes, .pos = magic.len };
+    _ = i.int() catch return;
+    _ = i.str() catch return;
+    _ = i.int() catch return;
+    _ = i.digest() catch return;
+    _ = i.int() catch return;
+    const state_at = i.pos;
+    _ = i.digest() catch return;
+    const body_at = i.pos;
+    _ = i.digest() catch return;
+    var state: Sha256 = .init(.{});
+    const n = i.int() catch return;
+    for (0..n) |_| {
+        const tag = i.byte() catch return;
+        const flags = i.byte() catch return;
+        const len = i.int() catch return;
+        const at = i.pos;
+        _ = i.digest() catch return;
+        if (len > bytes.len - i.pos) return;
+        Sha256.hash(bytes[i.pos..][0..len], bytes[at..][0..32], .{});
+        i.pos += len;
+        if (flags == 0) {
+            state.update(&.{tag});
+            state.update(bytes[at..][0..32]);
+        }
+    }
+    bytes[state_at..][0..32].* = state.finalResult();
+    // The body digest covers the State Fingerprint, so it comes after.
+    var again: Sha256 = .init(.{});
+    again.update(bytes[0..body_at]);
+    var j: In = .{ .bytes = bytes, .pos = body_at + 32 };
+    const m = j.int() catch return;
+    for (0..m) |_| {
+        const tag = j.byte() catch return;
+        const flags = j.byte() catch return;
+        const len = j.int() catch return;
+        const d = j.digest() catch return;
+        j.pos += len;
+        again.update(&.{ tag, flags });
+        again.update(&d);
+    }
+    bytes[body_at..][0..32].* = again.finalResult();
+}
+
 /// Restores a mutated save and, if it restores, runs it: it must refuse or
 /// run, never crash.
 fn hostile(gpa: Allocator, bad: []u8) !void {
-    std.crypto.hash.sha2.Sha256.hash(bad[0 .. bad.len - 32], bad[bad.len - 32 ..][0..32], .{});
+    reseal(bad);
     for ([_]Options{ .{}, .{ .variables_only = true }, .{ .reload_changed = true } }) |options| {
         var restored: Group = .init(gpa, null);
         defer restored.deinit();
@@ -3406,14 +3767,14 @@ test "a hostile save that restores runs without a crash" {
         const bad = try gpa.dupe(u8, good);
         defer gpa.free(bad);
         // Every byte changed, and then random changes of a few bytes.
-        for (0..good.len - 32) |n| for ([_]u8{ 0x01, 0x02, 0x80, 0xff }) |flip| {
+        for (0..good.len) |n| for ([_]u8{ 0x01, 0x02, 0x80, 0xff }) |flip| {
             @memcpy(bad, good);
             bad[n] ^= flip;
             try hostile(gpa, bad);
         };
         for (0..3000) |_| {
             @memcpy(bad, good);
-            for (0..random.intRangeAtMost(usize, 1, 4)) |_| bad[random.uintLessThan(usize, good.len - 32)] = random.int(u8);
+            for (0..random.intRangeAtMost(usize, 1, 4)) |_| bad[random.uintLessThan(usize, good.len)] = random.int(u8);
             try hostile(gpa, bad);
         }
     }
@@ -3598,11 +3959,13 @@ test "the State Fingerprint refuses bytes it can't read and other save formats" 
     const bytes = try save(&g, gpa, try g.groupFingerprint());
     defer gpa.free(bytes);
     try testing.expectError(error.InvalidSave, stateFingerprint(bytes[0..10]));
-    bytes[bytes.len - 1] ^= 1;
+    // A State Fingerprint that doesn't match the section digests.
+    const state = magic.len + 2 + version.language.len + 1 + 32 + 1;
+    bytes[state] ^= 1;
     try testing.expectError(error.InvalidSave, stateFingerprint(bytes));
-    bytes[bytes.len - 1] ^= 1;
+    bytes[state] ^= 1;
     bytes[magic.len] = format_version + 1;
-    std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
+    reseal(bytes);
     try testing.expectError(error.Mismatch, stateFingerprint(bytes));
 }
 
@@ -3708,5 +4071,110 @@ test "a Partial Restore rebuilds only the Scripts whose code changed (ADR 0143)"
         partial.deinit(memory.allocator());
         try testing.expectEqual(Outcome.partial, outcome);
         finished = true;
+    }
+}
+
+test "Numbers, Quantities, Ranges, dates and Patterns save as structured values and restore exactly" {
+    const gpa = testing.allocator;
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    try testing.expect(try g.load("s", "script variable kept = []\non keep x\n  put x after kept\nend keep\n", .{}) == .loaded);
+    const exact = try model.Decimal.parse("1.50");
+    var made: [9]*Value = undefined;
+    made[0] = try model.scalar(gpa, .{ .number = exact });
+    made[1] = try model.scalar(gpa, .{ .number = try model.Decimal.parse("-1.5") });
+    made[2] = try model.quantity(gpa, try model.Decimal.parse("3"), "inches");
+    made[3] = try model.quantity(gpa, try model.Decimal.parse("1"), "inch");
+    made[4] = try model.range(gpa, made[0], made[1]);
+    made[5] = try model.scalar(gpa, .{ .instant = .{ .seconds = -1, .micros = 5 } });
+    made[6] = try model.scalar(gpa, .{ .civil_date = .{ .year = 2026, .month = 10, .day = 28 } });
+    made[7] = try model.scalar(gpa, .{ .civil_date = .{ .year = 1, .month = 2, .day = 3, .has_time = true, .hour = 4, .minute = 5, .second = 6, .microsecond = 7 } });
+    made[8] = try @import("../pattern.zig").parse(gpa, "<\"ID-\", 4 digits>");
+    for (made) |v| {
+        var args = [_]*Value{v};
+        _ = try g.deliver("s", "keep", &args, false);
+    }
+    try g.pump(.{ .seconds = 1790000000, .micros = 0 });
+    const print = try g.groupFingerprint();
+    const bytes = try save(&g, gpa, print);
+    defer gpa.free(bytes);
+    // `1.50` keeps its exponent: tag 2, not negative, 150, then -2.
+    try testing.expect(std.mem.indexOf(u8, bytes, &.{ 2, 0, 0x96, 0x01, 0x7e }) != null);
+    // `3 inches`: its Unit as its display form shows it.
+    try testing.expect(std.mem.indexOf(u8, bytes, &[_]u8{ 3, 0, 3, 0, 6 } ++ "inches") != null);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.full, try restore(&restored, bytes, .{}, &result));
+    const again = try save(&restored, gpa, print);
+    defer gpa.free(again);
+    try testing.expectEqualSlices(u8, bytes, again);
+    var shown: std.Io.Writer.Allocating = .init(gpa);
+    defer shown.deinit();
+    try display.write(&shown.writer, restored.scripts.items[0].variables[0]);
+    try testing.expectEqualStrings("[1.50, -1.5, 3 inches, 1 inch, 1.50..-1.5, 1969-12-31T23:59:59.000005Z, 2026-10-28, 0001-02-03T04:05:06.000007, <\"ID-\", 4 digits>]", shown.written());
+}
+
+test "an External-source Snapshot has the same State Fingerprint, and restores only as a missing bundle" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    const bytes = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    // Drop the `sources` section, the last, from the frame.
+    const count_at = magic.len + 2 + version.language.len + 1 + 32 + 1 + 32 + 32;
+    try testing.expectEqual(@as(u8, 13), bytes[count_at]);
+    var i: In = .{ .bytes = bytes, .pos = count_at + 1 };
+    for (0..12) |_| {
+        i.pos += 2;
+        const len = try i.int();
+        i.pos += 32 + len;
+    }
+    try testing.expectEqual(@backingInt(Section.sources), bytes[i.pos]);
+    const external = try gpa.dupe(u8, bytes[0..i.pos]);
+    defer gpa.free(external);
+    external[count_at] = 12;
+    reseal(external);
+    try testing.expectEqual(try stateFingerprint(bytes), try stateFingerprint(external));
+    for ([_]Options{ .{}, .{ .variables_only = true }, .{ .reload_changed = true } }) |options| {
+        var restored: Group = .init(gpa, null);
+        defer restored.deinit();
+        var result: Result = .{};
+        try testing.expectEqual(Outcome.mismatch, try restore(&restored, external, options, &result));
+    }
+}
+
+test "a save's header and section frames follow the save format" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    g.name = "lobby";
+    const bytes = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    try testing.expectEqualStrings("NTSV", bytes[0..4]);
+    try testing.expectEqual(@as(u8, 1), bytes[4]);
+    const header = try readFrame(bytes, true);
+    for (header.bodies[1..], 1..) |b, t| try testing.expect(b != null or t > @backingInt(Section.sources));
+    // The Group's name leads the `group` section.
+    try testing.expectEqualStrings("\x05lobby", header.bodies[@backingInt(Section.group)].?[0..6]);
+    // An unknown optional section is skipped; an unknown required one is
+    // refused.
+    for ([_]u8{ 1, 0 }) |flags| {
+        var more: std.ArrayList(u8) = .empty;
+        defer more.deinit(gpa);
+        try more.appendSlice(gpa, bytes);
+        try more.appendSlice(gpa, &.{ 200, flags, 0 });
+        try more.appendSlice(gpa, &@as([32]u8, @splat(0)));
+        const count_at = magic.len + 2 + version.language.len + 1 + 32 + 1 + 32 + 32;
+        more.items[count_at] += 1;
+        reseal(more.items);
+        var restored: Group = .init(gpa, null);
+        defer restored.deinit();
+        var result: Result = .{};
+        if (flags == 1) {
+            try testing.expectEqual(Outcome.full, try restore(&restored, more.items, .{}, &result));
+            result.deinit(gpa);
+        } else try testing.expectError(error.InvalidSave, restore(&restored, more.items, .{}, &result));
     }
 }

@@ -235,8 +235,8 @@ Every live Run, Script by Script, in each Script's live order.
 
 | Field | Type | Is |
 | --- | --- | --- |
+| per script | `list of uint` | How many Runs each Script has, one per Script. It comes first, so a reader knows each Run's Script before it reads the Run's code positions. |
 | runs | `list of run` | The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list. |
-| per script | `list of uint` | How many Runs each Script has, one per Script. |
 
 #### 8: work (required)
 
@@ -248,11 +248,11 @@ Each Script's queued work.
 
 #### 9: waits (required)
 
-The waits with deadlines, in the order they were set, and the Group's issued Run ids.
+Every pending wait, with a deadline or not, in the order they were set, and the Group's issued Run ids.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| waits | `list of deadline wait` | In the order the waits were set. |
+| waits | `list of deadline wait` | Every Run's and Join Member's `pending`, in the order the waits were set. |
 | ids | `list of text` | The Run ids the Group has issued and not yet released, in issue order. |
 
 #### 10: inputs (required)
@@ -546,7 +546,7 @@ A Suspending Capability call a Run waits on.
 | segment | `text` | The Segment it was made in. |
 | now | `instant` | The Clock reading it was made at. |
 | args | `list of value` | Its arguments. |
-| start | `bool` | Whether the Script made it with `start` rather than `run`, which decides whether the Host may Adopt it. |
+| start | `bool` | Whether the Host's Operation took it with `start` rather than `run`, which decides whether the Host may Adopt it. A Core whose Host Operations have no `run` form, such as Zig's, writes true. |
 | charged | `uint` | The Fuel charged for it. |
 | at unit | `text` | The unit of its call site, where a refused reissue faults. |
 | at pc | `uint` | The call site's instruction. |
@@ -596,7 +596,7 @@ An Operation's shape.
 | Field | Type | Is |
 | --- | --- | --- |
 | name | `text` | Its name. |
-| mode | `text` | `immediate` or `suspending`. |
+| mode | `text` | `immediate`, `suspending` or `fire-and-forget`. |
 | required | `uint` | Its required argument count. |
 | args | `uint` | Its total argument count. |
 | command | `bool` | Whether it is a command. |
@@ -760,7 +760,7 @@ A suspended wait: a Suspending Capability call, a `wait`, or a `wait for`.
 | Field | Type | Is |
 | --- | --- | --- |
 | id | `text` | Its id. |
-| deadline | `sint` | Its deadline, in microseconds since the Unix epoch. |
+| deadline | `optional sint` | Its deadline, in microseconds since the Unix epoch, if it has one: a suspending call without a `maxPending` or `MaxWait` deadline, or a `wait for` without a timeout or `after` branch, has none. |
 | order | `uint` | Its place in the deadline order. |
 | call | `ref` | Its call, in `calls`. |
 | grant | `text` | Its call's Grant. |
@@ -851,7 +851,7 @@ One Script's queued work.
 
 #### deadline wait
 
-A wait with a deadline.
+A pending wait, by where it is held.
 
 | Field | Type | Is |
 | --- | --- | --- |

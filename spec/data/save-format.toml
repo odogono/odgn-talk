@@ -273,14 +273,14 @@ required = true
 holds = "Every live Run, Script by Script, in each Script's live order."
 
 [[section.field]]
+name = "per script"
+type = "list of uint"
+is = "How many Runs each Script has, one per Script. It comes first, so a reader knows each Run's Script before it reads the Run's code positions."
+
+[[section.field]]
 name = "runs"
 type = "list of run"
 is = "The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list."
-
-[[section.field]]
-name = "per script"
-type = "list of uint"
-is = "How many Runs each Script has, one per Script."
 
 [[section]]
 tag = 8
@@ -297,12 +297,12 @@ is = "One per Script, in `scripts` order."
 tag = 9
 name = "waits"
 required = true
-holds = "The waits with deadlines, in the order they were set, and the Group's issued Run ids."
+holds = "Every pending wait, with a deadline or not, in the order they were set, and the Group's issued Run ids."
 
 [[section.field]]
 name = "waits"
 type = "list of deadline wait"
-is = "In the order the waits were set."
+is = "Every Run's and Join Member's `pending`, in the order the waits were set."
 
 [[section.field]]
 name = "ids"
@@ -569,7 +569,7 @@ is = "Its arguments."
 [[record.field]]
 name = "start"
 type = "bool"
-is = "Whether the Script made it with `start` rather than `run`, which decides whether the Host may Adopt it."
+is = "Whether the Host's Operation took it with `start` rather than `run`, which decides whether the Host may Adopt it. A Core whose Host Operations have no `run` form, such as Zig's, writes true."
 
 [[record.field]]
 name = "charged"
@@ -726,7 +726,7 @@ is = "Its name."
 [[record.field]]
 name = "mode"
 type = "text"
-is = "`immediate` or `suspending`."
+is = "`immediate`, `suspending` or `fire-and-forget`."
 
 [[record.field]]
 name = "required"
@@ -1173,8 +1173,8 @@ is = "Its id."
 
 [[record.field]]
 name = "deadline"
-type = "sint"
-is = "Its deadline, in microseconds since the Unix epoch."
+type = "optional sint"
+is = "Its deadline, in microseconds since the Unix epoch, if it has one: a suspending call without a `maxPending` or `MaxWait` deadline, or a `wait for` without a timeout or `after` branch, has none."
 
 [[record.field]]
 name = "order"
@@ -1427,7 +1427,7 @@ is = "In order."
 
 [[record]]
 name = "deadline wait"
-holds = "A wait with a deadline."
+holds = "A pending wait, by where it is held."
 
 [[record.field]]
 name = "run"
@@ -1697,7 +1697,7 @@ is = "Its magnitude."
 [[union.variant.field]]
 name = "unit"
 type = "text"
-is = "Its unit, in display form (chapter 3)."
+is = "Its unit, as its display form (chapter 3) shows it after the magnitude: plural unless the magnitude is 1 or -1, so `3 inches` and `1 inch`."
 
 [[union.variant]]
 tag = 4

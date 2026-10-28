@@ -21,7 +21,7 @@ defmodule NorthTalk.Artifact do
 
   # What this Host reads: the save format it was written against, and the
   # `hello` features it requires.
-  @save_format "zig/17"
+  @save_format "zig/1"
   @required_features []
 
   def release, do: @release
