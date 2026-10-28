@@ -183,6 +183,7 @@ put the optional ("city") of nothing otherwise "unknown" into city
 | `lines`, `words`, `characters` | text | its lines, words or Characters, as a list of texts |
 | `bytes` | Bytes | its bytes, as a list of numbers |
 | `code points` | text | its code points, as a list of one-code-point texts |
+| `elements` | a Host Object with an Object Collection | its members, as a list of Host Objects, read when the property is ([the object element contract](embedding/object-elements.md#walking-a-collection)) |
 
 A property of any other value raises `wrong kind`. `the items of s delimited by ";"` splits at `;` ([below](#delimited-by)).
 
@@ -191,7 +192,9 @@ A property of any other value raises `wrong kind`. `the items of s delimited by 
 An Object Element Reference, `element 3 of thisPage`, and an Element Count,
 `the number of elements of thisPage`, read a Host Object's collection rather
 than a part of a value. The [object element contract](embedding/object-elements.md)
-specifies them; they are not text/list chunks.
+specifies them; they are not text/list chunks. `the elements of thisPage`
+reads the whole collection as a list, so `repeat for each` and a Whose Clause
+over `element` walk it ([ADR 0138](../docs/adr/0138-an-object-collection-is-walked-as-an-eager-snapshot-list.md)).
 
 A Chunk Expression reads part of a value by kind and position: `word 2 of line 3 of report` ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)). A chunk word's singular and plural are the same chunk kind.
 
@@ -250,7 +253,7 @@ A Chunk Expression reads part of a value by kind and position: `word 2 of line 3
 
 A Whose Clause, `whose c`, keeps only the chunks for which `c` is `true` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). It may end an Every Head, `every K of x`, or an ordinal Chunk Expression, `the first K of x`. It is a whole expression, as a Lambda is, so inside an operand it needs brackets: `the length of (every item of xs whose it > 1)` ([chapter 2](02-grammar.md#operands)).
 
-- **The walk:** `every K of x whose c` and `the first K of x whose c` walk `the Ks of x`, the plural property of the chunk kind `K` ([Keys and properties](#keys-and-properties)), with the chain's `delimited by` if there is one. So they walk the elements of a list, the integers of an integer range, the items, lines, words, Characters or code points of text as texts, and the bytes of Bytes as numbers. Any other value raises `wrong kind`, as the property does. The walk is over a snapshot taken when it starts.
+- **The walk:** `every K of x whose c` and `the first K of x whose c` walk `the Ks of x`, the plural property of the chunk kind `K` ([Keys and properties](#keys-and-properties)), with the chain's `delimited by` if there is one. So they walk the elements of a list, the integers of an integer range, the items, lines, words, Characters or code points of text as texts, and the bytes of Bytes as numbers, and `element` walks the members of a Host Object's Object Collection. Any other value raises `wrong kind`, as the property does. The walk is over a snapshot taken when it starts.
 - **`it`** is the chunk being tested, and the body's own `it` can't be read in `c`. A Whose Clause inside `c` has its own `it`.
 - **A Whose Key:** a Name operand that is `c`'s first token, not a call and not the start of a Chunk Expression, is the key or property of `it` with that name, as the possessive _whose_ reads. `whose amount > 100 GBP` means `whose the amount of it > 100 GBP`, and `whose length > 80` means `whose the length of it > 80`. A local of the same name isn't read there. A Reserved Word can't be a Whose Key, and in brackets the first Name is a plain one: `whose (limit) > 3`.
 - **Other names** in `c` resolve as they do outside the clause. In `whose amount > 100 GBP and region is "EU"`, `region` is a local, or the load error `unknown name` if there is none, and the key is `it's region`.

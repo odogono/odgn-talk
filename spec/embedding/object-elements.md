@@ -4,7 +4,9 @@ This is the normative contract for [#1143](https://github.com/odogono/odgn-talk/
 The grammar, machine, embedding declarations and Trace catalogues include it;
 the [implementation handoff](../../docs/handoffs/1143-object-elements.md)
 tracks each Core's support. [ADR 0100](../../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
-records the choices.
+records the choices, and [ADR 0138](../../docs/adr/0138-an-object-collection-is-walked-as-an-eager-snapshot-list.md)
+adds walking a whole collection. Walking is not yet in the catalogues; its
+[handoff](../../docs/handoffs/1627-walk-object-collections.md) tracks that.
 
 ## Scope and authority
 
@@ -25,9 +27,10 @@ alternate spellings, executable parser extensions or collection methods
 callable by Script. Object Kind names remain independent of `element`:
 Folio's `rectangle`, `text` and other kinds need no common superclass.
 
-The first version selects one member or counts members. Ranges, enumeration,
-`every element`, `whose` heads over elements, and collection writes are
-outside this contract. An Object Element Reference belongs to the chunk
+A Script selects one member, counts members, or reads every member as a
+list with `the elements of o`, which `repeat for each` and Whose Clauses over
+`element` walk ([Walking a collection](#walking-a-collection)). Ranges of
+elements and collection writes are outside this contract. An Object Element Reference belongs to the chunk
 expression family but is not a text/list chunk with all of its operations.
 Existing text/list/Bytes chunks retain their rules.
 
@@ -147,9 +150,38 @@ even when the receiver's kind is unknown: unlike ordinary chunks they can
 only read Host state. They are `not constant` in initializers and defaults,
 at `element`/`elements` or the leading `the`. They are permitted in ordinary
 functions, Lambdas and a Whose Clause's condition, where Host property reads
-are already permitted. They do not introduce an element Whose head:
-`every element of p whose ...` and `the first element of p whose ...` are
-syntax errors at `element` and `whose`, respectively.
+are already permitted. The same applies to `the elements of o`.
+
+## Walking a collection
+
+`the elements of o` is the Built-in property `elements`: a new list of the
+members of `o`'s collection, in collection order. It is an ordinary list
+value, which may be stored, passed and walked, and it never changes after it
+is read. As for every Built-in property, a Host property named `elements` is
+read only as `the "elements" of o`.
+
+It applies the count's receiver checks, in the same order, with `function`
+`"elements"` for `out of domain`; a non-object receiver, including a list,
+raises `wrong kind` with `expected: "object"`. It then calls `Count` once
+and `At` once for each position from 1 to the count, in order, and gives the
+list. An empty collection gives `[]` after only `Count`. An `At` that gives
+Nothing for a position below the count is `host error`, since `Count` and
+`At` must describe the same membership. Like other reads, it never calls
+`Find`.
+
+The whole read is one Host Crossing for where a Stop, cancel or rewind lands,
+so membership is stable throughout it under the rule above. A Stop,
+cancellation or receiver disposal that terminates execution prevents the
+remaining callbacks, and no list is given.
+
+`every element of o whose c` and `the first element of o whose c` are Whose
+Clauses over `the elements of o`, by chapter 4's rules. `element` becomes
+an Every Head and an ordinal Whose head, and `delimited by` still never
+applies to it. The whole collection is read before `c` is first evaluated,
+including for `the first … whose`, which then stops testing at its match.
+`repeat for each thing in the elements of o` walks the list. A member
+disposed after the read is still given, and raises `object gone` where it is
+used, as any stored handle does.
 
 ## Embedding declarations
 
@@ -252,14 +284,16 @@ the C struct layout: rebuild embedding Hosts against the activated header.
 
 ## Lowering, charging and interruption
 
-Two instructions are sufficient:
+Three instructions are sufficient:
 
 - `get-element`: pop the receiver, then its selector, and push the selected
   object or Nothing. Evaluate selector before receiver. An ordinal lowers to
   its integer selector followed by the receiver and this instruction.
 - `count-elements`: pop the receiver and push its count.
+- `list-elements`: pop the receiver and push the list of its members. Both
+  `the elements of o` and the walk of an element Whose Clause lower to it.
 
-Both are positioned at the reference's first token, including the leading
+Each is positioned at the reference's first token, including the leading
 `the` of an ordinal or count. Every error, Limit Fault and callback source
 position belongs there; a following `set-property` retains its own position.
 They can raise the errors above and ordinary property-callback errors.
@@ -268,21 +302,25 @@ Do not extend `chunk-set`, `chunk-delete` or `test-chunk` to objects.
 Both instructions are forbidden in restricted callbacks, including when
 hidden in a locally called function. Apply the existing restricted-execution
 gate before their base or Host charges: raise `restricted operation` with
-`instruction` `"get-element"` or `"count-elements"`, pay only the existing
+`instruction` `"get-element"`, `"count-elements"` or `"list-elements"`, pay only the existing
 `restricted-refusal` rate, and invoke no Host callback. These reads cannot
 be made pure by selecting 0 or an empty collection.
 
 The base rate for `get-element` is `3 + scalars(input) / 8` Fuel,
 allocation 0, with `input` the selector; numeric selectors contribute zero
-scalars. The base rate for `count-elements` is 3 Fuel, allocation 0.
+scalars. The base rate for `count-elements` is 3 Fuel, allocation 0. The base rate for
+`list-elements` is 3 Fuel, allocation 0, paid like the others, and once the
+last `At` has answered it pays `items(result)` Fuel and `size(result)`
+allocation for the list, as the `property` rate does.
 Divided terms round up and
 charging order uses the existing Cost Model. After expression evaluation,
 pay the base rate before selector/receiver validation. There is no `scanned`
 charge for objects and no ordinary `chunk-get` charge on top.
 
 Before each callback, pay that callback's declared Fuel and allocation cost.
-If payment fails, do not call it and do not record a crossing. Each
-reference or count makes at most one callback. After each callback, convert and charge its returned
+If payment fails, do not call it and do not record a crossing. Each reference or count makes at most one callback; `list-elements` makes
+one `Count` and then one `At` per member, paying each `At` before calling it,
+so a Limit Fault part way stops the read with no list. After each callback, convert and charge its returned
 Value (or failure Data) exactly as for a property getter, with the additional
 count/member validation above. Account it once, without a separate allocation
 for pushing a returned handle or Nothing. A subsequent error or Limit Fault
