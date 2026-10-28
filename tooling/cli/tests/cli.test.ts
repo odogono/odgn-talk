@@ -688,6 +688,92 @@ test('test delivers timers on the virtual Clock', () => {
   expect(code).toBe(0);
 });
 
+const ownerDir = (tests: string, objects: object[] = []) => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-owner-'));
+  writeFileSync(
+    join(dir, 'latch.talk'),
+    [
+      'on open',
+      '  if the label of me is "latch" then set the isOpen of me to true',
+      'end open',
+      'on shut',
+      '  set the isOpen of the target to false',
+      'end shut',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(join(dir, 'latch.test.talk'), tests);
+  const manifest = join(dir, 'host.talk-manifest.json');
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      kind: 'latch',
+      version: '1',
+      language: coreVersions.language,
+      grants: [],
+      libraries: [],
+      messages: [],
+      objects,
+      objectKinds: [
+        {
+          name: 'door',
+          props: [
+            { name: 'isOpen', shape: 'boolean', readOnly: false },
+            { name: 'label', shape: 'text', readOnly: true },
+          ],
+          parentKinds: [],
+        },
+      ],
+      ownerKind: 'door',
+    }),
+  );
+  return { dir, manifest };
+};
+
+test('test gives each Script under test a mock owner of the Owner Kind', () => {
+  const { dir, manifest } = ownerDir(
+    [
+      'use assertEqual from test',
+      'on testOwner',
+      '  tell harness to set "latch.label", "latch"',
+      '  send open to latch and wait',
+      '  ask harness to owner "latch"',
+      '  put it into door',
+      '  assertEqual(the isOpen of door, true)',
+      '  send shut to door and wait',
+      '  assertEqual(the isOpen of door, false)',
+      'end testOwner',
+      'on testUnset',
+      '  send open to latch',
+      'end testUnset',
+      'on testNoOwner',
+      '  ask harness to owner "latchTest"',
+      'end testNoOwner',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  const file = join(dir, 'latch.test.talk');
+  expect(stdout).toContain(`ok ${file} testOwner\n`);
+  expect(stdout).toContain('No value is set for latch.label');
+  expect(stdout).toContain(
+    'latchTest testNoOwner errored: {code: "no such script", name: "latchTest", capability: "harness", operation: "owner"}',
+  );
+  expect(stdout).toEndWith('1 passed, 2 failed\n');
+});
+
+test("test refuses a Script named like a well-known object when there's an Owner Kind", () => {
+  const { dir, manifest } = ownerDir('on testNothing\nend testNothing\n', [
+    { name: 'latch', kind: 'door' },
+  ]);
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  expect(stdout).toContain(
+    "latch can't name a Script: a well-known object has that name",
+  );
+});
+
 test("test binds the Host Manifest's well-known objects, set through the harness", () => {
   const { dir, manifest } = testDir(
     [
