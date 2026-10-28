@@ -4,6 +4,7 @@ export default [
   {
     ignores: [
       '.cache/**',
+      '**/.astro/**',
       '.claude/**',
       '.codex/**',
       '.vscode/**',
@@ -37,7 +38,7 @@ export default [
     },
     settings: {
       // The resolver's list of Node built-ins predates node:sqlite.
-      'import-x/core-modules': ['node:sqlite'],
+      'import-x/core-modules': ['node:sqlite', 'astro:content'],
       'import-x/resolver': {
         typescript: {
           noWarnOnMultipleProjects: true,
@@ -50,6 +51,7 @@ export default [
             './tooling/playground/tsconfig.json',
             './tooling/editor/tsconfig.json',
             './tooling/creative/tsconfig.json',
+            './tooling/site/tsconfig.json',
             './bench/ts/tsconfig.json',
           ],
         },
@@ -74,6 +76,7 @@ export default [
       'tooling/stack/tools/**/*.ts',
       'tooling/playground/tools/**/*.ts',
       'tooling/creative/tools/**/*.ts',
+      'tooling/site/tools/**/*.ts',
       'bench/ts/src/main.ts',
       'bench/ts/src/character-indexing-worker.ts',
       'bench/ts/src/measure-peers.ts',

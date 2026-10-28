@@ -245,6 +245,13 @@ Files, grammar, or lowering.
 - Tests and cases: [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser)
 - First check: `bun test tooling/playground/tests`
 
+## northtalk.org (`tooling/site`)
+
+- Implementation: [published files](../../tooling/site/src/sources.ts), [link rewriting](../../tooling/site/src/rewrite.ts), [Starlight config](../../tooling/site/astro.config.mjs), [Worker](../../tooling/site/src/worker.ts)
+- Rules: [site guide](../../tooling/site/README.md), [ADR 0140](../../docs/adr/0140-northtalk-org-is-one-cloudflare-worker-deployed-from-ci.md)
+- Tests and cases: [rewrite tests](../../tooling/site/tests/rewrite.test.ts); `bun run --cwd tooling/site build` fails on a broken link
+- First check: `bun test tooling/site/tests`
+
 ## Folio (`tooling/creative`)
 
 - Implementation: [Folio task map](../../tooling/creative/NAVIGATION.md): Play Session, Project model, assets, Message Box, windows, Host Manifests, offline; on the [shared editor](../../tooling/editor/src/editor.ts) and its [LSP worker](../../tooling/editor/src/lsp.worker.ts)
