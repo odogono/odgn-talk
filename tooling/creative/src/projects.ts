@@ -32,9 +32,11 @@ import {
 } from './examples';
 import { importSound, isSoundAsset } from './sounds';
 import { fetchProjectFile, fileNameOf } from './open-url';
+import { readSharedLink, sharedLinkFor } from './shared-link';
 import {
   PROJECT_MIMETYPE,
   readProjectFile,
+  sha256Hex,
   writeProjectFile,
 } from './project-file';
 import type { StackShell } from './stack';
@@ -139,6 +141,8 @@ export type ProjectsDeps = {
   lockDelegate: LockDelegate;
   /** The `.folio` file URL the page's `?open=` names, if any. */
   openUrl?: string;
+  /** The payload of the Shared Link the page's fragment carries, if any. */
+  sharedLink?: string;
   shell: StackShell;
   storage: ProjectStorage | undefined;
   /** Why storage could not open, when there is none. */
@@ -984,6 +988,42 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       load: () => fetchProjectFile(url),
     });
 
+  /** Opens the Project a Shared Link, `#p1.<payload>`, carries (#1678). */
+  const openSharedLink = async (payload: string): Promise<void> =>
+    openSource({
+      source: `link:${await sha256Hex(new TextEncoder().encode(payload))}`,
+      name: 'the shared Project',
+      fileName: 'shared.folio',
+      load: async () =>
+        writeProjectFile(await readSharedLink(payload), new Map()),
+    });
+
+  /** Copies the Shared Link for the Project on the desk (#1678). */
+  const shareLink = async (): Promise<void> => {
+    editor.finishPendingEdit();
+    let link: string;
+    try {
+      link = await sharedLinkFor(
+        projectForExport(editor.capture().project),
+        location.href,
+      );
+    } catch (error) {
+      notice(
+        `Couldn't share: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      notice(
+        `Copied a link to this Project. Anyone who opens it gets their own copy.`,
+      );
+    } catch {
+      notice(`Copy this link to share the Project: ${link}`);
+    }
+  };
+  byId('share-link').addEventListener('click', () => void shareLink());
+
   type CopySource = {
     fileName: string;
     load: () => Promise<Uint8Array>;
@@ -1404,6 +1444,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void openExampleFile(deps.exampleSlug);
   } else if (deps.openUrl) {
     void openUrlFile(deps.openUrl);
+  } else if (deps.sharedLink) {
+    void openSharedLink(deps.sharedLink);
   }
   if (deps.initial.migrated && lock.editing && storage) {
     // Save the migrated model, keeping the old record as an earlier version.

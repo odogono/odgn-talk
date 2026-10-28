@@ -1202,6 +1202,15 @@ address and remembers the copy the same way. If the file can't be fetched or
 isn't a `.folio` file, a notice says why
 ([#1677](https://github.com/odogono/odgn-talk/issues/1677)).
 
+**File → Share Link** copies a Shared Link,
+`https://northtalk.org/folio/#p1.<payload>`, that carries the whole Project
+in its fragment, so it never reaches a server. A link can't carry images or
+sounds, so Share refuses a Project with assets and suggests exporting a
+`.folio` file instead. Opening a Shared Link adds a fresh copy, drops the
+fragment from the address and remembers the copy like `?open=`. The
+Playground's old `#v1.` links are ignored
+([#1678](https://github.com/odogono/odgn-talk/issues/1678)).
+
 ### The Lighthouse Mystery
 
 **Projects → Open The Lighthouse Mystery** adds a fresh copy of

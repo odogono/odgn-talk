@@ -16,6 +16,7 @@ import { mountPlay } from './play-view';
 import { openProjectStorage, type ProjectStorage } from './storage';
 import { EXAMPLE_META } from './examples';
 import { openUrlOf, withoutOpenParam } from './open-url';
+import { sharedLinkOf, withoutFragment } from './shared-link';
 
 const element = (id: string) => {
   const found = document.getElementById(id);
@@ -40,6 +41,12 @@ if (exampleSlug) {
 const openUrl = openUrlOf(location.href);
 if (openUrl) {
   history.replaceState(null, '', withoutOpenParam(location.href));
+}
+// A Shared Link, `#p1.<payload>`, carries a whole Project (#1678); the
+// address drops it for the same reason.
+const sharedLink = sharedLinkOf(location.href);
+if (sharedLink) {
+  history.replaceState(null, '', withoutFragment(location.href));
 }
 
 element('core').textContent = `Core ${coreVersions.core}`;
@@ -78,6 +85,7 @@ const boot = async (): Promise<void> => {
     channel,
     exampleSlug,
     openUrl,
+    sharedLink,
     initial,
     lock,
     lockDelegate,
