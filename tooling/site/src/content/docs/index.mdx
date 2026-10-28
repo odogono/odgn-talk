@@ -1,0 +1,62 @@
+---
+title: NorthTalk
+description: A HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go, Bun, Node and Elixir servers and browsers.
+template: splash
+hero:
+  title: Scripting your users can write, and you can trust
+  tagline: NorthTalk is a HyperTalk-descended language for untrusted end-user Scripts, run in a sandbox inside Go, Bun, Node and Elixir servers and browsers.
+  actions:
+    - text: Try Folio
+      link: /folio/
+      icon: right-arrow
+    - text: Read the tour
+      link: /learn/tour/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Reads like English" icon="pencil">
+    `put word 2 of line 3 of report into w`. Chunk Expressions, plain-word
+    operators and one exact decimal number type, so end users can read what
+    they wrote.
+  </Card>
+  <Card title="Sandboxed by Capabilities" icon="approve-check">
+    A Script can do nothing on its own. Every effect goes through a Capability
+    the Host grants, and every Run is metered with Fuel.
+  </Card>
+  <Card title="An actor per Script" icon="random">
+    Each Script has its own mailbox and never runs two Handlers at the same
+    instant. Runs
+    interleave only where the code says `wait`, so there are no data races to
+    reason about.
+  </Card>
+  <Card title="Embeds where you already are" icon="puzzle">
+    The TS Core runs in Bun, Node and the browser. Go and Elixir Hosts embed
+    the Zig Core. Every Core passes the same Conformance Corpus.
+  </Card>
+</CardGrid>
+
+## A taste
+
+Handlers answer messages. Clauses pick one by the shape of the argument, and
+`wait` is the only place a Run can pause.
+
+```talk
+on handle {type: "invoice", amount: a} as inv where a > 1000
+  send review with inv to approvals into verdict and wait
+  if verdict is "approved" then file inv
+end handle
+
+on handle {type: "invoice"} as inv
+  file inv
+end handle
+
+on handle other
+  pass handle                       -- hand it on up the Message Path
+end handle
+```
+
+The [tour](/learn/tour/) covers the whole language in one page. The
+[Specification](/reference/spec/) is the authority on every rule.

@@ -1,0 +1,18 @@
+/* northtalk.org's wordmark and accent colour. A full design pass is #1667. */
+
+:root {
+  --sl-color-accent-low: #0b2447;
+  --sl-color-accent: #2563eb;
+  --sl-color-accent-high: #bfdbfe;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dbeafe;
+  --sl-color-accent: #1d4ed8;
+  --sl-color-accent-high: #0b2447;
+}
+
+.site-title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}

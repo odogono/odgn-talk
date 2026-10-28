@@ -8,6 +8,8 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'NorthTalk',
+      logo: { src: './public/favicon.svg' },
+      customCss: ['./src/styles/theme.css'],
       description:
         'A HyperTalk-descended scripting language for untrusted end-user Scripts.',
       social: [
