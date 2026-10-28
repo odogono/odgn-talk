@@ -1,4 +1,4 @@
-# Unblessed: walking an Object Collection (#1627); first blessing awaits human review.
+# First blessing approved for #1627 on 2026-10-28; see docs/reviews/element-walks/README.md.
 kind = "disassembly"
 
 [versions]
