@@ -1,0 +1,7 @@
+-- a.talk: the changed Script, Home of the Function Value b keeps.
+
+use label from fmt
+
+on make
+  send keep with (given x: x + 1) to b
+end make

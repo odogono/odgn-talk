@@ -1,0 +1,6 @@
+-- fmt.talk: partial-restore-resumes-matched's Library. Replacing it after the save changes
+-- the code of every Script that imports it.
+
+function label x
+  return "v1 " & x
+end label

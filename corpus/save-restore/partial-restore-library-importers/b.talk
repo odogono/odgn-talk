@@ -1,0 +1,5 @@
+-- b.talk: imports nothing, so its Run resumes.
+
+on go
+  wait 10 s
+end go

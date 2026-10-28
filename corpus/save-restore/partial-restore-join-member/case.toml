@@ -1,0 +1,26 @@
+# partial-restore-join-member: a Join Member waiting on a changed Script fails
+# as its send would, and its Join fails by the ordinary rule (spec chapter
+# 10, "Partial Restore", Across Scripts).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"
+
+[[scripts]]
+name = "c"
+source = "c.talk"

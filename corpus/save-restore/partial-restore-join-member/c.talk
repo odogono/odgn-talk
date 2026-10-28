@@ -1,0 +1,6 @@
+-- c.talk: the matched Script the other Member waits on.
+
+on go
+  wait 20 s
+  return 2
+end go

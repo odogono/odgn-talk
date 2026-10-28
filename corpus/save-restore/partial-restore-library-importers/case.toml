@@ -1,0 +1,31 @@
+# partial-restore-library-importers: a changed Library rebuilds only the
+# Scripts that import it, directly or through another Library (spec chapter
+# 10, "Partial Restore").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[libraries]]
+name = "wrap"
+version = "1"
+source = "wrap.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"
+
+[[scripts]]
+name = "c"
+source = "c.talk"

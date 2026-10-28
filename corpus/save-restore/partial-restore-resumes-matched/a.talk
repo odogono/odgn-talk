@@ -1,0 +1,15 @@
+-- a.talk: imports fmt, so the restore rebuilds it.
+
+use label from fmt
+
+script variable n = 0
+
+on go
+  add 1 to n
+  wait 10 s
+  add 1 to n
+end go
+
+on show
+  return label(n)
+end show

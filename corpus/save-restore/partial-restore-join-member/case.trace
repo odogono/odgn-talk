@@ -1,0 +1,41 @@
+# Unblessed: Partial Restore cases from the TS Core (#1707); first blessing awaits human review.
+#
+# - b/r1's Join fails at the first Pump.
+
+> add-library fmt identity=30656214e3f8e6c58bf26ce23cf31bb6b0704ecd89c226db6202c57ffe982de2
+> load a identity=cecfb4e04727db7b42cb53611990aefc91354f08a1a955d1417fd94b3a0dae45
+> load b identity=c98d1100ff1e1128cb0fb73b842a3c45a291dae9d4f4632527c2a21dca380a99
+> load c identity=4de8656af05d499ff627cbe0861bb09d9e658cc4f3801390fe666bb8132c888e
+
+> deliver d1 to=b message=start
+> pump clock=2026-10-28T10:00:00Z
+send b/r1.c1 to=a message=go wait=join
+send b/r1.c2 to=c message=go wait=join
+seg b/r1 start delivery=d1 handler=start clause=1 fuel=68 alloc=64 state=336 end=join-end
+seg c/r1 start from=b/r1.c2 handler=go clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-28T10:00:20Z
+seg a/r1 start from=b/r1.c1 handler=go clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-28T10:00:10Z
+pumped state=idle fuel=98 next=2026-10-28T10:00:10Z
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload" discarded=[a/r1]
+
+> restore from=s1 mismatch=reload-changed fingerprint=f5f4f69b5221ef877599853c429e2b7d0ecbb2c3dbff2c894d18b5c983a8449f mode=partial reloaded=[a] discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:01Z
+raise b/r1 code="send failed" at=b:9 pos=10:5
+abandon b/r1.c2
+seg b/r1 resume fuel=15 alloc=0 state=27 end=return
+run b/r1 outcome=completed delivery=d1 handler=start fuel=83 alloc=64
+pumped state=idle fuel=15 next=2026-10-28T10:00:20Z
+> pump clock=2026-10-28T10:00:21Z
+seg c/r1 resume fuel=3 alloc=0 state=0 end=return
+run c/r1 outcome=completed handler=go value=2 fuel=18 alloc=0
+pumped state=idle fuel=3
+
+> vars
+vars a
+vars b got="send failed"
+vars c

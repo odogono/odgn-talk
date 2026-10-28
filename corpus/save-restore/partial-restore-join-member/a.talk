@@ -1,0 +1,8 @@
+-- a.talk: the changed Script one Join Member waits on.
+
+use label from fmt
+
+on go
+  wait 10 s
+  return 1
+end go

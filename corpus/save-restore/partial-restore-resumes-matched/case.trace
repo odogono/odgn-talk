@@ -1,0 +1,38 @@
+# Unblessed: Partial Restore cases from the TS Core (#1707); first blessing awaits human review.
+#
+# - a/r1 is discarded and a keeps n=1, its first Segment's commit.
+# - b/r1 resumes at its timer and leaves m=2.
+# - a's `show` runs the new fmt.
+
+> add-library fmt identity=fc230606e7f968c474a49ec2c2d94d9529f3f47a496e1708e268c992aa45098e
+> load a identity=2e846a60d846c2e631360076c41c9957ead7f09858f587cd8dd537473f09d95e
+> load b identity=88e25eaadce64c8bad60ece5d30a1ac3eb93674bc2d6f8e8cd264069e516129a
+
+> deliver d1 to=a message=go
+> deliver d2 to=b message=go
+> pump clock=2026-10-28T10:00:00Z
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=25 alloc=16 state=216 end=wait until=2026-10-28T10:00:10Z
+seg b/r1 start delivery=d2 handler=go clause=1 fuel=25 alloc=16 state=216 end=wait until=2026-10-28T10:00:10Z
+pumped state=idle fuel=50 next=2026-10-28T10:00:10Z
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload" discarded=[a/r1]
+
+> restore from=s1 mismatch=reload-changed fingerprint=0b99174b42746cf1200e4088a4f8eba5f901bae562397418be3e1496d81a4619 mode=partial reloaded=[a] discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:11Z
+seg b/r1 resume fuel=13 alloc=16 state=16 end=return
+run b/r1 outcome=completed delivery=d2 handler=go fuel=38 alloc=32
+pumped state=idle fuel=13
+> deliver d3 to=a message=show
+> pump clock=2026-10-28T10:00:12Z
+seg a/r2 start delivery=d3 handler=show clause=1 fuel=23 alloc=20 state=16 end=return
+run a/r2 outcome=completed delivery=d3 handler=show value="v2 1" fuel=23 alloc=20
+pumped state=idle fuel=23
+
+> vars
+vars a n=1
+vars b m=2

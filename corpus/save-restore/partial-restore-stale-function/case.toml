@@ -1,0 +1,22 @@
+# partial-restore-stale-function: a Function Value whose Home Script is a
+# changed Script is stale after a Partial Restore, and calling it fails with
+# `function gone` (spec chapter 10, "Partial Restore", Across Scripts).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"
