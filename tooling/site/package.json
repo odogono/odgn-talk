@@ -1,0 +1,21 @@
+{
+  "name": "@northtalk/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "bun tools/sync.ts",
+    "dev": "bun tools/sync.ts && bun --bun astro dev",
+    "build": "bun tools/sync.ts && bun --bun astro build && bun tools/check-links.ts",
+    "preview": "wrangler dev",
+    "typecheck": "bun --bun astro sync >/dev/null && tsc",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.7",
+    "astro": "^7.4.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261028.1",
+    "wrangler": "^4.154.0"
+  }
+}

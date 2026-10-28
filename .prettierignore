@@ -4,6 +4,7 @@
 /.vscode/
 dist/
 node_modules/
+.astro/
 # Generated tables must reproduce the generator's exact bytes.
 /impl/ts/src/generated/
 /tooling/stack/src/generated/

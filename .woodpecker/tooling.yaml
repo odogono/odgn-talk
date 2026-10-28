@@ -20,6 +20,10 @@ when:
         - 'tools/package.json'
         - 'tools/unicode/**'
         - 'spec/**'
+        # Files northtalk.org publishes (tooling/site/src/sources.ts).
+        - 'docs/**'
+        - 'GLOSSARY.md'
+        - 'impl/*/README.md'
         - '.woodpecker/tooling.yaml'
       exclude:
         - 'tools/sidecar/**'
@@ -68,6 +72,10 @@ steps:
       - cd ../creative
       - bun test --timeout 30000 tests
       - cd ../vscode
+      - bun test --timeout 30000 tests
+      - bun run build
+      # The build fails on a broken site link.
+      - cd ../site
       - bun test --timeout 30000 tests
       - bun run build
 
