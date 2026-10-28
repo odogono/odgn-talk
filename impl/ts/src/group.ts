@@ -71,6 +71,8 @@ import {
   compareNames,
   decodeGroup,
   encodeGroup,
+  stateFingerprint,
+  type GroupSnapshot,
   hexOf,
   restoreState,
   savedRuns,
@@ -986,12 +988,7 @@ export class TsGroup implements Group {
       throw new HostError('invalid value', 'Unknown snapshot source mode');
     }
     const id = `s${++this.saves}`;
-    if (
-      this.effectStateUnknown ||
-      this.scripts.some(s =>
-        this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
-      )
-    ) {
+    if (this.effectsPending()) {
       this.trace?.(recordLine('save', [id], [], true));
       this.trace?.(
         recordLine(
@@ -1003,12 +1000,39 @@ export class TsGroup implements Group {
       throw new HostError('effects pending');
     }
     const bytes = encodeGroup({
+      ...this.snapshot(),
+      id,
+      sources: o.sources ?? 'embedded',
+    });
+    this.trace?.(recordLine('save', [id], [], true));
+    return bytes;
+  }
+
+  /** Worker. Refused as a save would be, but writes no Trace record. */
+  stateFingerprint(): Uint8Array {
+    this.worker();
+    if (this.effectsPending()) {
+      throw new HostError('effects pending');
+    }
+    return stateFingerprint(this.snapshot());
+  }
+
+  private effectsPending(): boolean {
+    return (
+      this.effectStateUnknown ||
+      this.scripts.some(s =>
+        this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
+      )
+    );
+  }
+
+  private snapshot(): Omit<GroupSnapshot, 'id' | 'sources'> {
+    return {
       accounting: this.accounting,
       broadcasts: this.broadcasts,
       deliveries: this.deliveries,
       discardedDecisions: this.discardedDecisions,
       fingerprint: this.fingerprint(),
-      id,
       inputs: this.inputs,
       lastClock: this.lastClock,
       libraries: this.libraries,
@@ -1017,11 +1041,8 @@ export class TsGroup implements Group {
       randomState: this.randomState,
       references: this.references(),
       scripts: this.scripts,
-      sources: o.sources ?? 'embedded',
       waits: this.waits,
-    });
-    this.trace?.(recordLine('save', [id], [], true));
-    return bytes;
+    };
   }
 
   /** Build and check the complete replacement before publishing the Group. */
