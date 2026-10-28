@@ -252,6 +252,14 @@ export class WasmCore implements Core {
     return new WasmGroup(this.#groupCore, o);
   }
 
+  /** A save's State Fingerprint, without restoring it (ADR 0142). */
+  stateFingerprint(save: Uint8Array): Uint8Array {
+    const ok = this.#libraries.exchange('save-state-fingerprint', {
+      save: bytesFrame(save),
+    });
+    return bytesOfFrame(field(ok, 'stateFingerprint'));
+  }
+
   restore(
     save: Uint8Array,
     o: RestoreOptions,

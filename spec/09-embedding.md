@@ -435,6 +435,8 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `release` (interim) | `script`, `grant`, `reason`: `stop`, `reload`, `revoke` or `disable`, `now` | `release-result`: no fields | [Grant release hook](#the-grant-release-hook) |
 | `prop` (interim) | `object`, `prop`, and `value (V)` for a set; with `object-elements-v1`, `prop` `elements` with `op` `count`, `at` or `find` and, for `at` and `find`, `selector (V)` | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set`, and an Object Collection's `Count`, `At` and `Find` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
+| `state-fingerprint` | – | `stateFingerprint`: bytes | `Group.StateFingerprint` |
+| `save-state-fingerprint` | `save`, naming no Group | `stateFingerprint`: bytes | `Core.StateFingerprint` |
 | `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls`, `reports` | `Restore` |
 | `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans; with `restore-bindings-v1`, `define-capability` and `grant` may first register bindings under distinct refs, without admitting Group work | `Grants`, `Resolve` |

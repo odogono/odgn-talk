@@ -3063,6 +3063,37 @@ fn fingerprintReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
+fn stateFingerprintReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    var print: [32]u8 = undefined;
+    const code = Direct.groupStateFingerprint(entry.group, &print);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"stateFingerprint\":") catch {};
+    o.bytesTag(s.gpa, &print) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
+/// A save's State Fingerprint, Core-wide: it names no Group.
+fn saveStateFingerprintReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const text = asText(field(field(msg, "save") orelse return hostError(s.gpa, ref, .invalid_value), "$bytes")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const codec = std.base64.standard.Decoder;
+    const save = s.gpa.alloc(u8, codec.calcSizeForSlice(text) catch return hostError(s.gpa, ref, .invalid_value)) catch return oomReply();
+    defer s.gpa.free(save);
+    codec.decode(save, text) catch return hostError(s.gpa, ref, .invalid_value);
+    var print: [32]u8 = undefined;
+    const code = Direct.coreStateFingerprint(s.core, save.ptr, save.len, &print);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"stateFingerprint\":") catch {};
+    o.bytesTag(s.gpa, &print) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 fn defineObjectKindReply(s: *Session, msg: Json, ref: i64) []u8 {
     const a = s.core.gpa;
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -4384,7 +4415,7 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
     // running, then reached this boundary before servicing its queued frame.
     if (s.inline_inputs and (asBool(field(msg, "refuseWorker")) orelse false)) {
         const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-        if (!messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" })) return protocolError(s.gpa, ref, "refuseWorker requires a worker message");
+        if (!messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" })) return protocolError(s.gpa, ref, "refuseWorker requires a worker message");
         recordWorkerRefusal(s, entry, msg, m);
         return hostError(s.gpa, ref, .reentrant_call);
     }
@@ -4515,6 +4546,10 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return saveReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "fingerprint")) {
         return fingerprintReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "state-fingerprint")) {
+        return stateFingerprintReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "save-state-fingerprint")) {
+        return saveStateFingerprintReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "define-object-kind")) {
         return defineObjectKindReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "object")) {
@@ -4623,7 +4658,7 @@ fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
 const PausedWorker = exchange.Paused(*GroupEntry);
 
 fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, paused: PausedWorker) []u8 {
-    const input: exchange.Input = if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" }))
+    const input: exchange.Input = if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" }))
         .worker
     else if (messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" }))
         .admitted
@@ -7054,6 +7089,15 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     const plain = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"plain\"}}", .{21}))).object.get("save").?.object.get("$bytes").?.string;
     const direct = try okOf(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"plain2\",\"name\":\"plain\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 22, plain }));
     try std.testing.expectEqual(@as(usize, 0), direct.object.get("pending").?.array.items.len);
+    // The State Fingerprint: the save's, the source Group's and the
+    // restored Group's agree, though each save takes a new save id.
+    const live = (try okOf(try c.send("{{\"m\":\"state-fingerprint\",\"ref\":{d},\"group\":\"plain\"}}", .{40}))).object.get("stateFingerprint").?.object.get("$bytes").?.string;
+    const of_save = (try okOf(try c.send("{{\"m\":\"save-state-fingerprint\",\"ref\":{d},\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 41, plain }))).object.get("stateFingerprint").?.object.get("$bytes").?.string;
+    try std.testing.expectEqualStrings(live, of_save);
+    const restored_print = (try okOf(try c.send("{{\"m\":\"state-fingerprint\",\"ref\":{d},\"group\":\"plain2\"}}", .{42}))).object.get("stateFingerprint").?.object.get("$bytes").?.string;
+    try std.testing.expectEqualStrings(live, restored_print);
+    const unreadable = try c.send("{{\"m\":\"save-state-fingerprint\",\"ref\":{d},\"save\":{{\"$bytes\":\"AAAA\"}}}}", .{43});
+    try std.testing.expectEqualStrings("invalid save", unreadable.object.get("err").?.object.get("code").?.string);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"plain2\",\"to\":{{\"script\":\"p\"}},\"message\":{{\"name\":\"peek\"}}}}", .{23}));
     try std.testing.expectEqual(@as(i64, 3), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"plain2\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{24}))).object.get("result").?.integer);
 
