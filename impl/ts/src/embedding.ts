@@ -65,6 +65,8 @@ export type Core = {
     o: RestoreOptions,
   ): { group: Group; result: RestoreResult };
   sqliteCapability: typeof sqliteCapability;
+  /** Throws `invalid save` or `save mismatch`. The Zig Host Adapter's is #1698. */
+  stateFingerprint?(save: Uint8Array): Uint8Array;
   storeCapability: typeof storeCapability;
   timerCapability: typeof timerCapability;
   userCapability: typeof userCapability;
@@ -113,6 +115,8 @@ export type Group = {
   scriptNames(): string[];
   setParent(o: HostObject, parent: HostObject | undefined): void;
   settle(callId: string, s: Settlement): Call<unknown> | undefined;
+  /** Worker. Throws as save() would. The Zig Host Adapter's is #1698. */
+  stateFingerprint?(): Uint8Array;
 };
 
 /** A loaded Script's handle. */

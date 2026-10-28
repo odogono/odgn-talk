@@ -660,6 +660,11 @@ export interface Core {
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;
   restore(save: Uint8Array, o: RestoreOptions): { group: Group; result: RestoreResult };
+  /**
+   * A save's State Fingerprint, 32 bytes, without restoring it (chapter 10).
+   * Throws "invalid save" for unreadable bytes, "save mismatch" for another Core family or save-format version.
+   */
+  stateFingerprint(save: Uint8Array): Uint8Array;
 }
 /** The TS Core's is synchronous; @northtalk/ts/wasm's returns a Promise, as it compiles the module. */
 export declare function createCore(): Core;
@@ -771,6 +776,8 @@ export interface Group {
   /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
   save(): Uint8Array; // the TS Core's Group also takes SaveOptions
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
+  /** Worker. The State Fingerprint, 32 bytes; throws effects pending as save() would, writing no Trace record. */
+  stateFingerprint(): Uint8Array;
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
   inspect(): Inspection;
   /**

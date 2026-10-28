@@ -3,6 +3,7 @@
 import { defineCapability } from './capabilities';
 import type { Core } from './embedding';
 import { newGroup, restore } from './group';
+import { saveStateFingerprint } from './group-snapshot';
 import { compileLibrary } from './library';
 import { localeCapability } from './locale-capability';
 import { defineObjectKind } from './objects';
@@ -22,12 +23,17 @@ import { coreVersions } from './versions';
 // Core's members, with the TS Core's own Group and its extra overloads.
 export type TsCore = Omit<
   Core,
-  'compileLibrary' | 'defineObjectKind' | 'newGroup' | 'restore'
+  | 'compileLibrary'
+  | 'defineObjectKind'
+  | 'newGroup'
+  | 'restore'
+  | 'stateFingerprint'
 > & {
   compileLibrary: typeof compileLibrary;
   defineObjectKind: typeof defineObjectKind;
   newGroup: typeof newGroup;
   restore: typeof restore;
+  stateFingerprint: typeof saveStateFingerprint;
 };
 
 const core: TsCore = Object.freeze({
@@ -45,6 +51,7 @@ const core: TsCore = Object.freeze({
   compileLibrary,
   newGroup,
   restore,
+  stateFingerprint: saveStateFingerprint,
   versions: coreVersions,
 });
 

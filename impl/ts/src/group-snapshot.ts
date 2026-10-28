@@ -55,6 +55,45 @@ export type GroupSnapshot = {
 
 /** A Group's save bytes. */
 export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
+  const payload = wireOf(savedGroup(g));
+  return new TextEncoder().encode(
+    JSON.stringify({ hash: sha256(JSON.stringify(payload)), payload }),
+  );
+};
+
+/**
+ * A Group's State Fingerprint: its save's payload without the Trace save id,
+ * the source mode or the sources, as code counts by identity (ADR 0142).
+ */
+export const stateFingerprint = (g: Omit<GroupSnapshot, 'id' | 'sources'>) =>
+  fingerprintOf(wireOf(savedGroup({ ...g, id: '', sources: 'external' })));
+
+/** A save's State Fingerprint, without restoring it. */
+export const saveStateFingerprint = (bytes: Uint8Array): Uint8Array => {
+  const payload = readPayload(bytes);
+  if (
+    payload.family !== 'odgn-talk-ts' ||
+    payload.format !== saveFormatVersion
+  ) {
+    throw new HostError('save mismatch');
+  }
+  // Rejects the bytes a restore can't read.
+  decodeGroup(bytes);
+  return fingerprintOf(payload);
+};
+
+const fingerprintOf = (payload: SavedWire): Uint8Array => {
+  const { id: _id, sourceMode: _mode, scripts, ...rest } = payload;
+  const hex = sha256(
+    JSON.stringify({
+      ...rest,
+      scripts: scripts.map(({ sources: _sources, ...script }) => script),
+    }),
+  );
+  return Uint8Array.from(hex.match(/../g)!, byte => Number.parseInt(byte, 16));
+};
+
+const savedGroup = (g: GroupSnapshot): SavedGroup => {
   const { timers, pending, timerSeq } = g.waits.exportState();
   const state = {
     scripts: g.scripts.map(s => ({
@@ -93,7 +132,7 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
     randomState: g.randomState,
     discardedDecisions: g.discardedDecisions,
   };
-  const saved: SavedGroup = {
+  return {
     family: 'odgn-talk-ts',
     format: saveFormatVersion,
     language: languageVersion,
@@ -138,7 +177,6 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
     })),
     graph: saveGraph(state, g.references),
   };
-  return writeSave(saved);
 };
 
 export const snapshotReferences = (
@@ -362,7 +400,7 @@ type SavedWire = Omit<SavedGroup, 'graph' | 'scripts'> & {
     grants: { declaration: number; name: string }[];
   })[];
 };
-const writeSave = (saved: SavedGroup): Uint8Array => {
+const wireOf = (saved: SavedGroup): SavedWire => {
   const declarations: SavedWire['declarations'] = [];
   const seen = new Map<string, number>();
   const scripts = saved.scripts.map(script => ({
@@ -378,17 +416,15 @@ const writeSave = (saved: SavedGroup): Uint8Array => {
       return { name, declaration: id };
     }),
   }));
-  const payload: SavedWire = {
+  return {
     ...saved,
     declarations,
     scripts,
     graph: packGraph(saved.graph),
   };
-  return new TextEncoder().encode(
-    JSON.stringify({ hash: sha256(JSON.stringify(payload)), payload }),
-  );
 };
-export const decodeGroup = (bytes: Uint8Array): SavedGroup => {
+// A save's payload, its hash checked.
+const readPayload = (bytes: Uint8Array): SavedWire => {
   try {
     const outer = JSON.parse(
       new TextDecoder('utf-8', { fatal: true }).decode(bytes),
@@ -400,7 +436,14 @@ export const decodeGroup = (bytes: Uint8Array): SavedGroup => {
     ) {
       throw new Error('Corrupt save');
     }
-    const saved = outer.payload;
+    return outer.payload;
+  } catch {
+    throw new HostError('invalid save');
+  }
+};
+export const decodeGroup = (bytes: Uint8Array): SavedGroup => {
+  const saved = readPayload(bytes);
+  try {
     if (
       saved.family !== 'odgn-talk-ts' ||
       saved.format !== saveFormatVersion ||

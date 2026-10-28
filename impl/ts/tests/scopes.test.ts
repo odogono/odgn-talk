@@ -464,6 +464,7 @@ describe('Capability Scopes', () => {
     group.pump(now, { fuelSlice: 20 });
     expect(host.calls.map(c => c.op)).toEqual(['openfile']);
     expect(() => group.save()).toThrow('effects pending');
+    expect(() => group.stateFingerprint()).toThrow('effects pending');
     expect(host.calls).toHaveLength(1);
     script.stop('done');
     group.pump(now);
