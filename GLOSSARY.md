@@ -248,10 +248,6 @@ In the debugger, editing a Script while one of its Runs is paused, then Rewindin
 _Avoid_: hot reload, hot swap, live edit
 _Avoid_: reset, reload, refresh
 
-**Shared Link**:
-A Playground URL carrying the Session Script's and user Libraries' sources and, optionally, a Session Transcript, which replays when the link opens.
-_Avoid_: permalink, snapshot, save link
-
 **Script Runner**:
 The Host a `northtalk` command becomes when given a Script file: it loads the file as one Script, grants the Standard Capabilities it offers, Delivers `start` with the command's arguments, and lives while anything can still happen.
 _Avoid_: interpreter, launcher, server
@@ -285,7 +281,7 @@ The Run of the latest Entry, while the Session Host keeps the prompt for it: its
 _Avoid_: current run, active run
 
 **Session Command**:
-A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
+A `:`-prefixed instruction to the REPL, the Playground or Folio's Message Box itself, such as `:limits` or `:inspect`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
 
 **Declaration Documentation**:
@@ -371,6 +367,10 @@ _Avoid_: Script windows, code workspace
 **Example Project**:
 A Project that ships with Folio and that an author can open and change as a copy, to learn how to build something.
 _Avoid_: sample, demo, template
+
+**Shared Link**:
+A Folio URL that carries a whole Project without assets, and opens it as a copy. A Project with assets is shared as a `.folio` file instead.
+_Avoid_: permalink, snapshot, save link
 
 **Page**:
 A scrolling visual surface within a Project, containing freely positioned Elements and optionally its own Owning Script.
