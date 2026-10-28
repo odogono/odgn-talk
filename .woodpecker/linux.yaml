@@ -125,8 +125,25 @@ steps:
       # The Zig Corpus assembles large Trace and Save/Restore messages.
       # Collect temporary buffers early on the shared Linux workers.
       GOMEMLIMIT: 1GiB
+      # Each test binary otherwise compiles the embedded Zig reactor again.
+      NORTHTALK_ZIG_CACHE_DIR: /woodpecker-go-cache/${CI_REPO}/zig-reactor
     commands:
       - go vet ./...
       # Keep the large Corpus replay from overlapping other test packages.
       - go test -p 1 -count=1 ./...
+
+  # The race detector, alongside go-core rather than after it.
+  - name: go-core-race
+    when:
+      - event: [push, manual]
+        path: *go-paths
+    image: odgn-talk-ci:2026-10-19-2
+    depends_on: [workspace]
+    directory: impl/go
+    environment:
+      GOCACHE: /woodpecker-go-cache/${CI_REPO}/build
+      GOMODCACHE: /woodpecker-go-cache/${CI_REPO}/modules
+      GOMEMLIMIT: 1GiB
+      NORTHTALK_ZIG_CACHE_DIR: /woodpecker-go-cache/${CI_REPO}/zig-reactor
+    commands:
       - go test -p 1 -race -count=1 ./...

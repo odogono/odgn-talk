@@ -42,17 +42,32 @@ jobs:
     env:
       # Keep the large Corpus replay's memory behaviour consistent with Woodpecker.
       GOMEMLIMIT: 1GiB
+      # Each test binary otherwise compiles the embedded Zig reactor again.
+      NORTHTALK_ZIG_CACHE_DIR: ${{ github.workspace }}/.cache/zig-reactor
+    # The race detector runs on pushes to main, in Woodpecker's go-core-race.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
           cache-dependency-path: impl/go/go.sum
+      - uses: actions/cache@v4
+        with:
+          path: .cache/zig-reactor
+          key: zig-reactor-${{ runner.os }}-${{ hashFiles('impl/go/internal/zigwasm/artifact.json', 'impl/go/go.sum') }}
       - uses: ./.github/actions/setup-ts
-      - run: go vet ./...
-        working-directory: impl/go
       # Keep the large Corpus replay from overlapping other test packages.
       - run: go test -p 1 -count=1 ./...
         working-directory: impl/go
-      - run: go test -p 1 -race -count=1 ./...
+
+  go-vet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache-dependency-path: impl/go/go.sum
+      - run: go vet ./...
         working-directory: impl/go
