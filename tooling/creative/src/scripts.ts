@@ -230,7 +230,8 @@ export class CodeBrowser {
     });
     const outline = h('div', { class: 'code-browser-columns' });
     const body = h('div', { class: 'code-browser-body' });
-    const sourceTitle = h('h2', { class: 'code-source-title' });
+    // The columns show which Script is open; the title is for screen readers.
+    const sourceTitle = h('h2', { class: 'code-source-title visually-hidden' });
     const path = h('nav', {
       class: 'message-path',
       'aria-label': 'Message Path',
@@ -260,9 +261,15 @@ export class CodeBrowser {
     );
     const parent = h('div', { class: 'code-editor script-editor' });
     body.append(
-      h('div', { class: 'code-source-header' }, sourceTitle, showDictionary),
-      path,
-      addAction,
+      sourceTitle,
+      h(
+        'div',
+        { class: 'code-toolbar' },
+        path,
+        h('span', { class: 'spacer' }),
+        addAction,
+        showDictionary,
+      ),
       recipes,
       parent,
       problems,
@@ -525,7 +532,7 @@ export class CodeBrowser {
                 ];
         path.forEach((step, index) => {
           if (index) {
-            win.path.append(' → ');
+            win.path.append(h('span', { 'aria-hidden': 'true' }, '→'));
           }
           const button = h(
             'button',
