@@ -27,3 +27,4 @@ An author tests their own Scripts with `northtalk test`, which is Tooling (ADR 0
   - A test waiting on nothing that can happen fails rather than hangs.
 - **Host Objects and `timer`** (#348): the runner binds the manifest's well-known objects in every Script. Their properties start unset, and the harness sets them, since a Shape gives no default worth trusting. The runner keeps `timer`'s timers and delivers them by the same deadline stepping as `wait` and `advance`, so a test sees them fire in order of time.
 - **Out of scope for now:** the Playground, machine-readable output, and Host Objects' parents and Owning Scripts.
+- Narrowed by ADR 0139: with an Owner Kind, each Script under test owns a mock object, which the Harness's `owner` returns and `set` seeds.

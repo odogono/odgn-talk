@@ -137,3 +137,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0133: Folio tests a Project with Test Scripts and a Folio Harness](0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)
 - [0134: Folio records a play-through as a generated Test Script](0134-folio-records-a-play-through-as-a-generated-test-script.md)
 - [0135: `set` writes a path below a Host Object property as one crossing](0135-set-writes-a-path-below-a-host-object-property-as-one-crossing.md)
+- [0139: The test runner gives each Script under test a mock owner](0139-the-test-runner-gives-each-script-under-test-a-mock-owner.md)
