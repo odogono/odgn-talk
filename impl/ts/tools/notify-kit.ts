@@ -337,6 +337,7 @@ export const runNotifyKitSequence = (
             pending: [],
             reports: [],
             variablesOnly: step.variablesOnly ?? false,
+            reloaded: [],
           },
         };
       },

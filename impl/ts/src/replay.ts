@@ -1413,7 +1413,9 @@ const driveReplay = function* (
             onMismatch:
               r.fields.get('mismatch') === 'variables-only'
                 ? 'variables only'
-                : 'reject',
+                : r.fields.get('mismatch') === 'reload-changed'
+                  ? 'reload changed'
+                  : 'reject',
           });
           if (restoreBetweenPumps) {
             // A restore rewinds the visible Save counter as well as the Core's
