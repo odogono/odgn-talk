@@ -51,6 +51,8 @@ export type {
   LspDiagnostic,
 } from './lsp/protocol';
 export { libraryUri, type WorkspaceSource } from './lsp/workspace';
+export { operationAt } from './lsp/features';
+export { readManifest, type HostManifest } from './lsp/manifest';
 export type WorkspaceConfiguration = {
   /** Caps for the hover's Fuel Bound; any left out keep their defaults. */
   fuelCaps?: Partial<FuelCaps>;

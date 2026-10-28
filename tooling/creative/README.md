@@ -190,13 +190,25 @@ Double-click an Element to open its Script. For text, Shift-double-click opens
 its Script and plain double-click edits the text. ⌘⌥-click opens any Element's
 Script, including text being edited. Info also offers **Edit Script**, or
 **Edit Page Script** and **Edit Project Script** when nothing is selected.
-The **Code Browser** in the Window menu has one source editor and an outline of
-all Project, Page and Element Scripts, including nested groups, plus Libraries.
-Existing Script actions select the corresponding source. Selecting code leaves
+The **Code Browser** in the Window menu has one source editor under three
+columns, after the Smalltalk System Browser. **Sources** lists the Project, each
+Page, Libraries and Tests. The next column lists the chosen Source's Scripts: a
+Page's own Script and its Elements, with a Group's members after it, or the
+Libraries or Test Scripts. **Handlers** lists the shown Script's Handlers, and
+choosing one opens its line. On a narrow screen the columns stack. Existing Script actions select the corresponding source. Selecting code leaves
 the canvas’s Page and Element selection unchanged. Script sources retain their
 Message Path links, Add action, diagnostics and recipes. Each source keeps its
 cursor and scroll position when another source is selected. Resize the browser
 from its bottom-right corner.
+
+The **Dictionary** window, from the Window menu or the Code Browser's
+**Dictionary** button, lists the Grants of the Script the Code Browser shows,
+from the Host Manifest its completion reads: a Grants column, then the Grant's
+Operations, over the chosen Operation's call, description, examples, mode,
+result, cost and errors. A Test Script lists only the Folio Harness. It stays
+beside the Code Browser while you write. Right-click a Grant, an Operation call
+or a Host Command in a Script and choose **Show … in Dictionary** to open its
+entry; elsewhere the browser's own menu appears.
 
 Edits change the authored Project immediately and share its undo/redo, autosave
 and portable export/import. The editor’s ⌘/Ctrl-Z and redo shortcuts use the
@@ -225,8 +237,8 @@ hints. Editing handlers refreshes the Manifest alongside the source.
 
 ### Project Libraries
 
-Choose **New Library** in the Code Browser, give it a name in **Library name**,
-and write Handlers, functions and Constants in its source editor. Library names
+Choose **Libraries** in the Code Browser, then **+ New Library**. Double-click
+it to rename it, and write Handlers, functions and Constants in its source editor. Library names
 are NorthTalk identifiers, unique among the Project’s Libraries; Standard
 Library names are reserved. Object and Grant names are a separate namespace.
 A Library has no Script Variables, owner or mailbox. Pass caller-specific state
@@ -235,7 +247,7 @@ and objects as arguments; its code runs with its caller’s Grants.
 Import definitions explicitly, for example `use fits from tetrisRules`. Libraries
 may import other Libraries. The browser checks Library sources in Library mode
 and refreshes importers’ diagnostics as dependencies change. Rename and
-**Delete Library** are undoable and leave `use` lines untouched for manual repair.
+**Delete Library**, from its right-click menu, are undoable and leave `use` lines untouched for manual repair.
 Broken drafts can still be saved. Play reports Library errors and failed
 importers while independent code continues; Errors links to the Library’s own
 source and line, including after a rename. Deleted source targets become
@@ -280,8 +292,8 @@ by [`runProjectTests`](src/test-runner.ts) as `northtalk test` runs one
 - A failure is placed at the line that raised it in the Test Script,
   including a failed assertion, else at the Test Handler.
 
-Choose **New Test Script** in the Code Browser to add one with a Test Handler
-to start from, and rename it in **Test Script name**. Its editor knows the
+Choose **Tests** in the Code Browser, then **+ New Test Script**, to add one
+with a Test Handler to start from; double-click it to rename it. Its editor knows the
 Harness and the Test Library. **Run Tests** runs every Test Handler against
 the Project as it is now and lists `passed` and `failed` counts with each
 result and its problems; clicking a result opens its Test Script at the

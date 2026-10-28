@@ -1,7 +1,9 @@
-// The browser's outline follows the authored hierarchy, independently of
+// The Code Browser's columns, after the Smalltalk System Browser: Sources,
+// then the chosen Source's Scripts, then the shown Script's Handlers, over
+// the source editor. They follow the authored hierarchy, independently of
 // the canvas selection. The source editor remains a CodeMirror view.
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { DeepReadonly } from './readonly';
 import type {
   Element,
@@ -10,7 +12,13 @@ import type {
   ProjectTestScript,
 } from './model';
 import type { TestResult } from './test-runner';
-import { ownerId, type ScriptOwner } from './script-manifest';
+import { showContextMenu } from './context-menu';
+import {
+  ownerById,
+  ownerId,
+  scriptPage,
+  type ScriptOwner,
+} from './script-manifest';
 
 export type CodeSelection = {
   id: number;
@@ -26,9 +34,12 @@ export const sourceKey = (source: CodeSelection): string =>
   `${source.kind}:${source.id}`;
 
 type Props = {
+  /** The shown Script's Handlers, in source order. */
+  handlers: { line: number; name: string }[];
   named?: NamedSource;
   onDelete(): void;
   onNew(kind: NamedSource['kind']): void;
+  onOpenLine(line: number): void;
   onOpenResult(result: TestResult): void;
   onRename(name: string): string | undefined;
   onRunTests(): void;
@@ -41,134 +52,343 @@ type Props = {
 
 const LABELS = { library: 'Library', test: 'Test Script' } as const;
 
-const SourceName = ({
-  named,
-  onRename,
-  readOnly,
-}: Pick<Props, 'named' | 'onRename' | 'readOnly'>) => {
-  const [name, setName] = useState(named?.source.name ?? '');
-  const [error, setError] = useState('');
-  useEffect(() => {
-    setName(named?.source.name ?? '');
-    setError('');
-  }, [named?.source.name]);
-  if (!named) {
-    return null;
+// The first column's entries: the Project, each Page, Libraries and Tests.
+type Group = 'project' | 'libraries' | 'tests' | number;
+const groupOf = (
+  project: DeepReadonly<Project>,
+  selected: CodeSelection,
+): Group => {
+  if (selected.kind === 'library') {
+    return 'libraries';
   }
-  const rename = () => setError(onRename(name.trim()) ?? '');
-  const label = `${LABELS[named.kind]} name`;
+  if (selected.kind === 'test') {
+    return 'tests';
+  }
+  const owner = ownerById(project, selected.id);
   return (
-    <div className="library-name">
-      <label>
-        {label}
-        <input
-          aria-label={label}
-          disabled={readOnly}
-          onBlur={rename}
-          onInput={event => setName(event.currentTarget.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              rename();
-            }
-          }}
-          value={name}
-        />
-      </label>
-      <span role="status">{error}</span>
-    </div>
+    (owner && owner !== project && scriptPage(project, owner)?.id) || 'project'
   );
 };
 
-const Outline = (props: Props) => {
-  const { project, selected, onSelect } = props;
-  const sourceButton = (source: CodeSelection, label: string) => (
+// Each Element with its Group path, so a Group's members follow it.
+const allMembers = (
+  nodes: readonly DeepReadonly<Element>[],
+  path: string[] = [],
+): { element: DeepReadonly<Element>; path: string[] }[] =>
+  nodes.flatMap(element => [
+    { element, path },
+    ...(element.kind === 'group'
+      ? allMembers(element.members, [...path, element.name])
+      : []),
+  ]);
+
+const script = (owner: ScriptOwner): CodeSelection => ({
+  kind: 'script',
+  id: ownerId(owner),
+});
+
+const Column = ({
+  children,
+  footer,
+  title,
+}: {
+  children: preact.ComponentChildren;
+  footer?: preact.ComponentChildren;
+  title: preact.ComponentChildren;
+}) => (
+  <section
+    aria-label={typeof title === 'string' ? title : undefined}
+    className="browser-column"
+  >
+    <h3>{title}</h3>
+    <ul>{children}</ul>
+    {footer && <div className="browser-column-footer">{footer}</div>}
+  </section>
+);
+
+const Item = ({
+  current,
+  label,
+  onContextMenu,
+  onDblClick,
+  onSelect,
+  title,
+}: {
+  current: boolean;
+  label: preact.ComponentChildren;
+  onContextMenu?(event: MouseEvent): void;
+  onDblClick?(): void;
+  onSelect(): void;
+  title?: string;
+}) => (
+  <li>
     <button
-      aria-current={
-        sourceKey(source) === sourceKey(selected) ? 'true' : undefined
+      aria-current={current ? 'true' : undefined}
+      // A second click of a double-click renames.
+      onClick={event =>
+        event.detail === 2 && onDblClick ? onDblClick() : onSelect()
       }
-      onClick={() => onSelect(source)}
+      onContextMenu={onContextMenu}
+      title={title}
       type="button"
     >
       {label}
     </button>
+  </li>
+);
+
+// Renames the selected Library or Test Script in place; Enter or leaving
+// the field commits, Escape cancels.
+const RenameField = ({
+  initial,
+  label,
+  onDone,
+  onRename,
+}: {
+  initial: string;
+  label: string;
+  onDone(): void;
+  onRename(name: string): string | undefined;
+}) => {
+  const [name, setName] = useState(initial);
+  const [error, setError] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+  const commit = () => {
+    const problem = onRename(name.trim());
+    if (problem) {
+      setError(problem);
+    } else {
+      onDone();
+    }
+  };
+  return (
+    <li className="rename">
+      <input
+        aria-label={label}
+        onBlur={commit}
+        onInput={event => setName(event.currentTarget.value)}
+        onKeyDown={event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit();
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            onDone();
+          }
+        }}
+        ref={input}
+        value={name}
+      />
+      {error && <span role="status">{error}</span>}
+    </li>
   );
-  const scriptButton = (owner: ScriptOwner, label: string) =>
-    sourceButton({ kind: 'script', id: ownerId(owner) }, label);
-  const elements = (nodes: readonly DeepReadonly<Element>[]) => (
-    <ul>
-      {nodes.map(node => (
-        <li key={node.id}>
-          {scriptButton(node, `${node.kind}: ${node.name}`)}
-          {node.kind === 'group' && elements(node.members)}
-        </li>
+};
+
+const Columns = (props: Props) => {
+  const { project, selected, onSelect } = props;
+  // Libraries or Tests chosen while they have no source to show.
+  const [emptyGroup, setEmptyGroup] = useState<'libraries' | 'tests'>();
+  const [renaming, setRenaming] = useState<string>();
+  const group = emptyGroup ?? groupOf(project, selected);
+  const choose = (source: CodeSelection) => {
+    setEmptyGroup(undefined);
+    onSelect(source);
+  };
+  const isSelected = (source: CodeSelection) =>
+    !emptyGroup && sourceKey(source) === sourceKey(selected);
+  const openGroup = (next: Group) => {
+    if (next === 'libraries' || next === 'tests') {
+      const first = (
+        next === 'libraries' ? project.libraries : project.testScripts
+      )[0];
+      if (first) {
+        choose({
+          kind: next === 'libraries' ? 'library' : 'test',
+          id: first.id!,
+        });
+      } else {
+        setEmptyGroup(next);
+      }
+    } else if (next === 'project') {
+      choose(script(project));
+    } else {
+      choose({ kind: 'script', id: next });
+    }
+  };
+
+  const sources = (
+    <Column title="Sources">
+      <Item
+        current={group === 'project'}
+        label={`Project: ${project.name}`}
+        onSelect={() => openGroup('project')}
+      />
+      {project.pages.map(page => (
+        <Item
+          current={group === page.id}
+          key={page.id}
+          label={`Page: ${page.name}`}
+          onSelect={() => openGroup(page.id!)}
+        />
       ))}
-    </ul>
+      <Item
+        current={group === 'libraries'}
+        label="Libraries"
+        onSelect={() => openGroup('libraries')}
+      />
+      <Item
+        current={group === 'tests'}
+        label="Tests"
+        onSelect={() => openGroup('tests')}
+      />
+    </Column>
   );
+
+  const named = (kind: NamedSource['kind']) => {
+    const list = kind === 'library' ? project.libraries : project.testScripts;
+    return (
+      <Column
+        footer={
+          <>
+            <button
+              disabled={props.readOnly}
+              onClick={() => {
+                setEmptyGroup(undefined);
+                props.onNew(kind);
+              }}
+              title={`New ${LABELS[kind]}`}
+              type="button"
+            >
+              + New {LABELS[kind]}
+            </button>
+            {kind === 'test' && (
+              <button
+                disabled={!list.length || props.tests === 'running'}
+                onClick={props.onRunTests}
+                type="button"
+              >
+                Run Tests
+              </button>
+            )}
+          </>
+        }
+        title={kind === 'library' ? 'Libraries' : 'Test Scripts'}
+      >
+        {list.map(source => {
+          const selection = { kind, id: source.id! };
+          return renaming === sourceKey(selection) &&
+            props.named?.source.id === source.id ? (
+            <RenameField
+              initial={source.name}
+              key={source.id}
+              label={`${LABELS[kind]} name`}
+              onDone={() => setRenaming(undefined)}
+              onRename={props.onRename}
+            />
+          ) : (
+            <Item
+              current={isSelected(selection)}
+              key={source.id}
+              label={source.name}
+              onContextMenu={event => {
+                event.preventDefault();
+                choose(selection);
+                showContextMenu(event.clientX, event.clientY, [
+                  {
+                    label: 'Rename',
+                    disabled: props.readOnly,
+                    run: () => setRenaming(sourceKey(selection)),
+                  },
+                  {
+                    label: `Delete ${LABELS[kind]}`,
+                    disabled: props.readOnly,
+                    run: props.onDelete,
+                  },
+                ]);
+              }}
+              onDblClick={() => {
+                if (!props.readOnly) {
+                  setRenaming(sourceKey(selection));
+                }
+              }}
+              onSelect={() => choose(selection)}
+              title="Double-click to rename; right-click for more"
+            />
+          );
+        })}
+      </Column>
+    );
+  };
+
+  let scripts;
+  if (group === 'libraries') {
+    scripts = named('library');
+  } else if (group === 'tests') {
+    scripts = named('test');
+  } else if (group === 'project') {
+    scripts = (
+      <Column title="Scripts">
+        <Item
+          current={isSelected(script(project))}
+          label="Project Script"
+          onSelect={() => choose(script(project))}
+        />
+      </Column>
+    );
+  } else {
+    const page = project.pages.find(p => p.id === group)!;
+    scripts = (
+      <Column title="Scripts">
+        <Item
+          current={isSelected(script(page))}
+          label="Page Script"
+          onSelect={() => choose(script(page))}
+        />
+        {allMembers(page.elements).map(({ element, path }) => (
+          <Item
+            current={isSelected(script(element))}
+            key={element.id}
+            label={
+              <>
+                {path.length > 0 && (
+                  <span className="path">{path.join(' › ')} › </span>
+                )}
+                {element.name}
+              </>
+            }
+            onSelect={() => choose(script(element))}
+            title={element.kind}
+          />
+        ))}
+      </Column>
+    );
+  }
+
+  const handlers = (
+    <Column title="Handlers">
+      {!emptyGroup &&
+        props.handlers.map(handler => (
+          <Item
+            current={false}
+            key={`${handler.name}:${handler.line}`}
+            label={`on ${handler.name}`}
+            onSelect={() => props.onOpenLine(handler.line)}
+          />
+        ))}
+    </Column>
+  );
+
   return (
     <>
-      <nav aria-label="Project code">
-        <ul>
-          <li>
-            {scriptButton(project, `Project: ${project.name}`)}
-            <ul>
-              {project.pages.map(page => (
-                <li key={page.id}>
-                  {scriptButton(page, `Page: ${page.name}`)}
-                  {elements(page.elements)}
-                </li>
-              ))}
-            </ul>
-          </li>
-        </ul>
-        <h3>Libraries</h3>
-        <ul>
-          {project.libraries.map(library => (
-            <li key={library.id}>
-              {sourceButton({ kind: 'library', id: library.id! }, library.name)}
-            </li>
-          ))}
-        </ul>
-        <h3>Tests</h3>
-        <ul>
-          {project.testScripts.map(script => (
-            <li key={script.id}>
-              {sourceButton({ kind: 'test', id: script.id! }, script.name)}
-            </li>
-          ))}
-        </ul>
+      <nav aria-label="Project code" className="browser-columns">
+        {sources}
+        {scripts}
+        {handlers}
       </nav>
-      <div className="library-actions">
-        <button
-          disabled={props.readOnly}
-          onClick={() => props.onNew('library')}
-          type="button"
-        >
-          New Library
-        </button>
-        <button
-          disabled={props.readOnly}
-          onClick={() => props.onNew('test')}
-          type="button"
-        >
-          New Test Script
-        </button>
-        <button
-          disabled={props.readOnly || !props.named}
-          onClick={props.onDelete}
-          type="button"
-        >
-          Delete {LABELS[props.named?.kind ?? 'library']}
-        </button>
-        <button
-          disabled={!project.testScripts.length || props.tests === 'running'}
-          onClick={props.onRunTests}
-          type="button"
-        >
-          Run Tests
-        </button>
-      </div>
-      <SourceName key={sourceKey(selected)} {...props} />
       <TestResults {...props} />
     </>
   );
@@ -215,5 +435,5 @@ const TestResults = ({ tests, onOpenResult }: Props) => {
 };
 
 export const renderCodeOutline = (parent: HTMLElement, props: Props): void => {
-  render(<Outline {...props} />, parent);
+  render(<Columns {...props} />, parent);
 };

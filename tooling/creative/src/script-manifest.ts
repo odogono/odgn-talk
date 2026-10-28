@@ -218,3 +218,35 @@ export const languageConfiguration = (
   ...(sources ? { sources } : {}),
   fuelFrame: PUMP_FUEL,
 });
+
+/** A Script's Handlers in source order, with each one's first line. */
+export const scriptHandlers = (
+  source: string,
+): { line: number; name: string }[] => {
+  const handlers: { line: number; name: string }[] = [];
+  const nodes: SyntaxNode[] = [parseSourceRecovering(source).tree];
+  while (nodes.length) {
+    const node = nodes.shift()!;
+    if (node.rule === 'Handler') {
+      const message = node.children.find(
+        child => child.kind === 'node' && child.rule === 'MessageName',
+      );
+      if (message?.kind === 'node') {
+        handlers.push({
+          name: syntaxSelector(
+            node,
+            source.slice(message.start, message.end).trim(),
+          ),
+          line: source.slice(0, node.start).split('\n').length,
+        });
+      }
+    } else if (node.rule !== 'Error') {
+      nodes.push(
+        ...node.children.filter(
+          (child): child is SyntaxNode => child.kind === 'node',
+        ),
+      );
+    }
+  }
+  return handlers.sort((a, b) => a.line - b.line);
+};

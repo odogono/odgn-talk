@@ -1426,3 +1426,65 @@ export const codeActions = (analysis: Analysis, requested: Range) =>
           ]
         : [];
     });
+
+/**
+ * The Grant, and the Operation if any, that the code at `offset` calls: an
+ * `ask` or `tell`, a `tell` block's receiver or line, or a Host Command by
+ * name. Syntactic only, for "Show in Dictionary"; absent when the Manifest
+ * declares neither.
+ */
+export const operationAt = (
+  source: string,
+  offset: number,
+  manifest: HostManifest,
+): { grant: string; operation?: string } | undefined => {
+  const syntax = elements<SyntaxElement>(parseSourceRecovering(source).tree);
+  const within = (e: SyntaxElement) =>
+    e.kind === 'node'
+      ? e.start <= offset && offset <= e.end
+      : e.pos <= offset && offset <= e.end;
+  const nodes = syntax.filter(
+    (e): e is SyntaxNode => e.kind === 'node' && within(e),
+  );
+  // The innermost call wins, so a call in another's argument is its own.
+  const node = nodes
+    .filter(n =>
+      ['AskTell', 'OperationLine', 'SimpleStatement', 'TellBlock'].includes(
+        n.rule,
+      ),
+    )
+    .at(-1);
+  if (!node) {
+    return undefined;
+  }
+  if (node.rule === 'SimpleStatement') {
+    const head = node.children[0];
+    if (head?.kind !== 'token' || head.t !== 'word' || !within(head)) {
+      return undefined;
+    }
+    const commands = [...manifest.grants].flatMap(([grant, operations]) =>
+      [...operations.values()]
+        .filter(op => op.command && commandSelectors(op).includes(head.v))
+        .map(op => ({ grant, operation: op.name })),
+    );
+    return commands.length === 1 ? commands[0] : undefined;
+  }
+  if (node.rule === 'TellBlock') {
+    const receiver = node.children[1];
+    const grant =
+      receiver?.kind === 'node'
+        ? source.slice(receiver.start, receiver.end).trim()
+        : '';
+    return receiver && within(receiver) && manifest.grants.has(grant)
+      ? { grant }
+      : undefined;
+  }
+  const call = operationCall(syntax, node, source);
+  const operations = call && manifest.grants.get(call.grant);
+  if (!call || !operations) {
+    return undefined;
+  }
+  return operations.has(call.op.v)
+    ? { grant: call.grant, operation: call.op.v }
+    : { grant: call.grant };
+};

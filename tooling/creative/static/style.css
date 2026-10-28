@@ -604,52 +604,148 @@ button:disabled {
 }
 .code-browser > .code-browser-content {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   flex-shrink: 1;
 }
-.code-browser-outline {
-  width: 15rem;
+.code-browser-columns {
   flex-shrink: 0;
-  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+/* Smalltalk-style columns, each narrowing the one to its left. */
+.browser-columns {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  height: 10rem;
+}
+.browser-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   border-right: 1px solid var(--line);
-  padding: 0.5rem;
 }
-.code-browser-outline ul {
+.browser-column:last-child {
+  border-right: 0;
+}
+.browser-column h3 {
+  margin: 0;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--line);
+}
+.browser-column ul {
+  flex: 1;
+  overflow: auto;
   list-style: none;
-  padding-left: 0.6rem;
+  margin: 0;
+  padding: 0;
 }
-.code-browser-outline button[aria-current='true'] {
+.browser-column li button {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0.1rem 0.4rem;
+  text-align: left;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browser-column li button[aria-current='true'] {
   background: var(--line);
   color: var(--panel);
-  font-weight: bold;
 }
-.code-browser-outline button {
-  max-width: 100%;
-  text-align: left;
-  overflow-wrap: anywhere;
+.browser-column .path {
+  opacity: 0.6;
+}
+.browser-column li.rename input {
+  box-sizing: border-box;
+  width: 100%;
+  font-size: 0.8rem;
+}
+.browser-column li.rename [role='status'] {
+  display: block;
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  color: var(--error);
+}
+.browser-column-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-top: 1px solid var(--line);
+}
+.browser-column-footer button {
+  font-size: 0.75rem;
 }
 .code-browser-body {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-width: 0;
+  min-height: 0;
 }
-.code-source-title {
-  font-size: 0.9rem;
-  margin: 0.5rem;
+/* One line between the columns and the editor: the Message Path, then the
+   source's actions. */
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
 }
-.library-actions {
+.code-toolbar [hidden] {
+  display: none;
+}
+.code-toolbar .spacer {
+  flex: 1;
+}
+.code-toolbar button {
+  font-size: 0.8rem;
+  padding: 0.05rem 0.5rem;
+}
+.code-toolbar .message-path {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
 }
-.library-name input {
-  box-sizing: border-box;
-  width: 100%;
+.code-toolbar .message-path button {
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  background: none;
+  color: inherit;
 }
-.library-name [role='status'] {
-  color: var(--error);
+.code-toolbar .message-path button[aria-current='true'] {
+  font-weight: bold;
+  text-decoration: none;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.test-results {
+  max-height: 6rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.test-results p {
+  margin: 0;
 }
 .test-results ul {
   list-style: none;
@@ -664,19 +760,76 @@ button:disabled {
   margin: 0 0 0.3rem 1rem;
   white-space: pre-wrap;
 }
+.dictionary-window {
+  width: 30rem;
+  height: 28rem;
+}
+.dictionary-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.dictionary-scope {
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.dictionary-content .browser-columns {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+.dictionary-entry {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+.dictionary-op > code {
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+.dictionary-op p,
+.dictionary-op ul,
+.dictionary-op h4 {
+  margin: 0.3rem 0;
+}
+.dictionary-op pre {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+}
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  padding: 0.2rem 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 2px 2px 0 var(--line);
+}
+.context-menu button {
+  border: 0;
+  padding: 0.2rem 0.8rem;
+  text-align: left;
+}
+.context-menu button:focus,
+.context-menu button:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--panel);
+}
 @media (max-width: 640px) {
-  .code-browser > .code-browser-content {
-    flex-direction: column;
+  .browser-columns {
+    grid-auto-flow: row;
+    grid-auto-rows: minmax(0, 1fr);
+    height: 16rem;
   }
-  .code-browser-outline {
-    box-sizing: border-box;
-    width: 100%;
-    max-height: 10rem;
+  .browser-column {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-  }
-  .code-browser-body {
-    min-height: 10rem;
   }
 }
 .code-editor .cm-editor {
