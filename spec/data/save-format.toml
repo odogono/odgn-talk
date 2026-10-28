@@ -2036,6 +2036,11 @@ type = "optional uint"
 is = "The frame a cleanup failed in, if one did."
 
 [[union.variant.field]]
+name = "held"
+type = "list of frame"
+is = "The failed frames held above the running cleanup, in order."
+
+[[union.variant.field]]
 name = "then"
 type = "then"
 is = "Where control goes after."

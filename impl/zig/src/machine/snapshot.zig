@@ -762,6 +762,7 @@ const Saving = struct {
                 try s.o.int(u.failed);
                 try s.o.flag(u.failed_frame != null);
                 if (u.failed_frame) |f| try s.o.int(f);
+                try s.frames(run, u.held.items);
                 switch (u.then) {
                     .accept => |a| {
                         try s.o.byte(0);
@@ -1928,6 +1929,7 @@ const Restoring = struct {
                 u.left = try r.i.flag();
                 u.failed = try r.i.int();
                 if (try r.i.flag()) u.failed_frame = try r.i.small(usize);
+                try r.frames(run, &u.held);
                 switch (try r.i.byte()) {
                     0 => {
                         u.then = .{ .accept = .{ .frame = try r.i.small(usize), .pc = try r.i.small(u32), .stack = .empty } };
@@ -2211,6 +2213,10 @@ const Restoring = struct {
                 if (!kinds(d.owner_stack.items, try r.expectedRaised(code, d.owner_pc), true)) return error.InvalidSave;
             },
             .cleanup => |u| {
+                for (u.held.items) |*f| {
+                    const code = run.script.unitIn(f.library);
+                    if (!kinds(f.stack.items, try r.expectedRaised(code, f.pc), true)) return error.InvalidSave;
+                }
                 for (u.cleanups.items) |x| {
                     if (x.frame >= fs.len) return error.InvalidSave;
                     const code = run.script.unitIn(fs[x.frame].library);

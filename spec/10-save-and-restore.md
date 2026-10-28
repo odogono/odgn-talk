@@ -348,7 +348,7 @@ A Run's error control.
 | Tag | Variant | Is | Then |
 | --- | --- | --- | --- |
 | 0 | dispatch | Choosing a handler for an error. | error: `value`; owner: `uint`; place: `uint`; held: `list of frame`; owner stack: `list of slot`; owner pc: `uint`; search: `search` |
-| 1 | cleanup | Running cleanups before control moves on. | error: `value`; cleanups: `list of cleanup`; next: `uint`; left: `bool`; failed: `uint`; failed frame: `optional uint`; then: `then` |
+| 1 | cleanup | Running cleanups before control moves on. | error: `value`; cleanups: `list of cleanup`; next: `uint`; left: `bool`; failed: `uint`; failed frame: `optional uint`; held: `list of frame`; then: `then` |
 
 #### then
 

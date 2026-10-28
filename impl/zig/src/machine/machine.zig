@@ -596,9 +596,14 @@ pub const Unwinding = struct {
     left: bool = false,
     /// The logical size of the operand stack its cleanup copy cut from
     /// the failed continuation of frame `failed_frame`, which stays
-    /// retained while the cleanup runs (chapter 8, Pending cleanup state).
+    /// retained while the cleanup runs (chapter 8, Pending cleanup state),
+    /// with what each held frame's own cleanup cut.
     failed: u64 = 0,
     failed_frame: ?usize = null,
+    /// The failed frames above the frame whose cleanup is running, which
+    /// stay retained until the cleanup ends (chapter 8, Pending cleanup
+    /// state). A cancellation's cleanup holds none.
+    held: std.ArrayList(Frame) = .empty,
 };
 
 pub const Script = struct {
@@ -6887,8 +6892,8 @@ pub const Group = struct {
         // its activation, the owner's own stack and the failed frames it
         // holds aside. A pending cleanup has no size of its own; it keeps
         // its Error's context, an acceptance's activation, a transfer's
-        // arguments and the failed continuation's operands (chapter 8,
-        // Pending cleanup state).
+        // arguments, the failed frames it holds aside and the failed
+        // continuation's operands (chapter 8, Pending cleanup state).
         // Its interrupted dispatch contexts are gone, and the cleanups it
         // was preempted in end when it starts.
         if (pending_cancel) return total;
@@ -6899,17 +6904,20 @@ pub const Group = struct {
                 total += stackSize(d.owner_stack.items);
                 for (d.held) |*f| total += frameSize(f);
             },
-            .cleanup => |u| switch (u.then) {
-                .cancel => {},
-                .accept => |acc| total += 96 + costs.size(u.err) + 48 + stackSize(acc.stack.items) + u.failed,
-                .end, .search => total += 96 + costs.size(u.err) + u.failed,
-                .transfer => |t| {
-                    // Until its `leave`, the dispatch under it holds the
-                    // context.
-                    if (u.left) total += 96 + costs.size(u.err);
-                    total += 8 * t.args.len + u.failed;
-                    for (t.args) |v| total += costs.size(v);
-                },
+            .cleanup => |u| {
+                for (u.held.items) |*f| total += frameSize(f);
+                switch (u.then) {
+                    .cancel => {},
+                    .accept => |acc| total += 96 + costs.size(u.err) + 48 + stackSize(acc.stack.items) + u.failed,
+                    .end, .search => total += 96 + costs.size(u.err) + u.failed,
+                    .transfer => |t| {
+                        // Until its `leave`, the dispatch under it holds the
+                        // context.
+                        if (u.left) total += 96 + costs.size(u.err);
+                        total += 8 * t.args.len + u.failed;
+                        for (t.args) |v| total += costs.size(v);
+                    },
+                }
             },
         };
         return total;
@@ -7255,7 +7263,7 @@ pub const Group = struct {
     /// Run's Script.
     fn pushFrameIn(g: *Group, run: *Run, library: ?*Library, body: u32, args: []const *Value) !void {
         // A call that would pass the call depth faults at the call.
-        if (run.frames.items.len >= run.script.limits.call_depth) return g.faultOn(.depth);
+        if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return g.faultOn(.depth);
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
         const locals = try g.gpa.alloc(*Value, b.locals);
         var made: usize = 0;
@@ -7282,6 +7290,16 @@ pub const Group = struct {
         };
         const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
         try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
+    }
+
+    /// The failed frames the Run's cleanups hold aside, which count toward
+    /// its call depth.
+    fn heldCount(run: *const Run) usize {
+        var n: usize = 0;
+        for (run.controls.items) |c| if (c == .cleanup) {
+            n += c.cleanup.held.items.len;
+        };
+        return n;
     }
 
     fn popFrame(g: *Group, run: *Run) void {
@@ -8296,12 +8314,24 @@ pub const Group = struct {
                     try g.leaveDispatch(run);
                     continue;
                 }
-                while (run.frames.items.len > c.frame + 1) g.popFrame(run);
                 // Entering cleanup doesn't replace the failed continuation's
                 // operands; a cancellation keeps only the prefix.
                 if (u.then != .cancel and u.failed_frame != c.frame) {
-                    u.failed = stackSize(run.frames.items[c.frame].stack.items);
+                    // A held frame keeps what its own cleanup cut.
+                    var carried: u64 = 0;
+                    if (u.failed_frame) |k| if (k > c.frame and k < run.frames.items.len) {
+                        carried = u.failed -| stackSize(run.frames.items[k].stack.items);
+                    };
+                    u.failed = carried + stackSize(run.frames.items[c.frame].stack.items);
                     u.failed_frame = c.frame;
+                }
+                // The failed frames above stay retained until the cleanup
+                // ends; a cancellation's are gone.
+                if (u.then == .cancel) {
+                    while (run.frames.items.len > c.frame + 1) g.popFrame(run);
+                } else if (run.frames.items.len > c.frame + 1) {
+                    try u.held.insertSlice(g.gpa, 0, run.frames.items[c.frame + 1 ..]);
+                    run.frames.shrinkRetainingCapacity(c.frame + 1);
                 }
                 try g.cutStack(run, c.frame, c.depth);
                 run.frames.items[c.frame].pc = c.target;
@@ -8309,6 +8339,7 @@ pub const Group = struct {
             }
             var done = run.controls.pop().?.cleanup;
             done.cleanups.deinit(g.gpa);
+            g.releaseHeld(&done);
             switch (done.then) {
                 .accept => |acc| {
                     done.err.release();
@@ -8403,8 +8434,21 @@ pub const Group = struct {
                 }
                 u.err.release();
                 u.cleanups.deinit(g.gpa);
+                g.releaseHeld(u);
             },
         }
+    }
+
+    /// Releases the failed frames a cleanup holds aside.
+    fn releaseHeld(g: *Group, u: *Unwinding) void {
+        for (u.held.items) |*f| {
+            for (f.locals) |v| v.release();
+            @import("group_allocator.zig").freeFrameBuffer(g.gpa, *Value, f.locals);
+            for (f.stack.items) |slot| slot.release(g.gpa);
+            @import("group_allocator.zig").freeFrameBuffer(g.gpa, Slot, f.stack.allocatedSlice());
+        }
+        u.held.deinit(g.gpa);
+        u.held = .empty;
     }
 
     /// Drops every control, innermost first, for a Run that ends without

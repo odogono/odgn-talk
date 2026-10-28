@@ -1,0 +1,13 @@
+# cleanup-retained-state: the failed frames an uncaught error's `finally`
+# block runs over stay retained, and count in Persistent State (chapter 8,
+# Pending cleanup state).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "board"
+source = "board.talk"

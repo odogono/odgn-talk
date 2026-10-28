@@ -1,0 +1,19 @@
+script variable results = []
+
+function deep n
+  put [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] into big
+  if n = 0 then
+    throw {code: "bad"}
+  end if
+  return deep(n - 1)
+end deep
+
+on go
+  try
+    put deep(3) into x
+  finally
+    repeat 50 times
+      put 1 after results
+    end repeat
+  end try
+end go

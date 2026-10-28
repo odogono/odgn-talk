@@ -1,0 +1,26 @@
+# Unblessed: retained failed frames during cleanup (#1734); first blessing awaits human review.
+# cleanup-retained-state: `deep(3)` raises from four `deep` frames, each
+# holding a ten-item List, and nothing catches it. `go`'s `finally` block
+# runs while those failed frames stay retained, so when the Fuel cap stops
+# the Run inside it, its state counts all four frames, not just `go`'s.
+# The next Pump finishes the cleanup from where it stopped, and the error
+# ends the Run.
+
+> load board identity=8dae1e5b24bb6011c5e1e31dd848392dd049be7526370fd7c81ee6e78c70741f
+
+> request d1 to=board message=go
+> pump clock=2026-09-30T09:00:00Z fuel-cap=300
+raise board/r1 code="bad" at=board:22 pos=6:5
+preempt board/r1 start delivery=d1 handler=go clause=1 by=cap fuel=300 alloc=1375
+pumped state=sliced fuel=300
+> counters board
+counters board fuel=300 alloc=1375 runs=1 faults=0 state=2287 mailbox=0
+
+> pump clock=2026-09-30T09:00:01Z
+raise board/r1 code="bad" at=board:58 pos=12:3
+seg board/r1 continue fuel=564 alloc=1032 state=1216 end=error
+run board/r1 outcome=errored delivery=d1 handler=go error={code: "bad", at: {unit: "board", handler: "deep", line: 6, column: 5}} fuel=864 alloc=2407
+pumped state=idle fuel=564
+
+> vars
+vars board results=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
