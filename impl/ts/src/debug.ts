@@ -83,8 +83,12 @@ export class DebugController {
     run: string;
   } | null = null;
   private parents = new Map<string, string>();
-  private landing: { hostInputIndex: number; pc: DebugInstruction } | null =
-    null;
+  private landing: {
+    /** Its pc fell inside a hold, so it lands once the hold closes. */
+    deferred?: boolean;
+    hostInputIndex: number;
+    pc: DebugInstruction;
+  } | null = null;
   /** Pause at the next Run of this Script to start, once (Fix and Continue). */
   private restart: string | null = null;
   private readonly seen = new WeakSet<Run>();
@@ -244,7 +248,20 @@ export class DebugController {
     const fault = machineDebug.get(run)?.fault;
     let reason: DebugPause['reason'] | null = fault?.reason ?? null;
     let landingIndex: number | undefined;
-    if (!reason && this.landing && matches(this.landing.pc)) {
+    // A set's hold is one landing unit (ADR 0135): nothing pauses inside it,
+    // so no queued input lands between its Get and its Set, and a replay
+    // landing recorded inside one waits for the hold to close.
+    if (!reason && run.holding) {
+      if (this.landing && matches(this.landing.pc)) {
+        this.landing.deferred = true;
+      }
+      return null;
+    }
+    if (
+      !reason &&
+      this.landing &&
+      (this.landing.deferred || matches(this.landing.pc))
+    ) {
       reason = 'replay';
       landingIndex = this.landing.hostInputIndex;
       this.landing = null;
