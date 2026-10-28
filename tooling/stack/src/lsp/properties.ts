@@ -32,12 +32,79 @@ export const namedKind = (node: SemanticNode, manifest: HostManifest) => {
 
 export const word = (e: SemanticElement | undefined, text: string) =>
   e?.kind === 'token' && e.text === text;
+/** The message a Handler handles, or undefined for a Fallback Handler. */
+const handled = (handler: SemanticNode) => {
+  const name = handler.children.find(
+    (c): c is SemanticNode => c.kind === 'node' && c.rule === 'MessageName',
+  );
+  let e: SemanticElement | undefined = name;
+  while (e?.kind === 'node') {
+    e = e.children[0];
+  }
+  return e?.text;
+};
+
 /**
- * A `the <word> of <receiver>` read whose receiver has a known Object Kind:
- * a well-known object, or `me` under an Owner Kind. Computed keys and
- * collection reads are left out.
+ * The possible kinds of `the target` at a span: the kinds its Handler's
+ * message is delivered to, or the Owner Kind for a Script-addressed
+ * message. Unknown (empty) in a Fallback Handler, a Handler for an
+ * undeclared message, and outside a Handler.
  */
-export const propertyRead = (node: SemanticNode, manifest: HostManifest) => {
+export const targetKinds = (
+  nodes: readonly SemanticElement[],
+  at: SemanticNode,
+  manifest: HostManifest,
+): string[] => {
+  const handler = nodes.find(
+    (n): n is SemanticNode =>
+      n.kind === 'node' &&
+      n.rule === 'Handler' &&
+      n.span.start <= at.span.start &&
+      at.span.end <= n.span.end,
+  );
+  const name = handler && handled(handler);
+  const message =
+    name === undefined ? undefined : manifest.messageDecls.get(name);
+  if (!message) {
+    return [];
+  }
+  if (message.receivers?.length) {
+    return message.receivers;
+  }
+  return manifest.ownerKind === undefined ? [] : [manifest.ownerKind];
+};
+
+/** The possible kinds of a property's receiver: `the target`, `me` or a well-known object. */
+export const receiverKinds = (
+  receiver: SemanticNode,
+  manifest: HostManifest,
+  nodes: readonly SemanticElement[],
+): string[] => {
+  const value = expression(receiver);
+  if (
+    value.kind === 'node' &&
+    value.rule === 'The' &&
+    value.children.length === 2 &&
+    word(value.children[0], 'the') &&
+    word(value.children[1], 'target')
+  ) {
+    return targetKinds(nodes, value, manifest);
+  }
+  const kind = namedKind(receiver, manifest);
+  return kind === undefined ? [] : [kind];
+};
+
+/**
+ * A `the <word> of <receiver>` read whose receiver has known Object Kinds:
+ * `the target`, a well-known object, or `me` under an Owner Kind. Computed
+ * keys and collection reads are left out. `nodes` is every element of the
+ * tree, to find the Handler around `the target`.
+ */
+export const propertyRead = (
+  node: SemanticNode,
+  manifest: HostManifest,
+  nodes: readonly SemanticElement[],
+) => {
   const [head, key, of, receiver] = node.children;
   if (
     node.rule !== 'The' ||
@@ -52,16 +119,22 @@ export const propertyRead = (node: SemanticNode, manifest: HostManifest) => {
   ) {
     return undefined;
   }
-  const kind = namedKind(receiver, manifest);
-  const objectKind =
-    kind === undefined ? undefined : manifest.objectKinds.get(kind);
+  const kinds = receiverKinds(receiver, manifest, nodes).flatMap(k => {
+    const kind = manifest.objectKinds.get(k);
+    return kind ? [kind] : [];
+  });
   const name = key.children[0]!;
-  return objectKind && /^[\p{L}_]/u.test(name.text)
-    ? {
-        kind: objectKind,
-        name: name.text,
-        key: name,
-        prop: objectKind.props.get(name.text),
-      }
-    : undefined;
+  if (!kinds.length || !/^[\p{L}_]/u.test(name.text)) {
+    return undefined;
+  }
+  return {
+    /** Each possible kind that declares the property, with its declaration. */
+    found: kinds.flatMap(kind => {
+      const prop = kind.props.get(name.text);
+      return prop ? [{ kind, prop }] : [];
+    }),
+    kinds,
+    name: name.text,
+    key: name,
+  };
 };

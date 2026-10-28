@@ -1173,10 +1173,10 @@ const lintProperties = (
     if (e.kind !== 'node') {
       continue;
     }
-    const read = propertyRead(e, manifest);
-    if (read && !read.prop) {
+    const read = propertyRead(e, manifest, all);
+    if (read && !read.found.length) {
       emit('unknown-property', read.key.span, {
-        kind: read.kind.name,
+        kind: read.kinds.map(k => k.name).join(' or '),
         property: read.name,
       });
     }
@@ -1189,10 +1189,12 @@ const lintProperties = (
     ) {
       const written = expression(target);
       const set =
-        written.kind === 'node' ? propertyRead(written, manifest) : undefined;
-      if (set?.prop?.readOnly) {
+        written.kind === 'node'
+          ? propertyRead(written, manifest, all)
+          : undefined;
+      if (set?.found.length && set.found.every(f => f.prop.readOnly)) {
         emit('read-only-property', set.key.span, {
-          kind: set.kind.name,
+          kind: set.found.map(f => f.kind.name).join(' or '),
           property: set.name,
         });
       }

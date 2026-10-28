@@ -6,7 +6,13 @@ import {
 } from '@northtalk/ts';
 import { shapeText } from '../dictionary';
 import { grantDeclarations, type HostManifest } from './manifest';
-import { expression, namedKind, propertyRead, word } from './properties';
+import {
+  expression,
+  namedKind,
+  propertyRead,
+  receiverKinds,
+  word,
+} from './properties';
 import { rangeAt } from './protocol';
 import { semanticElements, type Analysis } from './workspace';
 
@@ -41,9 +47,9 @@ export const propertyHover = (
   manifest: HostManifest,
 ) => {
   for (const node of analysis.nodes) {
-    const read = propertyRead(node, manifest);
+    const read = propertyRead(node, manifest, analysis.nodes);
     if (
-      !read?.prop ||
+      !read?.found.length ||
       offset < read.key.span.start ||
       read.key.span.end <= offset
     ) {
@@ -52,7 +58,12 @@ export const propertyHover = (
     return {
       contents: {
         kind: 'plaintext',
-        value: `${read.kind.name} property ${read.name}${read.prop.readOnly ? ' (read-only)' : ''}\nShape: ${shapeText(read.prop.shape)}`,
+        value: read.found
+          .map(
+            ({ kind, prop }) =>
+              `${kind.name} property ${read.name}${prop.readOnly ? ' (read-only)' : ''}${read.kinds.length > 1 ? ' (possible member)' : ''}\nShape: ${shapeText(prop.shape)}`,
+          )
+          .join('\n\n'),
       },
       range: rangeAt(
         analysis.document.text,
@@ -132,7 +143,8 @@ export const objectProperties = (
       : { grants: grantDeclarations(manifest), objects: manifest.objects }),
     unit: analysis.document.library ? 'library' : 'script',
   });
-  const property = semanticElements(checked.tree.root).find(
+  const elements = semanticElements(checked.tree.root);
+  const property = elements.find(
     (n): n is SemanticNode =>
       n.kind === 'node' && n.rule === 'The' && n.span.start === slot.index,
   );
@@ -140,11 +152,12 @@ export const objectProperties = (
   if (receiver?.kind !== 'node') {
     return undefined;
   }
-  const direct = namedKind(receiver, manifest);
+  const direct = receiverKinds(receiver, manifest, elements);
   const value = expression(receiver);
   const read = value.kind === 'node' ? collection(value, manifest) : undefined;
-  const kinds = direct
-    ? [direct]
+  const possible = read !== undefined || direct.length > 1;
+  const kinds = direct.length
+    ? direct
     : read && !read.count
       ? read.elements.kinds
       : [];
@@ -159,7 +172,7 @@ export const objectProperties = (
       if (name.startsWith(slot[1]!)) {
         const details = properties.get(name) ?? [];
         details.push(
-          `${kind} property${prop.readOnly ? ' (read-only)' : ''}${read ? ' (possible member)' : ''}`,
+          `${kind} property${prop.readOnly ? ' (read-only)' : ''}${possible ? ' (possible member)' : ''}`,
         );
         properties.set(name, details);
       }
