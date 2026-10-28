@@ -3,4 +3,4 @@ type: feat
 scope: tools
 ---
 
-Folio's Code Browser has a Dictionary tab listing the selected Script's Grants, with each Operation's call, description, examples, mode, result, cost and errors, from the same Host Manifest as completion (#1683).
+Folio's Code Browser now browses Scripts in Smalltalk-style columns (Sources, Scripts, Handlers), and a Dictionary window lists the shown Script's Grants and each Operation's call, description, examples, mode, result, cost and errors. Right-click a call to show it in the Dictionary (#1683).

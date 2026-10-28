@@ -25,6 +25,16 @@ const windows = () => [
 ];
 const viewOf = (win: HTMLElement) =>
   EditorView.findFromDOM(win.querySelector('.cm-editor')!)!;
+const buttonIn = (win: HTMLElement, label: string) =>
+  [...win.querySelectorAll<HTMLButtonElement>('button')].find(
+    b => b.textContent === label,
+  );
+// Chooses a Code Browser column entry, waiting for it to render.
+const choose = async (win: HTMLElement, label: string) => {
+  await until(() => !!buttonIn(win, label));
+  buttonIn(win, label)!.click();
+};
+const tick = () => new Promise(requestAnimationFrame);
 const source = 'on click\n  put the label of button1 into message\nend click\n';
 const open = (name: string, shiftKey = false) => {
   document
@@ -323,14 +333,18 @@ export const runBrowserTests = async () => {
   });
   await test('Libraries create, edit, rename, diagnose imports and undo deletion', async () => {
     const win = windows()[0]!;
-    [...win.querySelectorAll<HTMLButtonElement>('button')]
-      .find(b => b.textContent === 'New Library')!
-      .click();
+    await choose(win, 'Libraries');
+    await choose(win, '+ New Library');
     const view = viewOf(win);
     view.dispatch({
       changes: { from: 0, insert: 'function answer\n return 42\nend answer' },
     });
     const id = shell.editor.project.libraries[0]!.id!;
+    await until(() => !!buttonIn(win, 'library1'));
+    buttonIn(win, 'library1')!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, detail: 2 }),
+    );
+    await until(() => !!win.querySelector('[aria-label="Library name"]'));
     const nameInput = win.querySelector<HTMLInputElement>(
       '[aria-label="Library name"]',
     )!;
@@ -371,9 +385,15 @@ export const runBrowserTests = async () => {
         win.querySelector('.script-problems')!.textContent === '✓ No problems',
     );
     shell.openLibrary(id);
-    [...win.querySelectorAll<HTMLButtonElement>('button')]
-      .find(b => b.textContent === 'Delete Library')!
-      .click();
+    await until(() => !!buttonIn(win, 'answers'));
+    buttonIn(win, 'answers')!.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    );
+    buttonIn(document.body, 'Delete Library')!.click();
     assert(shell.editor.project.libraries.length === 0, 'Library deleted');
     shell.editor.undo();
     shell.redraw();
@@ -387,10 +407,9 @@ export const runBrowserTests = async () => {
       'Undo restores Library source',
     );
     shell.setReadOnly(true);
+    await tick();
     assert(
-      [
-        ...win.querySelectorAll<HTMLButtonElement>('.library-actions button'),
-      ].every(b => b.disabled),
+      buttonIn(win, '+ New Library')!.disabled,
       'Library management is read-only',
     );
     shell.setReadOnly(false);
@@ -401,7 +420,8 @@ export const runBrowserTests = async () => {
       [...win.querySelectorAll<HTMLButtonElement>('button')].find(
         b => b.textContent === label,
       )!;
-    button('New Test Script').click();
+    await choose(win, 'Tests');
+    await choose(win, '+ New Test Script');
     const script = shell.editor.project.testScripts[0]!;
     assert(script.name === 'tests1.test', 'A new Test Script is named');
     const view = viewOf(win);
@@ -441,47 +461,111 @@ export const runBrowserTests = async () => {
     shell.editor.edit(({ tree }) => tree.removeTestScript(script.id!));
     shell.redraw();
   });
-  await test("the Dictionary tab lists the selected Script's Grants", async () => {
+  await test('the columns choose Sources and Scripts and jump to Handlers', async () => {
+    const win = windows()[0]!;
+    const view = viewOf(win);
+    await choose(win, 'Page: page1');
+    await choose(win, 'text1');
+    assert(
+      win.querySelector('.code-source-title')!.textContent ===
+        'Script of Element “text1”',
+      'Choosing an Element shows its Script',
+    );
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert:
+          'on click\n  beep\nend click\n\non keyDown k\n  beep\nend keyDown\n',
+      },
+    });
+    shell.redraw();
+    await choose(win, 'on keyDown');
+    assert(
+      view.state.doc.lineAt(view.state.selection.main.head).number === 5,
+      'A Handler opens at its line',
+    );
+    await choose(win, 'Project: ' + shell.editor.project.name);
+    assert(
+      buttonIn(win, 'Project Script')?.getAttribute('aria-current') === 'true',
+      'The Project shows its Script',
+    );
+  });
+  await test("the Dictionary window lists the selected Script's Grants", async () => {
     shell.openScript(shell.editor.project);
     const win = windows()[0]!;
-    const tab = (label: string) =>
-      [...win.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
-        b => b.textContent === label,
-      )!;
-    tab('Dictionary').click();
-    await until(() => !!win.querySelector('.dictionary'));
+    buttonIn(win, 'Dictionary')!.click();
+    const dictionary = document.getElementById('dictionary-window')!;
+    await until(() => !!dictionary.querySelector('.dictionary-op'));
     const grants = () =>
-      [...win.querySelectorAll('.dictionary h3')].map(h => h.textContent);
+      [
+        ...dictionary.querySelectorAll('section[aria-label="Grants"] button'),
+      ].map(b => b.textContent);
     assert(
       grants().includes('folio') && !grants().includes('harness'),
       'A Script holds the Folio Grants',
     );
-    const page = win.querySelector(
-      '.dictionary section[aria-label="folio"] .dictionary-op',
-    );
+    await choose(dictionary, 'folio');
+    await choose(dictionary, 'show');
+    const entry = dictionary.querySelector('.dictionary-op')!;
     assert(
-      page?.querySelector('p') && page.querySelectorAll('li').length > 0,
-      'An Operation shows its description and facts',
+      entry.getAttribute('aria-label') === 'show' &&
+        entry.querySelector('p') &&
+        entry.querySelectorAll('li').length > 0 &&
+        entry.querySelector('pre code')?.textContent === 'show welcomeText',
+      'An Operation shows its description, facts and examples',
     );
     shell.editor.edit(({ tree }) => tree.addTestScript('t.test', ''));
     shell.redraw();
     shell.openTestScript(shell.editor.project.testScripts[0]!.id!, 1);
-    assert(
-      grants().join() === 'harness',
-      'A Test Script holds only the Folio Harness',
-    );
-    assert(
-      win
-        .querySelector('.dictionary pre code')
-        ?.textContent?.startsWith('ask harness to'),
-      'Examples are listed',
-    );
-    tab('Code').click();
-    await until(() => !!win.querySelector('nav[aria-label="Project code"]'));
+    await until(() => grants().join() === 'harness');
     shell.editor.edit(({ tree }) =>
       tree.removeTestScript(shell.editor.project.testScripts[0]!.id!),
     );
     shell.redraw();
+  });
+  await test('right-clicking a call shows it in the Dictionary', async () => {
+    shell.openScript(shell.editor.project);
+    const win = windows()[0]!;
+    const view = viewOf(win);
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: 'on startPlay\n  hide button1\nend startPlay\n',
+      },
+    });
+    await tick();
+    const pos = view.state.doc.toString().indexOf('hide') + 1;
+    const at = view.coordsAtPos(pos)!;
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: at.left + 1,
+      clientY: (at.top + at.bottom) / 2,
+    });
+    view.contentDOM.dispatchEvent(event);
+    assert(event.defaultPrevented, 'A call replaces the browser menu');
+    buttonIn(document.body, 'Show folio hide in Dictionary')!.click();
+    const dictionary = document.getElementById('dictionary-window')!;
+    await until(
+      () =>
+        dictionary
+          .querySelector('.dictionary-op')
+          ?.getAttribute('aria-label') === 'hide',
+    );
+    assert(!dictionary.hidden, 'The Dictionary opens');
+    const away = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: at.left + 1,
+      clientY: view.coordsAtPos(0)!.top + 2,
+    });
+    view.contentDOM.dispatchEvent(away);
+    assert(!away.defaultPrevented, 'Elsewhere keeps the browser menu');
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: '' },
+    });
   });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);

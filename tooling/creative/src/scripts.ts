@@ -4,7 +4,7 @@ import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
 import { readDictionary } from '@northtalk/tooling/dictionary';
-import { libraryUri } from '@northtalk/tooling/lsp';
+import { libraryUri, operationAt, readManifest } from '@northtalk/tooling/lsp';
 import {
   codeWindow,
   languageServer,
@@ -18,6 +18,8 @@ import {
   type NamedSource,
   type TestRun,
 } from './code-browser-panel';
+import { showContextMenu } from './context-menu';
+import { DictionaryWindow } from './dictionary-window';
 import { h } from './dom';
 import type { StackEditor } from './editing';
 import { freshName } from './model';
@@ -26,6 +28,7 @@ import {
   ownerById,
   ownerId,
   scriptManifest,
+  scriptHandlers,
   scriptPage,
   testScriptManifest,
   type ScriptOwner,
@@ -67,6 +70,7 @@ export class CodeBrowser {
   #editing = new Compartment();
   #syncing = false;
   #tests: TestRun;
+  readonly dictionary = new DictionaryWindow();
 
   constructor(
     readonly editor: StackEditor,
@@ -104,6 +108,49 @@ export class CodeBrowser {
   }
   #text(): string {
     return this.#named()?.source.source ?? this.#owner()?.script ?? '';
+  }
+
+  // The selected source's Manifest, which completion and the Dictionary read.
+  #manifest() {
+    const project = this.editor.project;
+    const named = this.#named();
+    return named?.kind === 'library'
+      ? { ...scriptManifest(project, project), objects: [], messages: [] }
+      : named?.kind === 'test'
+        ? testScriptManifest(project)
+        : scriptManifest(project, this.#owner() ?? project);
+  }
+  #label(): string {
+    const project = this.editor.project;
+    const named = this.#named();
+    const owner = this.#owner() ?? project;
+    return named
+      ? `${named.kind === 'library' ? 'Library' : 'Test Script'} “${named.source.name}”`
+      : `Script of ${owner === project ? 'Project' : 'elements' in owner ? 'Page' : 'Element'} “${owner.name}”`;
+  }
+
+  // Right-clicking a Grant or Operation call offers its Dictionary entry;
+  // anywhere else keeps the browser's own menu.
+  #contextMenu(view: EditorView, event: MouseEvent): void {
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    if (pos === null) {
+      return;
+    }
+    const target = operationAt(
+      view.state.doc.toString(),
+      pos,
+      readManifest(this.#manifest()),
+    );
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    showContextMenu(event.clientX, event.clientY, [
+      {
+        label: `Show ${target.operation ? `${target.grant} ${target.operation}` : target.grant} in Dictionary`,
+        run: () => this.dictionary.open(target),
+      },
+    ]);
   }
 
   #state(server: LanguageServer): EditorState {
@@ -181,7 +228,7 @@ export class CodeBrowser {
       left: 140,
       top: 140,
     });
-    const outline = h('aside', { class: 'code-browser-outline' });
+    const outline = h('div', { class: 'code-browser-columns' });
     const body = h('div', { class: 'code-browser-body' });
     const sourceTitle = h('h2', { class: 'code-source-title' });
     const path = h('nav', {
@@ -194,6 +241,12 @@ export class CodeBrowser {
       { type: 'button', class: 'add-action' },
       'Add action…',
     );
+    const showDictionary = h(
+      'button',
+      { type: 'button', class: 'show-dictionary' },
+      'Dictionary',
+    );
+    showDictionary.addEventListener('click', () => this.dictionary.open());
     addAction.addEventListener('click', () => {
       const owner = this.#owner();
       if (owner) {
@@ -206,8 +259,18 @@ export class CodeBrowser {
       'Checking…',
     );
     const parent = h('div', { class: 'code-editor script-editor' });
-    body.append(sourceTitle, path, addAction, recipes, parent, problems);
+    body.append(
+      h('div', { class: 'code-source-header' }, sourceTitle, showDictionary),
+      path,
+      addAction,
+      recipes,
+      parent,
+      problems,
+    );
     win.node.append(h('div', { class: 'code-browser-content' }, outline, body));
+    parent.addEventListener('contextmenu', event =>
+      this.#contextMenu(view, event),
+    );
     const server = languageServer();
     const view = new EditorView({ parent, state: this.#state(server) });
     const browser = {
@@ -352,6 +415,9 @@ export class CodeBrowser {
       this.#tests = undefined;
       this.#generation = this.editor.generation;
     }
+    if (!this.#syncing) {
+      this.dictionary.update(readDictionary(this.#manifest()), this.#label());
+    }
     const win = this.#window;
     if (!win || this.#syncing) {
       return;
@@ -368,16 +434,8 @@ export class CodeBrowser {
       const project = this.editor.project;
       const owner = this.#owner();
       const named = this.#named();
-      const scriptOwnManifest = scriptManifest(project, owner ?? project);
-      // The editor's completion and the Dictionary tab read this Manifest.
-      const manifest =
-        named?.kind === 'library'
-          ? { ...scriptOwnManifest, objects: [], messages: [] }
-          : named?.kind === 'test'
-            ? testScriptManifest(project)
-            : scriptOwnManifest;
       win.server.configure(
-        manifest,
+        this.#manifest(),
         project.libraries.map(l => ({
           uri: this.#uri({ kind: 'library', id: l.id! }),
           text: l.source,
@@ -386,7 +444,8 @@ export class CodeBrowser {
       );
       renderCodeOutline(win.outline, {
         project,
-        dictionary: readDictionary(manifest),
+        handlers: scriptHandlers(this.#text()),
+        onOpenLine: line => this.#show(this.#selected, line),
         ...(named ? { named } : {}),
         selected: this.#selected,
         readOnly: this.editor.readOnly,
@@ -446,9 +505,7 @@ export class CodeBrowser {
           }
         },
       });
-      win.sourceTitle.textContent = named
-        ? `${named.kind === 'library' ? 'Library' : 'Test Script'} “${named.source.name}”`
-        : `Script of ${owner === project ? 'Project' : 'elements' in owner! ? 'Page' : 'Element'} “${owner!.name}”`;
+      win.sourceTitle.textContent = this.#label();
       win.addAction.hidden = !owner;
       win.addAction.disabled = this.editor.readOnly;
       win.path.hidden = !owner;
