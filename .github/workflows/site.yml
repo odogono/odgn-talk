@@ -1,0 +1,54 @@
+name: northtalk.org
+
+# Build the site, with Folio and the Go module paths, and deploy its Worker
+# on each push to main that changes it (ADR 0140). Needs the repo secrets
+# CLOUDFLARE_API_TOKEN (Workers Scripts: Edit, Workers Routes: Edit) and
+# CLOUDFLARE_ACCOUNT_ID, and the repo variable CF_WEB_ANALYTICS_TOKEN.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tooling/site/**'
+      # Folio, and what Folio and the code highlighting are built from.
+      - 'tooling/creative/**'
+      - 'tooling/editor/**'
+      - 'tooling/stack/**'
+      - 'tooling/vscode/syntaxes/**'
+      - 'impl/ts/src/**'
+      # The published Markdown (tooling/site/src/sources.ts).
+      - 'docs/tour.md'
+      - 'docs/embedding-typescript.md'
+      - 'impl/*/README.md'
+      - 'spec/*.md'
+      - 'GLOSSARY.md'
+      - 'bun.lock'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push supersedes a queued deploy, but never cancels a running one.
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: northtalk.org
+      url: https://northtalk.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - run: bun run build
+        working-directory: tooling/site
+        env:
+          ASTRO_TELEMETRY_DISABLED: '1'
+          CF_WEB_ANALYTICS_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
+      - run: bunx wrangler deploy
+        working-directory: tooling/site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

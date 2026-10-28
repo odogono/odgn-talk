@@ -3,6 +3,10 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import northtalk from '../vscode/syntaxes/northtalk.tmLanguage.json' with { type: 'json' };
 
+// Cloudflare Web Analytics is cookieless. CI sets the beacon's token; local
+// builds leave it out.
+const analytics = process.env.CF_WEB_ANALYTICS_TOKEN;
+
 export default defineConfig({
   site: 'https://northtalk.org',
   integrations: [
@@ -10,6 +14,18 @@ export default defineConfig({
       title: 'NorthTalk',
       logo: { src: './public/favicon.svg' },
       customCss: ['./src/styles/theme.css'],
+      head: analytics
+        ? [
+            {
+              tag: 'script',
+              attrs: {
+                defer: true,
+                src: 'https://static.cloudflareinsights.com/beacon.min.js',
+                'data-cf-beacon': JSON.stringify({ token: analytics }),
+              },
+            },
+          ]
+        : [],
       description:
         'A HyperTalk-descended scripting language for untrusted end-user Scripts.',
       social: [
