@@ -106,6 +106,8 @@ type StoredMeta = { key: string; value: string };
 type StoredFileHandle = ProjectFileHandleRecord & { projectId: string };
 
 const LAST_PROJECT_KEY = 'lastProjectId';
+/** Prefixes the meta key that names the copy opened from a source. */
+const COPY_KEY_PREFIX = 'copyOf:';
 
 /** How many of the newest versions a save always keeps. */
 export const KEPT_RECENT_VERSIONS = 20;
@@ -652,6 +654,29 @@ export class ProjectStorage {
         meta.put({ key: LAST_PROJECT_KEY, value: id } satisfies StoredMeta),
       );
     });
+  }
+
+  /**
+   * The Project last opened as a copy from `source`, such as
+   * `example:tetris` (#1679), while it still exists.
+   */
+  async copyOf(source: string): Promise<string | undefined> {
+    const meta = await transact(this.#db, ['meta'], 'readonly', tx =>
+      request(store(tx, 'meta').get(`${COPY_KEY_PREFIX}${source}`)),
+    );
+    const id = (meta as StoredMeta | undefined)?.value;
+    return id && (await this.projectRecord(id)) ? id : undefined;
+  }
+
+  async setCopyOf(source: string, id: string): Promise<void> {
+    await transact(this.#db, ['meta'], 'readwrite', tx =>
+      request(
+        store(tx, 'meta').put({
+          key: `${COPY_KEY_PREFIX}${source}`,
+          value: id,
+        } satisfies StoredMeta),
+      ),
+    );
   }
 }
 

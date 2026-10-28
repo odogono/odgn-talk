@@ -1176,6 +1176,12 @@ fresh copy from the file, as an import, and sets the address back to Folio's
 own, so a reload doesn't add another copy. The slug is a public link, so
 never change one once it's published.
 
+Folio remembers which Project each address made, in the browser's storage
+alongside the Projects. Opening the same address again, while that copy
+still exists, shows a banner with **Open your copy** and **Start fresh**
+instead of adding another one
+([#1679](https://github.com/odogono/odgn-talk/issues/1679)).
+
 ### The Lighthouse Mystery
 
 **Projects → Open The Lighthouse Mystery** adds a fresh copy of

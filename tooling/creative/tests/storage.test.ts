@@ -354,3 +354,19 @@ test('stored version JSON omits session ids byte for byte', async () => {
   expect(models).toEqual([JSON.stringify(serializeProject(project))]);
   storage.close();
 });
+
+test('the copy opened from a source is remembered while it exists', async () => {
+  const { storage } = await openStorage();
+  expect(await storage.copyOf('example:tetris')).toBeUndefined();
+  const copy = await storage.saveProject(undefined, createProject('Tetris'));
+  await storage.setCopyOf('example:tetris', copy.id);
+  expect(await storage.copyOf('example:tetris')).toBe(copy.id);
+  expect(await storage.copyOf('example:lighthouse')).toBeUndefined();
+  // A newer copy replaces the older one.
+  const fresh = await storage.saveProject(undefined, createProject('Tetris'));
+  await storage.setCopyOf('example:tetris', fresh.id);
+  expect(await storage.copyOf('example:tetris')).toBe(fresh.id);
+  // A deleted copy is forgotten, so the next visit opens a fresh one.
+  await storage.deleteProject(fresh.id);
+  expect(await storage.copyOf('example:tetris')).toBeUndefined();
+});

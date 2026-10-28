@@ -108,7 +108,12 @@ export const installServiceWorker = (
     request: FetchEventLike['request'],
   ): Promise<Response> => {
     // A navigation to a precached page, such as an Example Project's
-    // `<slug>/`, gets that page; any other navigation gets Folio's own.
+    // `<slug>/`, gets that page; without its closing `/` it redirects
+    // there, as the host does, so the page's `../` URLs stay under the
+    // scope. Any other navigation gets Folio's own page.
+    if (request.mode === 'navigate' && shellUrls.has(`${request.url}/`)) {
+      return Response.redirect(`${request.url}/`, 307);
+    }
     const navigation = shellUrls.has(request.url) ? request.url : index;
     const cached = await scope.caches.match(
       request.mode === 'navigate' ? navigation : request.url,

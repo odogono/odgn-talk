@@ -604,13 +604,13 @@ export const mountProjects = (deps: ProjectsDeps): void => {
    * Project. A file opened with a handle (from the operating system, a
    * picker or a drop) keeps it, so Save can write back to it — and a
    * file this app refuses, such as a newer format, never gets a handle
-   * kept, so it can never be overwritten.
+   * kept, so it can never be overwritten. Gives the stored Project's id.
    */
   const importProject = async (
     file: File,
     handle?: ProjectFileHandle,
     opened?: string,
-  ): Promise<void> => {
+  ): Promise<string | undefined> => {
     try {
       const loaded = await readProjectFile(
         new Uint8Array(await file.arrayBuffer()),
@@ -678,7 +678,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         notice(
           'The imported Project is in Projects. Your current edits stay on the desk.',
         );
-        return;
+        return created?.id;
       }
       for (const imported of accepted) {
         shell.images.add(imported);
@@ -694,8 +694,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (messages.length) {
         notice(messages.join(' '));
       }
+      return created?.id;
     } catch (error) {
       notice(`Couldn't import: ${String(error)}`);
+      return undefined;
     }
   };
   let importing = false;
@@ -947,8 +949,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   /**
-   * Opens a fresh copy of the Example Project at `/folio/<slug>` (#1676)
-   * from the `.folio` file the build wrote for it, as an import.
+   * Opens the Example Project at `/folio/<slug>` (#1676). When an earlier
+   * visit made a copy that still exists, the copy banner offers it or a
+   * fresh one (#1679); otherwise a fresh copy opens straight away.
    */
   const openExampleFile = async (slug: string): Promise<void> => {
     const example = EXAMPLE_PROJECTS.find(e => e.slug === slug);
@@ -956,6 +959,37 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       notice(`There's no Example Project called “${slug}”.`);
       return;
     }
+    const source = `example:${slug}`;
+    const existing = await storage?.copyOf(source).catch(() => undefined);
+    if (!existing) {
+      await openExampleCopy(example, source);
+      return;
+    }
+    byId('copy-banner-text').textContent =
+      `You already have a copy of “${example.name}”.`;
+    byId('copy-banner').hidden = false;
+    copyChoice = {
+      fresh: () => openExampleCopy(example, source),
+      mine: () => openProject(existing),
+    };
+  };
+  let copyChoice:
+    { fresh: () => Promise<void>; mine: () => Promise<void> } | undefined;
+  const chooseCopy = (choice: 'fresh' | 'mine'): void => {
+    byId('copy-banner').hidden = true;
+    const chosen = copyChoice?.[choice];
+    copyChoice = undefined;
+    void chosen?.();
+  };
+  byId('open-my-copy').addEventListener('click', () => chooseCopy('mine'));
+  byId('open-fresh-copy').addEventListener('click', () => chooseCopy('fresh'));
+
+  /** Imports a fresh copy of an Example Project's file and remembers it. */
+  const openExampleCopy = async (
+    example: ExampleProject,
+    source: string,
+  ): Promise<void> => {
+    const { slug } = example;
     let bytes: ArrayBuffer;
     try {
       const response = await fetch(exampleFilePath(slug));
@@ -967,11 +1001,14 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       notice(`Couldn't open “${example.name}”: ${String(error)}`);
       return;
     }
-    await importProject(
+    const id = await importProject(
       new File([bytes], `${slug}.folio`),
       undefined,
       `Opened a fresh copy of “${example.name}”. Choose Browse in Tools to try it, then make it your own.`,
     );
+    if (id) {
+      await storage?.setCopyOf(source, id).catch(() => {});
+    }
   };
 
   const renameProject = async (id: string, title: string): Promise<void> => {
