@@ -20,6 +20,16 @@ Catch dispatch can be saved at any instruction boundary, including ordinary catc
 - **Unobservable:** saving charges nothing and changes only the Trace save id counter. A successful save appears in the Trace only as a `save` record; a refused attempt writes `save` then `refused code="effects pending"`, allocating an attempt id but no restorable snapshot ([chapter 11](11-the-trace-and-conformance.md)).
 - **The bytes:** the same complete Group state, including its Trace save id counter, gives the same bytes on the same Core version. Consecutive saves advance that counter and therefore differ; saving never changes Script state or scheduling.
 
+### The State Fingerprint
+
+A **State Fingerprint** lets a Host tell whether two saved Groups are in the same state, which their bytes can't show because each save advances the Trace save id counter ([ADR 0142](../docs/adr/0142-saved-state-is-compared-by-state-fingerprint.md)).
+
+- **Two forms:** `group.stateFingerprint()` gives a live Group's, and `core.stateFingerprint(save)` gives a save's. Each is 32 bytes. The second equals the first taken from the Group a full restore of that save would rebuild, without restoring it.
+- **What it covers:** everything [a save holds](#what-a-save-holds) except the Trace save id counter. Code counts by its identity, so an Embedded-source and an External-source Snapshot of the same state give the same fingerprint. Host Objects count by kind, id, parent and disposal, never by native handle, so a restored Group's fingerprint equals its save's.
+- **What it leaves out:** the Trace save id counter, and anything [a save leaves out](#what-a-save-leaves-out). A Session Host's observation state is saved beside the Group, not in it, so it is never covered.
+- **The guarantee:** on one Core family and save-format version, two Groups have the same State Fingerprint exactly when everything it covers is equal. So two saves with nothing run between them give the same fingerprint, as does a save, its restore and a save of that restore. Fingerprints from different Core families or save-format versions are not comparable; how a Core computes it is [outside parity](#outside-parity), as the save's bytes are.
+- **Unobservable:** taking it charges nothing, changes no state or counter, and writes no Trace record. The live form follows the rules for [when a save can be attempted](#saving): it is a worker call, `reentrant call` during a Pump, and `effects pending` when a save would be refused. The save form fails with `invalid save` for bytes the Core can't read, and `save mismatch` for a save of another Core family or save-format version.
+
 ### Accounting and Session observations
 
 A save preserves [Run accounting](09-embedding.md#run-accounting) ancestry on live Runs and queued messages, root discard counts, creation/admission order and accounting observations not yet returned. A Restore returns its specified accounting baseline, including exact saved Fuel for Runs discarded by VariablesOnly. It does not re-emit already-returned dispatch events or reset Fuel.
@@ -249,5 +259,6 @@ These are the Host errors this chapter adds to [the catalogue](09-embedding.md#h
 ## Outside parity
 
 - **The save's bytes:** the format is each Core family's own, and only its behaviour on restore is normative. A save is deterministic on one Core.
+- **The State Fingerprint's bytes:** each Core family computes its own; only [its guarantee](#the-state-fingerprint) is normative.
 - **Storage:** where the Host keeps a save, and whether it compresses or encrypts it.
 - **Futures:** how a Host reconnects its own waiting code to a restored Group's reports.
