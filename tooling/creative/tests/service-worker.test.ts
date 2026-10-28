@@ -213,6 +213,14 @@ test('a precached page under the scope loads as itself, not as the index', async
     url: `${BASE}tetris/`,
   });
   expect(await page!.text()).toBe('body of ./tetris/');
+  // Docs link to `/folio/tetris`, without the closing `/`, which redirects.
+  const bare = await fetchViaWorker({
+    method: 'GET',
+    mode: 'navigate',
+    url: `${BASE}tetris`,
+  });
+  expect(bare!.status).toBe(307);
+  expect(bare!.headers.get('location')).toBe(`${BASE}tetris/`);
   const other = await fetchViaWorker({
     method: 'GET',
     mode: 'navigate',
