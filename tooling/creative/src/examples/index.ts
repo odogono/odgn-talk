@@ -3,6 +3,7 @@
 // so it needs no files and reopens offline exactly as exported.
 import { type Project } from '../model';
 import { createLighthouseProject, LIGHTHOUSE_PROJECT_NAME } from './lighthouse';
+import { createSonarProject, SONAR_PROJECT_NAME } from './sonar';
 import { createTetrisProject, TETRIS_PROJECT_NAME } from './tetris';
 import {
   CANVAS_TETRIS_PROJECT_NAME,
@@ -47,6 +48,13 @@ export const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     description:
       'The same falling-blocks game drawn with canvas commands, instead of the Element version’s 200 pre-placed board rectangles.',
     create: createCanvasTetrisProject,
+  },
+  {
+    name: SONAR_PROJECT_NAME,
+    slug: 'sonar',
+    description:
+      'Sweep a sea for mines on one canvas: a sonar sweep on `frame`, pings that ripple from where you click, right-click or a long press for buoys.',
+    create: createSonarProject,
   },
 ];
 

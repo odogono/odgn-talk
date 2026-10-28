@@ -379,6 +379,9 @@ List files with `rg --files tooling/creative` before opening one by name.
   builds Canvas Tetris, both over the shared
   [tetris-rules.ts](src/examples/tetris-rules.ts) Script and
   [tetris-layout.ts](src/examples/tetris-layout.ts) Page.
+  [examples/sonar.ts](src/examples/sonar.ts) builds Sonar, one Canvas
+  driven by `frame`, `click`'s map and `pointerHeld`, played through in
+  [sonar.test.ts](tests/sonar.test.ts).
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
   [project-title.browser.ts](tests/project-title.browser.ts),
   [info-panel.browser.ts](tests/info-panel.browser.ts),
