@@ -6454,7 +6454,7 @@ pub const Group = struct {
         if (fatal) for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
     }
 
-    fn reportStop(g: *Group, script_name: []const u8, reason: []const u8, discarded: []const []const u8, dropped: []const u64, pending: []const []const u8) !void {
+    pub fn reportStop(g: *Group, script_name: []const u8, reason: []const u8, discarded: []const []const u8, dropped: []const u64, pending: []const []const u8) !void {
         const r = &g.reports;
         const a = r.arena.allocator();
         const runs = try a.alloc([]const u8, discarded.len);
@@ -6464,6 +6464,18 @@ pub const Group = struct {
         const calls = try a.alloc([]const u8, pending.len);
         for (pending, calls) |id, *x| x.* = try r.text(id);
         try r.add(.{ .stop = .{ .script = try r.text(script_name), .reason = try r.text(reason), .discarded_runs = runs, .dropped_messages = messages, .pending_calls = calls } });
+    }
+
+    /// A Partial Restore's drop of a changed Script's restored message
+    /// (chapter 10, Partial Restore): as a Reload's Stop drops it, its open
+    /// Decision put in `decisions` for the first Pump.
+    pub fn dropRestored(g: *Group, s: *Script, d: Delivery, decisions: *DeliveryDecisions) !void {
+        g.discardMessage(d);
+        defer g.releaseDelivery(d);
+        try g.endDelivery(d, .{ .failed = .{ .reason = "stopped" } }, .{
+            .part = if (d.decision) .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } } else null,
+            .decisions = decisions,
+        });
     }
 
     /// A message a stopped Script won't run: its sender gets `send failed`,
@@ -6606,7 +6618,7 @@ pub const Group = struct {
         /// Borrows the error; a waiting sender retains its own reference.
         failed: struct { reason: []const u8, err: ?*Value = null },
     };
-    const DeliveryDecisions = std.ArrayList(struct { id: u64, broadcast: u64, part: Part });
+    pub const DeliveryDecisions = std.ArrayList(struct { id: u64, broadcast: u64, part: Part });
     const DeliveryEnd = struct {
         /// An open Decision defaults to allowed at the end of its path.
         /// A Run holding a Verdict supplies its part even when !d.decision.

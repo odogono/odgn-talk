@@ -335,6 +335,11 @@ rewind/reload-reshape
 rewind/store-write
 rewind/unparked-segment-base
 save-restore/overdue-waits-fire-in-deadline-order
+save-restore/partial-restore-join-member
+save-restore/partial-restore-library-importers
+save-restore/partial-restore-resumes-matched
+save-restore/partial-restore-send-failed
+save-restore/partial-restore-stale-function
 save-restore/preempted-join-keeps-pending-members
 save-restore/preempted-run-keeps-segment-base
 save-restore/reissue-charge-slice

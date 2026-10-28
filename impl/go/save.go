@@ -20,6 +20,7 @@ type MismatchPolicy int
 const (
 	RejectMismatch MismatchPolicy = iota
 	VariablesOnly
+	ReloadChanged
 )
 
 type RestoreResult struct {

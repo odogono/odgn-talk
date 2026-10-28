@@ -1632,6 +1632,8 @@ pub const ObjectRef = extern struct { kind: [*]const u8, kind_len: usize, id: [*
 pub const RestoreResult = struct {
     gpa: std.mem.Allocator,
     variables_only: bool,
+    /// For a Partial Restore, the Scripts it rebuilt, in load order.
+    reloaded: []Id,
     pending: []PendingCall,
     disposed: []ObjectRef,
     discarded: []Id,
@@ -1688,6 +1690,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
         .resolve = .{ .context = &bridges, .call = Bridges.resolve },
         .kinds = .{ .context = &bridges, .call = Bridges.kindNamed },
         .variables_only = o.mismatch == .variables_only,
+        .reload_changed = o.mismatch == .reload_changed,
     }, &report) catch |err| {
         g.flush();
         talk_group_release(g);
@@ -1708,7 +1711,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
         talk_group_release(g);
         return .out_of_memory;
     };
-    r.* = .{ .gpa = c.gpa, .variables_only = outcome == .variables_only, .pending = &.{}, .disposed = &.{}, .discarded = &.{}, .dropped = &.{}, .abandoned = &.{} };
+    r.* = .{ .gpa = c.gpa, .variables_only = outcome == .variables_only, .reloaded = &.{}, .pending = &.{}, .disposed = &.{}, .discarded = &.{}, .dropped = &.{}, .abandoned = &.{} };
     const filled = blk: {
         r.pending = c.gpa.alloc(PendingCall, g.group.restored.?.pending.items.len) catch break :blk false;
         for (g.group.restored.?.pending.items, r.pending) |id, *p| {
@@ -1719,7 +1722,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
             p.* = .{ .id = id.ptr, .id_len = id.len, .script = call.script.ptr, .script_len = call.script.len, .grant = call.grant.ptr, .grant_len = call.grant.len, .operation = operation.ptr, .operation_len = operation.len };
         }
         r.disposed = c.gpa.alloc(ObjectRef, report.disposed.len) catch break :blk false;
-        inline for (.{ "discarded", "dropped", "abandoned" }) |f| {
+        inline for (.{ "reloaded", "discarded", "dropped", "abandoned" }) |f| {
             const ids = @field(report, f);
             @field(r, f) = c.gpa.alloc(Id, ids.len) catch break :blk false;
             for (ids, @field(r, f)) |id, *x| x.* = .{ .data = id.ptr, .len = id.len };
@@ -1768,7 +1771,14 @@ export fn talk_restore_result_disposed(r: *const RestoreResult, out: *?[*]const 
     return r.disposed.len;
 }
 
-/// What a variables-only restore discarded: 0 the Runs, 1 the dropped
+/// The Scripts a Partial Restore rebuilt, in load order; each name borrows
+/// from the Group.
+export fn talk_restore_result_reloaded(r: *const RestoreResult, out: *?[*]const Id) usize {
+    out.* = r.reloaded.ptr;
+    return r.reloaded.len;
+}
+
+/// What a variables-only or Partial Restore discarded: 0 the Runs, 1 the dropped
 /// Deliveries, 2 the abandoned calls; each id borrows from the Group.
 export fn talk_restore_result_ids(r: *const RestoreResult, which: c_int, out: *?[*]const Id) usize {
     const ids = switch (which) {
@@ -1785,6 +1795,7 @@ pub export fn talk_restore_result_release(r: ?*RestoreResult) void {
     const x = r orelse return;
     x.gpa.free(x.pending);
     x.gpa.free(x.disposed);
+    x.gpa.free(x.reloaded);
     x.gpa.free(x.discarded);
     x.gpa.free(x.dropped);
     x.gpa.free(x.abandoned);

@@ -1198,22 +1198,28 @@ pub const Options = struct {
     kinds: ?Kinds = null,
     /// The `VariablesOnly` mismatch policy, rather than `RejectMismatch`.
     variables_only: bool = false,
+    /// The `ReloadChanged` mismatch policy: a Partial Restore when only
+    /// Script code changed, and a variables-only restore otherwise.
+    reload_changed: bool = false,
 };
 
-pub const Outcome = enum { full, variables_only, mismatch };
+pub const Outcome = enum { full, partial, variables_only, mismatch };
 
 /// What a restore reports beside its Group: the Host Objects that didn't
 /// resolve, which `gpa` owns; the pending calls are the Group's
 /// `restored.pending`.
 pub const Result = struct {
     disposed: []*objects.Object = &.{},
-    /// For a variables-only restore, what it discarded, by id.
+    /// For a Partial Restore, the Scripts it rebuilt, in load order.
+    reloaded: []const []const u8 = &.{},
+    /// For a variables-only or Partial Restore, what it discarded, by id.
     discarded: []const []const u8 = &.{},
     dropped: []const []const u8 = &.{},
     abandoned: []const []const u8 = &.{},
 
     pub fn deinit(x: *Result, gpa: Allocator) void {
         gpa.free(x.disposed);
+        gpa.free(x.reloaded);
         gpa.free(x.discarded);
         gpa.free(x.dropped);
         gpa.free(x.abandoned);
@@ -1247,6 +1253,9 @@ const Restoring = struct {
     /// The Grants the Host didn't re-bind, as `<script>.<name>`.
     unbound: std.ArrayList([]const u8) = .empty,
     mismatch: bool = false,
+    /// A mismatch other than in Script code, such as a version or a Grant,
+    /// which no Partial Restore can take.
+    fixed: bool = false,
     /// A variables-only restore reads Runs only to discard them, against
     /// code that may no longer match: no code position is trusted or used.
     skim: bool = false,
@@ -1256,6 +1265,11 @@ const Restoring = struct {
 
     fn gpa(r: *Restoring) Allocator {
         return r.g.gpa;
+    }
+
+    fn grantMismatch(r: *Restoring) void {
+        r.mismatch = true;
+        r.fixed = true;
     }
 
     fn keep(r: *Restoring) Allocator {
@@ -2083,6 +2097,8 @@ fn unbound(context: ?*anyopaque, c: *capabilities.Call, args: []const *Value) ca
 /// text is the Group's `keep`; its values are released unless taken.
 const Saved = struct {
     name: []const u8,
+    /// Its code identity when saved.
+    identity: [32]u8,
     source: []const u8,
     extensions: []const []const u8,
     limits: machine.Limits,
@@ -2119,10 +2135,11 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     const a = r.gpa();
     const k = r.keep();
     const i = &r.i;
-    out.* = .{ .name = "", .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .extension_definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
+    out.* = .{ .name = "", .identity = undefined, .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .extension_definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
     errdefer out.release(a);
     out.name = try r.kept();
     if (i.bytes.len - i.pos < 32) return error.InvalidSave;
+    out.identity = i.bytes[i.pos..][0..32].*;
     i.pos += 32;
     out.source = try r.kept();
     const extensions = try k.alloc([]const u8, try i.count());
@@ -2155,16 +2172,16 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
             @memset(kept, false);
             for (saved.ops) |o| {
                 const at = grant.capability.find(o.name) orelse {
-                    r.mismatch = true;
+                    r.grantMismatch();
                     continue;
                 };
-                if (!grant.operations[at]) r.mismatch = true;
+                if (!grant.operations[at]) r.grantMismatch();
                 kept[at] = true;
             }
-            if (!std.mem.eql(u8, grant.capability.name, saved.capability)) r.mismatch = true;
+            if (!std.mem.eql(u8, grant.capability.name, saved.capability)) r.grantMismatch();
             const json = try fingerprint.grantJson(a, grant.capability, kept);
             defer a.free(json);
-            if (!std.mem.eql(u8, json, saved.json)) r.mismatch = true;
+            if (!std.mem.eql(u8, json, saved.json)) r.grantMismatch();
             sg.* = .{ .name = saved.name, .grant = grant, .kept = kept, .revoked = saved.revoked, .disabled = saved.disabled };
         } else {
             try r.unbound.append(a, try std.fmt.allocPrint(k, "{s}.{s}", .{ out.name, saved.name }));
@@ -2289,7 +2306,10 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.charge_counter = try i.int();
     g.random_state = try i.wide();
     try g.waits.importIssued(a, i);
-    if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
+    if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) {
+        r.mismatch = true;
+        r.fixed = true;
+    }
     // Libraries, matched by identity to those the Host passes.
     r.libraries = try a.alloc(?*Library, try i.count());
     @memset(r.libraries, null);
@@ -2432,7 +2452,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     };
     // Versions: the Fingerprint of what this Group now is.
     if (!r.mismatch and !std.mem.eql(u8, &(try g.groupFingerprint()), &saved_print)) r.mismatch = true;
-    if (r.mismatch and !options.variables_only) {
+    if (r.mismatch and !options.variables_only and !options.reload_changed) {
         if (g.trace) |w| {
             w.print("> restore from=s{d}", .{g.saves}) catch {};
             writeIds(w, "unbound", r.unbound.items);
@@ -2441,23 +2461,42 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         }
         return .mismatch;
     }
-    const variables_only = r.mismatch;
-    if (variables_only) {
-        // Each Script rebuilt, against what the Host passes now.
+    // A Partial Restore takes a mismatch only in Script code.
+    const partial = r.mismatch and options.reload_changed and !r.fixed;
+    const variables_only = r.mismatch and !partial;
+    // Each Script rebuilt from new code: under a Partial Restore, those whose code changed.
+    const reloading = try a.alloc(bool, saved.len);
+    defer a.free(reloading);
+    @memset(reloading, variables_only);
+    if (r.mismatch) {
+        // Each Script rebuilt, against what the Host passes now: under a
+        // Partial Restore, as first compiled when its code identity still
+        // matches, and otherwise as a variables-only restore rebuilds it.
         while (g.scripts.pop()) |x| g.destroyScript(x);
         g.libraries.clearRetainingCapacity();
         try g.libraries.appendSlice(a, named.items);
-        for (saved) |*x| _ = try rebuildSaved(&r, x);
-        r.skim = true;
-    } else for (g.scripts.items, saved) |x, *y| try fillSaved(&r, x, y);
+        for (saved, reloading) |*x, *c| {
+            if (partial) {
+                const built = try buildSaved(&r, x);
+                if (built and std.mem.eql(u8, &g.scripts.getLast().identity, &x.identity)) continue;
+                g.destroyScript(g.scripts.pop().?);
+                c.* = true;
+            }
+            _ = try rebuildSaved(&r, x);
+        }
+        r.skim = variables_only;
+    }
+    if (!variables_only) for (g.scripts.items, saved, reloading) |x, *y, c| if (!c) try fillSaved(&r, x, y);
     for (g.scripts.items) |s| {
         if (s.owner) |o| if (o.owner_of == null or !std.mem.eql(u8, o.owner_of.?, s.name)) return error.InvalidSave;
     }
     // Function Value code, placed in its Home Script's units; after a
-    // variables-only restore every one is stale.
+    // variables-only restore every one is stale, and after a Partial
+    // Restore every one whose Home Script changed.
     if (!variables_only) for (g.functions.items, places) |f, place| {
         if (!place.live) continue;
         const home = g.script(f.home) orelse continue;
+        if (reloading[std.mem.indexOfScalar(*Script, g.scripts.items, home).?]) continue;
         f.library = switch (place.tag) {
             .own => null,
             .extension => if (place.index < home.extensions.items.len) home.extensions.items[place.index] else return error.InvalidSave,
@@ -2468,11 +2507,14 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         f.body = place.body;
         f.generation = home.generation;
     };
-    // Every Run, Script by Script.
-    for (g.scripts.items) |s| {
+    // Every Run, Script by Script; a changed Script's are read only to be
+    // discarded.
+    for (g.scripts.items, reloading) |s, c| {
+        r.skim = c;
         const n = try i.count();
         for (0..n) |_| try r.oneRun(s);
     }
+    r.skim = variables_only;
     for (g.scripts.items) |s| {
         const n = try i.count();
         try s.work.ensureTotalCapacity(a, n);
@@ -2557,7 +2599,12 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }
     var discarded: Discarded = .{};
     defer discarded.deinit(a);
-    if (variables_only) try discard(&r, saved, &discarded) else baseline(g);
+    var reloaded: std.ArrayList([]const u8) = .empty;
+    defer reloaded.deinit(a);
+    if (variables_only) try discard(&r, saved, &discarded) else {
+        if (partial) try reload(&r, saved, reloading, &discarded, &reloaded);
+        baseline(g);
+    }
     // The calls that still pend.
     var pending_ids = try g.waits.importedPending(a, calls);
     errdefer pending_ids.deinit(a);
@@ -2589,15 +2636,17 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         }
     }
     result.disposed = try disposed.toOwnedSlice(a);
+    result.reloaded = try reloaded.toOwnedSlice(a);
     result.discarded = try discarded.runs.toOwnedSlice(a);
     result.dropped = try discarded.dropped.toOwnedSlice(a);
     result.abandoned = try discarded.abandoned.toOwnedSlice(a);
     if (g.trace) |w| {
         w.print("> restore from=s{d}", .{g.saves}) catch {};
-        if (options.variables_only) w.writeAll(" mismatch=variables-only") catch {};
+        if (options.reload_changed) w.writeAll(" mismatch=reload-changed") catch {} else if (options.variables_only) w.writeAll(" mismatch=variables-only") catch {};
         writeIds(w, "unbound", r.unbound.items);
         writeIds(w, "withheld", withheld.items);
-        w.print(" fingerprint={x} mode={s}", .{ saved_print, if (variables_only) "variables-only" else "full" }) catch {};
+        w.print(" fingerprint={x} mode={s}", .{ saved_print, if (variables_only) "variables-only" else if (partial) "partial" else "full" }) catch {};
+        writeIds(w, "reloaded", result.reloaded);
         writeIds(w, "pending", g.restored.?.pending.items);
         if (result.disposed.len > 0) {
             w.writeAll(" disposed=[") catch {};
@@ -2612,7 +2661,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         writeIds(w, "abandoned", result.abandoned);
         w.writeAll("\n") catch {};
     }
-    return if (variables_only) .variables_only else .full;
+    return if (variables_only) .variables_only else if (partial) .partial else .full;
 }
 
 /// A full restore's accounting baseline (chapter 9, Run accounting): every
@@ -2670,29 +2719,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
     for (g.scripts.items, saved) |s, *x| {
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(a);
-        try runs.appendSlice(a, s.live.items);
-        sorting.stable(*Run, runs.items, {}, struct {
-            fn less(_: void, p: *Run, q: *Run) bool {
-                return runNumber(p.id) < runNumber(q.id);
-            }
-        }.less);
-        // The prospective post-rollback view of the saved variables.
-        const view = try a.dupe(*Value, x.variables);
-        defer a.free(view);
-        for (runs.items) |run| if (machine.run_lifecycle.continuing(run)) if (run.segment_base) |base| {
-            if (base.len > view.len) return error.InvalidSave;
-            @memcpy(view[0..base.len], base);
-        };
-        for (s.variableNames(), s.variables) |name, *v| {
-            for (x.variable_names, view) |old, value| if (std.mem.eql(u8, old, name)) {
-                v.*.release();
-                v.* = value.retain();
-                break;
-            };
-        }
-        var state: u64 = 0;
-        for (s.variables) |v| state += machine.costs.size(v);
-        if (state > s.limits.persistent_state) return error.StateTooLarge;
+        try carry(r, s, x, &runs);
         for (runs.items) |run| {
             g.discardRun(run, "variables-only restore");
             try out.runs.append(a, try k.dupe(u8, run.id));
@@ -2728,6 +2755,113 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
     }
     g.releaseInputs(g.inputs.items);
     g.inputs.clearRetainingCapacity();
+    sorting.stable(u64, dropped.items, {}, std.sort.asc(u64));
+    for (dropped.items) |id| try out.dropped.append(a, try std.fmt.allocPrint(k, "d{d}", .{id}));
+    sorting.stable([]const u8, out.abandoned.items, {}, struct {
+        fn less(_: void, p: []const u8, q: []const u8) bool {
+            return machine.callOrder(p, q);
+        }
+    }.less);
+}
+
+/// Each Script Variable a rebuilt Script declares takes its saved value, as
+/// a preempted Run's rollback would leave it; `runs` gets the Script's
+/// restored Runs in the order they started. Over its Persistent State cap,
+/// the restore fails.
+fn carry(r: *Restoring, s: *Script, x: *const Saved, runs: *std.ArrayList(*Run)) Error!void {
+    const a = r.gpa();
+    try runs.appendSlice(a, s.live.items);
+    sorting.stable(*Run, runs.items, {}, struct {
+        fn less(_: void, p: *Run, q: *Run) bool {
+            return runNumber(p.id) < runNumber(q.id);
+        }
+    }.less);
+    // The prospective post-rollback view of the saved variables.
+    const view = try a.dupe(*Value, x.variables);
+    defer a.free(view);
+    for (runs.items) |run| if (machine.run_lifecycle.continuing(run)) if (run.segment_base) |base| {
+        if (base.len > view.len) return error.InvalidSave;
+        @memcpy(view[0..base.len], base);
+    };
+    for (s.variableNames(), s.variables) |name, *v| {
+        for (x.variable_names, view) |old, value| if (std.mem.eql(u8, old, name)) {
+            v.*.release();
+            v.* = value.retain();
+            break;
+        };
+    }
+    var state: u64 = 0;
+    for (s.variables) |v| state += machine.costs.size(v);
+    if (state > s.limits.persistent_state) return error.StateTooLarge;
+}
+
+/// A Partial Restore's Reloads (chapter 10, Partial Restore): each changed
+/// Script, in load order, carries its Script Variables over as a Reload with
+/// `CarryVariables` would, and its saved Runs and mailbox end as that
+/// Reload's Stop would end them, with no Host hook. Those waiting on them
+/// get `send failed`, reason `stopped`, and each open Decision settles
+/// undecided at the first Pump.
+fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, out: *Discarded, reloaded: *std.ArrayList([]const u8)) Error!void {
+    const g = r.g;
+    const a = r.gpa();
+    const k = r.keep();
+    var decisions: machine.Group.DeliveryDecisions = .empty;
+    defer decisions.deinit(a);
+    var dropped: std.ArrayList(u64) = .empty;
+    defer dropped.deinit(a);
+    for (g.scripts.items, saved, changed) |s, *x, c| {
+        if (!c) continue;
+        try reloaded.append(a, s.name);
+        // The calls and waits its Runs abandon, in call id order.
+        const calls = out.abandoned.items.len;
+        for (g.waits.all()) |p| if (p.run.script == s) {
+            const id = if (p.call) |call| call.id else p.id;
+            if (id.len > 0) try out.abandoned.append(a, try k.dupe(u8, id));
+        };
+        sorting.stable([]const u8, out.abandoned.items[calls..], {}, struct {
+            fn less(_: void, p: []const u8, q: []const u8) bool {
+                return machine.callOrder(p, q);
+            }
+        }.less);
+        var runs: std.ArrayList(*Run) = .empty;
+        defer runs.deinit(a);
+        try carry(r, s, x, &runs);
+        // Its ready Runs end below, with the rest.
+        var at: usize = 0;
+        while (at < s.work.items.len) {
+            if (s.work.items[at] == .run) _ = s.work.orderedRemove(at) else at += 1;
+        }
+        const ended = out.runs.items.len;
+        for (runs.items) |run| {
+            const id = try k.dupe(u8, run.id);
+            try out.runs.append(a, id);
+            g.endRun(run, .{ .stopped = .{ .decisions = &decisions, .discard = "reload", .run_id = id } }) catch |e| return valueError(e);
+        }
+        const messages = dropped.items.len;
+        while (s.work.items.len > 0) {
+            const d = s.work.orderedRemove(0).message;
+            if (d.from == null and d.id > 0) try dropped.append(a, d.id);
+            g.dropRestored(s, d, &decisions) catch |e| return valueError(e);
+        }
+        try g.reportStop(s.name, "reload", out.runs.items[ended..], dropped.items[messages..], out.abandoned.items[calls..]);
+    }
+    // A queued settlement of a call the changed Scripts abandoned settles
+    // nothing.
+    var at: usize = 0;
+    while (at < g.inputs.items.len) {
+        const x = g.inputs.items[at];
+        const abandoned = x == .settlement and for (out.abandoned.items) |id| {
+            if (std.mem.eql(u8, id, x.settlement.id)) break true;
+        } else false;
+        if (abandoned) {
+            var one = [_]machine.Input{g.inputs.orderedRemove(at)};
+            g.releaseInputs(&one);
+        } else at += 1;
+    }
+    for (decisions.items) |x| switch (x.part) {
+        .undecided => |m| try defer_(g, .{ .id = x.id, .broadcast = x.broadcast, .message = "", .args = &.{}, .request = false }, m.script, m.run),
+        else => {},
+    };
     sorting.stable(u64, dropped.items, {}, std.sort.asc(u64));
     for (dropped.items) |id| try out.dropped.append(a, try std.fmt.allocPrint(k, "d{d}", .{id}));
     sorting.stable([]const u8, out.abandoned.items, {}, struct {
@@ -3233,11 +3367,11 @@ fn richGroup(gpa: Allocator) !Group {
 /// run, never crash.
 fn hostile(gpa: Allocator, bad: []u8) !void {
     std.crypto.hash.sha2.Sha256.hash(bad[0 .. bad.len - 32], bad[bad.len - 32 ..][0..32], .{});
-    for ([_]bool{ false, true }) |variables_only| {
+    for ([_]Options{ .{}, .{ .variables_only = true }, .{ .reload_changed = true } }) |options| {
         var restored: Group = .init(gpa, null);
         defer restored.deinit();
         var result: Result = .{};
-        const outcome = restore(&restored, bad, .{ .variables_only = variables_only }, &result) catch continue;
+        const outcome = restore(&restored, bad, options, &result) catch continue;
         result.deinit(gpa);
         if (outcome == .mismatch) continue;
         _ = restored.deliver("a", "spin", &.{}, false) catch {};
@@ -3430,4 +3564,109 @@ test "the State Fingerprint refuses bytes it can't read and other save formats" 
     bytes[magic.len] = format_version + 1;
     std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
     try testing.expectError(error.Mismatch, stateFingerprint(bytes));
+}
+
+test "a Partial Restore rebuilds only the Scripts whose code changed (ADR 0143)" {
+    const gpa = testing.allocator;
+    const first = try machine.compileLibrary(gpa, "lib", "1", "function k\n  return 1\nend k\n", &.{}, null);
+    defer first.library.destroy();
+    const second = try machine.compileLibrary(gpa, "lib", "1", "function k\n  return 2\nend k\n", &.{}, null);
+    defer second.library.destroy();
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    try g.addLibrary(first.library);
+    const a =
+        \\use k from lib
+        \\script variable n = 10
+        \\on go
+        \\  put n + k() into n
+        \\  wait 5 s
+        \\  return n
+        \\end go
+        \\
+    ;
+    const b =
+        \\script variable m = 0
+        \\on tick
+        \\  wait 5 s
+        \\  put 1 into m
+        \\end tick
+        \\on query
+        \\  send go to a and wait
+        \\  put it into m
+        \\end query
+        \\
+    ;
+    try testing.expect(try g.load("a", a, .{}) == .loaded);
+    try testing.expect(try g.load("b", b, .{}) == .loaded);
+    _ = try g.deliver("b", "tick", &.{}, false);
+    _ = try g.deliver("b", "query", &.{}, false);
+    const start: model.dates.Instant = .{ .seconds = 1790000000, .micros = 0 };
+    try g.pump(start);
+    try testing.expectEqual(@as(usize, 1), g.script("a").?.live.items.len);
+    try testing.expectEqual(@as(usize, 2), g.script("b").?.live.items.len);
+    const bytes = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    // The same Library restores in full, and a changed one is refused
+    // without a policy.
+    for ([_]*Library{ first.library, second.library }) |given| {
+        var copy: Group = .init(gpa, null);
+        defer copy.deinit();
+        var result: Result = .{};
+        defer result.deinit(gpa);
+        const expected: Outcome = if (given == first.library) .full else .mismatch;
+        try testing.expectEqual(expected, try restore(&copy, bytes, .{ .libraries = &.{given} }, &result));
+    }
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.partial, try restore(&restored, bytes, .{ .libraries = &.{second.library}, .reload_changed = true }, &result));
+    try testing.expectEqual(@as(usize, 1), result.reloaded.len);
+    try testing.expectEqualStrings("a", result.reloaded[0]);
+    try testing.expectEqual(@as(usize, 1), result.discarded.len);
+    try testing.expect(std.mem.startsWith(u8, result.discarded[0], "a/r"));
+    const ra = restored.script("a").?;
+    const rb = restored.script("b").?;
+    try testing.expectEqual(@as(usize, 0), ra.live.items.len);
+    try testing.expectEqual(@as(usize, 2), rb.live.items.len);
+    // The carried Script Variable, and the sender told `send failed`.
+    try testing.expectEqual(@as(i64, 11), try ra.variables[0].data.number.integer(i64));
+    try testing.expectEqual(@as(usize, 1), rb.work.items.len);
+    // `stop` with reason `reload`, after the discarded Run's report.
+    var stops: usize = 0;
+    for (restored.reports.list.items) |x| if (x == .stop) {
+        stops += 1;
+        try testing.expectEqualStrings("a", x.stop.script);
+        try testing.expectEqualStrings("reload", x.stop.reason);
+        try testing.expectEqual(@as(usize, 1), x.stop.discarded_runs.len);
+    };
+    try testing.expectEqual(@as(usize, 1), stops);
+    // The matched Script's Run goes on, and the changed Script runs its new
+    // code.
+    try restored.pump(.{ .seconds = start.seconds + 10, .micros = 0 });
+    try testing.expectEqual(@as(usize, 0), rb.live.items.len);
+    try testing.expectEqual(@as(i64, 1), try rb.variables[0].data.number.integer(i64));
+    const asked = try restored.deliver("a", "go", &.{}, true);
+    try restored.pump(.{ .seconds = start.seconds + 20, .micros = 0 });
+    try restored.pump(.{ .seconds = start.seconds + 30, .micros = 0 });
+    try testing.expectEqual(@as(i64, 13), try restored.results.get(asked).?.data.number.integer(i64));
+    // Refused at any allocation, it leaves nothing behind.
+    const GroupAllocator = @import("group_allocator.zig").GroupAllocator;
+    var cap: usize = 1024;
+    var finished = false;
+    while (!finished) : (cap += 64) {
+        var memory: GroupAllocator = .init(gpa, cap);
+        defer memory.deinit();
+        var copy: Group = .init(memory.allocator(), null);
+        defer copy.deinit();
+        var partial: Result = .{};
+        const outcome = restore(&copy, bytes, .{ .libraries = &.{second.library}, .reload_changed = true }, &partial) catch |e| {
+            if (e != error.OutOfMemory) return e;
+            continue;
+        };
+        partial.deinit(memory.allocator());
+        try testing.expectEqual(Outcome.partial, outcome);
+        finished = true;
+    }
 }
