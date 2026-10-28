@@ -1121,13 +1121,16 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     for (g.ids.items) |id| try o.str(id);
     try o.int(g.inputs.items.len);
     for (g.inputs.items) |x| try s.input(x);
-    // Broadcast Decisions some recipient hasn't sealed.
-    try o.int(g.open_broadcasts.count());
-    var open = g.open_broadcasts.iterator();
-    while (open.next()) |e| {
-        try o.int(e.key_ptr.*);
-        try o.int(e.value_ptr.deliveries.len);
-        for (e.value_ptr.deliveries, e.value_ptr.parts) |d, part| {
+    // Broadcast Decisions some recipient hasn't sealed, by id: a hash map's
+    // order depends on its insertion history, which a restore doesn't keep.
+    const open = try sortedKeys(machine.OpenBroadcast, gpa, g.open_broadcasts);
+    defer gpa.free(open);
+    try o.int(open.len);
+    for (open) |id| {
+        const e = g.open_broadcasts.getPtr(id).?;
+        try o.int(id);
+        try o.int(e.deliveries.len);
+        for (e.deliveries, e.parts) |d, part| {
             try o.int(d);
             const p = part orelse {
                 try o.byte(0);
@@ -1156,11 +1159,12 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     // Run accounting: each root's discarded messages, and the roots whose
     // work changed since the last report (chapter 9, Run accounting).
-    try o.int(g.root_discards.count());
-    var discards = g.root_discards.iterator();
-    while (discards.next()) |e| {
-        try o.int(e.key_ptr.*);
-        try o.int(e.value_ptr.*);
+    const discards = try sortedKeys(u64, gpa, g.root_discards);
+    defer gpa.free(discards);
+    try o.int(discards.len);
+    for (discards) |root| {
+        try o.int(root);
+        try o.int(g.root_discards.get(root).?);
     }
     try o.int(g.changed_roots.count());
     for (g.changed_roots.keys()) |root| try o.int(root);
@@ -1168,6 +1172,16 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     std.crypto.hash.sha2.Sha256.hash(o.bytes.items, &digest, .{});
     try o.bytes.appendSlice(gpa, &digest);
     return o.bytes.toOwnedSlice(gpa);
+}
+
+/// A map's keys in ascending order, so a save doesn't depend on hash order.
+fn sortedKeys(comptime V: type, gpa: Allocator, map: std.AutoHashMapUnmanaged(u64, V)) ![]u64 {
+    const keys = try gpa.alloc(u64, map.count());
+    var it = map.keyIterator();
+    var n: usize = 0;
+    while (it.next()) |k| : (n += 1) keys[n] = k.*;
+    std.mem.sort(u64, keys, {}, std.sort.asc(u64));
+    return keys;
 }
 
 // ---------------------------------------------------------------- restoring
@@ -3549,6 +3563,32 @@ test "the State Fingerprint leaves out the save id counter and survives restore 
     a.variables[0] = old;
     try testing.expect(!std.mem.eql(u8, &live, &changed));
     try testing.expectEqual(live, try liveStateFingerprint(&g, gpa));
+}
+
+test "open Broadcast Decisions and root discards save in key order, so a restore saves the same bytes" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    // Keys put in descending order: a rebuilt hash map iterates them differently.
+    var k: u64 = 40;
+    while (k > 1) : (k -= 1) {
+        const deliveries = try gpa.alloc(u64, 0);
+        const parts = try gpa.alloc(?machine.Part, 0);
+        try g.open_broadcasts.put(gpa, 1000 + k, .{ .deliveries = deliveries, .parts = parts });
+        try g.root_discards.put(gpa, 2000 + k, k);
+    }
+    const print = try g.groupFingerprint();
+    const first = try save(&g, gpa, print);
+    defer gpa.free(first);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    try testing.expectEqual(Outcome.full, try restore(&restored, first, .{}, &result));
+    defer result.deinit(gpa);
+    const again = try save(&restored, gpa, print);
+    defer gpa.free(again);
+    try testing.expectEqualSlices(u8, first, again);
+    try testing.expectEqual(try stateFingerprint(first), try liveStateFingerprint(&restored, gpa));
 }
 
 test "the State Fingerprint refuses bytes it can't read and other save formats" {
