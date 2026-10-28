@@ -1104,18 +1104,6 @@ const frameHeader = (f: Frame): number =>
     f.locals.length,
     f.locals.reduce((t, v) => t + sizeOf(v), 0),
   );
-// The failed frames the controls hold aside above frame `i`, where a
-// dispatch or a running `finally` block is.
-const heldAbove = (controls: Control[], i: number): Frame[] =>
-  controls.flatMap(c =>
-    c.k === 'dispatch'
-      ? c.owner === i
-        ? c.held
-        : []
-      : c.cleanups[c.next - 1]?.frame === i && !c.cleanups[c.next - 1]!.leave
-        ? c.held
-        : [],
-  );
 const stackSize = (stack: Item[]): number =>
   stack.reduce((total, item) => total + itemSize(item), 0);
 const next = (frame: Frame): void => {
@@ -2386,7 +2374,12 @@ export class Run {
     return this.frames.at(-1)!;
   }
 
-  /** Tooling-only control views; never part of Inspect or saved state. */
+  /**
+   * Tooling-only control views; never part of Inspect or saved state. The
+   * frames each control retains come first, a dispatch's owner at its own
+   * place, then those it holds aside; then the frames running, where a
+   * policy or a `finally` block runs in a view of its retained owner.
+   */
   debugFrames(): {
     frame: Frame;
     owner?: number;
@@ -2397,17 +2390,54 @@ export class Run {
       owner?: number;
       role?: 'retained' | 'dispatch';
     }[] = [];
-    this.frames.forEach((frame, i) => {
-      const owner = views.length;
-      views.push(
-        this.controls.some(c => c.k === 'dispatch' && c.owner === i)
-          ? { frame, owner, role: 'dispatch' }
-          : { frame },
-      );
-      for (const held of heldAbove(this.controls, i)) {
-        views.push({ frame: held, role: 'retained' });
+    const index = new Map<Frame, number>();
+    const retain = (f: Frame, view: Frame) => {
+      if (!index.has(f)) {
+        index.set(f, views.length);
+        views.push({ frame: view, role: 'retained' });
+      }
+    };
+    const running = new Set<Frame>();
+    this.controls.forEach((c, i) => {
+      if (c.k === 'cleanup' && c.then.k === 'cancel') {
+        return;
+      }
+      const { frames, pcs } = this.framesAt(i);
+      const step = c.k === 'cleanup' ? c.cleanups[c.next - 1] : undefined;
+      const top =
+        c.k === 'dispatch'
+          ? c.owner
+          : step && !step.leave
+            ? step.frame
+            : frames.length - 1;
+      frames.slice(0, top + 1).forEach((f, j) => {
+        const parked = c.k === 'dispatch' && j === c.owner;
+        const pc = parked ? c.ownerPc : pcs.get(f);
+        retain(
+          f,
+          parked
+            ? { ...f, pc: c.ownerPc, stack: c.ownerStack }
+            : pc === undefined
+              ? f
+              : { ...f, pc },
+        );
+      });
+      for (const f of c.held) {
+        retain(f, f);
+      }
+      const at = frames[top];
+      if (at && (c.k === 'dispatch' || (step && !step.leave))) {
+        running.add(at);
       }
     });
+    for (const frame of this.frames) {
+      const owner = index.get(frame);
+      if (owner === undefined) {
+        views.push({ frame });
+      } else if (running.has(frame)) {
+        views.push({ frame, owner, role: 'dispatch' });
+      }
+    }
     return views;
   }
 
