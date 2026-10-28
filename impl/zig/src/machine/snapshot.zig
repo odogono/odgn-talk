@@ -2845,6 +2845,19 @@ fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, out: *Disc
         }
         try g.reportStop(s.name, "reload", out.runs.items[ended..], dropped.items[messages..], out.abandoned.items[calls..]);
     }
+    // A queued settlement of a call the changed Scripts abandoned settles
+    // nothing.
+    var at: usize = 0;
+    while (at < g.inputs.items.len) {
+        const x = g.inputs.items[at];
+        const abandoned = x == .settlement and for (out.abandoned.items) |id| {
+            if (std.mem.eql(u8, id, x.settlement.id)) break true;
+        } else false;
+        if (abandoned) {
+            var one = [_]machine.Input{g.inputs.orderedRemove(at)};
+            g.releaseInputs(&one);
+        } else at += 1;
+    }
     for (decisions.items) |x| switch (x.part) {
         .undecided => |m| try defer_(g, .{ .id = x.id, .broadcast = x.broadcast, .message = "", .args = &.{}, .request = false }, m.script, m.run),
         else => {},
