@@ -348,6 +348,20 @@ var Errors = ErrorsTable{
 			Message: "Invalid {format} at Character {offset}",
 		},
 		ErrorsTableErrorEntry{
+			Code: "can't patch",
+			Fields: []string{
+				"index",
+				"op",
+				"path",
+				"reason",
+			},
+			RaisedWhen: "An operation of `applyPatch`'s JSON Patch is invalid, misses its target or fails its test",
+			Sources: []string{
+				"ADR 0137",
+			},
+			Message: "JSON Patch operation {index} ({op} at {path}) failed: {reason}",
+		},
+		ErrorsTableErrorEntry{
 			Code: "unknown zone",
 			Fields: []string{
 				"zone",

@@ -1,0 +1,12 @@
+# json-patch: one Delivery applies a patch, then a patch whose test fails.
+
+> load patch identity=55f59452b71340bddacb8d037c8d4d28ce2d66bc1b5bc62f93f62e8e7d91c5f9
+> deliver d1 to=patch message=go
+> pump clock=2026-10-27T09:00:00Z
+raise patch/r1 code="can't patch" at=json:2548 pos=543:3
+seg patch/r1 start delivery=d1 handler=go clause=1 fuel=94129 alloc=241603 state=974 end=return
+run patch/r1 outcome=completed delivery=d1 handler=go fuel=94129 alloc=241603
+pumped state=idle fuel=94129
+
+> vars
+vars patch doc={door: {isLocked: true}, lights: [0, 1, 2], porch: {isLocked: true}, last: 3} failed=[{code: "can't patch", index: 2, op: "test", path: "/x", reason: "test failed", at: {unit: "patch", handler: "go", line: 13, column: 9}}]

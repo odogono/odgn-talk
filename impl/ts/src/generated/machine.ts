@@ -1455,6 +1455,7 @@ export const errorMessages = {
   "out of domain": "{value} is outside the domain of {function}",
   "out of range": "{value} is out of range for {field}",
   "can't decode": "Invalid {format} at Character {offset}",
+  "can't patch": "JSON Patch operation {index} ({op} at {path}) failed: {reason}",
   "unknown zone": "Unknown time zone {zone}",
   "ambiguous time": "{civil} is ambiguous, or doesn't exist, in {zone}",
   "bad locale": "{locale} isn't a well-formed locale tag",

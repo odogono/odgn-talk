@@ -1071,6 +1071,15 @@ pub const stdlib: StdlibTable = .{
             .gives = "The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position",
         },
         .{
+            .library = "json",
+            .name = "applyPatch",
+            .call = "applyPatch(doc, patch)",
+            .gives = "`doc` with the RFC 6902 JSON Patch `patch`, a list of operations, applied in order",
+            .errors = &.{
+                "can't patch",
+            },
+        },
+        .{
             .library = "date",
             .name = "makeDate",
             .call = "makeDate(y, m, d)",

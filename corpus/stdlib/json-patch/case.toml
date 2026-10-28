@@ -1,0 +1,16 @@
+# json-patch: the json Library's `applyPatch` applies an RFC 6902 JSON Patch
+# decoded from JSON text: `add` inserts into an array and appends at `-`,
+# `remove`, `replace`, `move` and `copy` follow the RFC, and a pointer token
+# is a key on an object even when written in digits. A failing `test` raises
+# `can't patch` with the operation's 1-based index, and the document is left
+# as it was (spec chapter 7, `json`; ADR 0137; #1632).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "patch"
+source = "patch.talk"

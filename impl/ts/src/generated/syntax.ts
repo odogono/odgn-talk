@@ -1744,6 +1744,16 @@ export const libraryExports = [
     }
   },
   {
+    "library": "json",
+    "name": "applyPatch",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
     "library": "date",
     "name": "makeDate",
     "kind": "function",

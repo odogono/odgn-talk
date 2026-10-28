@@ -339,16 +339,33 @@ end needFunction
 --| The Value Path the JSON Pointer text `t` locates, with each array index as a 1-based position
 function pointerPath t
   needText(t)
+  put pointerTokens(t) into tokens
+  if tokens is nothing then outOfDomain("pointerPath", t)
   put [] into path
-  if t = "" then return path
+  repeat for each token in tokens
+    if isIndex(token) then
+      put token as number + 1 after path
+    else
+      put token after path
+    end if
+  end repeat
+  return path
+end pointerPath
+
+-- The reference tokens of the JSON Pointer text `t`, unescaped, or Nothing if
+-- `t` isn't a JSON Pointer. It reads code points, as decoding does, so a
+-- combining mark can't join a slash.
+private function pointerTokens t
+  put [] into tokens
+  if t = "" then return tokens
   put the code points of t into cps
-  if item 1 of cps <> "/" then outOfDomain("pointerPath", t)
+  if item 1 of cps <> "/" then return nothing
   put [] into token
   put 2 into i
   repeat while i <= the length of cps
     put item i of cps into c
     if c = "/" then
-      put pointerStep(token) after path
+      put join(token) after tokens
       put [] into token
     else if c = "~" then
       add 1 to i
@@ -358,25 +375,170 @@ function pointerPath t
       else if e = "1" then
         put "/" after token
       else
-        outOfDomain("pointerPath", t)
+        return nothing
       end if
     else
       put c after token
     end if
     add 1 to i
   end repeat
-  put pointerStep(token) after path
-  return path
-end pointerPath
+  put join(token) after tokens
+  return tokens
+end pointerTokens
 
--- A reference token's step: an array index, digits with no leading zero, is
--- an integer one past it, and any other token is its text.
-private function pointerStep cps
-  put join(cps) into token
-  if token = "" then return token
-  if the length of cps > 1 and item 1 of cps = "0" then return token
+-- Whether a reference token is an array index: digits with no leading zero.
+private function isIndex token
+  if token = "" then return false
+  put the code points of token into cps
+  if the length of cps > 1 and item 1 of cps = "0" then return false
   repeat for each c in cps
-    if not isDigit(c) then return token
+    if not isDigit(c) then return false
   end repeat
-  return token as number + 1
-end pointerStep
+  return true
+end isIndex
+
+-- JSON Patch (ADR 0137) ------------------------------------------------------
+
+--| `doc` with the RFC 6902 JSON Patch `patch`, a list of operations, applied in order
+function applyPatch doc, patch
+  needList(patch)
+  put 1 into n
+  repeat for each operation in patch
+    put patchOperation(doc, operation, n) into doc
+    add 1 to n
+  end repeat
+  return doc
+end applyPatch
+
+-- `doc` with one operation applied. Each failure raises `can't patch`.
+private function patchOperation doc, operation, n
+  if operation is not a map then cantPatch(n, nothing, nothing, "invalid operation")
+  put the op of operation into op
+  put the path of operation into path
+  if op is not in ["add", "remove", "replace", "move", "copy", "test"] then cantPatch(n, op, path, "invalid operation")
+  if path is not a text then cantPatch(n, op, path, "invalid operation")
+  put pointerTokens(path) into at
+  if at is nothing then cantPatch(n, op, path, "invalid pointer")
+  put nothing into v
+  if op is in ["add", "replace", "test"] then
+    if "value" is not in the keys of operation then cantPatch(n, op, path, "invalid operation")
+    put the value of operation into v
+  end if
+  put op into edit
+  if op is in ["move", "copy"] then
+    put the from of operation into from
+    if from is not a text then cantPatch(n, op, path, "invalid operation")
+    put pointerTokens(from) into source
+    if source is nothing then cantPatch(n, op, path, "invalid pointer")
+    let [found, v] be valueAt(doc, source)
+    if not found then cantPatch(n, op, path, "missing target")
+    if op = "move" then
+      if the length of source < the length of at and isPrefix(source, at) then cantPatch(n, op, path, "move into itself")
+      let [ok, doc] be editAt(doc, source, 1, "remove", nothing)
+    end if
+    put "add" into edit
+  end if
+  if op = "test" then
+    let [found, current] be valueAt(doc, at)
+    if not found or current <> v then cantPatch(n, op, path, "test failed")
+    return doc
+  end if
+  let [ok, edited] be editAt(doc, at, 1, edit, v)
+  if not ok then cantPatch(n, op, path, "missing target")
+  return edited
+end patchOperation
+
+-- [ok, `c` with `edit` ("add", "remove" or "replace") of `v` made at tokens
+-- `i` onward of `tokens`], as RFC 6902 makes it; ok is false when a target or
+-- parent it needs is missing.
+private function editAt c, tokens, i, edit, v
+  if i > the length of tokens then
+    if edit = "remove" then return [false, c]
+    return [true, v]
+  end if
+  put item i of tokens into token
+  if i < the length of tokens then
+    let [found, child] be childOf(c, token)
+    if not found then return [false, c]
+    let [ok, child] be editAt(child, tokens, i + 1, edit, v)
+    if not ok then return [false, c]
+    if c is a map then
+      put child into the (token) of c
+    else
+      put child into item (token as number + 1) of c
+    end if
+    return [true, c]
+  end if
+  if c is a map then
+    put token is in the keys of c into present
+    if edit = "add" then
+      put v into the (token) of c
+    else if not present then
+      return [false, c]
+    else if edit = "remove" then
+      delete the (token) of c
+    else
+      put v into the (token) of c
+    end if
+    return [true, c]
+  end if
+  if c is not a list then return [false, c]
+  if edit = "add" then
+    if token = "-" then return [true, insertItem(c, the length of c + 1, v)]
+    if not isIndex(token) then return [false, c]
+    if token as number > the length of c then return [false, c]
+    return [true, insertItem(c, token as number + 1, v)]
+  end if
+  if not isIndex(token) then return [false, c]
+  if token as number >= the length of c then return [false, c]
+  if edit = "remove" then
+    delete item (token as number + 1) of c
+  else
+    put v into item (token as number + 1) of c
+  end if
+  return [true, c]
+end editAt
+
+-- [found, the value at `tokens` inside `v`].
+private function valueAt v, tokens
+  repeat for each token in tokens
+    let [found, v] be childOf(v, token)
+    if not found then return [false, nothing]
+  end repeat
+  return [true, v]
+end valueAt
+
+-- [found, the value under `token` in `c`], where a map key may hold Nothing.
+private function childOf c, token
+  if c is a map then return [token is in the keys of c, the (token) of c]
+  if c is not a list then return [false, nothing]
+  if not isIndex(token) then return [false, nothing]
+  if token as number >= the length of c then return [false, nothing]
+  return [true, item (token as number + 1) of c]
+end childOf
+
+-- `xs` with `v` inserted at position `p`, from 1 to one past its end.
+private function insertItem xs, p, v
+  put [] into out
+  put 1 into k
+  repeat for each x in xs
+    if k = p then put v after out
+    put x after out
+    add 1 to k
+  end repeat
+  if p > the length of xs then put v after out
+  return out
+end insertItem
+
+-- Whether the tokens `a` begin the tokens `b`.
+private function isPrefix a, b
+  if the length of a > the length of b then return false
+  repeat for each k in 1..(the length of a)
+    if item k of a <> item k of b then return false
+  end repeat
+  return true
+end isPrefix
+
+private function cantPatch n, op, path, reason
+  throw {code: "can't patch", index: n, op: op, path: path, reason: reason}
+end cantPatch

@@ -1,0 +1,17 @@
+-- patch.talk: the json-patch case's Script.
+
+use decodeJson, applyPatch from json
+
+script variable doc = nothing
+script variable failed = []
+
+on go
+  put decodeJson("""{"door": {"isLocked": false}, "lights": [1, 2], "0": "zero"}""") into doc
+  put decodeJson("""[{"op": "replace", "path": "/door/isLocked", "value": true}, {"op": "add", "path": "/lights/0", "value": 0}, {"op": "add", "path": "/lights/-", "value": 3}, {"op": "remove", "path": "/0"}, {"op": "copy", "from": "/door", "path": "/porch"}, {"op": "move", "from": "/lights/3", "path": "/last"}]""") into patch
+  put applyPatch(doc, patch) into doc
+  try
+    put applyPatch(doc, decodeJson("""[{"op": "add", "path": "/x", "value": null}, {"op": "test", "path": "/x", "value": 1}]""")) into doc
+  catch e
+    put e after failed
+  end try
+end go

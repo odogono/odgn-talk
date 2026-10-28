@@ -205,6 +205,54 @@ describe('the stdlib Libraries', () => {
       'pointerPath("/a~2")',
       'error {code: "out of domain", function: "pointerPath", value: "/a~2"}',
     ],
+    [
+      '[applyPatch({foo: "bar"}, [{op: "add", path: "/baz", value: "qux"}]), applyPatch({foo: ["bar", "baz"]}, [{op: "add", path: "/foo/1", value: "qux"}]), applyPatch({foo: [1]}, [{op: "add", path: "/foo/-", value: 2}])]',
+      '[{foo: "bar", baz: "qux"}, {foo: ["bar", "qux", "baz"]}, {foo: [1, 2]}]',
+    ],
+    [
+      '[applyPatch({foo: ["bar", "qux", "baz"]}, [{op: "remove", path: "/foo/1"}]), applyPatch({baz: "qux", foo: "bar"}, [{op: "replace", path: "/baz", value: "boo"}]), applyPatch({a: 1}, [{op: "replace", path: "", value: 2}])]',
+      '[{foo: ["bar", "baz"]}, {baz: "boo", foo: "bar"}, 2]',
+    ],
+    [
+      '[applyPatch({foo: {bar: "baz", waldo: "fred"}, qux: {corge: "grault"}}, [{op: "move", from: "/foo/waldo", path: "/qux/thud"}]), applyPatch({foo: ["all", "grass", "cows", "eat"]}, [{op: "move", from: "/foo/1", path: "/foo/3"}]), applyPatch({a: [1]}, [{op: "copy", from: "/a", path: "/b"}])]',
+      '[{foo: {bar: "baz"}, qux: {corge: "grault", thud: "fred"}}, {foo: ["all", "cows", "eat", "grass"]}, {a: [1], b: [1]}]',
+    ],
+    [
+      '[applyPatch({"0": "k", a: nothing}, [{op: "test", path: "/0", value: "k"}, {op: "test", path: "/a", value: nothing}, {op: "test", path: "", value: {a: nothing, "0": "k"}}]), applyPatch({"a/b": 1, "m~n": 2}, [{op: "remove", path: "/a~1b"}, {op: "replace", path: "/m~0n", value: 3}])]',
+      '[{"0": "k", a: nothing}, {"m~n": 3}]',
+    ],
+    [
+      'applyPatch({baz: "qux"}, [{op: "test", path: "/baz", value: "qux"}, {op: "test", path: "/baz", value: "bar"}])',
+      `error {code: "can't patch", index: 2, op: "test", path: "/baz", reason: "test failed"}`,
+    ],
+    [
+      'applyPatch({foo: "bar"}, [{op: "add", path: "/baz/bat", value: "qux"}])',
+      `error {code: "can't patch", index: 1, op: "add", path: "/baz/bat", reason: "missing target"}`,
+    ],
+    [
+      '[applyPatch({a: [1]}, [{op: "remove", path: "/b"}]), applyPatch({a: [1]}, [{op: "add", path: "/a/2", value: 0}])]',
+      `error {code: "can't patch", index: 1, op: "remove", path: "/b", reason: "missing target"}`,
+    ],
+    [
+      'applyPatch({a: [1]}, [{op: "add", path: "/a/01", value: 0}])',
+      `error {code: "can't patch", index: 1, op: "add", path: "/a/01", reason: "missing target"}`,
+    ],
+    [
+      'applyPatch({a: {b: 1}}, [{op: "move", from: "/a", path: "/a/b/c"}])',
+      `error {code: "can't patch", index: 1, op: "move", path: "/a/b/c", reason: "move into itself"}`,
+    ],
+    [
+      'applyPatch({}, [{op: "add", path: "a", value: 1}])',
+      `error {code: "can't patch", index: 1, op: "add", path: "a", reason: "invalid pointer"}`,
+    ],
+    [
+      'applyPatch({}, [{op: "add", path: "/a"}, 5])',
+      `error {code: "can't patch", index: 1, op: "add", path: "/a", reason: "invalid operation"}`,
+    ],
+    [
+      'applyPatch({}, [5])',
+      `error {code: "can't patch", index: 1, op: nothing, path: nothing, reason: "invalid operation"}`,
+    ],
     // bytes
     ['[toHex(<<0xDE, 0xAD>>), fromHex("DEad")]', '["dead", <<0xDE, 0xAD>>]'],
     [

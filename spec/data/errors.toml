@@ -182,6 +182,13 @@ sources = ["ADR 0021", "ADR 0033"]
 message = "Invalid {format} at Character {offset}"
 
 [[error]]
+code = "can't patch"
+fields = ["index", "op", "path", "reason"]
+raised_when = "An operation of `applyPatch`'s JSON Patch is invalid, misses its target or fails its test"
+sources = ["ADR 0137"]
+message = "JSON Patch operation {index} ({op} at {path}) failed: {reason}"
+
+[[error]]
 code = "unknown zone"
 fields = ["zone"]
 raised_when = "A `calendar` Operation is given an unknown IANA zone; the Host fails with it"

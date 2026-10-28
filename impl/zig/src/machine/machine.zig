@@ -9476,7 +9476,9 @@ pub const Group = struct {
                     break :blk key_value.?.data.text;
                 };
                 if (base.data != .map) return g.wrongKind("map", base);
-                try g.push(frame, model.mapDelete(gpa, base, key) catch return error.OutOfMemory);
+                const r = model.mapDelete(gpa, base, key) catch return error.OutOfMemory;
+                m.result = r.retain();
+                try g.push(frame, r);
             },
             .append, .prepend, .append_all, .prepend_all => {
                 const v = pop(frame);
