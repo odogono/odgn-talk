@@ -10,6 +10,9 @@ import {
   type TextElement,
 } from '../src/model';
 import { PlaySession } from '../src/play';
+import { clickEvent, pointerValue } from '../src/pointer';
+
+const primaryClick = pointerValue(clickEvent(0, 0, 0));
 import {
   recipeEdit,
   recipePlacement,
@@ -95,7 +98,7 @@ test('each Recipe produces editable source with the intended runtime effect', as
     'end',
   );
   const play = new PlaySession(project);
-  play.send(play.page.elements[0]!, 'click');
+  play.send(play.page.elements[0]!, 'click', [primaryClick]);
   drain(play);
   for (let i = 0; i < 10; i++) {
     await Promise.resolve();
@@ -128,7 +131,7 @@ for (const value of [
     );
     expect(parseSource(button.script).error).toBeNull();
     const play = new PlaySession(project);
-    play.send(play.page.elements[0]!, 'click');
+    play.send(play.page.elements[0]!, 'click', [primaryClick]);
     drain(play);
     expect(play.problems).toEqual([]);
     expect(textOf(play.page.elements[1] as TextElement)).toBe(
@@ -142,7 +145,7 @@ test('parser placement ignores handler-like comments and strings and respects ba
   const source = '-- on click\non openPage\n put "on click" into x\nend\n';
   expect(recipePlacement(source)).toEqual({ kind: 'new' });
   const handler =
-    'on click -- header\n  -- body\n  set the visible of me to true\n  -- end comment\nend\n';
+    'on click {button: 0} -- header\n  -- body\n  set the visible of me to true\n  -- end comment\nend\n';
   for (const position of ['start', 'end'] as const) {
     const result = insert(handler, 'set the visible of me to false', position);
     expect(parseSource(result).error).toBeNull();
@@ -151,11 +154,13 @@ test('parser placement ignores handler-like comments and strings and respects ba
   }
   expect(
     insert(
-      'on click\r\nend click\r\n',
+      'on click {button: 0}\r\nend click\r\n',
       'set the visible of me to true',
       'start',
     ),
-  ).toBe('on click\r\n  set the visible of me to true\r\nend click\r\n');
+  ).toBe(
+    'on click {button: 0}\r\n  set the visible of me to true\r\nend click\r\n',
+  );
 });
 
 for (const source of [
@@ -264,7 +269,7 @@ test('sound Recipes offer only audio assets and play through the Play Host', () 
   button.script = insert('', recipeSource('loopSound', targets[0]!), 'new');
   expect(parseSource(button.script).error).toBeNull();
   const play = new PlaySession(project);
-  play.send(play.page.elements[0]!, 'click');
+  play.send(play.page.elements[0]!, 'click', [primaryClick]);
   drain(play);
   expect(play.problems).toEqual([]);
   expect(play.sounds.playing()).toEqual([

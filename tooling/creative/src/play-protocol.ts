@@ -4,6 +4,7 @@
 // plain data, so it crosses `postMessage` as it is.
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { type PerformanceSnapshot } from './performance';
+import { type ReaderArg } from './pointer';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
@@ -12,7 +13,12 @@ import { type VariableScript, type Watch, type WatchResult } from './variables';
 /** Element messages the page sends for reader input. */
 export type ReaderMessage = Extract<
   PlayMessage,
-  'click' | 'pointerEnter' | 'pointerLeave' | 'keyDown' | 'keyUp'
+  | 'click'
+  | 'pointerEnter'
+  | 'pointerLeave'
+  | 'pointerHeld'
+  | 'keyDown'
+  | 'keyUp'
 >;
 
 /** A reader's answer to a prompt; Nothing when dismissed. */
@@ -28,7 +34,7 @@ export type PlayRequest =
       session: number;
     }
   | {
-      args?: string[];
+      args?: ReaderArg[];
       kind: 'send';
       message: ReaderMessage;
       pageIndex: number;
@@ -101,6 +107,8 @@ export type PlayView = {
   /** `edit` is the last reader edit the worker applied to that Element. */
   elements: { edit?: number; element: Element; shown: boolean }[];
   full: boolean;
+  /** Elements a held press reports to, each frame, with `pointerHeld`. */
+  heldElements: string[];
   /** Loaded Script contexts, sent only when their identities change. */
   messageTargets?: LoadedMessageTarget[];
   navigating: boolean;

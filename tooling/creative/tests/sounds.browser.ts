@@ -2,6 +2,7 @@
 // audio decoder, the Add sound picker and browser playback voices.
 import { createElement, createProject } from '../src/model';
 import { PlaySession } from '../src/play';
+import { clickEvent, pointerValue } from '../src/pointer';
 import { browserSoundBackend, decodeSound, importSound } from '../src/sounds';
 import { mountStack } from '../src/stack';
 
@@ -117,13 +118,15 @@ export const runBrowserTests = async () => {
     shell.editor.edit(({ project, tree }) => {
       tree.setScript(
         project.pages[0]!.elements[0]!,
-        'on click\n tell sound to loop "waves"\nend click',
+        'on click {button: 0}\n tell sound to loop "waves"\nend click',
       );
     });
     const play = new PlaySession(shell.editor.project, 0, {
       soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
     });
-    play.send(play.page.elements[0]!, 'click');
+    play.send(play.page.elements[0]!, 'click', [
+      pointerValue(clickEvent(0, 0, 0)),
+    ]);
     // No awaits here: check the voice before any autoplay verdict can land.
     for (let i = 0; i < 100 && play.pump(0n).state === 'sliced'; i++) {
       // Drain the bounded Pump slices.

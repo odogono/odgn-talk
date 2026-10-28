@@ -140,3 +140,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0139: The test runner gives each Script under test a mock owner](0139-the-test-runner-gives-each-script-under-test-a-mock-owner.md)
 - [0140: northtalk.org is one Cloudflare Worker, deployed from CI](0140-northtalk-org-is-one-cloudflare-worker-deployed-from-ci.md)
 - [0144: A save restores on either Core, in one shared binary format](0144-a-save-restores-on-either-core.md)
+- [0145: Pointer messages carry an event map](0145-pointer-messages-carry-an-event-map.md)

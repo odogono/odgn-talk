@@ -11,6 +11,7 @@ import {
 import type { Element, Project } from './model';
 import { scriptPage, type ScriptOwner } from './script-manifest';
 import { isSoundAsset } from './sounds';
+import { PRIMARY_CLICK } from './pointer';
 
 export type RecipeKind =
   | 'navigate'
@@ -159,7 +160,7 @@ export const recipePlacement = (source: string): RecipePlacement => {
   const head = tokens(handler).filter(
     token => !block || token.pos < block.start,
   );
-  // Restrict automatic positions to plain, zero-argument click handlers. Any
+  // Restrict automatic positions to plain primary-click handlers. Any
   // control flow (including nested returns) is deliberately left to the author.
   const complex =
     !block ||
@@ -167,7 +168,7 @@ export const recipePlacement = (source: string): RecipePlacement => {
     head
       .filter(token => token.t !== 'nl')
       .map(token => token.v)
-      .join(' ') !== 'on click' ||
+      .join(' ') !== 'on click { button : 0 }' ||
     handler.children.some(
       child => child.kind === 'token' && child.v === 'finally',
     ) ||
@@ -195,7 +196,7 @@ export const recipeEdit = (
   if (position === 'new' && placement.kind === 'new') {
     return {
       from: source.length,
-      insert: `${source ? newline : ''}on click${newline}  ${action}${newline}end click${newline}`,
+      insert: `${source ? newline : ''}on click ${PRIMARY_CLICK}${newline}  ${action}${newline}end click${newline}`,
     };
   }
   if (

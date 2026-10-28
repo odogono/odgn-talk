@@ -101,6 +101,7 @@ const messages = [
   'click',
   'pointerEnter',
   'pointerLeave',
+  'pointerHeld',
   'keyDown',
   'keyUp',
   'openPage',
@@ -109,7 +110,12 @@ const messages = [
   'textChanged',
 ].map(name => ({
   name,
-  args: name === 'keyDown' || name === 'keyUp' ? ['text'] : [],
+  args:
+    name === 'keyDown' || name === 'keyUp'
+      ? ['text']
+      : name === 'click' || name === 'pointerHeld'
+        ? ['value']
+        : [],
 }));
 
 // Folio also delivers messages authored Scripts send to each other. Declare

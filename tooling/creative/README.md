@@ -277,7 +277,11 @@ by [`runProjectTests`](src/test-runner.ts) as `northtalk test` runs one
   Library named `test` hides it, so every test fails until it is renamed.
 - The Folio Harness, granted to the Test Script only:
   - `ask harness to key "ArrowLeft" and wait` sends `keyDown`, then `keyUp`, to the Page.
-  - `ask harness to click "restartButton" and wait` clicks an Element of the current Page.
+  - `ask harness to click "restartButton" and wait` clicks an Element of the current Page
+    with the primary button at its centre. A map replaces any of those, as in
+    `ask harness to click "board", {button: 2, x: 30, y: 50} and wait`.
+  - `ask harness to hold "cell", 500 ms and wait` presses an Element for the
+    duration: `pointerHeld` every 16 ms, then the `click` its release makes.
   - `ask harness to frame 16 ms and wait` moves the Clock on and delivers one `frame`.
   - `ask harness to advance 2 s and wait` moves the Clock on without a `frame`.
   - `ask harness to goTo "ending" and wait` changes Page.
@@ -311,6 +315,8 @@ Both Tetris Example Projects ship `game.test`.
 - Your keys and clicks become `key` and `click` calls, with the time between
   them as 16 ms `frame` calls, a run of them in a `repeat` loop. A Project
   with no `frame` Handler gets `advance` instead. Paused time isn't recorded.
+- A click is recorded with its button and position. A held press's
+  `pointerHeld` messages aren't replayed, only the `click` that ends it.
 - Typing into reader-editable text and answers to `ask user` aren't replayed:
   a `-- not recorded` comment marks each, and Errors says so. Hovering isn't
   recorded either, so `pointerEnter` and `pointerLeave` Handlers don't run in
@@ -848,7 +854,63 @@ Tools, Script and Errors windows still open (the Edit menu offers only Undo and 
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
-then `pointerLeave`. `keyDown key` and `keyUp key` report a pressed and released
+then `pointerLeave`.
+
+`click` carries one map, `{button, x, y}`
+([ADR 0145](../../docs/adr/0145-pointer-messages-carry-an-event-map.md)).
+`button` is the browser's: 0 primary, 1 middle, 2 secondary (right). A tap,
+and Enter or Space on a focused button, are 0. `x` and `y` are in Page units
+from the Element's top-left corner, whatever Present's scale, and a keyboard
+click is at the centre. A Handler picks a button with a pattern or a Guard:
+
+```talk
+on click {button: 0, x, y}
+  ping x, y
+end click
+
+on click {button} where button is 2
+  plantBuoy
+end click
+```
+
+A map pattern matches every map with the keys it lists, so `on click {}` and
+`on click e` run on every button; the Code Browser advises
+`on click {button: 0}` for a primary-only Handler, and warns about an
+`on click` without a parameter, which a click never reaches. A click no
+clause matches climbs the Message Path, so an Element can leave right-clicks
+to its Page. While a Page plays the browser's context menu stays away.
+
+While the primary button or a finger stays down on an Element whose Message
+Path handles `pointerHeld`, Folio sends it `pointerHeld {held, x, y}` once per
+displayed frame, `held` being the whole ms since the press and `x` and `y`
+where it began. It stops at release, at `pointerLeave` and when Play pauses,
+and the release still sends `click`. A long press is a Guard plus a latch,
+so the release doesn't also act as a click:
+
+```talk
+script variable planted = false
+
+on pointerHeld {held} where held >= 450 and not planted
+  put true into planted
+  plantBuoy
+end pointerHeld
+
+on pointerHeld _
+end pointerHeld
+
+on click {button: 0}
+  if planted then
+    put false into planted
+  else
+    ping
+  end if
+end click
+```
+
+Projects saved before format 5 open with each `on click` rewritten as
+`on click {button: 0}` and each `click` a Script sends given the same map. A
+send whose message name is computed is left alone; the Errors window reports
+it as an unhandled `click` when it runs. `keyDown key` and `keyUp key` report a pressed and released
 browser key (`event.key`) to focused editable text, otherwise to the Page.
 Each takes one text argument. Editable text keeps normal typing; a Page key
 event loses its browser default only when that message's Handler is on the
@@ -865,7 +927,8 @@ ignored until a fresh press. Page navigation also releases held keys along the
 old Page's Message Path to any surviving Project Handler. Stopping Play
 discards held keys, so releases
 cannot reach a new session. Enter or Space on a focused button sends it
-`click` and neither key message; a pointer click returns focus to the Page.
+`click {button: 0, …}` at its centre and neither key message; a pointer
+click returns focus to the Page.
 Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
 colour, align paragraphs, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
@@ -1067,7 +1130,7 @@ are temporary Play State: Stop restores the authored Elements exactly.
 Use `wait` in a handler to pause its Run before changing what the reader sees:
 
 ```talk
-on click
+on click {button: 0}
   set the label of me to "Wait for it…"
   wait 3 s
   set the label of me to "Ready!"
@@ -1118,7 +1181,7 @@ Every Script, and every Message Box command while browsing, gets Chapter 7's
 `user` Grant ([#1026](https://github.com/odogono/odgn-talk/issues/1026)):
 
 ```talk
-on click
+on click {button: 0}
   ask user to confirm "Start again?" and wait
   if not it then return
   ask user to choose ["Red", "Blue"], {prompt: "Pick a colour"} and wait

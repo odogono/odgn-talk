@@ -29,6 +29,7 @@ import {
 import { browserSoundBackend } from './sounds';
 import { paintCanvas } from './canvas-view';
 import { renderElement, type PlayMode, type StackShell } from './stack';
+import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
 import {
@@ -209,6 +210,12 @@ export const mountPlay = (shell: StackShell): void => {
   // the scaled Page fits its width (as the editor's stage does).
   const scaler = h('div', { class: 'play-scale' }, pageNode);
   reader.append(scaler);
+  // A playing Page is the reader's app: secondary clicks go to its Scripts.
+  pageNode.addEventListener('contextmenu', event => {
+    if (session && !session.stopped) {
+      event.preventDefault();
+    }
+  });
   // `user` prompts cover the Page, unscaled, and answering resumes Play.
   const prompts = mountPlayPrompts(scaler, (prompt, value) => {
     recorder?.unrecorded('a prompt answer');
@@ -240,6 +247,17 @@ export const mountPlay = (shell: StackShell): void => {
     string,
     { key: string; pageIndex: number; target: MirrorPage | TextElement }
   >();
+  // The press `pointerHeld` reports each frame until release or leave.
+  let press:
+    | {
+        element: Element;
+        node: HTMLElement;
+        start: number;
+        x: number;
+        y: number;
+      }
+    | undefined;
+  let pressRequest: number | undefined;
   // Sounds play here for the worker, each voice under the worker's number.
   const voices = new Map<number, { stop(): void }>();
   const silence = () => {
@@ -266,17 +284,19 @@ export const mountPlay = (shell: StackShell): void => {
   const sendTo = (
     target: MirrorPage | Element,
     message: ReaderMessage,
-    args?: string[],
+    args?: ReaderArg[],
     pageIndex = session?.page.index,
   ) => {
     if (!session || session.stopped || session.navigating || session.paused) {
       return;
     }
     if (recorder && message === 'click' && !('index' in target)) {
-      recorder.click(target.name);
+      recorder.click(target.name, args![0] as ClickEvent);
+    } else if (recorder && message === 'pointerHeld') {
+      recorder.unrecorded('a held press');
     } else if (recorder && message === 'keyDown' && args) {
       if ('index' in target) {
-        recorder.key(args[0]!);
+        recorder.key(args[0] as string);
       } else {
         recorder.unrecorded('typing');
       }
@@ -444,6 +464,7 @@ export const mountPlay = (shell: StackShell): void => {
       // Old Page Scripts have stopped; release to any surviving Project
       // Handler and require a fresh press on the new Page.
       releaseKeys();
+      endPress();
       closeText();
       pageNode.replaceChildren();
       drawnPage = play.page;
@@ -496,7 +517,7 @@ export const mountPlay = (shell: StackShell): void => {
       ) {
         closeText();
       }
-      const send = (name: 'click' | 'pointerEnter' | 'pointerLeave') =>
+      const send = (name: 'pointerEnter' | 'pointerLeave') =>
         sendTo(element, name);
       const existing = pageNode.querySelector<HTMLElement>(
         `[data-element="${CSS.escape(element.name)}"]`,
@@ -543,19 +564,42 @@ export const mountPlay = (shell: StackShell): void => {
           }
         });
         fresh.addEventListener('pointerleave', event => {
+          if (press?.node === fresh) {
+            endPress();
+          }
           if (event.pointerType !== 'touch') {
             send('pointerLeave');
           }
         });
-        fresh.addEventListener('click', event => {
+        fresh.addEventListener('pointerdown', event => {
+          if (
+            event.button === 0 &&
+            event.isPrimary &&
+            session?.heldElements.has(element.name)
+          ) {
+            startPress(element, fresh, event);
+          }
+        });
+        fresh.addEventListener('pointerup', endPress);
+        fresh.addEventListener('pointercancel', endPress);
+        const click = (event: MouseEvent) => {
           const touch = 'pointerType' in event && event.pointerType === 'touch';
           if (touch) {
             send('pointerEnter');
           }
-          send('click');
+          sendTo(element, 'click', [clickAt(fresh, event)]);
           if (touch) {
             send('pointerLeave');
           }
+        };
+        // Middle and secondary buttons arrive as `auxclick`, not `click`.
+        fresh.addEventListener('auxclick', event => {
+          if (event.button === 1 || event.button === 2) {
+            click(event);
+          }
+        });
+        fresh.addEventListener('click', event => {
+          click(event);
           // A pointer click leaves the keys with the Page, as games expect.
           if (event.detail > 0 && element.kind === 'button') {
             reader.focus();
@@ -597,6 +641,55 @@ export const mountPlay = (shell: StackShell): void => {
       }
     }
   };
+  /** Where `event` fell on `node`, in Page units from its top-left corner. */
+  const pageOffset = (node: HTMLElement, event: MouseEvent) => {
+    const box = node.getBoundingClientRect();
+    const scale = box.width / (node.offsetWidth || 1) || 1;
+    return {
+      x: (event.clientX - box.left) / scale,
+      y: (event.clientY - box.top) / scale,
+    };
+  };
+  /** A keyboard activation has no position, so it clicks the centre. */
+  const clickAt = (node: HTMLElement, event: MouseEvent): ClickEvent => {
+    if (event.detail === 0) {
+      return clickEvent(0, node.offsetWidth / 2, node.offsetHeight / 2);
+    }
+    const { x, y } = pageOffset(node, event);
+    return clickEvent(event.button, x, y);
+  };
+  const startPress = (
+    element: Element,
+    node: HTMLElement,
+    event: PointerEvent,
+  ) => {
+    endPress();
+    press = {
+      element,
+      node,
+      start: performance.now(),
+      ...pageOffset(node, event),
+    };
+    const tick = () => {
+      if (!press || !session || session.stopped || session.paused) {
+        pressRequest = undefined;
+        return;
+      }
+      const { x, y } = clickEvent(0, press.x, press.y);
+      sendTo(press.element, 'pointerHeld', [
+        { held: Math.round(performance.now() - press.start), x, y },
+      ]);
+      pressRequest = requestAnimationFrame(tick);
+    };
+    pressRequest = requestAnimationFrame(tick);
+  };
+  const endPress = () => {
+    press = undefined;
+    if (pressRequest !== undefined) {
+      cancelAnimationFrame(pressRequest);
+      pressRequest = undefined;
+    }
+  };
   const requestFrame = () => {
     if (frameRequest !== undefined || !session?.wantsFrames) {
       return;
@@ -617,6 +710,7 @@ export const mountPlay = (shell: StackShell): void => {
    */
   const stopPlay = () => {
     heldKeys.clear();
+    endPress();
     if (!session) {
       return;
     }
@@ -925,7 +1019,9 @@ export const mountPlay = (shell: StackShell): void => {
       (event.key === 'Enter' || event.key === ' ')
     ) {
       event.preventDefault();
-      sendTo(element, 'click');
+      sendTo(element, 'click', [
+        clickEvent(0, element.width / 2, element.height / 2),
+      ]);
       return;
     }
     const target =

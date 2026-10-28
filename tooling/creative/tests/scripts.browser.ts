@@ -35,7 +35,8 @@ const choose = async (win: HTMLElement, label: string) => {
   buttonIn(win, label)!.click();
 };
 const tick = () => new Promise(requestAnimationFrame);
-const source = 'on click\n  put the label of button1 into message\nend click\n';
+const source =
+  'on click {button: 0}\n  put the label of button1 into message\nend click\n';
 const open = (name: string, shiftKey = false) => {
   document
     .querySelector(`#page [data-element="${name}"]`)!
@@ -476,7 +477,7 @@ export const runBrowserTests = async () => {
         from: 0,
         to: view.state.doc.length,
         insert:
-          'on click\n  beep\nend click\n\non keyDown k\n  beep\nend keyDown\n',
+          'on click {button: 0}\n  beep\nend click\n\non keyDown k\n  beep\nend keyDown\n',
       },
     });
     shell.redraw();

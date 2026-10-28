@@ -3,6 +3,7 @@
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
+import { clickAdvice } from './click-advice';
 import { readDictionary } from '@northtalk/tooling/dictionary';
 import { libraryUri, operationAt, readManifest } from '@northtalk/tooling/lsp';
 import {
@@ -292,10 +293,11 @@ export class CodeBrowser {
       view,
     };
     this.#window = browser;
-    server.lsp.onDiagnostics = (uri, diagnostics) => {
+    server.lsp.onDiagnostics = (uri, found) => {
       if (uri !== this.#uri()) {
         return;
       }
+      const diagnostics = [...found, ...clickAdvice(view.state.doc.toString())];
       view.dispatch(diagnosticsSpec(view.state, diagnostics));
       problems.classList.toggle(
         'bad',

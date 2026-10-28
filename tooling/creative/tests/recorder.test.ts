@@ -40,7 +40,7 @@ test('time becomes 16 ms frames, a run of them a repeat, before each input', () 
   wait(40);
   recorder.key('ArrowLeft');
   wait(10);
-  recorder.click('restartButton');
+  recorder.click('restartButton', { button: 2, x: 4, y: 9 });
   recorder.unrecorded('typing');
   recorder.unrecorded('typing');
   recorder.pause();
@@ -53,7 +53,7 @@ test('time becomes 16 ms frames, a run of them a repeat, before each input', () 
     'end repeat',
     'ask harness to key "ArrowLeft" and wait',
     'ask harness to frame 16 ms and wait',
-    'ask harness to click "restartButton" and wait',
+    'ask harness to click "restartButton", {button: 2, x: 4, y: 9} and wait',
     '-- not recorded: typing',
     'ask harness to frame 16 ms and wait',
   ]);
@@ -103,10 +103,10 @@ test('the assertions cover the Page, texts and changed visibility', async () => 
   const secret = createElement('text', 'secret');
   secret.visible = false;
   page.elements.push(note, button, secret);
-  page.script = 'on click\n  show secret\nend click\n';
+  page.script = 'on click {button: 0}\n  show secret\nend click\n';
   const { recorder, wait } = recording();
   wait(5);
-  recorder.click('reveal');
+  recorder.click('reveal', { button: 0, x: 20, y: 10 });
   const recorded = await recordTest(
     project,
     recorder,
@@ -124,7 +124,7 @@ test('the assertions cover the Page, texts and changed visibility', async () => 
   expect(recorded.script.source).toBe(`use assertEqual from test
 
 on testRecording1
-  ask harness to click "reveal" and wait
+  ask harness to click "reveal", {button: 0, x: 20, y: 10} and wait
   ask harness to page
   assertEqual(it, "page1")
   ask harness to property "text", "note"

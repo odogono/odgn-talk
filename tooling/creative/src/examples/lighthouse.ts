@@ -143,9 +143,9 @@ const target = (
   reference = name,
 ): RecipeTarget => ({ name, reference, ...(property ? { property } : {}) });
 
-/** A `on click` handler around Recipe lines and hand-written ones alike. */
+/** An `on click {button: 0}` handler around Recipe lines and hand-written ones alike. */
 const onClick = (...lines: string[]): string =>
-  `on click\n${lines.map(line => `  ${line}`).join('\n')}\nend click\n`;
+  `on click {button: 0}\n${lines.map(line => `  ${line}`).join('\n')}\nend click\n`;
 
 const place = <T extends Element>(
   element: T,
@@ -397,7 +397,7 @@ on searchLampRoom
   set the width of it to 300
   set the height of it to 48
 end searchLampRoom
-on click
+on click {button: 0}
   if the name of the target = "trapdoor" then
     ${recipeSource('show', target('keyText'))}
     ${recipeSource('playSound', target('bell'))}

@@ -2,6 +2,7 @@ import { text, type Value } from '@northtalk/ts';
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { textOf, type Element, type Project } from './model';
 import { PlaySession, type PlayMessage } from './play';
+import { harnessClick, pointerValue } from './pointer';
 import { thaw, type DeepReadonly } from './readonly';
 
 /** How many Pump turns `settle` allows before it calls the session stuck. */
@@ -74,9 +75,31 @@ export class PlayHarness {
     await this.frame(1);
   }
 
-  /** Clicks the named Element on the current Page. */
-  async click(name: string): Promise<void> {
-    await this.send(name, 'click');
+  /**
+   * Clicks the named Element on the current Page: a primary click at its
+   * centre, unless `event` gives `button`, `x` or `y`.
+   */
+  async click(
+    name: string,
+    event: Partial<Record<'button' | 'x' | 'y', number>> = {},
+  ): Promise<void> {
+    const element = this.element(name);
+    const given = Object.keys(event).length
+      ? pointerValue(event as Record<string, number>)
+      : undefined;
+    await this.send(name, 'click', [harnessClick(element, given)]);
+  }
+
+  /** Reports a press on the named Element held for `held` ms. */
+  async hold(name: string, held: number): Promise<void> {
+    const { width, height } = this.element(name);
+    await this.send(name, 'pointerHeld', [
+      pointerValue({
+        held,
+        x: Math.round(width / 2),
+        y: Math.round(height / 2),
+      }),
+    ]);
   }
 
   async send(

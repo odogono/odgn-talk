@@ -15,7 +15,7 @@ const project = (tests: string) => {
   page.elements.push(label, flip);
   page.script = `script variable elapsedMs = 0
 script variable lastKey = ""
-on click
+on click {button: 0}
   set the text of label to "flipped"
 end click
 on keyDown key
@@ -180,6 +180,6 @@ end testNested
     ]),
   ];
   page.script =
-    'on click\n  set the text of nestedLabel to "flipped"\nend click\n';
+    'on click {button: 0}\n  set the text of nestedLabel to "flipped"\nend click\n';
   expect((await runProjectTests(tested)).map(r => r.problems)).toEqual([[]]);
 });

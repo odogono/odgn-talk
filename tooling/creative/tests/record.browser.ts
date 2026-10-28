@@ -26,7 +26,7 @@ export const runBrowserTests = async () => {
   secret.top = 120;
   secret.visible = false;
   project.pages[0]!.elements.push(reveal, secret);
-  project.pages[0]!.script = 'on click\n  show secret\nend click\n';
+  project.pages[0]!.script = 'on click {button: 0}\n  show secret\nend click\n';
   project.pages.push(createPage('later'));
   const shell = mountStack(project);
   mountPlay(shell);
@@ -50,7 +50,7 @@ export const runBrowserTests = async () => {
   const script = shell.editor.project.testScripts[0]!;
   assert(script.name === 'recorded.test', 'It goes in recorded.test');
   assert(
-    script.source.includes('ask harness to click "reveal" and wait') &&
+    script.source.includes('ask harness to click "reveal", {button: 0, x: ') &&
       script.source.includes('assertEqual(it, true)'),
     `It replays the click and checks the reveal:\n${script.source}`,
   );

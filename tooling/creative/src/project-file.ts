@@ -24,12 +24,13 @@ import {
   type RichText,
   type TextRun,
 } from './model';
+import { migrateClicks } from './click-migration';
 import { drawingProblem } from './drawing';
 import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 4;
+export const CURRENT_FORMAT = 5;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -543,6 +544,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   1: data => ({ ...data }),
   2: data => ({ ...data, libraries: [] }),
   3: data => ({ ...data, testScripts: [] }),
+  4: migrateClicks,
 };
 
 /**

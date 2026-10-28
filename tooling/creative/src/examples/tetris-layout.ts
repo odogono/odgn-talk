@@ -320,7 +320,7 @@ export const createTetrisPage = (
       label: 'New Game',
       fill: '#ffffff',
       textColor: INK,
-      script: 'on click\n  send restart to thisPage\nend click\n',
+      script: 'on click {button: 0}\n  send restart to thisPage\nend click\n',
     }),
     label(
       'help',

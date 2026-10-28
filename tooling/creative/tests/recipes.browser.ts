@@ -75,7 +75,7 @@ export const runBrowserTests = async () => {
     await click('Insert action');
     assert(
       shell.editor.project.pages[0]!.elements[0]!.script ===
-        'on click\n  tell pages to show cellar\nend click\n',
+        'on click {button: 0}\n  tell pages to show cellar\nend click\n',
       'Source inserted',
     );
     assert(
@@ -116,7 +116,7 @@ export const runBrowserTests = async () => {
     await click('Insert action');
     assert(
       view().state.doc.toString() ===
-        'on click\n  set the visible of me to false\n  tell pages to show cellar\nend click\n',
+        'on click {button: 0}\n  set the visible of me to false\n  tell pages to show cellar\nend click\n',
       'Action inserted before navigation',
     );
     add();
@@ -134,19 +134,19 @@ export const runBrowserTests = async () => {
       changes: {
         from: 0,
         to: view().state.doc.length,
-        insert: 'on click\n  if true then return\nend click\n',
+        insert: 'on click {button: 0}\n  if true then return\nend click\n',
       },
     });
     add();
     await choose('Action', 'show');
     assert(button('Use current cursor and preview'), 'Explicit cursor preview');
-    view().dispatch({ selection: { anchor: 9 } });
+    view().dispatch({ selection: { anchor: 21 } });
     await click('Use current cursor and preview');
     await click('Insert action');
     assert(
       view()
         .state.doc.toString()
-        .startsWith('on click\n  set the visible of me to true\n'),
+        .startsWith('on click {button: 0}\n  set the visible of me to true\n'),
       'Chosen cursor used',
     );
     assert(

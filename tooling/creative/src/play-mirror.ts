@@ -28,6 +28,7 @@ export class PlayMirror implements ReaderTextPlay {
   wantsFrames = false;
   prompt: PromptView | undefined;
   pageHandles = { keyDown: false, keyUp: false };
+  heldElements = new Set<string>();
   #shown = new Set<Element>();
   #order: Element[] = [];
 
@@ -83,6 +84,7 @@ export class PlayMirror implements ReaderTextPlay {
     this.wantsFrames = view.wantsFrames;
     this.prompt = view.prompt;
     this.pageHandles = view.pageHandles;
+    this.heldElements = new Set(view.heldElements);
     for (const { element, shown, edit = 0 } of view.elements) {
       let mirrored = this.#byName.get(element.name);
       if (!mirrored || mirrored.kind !== element.kind) {
