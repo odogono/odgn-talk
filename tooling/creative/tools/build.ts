@@ -19,9 +19,14 @@ import { iconPng, iconSvg } from './icons';
 const root = resolve(import.meta.dir, '..');
 export const dist = resolve(root, 'dist');
 
-/** The app shell the service worker precaches for offline use (#823). */
+/**
+ * The app shell the service worker precaches for offline use (#823). The
+ * page is `./`, not `./index.html`, because hosts such as Cloudflare
+ * redirect `index.html` to its directory, and a browser refuses a cached
+ * redirect as a navigation's response (#1662).
+ */
 export const precacheFiles = [
-  './index.html',
+  './',
   './style.css',
   './main.js',
   './lsp.worker.js',
@@ -34,6 +39,10 @@ export const precacheFiles = [
   './apple-touch-icon.png',
   './UNICODE-LICENSE.txt',
 ];
+
+/** The file in `dist/` behind a precached URL. */
+export const shellFile = (entry: string): string =>
+  entry === './' ? './index.html' : entry;
 
 export const build = async ({ minify = true } = {}): Promise<void> => {
   rmSync(dist, { recursive: true, force: true });
@@ -73,7 +82,7 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
   const hash = createHash('sha256');
   for (const entry of precacheFiles) {
     hash.update(entry);
-    hash.update(readFileSync(resolve(dist, entry)));
+    hash.update(readFileSync(resolve(dist, shellFile(entry))));
   }
   const version = hash.digest('hex').slice(0, 16);
   const worker = await Bun.build({

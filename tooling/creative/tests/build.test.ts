@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { build, dist, precacheFiles } from '../tools/build';
+import { build, dist, precacheFiles, shellFile } from '../tools/build';
 
 test('the build writes the page, its script and the LSP worker', async () => {
   await build({ minify: false });
@@ -69,7 +69,7 @@ test('the build writes everything offline use and installation need', async () =
   // Every precached file exists, so installing the worker cannot fail
   // on a missing shell file.
   for (const entry of precacheFiles) {
-    expect(existsSync(resolve(dist, entry)), entry).toBe(true);
-    expect(worker).toContain(entry.replace('./', ''));
+    expect(existsSync(resolve(dist, shellFile(entry))), entry).toBe(true);
+    expect(worker).toContain(JSON.stringify(entry));
   }
 }, 60_000);

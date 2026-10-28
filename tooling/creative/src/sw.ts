@@ -76,7 +76,7 @@ export const installServiceWorker = (
   const cacheName = cacheNameFor(version);
   const shell = precache.map(entry => new URL(entry, base).href);
   const shellUrls = new Set(shell);
-  const index = new URL('./index.html', base).href;
+  const index = new URL('./', base).href;
   const origin = new URL(base).origin;
 
   scope.addEventListener('install', (event: ExtendableEventLike) => {

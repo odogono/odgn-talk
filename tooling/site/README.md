@@ -23,4 +23,4 @@ Site-only pages, such as the home page, live in `src/content/docs/` itself. `tal
 
 ## The Worker
 
-[`wrangler.jsonc`](wrangler.jsonc) binds the Worker to `northtalk.org` and serves `dist/` as static assets. [`src/worker.ts`](src/worker.ts) is the entry point for paths that need code. `/go*` is next, in [#1513](https://github.com/odogono/odgn-talk/issues/1513). `/folio/` arrives with [#1662](https://github.com/odogono/odgn-talk/issues/1662). [#1663](https://github.com/odogono/odgn-talk/issues/1663) sets up the deploy.
+[`wrangler.jsonc`](wrangler.jsonc) binds the Worker to `northtalk.org` and serves `dist/` as static assets. [`src/worker.ts`](src/worker.ts) is the entry point for paths that need code. `/go*` is next, in [#1513](https://github.com/odogono/odgn-talk/issues/1513). The build also builds [Folio](../creative/) and copies it to `dist/folio/`, so the site serves it at `/folio/`. Folio's URLs are all relative, so its service worker is scoped to `/folio/` and leaves the docs alone. [#1663](https://github.com/odogono/odgn-talk/issues/1663) sets up the deploy.
