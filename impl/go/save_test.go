@@ -524,3 +524,68 @@ func TestReissueFuelFaultSkipsSiblingHostCalls(t *testing.T) {
 		})
 	}
 }
+
+func TestReloadChangedRebuildsOnlyChangedScripts(t *testing.T) {
+	c := New()
+	compile := func(source string) *Library {
+		l, err := c.CompileLibrary(LibrarySource{Name: "lib", Version: "1", Source: source}, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	first, second := compile("function k\n return 1\nend k\n"), compile("function k\n return 2\nend k\n")
+	g := c.NewGroup(GroupOptions{})
+	if err := g.AddLibrary(first); err != nil {
+		t.Fatal(err)
+	}
+	a, err := g.Load(LoadOptions{Name: "a", Source: "use k from lib\nscript variable n = 10\non go\n put n + k() into n\n wait 5 s\nend go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := g.Load(LoadOptions{Name: "b", Source: "script variable m = 0\non nap\n wait 5 s\n put 1 into m\nend nap"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Deliver(Message{Name: "go"})
+	b.Deliver(Message{Name: "nap"})
+	if _, err := g.Pump(time.Unix(1, 0), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.Restore(saved, RestoreOptions{Libraries: []*Library{second}}); err == nil {
+		t.Fatal("a changed Library restored under RejectMismatch")
+	}
+	restored, result, err := c.Restore(saved, RestoreOptions{Libraries: []*Library{second}, Mismatch: ReloadChanged})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.VariablesOnly || fmt.Sprint(result.Reloaded) != "[a]" || fmt.Sprint(result.DiscardedRuns) != "[a/r1]" {
+		t.Fatalf("Partial Restore result: %#v", result)
+	}
+	stops := 0
+	for _, r := range result.Reports {
+		if s, ok := r.(*Stop); ok {
+			stops++
+			if s.Script != "a" || s.Reason != "reload" {
+				t.Fatalf("stop report: %#v", s)
+			}
+		}
+	}
+	if stops != 1 {
+		t.Fatalf("stop reports: %#v", result.Reports)
+	}
+	if _, err := restored.Pump(time.Unix(10, 0), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	vars := restored.Inspect().Scripts
+	if got := vars[0].Vars[0].Val.String(); got != "11" {
+		t.Fatalf("carried variable: %s", got)
+	}
+	if got := vars[1].Vars[0].Val.String(); got != "1" {
+		t.Fatalf("matched Run did not go on: %s", got)
+	}
+}

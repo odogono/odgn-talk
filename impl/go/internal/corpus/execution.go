@@ -560,8 +560,11 @@ func (x *executionReplay) apply(i int) error {
 			}
 		}
 		policy := talk.RejectMismatch
-		if fields["mismatch"].Raw == "variables-only" {
+		switch fields["mismatch"].Raw {
+		case "variables-only":
 			policy = talk.VariablesOnly
+		case "reload-changed":
+			policy = talk.ReloadChanged
 		}
 		next, restoredResult, err := core.Restore(x.saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, Grants: func(script, name string) *talk.Grant {
 			if unbound[script+"."+name] {

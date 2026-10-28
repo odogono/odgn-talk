@@ -1555,8 +1555,6 @@ talk_host_error_code talk_core_state_fingerprint(talk_core *c, const uint8_t *sa
 typedef enum talk_mismatch_policy {
     TALK_REJECT_MISMATCH,
     TALK_VARIABLES_ONLY,
-    /* Not yet implemented (#1701): rejects a mismatch as
-     * TALK_REJECT_MISMATCH does. */
     TALK_RELOAD_CHANGED
 } talk_mismatch_policy;
 /* C only: talk.go's Grants function, a Script's named Grant re-bound, or
@@ -1621,8 +1619,12 @@ size_t talk_restore_result_disposed(const talk_restore_result *r, const talk_obj
  * baseline: a full restore's saved live Runs and active roots, or a
  * variables-only restore's discards; borrowed from r, and NULL for none. */
 const talk_reports *talk_restore_result_reports(const talk_restore_result *r);
-/* C only: what a variables-only restore discarded: which 0 the Runs, 1 the
- * dropped Deliveries, 2 the abandoned calls; *out borrows from the Group. */
+/* C only: talk.go's RestoreResult.Reloaded, the Scripts a Partial Restore
+ * rebuilt, in load order; *out borrows from the Group. */
+size_t talk_restore_result_reloaded(const talk_restore_result *r, const talk_id **out);
+/* C only: what a variables-only or Partial Restore discarded: which 0 the
+ * Runs, 1 the dropped Deliveries, 2 the abandoned calls; *out borrows from
+ * the Group. */
 size_t talk_restore_result_ids(const talk_restore_result *r, int which, const talk_id **out);
 /* C only: ends the caller's result. */
 void talk_restore_result_release(talk_restore_result *r);

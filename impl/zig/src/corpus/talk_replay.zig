@@ -1458,6 +1458,13 @@ fn rehandle(scripts: *std.StringHashMapUnmanaged(*c.talk_script), group: ?*c.tal
 }
 
 /// The ids of a Trace's `[a, b]` list.
+/// The `restore` record's mismatch policy.
+fn mismatchPolicy(word: []const u8) c.talk_mismatch_policy {
+    if (std.mem.eql(u8, word, "variables-only")) return c.TALK_VARIABLES_ONLY;
+    if (std.mem.eql(u8, word, "reload-changed")) return c.TALK_RELOAD_CHANGED;
+    return c.TALK_REJECT_MISMATCH;
+}
+
 fn idList(a: std.mem.Allocator, shown: []const u8) ![]const []const u8 {
     if (shown.len < 2 or shown[0] != '[') return error.MalformedCase;
     var out: std.ArrayList([]const u8) = .empty;
@@ -1744,7 +1751,7 @@ pub const Host = struct {
                 .grants_context = &rebinding,
                 .resolve = Resolving.call,
                 .resolve_context = &resolving,
-                .mismatch = if (std.mem.eql(u8, field(input, "mismatch") orelse "", "variables-only")) c.TALK_VARIABLES_ONLY else c.TALK_REJECT_MISMATCH,
+                .mismatch = mismatchPolicy(field(input, "mismatch") orelse ""),
                 .allocator = null,
                 .memory_cap = 1 << 30,
             };

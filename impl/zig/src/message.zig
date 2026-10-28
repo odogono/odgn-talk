@@ -3728,7 +3728,7 @@ const RestoreRequest = struct {
             };
         }
         const policy = asText(field(msg, "mismatch")) orelse "reject";
-        const mismatch: talk.MismatchPolicy = if (std.mem.eql(u8, policy, "reject")) .reject_mismatch else if (std.mem.eql(u8, policy, "variables only")) .variables_only else {
+        const mismatch: talk.MismatchPolicy = if (std.mem.eql(u8, policy, "reject")) .reject_mismatch else if (std.mem.eql(u8, policy, "variables only")) .variables_only else if (std.mem.eql(u8, policy, "reload changed")) .reload_changed else {
             s.gpa.free(libraries);
             s.gpa.free(save);
             return null;
@@ -3957,7 +3957,7 @@ fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (A
         try o.raw("]");
     }
     try o.raw("]");
-    inline for (.{ .{ "discardedRuns", "discarded" }, .{ "droppedMessages", "dropped" }, .{ "abandonedCalls", "abandoned" } }) |f| {
+    inline for (.{ .{ "reloaded", "reloaded" }, .{ "discardedRuns", "discarded" }, .{ "droppedMessages", "dropped" }, .{ "abandonedCalls", "abandoned" } }) |f| {
         try o.raw(",\"" ++ f[0] ++ "\":[");
         for (@field(res, f[1]), 0..) |id, i| {
             if (i > 0) try o.raw(",");

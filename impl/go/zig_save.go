@@ -59,7 +59,7 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 		libraries[i] = zigIdentity(l.id)
 		g.libraries[l.Name()] = l
 	}
-	policy, ok := map[MismatchPolicy]string{RejectMismatch: "reject", VariablesOnly: "variables only"}[o.Mismatch]
+	policy, ok := map[MismatchPolicy]string{RejectMismatch: "reject", VariablesOnly: "variables only", ReloadChanged: "reload changed"}[o.Mismatch]
 	if !ok {
 		return nil, result, g.refuse(InvalidValue, "invalid mismatch policy")
 	}
@@ -182,7 +182,7 @@ func (b *zigGroup) restoreReceipt(response zigResponse, result *RestoreResult) e
 	for _, field := range []struct {
 		name string
 		dst  any
-	}{{"variablesOnly", &result.VariablesOnly}, {"discardedRuns", &result.DiscardedRuns}, {"droppedMessages", &result.DroppedMessages}, {"abandonedCalls", &result.AbandonedCalls}} {
+	}{{"variablesOnly", &result.VariablesOnly}, {"reloaded", &result.Reloaded}, {"discardedRuns", &result.DiscardedRuns}, {"droppedMessages", &result.DroppedMessages}, {"abandonedCalls", &result.AbandonedCalls}} {
 		if err := b.decode(reply.get(field.name), reflect.ValueOf(field.dst).Elem()); err != nil {
 			return err
 		}
