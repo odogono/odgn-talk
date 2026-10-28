@@ -351,6 +351,59 @@ describe('Manifest Object Collections', () => {
   });
 });
 
+describe('Owner Kind', () => {
+  const door = {
+    name: 'door',
+    props: [
+      { name: 'portal', shape: 'text' },
+      { name: 'locked', shape: 'boolean', readOnly: true },
+    ],
+  };
+  const owned = { ...manifest, objectKinds: [door], ownerKind: 'door' };
+  test('reads the Owner Kind, which must be a declared Object Kind', () => {
+    expect(readManifest(owned).ownerKind).toBe('door');
+    expect(readManifest(manifest).ownerKind).toBeUndefined();
+    expect(() => readManifest({ ...owned, objectKinds: [] })).toThrow(
+      'Owner Kind door is not a declared Object Kind',
+    );
+    expect(() => readManifest({ ...owned, ownerKind: 1 })).toThrow();
+  });
+  test('completes and hovers the properties of me', () => {
+    const { request } = setup('on demo\n return the  of me\nend demo', owned);
+    expect(
+      request('textDocument/completion', at(1, 12)).map(c => [
+        c.label,
+        c.detail,
+      ]),
+    ).toEqual([
+      ['portal', 'door property'],
+      ['locked', 'door property (read-only)'],
+    ]);
+    const hovered = setup('on demo\n return the portal of me\nend demo', owned);
+    expect(
+      hovered.request('textDocument/hover', at(1, 13))?.contents.value,
+    ).toBe('door property portal\nShape: text');
+  });
+  test('leaves me unknown without an Owner Kind', () => {
+    const { request } = setup('on demo\n return the portal of me\nend demo', {
+      ...owned,
+      ownerKind: undefined,
+    });
+    expect(request('textDocument/hover', at(1, 13))).toBeNull();
+  });
+  test('publishes unknown and read-only properties of me as Lints', () => {
+    const { sent } = setup(
+      'on demo\n set the locked of me to true\n set the portal of me to the colour of me\nend demo',
+      owned,
+    );
+    const diagnostics = (sent.at(-1)!.params as Published).diagnostics;
+    expect(diagnostics.map(d => [d.code, d.range.start])).toEqual([
+      ['read-only-property', { line: 1, character: 9 }],
+      ['unknown-property', { line: 2, character: 29 }],
+    ]);
+  });
+});
+
 test('hover uses Core documentation for declarations and ordered Handler Clauses', () => {
   const source = [
     '  --| Adds one.',

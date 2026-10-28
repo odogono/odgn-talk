@@ -9,6 +9,7 @@ import type {
 import { builtins, properties } from './generated/lints';
 import type { LintId } from './lint';
 import { commandSelectors, type HostManifest } from './lsp/manifest';
+import { expression, propertyRead } from './lsp/properties';
 
 type Emit = (
   id: LintId,
@@ -1162,6 +1163,43 @@ const itOf = (body: SemanticNode): number | undefined => {
   return undefined;
 };
 
+/** Literal properties of `me` and well-known objects, against the manifest. */
+const lintProperties = (
+  all: readonly SemanticElement[],
+  manifest: HostManifest,
+  emit: Emit,
+) => {
+  for (const e of all) {
+    if (e.kind !== 'node') {
+      continue;
+    }
+    const read = propertyRead(e, manifest);
+    if (read && !read.prop) {
+      emit('unknown-property', read.key.span, {
+        kind: read.kind.name,
+        property: read.name,
+      });
+    }
+    const [head, target] = e.children;
+    if (
+      e.rule === 'SimpleStatement' &&
+      head?.kind === 'token' &&
+      head.text === 'set' &&
+      target?.kind === 'node'
+    ) {
+      const written = expression(target);
+      const set =
+        written.kind === 'node' ? propertyRead(written, manifest) : undefined;
+      if (set?.prop?.readOnly) {
+        emit('read-only-property', set.key.span, {
+          kind: set.kind.name,
+          property: set.name,
+        });
+      }
+    }
+  }
+};
+
 export const lintBindings = (
   tree: SemanticTree,
   manifest: HostManifest | null | undefined,
@@ -1201,6 +1239,9 @@ export const lintBindings = (
     if (binding?.kind === 'name' && binding.binding && keys) {
       constantKeys.set(binding.binding.id, keys);
     }
+  }
+  if (unit === 'script' && manifest) {
+    lintProperties(all, manifest, emit);
   }
   const handlers = new Map<string, SemanticNode[]>();
   for (const e of all) {

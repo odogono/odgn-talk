@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { checkSource, newGroup, parseSourceRecovering } from '@northtalk/ts';
+import {
+  checkSource,
+  coreVersions,
+  newGroup,
+  parseSourceRecovering,
+} from '@northtalk/ts';
 import {
   lint,
   lintSyntax,
   lintCatalogue,
+  readManifest,
   type HostManifest,
 } from '../src/lint';
 import { fixtureManifest, fixtures } from './fixtures';
@@ -29,10 +35,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-six implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(26);
+test('ships twenty-eight implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(28);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(26);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(28);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -907,4 +913,47 @@ test('interpolated-sql flags Interpolated Text and & from a non-Constant as SQL'
   const built = 'ask db to query "SELECT " & k, []';
   expect(sql(built, { manifest: grantOf('sqlite') })).toHaveLength(1);
   expect(sql(built, { manifest: grantOf('search') })).toEqual([]);
+});
+
+test('property Lints read the Owner Kind and well-known objects from the manifest', () => {
+  const manifest = readManifest({
+    kind: 'door',
+    version: '1',
+    language: coreVersions.language,
+    grants: [],
+    libraries: [],
+    messages: [{ name: 'demo', args: [], receivers: [] }],
+    objectKinds: [
+      {
+        name: 'door',
+        props: [
+          { name: 'portal', shape: 'text' },
+          { name: 'locked', shape: 'boolean', readOnly: true },
+        ],
+      },
+    ],
+    objects: [{ name: 'front', kind: 'door' }],
+    ownerKind: 'door',
+  });
+  const source = [
+    'on demo',
+    ' set the locked of me to true',
+    ' set the portal of front to the colour of me',
+    ' put the number of elements of me into n',
+    'end demo',
+  ].join('\n');
+  expect(lint(source, { manifest }).lints.map(l => [l.id, l.message])).toEqual([
+    [
+      'read-only-property',
+      "The Host Manifest declares door's locked read-only, so this set fails.",
+    ],
+    ['unknown-property', "The Host Manifest's door has no property colour."],
+  ]);
+  expect(lint(source).lints).toEqual([]);
+  expect(
+    lint(source, { manifest: { ...manifest, ownerKind: undefined } }).lints,
+  ).toEqual([]);
+  expect(
+    lint(source, { manifest, checkOptions: { unit: 'library' } }).lints,
+  ).toEqual([]);
 });
