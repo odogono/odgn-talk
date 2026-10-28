@@ -6,7 +6,7 @@ Every Script and Library compiles to a code unit for one Abstract Machine: a sta
 
 ## The machine's state
 
-Every catch uses two-phase search: dispatch tests run before failed frames or cleanup are discarded. [The Unwind Table](#the-unwind-table) defines retained and active control, including nested policy, cleanup and transfer; [chapter 10](10-save-and-restore.md#what-a-save-holds) defines how that state is saved.
+Every catch uses two-phase search: dispatch tests run before failed frames or cleanup are discarded. An error escaping a Recovery policy follows [chapter 6](06-errors-and-limits.md#catching): its exited policy and retained cleanup run before the search goes on outward from the catching try. [The Unwind Table](#the-unwind-table) defines retained and active control, including nested policy, cleanup and transfer; [chapter 10](10-save-and-restore.md#what-a-save-holds) defines how that state is saved.
 
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
 

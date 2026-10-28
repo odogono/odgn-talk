@@ -113,6 +113,7 @@ import { HostError } from '../src/errors';
 import type { Graph } from '../src/snapshot';
 
 type Atom = Graph['root'];
+// Edits a decoded save's Run and its error control records.
 class SnapshotEditor {
   constructor(readonly graph: Graph) {}
   node(a: Atom) {
@@ -134,17 +135,31 @@ class SnapshotEditor {
   run() {
     return this.graph.nodes.find(n => n.kind === 'run')!.data as Atom;
   }
-  context() {
-    return this.items(this.get(this.run(), 'recoveries')).at(-1)!;
+  controls() {
+    return this.items(this.get(this.run(), 'controls'));
   }
-  retained() {
-    return this.items(this.get(this.context(), 'retained'))[0]!;
+  control() {
+    return this.controls().at(-1)!;
   }
-  activation() {
-    return this.get(this.context(), 'activation');
+  dispatch() {
+    return [...this.controls()]
+      .reverse()
+      .find(c => this.get(c, 'k') === 'dispatch')!;
   }
-  pending() {
-    return this.get(this.context(), 'pending');
+  search() {
+    return this.get(this.dispatch(), 'search');
+  }
+  held() {
+    return this.items(this.get(this.dispatch(), 'held'))[0]!;
+  }
+  then() {
+    return this.get(this.control(), 'then');
+  }
+  steps() {
+    return this.items(this.get(this.control(), 'cleanups'));
+  }
+  step() {
+    return this.steps().find(s => this.get(s, 'leave') === false)!;
   }
 }
 const cleanupSource = `function fail
@@ -172,6 +187,9 @@ on go
   choose offer recover(7)
  end try
 end go`;
+// A save taken in each phase of a recovery: a catch dispatch holding the
+// failed frames, a transfer's cleanup, an acceptance's cleanup, and a
+// dispatch nested in another's policy.
 const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
   const g = newGroup({ name: 'snapshot' });
   g.load({
@@ -193,19 +211,22 @@ const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
     const payload = JSON.parse(new TextDecoder().decode(bytes)).payload;
     const saved = { graph: unpackGraph(payload.graph) };
     const e = new SnapshotEditor(saved.graph);
-    const contexts = e.items(e.get(e.run(), 'recoveries'));
-    if (!contexts.length) {
+    const controls = e.controls();
+    if (!controls.length) {
       continue;
     }
-    const pending = e.pending();
+    const dispatches = controls.filter(c => e.get(c, 'k') === 'dispatch');
+    const top = e.control();
+    const then = e.get(top, 'k') === 'cleanup' ? e.get(e.then(), 'k') : null;
     if (
       phase === 'nested'
-        ? contexts.length === 2
+        ? dispatches.length === 2
         : phase === 'selection'
-          ? (pending as [string])[0] === 'undefined'
-          : Array.isArray(pending) &&
-            pending[0] === 'ref' &&
-            e.get(pending, 'kind') === phase
+          ? e.get(top, 'k') === 'dispatch' &&
+            e.items(e.get(top, 'held')).length > 0
+          : phase === 'offer'
+            ? then === 'transfer' && e.step()
+            : then === 'accept' && e.step()
     ) {
       return bytes;
     }
@@ -218,147 +239,248 @@ const malformed: {
   name: string;
   phase: 'selection' | 'offer' | 'catch' | 'nested';
 }[] = [
-  {
-    name: 'retained code identity',
-    phase: 'selection',
-    mutate: e => e.set(e.retained(), 'code', ['external', 'unknown']),
-  },
-  {
-    name: 'retained body identity',
-    phase: 'selection',
-    mutate: e => e.set(e.retained(), 'body', ['external', 'code/s/0/unwind/0']),
-  },
-  {
-    name: 'retained PC',
-    phase: 'selection',
-    mutate: e => e.set(e.retained(), 'pc', 100_000),
-  },
-  {
-    name: 'retained local layout',
-    phase: 'selection',
-    mutate: e => {
-      e.items(e.get(e.retained(), 'locals')).pop();
-    },
-  },
-  {
-    name: 'activation PC',
-    phase: 'selection',
-    mutate: e => e.set(e.activation(), 'pc', -1),
-  },
-  {
-    name: 'owner cycle',
-    phase: 'selection',
-    mutate: e => e.set(e.activation(), 'owner', e.activation()),
-  },
-  {
-    name: 'missing owner',
-    phase: 'selection',
-    mutate: e => e.set(e.activation(), 'owner', ['undefined']),
-  },
-  {
-    name: 'split owner locals',
-    phase: 'selection',
-    mutate: e => {
-      const locals = e.get(e.activation(), 'locals');
-      const index = e.graph.nodes.length;
-      e.graph.nodes.push(structuredClone(e.node(locals)));
-      e.set(e.activation(), 'locals', ['ref', index]);
-    },
-  },
-  {
-    name: 'seen catch',
-    phase: 'selection',
-    mutate: e => {
-      const pairs = e.node(e.get(e.context(), 'seen')).data as [Atom, Atom][];
-      e.items(pairs[0]![1]).push(999);
-    },
-  },
-  {
-    name: 'cancellation phase',
-    phase: 'selection',
-    mutate: e => e.set(e.run(), 'cancellation', e.get(e.run(), 'frames')),
-  },
-  {
-    name: 'cursor',
-    phase: 'selection',
-    mutate: e => e.set(e.context(), 'cursor', 999),
-  },
-  {
-    name: 'try table',
-    phase: 'selection',
-    mutate: e => e.set(e.context(), 'entry', ['external', 'code/s/0/body/0']),
-  },
-  {
-    name: 'phase',
-    phase: 'offer',
-    mutate: e => e.set(e.pending(), 'kind', 'search'),
-  },
-  {
-    name: 'target PC',
-    phase: 'offer',
-    mutate: e => e.set(e.pending(), 'pc', 0),
-  },
-  {
-    name: 'target argument count',
-    phase: 'offer',
-    mutate: e => {
-      e.items(e.get(e.pending(), 'args')).pop();
-    },
-  },
-  {
-    name: 'target slot',
-    phase: 'offer',
-    mutate: e => {
-      e.items(e.get(e.pending(), 'binds'))[0] = 999;
-    },
-  },
+  // The Run's own fields.
   {
     name: 'attempt counter rewind',
     phase: 'offer',
     mutate: e => e.set(e.run(), 'offerAttempt', 0),
   },
   {
-    name: 'pending attempt',
-    phase: 'offer',
-    mutate: e => e.set(e.pending(), 'attempt', 99),
+    name: 'cleanup start past the Fuel used',
+    phase: 'selection',
+    mutate: e => e.set(e.run(), 'cleanupFrom', 1_000_000_000),
   },
   {
-    name: 'cleanup reference',
-    phase: 'offer',
-    mutate: e =>
-      e.set(e.context(), 'cleanupEntry', ['external', 'code/s/0/body/0']),
+    name: 'cancellation without its cleanup',
+    phase: 'selection',
+    mutate: e => e.set(e.run(), 'cleanupFrom', 0),
   },
   {
-    name: 'cleanup phase',
-    phase: 'offer',
-    mutate: e => e.set(e.context(), 'cleanup', ['undefined']),
+    name: 'raised position',
+    phase: 'selection',
+    mutate: e => e.set(e.get(e.run(), 'raisedAt'), 'pc', -1),
+  },
+  // A dispatch.
+  {
+    name: 'dispatch error',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'error', 7),
   },
   {
-    name: 'cleanup index',
-    phase: 'offer',
-    mutate: e => e.set(e.items(e.get(e.context(), 'queue'))[0]!, 'index', 999),
+    name: 'dispatch owner',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'owner', 999),
   },
   {
-    name: 'duplicate cleanup',
-    phase: 'offer',
+    name: 'dispatch place',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'place', -1),
+  },
+  {
+    name: 'owner PC',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'ownerPc', 100_000),
+  },
+  {
+    name: 'owner stack',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'ownerStack', 7),
+  },
+  {
+    name: 'held list',
+    phase: 'selection',
+    mutate: e => e.set(e.dispatch(), 'held', 7),
+  },
+  {
+    name: 'held code identity',
+    phase: 'selection',
+    mutate: e => e.set(e.held(), 'code', ['external', 'unknown']),
+  },
+  {
+    name: 'held body identity',
+    phase: 'selection',
+    mutate: e => e.set(e.held(), 'body', ['external', 'code/s/0/unwind/0']),
+  },
+  {
+    name: 'held PC',
+    phase: 'selection',
+    mutate: e => e.set(e.held(), 'pc', 100_000),
+  },
+  {
+    name: 'held local layout',
+    phase: 'selection',
     mutate: e => {
-      const queue = e.items(e.get(e.context(), 'queue'));
-      queue.push(queue[0]!);
+      e.items(e.get(e.held(), 'locals')).pop();
     },
   },
   {
-    name: 'catch target',
-    phase: 'catch',
-    mutate: e => e.set(e.pending(), 'pc', 0),
+    name: 'held twice',
+    phase: 'selection',
+    mutate: e => {
+      e.items(e.get(e.dispatch(), 'held')).push(e.held());
+    },
+  },
+  // A search.
+  {
+    name: 'search frame',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'frame', 999),
   },
   {
-    name: 'nested boundary cycle',
+    name: 'search entry',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'entry', 0),
+  },
+  {
+    name: 'search raised',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'raised', -1),
+  },
+  {
+    name: 'search position',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'position', -1),
+  },
+  {
+    name: 'search limit',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'limit', 7),
+  },
+  {
+    name: 'search skip',
+    phase: 'selection',
+    mutate: e => e.set(e.search(), 'skip', 7),
+  },
+  {
+    name: 'nested dispatch owner',
     phase: 'nested',
-    mutate: e => e.set(e.get(e.context(), 'boundary'), 'outer', e.context()),
+    mutate: e => e.set(e.dispatch(), 'owner', -1),
+  },
+  // A cleanup and its steps.
+  {
+    name: 'cleanup error',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'error', ['undefined']),
+  },
+  {
+    name: 'cleanup next',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'next', 999),
+  },
+  {
+    name: 'cleanup left',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'left', 'yes'),
+  },
+  {
+    name: 'cleanup failed',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'failed', -1),
+  },
+  {
+    name: 'cleanup failed frame',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'failedFrame', -1),
+  },
+  {
+    name: 'cleanup held',
+    phase: 'offer',
+    mutate: e => e.set(e.control(), 'held', 7),
+  },
+  {
+    name: 'step frame',
+    phase: 'offer',
+    mutate: e => e.set(e.step(), 'frame', 999),
+  },
+  {
+    name: 'step entry',
+    phase: 'offer',
+    mutate: e => e.set(e.step(), 'entry', 999),
+  },
+  {
+    name: 'step target',
+    phase: 'offer',
+    mutate: e => e.set(e.step(), 'target', 0),
+  },
+  {
+    name: 'step depth',
+    phase: 'offer',
+    mutate: e => e.set(e.step(), 'depth', 99),
+  },
+  {
+    name: 'step leave',
+    phase: 'offer',
+    mutate: e => e.set(e.step(), 'leave', 'no'),
+  },
+  {
+    name: 'duplicate step',
+    phase: 'offer',
+    mutate: e => {
+      e.steps().push(e.step());
+    },
+  },
+  {
+    name: 'then kind',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'k', 'search-again'),
+  },
+  // A transfer.
+  {
+    name: 'transfer frame',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'frame', 999),
+  },
+  {
+    name: 'transfer offer entry',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'offerEntry', 999),
+  },
+  {
+    name: 'transfer record',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'record', 999),
+  },
+  {
+    name: 'transfer offer',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'offer', 999),
+  },
+  {
+    name: 'transfer argument count',
+    phase: 'offer',
+    mutate: e => {
+      e.items(e.get(e.then(), 'args')).pop();
+    },
+  },
+  {
+    name: 'transfer attempt',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'attempt', 99),
+  },
+  {
+    name: 'transfer limit',
+    phase: 'offer',
+    mutate: e => e.set(e.then(), 'limit', 7),
+  },
+  // An acceptance.
+  {
+    name: 'accept frame',
+    phase: 'catch',
+    mutate: e => e.set(e.then(), 'frame', 999),
+  },
+  {
+    name: 'accept PC',
+    phase: 'catch',
+    mutate: e => e.set(e.then(), 'pc', 0),
+  },
+  {
+    name: 'accept stack',
+    phase: 'catch',
+    mutate: e => e.set(e.then(), 'stack', 7),
   },
 ];
 for (const { name, phase, mutate } of malformed) {
-  test(`refuse checksummed malformed dispatch: ${name}`, () => {
+  test(`refuse checksummed malformed control: ${name}`, () => {
     const envelope = JSON.parse(
       new TextDecoder().decode(snapshotIn(phase)),
     ) as { hash: string; payload: { graph: PackedGraph } };
@@ -369,7 +491,7 @@ for (const { name, phase, mutate } of malformed) {
     const bytes = new TextEncoder().encode(JSON.stringify(envelope));
     try {
       restore(bytes, options([]));
-      throw new Error('Accepted malformed dispatch');
+      throw new Error('Accepted malformed control');
     } catch (error) {
       expect(error).toBeInstanceOf(HostError);
       expect((error as HostError).code).toBe('invalid save');
