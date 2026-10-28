@@ -15,6 +15,7 @@ import { mountStack } from './stack';
 import { mountPlay } from './play-view';
 import { openProjectStorage, type ProjectStorage } from './storage';
 import { EXAMPLE_META } from './examples';
+import { openUrlOf, withoutOpenParam } from './open-url';
 
 const element = (id: string) => {
   const found = document.getElementById(id);
@@ -33,6 +34,12 @@ const exampleSlug = document.querySelector<HTMLMetaElement>(
 )?.content;
 if (exampleSlug) {
   history.replaceState(null, '', new URL('../', location.href));
+}
+// `?open=<url>` names any `.folio` file to open (#1677); the address
+// drops it so a reload doesn't open another copy.
+const openUrl = openUrlOf(location.href);
+if (openUrl) {
+  history.replaceState(null, '', withoutOpenParam(location.href));
 }
 
 element('core').textContent = `Core ${coreVersions.core}`;
@@ -70,6 +77,7 @@ const boot = async (): Promise<void> => {
   mountProjects({
     channel,
     exampleSlug,
+    openUrl,
     initial,
     lock,
     lockDelegate,
