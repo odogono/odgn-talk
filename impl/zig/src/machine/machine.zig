@@ -1591,7 +1591,9 @@ pub const Group = struct {
     waits: wait_table.Waits = .{},
     charge_counter: u64 = 0,
     charge_requests: std.ArrayList(*capabilities.ChargeRequest) = .empty,
-    /// The call ids of `send … and wait`, which waits and records name.
+    /// Owns the call ids of `send … and wait` and Function Value calls to
+    /// another Script, which waits and records borrow. A save doesn't keep
+    /// it: each pending wait saves its own id.
     ids: std.ArrayList([]u8) = .empty,
     /// The Host Objects the Group has handles for, in the order made.
     objects: std.ArrayList(*objects.Object) = .empty,
@@ -1685,7 +1687,8 @@ pub const Group = struct {
     keep: std.heap.ArenaAllocator,
     /// The reports not yet returned to the Host.
     reports: report.Reports,
-    /// The Runs made, which order them for accounting.
+    /// The number of Runs started, counted at each `run started`, which
+    /// orders them for accounting.
     run_order: u64 = 0,
     /// The Runs ended or discarded since the last accounting tail, as their
     /// last report rows.

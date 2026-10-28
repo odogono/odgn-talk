@@ -194,7 +194,7 @@ is = "The timer counter."
 [[section.field]]
 name = "run order"
 type = "uint"
-is = "The Run order counter."
+is = "The number of Runs the Group has started, counted at each `run started` report. A Run's `order` is this count when it started."
 
 [[section.field]]
 name = "charge counter"
@@ -237,12 +237,12 @@ is = "In the order the Group first saw them. A Value's or field's object `index`
 tag = 4
 name = "functions"
 required = true
-holds = "The code of every Function Value the Group made."
+holds = "The code of every Function Value the save holds, and no other."
 
 [[section.field]]
 name = "functions"
 type = "list of function"
-is = "In the order they were made. A Function Value's `code` points here."
+is = "Numbered in the order the writer first meets a Function Value with that code: the other sections in tag order, each one's fields in order, and each value depth-first as written, a Function Value before its captures. A Function Value's `code` points here. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order."
 
 [[section]]
 tag = 5
@@ -297,17 +297,12 @@ is = "One per Script, in `scripts` order."
 tag = 9
 name = "waits"
 required = true
-holds = "Every pending wait, with a deadline or not, in the order they were set, and the Group's issued Run ids."
+holds = "Every pending wait, with a deadline or not, in the order they were set."
 
 [[section.field]]
 name = "waits"
 type = "list of deadline wait"
 is = "Every Run's and Join Member's `pending`, in the order the waits were set."
-
-[[section.field]]
-name = "ids"
-type = "list of text"
-is = "The Run ids the Group has issued and not yet released, in issue order."
 
 [[section]]
 tag = 10

@@ -254,6 +254,8 @@ const Tag = model.Kind;
 const Tables = struct {
     objects: []const *objects.Object,
     functions: []const *machine.FunctionCode,
+    /// While saving, the code the save reaches, numbered as first met.
+    met: ?*Met = null,
 
     fn objectIndex(t: Tables, identity: usize) ?usize {
         for (t.objects, 0..) |o, i| if (@intFromPtr(o) == identity) return i;
@@ -263,6 +265,30 @@ const Tables = struct {
     fn functionIndex(t: Tables, identity: usize) ?usize {
         for (t.functions, 0..) |f, i| if (@intFromPtr(f) == identity) return i;
         return null;
+    }
+
+    /// A written Function Value's code index: its place among the code the
+    /// writer has met so far, or the next one.
+    fn meet(t: Tables, gpa: Allocator, identity: usize) !?usize {
+        const m = t.met orelse return t.functionIndex(identity);
+        if (m.index.get(identity)) |at| return at;
+        const at = t.functionIndex(identity) orelse return null;
+        try m.codes.ensureUnusedCapacity(gpa, 1);
+        try m.index.put(gpa, identity, m.codes.items.len);
+        m.codes.appendAssumeCapacity(t.functions[at]);
+        return m.codes.items.len - 1;
+    }
+};
+
+/// The Function Value code a save reaches, in the order the writer first
+/// meets it (chapter 10, functions).
+const Met = struct {
+    codes: std.ArrayList(*machine.FunctionCode) = .empty,
+    index: std.AutoHashMapUnmanaged(usize, usize) = .empty,
+
+    fn deinit(m: *Met, gpa: Allocator) void {
+        m.codes.deinit(gpa);
+        m.index.deinit(gpa);
     }
 };
 
@@ -359,7 +385,7 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
             .pattern => |s| try o.str(s),
             .function => |f| {
                 // A value this Group didn't make is gone: none of its code.
-                try o.ref(t.functionIndex(f.identity));
+                try o.ref(try t.meet(o.gpa, f.identity));
                 try o.str(f.display);
                 try o.str(f.home);
                 try steps.append(o.gpa, .{ .value = f.captures });
@@ -1139,7 +1165,9 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     g.input_lock.lock();
     defer g.input_lock.unlock();
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return error.EffectsPending;
-    var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
+    var met: Met = .{};
+    defer met.deinit(gpa);
+    var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items, .met = &met }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
     defer s.deinit();
     defer s.o.bytes.deinit(gpa);
     const o = &s.o;
@@ -1186,25 +1214,6 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try s.object(x.parent);
         try o.flag(x.disposed);
         try o.optStr(x.owner_of);
-    }
-    Sections.end(&sections, &n, o);
-    // 4: Function Value code: a stale value's keeps only what it still
-    // answers.
-    Sections.begin(&sections, &n, o, .functions);
-    try o.int(g.functions.items.len);
-    for (g.functions.items) |f| {
-        try o.str(f.home);
-        try o.str(f.name);
-        try o.int(f.required);
-        try o.int(f.total);
-        try o.bytes.appendSlice(gpa, &f.unit);
-        const home = g.script(f.home);
-        const live = if (home) |h| h.generation == f.generation else false;
-        try o.flag(live);
-        if (live) {
-            try s.unit(home.?, f.library);
-            try o.int(f.body);
-        }
     }
     Sections.end(&sections, &n, o);
     // 5: the calls a Run still waits on, with their arguments.
@@ -1311,11 +1320,9 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     Sections.end(&sections, &n, o);
     // 9: every pending wait, in the order it was set, each by its Run and,
-    // for a Join Member, its member; then the issued Run ids.
+    // for a Join Member, its member.
     Sections.begin(&sections, &n, o, .waits);
     try s.waits.writeOrder(o, s.runs.items);
-    try o.int(g.ids.items.len);
-    for (g.ids.items) |id| try o.str(id);
     Sections.end(&sections, &n, o);
     // 10: the Host inputs queued for the next Pump.
     Sections.begin(&sections, &n, o, .inputs);
@@ -1384,6 +1391,28 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         for (x.extensions.items) |e| try o.str(e.source);
     }
     Sections.end(&sections, &n, o);
+
+    // 4: Function Value code, only what the save reaches, numbered as the
+    // other sections first met it; a stale value's keeps only what it still
+    // answers. Its bytes follow the others', and the frames go in tag order.
+    Sections.begin(&sections, &n, o, .functions);
+    try o.int(met.codes.items.len);
+    for (met.codes.items) |f| {
+        try o.str(f.home);
+        try o.str(f.name);
+        try o.int(f.required);
+        try o.int(f.total);
+        try o.bytes.appendSlice(gpa, &f.unit);
+        const home = g.script(f.home);
+        const live = if (home) |h| h.generation == f.generation else false;
+        try o.flag(live);
+        if (live) {
+            try s.unit(home.?, f.library);
+            try o.int(f.body);
+        }
+    }
+    Sections.end(&sections, &n, o);
+    std.mem.rotate(Written, sections[@backingInt(Section.functions) - 1 .. n], n - @backingInt(Section.functions));
 
     // The header, then each section's frame and body.
     var h: Out = .{ .gpa = gpa };
@@ -2862,14 +2891,6 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     // The waits, in the order they were set, each once.
     try sectionAt(&header, i, .waits);
     try g.waits.importOrder(a, i, r.runs.items);
-    const ids = try i.count();
-    for (0..ids) |_| {
-        const id = try a.dupe(u8, try i.str());
-        g.ids.append(a, id) catch |e| {
-            a.free(id);
-            return e;
-        };
-    }
     try sectionAt(&header, i, .inputs);
     const inputs = try i.count();
     for (0..inputs) |_| {

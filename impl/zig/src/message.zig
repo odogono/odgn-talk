@@ -100,6 +100,10 @@ const GroupEntry = struct {
     group: *talk.Group,
     /// Whether replies carry `trace`.
     traced: bool,
+    /// This Group instance's number in its Session. A Function Value
+    /// token names it, so a Group made or restored again under the same
+    /// handle refuses an earlier instance's tokens as `wrong group`.
+    instance: u64 = 0,
     /// Whether `run end` reports carry `climbed` (`climb-v1`).
     climb: bool = false,
     /// Whether Pump replies list stale Function Value calls (`function-gone-v1`).
@@ -323,6 +327,8 @@ pub const Session = struct {
     /// The Groups by handle, each keyed by its entry's own `name`. Nothing
     /// depends on their order, so `drop-group` swaps the last one in.
     groups: std.StringArrayHashMapUnmanaged(*GroupEntry) = .empty,
+    /// The last Group instance number given out.
+    instances: u64 = 0,
     /// Per-Operation and per-property Host contexts, owned here.
     op_contexts: std.ArrayList(*OpContext) = .empty,
     prop_contexts: std.ArrayList(*PropContext) = .empty,
@@ -418,6 +424,11 @@ pub const Session = struct {
         s.prop_contexts.deinit(gpa);
         Direct.coreRelease(s.core);
         gpa.destroy(s);
+    }
+
+    fn nextInstance(s: *Session) u64 {
+        s.instances += 1;
+        return s.instances;
     }
 
     fn groupNamed(s: *Session, name: []const u8) ?*GroupEntry {
@@ -689,9 +700,11 @@ var handling: ?*Session = null;
 
 /// `{"$function": [home, display, token]}`, with name and arity appended
 /// under `function-metadata-v1`. The token is the base64 of
-/// `{"g": group, "f": code, "d": display, "c": captures}`: the Group's
-/// handle, the index of the value's code in it, and its captures, so
-/// reading it needs nothing the Host must release.
+/// `{"g": group, "i": instance, "f": code, "d": display, "c": captures}`:
+/// the Group's handle and instance, the index of the value's code in it,
+/// and its captures, so reading it needs nothing the Host must release.
+/// The instance pins the token to the Group that made it: a restore makes
+/// a new instance, whose code table is numbered afresh.
 fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encoding.Error!void {
     const s: *Session = @ptrCast(@alignCast(context.?));
     return writeFunctionWith(s, w, v, s.function_metadata);
@@ -720,7 +733,7 @@ fn functionToken(s: *Session, v: *const Value) encoding.Error!FunctionToken {
     const iw = &inner.writer;
     iw.writeAll("{\"g\":") catch return error.OutOfMemory;
     std.json.Stringify.value(found[0].name, .{}, iw) catch return error.OutOfMemory;
-    iw.print(",\"f\":{d},\"d\":", .{found[1]}) catch return error.OutOfMemory;
+    iw.print(",\"i\":{d},\"f\":{d},\"d\":", .{ found[0].instance, found[1] }) catch return error.OutOfMemory;
     std.json.Stringify.value(f.display, .{}, iw) catch return error.OutOfMemory;
     iw.writeAll(",\"c\":") catch return error.OutOfMemory;
     try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy, .core_error = token_core_errors });
@@ -776,6 +789,8 @@ fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, to
     defer parsed.deinit();
     const g = asText(field(parsed.value, "g")) orelse return error.InvalidValue;
     if (!std.mem.eql(u8, g, e.name)) return error.WrongGroup;
+    const minted = asU64(field(parsed.value, "i") orelse return error.InvalidValue) orelse return error.InvalidValue;
+    if (minted != e.instance) return error.WrongGroup;
     const index = asU64(field(parsed.value, "f") orelse return error.InvalidValue) orelse return error.InvalidValue;
     const functions = e.group.group.functions.items;
     if (index >= functions.len) return error.InvalidValue;
@@ -2703,6 +2718,7 @@ fn createGroup(s: *Session, msg: Json) talk.HostErrorCode {
         },
         .group = undefined,
         .traced = asBool(field(msg, "trace")) orelse false,
+        .instance = s.nextInstance(),
         .climb = s.climb,
         .gone = s.gone,
     };
@@ -3857,7 +3873,7 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     entry.* = .{ .gpa = s.gpa, .name = s.gpa.dupe(u8, handle_name) catch {
         s.gpa.destroy(entry);
         return hostError(s.gpa, ref, .out_of_memory);
-    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .climb = s.climb, .gone = s.gone };
+    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .instance = s.nextInstance(), .climb = s.climb, .gone = s.gone };
     var group: ?*talk.Group = null;
     var result: ?*talk.RestoreResult = null;
     const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
@@ -7140,6 +7156,36 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "a restored Group refuses a Function Value token from before the restore, even under its old handle" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"group-exchanges-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":false}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable kept = nothing\\non make n\\n  put given x: x + n into kept\\n  return kept\\nend make\\n\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\",\"args\":[5]}}}}", .{4}));
+    const made = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{5}));
+    var fn_json: std.Io.Writer.Allocating = .init(gpa);
+    defer fn_json.deinit();
+    try fn_json.writer.print("{f}", .{std.json.fmt(made.object.get("result").?, .{})});
+    const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{6}))).object.get("save").?.object.get("$bytes").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"drop-group\",\"ref\":{d},\"group\":\"g\"}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}},\"libraries\":[],\"mismatch\":\"reject\",\"trace\":false}}", .{ 8, save }));
+    const stale = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[3]}}", .{ 9, fn_json.written() });
+    try std.testing.expectEqualStrings("wrong group", stale.object.get("err").?.object.get("code").?.string);
+    // The restored value, written again, is this instance's and calls.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\",\"args\":[7]}}}}", .{10}));
+    const again = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{11}));
+    var fresh: std.Io.Writer.Allocating = .init(gpa);
+    defer fresh.deinit();
+    try fresh.writer.print("{f}", .{std.json.fmt(again.object.get("result").?, .{})});
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[3]}}", .{ 12, fresh.written() }));
+    const called = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{13}));
+    try std.testing.expectEqual(@as(i64, 10), called.object.get("result").?.integer);
 }
 
 test "Function error during retains the original opaque token and arguments" {
