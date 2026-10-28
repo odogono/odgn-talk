@@ -1,0 +1,7 @@
+-- wrap.talk: a Library importing fmt, so a change to fmt changes it too.
+
+use label from fmt
+
+function wrapped x
+  return label(x)
+end wrapped

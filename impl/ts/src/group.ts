@@ -78,6 +78,7 @@ import {
   savedRuns,
   snapshotReferences,
   versionMismatch,
+  libraryMismatch,
 } from './group-snapshot';
 import {
   makeObject,
@@ -236,9 +237,9 @@ export type ScriptSources = { extensions?: readonly string[]; source: string };
 export type RestoreOptions = GroupOptions & {
   grants(script: string, name: string): Grant<unknown> | undefined;
   libraries: readonly Library[];
-  onMismatch: 'reject' | 'variables only';
+  onMismatch: 'reject' | 'variables only' | 'reload changed';
   resolve(kind: string, id: string): { native: unknown } | undefined;
-  /** Native TS external-source snapshots only. Different code requires variables-only policy. */
+  /** Native TS external-source snapshots only. Different code requires a variables-only or Partial Restore. */
   scriptSources?(request: ScriptCodeRequest): ScriptSources | undefined;
 };
 export type PendingCall = {
@@ -254,6 +255,8 @@ export type RestoreResult = {
   disposed: [string, string][];
   droppedMessages: string[];
   pending: PendingCall[];
+  /** The Scripts a Partial Restore rebuilt from their new code, in load order. */
+  reloaded: string[];
   reports: Report[];
   variablesOnly: boolean;
 };
@@ -1085,7 +1088,10 @@ export class TsGroup implements Group {
     for (const library of o.libraries) {
       group.libraries.set(library.name, library);
     }
-    let mismatch = versionMismatch(saved, group.libraries);
+    let mismatch = libraryMismatch(saved, group.libraries);
+    // A mismatch in anything but Script code is never partial (ADR 0143).
+    let wholeGroup = versionMismatch(saved);
+    const changed = new Set<string>();
     let loadFailure: LoadError | undefined;
     for (const script of saved.scripts) {
       const supplied =
@@ -1142,7 +1148,7 @@ export class TsGroup implements Group {
           canonicalJSON(grantData(rebound)) !==
           canonicalJSON(grantData(placeholder))
         ) {
-          mismatch = true;
+          wholeGroup = true;
         }
         grants[grant.name] = rebound ?? placeholder;
       }
@@ -1169,9 +1175,12 @@ export class TsGroup implements Group {
         for (const source of sources.slice(1)) {
           group.applyExtension(state, source, undefined, false);
         }
-        mismatch ||=
+        if (
           state.units.length !== script.identities.length ||
-          state.units.some((unit, i) => unit.identity !== script.identities[i]);
+          state.units.some((unit, i) => unit.identity !== script.identities[i])
+        ) {
+          changed.add(script.name);
+        }
         state.revoked = revoked;
         state.unbound = new Set(revoked);
       } catch (error) {
@@ -1184,7 +1193,13 @@ export class TsGroup implements Group {
     for (const object of saved.objects) {
       group.objects.get(object.key)!.owner = object.owner;
     }
-    mismatch ||= hexOf(group.fingerprint()) !== saved.fingerprint;
+    mismatch ||=
+      wholeGroup ||
+      changed.size > 0 ||
+      hexOf(group.fingerprint()) !== saved.fingerprint;
+    const partial =
+      mismatch && !wholeGroup && o.onMismatch === 'reload changed';
+    const variablesOnly = mismatch && !partial;
     const restoreLine = (result?: RestoreResult) =>
       recordLine(
         'restore',
@@ -1193,7 +1208,11 @@ export class TsGroup implements Group {
           ['from', saved.id],
           [
             'mismatch',
-            o.onMismatch === 'variables only' ? 'variables-only' : null,
+            o.onMismatch === 'variables only'
+              ? 'variables-only'
+              : o.onMismatch === 'reload changed'
+                ? 'reload-changed'
+                : null,
           ],
           ['unbound', unbound.length ? idList(unbound) : null],
           [
@@ -1210,7 +1229,17 @@ export class TsGroup implements Group {
           ['fingerprint', saved.fingerprint],
           [
             'mode',
-            result ? (result.variablesOnly ? 'variables-only' : 'full') : null,
+            result
+              ? result.variablesOnly
+                ? 'variables-only'
+                : partial
+                  ? 'partial'
+                  : 'full'
+              : null,
+          ],
+          [
+            'reloaded',
+            result?.reloaded.length ? idList(result.reloaded) : null,
           ],
           [
             'pending',
@@ -1276,10 +1305,13 @@ export class TsGroup implements Group {
       );
     }
     const refs = group.references();
-    const state = restoreState(saved, refs, mismatch);
+    const state = restoreState(saved, refs, partial ? changed : variablesOnly);
     const result: RestoreResult = {
       reports: [],
-      variablesOnly: mismatch,
+      variablesOnly,
+      reloaded: partial
+        ? saved.scripts.flatMap(s => (changed.has(s.name) ? [s.name] : []))
+        : [],
       pending: [],
       disposed,
       discardedRuns: [],
@@ -1301,6 +1333,8 @@ export class TsGroup implements Group {
     group.randomState = state.randomState;
     group.waits.importTimerSeq(state.timerSeq);
     group.saves = Number(saved.id.slice(1));
+    // Each changed Script's carried Script Variables, set once its Runs end.
+    const carried = new Map<ScriptState, Value[]>();
     for (const [i, runtime] of state.scripts.entries()) {
       const script = group.scripts[i]!;
       script.runs = runtime.runs;
@@ -1311,8 +1345,9 @@ export class TsGroup implements Group {
       for (const name of runtime.revoked) {
         script.revoked.add(name);
       }
+      const reloading = partial && changed.has(script.name);
       let variables = runtime.variables;
-      if (mismatch) {
+      if (variablesOnly || reloading) {
         for (const r of savedRuns(runtime)) {
           if (
             !r.parked &&
@@ -1325,11 +1360,16 @@ export class TsGroup implements Group {
           }
         }
       }
-      script.loaded.variables = script.loaded.variableNames.map((name, j) => {
+      const kept = script.loaded.variableNames.map((name, j) => {
         const old = runtime.variableNames.indexOf(name);
         return old >= 0 ? variables[old]! : script.loaded.variables[j]!;
       });
-      if (mismatch) {
+      if (reloading) {
+        carried.set(script, kept);
+      } else {
+        script.loaded.variables = kept;
+      }
+      if (variablesOnly) {
         result.discardedRuns.push(...savedRuns(runtime).map(r => r.id));
         result.droppedMessages.push(
           ...runtime.queue
@@ -1362,6 +1402,10 @@ export class TsGroup implements Group {
           suspended: runtime.suspended,
         });
         group.waits.importWaiters(script, runtime.waiters);
+        // A changed Script's saved Runs point into code it no longer has.
+        if (reloading) {
+          continue;
+        }
         script.loaded.live = runtime.live;
         runtime.definitions.forEach((values, j) => {
           script.loaded.units[j]!.definitions.splice(
@@ -1382,7 +1426,7 @@ export class TsGroup implements Group {
         }
       }
     }
-    if (mismatch) {
+    if (variablesOnly) {
       result.abandonedCalls = [...state.pending.keys()].sort(compareCallIds);
       for (const input of state.inputs) {
         if (input.action.k === 'delivery') {
@@ -1413,6 +1457,18 @@ export class TsGroup implements Group {
               input.action as Extract<InputAction, { k: 'broadcast' }>,
             )),
       }));
+      const abandoned: string[] = [];
+      for (const [script, variables] of carried) {
+        const ended = group.reloadRestored(script);
+        result.discardedRuns.push(...ended.runs);
+        result.droppedMessages.push(...ended.messages);
+        abandoned.push(...ended.pendingCalls);
+        script.loaded.variables = variables;
+        if (script.loaded.variablesSize() > script.limits.persistentState) {
+          throw new HostError('state too large');
+        }
+      }
+      result.abandonedCalls = abandoned.sort(compareCallIds);
       result.pending = group.pendingOperations();
       const settled = new Set(
         state.inputs.flatMap(input =>
@@ -2034,21 +2090,24 @@ export class TsGroup implements Group {
     runs: Running[],
     messages: Delivery[],
     pendingCalls: string[],
-    releaseReason: ReleaseReason = 'stop',
+    /** Null for a Partial Restore's Reload, whose `restore` record stands for it. */
+    releaseReason: ReleaseReason | null = 'stop',
   ) {
-    this.releaseGrants(s, releaseReason);
-    this.trace?.(
-      recordLine(
-        'stopped',
-        [s.name],
-        [
-          ['reason', JSON.stringify(reason)],
-          ['discarded', idList(runs.map(r => r.id))],
-          ['dropped', idList(messages.flatMap(d => (d.id ? [d.id] : [])))],
-          ['abandoned', idList(pendingCalls)],
-        ],
-      ),
-    );
+    if (releaseReason) {
+      this.releaseGrants(s, releaseReason);
+      this.trace?.(
+        recordLine(
+          'stopped',
+          [s.name],
+          [
+            ['reason', JSON.stringify(reason)],
+            ['discarded', idList(runs.map(r => r.id))],
+            ['dropped', idList(messages.flatMap(d => (d.id ? [d.id] : [])))],
+            ['abandoned', idList(pendingCalls)],
+          ],
+        ),
+      );
+    }
     for (const r of runs) {
       this.accountEnd(
         r,
@@ -2077,6 +2136,40 @@ export class TsGroup implements Group {
     for (const d of messages) {
       this.stoppedDelivery(s, d);
     }
+  }
+
+  /**
+   * A Partial Restore's Reload of a changed Script (ADR 0143). The rest of
+   * the Group sees what a live Reload would give it, but no Host function
+   * runs: this Script's Grants, Segments and scopes were never live here.
+   * Its open Decision recipients are discarded, reported at the first Pump.
+   */
+  private reloadRestored(s: ScriptState) {
+    const runs = this.runsOf(s);
+    const messages = s.queue.filter((q): q is Delivery => !('run' in q));
+    const pendingCalls: string[] = [];
+    for (const r of runs) {
+      this.accumulateRunCosts(s, r.run);
+      pendingCalls.push(
+        ...r.run.discard('stopped', r.parked || r.resuming || r.cleanupReady),
+      );
+      this.forgetWait(s, r);
+      this.discardDecision(r.delivery, s.name, r.id);
+    }
+    for (const d of messages) {
+      this.discardDecision(d, s.name);
+    }
+    s.queue = [];
+    if (!s.stopped) {
+      this.reportStop(s, 'reload', runs, messages, pendingCalls, null);
+    }
+    s.stopped = false;
+    delete s.stopReason;
+    return {
+      runs: runs.map(r => r.id),
+      messages: messages.flatMap(d => (d.id ? [d.id] : [])),
+      pendingCalls,
+    };
   }
 
   private dropStoppedMailbox(s: ScriptState) {

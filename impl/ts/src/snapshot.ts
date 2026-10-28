@@ -154,11 +154,25 @@ export const saveGraph = (root: unknown, refs: References): Graph => {
   return { root: encoded, nodes };
 };
 
+/**
+ * What a restore against changed code tolerates: `true` for a variables-only
+ * restore, or the Scripts a Partial Restore rebuilds. Their code may be
+ * missing, and every Function Value homed in them is stale.
+ */
+export type ChangedCode = boolean | ReadonlySet<string>;
+
 export const restoreGraph = (
   graph: Graph,
   refs: References,
-  variablesOnly = false,
+  changed: ChangedCode = false,
 ): unknown => {
+  const missingAllowed = (key: string) =>
+    changed === true ||
+    (changed !== false &&
+      (key.startsWith('library/') ||
+        (key.startsWith('code/') && changed.has(key.split('/')[1]!))));
+  const stale = (fn: FunctionRef) =>
+    changed === true || (changed !== false && changed.has(fn.home));
   // An explicit work stack keeps arbitrarily nested Host Values off the JS stack.
   const values: unknown[] = [];
   const seen = new Set<number>();
@@ -194,7 +208,10 @@ export const restoreGraph = (
         done(BigInt(a[1]!));
         return;
       case 'external':
-        done(refs.byKey.get(String(a[1])) ?? (variablesOnly ? {} : invalid()));
+        done(
+          refs.byKey.get(String(a[1])) ??
+            (missingAllowed(String(a[1])) ? {} : invalid()),
+        );
         return;
       case 'ref':
         break;
@@ -261,7 +278,7 @@ export const restoreGraph = (
           }
           finish(
             functionValue(
-              variablesOnly
+              stale(fn)
                 ? {
                     ...fn,
                     code: staleCode(fn.code),

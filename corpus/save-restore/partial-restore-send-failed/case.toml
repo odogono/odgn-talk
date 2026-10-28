@@ -1,0 +1,22 @@
+# partial-restore-send-failed: a matched Script in `send … and wait` to a
+# changed Script gets `send failed`, as a Reload of that Script would give it
+# (spec chapter 10, "Partial Restore", Across Scripts).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

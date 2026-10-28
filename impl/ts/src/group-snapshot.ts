@@ -26,6 +26,7 @@ import {
   restoreGraph,
   saveFormatVersion,
   saveGraph,
+  type ChangedCode,
   type Graph,
   type References,
 } from './snapshot';
@@ -220,14 +221,17 @@ export const snapshotReferences = (
   return refs;
 };
 
-/** Whether a save comes from other versions or Libraries than these. */
-export const versionMismatch = (
+/** Whether a save comes from other format, language or Cost Model versions. */
+export const versionMismatch = (saved: SavedGroup): boolean =>
+  saved.format !== saveFormatVersion ||
+  saved.language !== languageVersion ||
+  saved.costModel !== costModel.version;
+
+/** Whether a save comes from other Libraries than these. */
+export const libraryMismatch = (
   saved: SavedGroup,
   libraries: ReadonlyMap<string, Library>,
 ): boolean =>
-  saved.format !== saveFormatVersion ||
-  saved.language !== languageVersion ||
-  saved.costModel !== costModel.version ||
   saved.libraries.some(
     ([name, identity]) =>
       !libraries.has(name) || identityOf(libraries.get(name)!) !== identity,
@@ -237,9 +241,9 @@ export const versionMismatch = (
 export const restoreState = (
   saved: SavedGroup,
   refs: References,
-  variablesOnly: boolean,
+  changed: ChangedCode,
 ): SavedState => {
-  const state = restoreGraph(saved.graph, refs, variablesOnly) as SavedState;
+  const state = restoreGraph(saved.graph, refs, changed) as SavedState;
   validateSavedAccounting(state);
   return state;
 };

@@ -1,0 +1,23 @@
+# partial-restore-resumes-matched: under `ReloadChanged`, a save whose only
+# mismatch is a changed Library continues the Script that doesn't import it
+# and rebuilds the one that does, carrying its Script Variables (spec
+# chapter 10, "Partial Restore").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

@@ -1,0 +1,7 @@
+-- a.talk: imports fmt directly, so it is rebuilt.
+
+use label from fmt
+
+on go
+  wait 10 s
+end go

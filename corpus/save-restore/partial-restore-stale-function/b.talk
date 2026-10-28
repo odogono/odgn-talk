@@ -1,0 +1,17 @@
+-- b.talk: the matched Script; it keeps a's Function Value and calls it later.
+
+script variable f = nothing
+script variable got = ""
+
+on keep g
+  put g into f
+end keep
+
+on useit
+  try
+    f(1) and wait
+    put it into got
+  catch e
+    put the code of e into got
+  end try
+end useit

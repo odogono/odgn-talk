@@ -1525,6 +1525,7 @@ export class WasmGroup implements Group {
     return {
       reports: this.#reports(ok),
       variablesOnly: boolOf(field(ok, 'variablesOnly')) ?? false,
+      reloaded: textsOf(field(ok, 'reloaded')),
       pending,
       discardedRuns: textsOf(field(ok, 'discardedRuns')),
       disposed: listOf(field(ok, 'disposed')).map(

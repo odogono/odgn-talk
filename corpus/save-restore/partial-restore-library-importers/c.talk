@@ -1,0 +1,7 @@
+-- c.talk: imports fmt through wrap, so it is rebuilt.
+
+use wrapped from wrap
+
+on go
+  wait 10 s
+end go

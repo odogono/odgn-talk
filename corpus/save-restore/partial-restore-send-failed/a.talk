@@ -1,0 +1,8 @@
+-- a.talk: the changed Script; its Run handling the send is discarded.
+
+use label from fmt
+
+on go
+  wait 10 s
+  return label("done")
+end go

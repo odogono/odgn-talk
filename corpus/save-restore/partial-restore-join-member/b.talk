@@ -1,0 +1,15 @@
+-- b.talk: the matched Script whose Join fails.
+
+script variable got = ""
+
+on start
+  try
+    wait for all
+      send go to a and wait
+      send go to c and wait
+    end wait
+    put "joined" into got
+  catch e
+    put the code of e into got
+  end try
+end start

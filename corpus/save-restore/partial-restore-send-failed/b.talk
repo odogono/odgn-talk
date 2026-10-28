@@ -1,0 +1,12 @@
+-- b.talk: the matched Script; its send fails when a is rebuilt.
+
+script variable got = ""
+
+on start
+  try
+    send go to a and wait
+    put it into got
+  catch e
+    put the code of e into got
+  end try
+end start

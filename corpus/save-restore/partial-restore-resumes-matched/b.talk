@@ -1,0 +1,9 @@
+-- b.talk: imports nothing, so its suspended Run resumes after the restore.
+
+script variable m = 0
+
+on go
+  add 1 to m
+  wait 10 s
+  add 1 to m
+end go

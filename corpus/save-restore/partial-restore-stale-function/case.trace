@@ -1,0 +1,35 @@
+# Unblessed: Partial Restore cases from the TS Core (#1707); first blessing awaits human review.
+#
+# - b keeps f, but f is stale: the call fails with `function gone`.
+
+> add-library fmt identity=d73b67124a4ef6278335478dd3a9c8e7c2f544e3b1634be6b0d5ed42e7c66b02
+> load a identity=0aa13a82ae79e9f25b780343852c0a5e47168a6bcf83e41c4ccabef140d925f8
+> load b identity=8d4ef6b53cc49a83bf0abd978e601175369bde7d210740476fe7ebc9370b8087
+
+> deliver d1 to=a message=make
+> pump clock=2026-10-28T10:00:00Z
+send a/r1 to=b message=keep args=[<function a:6:19>]
+seg a/r1 start delivery=d1 handler=make clause=1 fuel=34 alloc=96 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=make fuel=34 alloc=96
+seg b/r1 start from=a/r1 handler=keep clause=1 fuel=10 alloc=0 state=48 end=return
+run b/r1 outcome=completed handler=keep fuel=10 alloc=0
+pumped state=idle fuel=44
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload"
+
+> restore from=s1 mismatch=reload-changed fingerprint=ae21ae650dab5892ccae21435a41b516c3b5d7379adf9c97dbdefc97fdd6ee42 mode=partial reloaded=[a]
+
+> deliver d2 to=b message=useit
+> pump clock=2026-10-28T10:00:01Z
+raise b/r2 code="function gone" at=b:13 pos=12:5
+seg b/r2 start delivery=d2 handler=useit clause=1 fuel=29 alloc=0 state=61 end=return
+run b/r2 outcome=completed delivery=d2 handler=useit fuel=29 alloc=0
+pumped state=idle fuel=29
+
+> vars
+vars a
+vars b f=<function a:6:19> got="function gone"
