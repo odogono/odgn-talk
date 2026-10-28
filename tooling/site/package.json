@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "sync": "bun tools/sync.ts",
-    "dev": "bun tools/sync.ts && astro dev",
-    "build": "bun tools/sync.ts && astro build && bun tools/check-links.ts",
+    "dev": "bun tools/sync.ts && bun --bun astro dev",
+    "build": "bun tools/sync.ts && bun --bun astro build && bun tools/check-links.ts",
     "preview": "wrangler dev",
-    "typecheck": "astro sync >/dev/null && tsc",
+    "typecheck": "bun --bun astro sync >/dev/null && tsc",
     "test": "bun test tests"
   },
   "dependencies": {
