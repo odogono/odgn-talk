@@ -1522,7 +1522,8 @@ pub const Broadcast = struct {
 pub const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
-    /// The name the Host gave the Group, which a save records; borrowed.
+    /// The name a save records: the Host's for a new Group, borrowed, and
+    /// the save's for a restored one, in `keep`.
     name: []const u8 = "",
     gpa: Allocator,
     /// This Pump's Fuel Slice and Fuel cap; 0 for none.

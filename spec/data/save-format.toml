@@ -169,7 +169,7 @@ holds = "The Group's counters and its record of issued call ids."
 [[section.field]]
 name = "name"
 type = "text"
-is = "The Group's name."
+is = "The Group's name when it was first made. A restored Group writes its save's name here, whatever the Host names it, so its State Fingerprint equals its save's."
 
 [[section.field]]
 name = "clock"

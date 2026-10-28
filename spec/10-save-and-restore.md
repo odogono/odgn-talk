@@ -179,7 +179,7 @@ The Group's counters and its record of issued call ids.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | The Group's name. |
+| name | `text` | The Group's name when it was first made. A restored Group writes its save's name here, whatever the Host names it, so its State Fingerprint equals its save's. |
 | clock | `instant` | The last Clock reading. |
 | deliveries | `uint` | The last Delivery id issued. |
 | broadcasts | `uint` | The last Broadcast id issued. |

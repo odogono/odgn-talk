@@ -2584,8 +2584,9 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }.at;
     r.i = .{ .bytes = &.{} };
     try sectionAt(&header, i, .group);
-    // The saved name is a record: the Host names the restored Group.
-    _ = try i.str();
+    // A restored Group's saves keep its save's name, whatever the Host
+    // names it, so its State Fingerprint equals its save's.
+    g.name = try r.kept();
     g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
