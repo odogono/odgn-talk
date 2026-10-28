@@ -1,0 +1,12 @@
+# Unblessed: element-walks (#1627); first blessing awaits human review.
+> load guard-elements identity=87318ec398bd83fb2c2642f989c6de75073827c2e897e50f175210be9014aa9f
+diag guard-elements code="not in a guard" pos=1:15
+> load guard-every identity=8efe45829229ccf232fd0a5759c4fe45d8ced5e7452b6107fe618bd2449cb71f
+diag guard-every code="not in a guard" pos=1:15
+> load constant-elements identity=c2103d853d3be9dac69208f18bca558a486c0933042375247992bca049c11227
+diag constant-elements code="not constant" pos=1:16
+> load every-delimited identity=4994ef7a236cdc470cc2285d6878439b589c78ad2eff81bcf5a9745c02cd99f3
+diag every-delimited code="unexpected token" pos=2:33
+> load set-elements identity=a90306a377aa54e41bdc870ad7673e8be034803e39e5818db89d613477379c72
+diag set-elements code="not a container" pos=2:7
+> vars

@@ -237,6 +237,7 @@ load-diagnostics/default-order
 load-diagnostics/duplicate-key
 load-diagnostics/duplicate-name
 load-diagnostics/element-references
+load-diagnostics/element-walks
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/empty-timeout
@@ -294,6 +295,7 @@ nothing-defaults/values
 objects/argument-labels
 objects/element-host-failures
 objects/element-references
+objects/element-walks
 objects/guard-keys
 objects/implicit-property-targets
 objects/message-path

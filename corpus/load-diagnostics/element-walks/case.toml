@@ -1,0 +1,36 @@
+# Unblessed: element-walks: `the elements of o` and element Whose Clauses read Host state (#1627); first blessing awaits human review.
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[objectKinds]]
+name = "page"
+elements = { shape = { object = "page" }, countCost = { fuel = 1 }, atCost = { fuel = 1 }, findCost = { fuel = 1 } }
+[[objects]]
+kind = "page"
+id = "main"
+
+[[scripts]]
+name = "guard-elements"
+source = "guard-elements.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "guard-every"
+source = "guard-every.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "constant-elements"
+source = "constant-elements.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "every-delimited"
+source = "every-delimited.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "set-elements"
+source = "set-elements.talk"
+objects = { thisPage = { kind = "page", id = "main" } }

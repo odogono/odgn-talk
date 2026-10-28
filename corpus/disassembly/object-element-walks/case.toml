@@ -1,0 +1,14 @@
+# Unblessed: walking an Object Collection (#1627); first blessing awaits human review.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "walk"
+source = "walk.talk"
+
+[[disassembly]]
+unit = "walk"
+expected = "walk.dis"

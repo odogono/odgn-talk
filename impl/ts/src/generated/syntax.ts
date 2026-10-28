@@ -112,7 +112,8 @@ export const grammar = {
     "words",
     "characters",
     "bytes",
-    "code points"
+    "code points",
+    "elements"
   ],
   "follow": [
     "as",

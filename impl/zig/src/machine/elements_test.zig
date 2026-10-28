@@ -164,3 +164,105 @@ test "a member and a count in range are answers" {
     try testing.expect(std.mem.indexOf(u8, trace, "vars s log=[<object rect \"r1\">]") != null);
     _ = chunks;
 }
+
+/// A page of `n` rects, whose `At` gives Nothing at `hole` (#1627).
+const Walk = struct {
+    rect: caps.Shape = .{ .references = 1000000, .allocator = testing.allocator, .data = .{ .object = "rect" } },
+    page: objects.Kind = undefined,
+    rect_kind: objects.Kind = .{ .name = "rect", .props = &.{} },
+    members: [3]*objects.Object = undefined,
+    n: usize = 3,
+    hole: i64 = 0,
+
+    fn init(w: *Walk) void {
+        w.page = .{ .name = "page", .props = &.{}, .elements = .{
+            .shape = &w.rect,
+            .count = count,
+            .at = at,
+            .find = find,
+            .context = w,
+            .count_cost = .{ .fuel = 5 },
+            .at_cost = .{ .fuel = 7 },
+            .find_cost = .{ .fuel = 5 },
+        } };
+    }
+    fn count(ctx: ?*anyopaque, _: std.mem.Allocator, _: *objects.Object) objects.Result {
+        const w: *Walk = @ptrCast(@alignCast(ctx.?));
+        return Host.number(switch (w.n) {
+            0 => "0",
+            else => "3",
+        });
+    }
+    fn at(ctx: ?*anyopaque, _: std.mem.Allocator, _: *objects.Object, index: i64) objects.Result {
+        const w: *Walk = @ptrCast(@alignCast(ctx.?));
+        if (index == w.hole) return .{ .value = model.scalar(testing.allocator, .nothing) catch unreachable };
+        return .{ .value = w.members[@intCast(index - 1)].value.retain() };
+    }
+    fn find(_: ?*anyopaque, _: std.mem.Allocator, _: *objects.Object, _: []const u8) objects.Result {
+        unreachable;
+    }
+};
+
+const walk_source =
+    \\script variable log = []
+    \\on go p
+    \\  try
+    \\    repeat for each e in the elements of p
+    \\      put the id of e after log
+    \\    end repeat
+    \\    put the length of (every element of p whose the id of it is not "r2") after log
+    \\    put the id of (the first element of p whose the id of it is "r2") after log
+    \\  catch e
+    \\    put the code of e after log
+    \\  end try
+    \\end go
+    \\
+;
+
+fn walk(a: std.mem.Allocator, n: usize, hole: i64) ![]u8 {
+    var w: Walk = .{ .n = n, .hole = hole };
+    w.init();
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    var g: machine.Group = .init(a, &out.writer);
+    defer g.deinit();
+    try testing.expect(try g.load("s", walk_source, .{}) == .loaded);
+    const page = try g.object(&w.page, "main", null);
+    for (&w.members, [_][]const u8{ "r1", "r2", "r3" }) |*m, id| m.* = try g.object(&w.rect_kind, id, null);
+    out.writer.end = 0;
+    var args = [_]*model.Value{page.value.retain()};
+    _ = try g.deliver("s", "go", &args, false);
+    try g.pump(clock);
+    g.vars();
+    return a.dupe(u8, out.written());
+}
+
+test "the elements of a page are walked in order, read whole each time" {
+    const a = testing.allocator;
+    const trace = try walk(a, 3, 0);
+    defer a.free(trace);
+    if (std.mem.indexOf(u8, trace, "vars s log=[\"r1\", \"r2\", \"r3\", 2, \"r2\"]") == null) {
+        std.debug.print("{s}\n", .{trace});
+        return error.TestUnexpectedResult;
+    }
+    // Three reads, each a count then every position, even for `first`.
+    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, trace, "op=count"));
+    try testing.expectEqual(@as(usize, 3), std.mem.count(u8, trace, "op=at selector=3 "));
+}
+
+test "an empty collection is only counted" {
+    const a = testing.allocator;
+    const trace = try walk(a, 0, 0);
+    defer a.free(trace);
+    try testing.expectEqual(@as(usize, 0), std.mem.count(u8, trace, "op=at"));
+    try testing.expect(std.mem.indexOf(u8, trace, "vars s log=[0, \"wrong kind\"]") != null or std.mem.indexOf(u8, trace, "vars s log=[0") != null);
+}
+
+test "Nothing below the count is a host error" {
+    const a = testing.allocator;
+    const trace = try walk(a, 3, 2);
+    defer a.free(trace);
+    try testing.expect(std.mem.indexOf(u8, trace, "op=at selector=2 error={}") != null);
+    try testing.expect(std.mem.indexOf(u8, trace, "vars s log=[\"host error\"]") != null);
+    try testing.expectEqual(@as(usize, 0), std.mem.count(u8, trace, "op=at selector=3 "));
+}

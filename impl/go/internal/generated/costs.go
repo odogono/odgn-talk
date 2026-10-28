@@ -112,6 +112,10 @@ var Costs = CostsTable{
 			Issue:  "#1350",
 			Change: "Joins reserve 1 Fuel per started local Result Target and 3 per started Script Variable Result Target at successful completion, after answer conversion and charging and before any target write; no registration charge, extra allocation or descriptor logical size; Cost Model 0 remains provisional",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#1627",
+			Change: "Add list-elements for `the elements of o` and element Whose Clauses, at a 3-Fuel base, then each collection callback's declared cost and result conversion, then items(result) Fuel and size(result) allocation for the list; Cost Model 0 remains provisional.",
+		},
 	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
@@ -315,6 +319,12 @@ var Costs = CostsTable{
 			Key:   "count-elements",
 			Fuel:  "3",
 			Input: "the Host Object; the Host's count callback also charges its declared cost and the result's conversion, as a property getter does",
+		},
+		CostsTableRateEntry{
+			Key:   "list-elements",
+			Fuel:  "3 + items(result)",
+			Alloc: "size(result)",
+			Input: "the Host Object; before the result's charge, the count callback and each member's callback also charge their declared cost and their result's conversion, as a property getter does",
 		},
 		CostsTableRateEntry{
 			Key:   "property",

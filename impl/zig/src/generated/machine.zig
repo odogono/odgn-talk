@@ -781,6 +781,22 @@ pub const machine: MachineTable = .{
             },
         },
         .{
+            .name = "list-elements",
+            .group = "access",
+            .operands = &.{},
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "list-elements",
+            .does = "`the elements of o`, and the walk of an element Whose Clause: pops the Host Object and pushes a list of its collection's members",
+            .errors = &.{
+                "wrong kind",
+                "object gone",
+                "out of domain",
+                "restricted operation",
+            },
+        },
+        .{
             .name = "property",
             .group = "access",
             .operands = &.{

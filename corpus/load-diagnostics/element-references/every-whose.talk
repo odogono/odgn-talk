@@ -1,3 +1,0 @@
-on go
-  put every element of thisPage whose it is nothing into xs
-end go

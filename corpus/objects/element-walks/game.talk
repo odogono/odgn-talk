@@ -1,0 +1,25 @@
+-- game.talk: the element-walks case's Script.
+
+script variable log = []
+
+on walk
+  repeat for each thing in the elements of hall
+    put the id of thing after log
+  end repeat
+  put the elements of cellar after log
+end walk
+
+on pick
+  put every element of hall whose takeable after log
+  put the first element of hall whose takeable after log
+  put the last element of hall whose takeable is false after log
+  put every element of cellar whose takeable after log
+end pick
+
+on wrong
+  try
+    put the elements of [1, 2] after log
+  catch e
+    put e after log
+  end try
+end wrong

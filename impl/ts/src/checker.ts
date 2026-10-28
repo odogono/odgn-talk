@@ -121,6 +121,19 @@ const isElementRead = (node: SyntaxNode): boolean => {
         isWordToken(fourth, 'elements')))
   );
 };
+/** `the elements of x` or `every element of x` (#1627). */
+const isCollectionWalk = (node: SyntaxNode): boolean => {
+  const [, second] = node.children;
+  return (
+    (node.rule === 'EveryHead' && isWordToken(second, 'element')) ||
+    (node.rule === 'The' &&
+      second?.kind === 'node' &&
+      second.rule === 'Key' &&
+      tokens(second)
+        .map(t => t.v)
+        .join(' ') === 'elements')
+  );
+};
 /** The expression a Container is, past its wrappers and parentheses. */
 const containerExpression = (container: SyntaxNode): SyntaxNode => {
   let node = container;
@@ -1248,7 +1261,7 @@ const checkParsed = (
           }
           continue;
         }
-        if (isElementRead(element)) {
+        if (isElementRead(element) || isCollectionWalk(element)) {
           report('not constant', context.get(element)!.first!);
           return;
         }

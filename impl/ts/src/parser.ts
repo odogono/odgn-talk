@@ -2067,7 +2067,10 @@ class Parser {
     const t = this.peek(0);
     if (this.isWord(t, 'every')) {
       const n = this.la2('every-chunk', 'operator');
-      if (this.isWord(n) && (SINGULAR.has(n.v) || n.v === 'code')) {
+      if (
+        this.isWord(n) &&
+        (SINGULAR.has(n.v) || n.v === 'code' || n.v === 'element')
+      ) {
         const frame = this.enter('Whose');
         try {
           const head = (yield this.everyHead()) as Node;
@@ -2084,7 +2087,10 @@ class Parser {
       }
     }
     const e = (yield this.defaultExpression()) as Node;
-    if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
+    if (
+      (e.k === 'OrdinalChunk' || (e.k === 'ObjectElement' && e.ord)) &&
+      this.atOperatorWord('whose')
+    ) {
       const frame = this.enter('Whose', 1);
       try {
         const op = this.next('operator');
@@ -2115,6 +2121,7 @@ class Parser {
       const src = (yield this.postfix()) as Node;
       let delimiter: Node | undefined;
       if (
+        kind !== 'element' &&
         this.atOperatorWord('delimited') &&
         this.isWord(this.la2('delimited-by', 'operator'), 'by')
       ) {

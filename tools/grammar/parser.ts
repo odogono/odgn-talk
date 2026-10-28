@@ -1458,12 +1458,18 @@ export class Parser {
     const t = this.peek(0);
     if (this.isWord(t, 'every')) {
       const n = this.la2('every-chunk', 'operator');
-      if (this.isWord(n) && (SINGULAR.has(n.v) || n.v === 'code')) {
+      if (
+        this.isWord(n) &&
+        (SINGULAR.has(n.v) || n.v === 'code' || n.v === 'element')
+      ) {
         return this.everyHead();
       }
     }
     const e = this.defaultExpression();
-    if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
+    if (
+      (e.k === 'OrdinalChunk' || (e.k === 'ObjectElement' && e.ord)) &&
+      this.atOperatorWord('whose')
+    ) {
       const op = this.next('operator');
       return this.at(op, { k: 'Whose', of: e, cond: this.whoseCondition() });
     }
@@ -2021,6 +2027,7 @@ export class Parser {
     const src = this.postfix(this.primary());
     let delimiter: Node | undefined;
     if (
+      kind !== 'element' &&
       this.atOperatorWord('delimited') &&
       this.isWord(this.la2('delimited-by', 'operator'), 'by')
     ) {

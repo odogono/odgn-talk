@@ -1,3 +1,0 @@
-on go
-  put the first element of thisPage whose it is nothing into x
-end go

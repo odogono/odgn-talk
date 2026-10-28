@@ -461,6 +461,14 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "list-elements",
+    "cost": "list-elements",
+    "operands": [],
+    "pops": 1,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
     "name": "property",
     "cost": "property",
     "operands": [
@@ -1739,6 +1747,16 @@ export const costModel = {
         [0, 0, 3, 1]
       ],
       "alloc": []
+    },
+    {
+      "key": "list-elements",
+      "fuel": [
+        [0, 0, 3, 1],
+        [7, 2, 1, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
     },
     {
       "key": "property",

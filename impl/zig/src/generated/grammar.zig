@@ -177,6 +177,7 @@ pub const grammar: GrammarTable = .{
         "characters",
         "bytes",
         "code points",
+        "elements",
     },
     .labels = .{
         .reserved = &.{
@@ -372,6 +373,7 @@ pub const grammar: GrammarTable = .{
             .positions = &.{
                 "operand position, before a token that can start an index (an Object Element Reference)",
                 "after `the` and an ordinal (an ordinal Object Element Reference)",
+                "after `every`, before `of` (an Every Head)",
             },
         },
         .{
@@ -379,6 +381,7 @@ pub const grammar: GrammarTable = .{
             .positions = &.{
                 "operand position, before a token that can start an index (an Object Element Reference)",
                 "after `the number of`, before `of` (an Element Count)",
+                "after `the`, before `of` (the Built-in property `elements`)",
             },
         },
         .{
@@ -556,7 +559,7 @@ pub const grammar: GrammarTable = .{
         .{
             .word = "whose",
             .positions = &.{
-                "after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause)",
+                "after an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand (a Whose Clause)",
             },
         },
         .{
@@ -799,7 +802,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .name = "whose",
-            .attaches = "an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does",
+            .attaches = "an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand, and ends the expression, as a Lambda does",
         },
         .{
             .name = "lazily",

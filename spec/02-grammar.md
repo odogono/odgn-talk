@@ -72,8 +72,8 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `dropping` | after a comma in a Handler head |
 | `during` | after a comma in a Handler head, before a name |
 | `each` | after `repeat for` |
-| `element` | operand position, before a token that can start an index (an Object Element Reference); after `the` and an ordinal (an ordinal Object Element Reference) |
-| `elements` | operand position, before a token that can start an index (an Object Element Reference); after `the number of`, before `of` (an Element Count) |
+| `element` | operand position, before a token that can start an index (an Object Element Reference); after `the` and an ordinal (an ordinal Object Element Reference); after `every`, before `of` (an Every Head) |
+| `elements` | operand position, before a token that can start an index (an Object Element Reference); after `the number of`, before `of` (an Element Count); after `the`, before `of` (the Built-in property `elements`) |
 | `empty` | after `is` or `is not` |
 | `ends` | operator position, before `with` |
 | `every` | operand position, before `match` (the Match Search); at the start of an expression, before a chunk kind's singular or `code` (an Every Head) |
@@ -103,7 +103,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `unwind` | after `before` in a catch head |
 | `use` | at the start of a top-level declaration |
 | `variable` | after `script` at the start of a top-level declaration |
-| `whose` | after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause) |
+| `whose` | after an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand (a Whose Clause) |
 | `with` | after the message name in `send`; after the Container in `replace`; after `begins` or `ends`; after `does not begin` or `does not end`; at the start of a statement, before `timeout` (a Timeout Block) |
 
 <!-- end -->
@@ -416,7 +416,8 @@ changing labelled message producers or consumers.
 
 ```ebnf
 Expression     ::= Lambda | EveryHead Whose | Default Whose?
-                   /* `Whose` after `Default` only when it is an ordinal Chunk Expression, with or without its `delimited by` */
+                   /* `Whose` after `Default` only when it is an ordinal Chunk Expression, with or without its `delimited by`,
+                      or an ordinal Object Element Reference */
 Default        ::= Or ( 'otherwise' Or )*
 OptionalKey    ::= Key | Text | '(' Expression ')'
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
@@ -484,7 +485,7 @@ Each trailing modifier attaches to its own construct:
 | `as` | the operand before it, as a postfix operator above every binary operator and below chunk `of`, `'s` and calls |
 | `ignoring case` | the nearest comparison before it, a `match` subject, or a Text Pattern element |
 | `delimited by` | the outermost Chunk Expression of an `of` chain |
-| `whose` | an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does |
+| `whose` | an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand, and ends the expression, as a Lambda does |
 | `lazily` | a Text Pattern element |
 | `and wait` | a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement |
 | `little, big` | an integer field of a Binary Pattern or build |
@@ -521,7 +522,7 @@ The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
 EveryHead      ::= 'every' ( 'code' 'point' | Name ) 'of' Postfix ( 'delimited' 'by' Postfix )?
-                   /* the Name after `every` is a chunk kind's singular */
+                   /* the Name after `every` is a chunk kind's singular or `element`; `delimited by` never follows `element` */
 Whose          ::= 'whose' Expression
                    /* a Name operand that is the Expression's first token is a Whose Key, a key or property of `it` */
 ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
@@ -570,7 +571,7 @@ The Built-in property names, which `the <name> of x` reads instead of a key:
 
 <!-- generated: grammar.properties -->
 
-`length`, `keys`, `values`, `items`, `lines`, `words`, `characters`, `bytes`, `code points`
+`length`, `keys`, `values`, `items`, `lines`, `words`, `characters`, `bytes`, `code points`, `elements`
 
 <!-- end -->
 

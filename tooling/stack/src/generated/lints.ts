@@ -287,7 +287,8 @@ export const properties = [
   "words",
   "characters",
   "bytes",
-  "code points"
+  "code points",
+  "elements"
 ] as const;
 export const builtins = [
   {

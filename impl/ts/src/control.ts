@@ -240,6 +240,19 @@ const hostKey = (key: string) => key !== 'id' && !properties.has(key);
  * Host state: `element s of x`, `the first element of x` and
  * `the number of elements of x`.
  */
+// `the elements of x` or `every element of x` (#1627): reads a whole collection.
+const isCollectionWalk = (node: SemanticNode): boolean => {
+  const [first, second] = node.children;
+  return (
+    (node.rule === 'EveryHead' && word(second, 'element')) ||
+    (node.rule === 'The' &&
+      second?.kind === 'node' &&
+      second.rule === 'Key' &&
+      keyText(second) === 'elements' &&
+      word(first, 'the'))
+  );
+};
+
 const isElementRead = (node: SemanticNode): boolean => {
   const [first, second, third, fourth] = node.children;
   if (node.rule === 'Chunk') {
@@ -275,7 +288,7 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
     ) {
       report('not in a guard', head);
     }
-    if (isElementRead(node)) {
+    if (isElementRead(node) || isCollectionWalk(node)) {
       report('not in a guard', head as Leaf);
     } else if (
       node.rule === 'The' &&

@@ -2165,6 +2165,11 @@ const Checker = struct {
                 try c.expr(s, k.base, in);
             },
             .property => |p| {
+                // `the elements of o` reads the Host too (#1627).
+                if (!p.code_points and std.mem.eql(u8, c.text(p.name), "elements")) {
+                    if (in == .guard) try c.report(.not_in_a_guard, e.pos);
+                    if (in == .initialiser) c.notConstant(e.pos);
+                }
                 try c.expr(s, p.base, in);
                 if (p.delimiter) |d| {
                     try c.expr(s, d, in);
@@ -2192,6 +2197,11 @@ const Checker = struct {
                 try c.expr(s, of, in);
             },
             .whose => |wh| {
+                if (wh.elements and wh.ordinal == null) {
+                    // At `every`, the token before its word.
+                    if (in == .guard) try c.report(.not_in_a_guard, wh.word - 1);
+                    if (in == .initialiser) c.notConstant(wh.word - 1);
+                }
                 if (wh.ordinal) |o| try c.expr(s, o, in) else {
                     try c.expr(s, wh.source, in);
                     if (wh.delimiter) |d| {

@@ -423,8 +423,11 @@ pub const Whose = struct {
     source: *Expr,
     delimiter: ?*Expr,
     delimited: ?Tok,
-    /// For an ordinal: the ordinal chunk.
+    /// For an ordinal: the ordinal chunk, or ordinal Object Element
+    /// Reference.
     ordinal: ?*Expr,
+    /// It walks an Object Collection: `element` (#1627).
+    elements: bool = false,
     condition: *Expr,
 };
 
