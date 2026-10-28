@@ -954,7 +954,7 @@ export interface RestoreOptions extends GroupOptions {
   grants(script: string, name: string): Grant<any> | undefined;
   /** An id it can't resolve restores as a disposed Host Object. */
   resolve(kind: string, id: string): { native: unknown } | undefined;
-  onMismatch: "reject" | "variables only";
+  onMismatch: "reject" | "variables only" | "reload changed";
   /** Native TS external-source snapshots only; called synchronously once per Script. */
   scriptSources?(request: ScriptCodeRequest): ScriptSources | undefined;
 }
@@ -962,6 +962,7 @@ export interface PendingCall { id: string; script: string; grant: string; operat
 export interface RestoreResult {
   reports: Report[]; // accounting baseline, including saved work discarded on restore
   variablesOnly: boolean;
+  reloaded: string[]; // the Scripts a Partial Restore rebuilt, in load order
   pending: PendingCall[]; // unsettled at the first Pump fails as `call lost`
   discardedRuns: string[];
   disposed: [kind: string, id: string][]; // the Host Objects that didn't resolve
