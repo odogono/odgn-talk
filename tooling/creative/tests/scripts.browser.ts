@@ -441,6 +441,48 @@ export const runBrowserTests = async () => {
     shell.editor.edit(({ tree }) => tree.removeTestScript(script.id!));
     shell.redraw();
   });
+  await test("the Dictionary tab lists the selected Script's Grants", async () => {
+    shell.openScript(shell.editor.project);
+    const win = windows()[0]!;
+    const tab = (label: string) =>
+      [...win.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        b => b.textContent === label,
+      )!;
+    tab('Dictionary').click();
+    await until(() => !!win.querySelector('.dictionary'));
+    const grants = () =>
+      [...win.querySelectorAll('.dictionary h3')].map(h => h.textContent);
+    assert(
+      grants().includes('folio') && !grants().includes('harness'),
+      'A Script holds the Folio Grants',
+    );
+    const page = win.querySelector(
+      '.dictionary section[aria-label="folio"] .dictionary-op',
+    );
+    assert(
+      page?.querySelector('p') && page.querySelectorAll('li').length > 0,
+      'An Operation shows its description and facts',
+    );
+    shell.editor.edit(({ tree }) => tree.addTestScript('t.test', ''));
+    shell.redraw();
+    shell.openTestScript(shell.editor.project.testScripts[0]!.id!, 1);
+    assert(
+      grants().join() === 'harness',
+      'A Test Script holds only the Folio Harness',
+    );
+    assert(
+      win
+        .querySelector('.dictionary pre code')
+        ?.textContent?.startsWith('ask harness to'),
+      'Examples are listed',
+    );
+    tab('Code').click();
+    await until(() => !!win.querySelector('nav[aria-label="Project code"]'));
+    shell.editor.edit(({ tree }) =>
+      tree.removeTestScript(shell.editor.project.testScripts[0]!.id!),
+    );
+    shell.redraw();
+  });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);
     assert(windows().length === 1, 'Shift-double-click selects text Script');

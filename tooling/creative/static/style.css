@@ -629,6 +629,37 @@ button:disabled {
   text-align: left;
   overflow-wrap: anywhere;
 }
+.code-browser-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+.code-browser-outline .code-browser-tabs button[aria-selected='true'] {
+  background: var(--line);
+  color: var(--panel);
+  font-weight: bold;
+}
+.dictionary h3 span {
+  font-weight: normal;
+  opacity: 0.7;
+}
+.dictionary-op {
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+}
+.dictionary-op > code {
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+.dictionary-op p,
+.dictionary-op ul,
+.dictionary-op h4 {
+  margin: 0.2rem 0;
+}
+.dictionary-op pre {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+}
 .code-browser-body {
   display: flex;
   flex-direction: column;

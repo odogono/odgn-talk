@@ -3,6 +3,7 @@
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
+import { readDictionary } from '@northtalk/tooling/dictionary';
 import { libraryUri } from '@northtalk/tooling/lsp';
 import {
   codeWindow,
@@ -367,8 +368,25 @@ export class CodeBrowser {
       const project = this.editor.project;
       const owner = this.#owner();
       const named = this.#named();
+      const scriptOwnManifest = scriptManifest(project, owner ?? project);
+      // The editor's completion and the Dictionary tab read this Manifest.
+      const manifest =
+        named?.kind === 'library'
+          ? { ...scriptOwnManifest, objects: [], messages: [] }
+          : named?.kind === 'test'
+            ? testScriptManifest(project)
+            : scriptOwnManifest;
+      win.server.configure(
+        manifest,
+        project.libraries.map(l => ({
+          uri: this.#uri({ kind: 'library', id: l.id! }),
+          text: l.source,
+          library: l.name,
+        })),
+      );
       renderCodeOutline(win.outline, {
         project,
+        dictionary: readDictionary(manifest),
         ...(named ? { named } : {}),
         selected: this.#selected,
         readOnly: this.editor.readOnly,
@@ -467,20 +485,6 @@ export class CodeBrowser {
       if (this.editor.readOnly || !owner) {
         closeRecipePicker(win.recipes);
       }
-      const manifest = scriptManifest(project, owner ?? project);
-      const sources = project.libraries.map(l => ({
-        uri: this.#uri({ kind: 'library', id: l.id! }),
-        text: l.source,
-        library: l.name,
-      }));
-      win.server.configure(
-        named?.kind === 'library'
-          ? { ...manifest, objects: [], messages: [] }
-          : named?.kind === 'test'
-            ? testScriptManifest(project)
-            : manifest,
-        sources,
-      );
       if (win.view.state.readOnly !== this.editor.readOnly) {
         win.view.dispatch({
           effects: this.#editing.reconfigure(

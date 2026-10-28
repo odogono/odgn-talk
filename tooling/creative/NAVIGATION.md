@@ -296,7 +296,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [script-names.ts](src/script-names.ts): binding and name checks.
 - [scripts.ts](src/scripts.ts): the single Code Browser, per-source editor
   states and selected owner-scoped workspace; [code-browser-panel.tsx](src/code-browser-panel.tsx)
-  renders its Project hierarchy and Library controls.
+  renders its Project hierarchy, Library controls and Dictionary tab (the
+  selected Manifest through `readDictionary` in [dictionary.ts](../stack/src/dictionary.ts)).
 - [libraries.ts](src/libraries.ts): dependency-ordered Library compilation and
   isolated diagnostics; [play.ts](src/play.ts) registers the graph before Scripts.
   Library edits use root transactions in [tree/project-tree.ts](src/tree/project-tree.ts).

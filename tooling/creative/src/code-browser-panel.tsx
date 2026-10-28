@@ -1,6 +1,7 @@
 // The browser's outline follows the authored hierarchy, independently of
 // the canvas selection. The source editor remains a CodeMirror view.
 import { render } from 'preact';
+import type { DictionaryGrant } from '@northtalk/tooling/dictionary';
 import { useEffect, useState } from 'preact/hooks';
 import type { DeepReadonly } from './readonly';
 import type {
@@ -26,6 +27,8 @@ export const sourceKey = (source: CodeSelection): string =>
   `${source.kind}:${source.id}`;
 
 type Props = {
+  /** The selected Script's Grants, from the Manifest completion reads. */
+  dictionary: DictionaryGrant[];
   named?: NamedSource;
   onDelete(): void;
   onNew(kind: NamedSource['kind']): void;
@@ -214,6 +217,70 @@ const TestResults = ({ tests, onOpenResult }: Props) => {
   );
 };
 
+// Each Grant's Operations, as the Playground's Dictionary panel lists them.
+const Dictionary = ({ dictionary }: Pick<Props, 'dictionary'>) => (
+  <section aria-label="Dictionary" className="dictionary">
+    {dictionary.length === 0 && <p>This Script holds no Grants.</p>}
+    {dictionary.map(grant => (
+      <section aria-label={grant.name} key={grant.name}>
+        <h3>
+          {grant.name}
+          {grant.capability !== grant.name && <span> {grant.capability}</span>}
+        </h3>
+        {grant.operations.map(op => (
+          <article className="dictionary-op" key={op.name}>
+            <code>{op.call}</code>
+            {op.description && <p>{op.description}</p>}
+            <ul>
+              {op.facts.map(fact => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+            {op.examples?.length ? (
+              <>
+                <h4>Examples</h4>
+                {op.examples.map(example => (
+                  <pre key={example}>
+                    <code>{example}</code>
+                  </pre>
+                ))}
+              </>
+            ) : null}
+          </article>
+        ))}
+      </section>
+    ))}
+  </section>
+);
+
+const TABS = { code: 'Code', dictionary: 'Dictionary' } as const;
+
+const CodeBrowserPanel = (props: Props) => {
+  const [tab, setTab] = useState<keyof typeof TABS>('code');
+  return (
+    <>
+      <div className="code-browser-tabs" role="tablist">
+        {(Object.keys(TABS) as (keyof typeof TABS)[]).map(key => (
+          <button
+            aria-selected={tab === key}
+            key={key}
+            onClick={() => setTab(key)}
+            role="tab"
+            type="button"
+          >
+            {TABS[key]}
+          </button>
+        ))}
+      </div>
+      {tab === 'code' ? (
+        <Outline {...props} />
+      ) : (
+        <Dictionary dictionary={props.dictionary} />
+      )}
+    </>
+  );
+};
+
 export const renderCodeOutline = (parent: HTMLElement, props: Props): void => {
-  render(<Outline {...props} />, parent);
+  render(<CodeBrowserPanel {...props} />, parent);
 };

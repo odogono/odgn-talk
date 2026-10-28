@@ -196,7 +196,10 @@ Existing Script actions select the corresponding source. Selecting code leaves
 the canvas’s Page and Element selection unchanged. Script sources retain their
 Message Path links, Add action, diagnostics and recipes. Each source keeps its
 cursor and scroll position when another source is selected. Resize the browser
-from its bottom-right corner.
+from its bottom-right corner. The **Dictionary** tab beside the outline lists
+the selected Script's Grants, with each Operation's call, description, examples,
+mode, result, cost and errors, from the Host Manifest completion reads; a Test
+Script lists only the Folio Harness.
 
 Edits change the authored Project immediately and share its undo/redo, autosave
 and portable export/import. The editor’s ⌘/Ctrl-Z and redo shortcuts use the
