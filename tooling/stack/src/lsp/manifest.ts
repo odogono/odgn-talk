@@ -60,6 +60,8 @@ export type HostManifest = {
   objects: string[];
   /** Each well-known object's kind, by name. */
   objectsKinds: Map<string, string>;
+  /** The Owner Kind: the Object Kind of `me`, when the manifest names one. */
+  ownerKind?: string;
 };
 const array = (value: unknown): unknown[] => {
   if (!Array.isArray(value)) {
@@ -251,6 +253,11 @@ export const readManifest = (value: unknown): HostManifest => {
       return [string(object.name), string(object.kind)] as const;
     }),
   );
+  const ownerKind =
+    data.ownerKind === undefined ? undefined : string(data.ownerKind);
+  if (ownerKind !== undefined && !objectKinds.has(ownerKind)) {
+    throw new Error(`Owner Kind ${ownerKind} is not a declared Object Kind`);
+  }
   const messageDecls = new Map<string, ManifestMessage>();
   for (const value of array(data.messages)) {
     const message = record(value);
@@ -279,6 +286,7 @@ export const readManifest = (value: unknown): HostManifest => {
     objectKinds,
     objects: [...objectsKinds.keys()],
     objectsKinds,
+    ...(ownerKind === undefined ? {} : { ownerKind }),
   };
 };
 export const grantDeclarations = (manifest: HostManifest): GrantDecls =>

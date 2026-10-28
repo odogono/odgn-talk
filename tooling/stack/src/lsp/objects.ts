@@ -2,40 +2,14 @@ import {
   checkSyntax,
   exportsOf,
   parseSourceRecovering,
-  type SemanticElement,
   type SemanticNode,
 } from '@northtalk/ts';
 import { shapeText } from '../dictionary';
 import { grantDeclarations, type HostManifest } from './manifest';
+import { expression, namedKind, propertyRead, word } from './properties';
 import { rangeAt } from './protocol';
 import { semanticElements, type Analysis } from './workspace';
 
-/** Strip only expression wrappers and parentheses, never a call or lookup. */
-const expression = (node: SemanticNode): SemanticElement => {
-  let current: SemanticElement = node;
-  while (current.kind === 'node') {
-    const children: SemanticElement[] = current.children.filter(
-      c => c.kind !== 'token' || (c.text !== '(' && c.text !== ')'),
-    );
-    if (children.length !== 1) {
-      break;
-    }
-    current = children[0]!;
-  }
-  return current;
-};
-
-const namedKind = (node: SemanticNode, manifest: HostManifest) => {
-  const name = expression(node);
-  // Binding identity matters: a same-spelled parameter/local is not the Host
-  // Object. Do not propagate kinds through assignments, calls or properties.
-  return name.kind === 'name' && name.binding?.kind === 'object'
-    ? manifest.objectsKinds.get(name.text)
-    : undefined;
-};
-
-const word = (e: SemanticElement | undefined, text: string) =>
-  e?.kind === 'token' && e.text === text;
 const collectionRead = (node: SemanticNode) => {
   const [first, second, third, fourth] = node.children;
   const count =
@@ -59,6 +33,35 @@ const collection = (node: SemanticNode, manifest: HostManifest) => {
   const kind = read && namedKind(read.receiver, manifest);
   const elements = kind && manifest.objectKinds.get(kind)?.elements;
   return elements ? { ...read, kind, elements } : undefined;
+};
+
+export const propertyHover = (
+  analysis: Analysis,
+  offset: number,
+  manifest: HostManifest,
+) => {
+  for (const node of analysis.nodes) {
+    const read = propertyRead(node, manifest);
+    if (
+      !read?.prop ||
+      offset < read.key.span.start ||
+      read.key.span.end <= offset
+    ) {
+      continue;
+    }
+    return {
+      contents: {
+        kind: 'plaintext',
+        value: `${read.kind.name} property ${read.name}${read.prop.readOnly ? ' (read-only)' : ''}\nShape: ${shapeText(read.prop.shape)}`,
+      },
+      range: rangeAt(
+        analysis.document.text,
+        read.key.span.start,
+        read.key.span.end,
+      ),
+    };
+  }
+  return null;
 };
 
 export const collectionHover = (

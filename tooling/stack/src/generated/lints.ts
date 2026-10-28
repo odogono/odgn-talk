@@ -129,6 +129,22 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "unknown-property",
+    "flags": "a literal property of `me` or a well-known object that the Host Manifest's Object Kind for it doesn't declare",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "The Host Manifest's {kind} has no property {property}.",
+    "status": "implemented"
+  },
+  {
+    "id": "read-only-property",
+    "flags": "a `set` of a literal property of `me` or a well-known object that the Host Manifest declares read-only",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "The Host Manifest declares {kind}'s {property} read-only, so this set fails.",
+    "status": "implemented"
+  },
+  {
     "id": "fallback-routes-known",
     "flags": "a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail",
     "beginner": "hint",

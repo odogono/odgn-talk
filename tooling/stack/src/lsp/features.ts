@@ -46,7 +46,7 @@ import {
   type HostManifest,
   type ManifestOperation,
 } from './manifest';
-import { collectionHover, objectProperties } from './objects';
+import { collectionHover, objectProperties, propertyHover } from './objects';
 import {
   argumentPhrase,
   callSignature,
@@ -943,6 +943,10 @@ export const hover = (
     manifest && collectionHover(analysis, offset, manifest);
   if (objectCollection) {
     return objectCollection;
+  }
+  const property = manifest && propertyHover(analysis, offset, manifest);
+  if (property) {
+    return property;
   }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;
