@@ -1843,6 +1843,7 @@ pub const ManifestSpec = extern struct {
     object_kinds_len: usize,
     objects: ?[*]const ManifestObject,
     objects_len: usize,
+    owner_kind: ?*const objects.Kind = null,
 };
 
 fn listOf(comptime T: type, items: ?[*]const T, len: usize) error{InvalidValue}![]const T {
@@ -1879,6 +1880,7 @@ fn exportManifest(a: std.mem.Allocator, m: *const ManifestSpec) ![]u8 {
         .messages = messages,
         .object_kinds = try listOf(*const objects.Kind, m.object_kinds, m.object_kinds_len),
         .objects = named,
+        .owner_kind = m.owner_kind,
     });
 }
 

@@ -1345,6 +1345,7 @@ type ManifestSpec struct {
 	Messages    []MessageDecl
 	ObjectKinds []*ObjectKind
 	Objects     map[string]*ObjectKind // well-known names bound at load
+	OwnerKind   *ObjectKind            // the Owner Kind, one of ObjectKinds: the kind of me, for tooling; nil if unknown
 }
 
 // MessageDecl is tooling-only: the Core never checks a Delivery against it.

@@ -531,6 +531,7 @@ A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load s
   - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds, with any documentation
   - `objectKinds`: name, properties and `parentKinds`, then its `elements` collection declaration when it has one
   - `objects`: well-known name and kind
+- **The Owner Kind:** `ownerKind` comes last, only when present. It names one of `objectKinds`, and tooling treats the `me` of this kind of Script as an object of that kind. Without it, tooling leaves `me` unknown. `ExportManifest` refuses a kind that isn't in `objectKinds` as `invalid value`.
 - **One data model:** Operation Declarations and Shapes use the same data model as the corpus's `case.toml`, written as JSON here and as TOML there. A Constant value inside them uses the Value Encoding.
 - **Documentation:** an Operation writes its `description`, then its `examples`, after its other keys, each only when present. They are the only keys `case.toml` lacks, and the only ones the Group Fingerprint leaves out, so rewording them changes the manifest's bytes but not the Fingerprint.
 - **Message documentation:** a message writes its `description`, then its `examples`, after its other keys, each only when present, as an Operation does. Tooling shows them for a Handler or command with the message's name, such as one a Host answers at the end of every Message Path.

@@ -29,6 +29,9 @@ pub const Spec = struct {
     messages: []const Message,
     object_kinds: []const *const objects.Kind,
     objects: []const Object,
+    /// The Owner Kind, which must be one of `object_kinds`; null leaves
+    /// `me` unknown to tooling.
+    owner_kind: ?*const objects.Kind = null,
 };
 
 pub const Error = Allocator.Error || error{InvalidValue};
@@ -60,9 +63,13 @@ fn writeCost(w: *std.Io.Writer, c: capabilities.Cost) !void {
 
 /// The manifest's bytes, owned by the caller. Each list is ordered by name,
 /// and a name given twice in one list, or a message name that isn't a Name
-/// or a Selector for its arguments, is InvalidValue.
+/// or a Selector for its arguments, or an Owner Kind not in `object_kinds`, is
+/// InvalidValue.
 pub fn write(a: Allocator, spec: Spec) Error![]u8 {
     for (spec.messages) |m| if (!machine.messageName(m.name, m.args.len)) return error.InvalidValue;
+    if (spec.owner_kind) |owner| for (spec.object_kinds) |k| {
+        if (k == owner) break;
+    } else return error.InvalidValue;
     const grants = try sorted(a, Grant, spec.grants);
     defer a.free(grants);
     const libraries = try sorted(a, *const machine.Library, spec.libraries);
@@ -198,5 +205,10 @@ fn writeAll(a: Allocator, w: *std.Io.Writer, spec: Spec, grants: []const Grant, 
         try writeString(w, o.kind.name);
         try w.writeByte('}');
     }
-    try w.writeAll("]}");
+    try w.writeByte(']');
+    if (spec.owner_kind) |owner| {
+        try w.writeAll(",\"ownerKind\":");
+        try writeString(w, owner.name);
+    }
+    try w.writeByte('}');
 }

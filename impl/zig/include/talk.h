@@ -1674,13 +1674,17 @@ typedef struct talk_manifest_spec {
     size_t object_kinds_len;
     const talk_manifest_object *objects;
     size_t objects_len;
+    /* The Owner Kind, one of object_kinds: the kind of this kind of
+     * Script's me, for tooling only. NULL leaves me unknown. */
+    const talk_object_kind *owner_kind;
 } talk_manifest_spec;
 /* Writes the Host Manifest as deterministic JSON, in an owned buffer: the
  * same definitions always give the same bytes (chapter 9, The Host Manifest
  * format). It is a pure function of the definitions, not of a live Group,
  * and never includes a Grant's binding. Each list is ordered by name; a
  * name given twice in one list, or a message name that isn't a Name or a
- * Selector for its arguments, is TALK_INVALID_VALUE. */
+ * Selector for its arguments, or an owner_kind not in object_kinds, is
+ * TALK_INVALID_VALUE. */
 talk_host_error_code talk_export_manifest(const talk_manifest_spec *m, talk_owned_bytes *out);
 /* The handle of the Group's Script with that name, or NULL; a restored
  * Group's Scripts are reached this way. */
