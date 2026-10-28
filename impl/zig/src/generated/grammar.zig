@@ -1013,6 +1013,10 @@ pub const grammar: GrammarTable = .{
             .raised_when = "A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind",
         },
         .{
+            .code = "unit without number",
+            .raised_when = "A Unit word can't continue the parse and follows a Name or a closing bracket on its line; a Unit follows only a number literal, so write `x as s`, `x * 1 s`, or the Unit in the Constant; reported at the Unit word",
+        },
+        .{
             .code = "unexpected token",
             .raised_when = "A token can't continue the parse, including the end of a line or of the source",
         },

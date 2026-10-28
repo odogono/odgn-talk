@@ -12,7 +12,7 @@
 //   * The first syntax error stops the parse. Only it is normative.
 
 import grammar from '../../spec/data/grammar.toml';
-import { Lexer, RESERVED, type Mode, type Token } from './lexer';
+import { isUnitWord, Lexer, RESERVED, type Mode, type Token } from './lexer';
 
 export type Node = {
   [key: string]: any;
@@ -301,6 +301,13 @@ export class Parser {
     if (t.t === 'error') {
       throw new SyntaxError(t, t.code!, t.v);
     }
+    if (this.unitWithoutNumber(t)) {
+      throw new SyntaxError(
+        t,
+        'unit without number',
+        `a Unit follows only a number: write \`x as ${t.v}\`, \`x * 1 ${t.v}\`, or the Unit in the Constant`,
+      );
+    }
     const got =
       t.t === 'nl'
         ? 'end of line'
@@ -311,6 +318,19 @@ export class Parser {
       t,
       'unexpected token',
       `expected ${expected}, found ${got}`,
+    );
+  }
+
+  // A Unit word straight after a Name or a closing bracket on its line, as
+  // in `wait tick s`: a Unit follows only a number literal (#1694).
+  unitWithoutNumber(t: Token): boolean {
+    const p = this.prev;
+    return (
+      t.t === 'word' &&
+      isUnitWord(t.v) &&
+      p !== null &&
+      p.line === t.line &&
+      (this.isName(p) || (p.t === 'op' && (p.v === ')' || p.v === ']')))
     );
   }
 

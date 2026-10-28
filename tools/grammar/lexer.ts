@@ -55,6 +55,7 @@ for (const u of units.unit as Unit[]) {
     UNITS.set(u.plural, u);
   }
 }
+export const isUnitWord = (w: string) => UNITS.has(w);
 const isCalendar = (u: Unit) => Boolean(kinds.get(u.kind)?.calendar);
 
 // A Compound Unit's shape: factors joined by `*`, one `/`, exponents after `^`.

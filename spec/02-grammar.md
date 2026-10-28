@@ -765,6 +765,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | `bad character` | A character outside a text literal or comment starts no token |
 | `unterminated text` | An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener |
 | `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
+| `unit without number` | A Unit word can't continue the parse and follows a Name or a closing bracket on its line; a Unit follows only a number literal, so write `x as s`, `x * 1 s`, or the Unit in the Constant; reported at the Unit word |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
 | `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token |
 | `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |

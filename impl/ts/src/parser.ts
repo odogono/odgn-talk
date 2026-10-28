@@ -11,6 +11,7 @@ import type {
 } from './syntax';
 import { Lexer, RESERVED, type Mode, type Token } from './lexer';
 import { runTask, type Task } from './tasks';
+import { unitEntry } from './units';
 
 // Recognition shapes are private. The public tree contains grammar productions
 // and their original tokens, including fields the eventual checker must inspect.
@@ -550,6 +551,13 @@ class Parser {
     if (t.t === 'error') {
       this.lexicalFailure(t);
     }
+    if (this.unitWithoutNumber(t)) {
+      throw new ParseError(
+        t,
+        'unit without number',
+        `a Unit follows only a number: write \`x as ${t.v}\`, \`x * 1 ${t.v}\`, or the Unit in the Constant`,
+      );
+    }
     const got =
       t.t === 'nl'
         ? 'end of line'
@@ -560,6 +568,19 @@ class Parser {
       t,
       'unexpected token',
       `expected ${expected}, found ${got}`,
+    );
+  }
+
+  // A Unit word straight after a Name or a closing bracket on its line, as
+  // in `wait tick s`: a Unit follows only a number literal (#1694).
+  unitWithoutNumber(t: Token): boolean {
+    const p = this.prev;
+    return (
+      t.t === 'word' &&
+      unitEntry(t.v) !== undefined &&
+      p !== null &&
+      p.line === t.line &&
+      (this.isName(p) || (p.t === 'op' && (p.v === ')' || p.v === ']')))
     );
   }
 

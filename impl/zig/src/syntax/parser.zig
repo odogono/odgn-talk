@@ -338,7 +338,17 @@ const Parser = struct {
 
     fn failAt(p: *Parser, t: Token) error{Syntax} {
         if (t.kind == .invalid) return p.failCode(t.code, t.offset);
+        if (p.unitWithoutNumber(t)) return p.failCode(.unit_without_number, t.start);
         return p.failCode(.unexpected_token, t.start);
+    }
+
+    /// A Unit word straight after a Name or a closing bracket on its line, as
+    /// in `wait tick s`: a Unit follows only a number literal (#1694).
+    fn unitWithoutNumber(p: *Parser, t: Token) bool {
+        if (t.kind != .word or !lexer.isUnitName(p.word(t))) return false;
+        const prev = (p.prev orelse return false).tok;
+        if (std.mem.indexOfScalar(u8, p.lex.shared.source[prev.end..t.start], '\n') != null) return false;
+        return p.isName(prev) or prev.kind == .right_paren or prev.kind == .right_bracket;
     }
 
     fn fail(p: *Parser, mode: Mode) Error {
