@@ -75,6 +75,11 @@ func bridgeCanonical(v reflect.Value) any {
 			name := v.Type().Field(i).Name
 			// Wording is outside parity, but typed report identity, errors and all
 			// accounting fields are compared, including allocation and positions.
+			// The recording predates Partial Restore (ADR 0143), so an empty
+			// Reloaded list is what the native Core would have reported.
+			if name == "Reloaded" && v.Field(i).Len() == 0 {
+				continue
+			}
 			if name != "Detail" && name != "Message" {
 				out[name] = bridgeCanonical(v.Field(i))
 			}
