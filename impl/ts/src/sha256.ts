@@ -1,5 +1,7 @@
 // SHA-256 (FIPS 180-4), synchronous and browser-safe, for code identities
-// (chapter 9). It hashes UTF-8 bytes and gives lowercase hexadecimal.
+// (chapter 9) and the save format's digests (chapter 10). `Sha256` hashes
+// bytes incrementally; `sha256` hashes UTF-8 text or bytes to lowercase
+// hexadecimal.
 const K = new Uint32Array([
   0x42_8a_2f_98, 0x71_37_44_91, 0xb5_c0_fb_cf, 0xe9_b5_db_a5, 0x39_56_c2_5b,
   0x59_f1_11_f1, 0x92_3f_82_a4, 0xab_1c_5e_d5, 0xd8_07_aa_98, 0x12_83_5b_01,
@@ -18,23 +20,77 @@ const K = new Uint32Array([
 
 const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
 
-export const sha256 = (input: string | Uint8Array): string => {
-  const bytes =
-    typeof input === 'string' ? new TextEncoder().encode(input) : input;
-  const length = bytes.length;
-  const padded = new Uint8Array(Math.ceil((length + 9) / 64) * 64);
-  padded.set(bytes);
-  padded[length] = 0x80;
-  const view = new DataView(padded.buffer);
-  // The bit length's high word: length * 8 / 2^32.
-  view.setUint32(padded.length - 8, Math.floor(length / 0x20_00_00_00));
-  view.setUint32(padded.length - 4, (length * 8) >>> 0);
-  const h = new Uint32Array([
-    0x6a_09_e6_67, 0xbb_67_ae_85, 0x3c_6e_f3_72, 0xa5_4f_f5_3a, 0x51_0e_52_7f,
-    0x9b_05_68_8c, 0x1f_83_d9_ab, 0x5b_e0_cd_19,
-  ]);
-  const w = new Uint32Array(64);
-  for (let block = 0; block < padded.length; block += 64) {
+const initial = [
+  0x6a_09_e6_67, 0xbb_67_ae_85, 0x3c_6e_f3_72, 0xa5_4f_f5_3a, 0x51_0e_52_7f,
+  0x9b_05_68_8c, 0x1f_83_d9_ab, 0x5b_e0_cd_19,
+];
+
+/** An incremental SHA-256: `update` with bytes, then `final` once. */
+export class Sha256 {
+  private readonly h = new Uint32Array(initial);
+  private readonly w = new Uint32Array(64);
+  private readonly block = new Uint8Array(64);
+  private readonly blockView = new DataView(this.block.buffer);
+  private filled = 0;
+  private length = 0;
+  private done = false;
+
+  update(bytes: Uint8Array): this {
+    if (this.done) {
+      throw new Error('Sha256.update after final');
+    }
+    this.length += bytes.length;
+    let at = 0;
+    if (this.filled > 0) {
+      const take = Math.min(64 - this.filled, bytes.length);
+      this.block.set(bytes.subarray(0, take), this.filled);
+      this.filled += take;
+      at = take;
+      if (this.filled < 64) {
+        return this;
+      }
+      this.compress(this.blockView, 0);
+      this.filled = 0;
+    }
+    const whole = at + Math.floor((bytes.length - at) / 64) * 64;
+    if (whole > at) {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+      for (; at < whole; at += 64) {
+        this.compress(view, at);
+      }
+    }
+    this.block.set(bytes.subarray(at));
+    this.filled = bytes.length - at;
+    return this;
+  }
+
+  /** The 32-byte digest; the hash takes no more input after it. */
+  final(): Uint8Array {
+    if (this.done) {
+      throw new Error('Sha256.final twice');
+    }
+    const length = this.length;
+    const tail = new Uint8Array(this.filled < 56 ? 64 : 128);
+    tail.set(this.block.subarray(0, this.filled));
+    tail[this.filled] = 0x80;
+    const view = new DataView(tail.buffer);
+    // The bit length's high word: length * 8 / 2^32.
+    view.setUint32(tail.length - 8, Math.floor(length / 0x20_00_00_00));
+    view.setUint32(tail.length - 4, (length * 8) >>> 0);
+    for (let at = 0; at < tail.length; at += 64) {
+      this.compress(view, at);
+    }
+    this.done = true;
+    const out = new Uint8Array(32);
+    const outView = new DataView(out.buffer);
+    for (let i = 0; i < 8; i++) {
+      outView.setUint32(i * 4, this.h[i]!);
+    }
+    return out;
+  }
+
+  private compress(view: DataView, block: number): void {
+    const { h, w } = this;
     for (let i = 0; i < 16; i++) {
       w[i] = view.getUint32(block + i * 4);
     }
@@ -78,5 +134,16 @@ export const sha256 = (input: string | Uint8Array): string => {
     h[6] = (h[6]! + g) >>> 0;
     h[7] = (h[7]! + hh) >>> 0;
   }
-  return Array.from(h, x => x.toString(16).padStart(8, '0')).join('');
+}
+
+/** The SHA-256 of `bytes`, as 32 bytes. */
+export const sha256Bytes = (bytes: Uint8Array): Uint8Array =>
+  new Sha256().update(bytes).final();
+
+export const sha256 = (input: string | Uint8Array): string => {
+  const bytes =
+    typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  return Array.from(sha256Bytes(bytes), x =>
+    x.toString(16).padStart(2, '0'),
+  ).join('');
 };
