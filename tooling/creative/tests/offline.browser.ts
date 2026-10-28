@@ -6,7 +6,7 @@
 import { fileAccessSupport } from '../src/file-access';
 
 const SHELL = [
-  'index.html',
+  '',
   'style.css',
   'main.js',
   'lsp.worker.js',
@@ -89,7 +89,7 @@ export const runBrowserTests = async () => {
       shell.length === SHELL.length,
       `only these shell files are cached: ${shell.join(', ')}`,
     );
-    const page = await caches.match(new URL('./index.html', document.baseURI));
+    const page = await caches.match(new URL('./', document.baseURI));
     const text = await page!.text();
     assert(text.includes('<title>Folio</title>'), 'cached page is not Folio');
   });

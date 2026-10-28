@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
 
 const dist = join(import.meta.dirname, '../dist');
 // Paths served by something other than this build.
-const elsewhere = ['/folio/', '/go'];
+const elsewhere = ['/go'];
 
 const pages = (dir: string): string[] =>
   readdirSync(dir).flatMap(name => {

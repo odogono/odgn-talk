@@ -729,7 +729,7 @@ rebuilds the app, so run it again after an app rebuild.
 
 Once `/` has loaded, the [service worker](#offline-installing-and-files-on-disk)
 controls the whole origin, test pages included: it answers every
-navigation with its cached `index.html` and serves the shell, `main.js`
+navigation with its cached page and serves the shell, `main.js`
 included, from the build it cached. Before running a suite, unregister it
 and clear its caches from the console of any page on the origin, then open
 the suite's page in a fresh tab, one tab per suite:

@@ -5,7 +5,7 @@
   "scripts": {
     "sync": "bun tools/sync.ts",
     "dev": "bun tools/sync.ts && bun --bun astro dev",
-    "build": "bun tools/sync.ts && bun --bun astro build && bun tools/check-links.ts",
+    "build": "bun tools/sync.ts && bun --bun astro build && bun tools/folio.ts && bun tools/check-links.ts",
     "preview": "wrangler dev",
     "typecheck": "bun --bun astro sync >/dev/null && tsc",
     "test": "bun test tests"

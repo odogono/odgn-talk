@@ -10,7 +10,7 @@ import {
 } from '../src/sw';
 
 const BASE = 'https://folio.example/app/';
-const PRECACHE = ['./index.html', './main.js', './style.css'];
+const PRECACHE = ['./', './main.js', './style.css'];
 
 type Listener = (event: never) => void;
 
@@ -157,7 +157,7 @@ test('the shell loads from the cache with the network off', async () => {
     mode: 'navigate',
     url: BASE,
   });
-  expect(await page!.text()).toBe('body of ./index.html');
+  expect(await page!.text()).toBe('body of ./');
   const script = await fetchViaWorker({
     method: 'GET',
     mode: 'cors',
