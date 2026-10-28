@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/save-format.schema.json",
+  "title": "save-format",
+  "description": "The save format every Core writes and reads.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "object",
+      "properties": {
+        "magic": {
+          "type": "string",
+          "pattern": "^[A-Z]{4}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "magic",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "primitive": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "encoding": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "encoding"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "header": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "is": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "is"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "section": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 255
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "holds": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z]+( [a-z]+)*$"
+                },
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "is": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "is"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "tag",
+          "name",
+          "required",
+          "holds",
+          "field"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "record": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "holds": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z]+( [a-z]+)*$"
+                },
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "is": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "is"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "holds",
+          "field"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "union": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "holds": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variant": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z]+( [a-z]+)*$"
+                },
+                "is": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "field": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "pattern": "^[a-z]+( [a-z]+)*$"
+                      },
+                      "type": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "is": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                      "is"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "tag",
+                "name",
+                "is"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "holds",
+          "variant"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "format",
+    "primitive",
+    "header",
+    "section",
+    "record",
+    "union"
+  ],
+  "additionalProperties": false
+}

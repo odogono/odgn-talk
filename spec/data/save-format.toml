@@ -1,0 +1,2525 @@
+# The save format: the bytes every Core writes for a save and reads on a
+# restore, whichever Core took it (ADR 0144).
+#
+# A save is a header followed by sections. Each section is framed by a tag, a
+# flag byte, a length and its own SHA-256, so a reader can find, check or skip
+# any section without decoding the others. The State Fingerprint and the body
+# digest are computed from the sections' digests, so each byte is hashed once.
+#
+# Schema: schema/save-format.schema.json. Shown in chapter 10 (regions
+# `save-format.*`). Owned by the chapter 10 task.
+#
+# [format]
+#   magic, version  the first four bytes, and the save format version
+#
+# [[primitive]]     an encoding the fields below name as their type
+#   name, encoding
+#
+# [[header]]        the header's fields, in order
+#   name, type, is
+#
+# [[section]]       the sections, in ascending tag order, each at most once
+#   tag             its byte, 1–255
+#   name            its name
+#   required        whether every save has it; a reader rejects an unknown
+#                   required section and skips an unknown optional one
+#   holds           one sentence
+#   [[section.field]] name, type, is
+#
+# [[record]]        a structure fields refer to by name
+#   name, holds, [[record.field]] name, type, is
+#
+# [[union]]         a structure that is one of several variants, written as
+#                   its variant's tag byte and then that variant's fields
+#   name, holds, [[union.variant]] tag, name, is, [[union.variant.field]]
+#
+# A type is a primitive, record or union name, `list of T` (a `uint` count
+# then that many T), or `optional T` (a `bool`, then T when it is true).
+
+[format]
+magic = "NTSV"
+version = 1
+
+[[primitive]]
+name = "magic"
+encoding = "Four bytes, the `[format]` magic."
+
+[[primitive]]
+name = "byte"
+encoding = "One byte."
+
+[[primitive]]
+name = "bool"
+encoding = "One byte: 0 for false and 1 for true. Any other byte is `invalid save`."
+
+[[primitive]]
+name = "uint"
+encoding = "An unsigned LEB128 integer, in its shortest form."
+
+[[primitive]]
+name = "sint"
+encoding = "A signed LEB128 integer, in its shortest form."
+
+[[primitive]]
+name = "text"
+encoding = "A `uint` byte length, then that many bytes of UTF-8."
+
+[[primitive]]
+name = "bytes"
+encoding = "A `uint` length, then that many bytes."
+
+[[primitive]]
+name = "raw"
+encoding = "Bytes whose length an earlier field gives."
+
+[[primitive]]
+name = "digest"
+encoding = "32 bytes: a SHA-256 digest or a code identity."
+
+[[primitive]]
+name = "index"
+encoding = "A `uint` position in a list this save already holds, counting from 0."
+
+[[primitive]]
+name = "ref"
+encoding = "A `uint`: 0 for none, or a position in a list this save already holds plus 1."
+
+[[header]]
+name = "magic"
+type = "magic"
+is = "The bytes `NTSV`."
+
+[[header]]
+name = "format"
+type = "uint"
+is = "The save format version."
+
+[[header]]
+name = "language"
+type = "text"
+is = "The language version."
+
+[[header]]
+name = "cost model"
+type = "uint"
+is = "The Cost Model version."
+
+[[header]]
+name = "group fingerprint"
+type = "digest"
+is = "The Group Fingerprint (chapter 9) the save was taken under."
+
+[[header]]
+name = "save id counter"
+type = "uint"
+is = "The Trace save id counter, after this save."
+
+[[header]]
+name = "state fingerprint"
+type = "digest"
+is = "The State Fingerprint: the SHA-256 of each required section's tag byte and digest, in tag order."
+
+[[header]]
+name = "body digest"
+type = "digest"
+is = "The SHA-256 of every header byte before this field, then each section's tag byte, flag byte and digest, in order."
+
+[[header]]
+name = "sections"
+type = "list of section"
+is = "The sections, in ascending tag order."
+
+[[record]]
+name = "section"
+holds = "One section's frame."
+
+[[record.field]]
+name = "tag"
+type = "byte"
+is = "The section's tag."
+
+[[record.field]]
+name = "flags"
+type = "byte"
+is = "Bit 0 set for an optional section; every other bit clear."
+
+[[record.field]]
+name = "length"
+type = "uint"
+is = "The body's length in bytes."
+
+[[record.field]]
+name = "digest"
+type = "digest"
+is = "The SHA-256 of the body."
+
+[[record.field]]
+name = "body"
+type = "raw"
+is = "`length` bytes: the section's fields, in order. Bytes left over after its last field are `invalid save`."
+
+# ------------------------------------------------------------------ sections
+
+[[section]]
+tag = 1
+name = "group"
+required = true
+holds = "The Group's counters and its record of issued call ids."
+
+[[section.field]]
+name = "name"
+type = "text"
+is = "The Group's name."
+
+[[section.field]]
+name = "clock"
+type = "instant"
+is = "The last Clock reading."
+
+[[section.field]]
+name = "deliveries"
+type = "uint"
+is = "The last Delivery id issued."
+
+[[section.field]]
+name = "broadcasts"
+type = "uint"
+is = "The last Broadcast id issued."
+
+[[section.field]]
+name = "timers"
+type = "uint"
+is = "The timer counter."
+
+[[section.field]]
+name = "run order"
+type = "uint"
+is = "The Run order counter."
+
+[[section.field]]
+name = "charge counter"
+type = "uint"
+is = "The charge request counter."
+
+[[section.field]]
+name = "random state"
+type = "uint"
+is = "The Group's random generator state."
+
+[[section.field]]
+name = "issued calls"
+type = "list of issued"
+is = "Each Run's issued call numbers, by Run id in ascending byte order."
+
+[[section]]
+tag = 2
+name = "libraries"
+required = true
+holds = "Every Library the Group holds, by identity."
+
+[[section.field]]
+name = "libraries"
+type = "list of library"
+is = "In the Group's order."
+
+[[section]]
+tag = 3
+name = "objects"
+required = true
+holds = "Every Host Object the Group has seen, by Object Kind and id."
+
+[[section.field]]
+name = "objects"
+type = "list of object"
+is = "In the order the Group first saw them. A Value's or field's object `index` or `ref` points here."
+
+[[section]]
+tag = 4
+name = "functions"
+required = true
+holds = "The code of every Function Value the Group made."
+
+[[section.field]]
+name = "functions"
+type = "list of function"
+is = "In the order they were made. A Function Value's `code` points here."
+
+[[section]]
+tag = 5
+name = "calls"
+required = true
+holds = "The Suspending Capability calls a Run still waits on."
+
+[[section.field]]
+name = "calls"
+type = "list of call"
+is = "In the order they were made."
+
+[[section]]
+tag = 6
+name = "scripts"
+required = true
+holds = "Each Script's identity, limits, Grants, objects, variables and counters."
+
+[[section.field]]
+name = "scripts"
+type = "list of script"
+is = "In load order."
+
+[[section]]
+tag = 7
+name = "runs"
+required = true
+holds = "Every live Run, Script by Script, in each Script's live order."
+
+[[section.field]]
+name = "runs"
+type = "list of run"
+is = "The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list."
+
+[[section.field]]
+name = "per script"
+type = "list of uint"
+is = "How many Runs each Script has, one per Script."
+
+[[section]]
+tag = 8
+name = "work"
+required = true
+holds = "Each Script's queued work."
+
+[[section.field]]
+name = "work"
+type = "list of script work"
+is = "One per Script, in `scripts` order."
+
+[[section]]
+tag = 9
+name = "waits"
+required = true
+holds = "The waits with deadlines, in the order they were set, and the Group's issued Run ids."
+
+[[section.field]]
+name = "waits"
+type = "list of deadline wait"
+is = "In the order the waits were set."
+
+[[section.field]]
+name = "ids"
+type = "list of text"
+is = "The Run ids the Group has issued and not yet released, in issue order."
+
+[[section]]
+tag = 10
+name = "inputs"
+required = true
+holds = "The Host inputs queued for the next Pump."
+
+[[section.field]]
+name = "inputs"
+type = "list of input"
+is = "In queue order."
+
+[[section]]
+tag = 11
+name = "decisions"
+required = true
+holds = "Broadcast Decisions some recipient hasn't sealed, and those a variables-only restore left for the first Pump."
+
+[[section.field]]
+name = "open"
+type = "list of open broadcast"
+is = "By Broadcast id, ascending."
+
+[[section.field]]
+name = "deferred"
+type = "list of deferred decision"
+is = "In the order they were deferred."
+
+[[section]]
+tag = 12
+name = "accounting"
+required = true
+holds = "Run accounting: each root's discarded messages, and the roots whose work changed since the last report (chapter 9)."
+
+[[section.field]]
+name = "discards"
+type = "list of root discards"
+is = "By root id, ascending."
+
+[[section.field]]
+name = "changed roots"
+type = "list of uint"
+is = "In the order they changed."
+
+[[section]]
+tag = 13
+name = "sources"
+required = false
+holds = "Each Script's base and extension sources, in an Embedded-source Snapshot."
+
+[[section.field]]
+name = "sources"
+type = "list of script sources"
+is = "One per Script, in `scripts` order."
+
+# ------------------------------------------------------------------- records
+
+[[record]]
+name = "instant"
+holds = "An Instant."
+
+[[record.field]]
+name = "seconds"
+type = "sint"
+is = "Seconds since the Unix epoch."
+
+[[record.field]]
+name = "micros"
+type = "uint"
+is = "Microseconds within the second, below 1000000."
+
+[[record]]
+name = "decimal"
+holds = "A Number, exactly as the value holds it, so `1.50` and `1.5` stay distinct."
+
+[[record.field]]
+name = "negative"
+type = "bool"
+is = "Its sign, including a negative zero."
+
+[[record.field]]
+name = "coefficient"
+type = "uint"
+is = "Its coefficient."
+
+[[record.field]]
+name = "exponent"
+type = "sint"
+is = "Its power of ten."
+
+[[record]]
+name = "issued"
+holds = "One Run's issued call numbers."
+
+[[record.field]]
+name = "run"
+type = "text"
+is = "The Run's id."
+
+[[record.field]]
+name = "ranges"
+type = "list of issued range"
+is = "Disjoint, ascending, and at least one."
+
+[[record]]
+name = "issued range"
+holds = "A run of consecutive call numbers."
+
+[[record.field]]
+name = "first"
+type = "uint"
+is = "The first number."
+
+[[record.field]]
+name = "last"
+type = "uint"
+is = "The last number."
+
+[[record.field]]
+name = "eligible"
+type = "bool"
+is = "Whether these calls may still be settled."
+
+[[record]]
+name = "library"
+holds = "A Library, by identity; the Host supplies its code on restore."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "version"
+type = "text"
+is = "Its version."
+
+[[record.field]]
+name = "identity"
+type = "digest"
+is = "Its code identity (chapter 9)."
+
+[[record]]
+name = "object"
+holds = "A Host Object."
+
+[[record.field]]
+name = "kind"
+type = "text"
+is = "Its Object Kind."
+
+[[record.field]]
+name = "id"
+type = "text"
+is = "Its id."
+
+[[record.field]]
+name = "parent"
+type = "ref"
+is = "Its parent, in `objects`."
+
+[[record.field]]
+name = "disposed"
+type = "bool"
+is = "Whether it is disposed."
+
+[[record.field]]
+name = "owner of"
+type = "optional text"
+is = "The Script it owns, if it is a Script's owner."
+
+[[record]]
+name = "function"
+holds = "A Function Value's code. A stale one, whose home Script has since been reloaded, keeps only what it still answers."
+
+[[record.field]]
+name = "home"
+type = "text"
+is = "Its home Script."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "required"
+type = "uint"
+is = "Its required parameter count."
+
+[[record.field]]
+name = "total"
+type = "uint"
+is = "Its total parameter count."
+
+[[record.field]]
+name = "unit"
+type = "digest"
+is = "The code identity of the unit that holds it."
+
+[[record.field]]
+name = "body"
+type = "optional code position"
+is = "Where its body is, if its home Script still has its code."
+
+[[record]]
+name = "code position"
+holds = "A code body, relative to a Script."
+
+[[record.field]]
+name = "unit"
+type = "unit"
+is = "The unit."
+
+[[record.field]]
+name = "body"
+type = "uint"
+is = "The body's number in that unit, as chapter 8's lowering numbers them."
+
+[[record]]
+name = "call"
+holds = "A Suspending Capability call a Run waits on."
+
+[[record.field]]
+name = "id"
+type = "text"
+is = "Its call id."
+
+[[record.field]]
+name = "script"
+type = "text"
+is = "The Script that made it."
+
+[[record.field]]
+name = "grant"
+type = "text"
+is = "The Grant it went through."
+
+[[record.field]]
+name = "run"
+type = "text"
+is = "The Run that made it."
+
+[[record.field]]
+name = "segment"
+type = "text"
+is = "The Segment it was made in."
+
+[[record.field]]
+name = "now"
+type = "instant"
+is = "The Clock reading it was made at."
+
+[[record.field]]
+name = "args"
+type = "list of value"
+is = "Its arguments."
+
+[[record.field]]
+name = "start"
+type = "bool"
+is = "Whether the Script made it with `start` rather than `run`, which decides whether the Host may Adopt it."
+
+[[record.field]]
+name = "charged"
+type = "uint"
+is = "The Fuel charged for it."
+
+[[record.field]]
+name = "at unit"
+type = "text"
+is = "The unit of its call site, where a refused reissue faults."
+
+[[record.field]]
+name = "at pc"
+type = "uint"
+is = "The call site's instruction."
+
+[[record.field]]
+name = "at line"
+type = "uint"
+is = "The call site's line."
+
+[[record.field]]
+name = "at column"
+type = "uint"
+is = "The call site's column."
+
+[[record]]
+name = "script"
+holds = "A Script, without its Runs, work or sources."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "identity"
+type = "digest"
+is = "Its base code identity."
+
+[[record.field]]
+name = "extensions"
+type = "list of digest"
+is = "Its extensions' code identities, in order."
+
+[[record.field]]
+name = "limits"
+type = "list of uint"
+is = "Its limits, in `limits.toml` order."
+
+[[record.field]]
+name = "grants"
+type = "list of grant"
+is = "Its Grants, in order."
+
+[[record.field]]
+name = "owner"
+type = "ref"
+is = "Its owner, in `objects`."
+
+[[record.field]]
+name = "objects"
+type = "list of named object"
+is = "Its named Host Objects, in order."
+
+[[record.field]]
+name = "variable names"
+type = "list of text"
+is = "Its Script Variables' names, in declaration order."
+
+[[record.field]]
+name = "variables"
+type = "list of value"
+is = "Its Script Variables' values, in the same order."
+
+[[record.field]]
+name = "definitions"
+type = "list of value"
+is = "Its base unit's definitions, then each extension's, in order."
+
+[[record.field]]
+name = "runs"
+type = "uint"
+is = "Its Run counter."
+
+[[record.field]]
+name = "fuel total"
+type = "uint"
+is = "Its total Fuel used."
+
+[[record.field]]
+name = "alloc total"
+type = "uint"
+is = "Its total Allocation used."
+
+[[record.field]]
+name = "faults"
+type = "uint"
+is = "Its fault count."
+
+[[record.field]]
+name = "debt"
+type = "uint"
+is = "Its Fuel debt."
+
+[[record.field]]
+name = "stopped"
+type = "optional text"
+is = "Why it was stopped, if it was."
+
+[[record]]
+name = "grant"
+holds = "A Script's Grant, with what a restore that can't re-bind it still needs to check code against."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "declarations"
+type = "text"
+is = "Its Capability and kept Operations as Host Manifest JSON (chapter 9)."
+
+[[record.field]]
+name = "capability"
+type = "text"
+is = "Its Capability's name."
+
+[[record.field]]
+name = "operations"
+type = "list of operation"
+is = "Its kept Operations, in the Capability's order."
+
+[[record.field]]
+name = "revoked"
+type = "bool"
+is = "Whether it is revoked."
+
+[[record.field]]
+name = "disabled"
+type = "bool"
+is = "Whether it is disabled."
+
+[[record]]
+name = "operation"
+holds = "An Operation's shape."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "mode"
+type = "text"
+is = "`immediate` or `suspending`."
+
+[[record.field]]
+name = "required"
+type = "uint"
+is = "Its required argument count."
+
+[[record.field]]
+name = "args"
+type = "uint"
+is = "Its total argument count."
+
+[[record.field]]
+name = "command"
+type = "bool"
+is = "Whether it is a command."
+
+[[record.field]]
+name = "labels"
+type = "list of text"
+is = "Its argument labels."
+
+[[record]]
+name = "named object"
+holds = "A Script's named Host Object."
+
+[[record.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[record.field]]
+name = "object"
+type = "ref"
+is = "The object, in `objects`."
+
+[[record]]
+name = "script sources"
+holds = "One Script's sources."
+
+[[record.field]]
+name = "source"
+type = "text"
+is = "Its base source."
+
+[[record.field]]
+name = "extensions"
+type = "list of text"
+is = "Its extensions' sources, in order."
+
+[[record]]
+name = "run"
+holds = "A live Run."
+
+[[record.field]]
+name = "id"
+type = "text"
+is = "Its id."
+
+[[record.field]]
+name = "order"
+type = "uint"
+is = "Its place in the Group's Run order."
+
+[[record.field]]
+name = "reported fuel"
+type = "optional uint"
+is = "The Fuel last reported for it, if any was."
+
+[[record.field]]
+name = "fuel"
+type = "uint"
+is = "The Fuel it has used."
+
+[[record.field]]
+name = "alloc"
+type = "uint"
+is = "The Allocation it has used."
+
+[[record.field]]
+name = "delivery"
+type = "delivery"
+is = "The Delivery it handles."
+
+[[record.field]]
+name = "handler"
+type = "text"
+is = "The Handler it runs."
+
+[[record.field]]
+name = "clause"
+type = "uint"
+is = "The Handler clause it runs."
+
+[[record.field]]
+name = "limits"
+type = "list of uint"
+is = "Its limits, in `limits.toml` order."
+
+[[record.field]]
+name = "clause fuel"
+type = "uint"
+is = "The Fuel used in its current clause."
+
+[[record.field]]
+name = "preempted in"
+type = "optional preemption"
+is = "Where a Fuel Slice preempted it, if one did."
+
+[[record.field]]
+name = "continuing"
+type = "bool"
+is = "Whether it continues past its current clause."
+
+[[record.field]]
+name = "clauses seen"
+type = "uint"
+is = "How many clauses it has tried."
+
+[[record.field]]
+name = "cleanup from"
+type = "optional uint"
+is = "The frame its cleanup started from, if it is cleaning up."
+
+[[record.field]]
+name = "cleanup limited"
+type = "bool"
+is = "Whether its cleanup hit the cleanup budget."
+
+[[record.field]]
+name = "controls"
+type = "list of control"
+is = "Its error control, innermost last."
+
+[[record.field]]
+name = "attempts"
+type = "uint"
+is = "Its attempt counter."
+
+[[record.field]]
+name = "calls"
+type = "uint"
+is = "Its call counter."
+
+[[record.field]]
+name = "segment fuel"
+type = "uint"
+is = "The Fuel used in its current Segment."
+
+[[record.field]]
+name = "segment alloc"
+type = "uint"
+is = "The Allocation used in its current Segment."
+
+[[record.field]]
+name = "started"
+type = "bool"
+is = "Whether it has started."
+
+[[record.field]]
+name = "waiting"
+type = "optional pending"
+is = "Its wait, if it is suspended."
+
+[[record.field]]
+name = "resume with"
+type = "resume"
+is = "What it resumes with, if it is ready to resume."
+
+[[record.field]]
+name = "suspended at"
+type = "text"
+is = "Where it suspended, as its Trace shows."
+
+[[record.field]]
+name = "waited"
+type = "waited"
+is = "Its last wait."
+
+[[record.field]]
+name = "raised at"
+type = "optional position"
+is = "Where its current error was raised, if it has one."
+
+[[record.field]]
+name = "join"
+type = "optional join"
+is = "Its Join, if it is in one."
+
+[[record.field]]
+name = "clause body"
+type = "optional code position"
+is = "Its current clause's body, if it has one."
+
+[[record.field]]
+name = "fallback"
+type = "bool"
+is = "Whether it runs a fallback clause."
+
+[[record.field]]
+name = "select at"
+type = "optional uint"
+is = "The instruction its clause selection resumes at, if it is selecting."
+
+[[record.field]]
+name = "parked"
+type = "bool"
+is = "Whether it is parked."
+
+[[record.field]]
+name = "abandoned"
+type = "list of text"
+is = "The call ids it abandoned."
+
+[[record.field]]
+name = "base"
+type = "uint"
+is = "Its Segment's base."
+
+[[record.field]]
+name = "segments"
+type = "uint"
+is = "How many Segments it has started."
+
+[[record.field]]
+name = "verdict"
+type = "bool"
+is = "Whether its Decision verdict is sealed."
+
+[[record.field]]
+name = "segment base"
+type = "optional list of value"
+is = "Its Segment's rollback base, if it has one."
+
+[[record.field]]
+name = "frames"
+type = "list of frame"
+is = "Its call frames, innermost last."
+
+[[record]]
+name = "preemption"
+holds = "Where a Fuel Slice preempted a Run."
+
+[[record.field]]
+name = "body"
+type = "code position"
+is = "The body it was in."
+
+[[record.field]]
+name = "fallback"
+type = "bool"
+is = "Whether it was in a fallback clause."
+
+[[record]]
+name = "position"
+holds = "A source position."
+
+[[record.field]]
+name = "line"
+type = "uint"
+is = "Its line."
+
+[[record.field]]
+name = "column"
+type = "uint"
+is = "Its column."
+
+[[record]]
+name = "frame"
+holds = "A call frame."
+
+[[record.field]]
+name = "body"
+type = "code position"
+is = "The body it runs."
+
+[[record.field]]
+name = "pc"
+type = "uint"
+is = "Its next instruction, as chapter 8's lowering numbers them."
+
+[[record.field]]
+name = "locals"
+type = "list of value"
+is = "Its locals."
+
+[[record.field]]
+name = "stack"
+type = "list of slot"
+is = "Its operand stack, bottom first."
+
+[[record.field]]
+name = "called"
+type = "bool"
+is = "Whether it was entered by a call."
+
+[[record.field]]
+name = "restricted"
+type = "bool"
+is = "Whether it runs restricted."
+
+[[record]]
+name = "limit"
+holds = "A bound on a handler search."
+
+[[record.field]]
+name = "frame"
+type = "uint"
+is = "Its frame."
+
+[[record.field]]
+name = "entry"
+type = "uint"
+is = "Its handler table entry."
+
+[[record]]
+name = "search"
+holds = "A handler search in progress."
+
+[[record.field]]
+name = "frame"
+type = "uint"
+is = "The frame being searched."
+
+[[record.field]]
+name = "entry"
+type = "uint"
+is = "The handler table entry being tried."
+
+[[record.field]]
+name = "raised"
+type = "uint"
+is = "The frame the error was raised in."
+
+[[record.field]]
+name = "limit"
+type = "optional limit"
+is = "Where the search stops, if it is bounded."
+
+[[record.field]]
+name = "position"
+type = "uint"
+is = "Its position among recovery offers."
+
+[[record.field]]
+name = "skip"
+type = "optional limit"
+is = "The entries it skips, if any."
+
+[[record]]
+name = "cleanup"
+holds = "A cleanup a Run still has to run."
+
+[[record.field]]
+name = "frame"
+type = "uint"
+is = "Its frame."
+
+[[record.field]]
+name = "target"
+type = "uint"
+is = "Its target instruction."
+
+[[record.field]]
+name = "depth"
+type = "uint"
+is = "The operand stack depth it starts at."
+
+[[record.field]]
+name = "entry"
+type = "uint"
+is = "Its handler table entry."
+
+[[record.field]]
+name = "leave"
+type = "bool"
+is = "Whether it leaves the frame after."
+
+[[record]]
+name = "failure"
+holds = "A Script error a call failed with."
+
+[[record.field]]
+name = "code"
+type = "text"
+is = "Its error code."
+
+[[record.field]]
+name = "message"
+type = "optional text"
+is = "Its message."
+
+[[record.field]]
+name = "data"
+type = "optional value"
+is = "Its data."
+
+[[record]]
+name = "waited"
+holds = "A Run's or Join Member's last wait."
+
+[[record.field]]
+name = "id"
+type = "text"
+is = "Its id."
+
+[[record.field]]
+name = "block"
+type = "bool"
+is = "Whether it was in a timeout block."
+
+[[record.field]]
+name = "call"
+type = "ref"
+is = "Its call, in `calls`."
+
+[[record.field]]
+name = "grant"
+type = "text"
+is = "Its call's Grant."
+
+[[record.field]]
+name = "operation"
+type = "text"
+is = "Its call's Operation."
+
+[[record.field]]
+name = "declared"
+type = "bool"
+is = "Whether the Operation was declared."
+
+[[record.field]]
+name = "after"
+type = "sint"
+is = "Its wait, in microseconds."
+
+[[record]]
+name = "pending"
+holds = "A suspended wait: a Suspending Capability call, a `wait`, or a `wait for`."
+
+[[record.field]]
+name = "id"
+type = "text"
+is = "Its id."
+
+[[record.field]]
+name = "deadline"
+type = "sint"
+is = "Its deadline, in microseconds since the Unix epoch."
+
+[[record.field]]
+name = "order"
+type = "uint"
+is = "Its place in the deadline order."
+
+[[record.field]]
+name = "call"
+type = "ref"
+is = "Its call, in `calls`."
+
+[[record.field]]
+name = "grant"
+type = "text"
+is = "Its call's Grant."
+
+[[record.field]]
+name = "operation"
+type = "text"
+is = "Its call's Operation."
+
+[[record.field]]
+name = "declared"
+type = "bool"
+is = "Whether the Operation was declared."
+
+[[record.field]]
+name = "after"
+type = "sint"
+is = "Its wait, in microseconds."
+
+[[record.field]]
+name = "member"
+type = "ref"
+is = "Its Join Member, in the Run's `join`."
+
+[[record.field]]
+name = "block"
+type = "bool"
+is = "Whether it is in a timeout block."
+
+[[record.field]]
+name = "branch"
+type = "uint"
+is = "Its branch."
+
+[[record.field]]
+name = "event"
+type = "optional event"
+is = "Its `wait for`, if it is one."
+
+[[record]]
+name = "event"
+holds = "A `wait for` and its branches."
+
+[[record.field]]
+name = "unit"
+type = "unit"
+is = "The unit it is in."
+
+[[record.field]]
+name = "entry"
+type = "uint"
+is = "Its entry."
+
+[[record.field]]
+name = "any"
+type = "bool"
+is = "Whether any branch may fire."
+
+[[record.field]]
+name = "branches"
+type = "list of branch"
+is = "Its branches, in order."
+
+[[record]]
+name = "join"
+holds = "A Join in progress."
+
+[[record.field]]
+name = "frame"
+type = "uint"
+is = "The frame that started it."
+
+[[record.field]]
+name = "start"
+type = "uint"
+is = "The instruction it started at."
+
+[[record.field]]
+name = "members"
+type = "list of member"
+is = "Its members, in order."
+
+[[record]]
+name = "member"
+holds = "A Join Member."
+
+[[record.field]]
+name = "frame"
+type = "uint"
+is = "Its frame."
+
+[[record.field]]
+name = "start"
+type = "uint"
+is = "The instruction it started at."
+
+[[record.field]]
+name = "pending"
+type = "optional pending"
+is = "Its wait, if it still waits."
+
+[[record.field]]
+name = "waited"
+type = "waited"
+is = "Its last wait."
+
+[[record.field]]
+name = "with"
+type = "resume"
+is = "Its result, if it has one."
+
+[[record.field]]
+name = "cut"
+type = "bool"
+is = "Whether it was cut short."
+
+[[record]]
+name = "override"
+holds = "A Delivery's limit overrides."
+
+[[record.field]]
+name = "fuel per run"
+type = "optional uint"
+is = "Its `fuelPerRun`."
+
+[[record.field]]
+name = "alloc per run"
+type = "optional uint"
+is = "Its `allocPerRun`."
+
+[[record.field]]
+name = "max wait ms"
+type = "optional uint"
+is = "Its `maxWaitMs`."
+
+[[record.field]]
+name = "max join"
+type = "optional uint"
+is = "Its `maxJoin`."
+
+[[record]]
+name = "delivery"
+holds = "A message on its way to a Script."
+
+[[record.field]]
+name = "id"
+type = "uint"
+is = "Its Delivery id."
+
+[[record.field]]
+name = "root"
+type = "uint"
+is = "The root of its Message Path."
+
+[[record.field]]
+name = "message"
+type = "text"
+is = "Its message name."
+
+[[record.field]]
+name = "args"
+type = "list of value"
+is = "Its arguments."
+
+[[record.field]]
+name = "request"
+type = "bool"
+is = "Whether its sender waits for a reply."
+
+[[record.field]]
+name = "during"
+type = "optional value"
+is = "The value it was sent during, if any."
+
+[[record.field]]
+name = "from"
+type = "optional text"
+is = "The Script that sent it, if a Script did."
+
+[[record.field]]
+name = "internal error"
+type = "bool"
+is = "Whether it reports an internal error."
+
+[[record.field]]
+name = "waits"
+type = "bool"
+is = "Whether its sender is waiting."
+
+[[record.field]]
+name = "target"
+type = "ref"
+is = "Its target, in `objects`."
+
+[[record.field]]
+name = "at"
+type = "ref"
+is = "The object it is at, in `objects`."
+
+[[record.field]]
+name = "function"
+type = "optional value"
+is = "The Function Value it calls, if any."
+
+[[record.field]]
+name = "decision"
+type = "bool"
+is = "Whether it is a Decision."
+
+[[record.field]]
+name = "decides"
+type = "bool"
+is = "Whether its recipient decides."
+
+[[record.field]]
+name = "broadcast"
+type = "uint"
+is = "Its Broadcast id, or 0."
+
+[[record.field]]
+name = "limits"
+type = "optional override"
+is = "Its limit overrides, if any."
+
+[[record.field]]
+name = "passed by"
+type = "ref"
+is = "The object that passed it on, in `objects`."
+
+[[record]]
+name = "script work"
+holds = "One Script's queued work."
+
+[[record.field]]
+name = "items"
+type = "list of work"
+is = "In order."
+
+[[record]]
+name = "deadline wait"
+holds = "A wait with a deadline."
+
+[[record.field]]
+name = "run"
+type = "index"
+is = "Its Run, in `runs`."
+
+[[record.field]]
+name = "member"
+type = "ref"
+is = "Its Join Member, in that Run's `join`."
+
+[[record]]
+name = "mark"
+holds = "A Decision recipient's mark."
+
+[[record.field]]
+name = "script"
+type = "text"
+is = "The recipient Script."
+
+[[record.field]]
+name = "run"
+type = "text"
+is = "The recipient Run."
+
+[[record.field]]
+name = "reason"
+type = "optional value"
+is = "A veto's reason."
+
+[[record.field]]
+name = "outcome"
+type = "text"
+is = "Its outcome."
+
+[[record]]
+name = "open broadcast"
+holds = "A Broadcast Decision some recipient hasn't sealed."
+
+[[record.field]]
+name = "id"
+type = "uint"
+is = "Its Broadcast id."
+
+[[record.field]]
+name = "parts"
+type = "list of decision part"
+is = "One per recipient Delivery."
+
+[[record]]
+name = "decision part"
+holds = "One recipient's part in a Decision."
+
+[[record.field]]
+name = "delivery"
+type = "uint"
+is = "Its Delivery id."
+
+[[record.field]]
+name = "part"
+type = "part"
+is = "Its part so far."
+
+[[record]]
+name = "deferred decision"
+holds = "A Decision a variables-only restore left for the first Pump."
+
+[[record.field]]
+name = "id"
+type = "uint"
+is = "Its Delivery id."
+
+[[record.field]]
+name = "broadcast"
+type = "uint"
+is = "Its Broadcast id."
+
+[[record.field]]
+name = "mark"
+type = "optional mark"
+is = "Its mark, if it has one."
+
+[[record]]
+name = "root discards"
+holds = "One root's discarded messages."
+
+[[record.field]]
+name = "root"
+type = "uint"
+is = "The root."
+
+[[record.field]]
+name = "discarded"
+type = "uint"
+is = "How many messages it discarded."
+
+[[record]]
+name = "iterator"
+holds = "An iteration in progress."
+
+[[record.field]]
+name = "subject"
+type = "optional value"
+is = "What it iterates."
+
+[[record.field]]
+name = "position"
+type = "uint"
+is = "Its position."
+
+[[record.field]]
+name = "left"
+type = "uint"
+is = "How many items are left."
+
+[[record]]
+name = "reader"
+holds = "A Bytes reader in progress."
+
+[[record.field]]
+name = "subject"
+type = "value"
+is = "The Bytes it reads."
+
+[[record.field]]
+name = "position"
+type = "uint"
+is = "Its position."
+
+[[record]]
+name = "replacement"
+holds = "A Text Pattern replacement in progress."
+
+[[record.field]]
+name = "text"
+type = "value"
+is = "The Text it replaces in."
+
+[[record.field]]
+name = "matches"
+type = "value"
+is = "Its matches."
+
+[[record.field]]
+name = "spans"
+type = "list of span"
+is = "The matched spans."
+
+[[record.field]]
+name = "next"
+type = "uint"
+is = "The next match."
+
+[[record.field]]
+name = "position"
+type = "uint"
+is = "Its position in the Text."
+
+[[record.field]]
+name = "pieces"
+type = "text"
+is = "The output so far."
+
+[[record]]
+name = "span"
+holds = "A matched span of Text."
+
+[[record.field]]
+name = "start"
+type = "uint"
+is = "Its start."
+
+[[record.field]]
+name = "end"
+type = "uint"
+is = "Its end."
+
+[[record]]
+name = "civil date"
+holds = "A date, with or without a time."
+
+[[record.field]]
+name = "year"
+type = "sint"
+is = "Its year."
+
+[[record.field]]
+name = "month"
+type = "uint"
+is = "Its month, 1–12."
+
+[[record.field]]
+name = "day"
+type = "uint"
+is = "Its day, 1–31."
+
+[[record.field]]
+name = "time"
+type = "optional time"
+is = "Its time, if it has one."
+
+[[record]]
+name = "time"
+holds = "A time of day."
+
+[[record.field]]
+name = "hour"
+type = "uint"
+is = "Its hour."
+
+[[record.field]]
+name = "minute"
+type = "uint"
+is = "Its minute."
+
+[[record.field]]
+name = "second"
+type = "uint"
+is = "Its second."
+
+[[record.field]]
+name = "microsecond"
+type = "uint"
+is = "Its microsecond."
+
+# -------------------------------------------------------------------- unions
+
+[[union]]
+name = "value"
+holds = "A Script value. Text and Map values carry a mark byte: bit 0 for a core message, bit 1 for a Script name, every other bit clear."
+
+[[union.variant]]
+tag = 0
+name = "nothing"
+is = "Nothing."
+
+[[union.variant]]
+tag = 1
+name = "boolean"
+is = "A Boolean."
+
+[[union.variant.field]]
+name = "value"
+type = "bool"
+is = "Its value."
+
+[[union.variant]]
+tag = 2
+name = "number"
+is = "A Number."
+
+[[union.variant.field]]
+name = "number"
+type = "decimal"
+is = "Its value."
+
+[[union.variant]]
+tag = 3
+name = "quantity"
+is = "A Quantity."
+
+[[union.variant.field]]
+name = "number"
+type = "decimal"
+is = "Its magnitude."
+
+[[union.variant.field]]
+name = "unit"
+type = "text"
+is = "Its unit, in display form (chapter 3)."
+
+[[union.variant]]
+tag = 4
+name = "text"
+is = "A Text."
+
+[[union.variant.field]]
+name = "marks"
+type = "byte"
+is = "Its marks."
+
+[[union.variant.field]]
+name = "text"
+type = "text"
+is = "Its content."
+
+[[union.variant]]
+tag = 5
+name = "bytes"
+is = "A Bytes."
+
+[[union.variant.field]]
+name = "bytes"
+type = "bytes"
+is = "Its content."
+
+[[union.variant]]
+tag = 6
+name = "list"
+is = "A List."
+
+[[union.variant.field]]
+name = "items"
+type = "list of value"
+is = "Its items, in order."
+
+[[union.variant]]
+tag = 7
+name = "map"
+is = "A Map."
+
+[[union.variant.field]]
+name = "marks"
+type = "byte"
+is = "Its marks."
+
+[[union.variant.field]]
+name = "pairs"
+type = "list of pair"
+is = "Its pairs, in the Map's order."
+
+[[union.variant]]
+tag = 8
+name = "range"
+is = "A Range."
+
+[[union.variant.field]]
+name = "from"
+type = "value"
+is = "Its start."
+
+[[union.variant.field]]
+name = "to"
+type = "value"
+is = "Its end."
+
+[[union.variant]]
+tag = 9
+name = "instant"
+is = "An Instant."
+
+[[union.variant.field]]
+name = "instant"
+type = "instant"
+is = "Its value."
+
+[[union.variant]]
+tag = 10
+name = "civil date"
+is = "A civil date."
+
+[[union.variant.field]]
+name = "date"
+type = "civil date"
+is = "Its value."
+
+[[union.variant]]
+tag = 11
+name = "pattern"
+is = "A Text Pattern."
+
+[[union.variant.field]]
+name = "source"
+type = "text"
+is = "Its source."
+
+[[union.variant]]
+tag = 12
+name = "function"
+is = "A Function Value."
+
+[[union.variant.field]]
+name = "code"
+type = "ref"
+is = "Its code, in `functions`; none for a value this Group didn't make."
+
+[[union.variant.field]]
+name = "display"
+type = "text"
+is = "Its display form."
+
+[[union.variant.field]]
+name = "home"
+type = "text"
+is = "Its home Script."
+
+[[union.variant.field]]
+name = "captures"
+type = "value"
+is = "Its captures, a Map."
+
+[[union.variant]]
+tag = 13
+name = "object"
+is = "A Host Object."
+
+[[union.variant.field]]
+name = "object"
+type = "index"
+is = "The object, in `objects`."
+
+[[record]]
+name = "pair"
+holds = "A Map pair."
+
+[[record.field]]
+name = "key"
+type = "text"
+is = "Its key."
+
+[[record.field]]
+name = "value"
+type = "value"
+is = "Its value."
+
+[[union]]
+name = "unit"
+holds = "Where a code unit is, relative to a Script."
+
+[[union.variant]]
+tag = 0
+name = "own"
+is = "The Script's own base unit."
+
+[[union.variant]]
+tag = 1
+name = "extension"
+is = "One of the Script's extensions."
+
+[[union.variant.field]]
+name = "extension"
+type = "uint"
+is = "Its place in the Script's extensions."
+
+[[union.variant]]
+tag = 2
+name = "library"
+is = "A Library the Group holds."
+
+[[union.variant.field]]
+name = "library"
+type = "index"
+is = "The Library, in `libraries`."
+
+[[union.variant]]
+tag = 3
+name = "stdlib"
+is = "A stdlib Library."
+
+[[union.variant.field]]
+name = "name"
+type = "text"
+is = "Its name."
+
+[[union]]
+name = "slot"
+holds = "An operand stack slot. An iterator, reader or replacement that several slots share is written in full once, the first time, and by position after."
+
+[[union.variant]]
+tag = 0
+name = "value"
+is = "A value."
+
+[[union.variant.field]]
+name = "value"
+type = "value"
+is = "The value."
+
+[[union.variant]]
+tag = 1
+name = "iterator"
+is = "An iterator."
+
+[[union.variant.field]]
+name = "shared"
+type = "ref"
+is = "An iterator already written, by the order they were first written; or none, and the iterator follows."
+
+[[union.variant.field]]
+name = "iterator"
+type = "iterator"
+is = "Present only when `shared` is none."
+
+[[union.variant]]
+tag = 2
+name = "reader"
+is = "A Bytes reader."
+
+[[union.variant.field]]
+name = "shared"
+type = "ref"
+is = "A reader already written; or none, and the reader follows."
+
+[[union.variant.field]]
+name = "reader"
+type = "reader"
+is = "Present only when `shared` is none."
+
+[[union.variant]]
+tag = 3
+name = "replacement"
+is = "A Text Pattern replacement."
+
+[[union.variant.field]]
+name = "shared"
+type = "ref"
+is = "A replacement already written; or none, and the replacement follows."
+
+[[union.variant.field]]
+name = "replacement"
+type = "replacement"
+is = "Present only when `shared` is none."
+
+[[union.variant]]
+tag = 4
+name = "deadline"
+is = "A timeout block's deadline."
+
+[[union.variant.field]]
+name = "at"
+type = "sint"
+is = "The deadline, in microseconds since the Unix epoch."
+
+[[union.variant.field]]
+name = "us"
+type = "sint"
+is = "The block's duration, in microseconds."
+
+[[union]]
+name = "control"
+holds = "A Run's error control."
+
+[[union.variant]]
+tag = 0
+name = "dispatch"
+is = "Choosing a handler for an error."
+
+[[union.variant.field]]
+name = "error"
+type = "value"
+is = "The error."
+
+[[union.variant.field]]
+name = "owner"
+type = "uint"
+is = "The frame that owns the dispatch."
+
+[[union.variant.field]]
+name = "place"
+type = "uint"
+is = "Where in the owner it was raised."
+
+[[union.variant.field]]
+name = "held"
+type = "list of frame"
+is = "The frames held while it dispatches."
+
+[[union.variant.field]]
+name = "owner stack"
+type = "list of slot"
+is = "The owner's operand stack."
+
+[[union.variant.field]]
+name = "owner pc"
+type = "uint"
+is = "The owner's instruction."
+
+[[union.variant.field]]
+name = "search"
+type = "search"
+is = "Its handler search."
+
+[[union.variant]]
+tag = 1
+name = "cleanup"
+is = "Running cleanups before control moves on."
+
+[[union.variant.field]]
+name = "error"
+type = "value"
+is = "The error."
+
+[[union.variant.field]]
+name = "cleanups"
+type = "list of cleanup"
+is = "The cleanups, in order."
+
+[[union.variant.field]]
+name = "next"
+type = "uint"
+is = "The next cleanup."
+
+[[union.variant.field]]
+name = "left"
+type = "bool"
+is = "Whether it has left the frame."
+
+[[union.variant.field]]
+name = "failed"
+type = "uint"
+is = "How many cleanups failed."
+
+[[union.variant.field]]
+name = "failed frame"
+type = "optional uint"
+is = "The frame a cleanup failed in, if one did."
+
+[[union.variant.field]]
+name = "then"
+type = "then"
+is = "Where control goes after."
+
+[[union]]
+name = "then"
+holds = "Where control goes after cleanups."
+
+[[union.variant]]
+tag = 0
+name = "accept"
+is = "On to a handler."
+
+[[union.variant.field]]
+name = "frame"
+type = "uint"
+is = "Its frame."
+
+[[union.variant.field]]
+name = "pc"
+type = "uint"
+is = "Its instruction."
+
+[[union.variant.field]]
+name = "stack"
+type = "list of slot"
+is = "Its operand stack."
+
+[[union.variant]]
+tag = 1
+name = "end"
+is = "The Run ends."
+
+[[union.variant]]
+tag = 2
+name = "cancel"
+is = "The Run is cancelled."
+
+[[union.variant]]
+tag = 3
+name = "transfer"
+is = "To a named recovery offer."
+
+[[union.variant.field]]
+name = "frame"
+type = "uint"
+is = "The offer's frame."
+
+[[union.variant.field]]
+name = "offer entry"
+type = "uint"
+is = "The offer's handler table entry."
+
+[[union.variant.field]]
+name = "record"
+type = "uint"
+is = "The offer record."
+
+[[union.variant.field]]
+name = "offer"
+type = "uint"
+is = "The offer."
+
+[[union.variant.field]]
+name = "args"
+type = "list of value"
+is = "The transfer's arguments."
+
+[[union.variant.field]]
+name = "attempt"
+type = "uint"
+is = "The attempt."
+
+[[union.variant.field]]
+name = "limit"
+type = "optional limit"
+is = "Its bound."
+
+[[union.variant]]
+tag = 4
+name = "search"
+is = "Back to a handler search."
+
+[[union.variant.field]]
+name = "search"
+type = "search"
+is = "The search."
+
+[[union]]
+name = "resume"
+holds = "What a Run or Join Member resumes with; tag 0 for nothing yet."
+
+[[union.variant]]
+tag = 0
+name = "none"
+is = "Nothing yet."
+
+[[union.variant]]
+tag = 1
+name = "answer"
+is = "An answer."
+
+[[union.variant.field]]
+name = "value"
+type = "value"
+is = "The answer."
+
+[[union.variant.field]]
+name = "fuel"
+type = "uint"
+is = "Any cost that came with it."
+
+[[union.variant]]
+tag = 2
+name = "failed"
+is = "A `Fail` with a Script error."
+
+[[union.variant.field]]
+name = "failure"
+type = "failure"
+is = "The error."
+
+[[union.variant]]
+tag = 3
+name = "broken"
+is = "A failure that wasn't a Script error."
+
+[[union.variant]]
+tag = 4
+name = "timeout"
+is = "Its deadline passed."
+
+[[union.variant]]
+tag = 5
+name = "woke"
+is = "A `wait` ran out."
+
+[[union.variant]]
+tag = 6
+name = "reply"
+is = "The reply to a `send … and wait`."
+
+[[union.variant.field]]
+name = "value"
+type = "value"
+is = "The reply."
+
+[[union.variant]]
+tag = 7
+name = "event"
+is = "A `wait for` that fired."
+
+[[union.variant.field]]
+name = "message"
+type = "optional value"
+is = "The message, or none for a timeout or an `after`."
+
+[[union.variant.field]]
+name = "branch"
+type = "uint"
+is = "The branch's number."
+
+[[union.variant.field]]
+name = "binds"
+type = "uint"
+is = "How many names the branch binds."
+
+[[union.variant]]
+tag = 8
+name = "send failed"
+is = "A `send … and wait` that got no reply."
+
+[[union.variant.field]]
+name = "reason"
+type = "text"
+is = "Why."
+
+[[union.variant.field]]
+name = "error"
+type = "optional value"
+is = "The error, if any."
+
+[[union.variant]]
+tag = 9
+name = "joined"
+is = "Every member of its Join answered."
+
+[[union.variant]]
+tag = 10
+name = "join failed"
+is = "A member of its Join failed."
+
+[[union.variant.field]]
+name = "member"
+type = "uint"
+is = "The member."
+
+[[union.variant]]
+tag = 11
+name = "unparked"
+is = "It was unparked."
+
+[[union.variant]]
+tag = 12
+name = "cancelled"
+is = "It was cancelled."
+
+[[union.variant]]
+tag = 13
+name = "lost"
+is = "Its call was lost."
+
+[[union.variant]]
+tag = 14
+name = "limited"
+is = "It hit a limit."
+
+[[union.variant]]
+tag = 15
+name = "revoked"
+is = "Its Grant was revoked."
+
+[[union]]
+name = "branch"
+holds = "A `wait for` branch."
+
+[[union.variant]]
+tag = 0
+name = "when"
+is = "A message branch."
+
+[[union.variant.field]]
+name = "from"
+type = "optional value"
+is = "The sender it waits on, if any."
+
+[[union.variant.field]]
+name = "captures"
+type = "list of value"
+is = "Its captures."
+
+[[union.variant]]
+tag = 1
+name = "after"
+is = "A timeout branch."
+
+[[union.variant.field]]
+name = "at"
+type = "sint"
+is = "Its deadline, in microseconds since the Unix epoch."
+
+[[union]]
+name = "work"
+holds = "One item of a Script's queued work."
+
+[[union.variant]]
+tag = 0
+name = "message"
+is = "A message not yet started."
+
+[[union.variant.field]]
+name = "delivery"
+type = "delivery"
+is = "The message."
+
+[[union.variant]]
+tag = 1
+name = "run"
+is = "A Run ready to continue."
+
+[[union.variant.field]]
+name = "run"
+type = "index"
+is = "The Run, in `runs`."
+
+[[union]]
+name = "part"
+holds = "A Decision recipient's part so far."
+
+[[union.variant]]
+tag = 0
+name = "none"
+is = "Not decided yet."
+
+[[union.variant]]
+tag = 1
+name = "allowed"
+is = "Allowed."
+
+[[union.variant]]
+tag = 2
+name = "vetoed"
+is = "Vetoed."
+
+[[union.variant.field]]
+name = "mark"
+type = "mark"
+is = "The veto."
+
+[[union.variant]]
+tag = 3
+name = "undecided"
+is = "Ended without deciding."
+
+[[union.variant.field]]
+name = "mark"
+type = "mark"
+is = "How it ended."
+
+[[union]]
+name = "input"
+holds = "A queued Host input. A charge request in the queue refuses the save with `effects pending`, so it has no tag."
+
+[[union.variant]]
+tag = 0
+name = "settlement"
+is = "A restored call's settlement, queued before the first Pump."
+
+[[union.variant.field]]
+name = "id"
+type = "text"
+is = "The call id."
+
+[[union.variant.field]]
+name = "how"
+type = "byte"
+is = "0 answer, 1 fail, 2 reissue, 3 adopt."
+
+[[union.variant.field]]
+name = "with"
+type = "resume"
+is = "Its result."
+
+[[union.variant]]
+tag = 1
+name = "deliver"
+is = "A Delivery to a Script."
+
+[[union.variant.field]]
+name = "script"
+type = "text"
+is = "The Script, or empty for its Target."
+
+[[union.variant.field]]
+name = "delivery"
+type = "delivery"
+is = "The Delivery."
+
+[[union.variant]]
+tag = 2
+name = "set parent"
+is = "`setParent`."
+
+[[union.variant.field]]
+name = "object"
+type = "ref"
+is = "The object, in `objects`."
+
+[[union.variant.field]]
+name = "parent"
+type = "ref"
+is = "Its new parent, in `objects`."
+
+[[union.variant]]
+tag = 3
+name = "dispose"
+is = "`dispose`."
+
+[[union.variant.field]]
+name = "object"
+type = "ref"
+is = "The object, in `objects`."
+
+[[union.variant]]
+tag = 4
+name = "settle"
+is = "An answer or failure for a suspending call."
+
+[[union.variant.field]]
+name = "id"
+type = "text"
+is = "The call id."
+
+[[union.variant.field]]
+name = "with"
+type = "resume"
+is = "Its result."
+
+[[union.variant]]
+tag = 5
+name = "broadcast"
+is = "A Broadcast or Broadcast Decision; its recipients are found as the queue drains."
+
+[[union.variant.field]]
+name = "id"
+type = "uint"
+is = "Its Broadcast id."
+
+[[union.variant.field]]
+name = "message"
+type = "text"
+is = "Its message name."
+
+[[union.variant.field]]
+name = "args"
+type = "list of value"
+is = "Its arguments."
+
+[[union.variant.field]]
+name = "decision"
+type = "bool"
+is = "Whether it is a Decision."
+
+[[union.variant.field]]
+name = "limits"
+type = "optional override"
+is = "Its limit overrides, if any."
+
+[[union.variant]]
+tag = 6
+name = "revoke"
+is = "Revoking a Script's Grant."
+
+[[union.variant.field]]
+name = "script"
+type = "text"
+is = "The Script."
+
+[[union.variant.field]]
+name = "grant"
+type = "text"
+is = "The Grant."
+
+[[union.variant]]
+tag = 7
+name = "cancel run"
+is = "Cancelling a Run."
+
+[[union.variant.field]]
+name = "run"
+type = "text"
+is = "The Run id."
+
+[[union.variant]]
+tag = 8
+name = "rewind run"
+is = "Rewinding a Run in its first Segment to its message."
+
+[[union.variant.field]]
+name = "run"
+type = "text"
+is = "The Run id."
+
+[[union.variant]]
+tag = 9
+name = "stop"
+is = "Stopping a Script."
+
+[[union.variant.field]]
+name = "script"
+type = "text"
+is = "The Script."
+
+[[union.variant.field]]
+name = "reason"
+type = "text"
+is = "Why."
+
+[[union.variant]]
+tag = 10
+name = "cancel delivery"
+is = "Cancelling a Delivery."
+
+[[union.variant.field]]
+name = "delivery"
+type = "uint"
+is = "Its Delivery id."
+
+[[union.variant]]
+tag = 11
+name = "cancel broadcast"
+is = "Cancelling a Broadcast."
+
+[[union.variant.field]]
+name = "broadcast"
+type = "uint"
+is = "Its Broadcast id."

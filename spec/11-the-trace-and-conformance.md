@@ -678,6 +678,14 @@ Every Trace Case is also run a second way, to check that save then restore is un
 - **Explicit save/restore boundaries** in a case use its own records and settlements; the runner omits the extra hidden round-trip there, so automatic Adopt inputs cannot enter a visible save.
 - **Hand-written cases** cover what this can't reach: settling by answer, fail and reissue, variables-only restores, and restoring with Grants, Libraries or Host Objects the Host no longer has ([chapter 10](10-save-and-restore.md)).
 
+### Cross-Core replays
+
+Every save restores on either Core ([ADR 0144](../docs/adr/0144-a-save-restores-on-either-core.md)), so a runner that hosts both Cores also runs each Trace Case with every save, the replay's hidden ones and a case's explicit ones alike, restored on the other Core.
+
+- **Four directions:** each save is taken on one Core and restored on each, TS to TS, TS to Zig, Zig to TS and Zig to Zig, with the same policy, Grants, Host Objects and settlements as the save and restore replay.
+- **The same Trace:** the Trace after the restore must equal the case's, as for the save and restore replay.
+- **The same bytes:** both Cores' saves of the same state must be byte-identical, and a save of the restored Group, with nothing run between, must equal the save it came from apart from the Trace save id counter. Their State Fingerprints must be equal.
+
 ## Other case kinds
 
 ### Disassembly Cases

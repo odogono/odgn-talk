@@ -44,6 +44,11 @@ support and limitations belong in the [TS](../impl/ts/README.md),
   or separate invocation is needed for them. Zig CI also runs a third pass,
   `zig build corpus -- --defer-crossings`, which defers each eligible crossing
   once and must leave every Trace unchanged.
+- **Cross-Core replay:** a runner hosting both Cores restores every save of a
+  Trace Case on the other Core as well, in all four directions, and requires
+  the same Trace, byte-identical saves and equal State Fingerprints
+  ([chapter 11](../spec/11-the-trace-and-conformance.md#cross-core-replays)).
+  No runner does this yet; it arrives with the shared save format (#1719).
 - **Session Transcript:** drive the Session Host with `session.transcript` and
   compare both printed output and the emitted `case.trace`, as the
   [conformance requirement](../spec/11-the-trace-and-conformance.md#conformance)
