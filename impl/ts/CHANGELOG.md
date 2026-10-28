@@ -7,6 +7,40 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
+### Added
+
+- **ts:** Add a `closeTimeoutMs` driver option so `drive.close()` resolves after a bound, reporting Host `run` Promises still pending to `onCloseTimeout`, and document that a suspending Operation's `run` must settle once `call.signal` aborts (#1553).
+- **ts:** Add `script.handlers` to Scripts loaded through `createGroup`, and `handlersOf(script)` for any Script, to call Handlers with plain JS arguments and answers over either Core. `group.load<T>()` optionally types those calls.
+- **ts:** The TS Core runs `set` through a property's value, such as `set the isLocked of the door of me to true`, with one Get and one Set that a Stop, cancel or rewind never lands between (#1626).
+- **spec:** `set` writes a path below a Host Object property, so `set the isLocked of the door of me to true` reads `door`, changes one key and writes it back with one Set. A Stop, cancel or rewind never lands between the read and the write (#1626).
+- **spec:** A Host Manifest may name an Owner Kind with `ownerKind`: the Object Kind of `me` for its kind of Script, which tooling reads and the Core never does. `ExportManifest` writes it last and refuses a kind that isn't in `objectKinds` (#1628).
+- **spec:** Add `withPath`, `withoutPath` and `hasPath` to the `map` Library, which write, remove and test a value through a Value Path given as data, and `pointerPath` to the `json` Library, which converts JSON Pointer text to a Value Path (#1631).
+- **spec:** Add `applyPatch(doc, patch)` to the `json` Library, which applies an RFC 6902 JSON Patch to a value and raises the new `can't patch` error when an operation fails (#1632).
+- **ts:** Add `inlineGrants` to expose plain JS functions as immediate or suspending Operations, with plain-data conversion and cancellation signals, over the TS Core and Zig Host Adapter (#1562).
+- **ts:** Accept safe-integer JS numbers in `toValue` with `{ numbers: 'integer' }`, including inside arrays, objects and Maps. The default still refuses JS numbers.
+- **ts:** Add `createGroup({ name, core?, ...driverOptions })` for a driven Group with `close(reason?)` and `await using` disposal. The root export defaults to the process-wide TS Core; `/wasm` requires an explicit Core.
+- **spec:** Run `the elements of o`, `repeat for each` over it, and `every element … whose` / `the first element … whose` on the TS and Zig Cores, through the new `list-elements` instruction (#1627).
+- **spec:** Specify walking a Host Object's Object Collection: `the elements of o` gives its members as a list, so `repeat for each` and `every element … whose` work over a room's contents (#1627).
+
+### Fixed
+
+- **ts:** `openSqliteDatabase('')` and `openSqliteDatabase(':memory:')` now say to open a file in a temporary directory instead, and the README explains why an in-memory database isn't supported.
+- **ts:** Keep the TS debugger from pausing inside a `set` through a property's value, so a Stop, cancel or Rewind made at a pause can't land between its Get and its Set, and defer a replay landing recorded inside one until the Set (#1642).
+- **ts:** Require Node 24.10 or later for every `@northtalk/ts` entry point, including Core-only applications, and verify the packed package and server runtime kits at that minimum. Node 22 and Node versions below 24.10 are no longer supported. Bun and browser support are unchanged.
+- **ts:** Passing plain JS where a Value is expected, as in `script.invoke('hit', 'bob')`, now gives an error that names the call, the argument's position and its JS type. It suggests `text()`, `num()` or `toValue()`, or `script.handlers.<name>(...)` for a named Handler. This works on both Cores and for `invoke`, `request`, `deliver`, `decide`, `broadcast`, `call` and `callPump`.
+
+### Performance
+
+- **ts:** Reduce Script and Library Load time by compacting precedence syntax, climbing operator precedence in one parser task, building the semantic tree in the checker's bounds walk, and avoiding repeated token copies and line searches while lexing.
+- **ts:** Run TS Core iteration, key reads, appends, function calls and returns on the fast path, and step many instructions per Group callback, cutting `core/fib` and `core/calls` Run time by roughly 35–45% on Bun (#1585).
+- **ts:** Reduce TS Core instruction overhead by reusing charging scratch space, popping operand stacks directly and privately owning immutable Value and Map data (#1580).
+- **ts:** Defer arithmetic result text until it is read, count decimal digits without BigInt string conversion, and skip multiplying or dividing a checked value by exactly 1.
+- **ts:** Cut TS Core Load time by about 15%, and LSP reanalysis by about 13%, by finding the checker's per-element records by source position, sharing unchanged control-flow contexts, building tokens without object spreads and caching recent code identities (#1586).
+- **ts:** Build map literals in one pass and append single List items along one edge path in the TS Core, so collecting record rows runs about a third faster (#1583).
+- **ts:** Cache Text measurements and Characters in the TS Core, and normalize concatenation only at the join, so building and reading text avoids repeated full-string scans.
+
 ## [0.2.0] - 2026-10-23
 
 ### Breaking
