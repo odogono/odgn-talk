@@ -30,9 +30,11 @@ const types: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.map': 'application/json',
+  '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.folio': 'application/vnd.odgn.northtalk-project+zip',
 };
 
 type Check = { error?: string; name?: string; passed: boolean };
@@ -131,7 +133,13 @@ const server = Bun.serve({
   port: 0,
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    const file = resolve(dist, `.${path === '/' ? '/index.html' : path}`);
+    // As `serve.ts` and Cloudflare do, a directory's path serves its
+    // `index.html`; the service worker caches Example Project pages such
+    // as `/tetris/`, and one 404 fails its whole install.
+    const file = resolve(
+      dist,
+      `.${path.endsWith('/') ? `${path}index.html` : path}`,
+    );
     if (!file.startsWith(dist) || !(await Bun.file(file).exists())) {
       return new Response('Not found', { status: 404 });
     }
