@@ -46,6 +46,7 @@ const DATA_FILES = [
   'stdlib',
   'corpus',
   'session',
+  'save-format',
 ] as const;
 type DataName = (typeof DATA_FILES)[number];
 type Data = Record<DataName, any>;
@@ -303,7 +304,58 @@ const corpusCheck = (d: Data) => {
   }
 };
 
+// Each type a save-format field names must resolve, and tags, names and the
+// sections' order must be unique.
+const checkSaveFormat = (f: any) => {
+  const fail = (msg: string) =>
+    problems.push(`spec/data/save-format.toml: ${msg}`);
+  const named = [...f.primitive, ...f.record, ...f.union].map(
+    (x: any) => x.name,
+  );
+  for (const n of duplicates(named)) {
+    fail(`"${n}" is defined twice`);
+  }
+  const known = new Set(named);
+  const resolve = (type: string, where: string) => {
+    const base = type.replace(/^(optional |list of )+/, '');
+    if (!known.has(base)) {
+      fail(`${where} names unknown type "${base}"`);
+    }
+  };
+  const fields = (list: any[] | undefined, where: string) => {
+    for (const n of duplicates((list ?? []).map(x => x.name))) {
+      fail(`${where} has field "${n}" twice`);
+    }
+    for (const x of list ?? []) {
+      resolve(x.type, `${where} field "${x.name}"`);
+    }
+  };
+  fields(f.header, 'the header');
+  const tags = f.section.map((x: any) => x.tag);
+  if (tags.some((t: number, i: number) => i > 0 && t <= tags[i - 1])) {
+    fail('sections are not in ascending tag order');
+  }
+  for (const n of duplicates(f.section.map((x: any) => x.name))) {
+    fail(`section "${n}" is listed twice`);
+  }
+  for (const x of f.section) {
+    fields(x.field, `section "${x.name}"`);
+  }
+  for (const x of f.record) {
+    fields(x.field, `record "${x.name}"`);
+  }
+  for (const u of f.union) {
+    for (const t of duplicates(u.variant.map((v: any) => String(v.tag)))) {
+      fail(`union "${u.name}" uses tag ${t} twice`);
+    }
+    for (const v of u.variant) {
+      fields(v.field, `union "${u.name}" variant "${v.name}"`);
+    }
+  }
+};
+
 const crossCheck = (d: Data) => {
+  checkSaveFormat(d['save-format']);
   const fail = (file: string, msg: string) =>
     problems.push(`spec/data/${file}: ${msg}`);
 
@@ -740,7 +792,50 @@ const sources = (list: string[], file: string): string =>
     })
     .join(', ');
 
+const fieldTable = (fields: any[], file: string) =>
+  table(
+    ['Field', 'Type', 'Is'],
+    fields.map(x => [x.name, code(x.type), prose(x.is, file)]),
+  );
+
 const VIEWS: Record<string, View> = {
+  'save-format.primitives': d =>
+    table(
+      ['Type', 'Encoding'],
+      d['save-format'].primitive.map((x: any) => [code(x.name), x.encoding]),
+    ),
+  'save-format.header': (d, file) => fieldTable(d['save-format'].header, file),
+  'save-format.sections': (d, file) =>
+    d['save-format'].section
+      .map(
+        (x: any) =>
+          `#### ${x.tag}: ${x.name} (${x.required ? 'required' : 'optional'})\n\n${prose(x.holds, file)}\n\n${fieldTable(x.field, file)}`,
+      )
+      .join('\n\n'),
+  'save-format.records': (d, file) =>
+    d['save-format'].record
+      .map(
+        (x: any) =>
+          `#### ${x.name}\n\n${prose(x.holds, file)}\n\n${fieldTable(x.field, file)}`,
+      )
+      .join('\n\n'),
+  'save-format.unions': (d, file) =>
+    d['save-format'].union
+      .map(
+        (u: any) =>
+          `#### ${u.name}\n\n${prose(u.holds, file)}\n\n${table(
+            ['Tag', 'Variant', 'Is', 'Then'],
+            u.variant.map((v: any) => [
+              v.tag,
+              v.name,
+              prose(v.is, file),
+              (v.field ?? [])
+                .map((x: any) => `${x.name}: ${code(x.type)}`)
+                .join('; '),
+            ]),
+          )}`,
+      )
+      .join('\n\n'),
   ...Object.fromEntries(
     [
       'messages',

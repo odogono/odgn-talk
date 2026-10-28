@@ -842,7 +842,7 @@ the Message Layer and `@northtalk/ts/wasm` do not support it. There is no
 cross-Core compatibility or legacy format reader. Format-9 saves must be
 consumed with the old Core or replaced under the Host's own upgrade policy.
 
-See [chapter 10](../../spec/10-save-and-restore.md#native-ts-source-modes)
+See [chapter 10](../../spec/10-save-and-restore.md#source-modes)
 for the contract and the [snapshot benchmark](../../bench/README.md#ts-snapshot-sizes)
 for reproducible synthetic size and timing measurements.
 

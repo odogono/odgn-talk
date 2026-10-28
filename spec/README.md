@@ -67,6 +67,7 @@ Before editing grammar, instructions or catalogues, use the [change-impact guide
 | [`machine.toml`](data/machine.toml) | The Abstract Machine's instruction set | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`costs.toml`](data/costs.toml) | The Cost Model | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`host-errors.toml`](data/host-errors.toml) | The Host error catalogue | [9](09-embedding.md) |
+| [`save-format.toml`](data/save-format.toml) | The save format: its header, sections, records and unions | [10](10-save-and-restore.md) |
 | [`stdlib.toml`](data/stdlib.toml) | The Built-ins, the stdlib Libraries' exports, the text encodings `bytes` decodes, and the Standard Capabilities' Operations | [7](07-libraries-and-the-standard-library.md) |
 | [`corpus.toml`](data/corpus.toml) | The Trace's records and their keys, and the keys of `case.toml` | [11](11-the-trace-and-conformance.md) |
 | [`trace.ebnf`](data/trace.ebnf) | The grammars of the display form, the Trace's lines, Value Encoding case files and Session Transcripts | [11](11-the-trace-and-conformance.md), [12](12-sessions-and-tooling.md) |
