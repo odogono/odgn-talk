@@ -30,3 +30,4 @@ This narrows ADR 0005. Every core (TS now, Go later) must be able to save a set 
 - Narrowed by [ADR 0049](0049-live-host-effects-prevent-saving.md): Save refuses a Group with live Capability Scopes or provisional Segment-bound effects, including at a preemption boundary. Successful save/restore remains unobservable.
 - Narrowed by [ADR 0058](0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md): the Host gets a restored Group's handles back with `group.ObjectByID(kind, id)`, completing #72's note on `Resolve`.
 - Extended by [ADR 0111](0111-snapshot-sources-may-come-from-the-host.md): native TS may obtain Script sources from the Host, verifying every code identity before full continuation; explicitly chosen variables-only recovery can use current replacement sources.
+- Superseded in part by [ADR 0144](0144-a-save-restores-on-either-core.md): a save restores on either Core, in one shared binary format.
