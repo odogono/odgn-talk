@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Serve the built creative tool locally. With `--watch`, rebuild on each
 // change under src/ and static/ (the Core and tooling are rebuilt with it).
-import { watch } from 'node:fs';
+import { existsSync, watch } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { build } from './build';
 
@@ -45,6 +45,7 @@ const types: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.folio': 'application/vnd.odgn.northtalk-project+zip',
 };
 
 const server = Bun.serve({
@@ -52,7 +53,18 @@ const server = Bun.serve({
   port,
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    const file = resolve(dist, `.${path === '/' ? '/index.html' : path}`);
+    // As Cloudflare does, a directory's path ends in `/` and serves its
+    // `index.html`, such as an Example Project's `/tetris/`.
+    if (
+      !path.endsWith('/') &&
+      existsSync(resolve(dist, `.${path}/index.html`))
+    ) {
+      return Response.redirect(new URL(`${path}/`, request.url).href, 307);
+    }
+    const file = resolve(
+      dist,
+      `.${path.endsWith('/') ? `${path}index.html` : path}`,
+    );
     if (!file.startsWith(dist) || !(await Bun.file(file).exists())) {
       return new Response('Not found', { status: 404 });
     }

@@ -14,6 +14,7 @@ import { mountOffline } from './offline';
 import { mountStack } from './stack';
 import { mountPlay } from './play-view';
 import { openProjectStorage, type ProjectStorage } from './storage';
+import { EXAMPLE_META } from './examples';
 
 const element = (id: string) => {
   const found = document.getElementById(id);
@@ -22,6 +23,17 @@ const element = (id: string) => {
   }
   return found;
 };
+
+// An Example Project's page, `/folio/<slug>/`, names it in a meta tag
+// (ADR 0141). The address goes back to Folio's own before anything loads
+// by a relative URL, so the page's workers resolve as usual, and so a
+// reload opens the copy just made rather than another one.
+const exampleSlug = document.querySelector<HTMLMetaElement>(
+  `meta[name="${EXAMPLE_META}"]`,
+)?.content;
+if (exampleSlug) {
+  history.replaceState(null, '', new URL('../', location.href));
+}
 
 element('core').textContent = `Core ${coreVersions.core}`;
 mountMenus(`NorthTalk Core ${coreVersions.core}`);
@@ -57,6 +69,7 @@ const boot = async (): Promise<void> => {
   mountPlay(shell);
   mountProjects({
     channel,
+    exampleSlug,
     initial,
     lock,
     lockDelegate,

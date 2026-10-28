@@ -86,6 +86,7 @@ const mount = (stored = true) => {
   const examples: ExampleProject[] = [
     {
       name: 'Sample',
+      slug: 'sample',
       description: 'A sample.',
       create: () => Promise.reject(new Error('unused')),
     },
