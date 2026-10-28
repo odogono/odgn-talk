@@ -317,6 +317,7 @@ recovery-offers/boundaries
 recovery-offers/cancellation
 recovery-offers/cleanup-restore
 recovery-offers/costs
+recovery-offers/escape-order
 recovery-offers/nested
 reload/decomposed-source
 reload/extend-script-name
