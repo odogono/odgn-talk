@@ -485,7 +485,7 @@ The Name that starts a Whose Clause's condition, read as a key or property of `i
 _Avoid_: implicit key, bare key
 
 **Every Head**:
-The `every item of xs` that starts a Whose Clause's list form. It is never written without `whose`.
+The `every item of xs` or `every element of o` that starts a Whose Clause's list form. It is never written without `whose`.
 _Avoid_: every reference, every chunk
 
 **Beginner Surface**:
@@ -791,7 +791,7 @@ A family of Host Objects the Host defines once per process, with its properties 
 _Avoid_: object type, class
 
 **Object Collection**:
-An ordered collection of Host Objects exposed by a Host Object, with a unique name for each member. Its membership and order are independent of Message Path ancestry.
+An ordered collection of Host Objects exposed by a Host Object, with a unique name for each member. Its membership and order are independent of Message Path ancestry. `the elements of o` gives its members as a list, as they were when it was read.
 _Avoid_: child list, parent graph
 
 **Unit Kind**:

@@ -1,5 +1,7 @@
 # Object element references use a fixed spelling and a Host collection
 
+[ADR 0138](0138-an-object-collection-is-walked-as-an-eager-snapshot-list.md) amends this: `the elements of o` and `whose` over elements are now included.
+
 Folio's collection policy is extended by [ADR 0103](0103-folio-groups-are-nested-elements-with-page-wide-names.md):
 Group Elements expose immediate members, and Page collections include groups
 and descendants in postorder. The Core reference mechanism is unchanged.
