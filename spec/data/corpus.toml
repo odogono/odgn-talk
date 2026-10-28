@@ -511,7 +511,7 @@ is = "the save it restores"
 key = "mismatch"
 type = "word"
 optional = true
-words = ["variables-only"]
+words = ["variables-only", "reload-changed"]
 is = "the Host's policy for a mismatch, when it isn't to reject"
 
 [[record.key]]
@@ -536,8 +536,15 @@ is = "the save's Group Fingerprint"
 key = "mode"
 type = "word"
 filled = true
-words = ["full", "variables-only"]
+words = ["full", "partial", "variables-only"]
 is = "the kind of restore"
+
+[[record.key]]
+key = "reloaded"
+type = "ids"
+optional = true
+filled = true
+is = "for a Partial Restore, the Scripts rebuilt from their new code"
 
 [[record.key]]
 key = "pending"
@@ -557,21 +564,21 @@ key = "discarded"
 type = "ids"
 optional = true
 filled = true
-is = "for a variables-only restore, the discarded Runs"
+is = "for a variables-only or Partial Restore, the discarded Runs"
 
 [[record.key]]
 key = "dropped"
 type = "ids"
 optional = true
 filled = true
-is = "for a variables-only restore, the dropped Deliveries"
+is = "for a variables-only or Partial Restore, the dropped Deliveries"
 
 [[record.key]]
 key = "abandoned"
 type = "ids"
 optional = true
 filled = true
-is = "for a variables-only restore, the abandoned calls"
+is = "for a variables-only or Partial Restore, the abandoned calls"
 
 [[record]]
 name = "counters"

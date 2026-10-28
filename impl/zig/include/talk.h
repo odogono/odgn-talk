@@ -1554,7 +1554,10 @@ talk_host_error_code talk_group_state_fingerprint(talk_group *g, uint8_t out[32]
 talk_host_error_code talk_core_state_fingerprint(talk_core *c, const uint8_t *save, size_t len, uint8_t out[32]);
 typedef enum talk_mismatch_policy {
     TALK_REJECT_MISMATCH,
-    TALK_VARIABLES_ONLY
+    TALK_VARIABLES_ONLY,
+    /* Not yet implemented (#1701): rejects a mismatch as
+     * TALK_REJECT_MISMATCH does. */
+    TALK_RELOAD_CHANGED
 } talk_mismatch_policy;
 /* C only: talk.go's Grants function, a Script's named Grant re-bound, or
  * NULL to restore it revoked. */

@@ -1293,6 +1293,7 @@ type MismatchPolicy int
 const (
 	RejectMismatch MismatchPolicy = iota
 	VariablesOnly
+	ReloadChanged // a Partial Restore when only Script code changed
 )
 
 // Restore is safe from any goroutine; the Group it returns has not been
@@ -1307,6 +1308,7 @@ func (c *Core) StateFingerprint(save []byte) ([32]byte, error)
 type RestoreResult struct {
 	Reports       []Report // accounting baseline, including saved work discarded on restore
 	VariablesOnly bool
+	Reloaded      []string      // the Scripts a Partial Restore rebuilt, in load order
 	Pending       []PendingCall // each must be settled before the first Pump
 	DiscardedRuns []RunID
 	Disposed      []ObjectRef // the Host Objects that didn't resolve

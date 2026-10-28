@@ -610,6 +610,10 @@ _Avoid_: snapshot hash, checksum, state hash
 Rebuilding a Script Group from a Script Snapshot, on the same Core family. Its Host Objects come back as new handles, keeping their Object Kind, id, parent and disposal.
 _Avoid_: load, deserialize, rehydrate
 
+**Partial Restore**:
+A Restore whose only mismatch is that some Scripts' code changed. It continues the Scripts whose code matches exactly, and rebuilds each changed Script from its new code as a Reload would leave it, with its Script Variables carried over.
+_Avoid_: selective restore, mixed restore
+
 **Resolve**:
 The Host's step in a Restore that turns each saved Host Object's Object Kind and id back into the thing the Host owns. One it can't resolve comes back disposed.
 _Avoid_: rebind, name resolution (that's for names in Scripts)

@@ -230,7 +230,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `set-parent` |  | `object`, `parent` | sets a Host Object's parent |
 | `dispose` |  | `object` | disposes a Host Object |
 | `save` | `save` |  | saves the Group |
-| `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
+| `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `reloaded`?\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
 | `counters` | `script` |  | reads the Script's Counters without draining Host Inputs; writes one `counters` record |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
 | `stub-effect` | `grant` | `phase`, `status` | queues a synchronous lifecycle hook result for the participant whose first enrolled Grant is <script>.<granted name>; a runner input, not a queued Core input |
@@ -296,16 +296,17 @@ A record is written when what it records happens, so a Trace is in the order the
 | `set-parent` | `parent` | `value` | its new parent, or `nothing` |
 | `dispose` | `object` | `value` | the object |
 | `restore` | `from` | `id` | the save it restores |
-| `restore` | `mismatch` | `word` | the Host's policy for a mismatch, when it isn't to reject: `variables-only` |
+| `restore` | `mismatch` | `word` | the Host's policy for a mismatch, when it isn't to reject: `variables-only`, `reload-changed` |
 | `restore` | `unbound` | `ids` | the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked |
 | `restore` | `withheld` | `ids` | the Libraries the Host doesn't pass, by name, so a save that needs one is a mismatch |
 | `restore` | `fingerprint` | `hex` | the save's Group Fingerprint |
-| `restore` | `mode` | `word` | the kind of restore: `full`, `variables-only` |
+| `restore` | `mode` | `word` | the kind of restore: `full`, `partial`, `variables-only` |
+| `restore` | `reloaded` | `ids` | for a Partial Restore, the Scripts rebuilt from their new code |
 | `restore` | `pending` | `ids` | the pending calls, for the Host to settle |
 | `restore` | `disposed` | `value` | the Host Objects the Host doesn't resolve, a list, which restore as disposed |
-| `restore` | `discarded` | `ids` | for a variables-only restore, the discarded Runs |
-| `restore` | `dropped` | `ids` | for a variables-only restore, the dropped Deliveries |
-| `restore` | `abandoned` | `ids` | for a variables-only restore, the abandoned calls |
+| `restore` | `discarded` | `ids` | for a variables-only or Partial Restore, the discarded Runs |
+| `restore` | `dropped` | `ids` | for a variables-only or Partial Restore, the dropped Deliveries |
+| `restore` | `abandoned` | `ids` | for a variables-only or Partial Restore, the abandoned calls |
 | `stub-effect` | `phase` | `word` | the hook: `begin`, `commit`, `rollback` |
 | `stub-effect` | `status` | `word` | the definite or uncertain Host outcome: `ok`, `failed`, `unknown` |
 

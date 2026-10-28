@@ -25,6 +25,7 @@ const (
 type RestoreResult struct {
 	Reports         []Report
 	VariablesOnly   bool
+	Reloaded        []string
 	Pending         []PendingCall
 	DiscardedRuns   []RunID
 	Disposed        []ObjectRef

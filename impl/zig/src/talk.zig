@@ -1594,7 +1594,7 @@ pub export fn talk_core_state_fingerprint(c: *Core, save: ?[*]const u8, len: usi
     return .ok;
 }
 
-pub const MismatchPolicy = enum(c_int) { reject_mismatch, variables_only };
+pub const MismatchPolicy = enum(c_int) { reject_mismatch, variables_only, reload_changed };
 
 pub const RebindFn = ?*const fn (context: ?*anyopaque, script: [*]const u8, script_len: usize, name: [*]const u8, name_len: usize) callconv(.c) ?*caps.Grant;
 pub const ResolveFn = ?*const fn (context: ?*anyopaque, kind: [*]const u8, kind_len: usize, id: [*]const u8, id_len: usize, native: *?*anyopaque) callconv(.c) bool;
