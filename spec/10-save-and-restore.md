@@ -184,7 +184,7 @@ The Group's counters and its record of issued call ids.
 | deliveries | `uint` | The last Delivery id issued. |
 | broadcasts | `uint` | The last Broadcast id issued. |
 | timers | `uint` | The timer counter. |
-| run order | `uint` | The Run order counter. |
+| run order | `uint` | The number of Runs the Group has started, counted at each `run started` report. A Run's `order` is this count when it started. |
 | charge counter | `uint` | The charge request counter. |
 | random state | `uint` | The Group's random generator state. |
 | issued calls | `list of issued` | Each Run's issued call numbers, by Run id in ascending byte order. |
@@ -207,11 +207,11 @@ Every Host Object the Group has seen, by Object Kind and id.
 
 #### 4: functions (required)
 
-The code of every Function Value the Group made.
+The code of every Function Value the save holds, and no other.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| functions | `list of function` | In the order they were made. A Function Value's `code` points here. |
+| functions | `list of function` | Numbered in the order the writer first meets a Function Value with that code: the other sections in tag order, each one's fields in order, and each value depth-first as written, a Function Value before its captures. A Function Value's `code` points here. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order. |
 
 #### 5: calls (required)
 
@@ -248,12 +248,11 @@ Each Script's queued work.
 
 #### 9: waits (required)
 
-Every pending wait, with a deadline or not, in the order they were set, and the Group's issued Run ids.
+Every pending wait, with a deadline or not, in the order they were set.
 
 | Field | Type | Is |
 | --- | --- | --- |
 | waits | `list of deadline wait` | Every Run's and Join Member's `pending`, in the order the waits were set. |
-| ids | `list of text` | The Run ids the Group has issued and not yet released, in issue order. |
 
 #### 10: inputs (required)
 
