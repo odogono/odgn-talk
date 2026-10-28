@@ -1,6 +1,13 @@
 import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
-import { newGroup, num, restore } from '../src/index';
+import {
+  defineObjectKind,
+  map,
+  newGroup,
+  num,
+  restore,
+  type Value,
+} from '../src/index';
 import { compileSource } from '../src/lowering';
 
 const source =
@@ -468,4 +475,69 @@ test('a Host Function call with wrong arity breaks before its entry Error', () =
   expect(operationalReports(debug.resume().reports)).toContainEqual(
     expect.objectContaining({ outcome: 'errored', fuel: 0 }),
   );
+});
+
+// A set through a property's value is one landing unit (ADR 0135).
+const holdSource =
+  'script variable n = 0\non go\n  put 1 into n\n  set the a of the state of box to 1\n  put 2 into n\nend go';
+const holdSetup = () => {
+  const code = compileSource(holdSource, { name: 's' }).unit!.code;
+  const trace: string[] = [];
+  const group = newGroup({ name: 'g', trace: line => trace.push(line) });
+  let state: Value = map([]);
+  const sets: Value[] = [];
+  const kind = defineObjectKind<null>({
+    name: 'box',
+    props: {
+      state: {
+        get: () => state,
+        set: (_o, value) => {
+          state = value;
+          sets.push(value);
+        },
+      },
+    },
+  });
+  const box = group.object(kind, 'b', null);
+  const s = group.load({ name: 's', objects: { box }, source: holdSource });
+  const hold = code.findIndex(i => i.op === 'hold');
+  return {
+    group,
+    s,
+    trace,
+    sets,
+    // Between the Get and the Set.
+    inside: code.findIndex((i, pc) => pc > hold && i.op === 'get-key') + 1,
+    after: code.findIndex(i => i.line === 5),
+  };
+};
+
+test('a debugger does not pause inside a hold, so a Stop lands after its Set', () => {
+  const t = holdSetup();
+  const debug = t.group.debug();
+  debug.breakAt([
+    { unit: 's', pc: t.inside },
+    { unit: 's', pc: t.after },
+  ]);
+  t.s.deliver({ name: 'go' });
+  t.group.pump(0n);
+  expect(debug.current?.pc).toBe(t.after);
+  expect(t.sets).toHaveLength(1);
+  t.s.stop('early');
+  debug.clearBreaks();
+  debug.resume();
+  expect(t.trace).toContain(`> stop s reason="early" pc=${t.after}`);
+  expect(t.sets).toHaveLength(1);
+});
+
+test('a replay landing inside a hold is deferred until the hold closes', () => {
+  const t = holdSetup();
+  const debug = t.group.debug();
+  t.s.deliver({ name: 'go' });
+  debug.landAt(3, { unit: 's', pc: t.inside });
+  t.group.pump(0n);
+  expect(debug.current?.reason).toBe('replay');
+  expect(debug.current?.hostInputIndex).toBe(3);
+  expect(debug.current!.pc).toBeGreaterThan(t.inside);
+  expect(t.sets).toHaveLength(1);
 });
