@@ -126,6 +126,16 @@ end t
 on t
   put 12 USD/month into rent
 end t
+-- case: a Unit after a Name, not a number (#1694)
+-- expect: unit without number at 2:13
+on t
+  wait tick s
+end t
+-- case: a Unit after a parenthesised expression
+-- expect: unit without number at 2:15
+on t
+  put (a + b) ms into x
+end t
 -- case: parses: a spaced `/` divides
 -- expect: parses
 on t

@@ -9,6 +9,7 @@ export type SyntaxErrorCode =
   | 'bad character'
   | 'unterminated text'
   | 'bad unit'
+  | 'unit without number'
   | 'unexpected token'
   | 'not a container';
 

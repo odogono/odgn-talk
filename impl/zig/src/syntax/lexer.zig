@@ -97,6 +97,7 @@ pub const Code = enum {
     bad_character,
     unterminated_text,
     bad_unit,
+    unit_without_number,
     unexpected_token,
     not_a_container,
     unterminated_interpolation,
