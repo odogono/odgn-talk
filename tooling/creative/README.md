@@ -305,7 +305,7 @@ failing line. Run Tests works in a read-only Project too. Tests run on the
 page, not in the Play worker, so a test that loops for a long time holds up
 the editor until its Pump limit ends it.
 
-Both Tetris Example Projects ship `game.test`.
+Both Tetris Example Projects ship `game.test`, and Sonar ships `sonar.test`.
 
 **Record Test**, beside Browse, writes a Recorded Test from what you do
 ([ADR 0134](../../docs/adr/0134-folio-records-a-play-through-as-a-generated-test-script.md)):

@@ -67,6 +67,7 @@ export default defineConfig({
           ],
         },
         { label: 'Folio', link: '/folio/' },
+        'examples',
       ],
     }),
   ],
