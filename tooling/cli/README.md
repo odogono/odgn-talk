@@ -90,12 +90,14 @@ bun run northtalk test --only testIncrements counter.test.talk
   - A property holds what was last set on it, by a Script or the harness, and starts unset. Reading an unset property fails with `unset property`.
   - A read-only property can be set only through the harness.
   - Objects have no parents and no Owning Scripts, so a message sent to one goes unhandled.
+- **Owners:** when the manifest names an Owner Kind, each Script under test owns a fresh object of that kind, its `me`, with the Script's name as its id (ADR 0139). Its properties behave as a well-known object's, it has no parent, and a message sent to it reaches its Script. The Test Script owns none, and no Script may share a well-known object's name.
 - **Timers:** the runner keeps each Script's timers and delivers each one's message to its Script when the Clock reaches it, as a Host does. A due timer is delivered before the Clock moves on, so timers and `wait` deadlines fire in order of time.
 - **The harness Capability:** granted to the Test Script only. `<op>` names a manifest Operation as `<grant>.<operation>`, or `console.read`.
   - `tell harness to stub "<op>", value` queues an answer for the next call of `<op>`.
   - `tell harness to stubFail "<op>", {code: "…", …}` queues a failure for it.
   - `ask harness to calls "<op>"` gives the argument lists of every call so far, oldest first. It also reads `timer.schedule` and `timer.cancel`.
-  - `tell harness to set "<object>.<property>", value` sets a well-known object's property, read-only or not.
+  - `tell harness to set "<object>.<property>", value` sets a well-known object's or owner's property, read-only or not.
+  - `ask harness to owner "<script>"` gives the owner of a Script under test, or fails with `no such script`.
   - `ask harness to advance 3 s and wait` moves the Clock on. Each deadline it passes fires in order.
   - A call of an immediate or suspending Operation with nothing queued fails with `unstubbed call`. A fire-and-forget call is only recorded.
 - **The test Library:** `use assert, assertEqual from test`.

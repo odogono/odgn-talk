@@ -30,6 +30,7 @@ import {
   type Group,
   type HostObject,
   type Library,
+  type ObjectKind,
   type Operation,
   type Report,
   type Value,
@@ -244,6 +245,19 @@ const testScript = (
     }));
   const testName = `${stem}Test`;
   for (const name of [testName, ...scripts.map(s => s.name)]) {
+    // With an Owner Kind, the harness's `set` key names a Script's owner as
+    // it names a well-known object, so the two may not share a name.
+    if (manifest?.ownerKind && manifest.objectsKinds.has(name)) {
+      return [
+        {
+          ok: false,
+          lines: [
+            `FAIL ${file}`,
+            `  ${name} can't name a Script: a well-known object has that name`,
+          ],
+        },
+      ];
+    }
     if (!IDENTIFIER.test(name)) {
       return [
         {
@@ -289,6 +303,9 @@ class TestRun {
   private readonly files = new Map<string, string>();
   private readonly group: Group;
   private readonly objects: Record<string, HostObject<Map<string, Value>>> = {};
+  // Each Script under test's owner, when the manifest names an Owner Kind.
+  private readonly owners = new Map<string, HostObject<Map<string, Value>>>();
+  private readonly kinds = new Map<string, ObjectKind<Map<string, Value>>>();
   private readonly problems: Problem[] = [];
   private readonly stubs = new Map<string, Stub[]>();
   // Each Script's timers, by Script and timer name.
@@ -319,6 +336,15 @@ class TestRun {
     const capabilities = this.capabilities();
     const declarations = declarationsOf(capabilities);
     this.makeObjects();
+    const ownerKind = manifest?.ownerKind;
+    for (const script of scripts) {
+      if (ownerKind && script.name !== testName) {
+        this.owners.set(
+          script.name,
+          this.group.object(this.kindOf(ownerKind), script.name, new Map()),
+        );
+      }
+    }
     let loading = 'a Library';
     try {
       for (const library of this.libraries(declarations)) {
@@ -332,10 +358,12 @@ class TestRun {
       for (const script of scripts) {
         loading = script.file;
         this.files.set(script.name, script.file);
+        const owner = this.owners.get(script.name);
         this.group.load({
           name: script.name,
           source: script.source,
           objects: this.objects,
+          ...(owner ? { owner } : {}),
           grants:
             script.name === testName
               ? {
@@ -676,41 +704,55 @@ class TestRun {
     return due.length > 0;
   }
 
-  // The manifest's well-known objects, each holding the property values
-  // Scripts and the harness set.
+  // A mocked Object Kind, whose objects hold the property values Scripts and
+  // the harness set.
+  private kindOf(kindName: string) {
+    const known = this.kinds.get(kindName);
+    if (known) {
+      return known;
+    }
+    const declared = this.manifest!.objectKinds.get(kindName)!;
+    const kind = defineObjectKind<Map<string, Value>>({
+      name: kindName,
+      props: Object.fromEntries(
+        [...declared.props].map(([prop, { readOnly, shape }]) => [
+          prop,
+          {
+            shape,
+            get: object => {
+              const value = object.native.get(prop);
+              if (!value) {
+                throw new ScriptError(
+                  'unset property',
+                  `No value is set for ${object.id}.${prop}`,
+                  map([]),
+                );
+              }
+              return value;
+            },
+            ...(readOnly
+              ? {}
+              : {
+                  set: (object, value) => {
+                    object.native.set(prop, value);
+                  },
+                }),
+          },
+        ]),
+      ),
+    });
+    this.kinds.set(kindName, kind);
+    return kind;
+  }
+
+  // The manifest's well-known objects.
   private makeObjects() {
     for (const [name, kindName] of this.manifest?.objectsKinds ?? []) {
-      const declared = this.manifest!.objectKinds.get(kindName)!;
-      const kind = defineObjectKind<Map<string, Value>>({
-        name: kindName,
-        props: Object.fromEntries(
-          [...declared.props].map(([prop, { readOnly, shape }]) => [
-            prop,
-            {
-              shape,
-              get: object => {
-                const value = object.native.get(prop);
-                if (!value) {
-                  throw new ScriptError(
-                    'unset property',
-                    `No value is set for ${object.id}.${prop}`,
-                    map([]),
-                  );
-                }
-                return value;
-              },
-              ...(readOnly
-                ? {}
-                : {
-                    set: (object, value) => {
-                      object.native.set(prop, value);
-                    },
-                  }),
-            },
-          ]),
-        ),
-      });
-      this.objects[name] = this.group.object(kind, name, new Map());
+      this.objects[name] = this.group.object(
+        this.kindOf(kindName),
+        name,
+        new Map(),
+      );
     }
   }
 
@@ -743,6 +785,25 @@ class TestRun {
           object.native.set(prop, value);
         },
       },
+      owner: {
+        mode: 'immediate',
+        args: [shape.text],
+        result: manifest?.ownerKind
+          ? shape.object(this.kindOf(manifest.ownerKind))
+          : shape.any,
+        cost: { fuel: 0 },
+        do: (_call, name) => {
+          const owner = this.owners.get(name);
+          if (!owner) {
+            throw new ScriptError(
+              'no such script',
+              `No Script under test named ${name} has an owner`,
+              map([['name', text(name)]]),
+            );
+          }
+          return owner;
+        },
+      },
       calls: {
         mode: 'immediate',
         args: [shape.text],
@@ -771,14 +832,14 @@ class TestRun {
     });
   }
 
-  // A well-known object's property, named `<object>.<property>`.
+  // A well-known object's or owner's property, named `<name>.<property>`.
   private property(key: string): [HostObject<Map<string, Value>>, string] {
     const [name = '', prop = ''] = key.split('.');
-    const object = this.objects[name];
+    const object = this.objects[name] ?? this.owners.get(name);
     if (!object?.kind.props.has(prop)) {
       throw new ScriptError(
         'no such property',
-        `No well-known object has a property ${key}`,
+        `No well-known object or owner has a property ${key}`,
         map([['name', text(key)]]),
       );
     }
