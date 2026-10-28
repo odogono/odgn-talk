@@ -86,7 +86,7 @@ fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
 }
 
 /// Compiles the case's Libraries, each once those it imports are compiled.
-fn compileLibraries(a: std.mem.Allocator, sources: Sources, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_grant_decls)) !void {
+fn compileLibraries(a: std.mem.Allocator, sources: Sources, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library), out_sources: *std.StringHashMapUnmanaged([]const u8), declarations: *std.ArrayList(c.talk_grant_decls)) !void {
     // The Grant declarations: each Capability the case defines, by its name.
     var it = defs.iterator();
     while (it.next()) |e| {
@@ -120,10 +120,45 @@ fn compileLibraries(a: std.mem.Allocator, sources: Sources, core: ?*c.talk_core,
             var l: ?*c.talk_library = null;
             try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l, null));
             try out.put(a, name, l.?);
+            try out_sources.put(a, name, source);
             _ = left.orderedRemove(i);
             progressed = true;
         }
         if (!progressed) return error.MalformedCase;
+    }
+}
+
+/// After a replacement, each Library compiled against a Library the runner
+/// no longer holds is compiled again from its source, as the Group
+/// recompiles it, so a later restore is given the new versions.
+fn recompileDependants(a: std.mem.Allocator, core: ?*c.talk_core, libraries: *std.StringHashMapUnmanaged(*c.talk_library), sources: *const std.StringHashMapUnmanaged([]const u8), declarations: []const c.talk_grant_decls) !void {
+    var again = true;
+    while (again) {
+        again = false;
+        var it = libraries.iterator();
+        while (it.next()) |e| {
+            var held: [*c]const ?*c.talk_library = null;
+            const n = c.talk_library_imports(e.value_ptr.*, @ptrCast(&held));
+            const stale = for (0..n) |k| {
+                var name: [*c]const u8 = null;
+                var len: usize = 0;
+                c.talk_library_name(held[k], &name, &len);
+                if (libraries.get(name[0..len])) |current| if (current != held[k].?) break true;
+            } else false;
+            if (!stale) continue;
+            const source = sources.get(e.key_ptr.*) orelse return error.MalformedCase;
+            var imports: std.ArrayList(?*c.talk_library) = .empty;
+            for (try usedLibraries(a, source)) |name| if (libraries.get(name)) |l| try imports.append(a, l);
+            var label: [*c]const u8 = null;
+            var label_len: usize = 0;
+            c.talk_library_version(e.value_ptr.*, &label, &label_len);
+            const src: c.talk_library_source = .{ .name = e.key_ptr.ptr, .name_len = e.key_ptr.len, .version = label, .version_len = label_len, .source = source.ptr, .source_len = source.len };
+            var l: ?*c.talk_library = null;
+            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.ptr, declarations.len, &l, null));
+            e.value_ptr.* = l.?;
+            again = true;
+            break;
+        }
     }
 }
 
@@ -1532,6 +1567,8 @@ pub const Host = struct {
     store: ObjectStore,
     /// The version of each Library the runner compiled last, by name.
     libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty,
+    /// Each of those Libraries' source, by name.
+    library_sources: std.StringHashMapUnmanaged([]const u8) = .empty,
     declarations: std.ArrayList(c.talk_grant_decls) = .empty,
     /// Saves by id, each Script's Grants as loaded, which a restore
     /// re-binds, and the Groups a restore replaced.
@@ -1566,7 +1603,7 @@ pub const Host = struct {
         try defineCapabilities(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineStandard(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineObjects(a, h.core, h.group, all, &h.store);
-        try compileLibraries(a, sources, h.core, all, &h.defs, &h.libraries, &h.declarations);
+        try compileLibraries(a, sources, h.core, all, &h.defs, &h.libraries, &h.library_sources, &h.declarations);
         return h;
     }
 
@@ -1714,6 +1751,8 @@ pub const Host = struct {
             const code = c.talk_replace_library(h.group, l, carry, null);
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
+                try h.library_sources.put(a, library, source);
+                try recompileDependants(a, h.core, libraries, &h.library_sources, h.declarations.items);
             } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE and code != c.TALK_EFFECT_STATE_UNKNOWN) try check(code);
         } else if (std.mem.eql(u8, name, "save")) {
             // The save is kept under the id the Core gives it.
