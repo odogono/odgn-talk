@@ -157,7 +157,17 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **`wait d`** suspends the Run for the exact duration `d`. Anything that isn't an exact duration Quantity raises `wrong kind`: a Quantity of another Unit Kind, or a calendar duration, with `expected` `"s"` and `got` its Unit, and anything else with `expected` `"quantity"`.
 - **Its deadline** is the Clock reading of the Pump in which the `wait` ran, plus `d`. It fires at the first later Pump whose Clock reading is at or past the deadline, so it never resumes in the Pump that started it, even for `wait 0 s`.
 - **Outside the Clock range:** a deadline is a mathematical count of microseconds, not construction or arithmetic of an Instant value. A valid exact duration still suspends and pays the instruction's charge when its deadline lies outside years 0001–9999. The full deadline is retained for timer ordering, cancellation, earlier Timeout Blocks and save/restore. One beyond the latest Clock reading cannot fire on a valid Clock; one before the earliest reading is already due, but still resumes only in a later Pump. Inspect and the Trace omit a deadline that cannot be represented as an Instant. The Pump's next deadline omits an unreachable future deadline; for an already-due deadline before the Clock range, it gives the current Pump's Clock reading, requesting another Pump at that reading.
+- **A computed duration:** `d` is any expression, so a duration may come from a Constant, a variable or arithmetic. The Unit belongs to the value, and a plain number takes one with `as`. A Unit word binds tighter than `/`, so `1/4 s` is `0.25 1/s`, and a quarter second is `1 s / 4`. The same holds for a `wait for` timeout and an `after` branch.
 - **In Libraries:** Library code may use `wait d` ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
+
+> constant tick = 1 s / 4
+>
+> on pace
+>   wait 15 * tick
+>   wait for go or 3 * tick
+>   put 1 into n
+>   wait n as s
+> end pace
 
 ### `wait for` a message
 
