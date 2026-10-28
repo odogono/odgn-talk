@@ -380,6 +380,7 @@ stdlib/template-migration
 suspension/answers
 suspension/argument-labels
 suspension/capability-resumption
+suspension/computed-durations
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/join-closing-position

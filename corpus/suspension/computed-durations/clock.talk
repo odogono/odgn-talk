@@ -1,0 +1,23 @@
+-- clock.talk: the computed-durations case's waiting Script.
+
+constant tick = 1 s / 4
+
+script variable seen = []
+
+on begin
+  wait tick
+  put "tick" after seen
+  wait 2 * tick
+  put "two" after seen
+  put 1 into n
+  wait n as s
+  put "as" after seen
+  wait for go or 3 * tick
+  put it after seen
+  wait for
+    when go then
+      put "go" after seen
+    after 4 * tick then
+      put "after" after seen
+  end wait
+end begin

@@ -1,0 +1,15 @@
+# computed-durations: `wait`, a one-line `wait for`'s timeout and a block's
+# `after` branch take any expression giving an exact duration, so a
+# duration may come from a Constant, a variable or arithmetic on one. A
+# plain number gets its Unit from `as` (spec chapter 5, `wait` for a time;
+# #1692).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "clock"
+source = "clock.talk"

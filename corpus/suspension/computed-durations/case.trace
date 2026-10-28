@@ -1,0 +1,24 @@
+> load clock identity=cc342b4eed9053bac96fcfa32ecb6974611bbf26ee11c1b55c4258bc2e7e57a9
+> deliver d1 to=clock message=begin
+> pump clock=2026-09-30T09:00:00Z
+seg clock/r1 start delivery=d1 handler=begin clause=1 fuel=15 alloc=0 state=240 end=wait until=2026-09-30T09:00:00.25Z
+pumped state=idle fuel=15 next=2026-09-30T09:00:00.25Z
+> pump clock=2026-09-30T09:00:00.25Z
+seg clock/r1 resume fuel=25 alloc=52 state=280 end=wait until=2026-09-30T09:00:00.75Z
+pumped state=idle fuel=25 next=2026-09-30T09:00:00.75Z
+> pump clock=2026-09-30T09:00:00.75Z
+seg clock/r1 resume fuel=26 alloc=51 state=314 end=wait until=2026-09-30T09:00:01.75Z
+pumped state=idle fuel=26 next=2026-09-30T09:00:01.75Z
+> pump clock=2026-09-30T09:00:01.75Z
+seg clock/r1 resume fuel=25 alloc=50 state=339 end=wait-for until=2026-09-30T09:00:02.5Z
+pumped state=idle fuel=25 next=2026-09-30T09:00:02.5Z
+> pump clock=2026-09-30T09:00:02.5Z
+seg clock/r1 resume fuel=26 alloc=40 state=345 end=wait-for-any until=2026-09-30T09:00:03.5Z
+pumped state=idle fuel=26 next=2026-09-30T09:00:03.5Z
+> pump clock=2026-09-30T09:00:03.5Z
+seg clock/r1 resume fuel=25 alloc=29 state=142 end=return
+run clock/r1 outcome=completed delivery=d1 handler=begin fuel=142 alloc=222
+pumped state=idle fuel=25
+
+> vars
+vars clock seen=["tick", "two", "as", nothing, "after"]
