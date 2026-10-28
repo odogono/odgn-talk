@@ -1,0 +1,25 @@
+-- policy.talk: a try inside a Recovery policy, the nested-unwind-order case.
+
+function work
+ try
+  try
+   throw "bad"
+  offer recover value
+   return value
+  end try
+ offer recover
+  return 99
+ end try
+end work
+on go
+ try
+  return work()
+ catch e before unwind
+  try
+   choose offer recover
+  catch "wrong arity"
+   put 8 into replacement
+  end try
+  choose offer recover(replacement)
+ end try
+end go

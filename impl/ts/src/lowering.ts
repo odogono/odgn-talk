@@ -1213,9 +1213,13 @@ class BodyLowering {
   }
 
   entries(span: Span, kind: 'catch' | 'finally' | 'offer', target: number) {
-    for (const [start, end] of span.spans) {
-      this.unwind.push({ start, end, kind, target, depth: this.iterators });
-    }
+    return span.spans.map(([start, end]) => ({
+      start,
+      end,
+      kind,
+      target,
+      depth: this.iterators,
+    }));
   }
 
   *match(s: Stmt & { k: 'match' }): Task {
@@ -1309,8 +1313,13 @@ class BodyLowering {
     yield this.leave(hasFinally ? me.finally! : this.finallies.length, () =>
       this.emit(at, 'jump', end),
     );
+    // A `try`'s own entries follow those of every `try` inside it, in its
+    // body, catch handler, offer actions and cleanup copy (chapter 8, The
+    // Unwind Table).
+    const own: PendingUnwind[] = [];
+    const guards: PendingUnwind[] = [];
     if (catchSpan) {
-      this.entries(catchSpan, 'catch', this.code.length);
+      own.push(...this.entries(catchSpan, 'catch', this.code.length));
       // Dispatch must not reuse scratch slots still live in retained continuations.
       const retainedFree = this.free;
       this.free = [];
@@ -1330,6 +1339,7 @@ class BodyLowering {
         // A text literal head is short for `{code: "…"}`.
         const pat = errorPattern(clause.pat);
         const self = this;
+        const before = this.unwind.length;
         yield this.guarded(
           next,
           (function* (): Task {
@@ -1339,6 +1349,9 @@ class BodyLowering {
             }
           })(),
         );
+        if (this.unwind.length > before) {
+          guards.push(this.unwind.pop()!);
+        }
         if (!clause.recovery) {
           this.emit(clause.pos, 'catch-accept');
         }
@@ -1356,6 +1369,7 @@ class BodyLowering {
       this.release(error);
       this.free = [...retainedFree, ...this.free];
     }
+    const offers: PendingUnwind[] = [];
     if (offerSpan) {
       const record: PendingOffer = {
         body: this.body.index,
@@ -1378,16 +1392,18 @@ class BodyLowering {
       }
       const index = this.offers.length;
       this.offers.push(record);
-      this.entries(offerSpan, 'offer', index);
+      offers.push(...this.entries(offerSpan, 'offer', index));
     }
     this.tries.pop();
+    const cleanup: PendingUnwind[] = [];
     if (finallySpan) {
       this.close(finallySpan);
       this.finallies.pop();
-      this.entries(finallySpan, 'finally', this.code.length);
+      cleanup.push(...this.entries(finallySpan, 'finally', this.code.length));
       yield this.block(s.finally!);
       this.emit(at, 'end-cleanup');
     }
+    this.unwind.push(...own, ...guards, ...offers, ...cleanup);
     this.place(end);
   }
 

@@ -1,0 +1,49 @@
+unit cleanup script
+constants
+  0 nothing
+  1 "a"
+  2 "b"
+  3 1
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler go clause 1 () locals 7 0002..0032
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 5:9 const 1 ; "a"
+  0003 5:3 throw
+  0004 8:10 const 2 ; "b"
+  0005 8:4 throw
+  0006 7:3 jump 0016
+  0007 9:3 store 3 ; (3)
+  0008 9:9 load 3 ; (3)
+  0009 9:9 store 4 ; (4)
+  0010 9:3 catch-accept
+  0011 9:3 move 4 1 ; (4), e
+  0012 10:8 const 3 ; 1
+  0013 10:4 store 2 ; x
+  0014 9:3 jump 0016
+  0015 9:3 catch-next
+  0016 4:2 jump 0030
+  0017 8:10 const 2 ; "b"
+  0018 8:4 throw
+  0019 7:3 jump 0029
+  0020 9:3 store 5 ; (5)
+  0021 9:9 load 5 ; (5)
+  0022 9:9 store 6 ; (6)
+  0023 9:3 catch-accept
+  0024 9:3 move 6 1 ; (6), e
+  0025 10:8 const 3 ; 1
+  0026 10:4 store 2 ; x
+  0027 9:3 jump 0029
+  0028 9:3 catch-next
+  0029 4:2 end-cleanup
+  0030 13:1 const 0 ; nothing
+  0031 13:1 return
+  0032 13:1 clause-fail
+unwind
+  0004..0005 catch -> 0007 depth 0
+  0008..0009 guard -> 0015 depth 0
+  0017..0018 catch -> 0020 depth 0
+  0021..0022 guard -> 0028 depth 0
+  0002..0003 finally -> 0017 depth 0
