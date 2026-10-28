@@ -987,6 +987,8 @@ export interface ManifestSpec {
   messages?: MessageDecl[];
   objectKinds?: ObjectKind[];
   objects?: Record<string, ObjectKind>;
+  /** The Owner Kind: one of objectKinds, the kind of this kind of Script's `me`. Tooling only. */
+  ownerKind?: ObjectKind;
 }
 /** Deterministic JSON. A pure function of the definitions; never includes bindings. */
 export declare function exportManifest(m: ManifestSpec): string;

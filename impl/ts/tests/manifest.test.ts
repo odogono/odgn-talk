@@ -240,6 +240,29 @@ test('Host Manifests sort declarations, preserve Shape order and omit executable
   expect(actor.parentKinds).toEqual(['zone', 'scene']);
 });
 
+test('the Owner Kind comes last and must be one of the Object Kinds', () => {
+  const door = defineObjectKind({ name: 'door', props: {} });
+  const room = defineObjectKind({ name: 'room', props: {} });
+  expect(
+    exportManifest({
+      kind: 'door script',
+      version: '1',
+      grants: {},
+      objectKinds: [door, room],
+      ownerKind: door,
+    }),
+  ).toEndWith('"objects":[],"ownerKind":"door"}\n');
+  expect(() =>
+    exportManifest({
+      kind: 'door script',
+      version: '1',
+      grants: {},
+      objectKinds: [room],
+      ownerKind: door,
+    }),
+  ).toThrow('ownerKind is not in objectKinds');
+});
+
 const documentedGrant = (description?: string, examples?: string[]) =>
   defineCapability('documented', {
     read: {

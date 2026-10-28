@@ -4041,7 +4041,8 @@ fn admitCall(entry: *GroupEntry, f: *Value, args: []*Value, limits: Override) Ad
 /// `export-manifest`: `kind`, `version`, `grants` (`{name: handle}`),
 /// `libraries` (identities), `messages` (`[{name, args, receivers,
 /// description?, examples?}]`),
-/// `objectKinds` (names) and `objects` (`{name: kind}`), replying the
+/// `objectKinds` (names), `objects` (`{name: kind}`) and `ownerKind`
+/// (a name, optional), replying the
 /// Host Manifest's bytes.
 fn exportManifestReply(s: *Session, msg: Json, ref: i64) []u8 {
     var scratch: std.heap.ArenaAllocator = .init(s.gpa);
@@ -4130,7 +4131,8 @@ fn manifestSpecOf(s: *Session, a: Allocator, msg: Json, shapes: *std.ArrayList(*
             slot.* = .{ .name = k.ptr, .name_len = k.len, .kind = kind_of };
         }
     }
-    return .{ .kind = kind.ptr, .kind_len = kind.len, .version = version.ptr, .version_len = version.len, .grants = grants.ptr, .grants_len = grants.len, .libraries = libraries.ptr, .libraries_len = libraries.len, .messages = messages.ptr, .messages_len = messages.len, .object_kinds = kinds.ptr, .object_kinds_len = kinds.len, .objects = well_known.ptr, .objects_len = well_known.len };
+    const owner_kind = if (field(msg, "ownerKind")) |o| kindNamed(s, asText(o) orelse return error.InvalidValue) orelse return error.InvalidValue else null;
+    return .{ .kind = kind.ptr, .kind_len = kind.len, .version = version.ptr, .version_len = version.len, .grants = grants.ptr, .grants_len = grants.len, .libraries = libraries.ptr, .libraries_len = libraries.len, .messages = messages.ptr, .messages_len = messages.len, .object_kinds = kinds.ptr, .object_kinds_len = kinds.len, .objects = well_known.ptr, .objects_len = well_known.len, .owner_kind = owner_kind };
 }
 
 /// An Operation's context, owned by the Session; its mode is set once the
@@ -7293,7 +7295,7 @@ test "export-manifest writes the Host Manifest's bytes, the same each time" {
     const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
     _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{3}));
     const lib = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"util\",\"version\":\"1\",\"source\":\"function one\\n  return 1\\nend one\\n\"}}", .{4}))).object.get("identity").?.object.get("$bytes").?.string;
-    const frame = "{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"grants\":{{\"api\":{d}}},\"libraries\":[{{\"$bytes\":\"{s}\"}}],\"messages\":[{{\"name\":\"open\",\"args\":[\"text\"],\"receivers\":[\"room\"],\"description\":\"Opens the door.\",\"examples\":[\"open \\\"now\\\"\"]}}],\"objectKinds\":[\"room\"],\"objects\":{{\"here\":\"room\"}}}}";
+    const frame = "{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"grants\":{{\"api\":{d}}},\"libraries\":[{{\"$bytes\":\"{s}\"}}],\"messages\":[{{\"name\":\"open\",\"args\":[\"text\"],\"receivers\":[\"room\"],\"description\":\"Opens the door.\",\"examples\":[\"open \\\"now\\\"\"]}}],\"objectKinds\":[\"room\"],\"objects\":{{\"here\":\"room\"}},\"ownerKind\":\"room\"}}";
     const first = (try okOf(try c.send(frame, .{ 5, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
     const second = (try okOf(try c.send(frame, .{ 6, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
     try std.testing.expectEqualStrings(first, second);
@@ -7311,12 +7313,15 @@ test "export-manifest writes the Host Manifest's bytes, the same each time" {
     try std.testing.expectEqualStrings("open", m.get("messages").?.array.items[0].object.get("name").?.string);
     try std.testing.expectEqualStrings("room", m.get("objectKinds").?.array.items[0].object.get("name").?.string);
     try std.testing.expectEqualStrings("here", m.get("objects").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("room", m.get("ownerKind").?.string);
     try std.testing.expect(std.mem.indexOf(u8, raw, "Doubles.") != null);
     const open = m.get("messages").?.array.items[0].object;
     try std.testing.expectEqualStrings("Opens the door.", open.get("description").?.string);
     try std.testing.expectEqualStrings("open \"now\"", open.get("examples").?.array.items[0].string);
     const unknown = try c.send("{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"objectKinds\":[\"nowhere\"]}}", .{7});
     try std.testing.expectEqualStrings("host error", try errKind(unknown));
+    const unlisted = try c.send("{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"ownerKind\":\"room\"}}", .{8});
+    try std.testing.expectEqualStrings("host error", try errKind(unlisted));
 }
 
 test "standard-capability: the Core answers clock, and console reaches the Host as op needs" {

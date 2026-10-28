@@ -2,6 +2,7 @@
 // and Group Fingerprints. Bindings and executable Host functions stay out.
 import type { Grant, ValueOperation, Shape } from './capabilities';
 import { quoteJSON } from './encoding';
+import { HostError } from './errors';
 import type { Library, OperationRef } from './library';
 import type { ObjectKind } from './objects';
 import { languageVersion } from './generated/machine';
@@ -23,6 +24,8 @@ export type ManifestSpec = {
   messages?: readonly MessageDecl[];
   objectKinds?: readonly ObjectKind[];
   objects?: Readonly<Record<string, ObjectKind>>;
+  /** The Owner Kind: one of objectKinds, the kind of `me` for tooling. */
+  ownerKind?: ObjectKind;
   version: string;
 };
 
@@ -141,8 +144,11 @@ const needsData = (needs: readonly OperationRef[]) =>
     .map(({ capability, operation }) => ({ capability, operation }));
 
 /** Chapter 9's deterministic JSON file, ending in LF; never calls the Host. */
-export const exportManifest = (m: ManifestSpec): string =>
-  `${canonicalJSON({
+export const exportManifest = (m: ManifestSpec): string => {
+  if (m.ownerKind && !(m.objectKinds ?? []).includes(m.ownerKind)) {
+    throw new HostError('invalid value', 'ownerKind is not in objectKinds');
+  }
+  return `${canonicalJSON({
     kind: m.kind,
     version: m.version,
     language: languageVersion,
@@ -191,4 +197,6 @@ export const exportManifest = (m: ManifestSpec): string =>
     objects: Object.entries(m.objects ?? {})
       .sort(([a], [b]) => compareText(a, b))
       .map(([name, kind]) => ({ name, kind: kind.name })),
+    ...(m.ownerKind ? { ownerKind: m.ownerKind.name } : {}),
   })}\n`;
+};
