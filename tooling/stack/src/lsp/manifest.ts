@@ -33,6 +33,8 @@ export type ManifestMessage = {
   description?: string;
   examples?: string[];
   name: string;
+  /** The Object Kinds it is delivered to; none for a Script-addressed message. */
+  receivers?: string[];
 };
 type ManifestCost = { alloc: number; fuel: number };
 export type ManifestObjectKind = {
@@ -269,6 +271,7 @@ export const readManifest = (value: unknown): HostManifest => {
     messageDecls.set(name, {
       name,
       args: args.map(v => shape(v)),
+      receivers: array(message.receivers ?? []).map(string),
       ...(message.description === undefined
         ? {}
         : { description: string(message.description) }),

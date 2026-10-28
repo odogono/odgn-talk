@@ -351,6 +351,97 @@ describe('Manifest Object Collections', () => {
   });
 });
 
+describe('Kind of the target', () => {
+  const kinds = [
+    {
+      name: 'door',
+      props: [
+        { name: 'portal', shape: 'text' },
+        { name: 'locked', shape: 'boolean', readOnly: true },
+      ],
+    },
+    {
+      name: 'window',
+      props: [{ name: 'locked', shape: 'boolean' }],
+    },
+    { name: 'room', props: [{ name: 'size', shape: 'number' }] },
+  ];
+  const host = {
+    ...manifest,
+    objectKinds: kinds,
+    ownerKind: 'room',
+    messages: [
+      { name: 'demo', args: [], receivers: [] },
+      { name: 'open', args: [], receivers: ['door'] },
+      { name: 'shut', args: [], receivers: ['door', 'window'] },
+    ],
+  };
+  const properties = ['portal', 'locked', 'size'];
+  const completions = (message: string, withHost: object = host) =>
+    setup(`on ${message}\n return the  of the target\nend ${message}`, withHost)
+      .request('textDocument/completion', at(1, 12))
+      .map(c => [c.label, c.detail]);
+  test("reads the target's kinds from its message's receivers", () => {
+    expect(completions('open')).toEqual([
+      ['portal', 'door property'],
+      ['locked', 'door property (read-only)'],
+    ]);
+    expect(completions('shut')).toEqual([
+      ['portal', 'door property (possible member)'],
+      [
+        'locked',
+        'door property (read-only) (possible member); window property (possible member)',
+      ],
+    ]);
+  });
+  test('a Script-addressed message has the Owner Kind as its target', () => {
+    expect(completions('demo')).toEqual([['size', 'room property']]);
+    expect(
+      completions('demo', { ...host, ownerKind: undefined }).filter(([l]) =>
+        properties.includes(l!),
+      ),
+    ).toEqual([]);
+  });
+  test('leaves the target unknown for undeclared messages and Fallback Handlers', () => {
+    expect(
+      completions('other').filter(([l]) => properties.includes(l!)),
+    ).toEqual([]);
+    const { request } = setup(
+      'on any message m\n return the portal of the target\nend',
+      host,
+    );
+    expect(request('textDocument/hover', at(1, 13))).toBeNull();
+  });
+  test('hovers each possible kind of the target', () => {
+    const { request } = setup(
+      'on shut\n return the locked of the target\nend shut',
+      host,
+    );
+    expect(request('textDocument/hover', at(1, 13))?.contents.value).toBe(
+      'door property locked (read-only) (possible member)\nShape: boolean\n\nwindow property locked (possible member)\nShape: boolean',
+    );
+  });
+  test('Lints the target, flagging read-only only when every kind agrees', () => {
+    const { sent } = setup(
+      [
+        'on open',
+        ' set the locked of the target to true',
+        'end open',
+        'on shut',
+        ' set the locked of the target to true',
+        ' put the colour of the target into c',
+        'end shut',
+      ].join('\n'),
+      host,
+    );
+    const diagnostics = (sent.at(-1)!.params as Published).diagnostics;
+    expect(diagnostics.map(d => [d.code, d.range.start.line])).toEqual([
+      ['read-only-property', 1],
+      ['unknown-property', 5],
+    ]);
+  });
+});
+
 describe('Owner Kind', () => {
   const door = {
     name: 'door',
