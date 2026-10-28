@@ -1,4 +1,4 @@
-# Unblessed: element-walks (#1627); first blessing awaits human review.
+# First blessing approved for #1627 on 2026-10-28; see docs/reviews/element-walks/README.md.
 > load guard-elements identity=87318ec398bd83fb2c2642f989c6de75073827c2e897e50f175210be9014aa9f
 diag guard-elements code="not in a guard" pos=1:15
 > load guard-every identity=8efe45829229ccf232fd0a5759c4fe45d8ced5e7452b6107fe618bd2449cb71f

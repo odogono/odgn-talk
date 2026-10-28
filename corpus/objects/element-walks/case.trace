@@ -1,4 +1,4 @@
-# Unblessed: walking an Object Collection (#1627); first blessing awaits human review.
+# First blessing approved for #1627 on 2026-10-28; see docs/reviews/element-walks/README.md.
 
 > load game identity=e78714a34976c520120c2f29c9e67b0f1cd6388849a785fb7d36c1ad4273c691
 > deliver d1 to=game message=walk

@@ -1,4 +1,4 @@
-# Unblessed: element-walks: `the elements of o` and element Whose Clauses read Host state (#1627); first blessing awaits human review.
+# element-walks: `the elements of o` and element Whose Clauses read Host state (#1627).
 kind = "trace"
 [versions]
 language = "1.0-rc.3"
