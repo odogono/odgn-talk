@@ -4,7 +4,7 @@
 
 NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go, Bun, Node and Elixir servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
-Script files end in `.talk`. Try expressions and declarations in the [Playground](https://opendoorgonorth.com/odgn-talk/) or run `bun run repl` from this repository after `bun install`. `bun run northtalk app.talk` runs a whole Script file: it grants the Standard Capabilities, sends the Script `start` with the command-line arguments, and exits when nothing is left to happen (section 16 has a small server).
+Script files end in `.talk`. Try NorthTalk in [Folio](https://northtalk.org/folio/), or run `bun run repl` from this repository after `bun install`. `bun run northtalk app.talk` runs a whole Script file: it grants the Standard Capabilities, sends the Script `start` with the command-line arguments, and exits when nothing is left to happen (section 16 has a small server).
 
 The examples below are independent teaching snippets, not one loadable Script. Names such as `approvals`, `storage` and `door` stand for Scripts, Grants or Host Objects supplied by an embedding application; they are not all available in the default REPL.
 
