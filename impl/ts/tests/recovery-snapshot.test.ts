@@ -187,22 +187,108 @@ on go
   choose offer recover(7)
  end try
 end go`;
+// A `try` inside a `finally` block a transfer runs: its catch dispatch sits
+// above the transfer's cleanup, under the dispatch the transfer leaves or
+// after it has left.
+const transferSources = {
+  'policy finally': cleanupSource.replace(
+    '  choose offer recover(7)',
+    `  try
+   choose offer recover(7)
+  finally
+   try
+    throw "inner"
+   catch e where e is not nothing
+    put 1 into y
+   end try
+  end try`,
+  ),
+  'failure finally': cleanupSource.replace(
+    '  put 2 into x',
+    `  try
+   throw "inner"
+  catch e where e is not nothing
+   put 2 into x
+  end try`,
+  ),
+};
+// An error escaping a Recovery policy whose own `finally` block runs before
+// the outward search (chapter 6, Catching).
+const escapeSource = `on go
+ try
+  try
+   throw "a"
+  catch "a" before unwind
+   try
+    throw "b"
+   finally
+    put 1 into x
+   end try
+  end try
+ catch e
+  return the code of e
+ end try
+end go`;
+for (const [name, source] of Object.entries(transferSources)) {
+  test(`snapshot at every boundary: dispatch in a transfer's ${name}`, () => {
+    const original: string[] = [],
+      resumed: string[] = [];
+    const g = newGroup({ name: 'snapshot', trace: l => original.push(l) });
+    g.load({ name: 's', source });
+    g.script('s')!.deliver({ name: 'go' });
+    let copy = restore(g.save(), options(resumed)).group;
+    let nested = false;
+    for (let step = 0; step < 4000; step++) {
+      original.length = 0;
+      resumed.length = 0;
+      const a = g.pump(BigInt(step), { fuelCap: 1 });
+      const b = copy.pump(BigInt(step), { fuelCap: 1 });
+      expect(b).toEqual(a);
+      expect(output(resumed)).toEqual(output(original));
+      const saved = g.save();
+      const e = new SnapshotEditor(
+        unpackGraph(JSON.parse(new TextDecoder().decode(saved)).payload.graph),
+      );
+      // A dispatch above a transfer's cleanup.
+      const live = e.graph.nodes.some(n => n.kind === 'run');
+      const [below, top] = live ? e.controls().slice(-2) : [];
+      nested ||=
+        !!top &&
+        !!below &&
+        e.get(top, 'k') === 'dispatch' &&
+        e.get(below, 'k') === 'cleanup' &&
+        e.get(e.get(below, 'then'), 'k') === 'transfer';
+      expect(state(copy.save())).toEqual(state(saved));
+      copy = restore(saved, options(resumed)).group;
+      if (a.state === 'idle') {
+        expect(nested).toBe(true);
+        return;
+      }
+    }
+    throw new Error('Recovery did not finish');
+  });
+}
+
 // A save taken in each phase of a recovery: a catch dispatch holding the
 // failed frames, a transfer's cleanup, an acceptance's cleanup, and a
 // dispatch nested in another's policy.
-const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
+const snapshotIn = (
+  phase: 'selection' | 'offer' | 'catch' | 'nested' | 'escape',
+) => {
   const g = newGroup({ name: 'snapshot' });
   g.load({
     name: 's',
     source:
       phase === 'nested'
         ? nested[0]!.source
-        : phase === 'catch'
-          ? cleanupSource.replace(
-              'catch "bad" before unwind\n  choose offer recover(7)',
-              'catch "bad"\n  return 7',
-            )
-          : cleanupSource,
+        : phase === 'escape'
+          ? escapeSource
+          : phase === 'catch'
+            ? cleanupSource.replace(
+                'catch "bad" before unwind\n  choose offer recover(7)',
+                'catch "bad"\n  return 7',
+              )
+            : cleanupSource,
   });
   g.script('s')!.deliver({ name: 'go' });
   for (let step = 0; step < 300; step++) {
@@ -226,7 +312,9 @@ const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
             e.items(e.get(top, 'held')).length > 0
           : phase === 'offer'
             ? then === 'transfer' && e.step()
-            : then === 'accept' && e.step()
+            : phase === 'escape'
+              ? then === 'search' && e.step()
+              : then === 'accept' && e.step()
     ) {
       return bytes;
     }
@@ -237,7 +325,7 @@ const snapshotIn = (phase: 'selection' | 'offer' | 'catch' | 'nested') => {
 const malformed: {
   mutate: (e: SnapshotEditor) => void;
   name: string;
-  phase: 'selection' | 'offer' | 'catch' | 'nested';
+  phase: 'selection' | 'offer' | 'catch' | 'nested' | 'escape';
 }[] = [
   // The Run's own fields.
   {
@@ -461,6 +549,22 @@ const malformed: {
     name: 'transfer limit',
     phase: 'offer',
     mutate: e => e.set(e.then(), 'limit', 7),
+  },
+  // A search after an escaped policy's cleanup.
+  {
+    name: 'then search frame',
+    phase: 'escape',
+    mutate: e => e.set(e.get(e.then(), 'search'), 'frame', 999),
+  },
+  {
+    name: 'then search raised',
+    phase: 'escape',
+    mutate: e => e.set(e.get(e.then(), 'search'), 'raised', -1),
+  },
+  {
+    name: 'then search skip',
+    phase: 'escape',
+    mutate: e => e.set(e.get(e.then(), 'search'), 'skip', 7),
   },
   // An acceptance.
   {

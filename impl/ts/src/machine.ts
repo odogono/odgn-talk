@@ -1678,9 +1678,6 @@ export class Run {
           limit(x.limit) &&
           limit(x.skip),
       );
-    // The frames at each level: live ones, then those held above them.
-    const heldTotal = this.controls.reduce((n, c) => n + c.held.length, 0);
-    const levels = this.frames.length + heldTotal;
     const entryOf = (frame: Frame | undefined, ei: number, kind: string) => {
       const e = frame?.code.unit.unwind[ei];
       requireSnapshot(
@@ -1693,14 +1690,16 @@ export class Run {
       return e!;
     };
     let owner = -1;
-    for (const c of this.controls) {
+    for (const [i, c] of this.controls.entries()) {
       requireSnapshot(Value.isValue(c.error));
+      // The frames as this control had them, and their places.
+      const { frames, pcs } = this.framesAt(i);
       if (c.k === 'dispatch') {
         requireSnapshot(c.error.kind === 'map');
         requireSnapshot(
           snapshotCounter(c.owner) &&
             c.owner >= owner &&
-            c.owner < this.frames.length,
+            c.owner < frames.length,
         );
         owner = c.owner;
         requireSnapshot(
@@ -1709,7 +1708,7 @@ export class Run {
             Array.isArray(c.ownerStack),
         );
         search(c.search);
-        const f = this.frames[c.owner]!;
+        const f = frames[c.owner]!;
         requireSnapshot(c.ownerPc >= f.body.start && c.ownerPc < f.body.end);
         requireSnapshot(c.search.entry > 0);
         const e = entryOf(f, c.search.entry - 1, 'catch');
@@ -1726,6 +1725,11 @@ export class Run {
           snapshotCounter(c.failed) &&
           (c.failedFrame === null || snapshotCounter(c.failedFrame)),
       );
+      // A frame by its index once the dispatch under a transfer has left:
+      // the live frames, then those the cleanup holds above them.
+      const levels = frames.length + c.held.length;
+      const at = (index: number) =>
+        index < frames.length ? frames[index] : c.held[index - frames.length];
       const steps = new Set<string>();
       for (const step of c.cleanups) {
         requireSnapshot(step && typeof step.leave === 'boolean');
@@ -1733,14 +1737,7 @@ export class Run {
           continue;
         }
         requireSnapshot(snapshotCounter(step.frame) && step.frame < levels);
-        const frame =
-          step.frame < this.frames.length
-            ? this.frames[step.frame]
-            : c.held[step.frame - this.frames.length];
-        if (!frame) {
-          continue;
-        }
-        const e = entryOf(frame, step.entry, 'finally');
+        const e = entryOf(at(step.frame), step.entry, 'finally');
         requireSnapshot(step.target === e.target && step.depth === e.depth);
         const key = `${step.frame}:${step.entry}`;
         requireSnapshot(!steps.has(key));
@@ -1748,12 +1745,12 @@ export class Run {
       }
       const running = c.cleanups[c.next - 1];
       if (running && !running.leave) {
-        const f = this.frames[running.frame];
+        const f = frames[running.frame];
+        const pc = f && (pcs.get(f) ?? f.pc);
         requireSnapshot(
           f &&
-            running.frame === this.frames.length - 1 - this.callsAbove(f) &&
-            f.pc >= running.target &&
-            f.pc < cleanupEnd(f.code.unit, running.target),
+            pc! >= running.target &&
+            pc! < cleanupEnd(f.code.unit, running.target),
         );
       }
       const t = c.then;
@@ -1765,11 +1762,11 @@ export class Run {
         case 'accept': {
           requireSnapshot(
             snapshotCounter(t.frame) &&
-              t.frame < this.frames.length &&
+              t.frame < frames.length &&
               snapshotCounter(t.pc) &&
               Array.isArray(t.stack),
           );
-          const f = this.frames[t.frame]!;
+          const f = frames[t.frame]!;
           requireSnapshot(
             t.pc > f.body.start &&
               t.pc < f.body.end &&
@@ -1779,12 +1776,11 @@ export class Run {
         }
         case 'search':
           search(t.search);
-          requireSnapshot(t.search.frame < this.frames.length);
+          requireSnapshot(t.search.frame < frames.length);
           break;
         case 'transfer': {
           requireSnapshot(
             snapshotCounter(t.frame) &&
-              t.frame < levels &&
               snapshotCounter(t.attempt) &&
               t.attempt > 0 &&
               t.attempt <= this.offerAttempt &&
@@ -1792,10 +1788,16 @@ export class Run {
               Array.isArray(t.args) &&
               t.args.every(Value.isValue),
           );
-          const frame =
-            t.frame < this.frames.length
-              ? this.frames[t.frame]
-              : this.recovery()?.held[t.frame - this.frames.length];
+          // Until its `leave`, the dispatch under it holds the failed frames
+          // above its owner, which the offer's frame is counted among.
+          const d = this.controls[i - 1];
+          const frame = c.left
+            ? at(t.frame)
+            : d?.k === 'dispatch'
+              ? t.frame <= d.owner
+                ? frames[t.frame]
+                : d.held[t.frame - d.owner - 1]
+              : undefined;
           const e = entryOf(frame, t.offerEntry, 'offer');
           const offer = frame!.code.unit.offers?.[t.record]?.offers[t.offer];
           requireSnapshot(
@@ -1812,9 +1814,31 @@ export class Run {
     }
   }
 
-  // The frames a running `finally` block has called, above its own.
-  private callsAbove(f: Frame) {
-    return this.frames.length - 1 - this.frames.indexOf(f);
+  /**
+   * The frames as control `i` had them, before the controls after it held
+   * some aside: each later dispatch gives back the frames it holds above its
+   * owner, whose place is its own pc again, and each later cleanup those it
+   * holds above its running block. `pcs` has the places that differ.
+   */
+  private framesAt(i: number): { frames: Frame[]; pcs: Map<Frame, number> } {
+    let frames = this.frames;
+    const pcs = new Map<Frame, number>();
+    for (let j = this.controls.length - 1; j > i; j--) {
+      const c = this.controls[j]!;
+      if (c.k === 'dispatch') {
+        const owner = frames[c.owner];
+        requireSnapshot(owner);
+        pcs.set(owner!, c.ownerPc);
+        frames = [...frames.slice(0, c.owner + 1), ...c.held];
+        continue;
+      }
+      const step = c.cleanups[c.next - 1];
+      if (step && !step.leave && c.held.length) {
+        requireSnapshot(step.frame < frames.length);
+        frames = [...frames.slice(0, step.frame + 1), ...c.held];
+      }
+    }
+    return { frames, pcs };
   }
 
   private validateControl(knownCode: ReadonlySet<object>): void {
