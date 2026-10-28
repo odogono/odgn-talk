@@ -303,7 +303,7 @@ One occasion on which a Core hands values to its Host, as a Session Transcript c
 _Avoid_: crossing (that is a Host Crossing), callback
 
 **Host Manifest**:
-A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive and the Host Objects it may meet. Tooling reads it. The Core never does.
+A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive, the Host Objects it may meet and any Owner Kind. Tooling reads it. The Core never does.
 _Avoid_: type definitions, SDK, d.ts, host profile
 
 **Lint**:
@@ -573,6 +573,10 @@ _Avoid_: bubbling, propagation, inheritance chain
 **Owning Script**:
 The one Script whose `me` is a given Host Object, and so the first to receive messages delivered to that object. An object has at most one.
 _Avoid_: attached script, behaviour, object script
+
+**Owner Kind**:
+The Object Kind a Host Manifest declares for the `me` of its kind of Script. Tooling reads it to complete and check `me`. The Core never does, and a manifest without one leaves `me` unknown.
+_Avoid_: owner, me type, owner type
 
 **Target**:
 The object a message was delivered to, written `the target`. It stays the same as the message climbs the Message Path.
