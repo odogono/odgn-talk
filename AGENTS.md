@@ -6,7 +6,7 @@ For issue work, start with [repository identity and issue conventions](docs/agen
 
 ### Commits
 
-PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment. See `docs/agents/commits.md`, which also covers the git hooks and reading a failed CI check with `bun run ci:log <pr>`.
+PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment at `changelog/unreleased/<slug>.md` whose `type` and `scope` front matter copy the title. See `docs/agents/commits.md`, which also covers the git hooks and reading a failed CI check with `bun run ci:log <pr>`.
 
 ### Triage labels
 

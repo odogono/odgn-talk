@@ -4,7 +4,8 @@
 // so no tab, storage or service worker carries over between runs. Only the
 // suites on the app page keep the service worker, which `offline` tests.
 // `--suite play,tetris` runs a subset; `--headed` shows the browser and
-// `--channel chrome` uses an installed Chrome.
+// `--channel chrome` uses an installed Chrome. `--timeout` bounds each page
+// step and `--run-timeout` a whole run, so a run that hangs fails instead.
 import { extname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { chromium, type Browser } from 'playwright';
@@ -16,10 +17,12 @@ const { values } = parseArgs({
     channel: { type: 'string' },
     headed: { type: 'boolean', default: false },
     suite: { type: 'string' },
+    'run-timeout': { type: 'string', default: '300000' },
     timeout: { type: 'string', default: '120000' },
   },
 });
 const timeout = Number(values.timeout);
+const runTimeout = Number(values['run-timeout']);
 const only = values.suite?.split(',').map(name => name.trim());
 
 const types: Record<string, string> = {
@@ -59,7 +62,15 @@ const runOne = async (
     page.setDefaultTimeout(timeout);
     page.on('pageerror', error => pageErrors.push(String(error)));
     await page.goto(new URL(suite.page, origin).href);
-    const result = await page.evaluate(
+    // `page.evaluate` has no timeout of its own, so race it against one.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Run timed out after ${runTimeout} ms`)),
+        runTimeout,
+      );
+    });
+    const evaluated = page.evaluate(
       async ({ module, run }) => {
         const loaded = (await import(module)) as Record<string, unknown>;
         const exports = Object.keys(loaded).filter(name =>
@@ -74,6 +85,9 @@ const runOne = async (
         };
       },
       { module: `/${suite.name}.browser.js`, run },
+    );
+    const result = await Promise.race([evaluated, deadline]).finally(() =>
+      clearTimeout(timer),
     );
     if (run === undefined) {
       return { exports: result.exports };
