@@ -1,6 +1,6 @@
 # element-references: Object Element References and Element Counts read Host
-# state, so they are `not in a guard`, `not constant` and never Containers;
-# `set` cannot write one, and they take no Whose Clause (#1143).
+# state, so they are `not in a guard`, `not constant` and never Containers,
+# and `set` cannot write one (#1143).
 kind = "trace"
 [versions]
 language = "1.0-rc.3"
@@ -65,16 +65,6 @@ objects = { thisPage = { kind = "page", id = "main" } }
 [[scripts]]
 name = "delete-reference"
 source = "delete-reference.talk"
-objects = { thisPage = { kind = "page", id = "main" } }
-
-[[scripts]]
-name = "every-whose"
-source = "every-whose.talk"
-objects = { thisPage = { kind = "page", id = "main" } }
-
-[[scripts]]
-name = "ordinal-whose"
-source = "ordinal-whose.talk"
 objects = { thisPage = { kind = "page", id = "main" } }
 
 [[scripts]]

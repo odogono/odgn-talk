@@ -178,6 +178,7 @@ var Grammar = GrammarTable{
 		"characters",
 		"bytes",
 		"code points",
+		"elements",
 	},
 	Labels: GrammarTableLabels{
 		Reserved: []string{
@@ -373,6 +374,7 @@ var Grammar = GrammarTable{
 			Positions: []string{
 				"operand position, before a token that can start an index (an Object Element Reference)",
 				"after `the` and an ordinal (an ordinal Object Element Reference)",
+				"after `every`, before `of` (an Every Head)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -380,6 +382,7 @@ var Grammar = GrammarTable{
 			Positions: []string{
 				"operand position, before a token that can start an index (an Object Element Reference)",
 				"after `the number of`, before `of` (an Element Count)",
+				"after `the`, before `of` (the Built-in property `elements`)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -557,7 +560,7 @@ var Grammar = GrammarTable{
 		GrammarTableContextualEntry{
 			Word: "whose",
 			Positions: []string{
-				"after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause)",
+				"after an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand (a Whose Clause)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -800,7 +803,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableModifierEntry{
 			Name:     "whose",
-			Attaches: "an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does",
+			Attaches: "an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand, and ends the expression, as a Lambda does",
 		},
 		GrammarTableModifierEntry{
 			Name:     "lazily",

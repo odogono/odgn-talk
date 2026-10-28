@@ -3037,6 +3037,9 @@ export class BodyCompiler {
           this.expr(n.delimiter);
           this.at(n);
           this.emit('property-delimited', [n.key]);
+        } else if (n.key === 'elements') {
+          this.at(n);
+          this.emit('list-elements');
         } else {
           this.at(n);
           this.emit('property', [n.key]);
@@ -3160,7 +3163,12 @@ export class BodyCompiler {
     // Every chunk kind's plural adds an `s`, `code points` included.
     const plural = `${head.kind}s`;
     let d: number | null = null;
-    if (delimiter && (src.k === 'Chunk' || src.k === 'OrdinalChunk')) {
+    if (n.every ? n.kind === 'element' : n.of.k === 'ObjectElement') {
+      // An Object Collection walks its members, read whole (ADR 0138).
+      this.expr(src);
+      this.at(n);
+      this.pos(word, () => this.emit('list-elements'));
+    } else if (delimiter && (src.k === 'Chunk' || src.k === 'OrdinalChunk')) {
       d = this.chunkRead({ ...src, delimiter }, true);
       this.at(n);
       this.emit('load', [d!]);

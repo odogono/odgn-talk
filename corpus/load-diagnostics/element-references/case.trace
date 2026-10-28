@@ -21,10 +21,6 @@ diag put-reference code="not a container" pos=2:14
 diag add-key-reference code="not a container" pos=2:12
 > load delete-reference identity=b64586ea3b877923abf1402552b3b58df9398f51e9763ec9f85ba90338857101
 diag delete-reference code="not a container" pos=2:10
-> load every-whose identity=28a428b4af0d1631e9a7f64caeccb06e11749eeca2ea345782b502c5ec80e2b2
-diag every-whose code="unexpected token" pos=2:13
-> load ordinal-whose identity=1d5026a81654fb6849f2a540b0bc0c394e91e6d22e0084578029dc55ed2cc93b
-diag ordinal-whose code="unexpected token" pos=2:37
 > load subtract-name identity=24096fd9f105896622afefea18e0c1df016c2da13c960dd6105e0efa3423bcce
 diag subtract-name code="unexpected token" pos=2:19
 > vars

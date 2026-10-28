@@ -9,13 +9,15 @@
   [object element contract](../../spec/embedding/object-elements.md#walking-a-collection).
   It deliberately leaves the executable catalogues unchanged, because adding
   `list-elements` or the new grammar alone fails Core coverage.
-- **Deferred to the implementation PR:**
-  - `grammar.ebnf`/`grammar.toml`: `element` as an Every Head and ordinal
-    Whose head, and `elements` as a Built-in property;
-  - `machine.toml`/`costs.toml`: `list-elements` and its rate;
-  - the `function: "elements"` and `"list-elements"` diagnostics fields;
-  - the reference parser and lowering, the TS and Zig Cores, and shared
-    Corpus cases.
+- **Implemented in:** the implementation PR that follows, which activates
+  the grammar, `list-elements` and its rate, the `elements` Built-in property
+  and the `function: "elements"` field, with the reference parser and
+  lowering and the TS and Zig Cores. Its Corpus cases
+  (`objects/element-walks`, `disassembly/object-element-walks`,
+  `load-diagnostics/element-walks`) are Unblessed and await first-blessing
+  review. It also removes the `every-whose` and `ordinal-whose` scripts
+  from the approved `load-diagnostics/element-references` case, since those
+  forms now parse.
 - **After the implementation:** tag `reactor-v*` and re-pin the Elixir Host.
 
 ## Acceptance

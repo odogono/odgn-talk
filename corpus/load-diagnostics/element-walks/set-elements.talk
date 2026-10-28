@@ -1,0 +1,3 @@
+on go
+  set the elements of thisPage to []
+end go

@@ -69,7 +69,7 @@ ordinals = [
 
 properties = [
   "length", "keys", "values", "items", "lines", "words", "characters", "bytes",
-  "code points",
+  "code points", "elements",
 ]
 
 [labels]
@@ -192,11 +192,11 @@ positions = ["after `repeat for`"]
 
 [[contextual]]
 word = "element"
-positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the` and an ordinal (an ordinal Object Element Reference)"]
+positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the` and an ordinal (an ordinal Object Element Reference)", "after `every`, before `of` (an Every Head)"]
 
 [[contextual]]
 word = "elements"
-positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the number of`, before `of` (an Element Count)"]
+positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the number of`, before `of` (an Element Count)", "after `the`, before `of` (the Built-in property `elements`)"]
 
 [[contextual]]
 word = "empty"
@@ -312,7 +312,7 @@ positions = ["after `script` at the start of a top-level declaration"]
 
 [[contextual]]
 word = "whose"
-positions = ["after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause)"]
+positions = ["after an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand (a Whose Clause)"]
 
 [[contextual]]
 word = "with"
@@ -443,7 +443,7 @@ attaches = "the outermost Chunk Expression of an `of` chain"
 
 [[modifier]]
 name = "whose"
-attaches = "an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does"
+attaches = "an Every Head, or an ordinal Chunk Expression or ordinal Object Element Reference that is a whole operand, and ends the expression, as a Lambda does"
 
 [[modifier]]
 name = "lazily"

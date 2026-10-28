@@ -604,6 +604,17 @@ errors = ["wrong kind", "object gone", "out of domain", "restricted operation"]
 does = "`the number of elements of o`: pops the Host Object and pushes its collection's count"
 
 [[instruction]]
+name = "list-elements"
+group = "access"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "list-elements"
+errors = ["wrong kind", "object gone", "out of domain", "restricted operation"]
+does = "`the elements of o`, and the walk of an element Whose Clause: pops the Host Object and pushes a list of its collection's members"
+
+[[instruction]]
 name = "property"
 group = "access"
 operands = ["property"]

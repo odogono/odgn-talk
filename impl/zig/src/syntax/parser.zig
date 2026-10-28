@@ -1291,9 +1291,15 @@ const Parser = struct {
         // A Whose Clause is a whole Expression, as a Lambda is.
         if (p.isWord(t, "every")) {
             const n = try p.peek2("every-chunk", .operator);
-            if (n.kind == .word and (isSingular(p.word(n)) or p.isWord(n, "code"))) return p.everyHead();
+            if (n.kind == .word and (isSingular(p.word(n)) or p.isWord(n, "code") or p.isWord(n, "element"))) return p.everyHead();
         }
         const e = try p.defaultExpr();
+        // `the first element of o whose c` (#1627).
+        if (e.data == .element and e.data.element.ordinal != null and try p.atWord("whose", .operator)) {
+            const op = try p.next(.operator);
+            const condition = try p.whoseCondition();
+            return p.mk(op, .{ .whose = .{ .whose = op, .every = false, .word = e.pos, .kind = .item, .source = e.data.element.of, .delimiter = null, .delimited = null, .ordinal = e, .condition = condition, .elements = true } }, &.{ e, condition });
+        }
         if (e.data == .chunk and e.data.chunk.ordinal != null and try p.atWord("whose", .operator)) {
             const op = try p.next(.operator);
             const condition = try p.whoseCondition();
@@ -1837,23 +1843,25 @@ const Parser = struct {
     fn everyHead(p: *Parser) Error!*Expr {
         _ = try p.next(.operand);
         const w = try p.next(.operand);
-        var k: ast.ChunkKind = undefined;
+        var k: ast.ChunkKind = .item;
+        // `every element of o whose c` walks an Object Collection (#1627).
+        const elements = std.mem.eql(u8, p.word(p.tokens.items[w]), "element");
         if (std.mem.eql(u8, p.word(p.tokens.items[w]), "code")) {
             _ = try p.expectWord("point", .operand);
             k = .code_point;
-        } else k = chunkKind(p.word(p.tokens.items[w]), null).?;
+        } else if (!elements) k = chunkKind(p.word(p.tokens.items[w]), null).?;
         _ = try p.expectWord("of", .operator);
         const source = try p.postfix(try p.primary());
         var delimiter: ?*Expr = null;
         var delimited: ?Tok = null;
-        if (try p.atWord("delimited", .operator) and p.isWord(try p.peek2("delimited-by", .operator), "by")) {
+        if (!elements and try p.atWord("delimited", .operator) and p.isWord(try p.peek2("delimited-by", .operator), "by")) {
             delimited = try p.next(.operator);
             _ = try p.next(.operand);
             delimiter = try p.postfix(try p.primary());
         }
         const op = try p.expectWord("whose", .operator);
         const condition = try p.whoseCondition();
-        return p.mk(op, .{ .whose = .{ .whose = op, .every = true, .word = w, .kind = k, .source = source, .delimiter = delimiter, .delimited = delimited, .ordinal = null, .condition = condition } }, &.{ source, delimiter, condition });
+        return p.mk(op, .{ .whose = .{ .whose = op, .every = true, .word = w, .kind = k, .source = source, .delimiter = delimiter, .delimited = delimited, .ordinal = null, .condition = condition, .elements = elements } }, &.{ source, delimiter, condition });
     }
 
     /// A Name operand that is the condition's first token is a Whose Key.
@@ -2880,5 +2888,12 @@ test "object element references and counts (#1143)" {
     try expectOutcome("on t\n  put 1 into element 3 of p\nend t\n", "not a container at 2:14");
     try expectOutcome("on t\n  delete the fill of element 3 of p\nend t\n", "not a container at 2:10");
     try expectOutcome("on t\n  put element - 1 into n\nend t\n", "unexpected token at 2:19");
-    try expectOutcome("on t\n  put the first element of p whose it is 1 into x\nend t\n", "unexpected token at 2:30");
+}
+
+test "walking an Object Collection (#1627)" {
+    try expectShape("the first element of p whose it is 1", "(whose (element first p) (equal it 1))");
+    try expectShape("the elements of p", "property");
+    try expectOutcome("on t\n  put every element of p whose it is 1 into x\nend t\n", "parses");
+    try expectOutcome("on t\n  repeat for each e in the elements of p\n  end repeat\nend t\n", "parses");
+    try expectOutcome("on t\n  put every element of p delimited by \";\" whose it is 1 into x\nend t\n", "unexpected token at 2:26");
 }

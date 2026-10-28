@@ -305,7 +305,7 @@ pub const errors: ErrorsTable = .{
                 "function",
                 "value",
             },
-            .raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, or `element` or `number of elements`",
+            .raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, `element`, `number of elements` or `elements`",
             .sources = &.{
                 "ADR 0002",
                 "ADR 0021",

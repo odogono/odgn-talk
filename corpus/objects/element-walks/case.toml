@@ -1,0 +1,49 @@
+# element-walks: `the elements of o` reads a Host Object's Object Collection
+# as a list, calling `Count` once and then `At` for each position, each
+# recorded as `prop` with `name=elements`. `repeat for each` walks the list,
+# and `every element … whose` and `the first element … whose` read every
+# member before testing. An empty collection calls only `Count`, and a list
+# receiver raises `wrong kind` (ADR 0138; the object element contract,
+# Walking a collection).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "room"
+elements = { shape = { object = "thing" }, countCost = { fuel = 1 }, atCost = { fuel = 1 }, findCost = { fuel = 1 } }
+
+[[objectKinds]]
+name = "thing"
+props = [{ name = "takeable", shape = "boolean", readOnly = true }]
+
+[[objects]]
+kind = "thing"
+id = "lamp"
+props = { takeable = 'true' }
+
+[[objects]]
+kind = "thing"
+id = "table"
+props = { takeable = 'false' }
+
+[[objects]]
+kind = "thing"
+id = "key"
+props = { takeable = 'true' }
+
+[[objects]]
+kind = "room"
+id = "hall"
+elements = [{ name = "lamp", object = '<object thing "lamp">' }, { name = "table", object = '<object thing "table">' }, { name = "key", object = '<object thing "key">' }]
+
+[[objects]]
+kind = "room"
+id = "cellar"
+
+[[scripts]]
+name = "game"
+source = "game.talk"
+objects = { hall = { kind = "room", id = "hall" }, cellar = { kind = "room", id = "cellar" } }

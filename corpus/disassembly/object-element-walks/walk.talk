@@ -1,0 +1,8 @@
+-- walk.talk: walking an Object Collection (#1627).
+
+on tidy room
+  put the elements of room into things
+  put every element of room whose the isTakeable of it into loot
+  put the first element of room whose the id of it is "lamp" into lamp
+  return [things, loot, lamp]
+end tidy

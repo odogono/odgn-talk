@@ -755,6 +755,18 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       const whose = pos(children[1]!);
       if (first?.kind !== 'node' || first.rule !== 'EveryHead') {
         const head = of<Expr>(first);
+        if (head.k === 'element' && typeof head.index === 'number') {
+          return {
+            k: 'whose',
+            pos: whose,
+            at: head.pos,
+            kind: 'element',
+            index: head.index,
+            src: head.base,
+            delimiter: null,
+            cond,
+          } satisfies Whose;
+        }
         if (head.k !== 'chunk' || typeof head.index !== 'number') {
           return shape(node);
         }
@@ -785,7 +797,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         .join(' ');
       return {
         at: pos(children[1]!),
-        kind: singular.get(kind) ?? shape(node),
+        kind: kind === 'element' ? kind : (singular.get(kind) ?? shape(node)),
         src: of<Expr>(children[ofAt + 1]),
         delimiter: children[ofAt + 4] ? of<Expr>(children[ofAt + 4]) : null,
       } satisfies EveryHead;

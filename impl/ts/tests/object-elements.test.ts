@@ -341,3 +341,91 @@ test('a Session Transcript records collection callbacks and replays them without
   );
   expect(calls).toHaveLength(3);
 });
+
+const twoMembers = (calls: string[]) => (members: HostObject<null>[]) => ({
+  count: () => {
+    calls.push('count');
+    return num(members.length);
+  },
+  at: (_: HostObject<null>, index: number) => {
+    calls.push(`at ${index}`);
+    return members[index - 1]!.value;
+  },
+});
+
+// Walking an Object Collection (#1627): `the elements of o` reads it whole.
+describe('Walking an Object Collection', () => {
+  test('the elements of o calls Count, then At for each position, in order', () => {
+    const calls: string[] = [];
+    const { lines, log } = run(
+      'elements-walk',
+      twoMembers(calls),
+      '  repeat for each thing in the elements of thisPage\n    put thing after log\n  end repeat',
+    );
+    expect(calls).toEqual(['count', 'at 1', 'at 2']);
+    expect(log.toString()).toBe(
+      '[<object elements-cell "c1">, <object elements-cell "c2">]',
+    );
+    expect(lines.filter(line => line.startsWith('prop '))).toEqual([
+      'prop s/r1 object=<object elements-walk "main"> name=elements op=count value=2',
+      'prop s/r1 object=<object elements-walk "main"> name=elements op=at selector=1 value=<object elements-cell "c1">',
+      'prop s/r1 object=<object elements-walk "main"> name=elements op=at selector=2 value=<object elements-cell "c2">',
+    ]);
+  });
+
+  test('Whose Clauses over element read every member before testing', () => {
+    const calls: string[] = [];
+    const { log } = run(
+      'elements-whose',
+      twoMembers(calls),
+      '  put [every element of thisPage whose the id of it is "c2", the first element of thisPage whose true] into log',
+    );
+    expect(calls).toEqual(['count', 'at 1', 'at 2', 'count', 'at 1', 'at 2']);
+    expect(log.toString()).toBe(
+      '[[<object elements-cell "c2">], <object elements-cell "c1">]',
+    );
+  });
+
+  test('an empty collection gives [] after only Count', () => {
+    const calls: string[] = [];
+    const { log } = run(
+      'elements-empty',
+      () => ({
+        count: () => {
+          calls.push('count');
+          return num(0);
+        },
+      }),
+      '  put the elements of thisPage into log',
+    );
+    expect(calls).toEqual(['count']);
+    expect(log.toString()).toBe('[]');
+  });
+
+  test('At giving Nothing below the count is host error', () => {
+    const { log } = run(
+      'elements-short',
+      () => ({ count: () => num(2) }),
+      '  try\n    put the elements of thisPage into log\n  catch e\n    put the code of e into log\n  end try',
+    );
+    expect(log.toString()).toBe('"host error"');
+  });
+
+  test('a list receiver is wrong kind, expecting an object', () => {
+    const { log } = run(
+      'elements-list',
+      () => ({}),
+      '  try\n    put the elements of [1, 2] into log\n  catch e\n    put [the code of e, the expected of e] into log\n  end try',
+    );
+    expect(log.toString()).toBe('["wrong kind", "object"]');
+  });
+
+  test('a kind with no collection is out of domain for elements', () => {
+    const { log } = run(
+      'elements-none',
+      members => ({ at: () => members[0]!.value }),
+      '  try\n    put every element of (element 1 of thisPage) whose true into log\n  catch e\n    put [the code of e, the function of e] into log\n  end try',
+    );
+    expect(log.toString()).toBe('["out of domain", "elements"]');
+  });
+});

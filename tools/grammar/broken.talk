@@ -1529,15 +1529,10 @@ end t
 on t
   put 1 into element 3 of thisPage
 end t
--- case: there is no element Whose head
--- expect: unexpected token at 2:13
+-- case: an element Every Head takes no `delimited by`
+-- expect: unexpected token at 2:26
 on t
-  put every element of p whose it into xs
-end t
--- case: an ordinal Object Element Reference takes no Whose Clause
--- expect: unexpected token at 2:30
-on t
-  put the first element of p whose it into x
+  put every element of p delimited by ";" whose it into xs
 end t
 -- case: a subtraction from a variable named `element` now starts a reference
 -- expect: unexpected token at 2:19

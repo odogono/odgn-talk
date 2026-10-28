@@ -247,6 +247,20 @@ pub const OpenBroadcast = struct { deliveries: []u64, parts: []?Part };
 /// Segment ends.
 pub const StoppedSend = struct { script: *Script, delivery: Delivery };
 
+/// A `list-elements` read in progress (#1627).
+const Listing = struct {
+    count: ?u64 = null,
+    items: std.ArrayList(*Value) = .empty,
+    fuel: u64 = 0,
+    alloc: u64 = 0,
+    landed: bool = false,
+
+    fn release(l: *Listing, gpa: std.mem.Allocator) void {
+        for (l.items.items) |v| v.release();
+        l.items.deinit(gpa);
+    }
+};
+
 pub const Run = struct {
     id: []const u8,
     script: *Script,
@@ -357,6 +371,9 @@ pub const Run = struct {
     /// classifies this owned return without invoking or recording it twice.
     returned_op: ?struct { outcome: capabilities.Outcome, charged: u64, valid: bool } = null,
     returned_prop: ?objects.Result = null,
+    /// A `list-elements` read part way, paused at a deferred callback:
+    /// the count, the members so far and what their callbacks cost.
+    listing: ?Listing = null,
     /// Its Script's Variables when its Segment began, which a failed commit
     /// restores; only for a Script with Segment-bound Operations.
     segment_base: ?[]*Value = null,
@@ -3687,6 +3704,7 @@ pub const Group = struct {
     fn destroyRun(g: *Group, run: *Run) void {
         if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
         if (run.returned_prop) |r| g.releasePropResult(r);
+        if (run.listing) |*l| l.release(g.gpa);
         if (g.waits.takeRun(run)) |p| {
             g.waits.abandonWait(p, .run_destroyed);
             g.destroyPending(p);
@@ -9308,6 +9326,19 @@ pub const Group = struct {
                 if (step == .crossing) try g.push(frame, receiver.retain());
                 return step;
             },
+            // `the elements of o`, and an element Whose Clause's walk (#1627).
+            .list_elements => {
+                const receiver = pop(frame);
+                defer receiver.release();
+                const step = g.listElements(run, frame, receiver, m) catch |e| {
+                    if (run.listing) |*l| l.release(gpa);
+                    run.listing = null;
+                    if (run.holding) g.setHold(run, false);
+                    return e;
+                };
+                if (step == .crossing) try g.push(frame, receiver.retain());
+                return step;
+            },
             // A map-only read: Nothing reads as Nothing, and every Host
             // Object, even for `id`, is a wrong kind with no Host call.
             .get_optional_key, .get_optional_key_computed => {
@@ -10590,6 +10621,119 @@ pub const Group = struct {
         return g.elementCall(run, frame, o, .find, selector, 0, m);
     }
 
+    /// `the elements of o`: `Count`, then `At` for each position, in order,
+    /// as one Host Crossing, then the list (#1627). Each callback's declared
+    /// cost is covered before it is made. A deferred callback pauses the
+    /// read in `run.listing`, and the instruction resumes it.
+    fn listElements(g: *Group, run: *Run, frame: *Frame, receiver: *Value, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        const o = try g.collectionOf(receiver, "elements");
+        if (run.listing == null) {
+            run.listing = .{};
+            g.setHold(run, true);
+        }
+        const l = &run.listing.?;
+        if (l.count == null) {
+            const v = switch (try g.listFetch(run, o, .count, 0, m)) {
+                .value => |v| v,
+                .crossing => return .crossing,
+            };
+            defer v.release();
+            l.count = objects.wholeMagnitude(v.data.number).?;
+        }
+        while (l.items.items.len < l.count.?) {
+            const i: i64 = @intCast(l.items.items.len + 1);
+            const v = switch (try g.listFetch(run, o, .at, i, m)) {
+                .value => |v| v,
+                .crossing => return .crossing,
+            };
+            try l.items.append(gpa, v);
+        }
+        if (!l.landed) {
+            g.setHold(run, false);
+            l.landed = true;
+            const interrupted = g.landedAt(run) catch |err| {
+                if (err != error.Deferred) return err;
+                return .crossing;
+            };
+            if (interrupted) {
+                m.fuel_extra = l.fuel;
+                m.alloc_extra = l.alloc;
+                l.release(gpa);
+                run.listing = null;
+                return error.Landed;
+            }
+        }
+        const list = try model.list(gpa, l.items.items);
+        m.fuel_extra = l.fuel;
+        m.alloc_extra = l.alloc;
+        m.result = list.retain();
+        l.release(gpa);
+        run.listing = null;
+        try g.push(frame, list);
+        return .next;
+    }
+
+    const Fetched = union(enum) { value: *Value, crossing };
+
+    /// One callback of a `list-elements` read: covered with what the read
+    /// has spent so far, called, recorded and converted. A position below
+    /// the count that gives Nothing is the Host's error.
+    fn listFetch(g: *Group, run: *Run, o: *objects.Object, op: objects.ElementOp, index: i64, m: *costs.Measures) !Fetched {
+        const gpa = g.gpa;
+        const els = o.kind.elements.?;
+        const l = &run.listing.?;
+        const cost = if (op == .count) els.count_cost else els.at_cost;
+        const returned = run.returned_prop;
+        if (returned == null) {
+            var probe = m.*;
+            probe.fuel_extra = l.fuel + cost.fuel;
+            probe.alloc_extra = l.alloc + cost.alloc;
+            try g.coverCharge(run, costs.chargeInstruction(.list_elements, &probe));
+        }
+        run.returned_prop = null;
+        const outcome = if (returned) |r| r else blk: {
+            const held = g.holdTrace();
+            const result = switch (op) {
+                .count => els.count(els.context, gpa, o),
+                else => els.at(els.context, gpa, o, index),
+            };
+            g.flushChargeRefusals();
+            g.trace = held;
+            break :blk result;
+        };
+        if (outcome == .deferred) return .crossing;
+        var owned = true;
+        defer if (owned) g.releasePropResult(outcome);
+        l.fuel += cost.fuel;
+        l.alloc += cost.alloc;
+        m.fuel_extra = l.fuel;
+        m.alloc_extra = l.alloc;
+        const selector = if (op == .at) try chunks.numberValue(gpa, index) else null;
+        defer if (selector) |x| x.release();
+        const valid = if (outcome == .value)
+            (op == .count or outcome.value.data != .nothing) and try g.validElement(o, op, outcome.value)
+        else
+            true;
+        if (returned == null) g.recordElementReturn(run, o, op, selector, outcome, valid);
+        if (!valid) return g.propError(run, o, op.operation());
+        switch (outcome) {
+            .value => |v| {
+                const size = costs.size(v);
+                l.fuel += (size + 31) / 32;
+                l.alloc += size;
+                owned = false;
+                return .{ .value = v };
+            },
+            .failed => |f| {
+                owned = false;
+                _ = try g.propFailed(run, o, op.operation(), .{ .code = f.code, .message = f.message, .data = f.data }, m);
+                unreachable;
+            },
+            else => return g.propError(run, o, op.operation()),
+        }
+    }
+
     /// The receiver of a collection read: a live object of this Group whose
     /// kind has a collection.
     fn collectionOf(g: *Group, v: *Value, function: []const u8) !*objects.Object {
@@ -11016,7 +11160,7 @@ pub const Group = struct {
 
 fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     return switch (ins.op) {
-        .get_element, .count_elements => true,
+        .get_element, .count_elements, .list_elements => true,
         .load_var, .store_var, .store_definition, .load_object, .me, .target, .set_property, .set_property_computed, .ask, .ask_wait, .tell, .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .send_up, .send_up_wait, .wait, .wait_for, .wait_for_any, .join_start, .join_ask, .join_send, .join_send_named, .join_send_spread, .join_end, .timeout_start, .timeout_end, .call_value_wait, .call_handler_wait, .veto, .pass, .choose_offer => true,
         .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable") or std.mem.eql(u8, ins.operands[0].text, "random"),
         .get_key, .get_key_computed => blk: {

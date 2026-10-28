@@ -2307,6 +2307,9 @@ class BodyLowering {
           yield this.expr(e.delimiter);
           return void this.emit(at, 'property-delimited', e.name);
         }
+        if (e.name === 'elements') {
+          return void this.emit(at, 'list-elements');
+        }
         return void this.emit(at, 'property', e.name);
       case 'chunk':
         return void (yield* this.chunkRead(e));
@@ -2388,7 +2391,11 @@ class BodyLowering {
     }
     const plural = PLURAL.get(e.kind)!;
     let d: number | null = null;
-    if (e.delimiter && e.src.k === 'chunk') {
+    if (e.kind === 'element') {
+      // An Object Collection walks its members, read whole (ADR 0138).
+      yield this.expr(e.src);
+      this.emit(e.at, 'list-elements');
+    } else if (e.delimiter && e.src.k === 'chunk') {
       d = yield* this.chunkRead({ ...e.src, delimiter: e.delimiter }, true);
       this.emit(at, 'load', d!);
       this.emit(e.at, 'property-delimited', plural);

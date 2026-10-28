@@ -2400,6 +2400,11 @@ const Frame = struct {
             },
             .property => |p| {
                 try f.expr(p.base);
+                // `the elements of o`: ⟦o⟧ list-elements, at `the` (#1627).
+                if (!p.code_points and p.delimiter == null and std.mem.eql(u8, try f.propertyName(p), "elements")) {
+                    try f.emit(.list_elements, &.{}, at, "");
+                    return;
+                }
                 if (p.delimiter) |d| {
                     try f.expr(d);
                     try f.emit(.property_delimited, &.{.{ .text = try f.propertyName(p) }}, at, "");
@@ -2581,7 +2586,7 @@ const Frame = struct {
             try f.emit(.list, &.{.{ .int = 0 }}, at, "");
         } else {
             try f.constAt(try f.nothing(), at);
-            ordinal = l.text(w.ordinal.?.data.chunk.ordinal.?);
+            ordinal = l.text(if (w.elements) w.ordinal.?.data.element.ordinal.? else w.ordinal.?.data.chunk.ordinal.?);
         }
         try f.store(r, at);
         if (ordinal) |o| if (!std.mem.eql(u8, o, "first") and !std.mem.eql(u8, o, "last")) {
@@ -2592,7 +2597,10 @@ const Frame = struct {
         // The walk.
         const plural = pluralName(w.kind);
         var delim: ?u32 = null;
-        if (w.delimiter) |d| {
+        if (w.elements) {
+            try f.expr(w.source);
+            try f.emit(.list_elements, &.{}, w.word, "");
+        } else if (w.delimiter) |d| {
             if (w.source.data == .chunk) {
                 // The source as a Chunk Expression with the delimiter, keeping
                 // its temp.

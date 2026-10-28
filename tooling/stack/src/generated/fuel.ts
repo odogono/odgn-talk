@@ -103,6 +103,13 @@ export const fuelRates = [
     "open": []
   },
   {
+    "key": "list-elements",
+    "fixed": 3,
+    "open": [
+      "items(result)"
+    ]
+  },
+  {
     "key": "property",
     "fixed": 3,
     "open": [

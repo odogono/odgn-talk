@@ -1,0 +1,46 @@
+# Unblessed: walking an Object Collection (#1627); first blessing awaits human review.
+
+> load game identity=e78714a34976c520120c2f29c9e67b0f1cd6388849a785fb7d36c1ad4273c691
+> deliver d1 to=game message=walk
+> pump clock=2026-10-28T09:00:00Z
+prop game/r1 object=<object room "hall"> name=elements op=count value=3
+prop game/r1 object=<object room "hall"> name=elements op=at selector=1 value=<object thing "lamp">
+prop game/r1 object=<object room "hall"> name=elements op=at selector=2 value=<object thing "table">
+prop game/r1 object=<object room "hall"> name=elements op=at selector=3 value=<object thing "key">
+prop game/r1 object=<object room "cellar"> name=elements op=count value=0
+seg game/r1 start delivery=d1 handler=walk clause=1 fuel=89 alloc=316 state=124 end=return
+run game/r1 outcome=completed delivery=d1 handler=walk fuel=89 alloc=316
+pumped state=idle fuel=89
+> deliver d2 to=game message=pick
+> pump clock=2026-10-28T09:00:01Z
+prop game/r2 object=<object room "hall"> name=elements op=count value=3
+prop game/r2 object=<object room "hall"> name=elements op=at selector=1 value=<object thing "lamp">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=2 value=<object thing "table">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=3 value=<object thing "key">
+prop game/r2 object=<object thing "lamp"> name=takeable op=get value=true
+prop game/r2 object=<object thing "table"> name=takeable op=get value=false
+prop game/r2 object=<object thing "key"> name=takeable op=get value=true
+prop game/r2 object=<object room "hall"> name=elements op=count value=3
+prop game/r2 object=<object room "hall"> name=elements op=at selector=1 value=<object thing "lamp">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=2 value=<object thing "table">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=3 value=<object thing "key">
+prop game/r2 object=<object thing "lamp"> name=takeable op=get value=true
+prop game/r2 object=<object room "hall"> name=elements op=count value=3
+prop game/r2 object=<object room "hall"> name=elements op=at selector=1 value=<object thing "lamp">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=2 value=<object thing "table">
+prop game/r2 object=<object room "hall"> name=elements op=at selector=3 value=<object thing "key">
+prop game/r2 object=<object thing "lamp"> name=takeable op=get value=true
+prop game/r2 object=<object thing "table"> name=takeable op=get value=false
+prop game/r2 object=<object thing "key"> name=takeable op=get value=true
+prop game/r2 object=<object room "cellar"> name=elements op=count value=0
+seg game/r2 start delivery=d2 handler=pick clause=1 fuel=214 alloc=920 state=268 end=return
+run game/r2 outcome=completed delivery=d2 handler=pick fuel=214 alloc=920
+pumped state=idle fuel=214
+> deliver d3 to=game message=wrong
+> pump clock=2026-10-28T09:00:02Z
+raise game/r3 code="wrong kind" at=game:120 pos=21:9
+seg game/r3 start delivery=d3 handler=wrong clause=1 fuel=32 alloc=656 state=860 end=return
+run game/r3 outcome=completed delivery=d3 handler=wrong fuel=32 alloc=656
+pumped state=idle fuel=32
+> vars
+vars game log=["lamp", "table", "key", [], [<object thing "lamp">, <object thing "key">], <object thing "lamp">, <object thing "table">, [], {code: "wrong kind", expected: "object", got: "list", value: [1, 2], at: {unit: "game", handler: "wrong", line: 21, column: 9}}]

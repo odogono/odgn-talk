@@ -37,6 +37,8 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured, into?: 
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.input)) / 8); into.alloc = 0; return into; },
   // count-elements
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3; into.alloc = 0; return into; },
+  // list-elements
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(7, m.result)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // property
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 3 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(7, m.result)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // chunk-get

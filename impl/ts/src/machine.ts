@@ -118,6 +118,7 @@ import {
   mapLayout,
   mapOfLayout,
   nothing,
+  num,
   quantity,
   text,
   Value,
@@ -159,6 +160,7 @@ export const defaultLimits: Limits = {
 // The rates charged outside an instruction's own.
 const CALL = rateOf('call');
 const RESTRICTED_REFUSAL = rateOf('restricted-refusal');
+const COUNT_ELEMENTS = rateOf('count-elements');
 const CAPABILITY = rateOf('capability');
 const CHOOSE_OFFER = rateOf('choose-offer');
 const CLAUSE = rateOf('clause');
@@ -3247,6 +3249,48 @@ export class Run {
     });
   }
 
+  /**
+   * `the elements of o` (#1627): the 3-Fuel base, the receiver's checks,
+   * one `Count`, one `At` per position, then the list's own charge.
+   */
+  private listElements(v: Value, rate: number): Value {
+    this.pay(COUNT_ELEMENTS);
+    const members = paidOnce(() => {
+      const { o, elements } = this.collectionOf(v, 'elements');
+      const count = this.elementCall(
+        o,
+        v,
+        'count',
+        null,
+        elements.countCost,
+        () => elements.count(o.handle),
+      );
+      const n = Number(count.asDecimal()!.toString());
+      const items: Value[] = [];
+      for (let i = 1; i <= n; i++) {
+        items.push(
+          this.elementCall(
+            o,
+            v,
+            'at',
+            num(i),
+            elements.atCost,
+            () => elements.at(o.handle, i),
+            true,
+          ),
+        );
+      }
+      return listValues(items);
+    });
+    this.m.result = members;
+    if (this.charging) {
+      const own = charge(rate, this.m);
+      const base = fixedCharges[COUNT_ELEMENTS]!;
+      this.payAmount(own.fuel - base.fuel, own.alloc - base.alloc);
+    }
+    return members;
+  }
+
   // One collection callback: its declared cost first, then the call, its
   // `prop` crossing and its result's checks and conversion.
   private elementCall(
@@ -3256,6 +3300,7 @@ export class Run {
     selector: Value | null,
     cost: { alloc?: number; fuel: number },
     call: () => unknown,
+    required = false,
   ): Value {
     const ctx = this.propContext(o, `elements.${op}`, cost);
     this.payAmount(ctx.declared, cost.alloc ?? 0);
@@ -3279,7 +3324,10 @@ export class Run {
         hostDetail(error),
       );
     }
-    const detail = this.elementResultDetail(o, op, result);
+    const detail =
+      required && Value.isValue(result) && result.kind === 'nothing'
+        ? 'its member is missing below its count'
+        : this.elementResultDetail(o, op, result);
     if (detail) {
       record({ error: map([]) });
       throw this.hostError(ctx, detail);
@@ -4682,6 +4730,7 @@ export class Run {
         );
       case Op.GetElement:
       case Op.CountElements:
+      case Op.ListElements:
         return true;
       case Op.GetKey:
       case Op.GetKeyComputed:
@@ -4904,6 +4953,11 @@ export class Run {
         return next(frame);
       case Op.CountElements:
         m.result = this.countElements(this.peek(), rate);
+        frame.stack.pop();
+        frame.stack.push(m.result);
+        return next(frame);
+      case Op.ListElements:
+        m.result = this.listElements(this.peek(), rate);
         frame.stack.pop();
         frame.stack.push(m.result);
         return next(frame);
