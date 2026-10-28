@@ -8,3 +8,7 @@ Hosts need to tell whether two saved Groups are in the same state, but consecuti
 - **Advance the counter only when state changed.** "Changed" has no clean definition once Clock readings and refused attempts count.
 - **Document the byte layout so Hosts blank the counter.** Ties every Host to a Core-specific, versioned format.
 - **One fingerprint shared by every Core.** Needs a normative, byte-exact encoding of all machine state, frames and operand stacks included: a second save format both Cores must track on every machine change. The Hosts asking compare states on one Core, so a cross-Core version can come later as a new fingerprint if one is needed.
+
+## Consequences
+
+- Superseded in part by [ADR 0144](0144-a-save-restores-on-either-core.md): the State Fingerprint is shared by every Core and read from the save's header.

@@ -139,3 +139,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0135: `set` writes a path below a Host Object property as one crossing](0135-set-writes-a-path-below-a-host-object-property-as-one-crossing.md)
 - [0139: The test runner gives each Script under test a mock owner](0139-the-test-runner-gives-each-script-under-test-a-mock-owner.md)
 - [0140: northtalk.org is one Cloudflare Worker, deployed from CI](0140-northtalk-org-is-one-cloudflare-worker-deployed-from-ci.md)
+- [0144: A save restores on either Core, in one shared binary format](0144-a-save-restores-on-either-core.md)
