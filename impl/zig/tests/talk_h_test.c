@@ -732,6 +732,7 @@ static void check_lifecycle_reentry(talk_group *group) {
     lifecycle_reentry_bad |= talk_save(group, &saved) != TALK_REENTRANT_CALL;
     lifecycle_reentry_bad |= saved.data != NULL || saved.len != 0;
     lifecycle_reentry_bad |= talk_fingerprint(group, fingerprint) != TALK_REENTRANT_CALL;
+    lifecycle_reentry_bad |= talk_group_state_fingerprint(group, fingerprint) != TALK_REENTRANT_CALL;
     lifecycle_reentry_bad |= talk_inspect(group, NULL) != TALK_REENTRANT_CALL;
 }
 static talk_release_reason released_reason = TALK_RELEASE_STOP;
@@ -2142,7 +2143,18 @@ static int save_test(void) {
     bad |= talk_script_deliver(script, &nap, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     talk_owned_bytes saved = {0};
+    unsigned char live[32], again[32], of_save[32], of_restored[32];
+    bad |= talk_group_state_fingerprint(group, live) != TALK_OK;
+    size_t traced = strlen(trace);
     bad |= talk_save(group, &saved) != TALK_OK;
+    talk_owned_bytes second = {0};
+    bad |= talk_save(group, &second) != TALK_OK;
+    bad |= talk_core_state_fingerprint(core, saved.data, saved.len, of_save) != TALK_OK || memcmp(live, of_save, 32) != 0;
+    bad |= talk_core_state_fingerprint(core, second.data, second.len, again) != TALK_OK || memcmp(live, again, 32) != 0;
+    talk_owned_bytes_release(&second);
+    bad |= talk_core_state_fingerprint(core, saved.data, 3, again) != TALK_INVALID_SAVE;
+    /* The live form writes nothing to the Trace: only the two saves. */
+    bad |= strncmp(trace + traced, "> save s1\n> save s2\n", 20) != 0 || strlen(trace) != traced + 20;
     talk_restore_options ro = {"g", 1, record, NULL, NULL, 0, NULL, NULL, NULL, NULL, TALK_REJECT_MISMATCH, NULL, 0};
     talk_group *restored = NULL;
     talk_restore_result *result = NULL;
@@ -2151,6 +2163,7 @@ static int save_test(void) {
     bad |= talk_restore_result_pending(result, &pending) != 0;
     bad |= talk_restore_result_variables_only(result);
     talk_restore_result_release(result);
+    bad |= talk_group_state_fingerprint(restored, of_restored) != TALK_OK || memcmp(live, of_restored, 32) != 0;
     bad |= talk_group_script(restored, "s", 1) == NULL;
     talk_settlement adopt = {NULL, NULL, false, true};
     bad |= talk_settle(restored, "s/r1.c1", 7, &adopt, NULL) != TALK_UNKNOWN_CALL;
@@ -3153,6 +3166,8 @@ static int metering_test(void) {
     bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
     talk_owned_bytes saved = {0};
     bad |= talk_save(group, &saved) != TALK_EFFECTS_PENDING || saved.data != NULL;
+    unsigned char refused[32];
+    bad |= talk_group_state_fingerprint(group, refused) != TALK_EFFECTS_PENDING;
     talk_charge_request *q = NULL, *invalid = NULL;
     bad |= talk_call_request_charge(metered_call, -1, &invalid) != TALK_INVALID_VALUE || invalid != NULL;
     bad |= talk_call_request_charge(metered_call, 9007199254740992LL, &invalid) != TALK_INVALID_VALUE || invalid != NULL;

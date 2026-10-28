@@ -935,6 +935,39 @@ pub fn effectsPending(g: *const Group) bool {
     return false;
 }
 
+/// The State Fingerprint of a save's bytes (ADR 0142): the SHA-256 of the
+/// save without its Trace save id counter or integrity digest. Every other
+/// part of a save is already a function of the state, Host Objects by kind,
+/// id, parent and disposal, so the restored Group's save gives the same.
+pub fn stateFingerprint(bytes: []const u8) error{ InvalidSave, Mismatch }![32]u8 {
+    if (bytes.len < magic.len + 32) return error.InvalidSave;
+    const body = bytes[0 .. bytes.len - 32];
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(body, &digest, .{});
+    if (!std.mem.eql(u8, &digest, bytes[body.len..])) return error.InvalidSave;
+    if (!std.mem.eql(u8, body[0..magic.len], magic)) return error.InvalidSave;
+    var i: In = .{ .bytes = body, .pos = magic.len };
+    if ((i.int() catch return error.InvalidSave) != format_version) return error.Mismatch;
+    _ = i.str() catch return error.InvalidSave;
+    _ = i.int() catch return error.InvalidSave;
+    if (i.bytes.len - i.pos < 32) return error.InvalidSave;
+    i.pos += 32;
+    const counter = i.pos;
+    _ = i.int() catch return error.InvalidSave;
+    var h: std.crypto.hash.sha2.Sha256 = .init(.{});
+    h.update(body[0..counter]);
+    h.update(body[i.pos..]);
+    return h.finalResult();
+}
+
+/// A live Group's State Fingerprint: its save's, taken without advancing
+/// the save id counter or writing to the Trace.
+pub fn liveStateFingerprint(g: *Group, gpa: Allocator) ![32]u8 {
+    const bytes = try save(g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    return stateFingerprint(bytes) catch unreachable;
+}
+
 /// The save's bytes, which `gpa` owns. Saving changes nothing in the Group
 /// but its save id counter, which the caller has already advanced.
 pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
@@ -3344,4 +3377,57 @@ test "Join destination associations require their original frame and member inst
         defer result.deinit(gpa);
         try testing.expectError(error.InvalidSave, restore(&copy, corrupt, .{}, &result));
     }
+}
+
+test "the State Fingerprint leaves out the save id counter and survives restore (ADR 0142)" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    const live = try liveStateFingerprint(&g, gpa);
+    const print = try g.groupFingerprint();
+    g.saves += 1;
+    const first = try save(&g, gpa, print);
+    defer gpa.free(first);
+    g.saves += 1;
+    const second = try save(&g, gpa, print);
+    defer gpa.free(second);
+    try testing.expect(!std.mem.eql(u8, first, second));
+    try testing.expectEqual(live, try stateFingerprint(first));
+    try testing.expectEqual(live, try stateFingerprint(second));
+    try testing.expectEqual(live, try liveStateFingerprint(&g, gpa));
+    try testing.expectEqual(@as(u64, 2), g.saves);
+    // Save, restore, save.
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    try testing.expectEqual(Outcome.full, try restore(&restored, first, .{}, &result));
+    defer result.deinit(gpa);
+    try testing.expectEqual(live, try liveStateFingerprint(&restored, gpa));
+    const again = try save(&restored, gpa, print);
+    defer gpa.free(again);
+    try testing.expectEqual(live, try stateFingerprint(again));
+    // One differing Script Variable changes it.
+    const a = g.script("a").?;
+    const old = a.variables[0];
+    a.variables[0] = try model.scalar(gpa, .{ .number = model.Decimal.fromInt(1) });
+    const changed = try liveStateFingerprint(&g, gpa);
+    a.variables[0].release();
+    a.variables[0] = old;
+    try testing.expect(!std.mem.eql(u8, &live, &changed));
+    try testing.expectEqual(live, try liveStateFingerprint(&g, gpa));
+}
+
+test "the State Fingerprint refuses bytes it can't read and other save formats" {
+    const gpa = testing.allocator;
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    const bytes = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    try testing.expectError(error.InvalidSave, stateFingerprint(bytes[0..10]));
+    bytes[bytes.len - 1] ^= 1;
+    try testing.expectError(error.InvalidSave, stateFingerprint(bytes));
+    bytes[bytes.len - 1] ^= 1;
+    bytes[magic.len] = format_version + 1;
+    std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
+    try testing.expectError(error.Mismatch, stateFingerprint(bytes));
 }

@@ -1370,6 +1370,13 @@ export class WasmGroup implements Group {
     return bytesOfFrame(field(this.worker('fingerprint'), 'fingerprint'));
   }
 
+  /** The State Fingerprint (ADR 0142): the Group's save without its save id. */
+  stateFingerprint(): Uint8Array {
+    return bytesOfFrame(
+      field(this.worker('state-fingerprint'), 'stateFingerprint'),
+    );
+  }
+
   inspect(): Inspection {
     const ok = this.worker('inspect');
     return {

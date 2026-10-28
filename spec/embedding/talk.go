@@ -998,6 +998,11 @@ const (
 // or fatal effect uncertainty return EffectsPending without advancing execution.
 func (g *Group) Save() ([]byte, error)
 
+// StateFingerprint is the State Fingerprint (ADR 0142): everything a save
+// holds but its save id counter. A worker call, refused as Save is, that
+// charges nothing and writes no Trace record.
+func (g *Group) StateFingerprint() ([32]byte, error)
+
 // Fingerprint is the Group Fingerprint (ADR 0009), the one lockstep check.
 // A worker call, between Pumps.
 func (g *Group) Fingerprint() [32]byte
@@ -1293,6 +1298,11 @@ const (
 // Restore is safe from any goroutine; the Group it returns has not been
 // pumped. The first Pump reads a Clock at or after the saved reading.
 func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
+
+// StateFingerprint is a save's State Fingerprint: the live Group's that a
+// full restore of it would build. InvalidSave for bytes the Core can't read,
+// SaveMismatch for another Core family or save-format version.
+func (c *Core) StateFingerprint(save []byte) ([32]byte, error)
 
 type RestoreResult struct {
 	Reports       []Report // accounting baseline, including saved work discarded on restore

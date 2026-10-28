@@ -72,6 +72,38 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     expect(core.versions.unicode).toBe(ts.coreVersions.unicode);
   });
 
+  test('the State Fingerprint ignores the save id and survives restore', async () => {
+    const core = await wasm.createCore({
+      wasm: module!,
+      diagnostics: () => {},
+    });
+    const g = core.newGroup({ name: 'g' });
+    const s = g.load({
+      name: 's',
+      source: 'script variable n = 0\non bump\n  add 1 to n\nend bump',
+    });
+    const live = g.stateFingerprint();
+    const a = g.save();
+    const b = g.save();
+    expect(a).not.toEqual(b);
+    expect(core.stateFingerprint(a)).toEqual(live);
+    expect(core.stateFingerprint(b)).toEqual(live);
+    const { group: copy } = core.restore(a, {
+      name: 'g',
+      libraries: [],
+      grants: () => undefined,
+      resolve: () => undefined,
+      onMismatch: 'reject',
+    });
+    expect(copy.stateFingerprint()).toEqual(live);
+    s.deliver({ name: 'bump' });
+    g.pump(second);
+    expect(g.stateFingerprint()).not.toEqual(live);
+    expect(() => core.stateFingerprint(new Uint8Array([1, 2, 3]))).toThrow(
+      'invalid save',
+    );
+  });
+
   both(
     'Requests settle from the Pump that ends their Run',
     async (core, nt) => {

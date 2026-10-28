@@ -1571,6 +1571,29 @@ pub export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
     return .ok;
 }
 
+/// The live Group's State Fingerprint (ADR 0142): a worker call that
+/// charges nothing and writes nothing to the Trace.
+pub export fn talk_group_state_fingerprint(g: *Group, out: *[32]u8) HostErrorCode {
+    g.group.checkWorker() catch |err| return status(err);
+    if (g.memory.refused) return .out_of_memory;
+    out.* = snapshot.liveStateFingerprint(&g.group, allocator) catch |err| return switch (err) {
+        error.EffectsPending => .effects_pending,
+        else => .out_of_memory,
+    };
+    return .ok;
+}
+
+/// A save's State Fingerprint, without restoring it.
+pub export fn talk_core_state_fingerprint(c: *Core, save: ?[*]const u8, len: usize, out: *[32]u8) HostErrorCode {
+    _ = c;
+    const given = bytes(save, len) catch return .invalid_value;
+    out.* = snapshot.stateFingerprint(given) catch |err| return switch (err) {
+        error.InvalidSave => .invalid_save,
+        error.Mismatch => .save_mismatch,
+    };
+    return .ok;
+}
+
 pub const MismatchPolicy = enum(c_int) { reject_mismatch, variables_only };
 
 pub const RebindFn = ?*const fn (context: ?*anyopaque, script: [*]const u8, script_len: usize, name: [*]const u8, name_len: usize) callconv(.c) ?*caps.Grant;
@@ -2152,6 +2175,8 @@ pub const direct = struct {
     pub const pendingRelease = talk_pending_release;
     pub const save = talk_save;
     pub const fingerprint = talk_fingerprint;
+    pub const groupStateFingerprint = talk_group_state_fingerprint;
+    pub const coreStateFingerprint = talk_core_state_fingerprint;
     pub const callAnswer = talk_call_answer;
     pub const callAnswerWithCost = talk_call_answer_with_cost;
     pub const callFail = talk_call_fail;

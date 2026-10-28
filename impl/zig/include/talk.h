@@ -1544,6 +1544,14 @@ talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_c
  * effect's state is unknown. Either way the attempt takes the next save id
  * and its save record. */
 talk_host_error_code talk_save(talk_group *g, talk_owned_bytes *out);
+/* The State Fingerprint (chapter 10): 32 bytes covering everything a save
+ * holds but its save id counter. The live form is a worker call, refused as
+ * talk_save is, that charges nothing and writes nothing to the Trace. The
+ * save form is TALK_INVALID_SAVE for bytes this Core can't read, and
+ * TALK_SAVE_MISMATCH for another save format; it equals the live form of the
+ * Group a full restore would build. */
+talk_host_error_code talk_group_state_fingerprint(talk_group *g, uint8_t out[32]);
+talk_host_error_code talk_core_state_fingerprint(talk_core *c, const uint8_t *save, size_t len, uint8_t out[32]);
 typedef enum talk_mismatch_policy {
     TALK_REJECT_MISMATCH,
     TALK_VARIABLES_ONLY
