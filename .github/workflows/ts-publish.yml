@@ -64,11 +64,13 @@ jobs:
           node-version: ${{ matrix.node }}
       - if: matrix.runtime == 'bun'
         uses: oven-sh/setup-bun@v2
-      # The registry can take a while to serve a new version.
+      # The registry can take a while to serve a new version, and serves its
+      # metadata minutes before its tarball, so wait for both.
       - name: Wait for the version on the registry
         run: |
-          for i in $(seq 1 30); do
-            npm view "@northtalk/ts@$VERSION" version && exit 0
+          for i in $(seq 1 60); do
+            tarball=$(npm view "@northtalk/ts@$VERSION" dist.tarball 2>/dev/null) &&
+              [ -n "$tarball" ] && curl -sfI "$tarball" > /dev/null && exit 0
             sleep 10
           done
           echo "::error::@northtalk/ts@$VERSION is not on the registry"
@@ -78,7 +80,8 @@ jobs:
       - if: matrix.runtime == 'node'
         run: |
           npm ci
-          npm install --no-save "@northtalk/ts@$VERSION"
+          # Saving rewrites the example's range, which may not admit a new minor.
+          npm install "@northtalk/ts@$VERSION"
           npm ls @northtalk/ts
           npm test
           npm run typecheck
