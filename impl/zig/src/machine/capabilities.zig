@@ -731,6 +731,9 @@ pub const Call = struct {
     /// Whether the Operation is still starting, the only time `Charge` is
     /// legal.
     starting: bool = true,
+    /// Whether the Host may Adopt it after a restore. Every Zig call may; a
+    /// TS `run` call, restored from a TS save, may not (chapter 10).
+    adoptable: bool = true,
     /// For a suspending call, the Group its answer goes to.
     group: ?*anyopaque = null,
     /// The Group that made the call, whatever its mode.

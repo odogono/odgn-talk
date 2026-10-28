@@ -314,15 +314,15 @@ still use. Check names against the installed source, under `lib_dir` from
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
 The [Go adapter](../go/README.md#zig-backend), now the Go default, also
-uses Zig's opaque `zig/17` saves. Its `restore-bindings-v1` Message Layer feature
+uses Zig's saves, in the shared save format `zig/1` ([ADR 0144](../../docs/adr/0144-a-save-restores-on-either-core.md)). Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
 Script/Object identities and pending Call metadata. Saves retain each
 pending Call's Segment id, including preempted open Joins and suspended waits. Saves retain each pending Call's original Clock for adoption,
 even after later Pumps; Reissue uses the first restored Pump's Clock. A save
 taken before a restored Group's first Pump keeps its queued settlements and how
-each settles, and restore requires their calls to still pend (#1055). `zig/17`
-rejects earlier save layouts with `invalid save`, including under VariablesOnly;
+each settles, and restore requires their calls to still pend (#1055). `zig/1`
+rejects earlier save layouts, Zig's own `zig/17` among them, with `invalid save`, including under VariablesOnly;
 Hosts must drain existing Groups on their old runtime or start fresh Groups.
 Rejected mismatches retain their mandatory Trace mode and error-reply records.
 
@@ -778,7 +778,7 @@ at the originating call, including a Join Member, without a synthetic Segment.
 A preempted Join's open Segment rolls back; a suspended Run keeps its committed
 variables. `talk_save` refuses with `effects pending` for pending metered calls
 or unresolved requests, even after Reload ends their call. Successful saves
-preserve the request counter and issued-call eligibility in save format `zig/17`;
+preserve the request counter and issued-call eligibility in the save format;
 older Zig snapshot layouts are refused. Issued ids are kept as consecutive
 per-Run ranges with the same eligibility. Repeated polling through one Operation
 therefore keeps a fixed number of history entries in memory and in saves.
@@ -1209,8 +1209,8 @@ Inspect and the Trace omit an unrepresentable `until`. Unreachable future
 deadlines have no next deadline, while one before the Clock range requests
 another Pump at the current reading. Timer ordering, earlier Timeout Blocks,
 cancellation and save/restore retain the full count
-([#1064](https://github.com/odogono/odgn-talk/issues/1064)). The private save format
-is `zig/17`, with 256-bit deadline storage; earlier layouts are refused.
+([#1064](https://github.com/odogono/odgn-talk/issues/1064)). The save format
+writes them as signed LEB128 integers; earlier layouts are refused.
 
 Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
 heap, its Script goes on to its next work, and each Script's work is one

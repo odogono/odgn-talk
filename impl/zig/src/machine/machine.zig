@@ -1522,6 +1522,9 @@ pub const Broadcast = struct {
 pub const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
+    /// The name a save records: the Host's for a new Group, borrowed, and
+    /// the save's for a restored one, in `keep`.
+    name: []const u8 = "",
     gpa: Allocator,
     /// This Pump's Fuel Slice and Fuel cap; 0 for none.
     slice: u64 = 0,
@@ -4463,6 +4466,7 @@ pub const Group = struct {
             if (std.mem.eql(u8, p, id)) break;
         } else return error.UnknownCall;
         for (r.settled.items) |x| if (std.mem.eql(u8, x, id)) return error.UnknownCall;
+        if (how == .adopt) if (g.waits.callById(id)) |c| if (!c.adoptable) return error.NotAdoptable;
         const own = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(own);
         try r.settled.ensureUnusedCapacity(g.gpa, 1);

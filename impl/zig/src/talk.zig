@@ -1094,6 +1094,7 @@ export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostEr
     g.out = .init(gpa);
     g.group = .init(gpa, if (o.trace != null) &g.out.writer else null);
     g.group.seed(o.seed);
+    g.group.name = g.name;
     out.* = g;
     return .ok;
 }

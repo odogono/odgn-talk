@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"testing"
@@ -20,32 +19,36 @@ func TestZigBackendRestoreRejectsMalformedSaves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := zigSavePayload(t, saved)
-	format, n := binary.Uvarint(payload[4:])
-	if n <= 0 {
-		t.Fatal("invalid save format header")
-	}
-	badMagic := bytes.Clone(payload)
+	z := parseZigSave(t, saved)
+	badMagic := bytes.Clone(saved)
 	badMagic[0] = 'X'
 	badDigest := bytes.Clone(saved)
 	badDigest[len(badDigest)-1] ^= 1
+	missing := z
+	missing.sections = []byte{0}
+	extra := z
+	extra.sections = append(bytes.Clone(z.sections), 0)
+	legacy := z
+	legacy.magic = []byte("NTZS")
+	legacy.format = 17
 	type malformedSave struct {
 		name string
 		save []byte
 	}
 	cases := []malformedSave{
-		{"magic", signZigSave(badMagic)},
+		{"magic", badMagic},
 		{"digest", badDigest},
 		{"truncated digest", saved[:len(saved)-1]},
-		{"missing state", signZigSave(payload[:4+n])},
-		{"extra state", signZigSave(append(bytes.Clone(payload), 0))},
+		{"missing state", missing.encode()},
+		{"extra state", extra.encode()},
+		{"zig format 17", legacy.encode()},
 	}
 	// Every prior format must remain invalid even under VariablesOnly. Re-sign
 	// each mutation so rejection tests the format, rather than its checksum.
-	for old := uint64(0); old < format; old++ {
-		out := binary.AppendUvarint(bytes.Clone(payload[:4]), old)
-		out = append(out, payload[4+n:]...)
-		cases = append(cases, malformedSave{fmt.Sprintf("format %d", old), signZigSave(out)})
+	for old := uint64(0); old < z.format; old++ {
+		prior := z
+		prior.format = old
+		cases = append(cases, malformedSave{fmt.Sprintf("format %d", old), prior.encode()})
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

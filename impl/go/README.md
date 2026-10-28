@@ -30,9 +30,10 @@ The public API is unchanged, and Hosts move by upgrading the module:
   `talk_zig_experimental` no longer exist. Builds need only Go, with
   `CGO_ENABLED=0` if you like; the reactor is embedded. Linux amd64/arm64 and
   macOS arm64 are the supported platforms.
-- **Saves are disposable across the switch.** Saves stay same-Core
-  ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)), so `Restore`
-  refuses a native Go save (`SaveFormat` `go/…`) with `invalid save`. There is
+- **Saves are disposable across the switch.** A native Go save (`SaveFormat`
+  `go/…`) isn't in the shared save format
+  ([ADR 0144](../../docs/adr/0144-a-save-restores-on-either-core.md)), so `Restore`
+  refuses it with `invalid save`. There is
   no converter. Before upgrading, either let saved Groups finish on the old
   version, or plan to start them fresh from source and the Host's own data.
   The last commit with the native Core is
@@ -658,9 +659,10 @@ bounds and stable-coefficient shortcuts cannot decide the comparison.
 
 ## Save, restore and code updates
 
-`Group.Save` returns the Zig Core's opaque save bytes for a Quiescent Group,
-and `CoreVersions().SaveFormat` names their format. Saves are same-Core
-([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)): `Core.Restore`
+`Group.Save` returns the Zig Core's save bytes for a Quiescent Group, in the
+save format every Core shares
+([ADR 0144](../../docs/adr/0144-a-save-restores-on-either-core.md)), and
+`CoreVersions().SaveFormat` names their format. `Core.Restore`
 refuses native Go saves and corrupt or unreadable bytes with `invalid save`
 (see [Moving from the native Go Core](#moving-from-the-native-go-core)). Live
 scopes or participants refuse Save with `effects pending`. Restore checks the
