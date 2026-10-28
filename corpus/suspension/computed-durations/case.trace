@@ -1,5 +1,3 @@
-# Unblessed: computed durations (#1692); first blessing awaits human review.
-
 > load clock identity=cc342b4eed9053bac96fcfa32ecb6974611bbf26ee11c1b55c4258bc2e7e57a9
 > deliver d1 to=clock message=begin
 > pump clock=2026-09-30T09:00:00Z
