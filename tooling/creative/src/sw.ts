@@ -107,8 +107,11 @@ export const installServiceWorker = (
   const respond = async (
     request: FetchEventLike['request'],
   ): Promise<Response> => {
+    // A navigation to a precached page, such as an Example Project's
+    // `<slug>/`, gets that page; any other navigation gets Folio's own.
+    const navigation = shellUrls.has(request.url) ? request.url : index;
     const cached = await scope.caches.match(
-      request.mode === 'navigate' ? index : request.url,
+      request.mode === 'navigate' ? navigation : request.url,
     );
     // The versioned cache holds exactly this build's shell, so a shell
     // URL is served from it without touching the network.

@@ -360,7 +360,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [text-editor.ts](src/text-editor.ts) over [rich-text.ts](src/rich-text.ts)
   and [rich-text-dom.ts](src/rich-text-dom.ts): in-place text editing.
 - [examples/index.ts](src/examples/index.ts): the Example Projects listed in
-  the Projects window; [examples/lighthouse.ts](src/examples/lighthouse.ts)
+  the Projects window, with the slugs [build.ts](tools/build.ts) writes a
+  `<slug>/` page and `projects/<slug>.folio` for; [examples/lighthouse.ts](src/examples/lighthouse.ts)
   builds The Lighthouse Mystery, [examples/tetris.ts](src/examples/tetris.ts)
   builds Tetris and [examples/tetris-canvas.ts](src/examples/tetris-canvas.ts)
   builds Canvas Tetris, both over the shared

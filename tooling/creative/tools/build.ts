@@ -4,7 +4,9 @@
 // and its icons. Any static host can serve the result. The service
 // worker is stamped with the list of shell files to precache and a
 // version hashed from their contents, so a rebuild with no shell change
-// keeps the installed worker, and a changed shell offers an update.
+// keeps the installed worker, and a changed shell offers an update. Each
+// Example Project gets a `.folio` file and a copy of the page at
+// `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141).
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -14,6 +16,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  EXAMPLE_META,
+  EXAMPLE_PROJECTS,
+  exampleFilePath,
+} from '../src/examples';
+import { writeProjectFile } from '../src/project-file';
 import { iconPng, iconSvg } from './icons';
 
 const root = resolve(import.meta.dir, '..');
@@ -40,9 +48,44 @@ export const precacheFiles = [
   './UNICODE-LICENSE.txt',
 ];
 
+/** Each Example Project's page and `.folio` file, precached with the shell. */
+export const examplePrecacheFiles = EXAMPLE_PROJECTS.flatMap(example => [
+  `./${example.slug}/`,
+  `./${exampleFilePath(example.slug)}`,
+]);
+
 /** The file in `dist/` behind a precached URL. */
 export const shellFile = (entry: string): string =>
-  entry === './' ? './index.html' : entry;
+  entry.endsWith('/') ? `${entry}index.html` : entry;
+
+/**
+ * Folio's page as served from `<slug>/`: one level down, so its relative
+ * URLs climb a level, and naming the Example Project to open.
+ */
+export const examplePage = (page: string, slug: string): string =>
+  page
+    .replaceAll('="./', '="../')
+    .replace(
+      '<meta charset="utf-8" />',
+      `<meta charset="utf-8" />\n    <meta name="${EXAMPLE_META}" content="${slug}" />`,
+    );
+
+const writeExamples = async (): Promise<void> => {
+  const page = readFileSync(resolve(dist, 'index.html'), 'utf8');
+  mkdirSync(resolve(dist, 'projects'), { recursive: true });
+  for (const example of EXAMPLE_PROJECTS) {
+    const { assets, project } = await example.create();
+    writeFileSync(
+      resolve(dist, exampleFilePath(example.slug)),
+      await writeProjectFile(project, assets),
+    );
+    mkdirSync(resolve(dist, example.slug), { recursive: true });
+    writeFileSync(
+      resolve(dist, example.slug, 'index.html'),
+      examplePage(page, example.slug),
+    );
+  }
+};
 
 export const build = async ({ minify = true } = {}): Promise<void> => {
   rmSync(dist, { recursive: true, force: true });
@@ -78,9 +121,11 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     iconPng(512, { maskable: true }),
   );
   writeFileSync(resolve(dist, 'apple-touch-icon.png'), iconPng(180));
+  await writeExamples();
 
+  const precache = [...precacheFiles, ...examplePrecacheFiles];
   const hash = createHash('sha256');
-  for (const entry of precacheFiles) {
+  for (const entry of precache) {
     hash.update(entry);
     hash.update(readFileSync(resolve(dist, shellFile(entry))));
   }
@@ -94,7 +139,7 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     minify,
     sourcemap: 'linked',
     define: {
-      __FOLIO_PRECACHE__: JSON.stringify(precacheFiles),
+      __FOLIO_PRECACHE__: JSON.stringify(precache),
       __FOLIO_VERSION__: JSON.stringify(version),
     },
   });

@@ -1163,9 +1163,18 @@ The Projects window lists Folio's Example Projects, from
 [`src/examples/index.ts`](src/examples/index.ts). Opening one adds a fresh,
 editable copy, never overwriting the Project on the desk; its assets are
 decoded first, like an import. To add one, write a builder beside the others
-returning the Project and its asset bytes, list it in `EXAMPLE_PROJECTS`, and
-[`examples.test.ts`](tests/examples.test.ts) checks that it builds and starts
-playing cleanly.
+returning the Project and its asset bytes, list it in `EXAMPLE_PROJECTS` with
+a slug, and [`examples.test.ts`](tests/examples.test.ts) checks that it builds
+and starts playing cleanly.
+
+Each Example Project also opens from its own address, such as
+<https://northtalk.org/folio/tetris>, so docs can link to it
+([ADR 0141](../../docs/adr/0141-folio-opens-projects-from-urls.md)). The
+build writes it to `projects/<slug>.folio` and a copy of Folio's page to
+`<slug>/index.html`, and the service worker precaches both. The page opens a
+fresh copy from the file, as an import, and sets the address back to Folio's
+own, so a reload doesn't add another copy. The slug is a public link, so
+never change one once it's published.
 
 ### The Lighthouse Mystery
 

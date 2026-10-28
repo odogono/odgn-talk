@@ -1,7 +1,15 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { build, dist, precacheFiles, shellFile } from '../tools/build';
+import { EXAMPLE_PROJECTS } from '../src/examples';
+import { readProjectFile } from '../src/project-file';
+import {
+  build,
+  dist,
+  examplePrecacheFiles,
+  precacheFiles,
+  shellFile,
+} from '../tools/build';
 
 test('the build writes the page, its script and the LSP worker', async () => {
   await build({ minify: false });
@@ -68,8 +76,32 @@ test('the build writes everything offline use and installation need', async () =
   expect(worker).not.toContain('__FOLIO_VERSION__');
   // Every precached file exists, so installing the worker cannot fail
   // on a missing shell file.
-  for (const entry of precacheFiles) {
+  for (const entry of [...precacheFiles, ...examplePrecacheFiles]) {
     expect(existsSync(resolve(dist, shellFile(entry))), entry).toBe(true);
     expect(worker).toContain(JSON.stringify(entry));
+  }
+}, 60_000);
+
+test('each Example Project has a static page and a .folio file', async () => {
+  await build({ minify: false });
+  const slugs = EXAMPLE_PROJECTS.map(example => example.slug);
+  expect(new Set(slugs).size).toBe(slugs.length);
+  for (const example of EXAMPLE_PROJECTS) {
+    expect(example.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+    const page = readFileSync(
+      resolve(dist, example.slug, 'index.html'),
+      'utf8',
+    );
+    // The page sits a level down, so nothing it loads may point at `./`.
+    expect(page).not.toContain('="./');
+    expect(page).toContain('src="../main.js"');
+    expect(page).toContain(
+      `<meta name="folio-example" content="${example.slug}" />`,
+    );
+    const loaded = await readProjectFile(
+      readFileSync(resolve(dist, 'projects', `${example.slug}.folio`)),
+    );
+    expect(loaded.project.name).toBe(example.name);
+    expect(loaded.missingAssets).toEqual([]);
   }
 }, 60_000);

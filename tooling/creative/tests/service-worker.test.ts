@@ -197,3 +197,26 @@ test('an uncached page says so plainly when offline', async () => {
   expect(response!.status).toBe(503);
   expect(await response!.text()).toContain('offline');
 });
+
+test('a precached page under the scope loads as itself, not as the index', async () => {
+  const { fetchViaWorker, fire, scope, world } = makeWorld();
+  const precache = [...PRECACHE, './tetris/'];
+  for (const name of precache) {
+    world.network.set(new URL(name, BASE).href, `body of ${name}`);
+  }
+  installServiceWorker(scope, { base: BASE, precache, version: 'v1' });
+  await fire('install');
+  world.offline = true;
+  const page = await fetchViaWorker({
+    method: 'GET',
+    mode: 'navigate',
+    url: `${BASE}tetris/`,
+  });
+  expect(await page!.text()).toBe('body of ./tetris/');
+  const other = await fetchViaWorker({
+    method: 'GET',
+    mode: 'navigate',
+    url: `${BASE}somewhere`,
+  });
+  expect(await other!.text()).toBe('body of ./');
+});

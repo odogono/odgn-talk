@@ -25,7 +25,11 @@ import {
   type ProjectFileHandle,
 } from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
-import { EXAMPLE_PROJECTS, type ExampleProject } from './examples';
+import {
+  EXAMPLE_PROJECTS,
+  exampleFilePath,
+  type ExampleProject,
+} from './examples';
 import { importSound, isSoundAsset } from './sounds';
 import {
   PROJECT_MIMETYPE,
@@ -127,6 +131,8 @@ export type LockDelegate = {
 
 export type ProjectsDeps = {
   channel: ProjectChannel | undefined;
+  /** The slug of an Example Project the page was opened to, if any. */
+  exampleSlug?: string;
   initial: InitialProject;
   lock: EditLock;
   lockDelegate: LockDelegate;
@@ -603,6 +609,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const importProject = async (
     file: File,
     handle?: ProjectFileHandle,
+    opened?: string,
   ): Promise<void> => {
     try {
       const loaded = await readProjectFile(
@@ -681,6 +688,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         importedId,
       );
       channel?.post({ type: 'list-changed' });
+      if (opened) {
+        messages.unshift(opened);
+      }
       if (messages.length) {
         notice(messages.join(' '));
       }
@@ -934,6 +944,34 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     } catch (error) {
       notice(`Couldn't open “${example.name}”: ${String(error)}`);
     }
+  };
+
+  /**
+   * Opens a fresh copy of the Example Project at `/folio/<slug>` (#1676)
+   * from the `.folio` file the build wrote for it, as an import.
+   */
+  const openExampleFile = async (slug: string): Promise<void> => {
+    const example = EXAMPLE_PROJECTS.find(e => e.slug === slug);
+    if (!example) {
+      notice(`There's no Example Project called “${slug}”.`);
+      return;
+    }
+    let bytes: ArrayBuffer;
+    try {
+      const response = await fetch(exampleFilePath(slug));
+      if (!response.ok) {
+        throw new Error(`the server answered ${response.status}`);
+      }
+      bytes = await response.arrayBuffer();
+    } catch (error) {
+      notice(`Couldn't open “${example.name}”: ${String(error)}`);
+      return;
+    }
+    await importProject(
+      new File([bytes], `${slug}.folio`),
+      undefined,
+      `Opened a fresh copy of “${example.name}”. Choose Browse in Tools to try it, then make it your own.`,
+    );
   };
 
   const renameProject = async (id: string, title: string): Promise<void> => {
@@ -1292,6 +1330,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   void drawList();
   void drawVersions();
   void drawStorageStatus();
+  if (deps.exampleSlug) {
+    void openExampleFile(deps.exampleSlug);
+  }
   if (deps.initial.migrated && lock.editing && storage) {
     // Save the migrated model, keeping the old record as an earlier version.
     autosave.markDirty();
