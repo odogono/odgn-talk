@@ -1,0 +1,11 @@
+# Unblessed: a Recovery escape runs its cleanup before the outward search (#1737); first blessing awaits human review.
+> load board identity=40400faf16cf3d144ad936ca5fe49270fda9506efbd35bfc9d72ee5c3e396ea6
+> request d1 to=board message=go
+> pump clock=2026-09-30T09:00:00Z
+raise board/r1 code="a" at=board:5 pos=7:4
+raise board/r1 code="b" at=board:16 pos=10:5
+seg board/r1 start delivery=d1 handler=go clause=1 fuel=67 alloc=207 state=23 end=return
+run board/r1 outcome=completed delivery=d1 handler=go value=["outer saw", "policy;"] fuel=67 alloc=207
+pumped state=idle fuel=67
+> vars
+vars board order="policy;"

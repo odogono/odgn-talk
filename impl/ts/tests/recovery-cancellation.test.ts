@@ -57,7 +57,8 @@ for (const phase of ['tests', 'policy', 'nested', 'transfer'] as const) {
       const f = run.frames.at(-1)!;
       const op = f.code.unit.code[f.pc]!.op;
       if (
-        (phase === 'tests' && f.activation) ||
+        (phase === 'tests' &&
+          run.debugFrames().find(v => v.frame === f)?.role === 'dispatch') ||
         (phase !== 'tests' && op === 'choose-offer')
       ) {
         found = true;

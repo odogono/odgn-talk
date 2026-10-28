@@ -1,0 +1,20 @@
+-- board.talk: the escape-order case's Script.
+script variable order = ""
+
+on go
+ try
+  try
+   throw "a"
+  catch "a" before unwind
+   try
+    throw "b"
+   finally
+    put "policy;" after order
+   end try
+  end try
+ catch e where order = ""
+  return ["outer saw empty", order]
+ catch e
+  return ["outer saw", order]
+ end try
+end go

@@ -224,22 +224,9 @@ export class DebugController {
       return null;
     }
     const ins = frame.code.unit.code[frame.pc]!;
-    // A dispatch cursor replaces its owner's control path. Failed callees
-    // stay retained for offer lookup, but are not callers of the policy.
-    const active: Run['frames'] = [];
-    for (const frame of run.frames) {
-      let owner = frame.owner;
-      while (owner) {
-        const index = active.indexOf(owner);
-        if (index >= 0) {
-          active.length = index;
-          break;
-        }
-        owner = owner.owner;
-      }
-      active.push(frame);
-    }
-    const depth = active.length;
+    // A catch dispatch holds its failed callees aside, so the frames are
+    // the control path.
+    const depth = run.frames.length;
     const matches = (at: DebugInstruction) =>
       (!at.unit || at.unit === frame.code.name) &&
       at.pc === frame.pc &&
