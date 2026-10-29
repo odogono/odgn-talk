@@ -3,7 +3,6 @@
 // Objects' natives, Operation functions, lifecycle hooks and futures stay
 // here, as chapter 9's message layer rules say.
 import {
-  LimitReached,
   type Call,
   type ChargeRequest,
   type ChargeResult,
@@ -14,6 +13,7 @@ import {
   type SegmentLifecycle,
 } from '../capabilities';
 import { fromBase64, toBase64 } from '../base64';
+import { CallMeter } from '../call-meter';
 import { invoke, type Group, type Script } from '../embedding';
 import { trackOperation } from '../operation-promises';
 import { formatInstant, parseInstant } from '../dates';
@@ -513,38 +513,24 @@ export class WasmGroup implements Group {
     }
     const automatic = boolOf(field(need, 'automatic')) ?? false;
     const left = intOf(field(need, 'fuelLeft'));
-    let starting = true,
-      charged = 0,
-      reached = false;
-    const charge = (fuel: number) => {
-      if (!starting || automatic) {
-        throw new HostError('invalid value', 'Charge only while starting');
-      }
-      if (!Number.isSafeInteger(fuel) || fuel < 0) {
-        throw new HostError('invalid value', 'Fuel must be a whole number');
-      }
-      if (reached || (left !== undefined && charged + fuel > left)) {
-        reached = true;
-        throw new LimitReached('the Run can’t cover this charge');
-      }
-      charged += fuel;
-    };
+    // The Zig Core said how much Fuel is left; it spends what was charged.
+    const meter = new CallMeter(
+      (fuel, charged) => left === undefined || charged + fuel <= left,
+    );
     const pending: Pending = {
       abort: new AbortController(),
       live: true,
       starting: true,
     };
-    const call = this.#callOf(need, grant, pending, charge);
+    const call = this.#callOf(need, grant, pending, meter.charge);
     const out: Record<string, Frame> = {};
     try {
       out.charged = 0;
-      const result = this.#invoke(
-        op as ValueOperation<unknown>,
-        call,
-        args,
-        pending,
-      );
-      if (reached) {
+      const invoke = () =>
+        this.#invoke(op as ValueOperation<unknown>, call, args, pending);
+      // Automatic abandonment can't charge: its window never opens.
+      const result = automatic ? invoke() : meter.starting(invoke);
+      if (meter.refused) {
         out.limit = true;
       } else if (op.mode === 'suspending') {
         out.started = true;
@@ -558,7 +544,7 @@ export class WasmGroup implements Group {
         }
       }
     } catch (error) {
-      if (reached || isLimitReached(error)) {
+      if (meter.refused || isLimitReached(error)) {
         out.limit = true;
       } else if (error instanceof ScriptError) {
         try {
@@ -570,10 +556,9 @@ export class WasmGroup implements Group {
         out.hostError = detailOf(error);
       }
     } finally {
-      starting = false;
       pending.starting = false;
     }
-    out.charged = charged;
+    out.charged = meter.charged;
     if (typeof out.hostError === 'string') {
       this.#failureDetails.set(id, out.hostError);
     }
