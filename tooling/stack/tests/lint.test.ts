@@ -15,7 +15,7 @@ import {
   lintSyntax,
   lintCatalogue,
   readManifest,
-  suggestMatchEdit,
+  idiomEdit,
   type HostManifest,
 } from '../src/lint';
 import { fixtureManifest, fixtures } from './fixtures';
@@ -41,10 +41,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-nine implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(29);
+test('ships thirty-two implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(32);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(29);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(32);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -1040,19 +1040,24 @@ test('match advice needs a subject the Script holds a value in', () => {
   }
 });
 
-const rewriteMatch = (source: string) => {
-  const [advice] = suggestMatch(source, 'beginner');
+// The source after applying the first `id` Lint's rewrite, if it has one.
+const rewrite = (source: string, id: string) => {
+  const advice = lint(source, { profile: 'beginner' }).lints.find(
+    l => l.id === id,
+  );
   const edit =
     advice &&
-    suggestMatchEdit(
+    idiomEdit(
       parseSourceRecovering(source).tree,
       source,
+      id,
       advice.span.start,
     );
   return (
     edit && source.slice(0, edit.start) + edit.newText + source.slice(edit.end)
   );
 };
+const rewriteMatch = (source: string) => rewrite(source, 'suggest-match');
 const answer = async (source: string, arg: Value) => {
   const group = newGroup({ name: 'g' });
   const reply = group.load({ name: 's', source }).request({
@@ -1116,5 +1121,146 @@ test('the match rewrite formats cleanly and answers as the if chain did', async 
     rewriteMatch(
       source.replace('else\n    return "other"', 'else return "other"'),
     ),
+  ).toBeUndefined();
+});
+
+const idiomLints = (source: string, id: string) =>
+  lint(source, { profile: 'beginner' }).lints.filter(l => l.id === id);
+const pickHandler = (body: string) => `on pick c\n${body}\nend pick`;
+// Each rewrite must answer `pick` as the original did, for every argument.
+const answersMatch = async (source: string, id: string, args: Value[]) => {
+  const rewritten = rewrite(source, id)!;
+  expect(idiomLints(rewritten, id)).toEqual([]);
+  const answers = await Promise.all(
+    args.map(async arg => [
+      await answer(source, arg),
+      await answer(rewritten, arg),
+    ]),
+  );
+  for (const [before, after] of answers) {
+    expect(after).toBe(before!);
+  }
+  return rewritten;
+};
+
+test('arithmetic advice needs a variable on the left of one operator', async () => {
+  const source = pickHandler('put c + 2 into c\nreturn c');
+  expect(lint(source).lints.map(l => l.id)).not.toContain(
+    'suggest-arithmetic-command',
+  );
+  expect(idiomLints(source, 'suggest-arithmetic-command')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 2, col: 1 },
+      message: 'Consider `add … to c`, which changes c in place.',
+    },
+  ]);
+  for (const [from, to] of [
+    ['c + 2', 'add 2 to c'],
+    ['c - (1 + 1)', 'subtract (1 + 1) from c'],
+    ['c * 3', 'multiply c by 3'],
+    ['c / 4', 'divide c by 4'],
+  ] as const) {
+    const each = source.replace('c + 2', from);
+    expect(
+      await answersMatch(each, 'suggest-arithmetic-command', [num(8)]),
+    ).toBe(pickHandler(`${to}\nreturn c`));
+  }
+  for (const negative of [
+    source.replace('c + 2', '2 + c'),
+    source.replace('c + 2', 'c + 2 + 3'),
+    source.replace('c + 2', 'c mod 2'),
+    source.replace('into c', 'into d'),
+    source.replace('into c', 'after c'),
+    `constant c = 1\non pick d\nput c + 2 into c\nend pick`,
+  ]) {
+    expect(idiomLints(negative, 'suggest-arithmetic-command')).toEqual([]);
+  }
+});
+
+test('membership advice needs three literal comparisons of one name', async () => {
+  const source = pickHandler(
+    'if c = "a" or "b" is c or c = 3 then return "listed"\nreturn "not"',
+  );
+  expect(idiomLints(source, 'suggest-is-in')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 2, col: 4 },
+      message:
+        'Consider `c is in […]`, listing the values, in place of comparing c with each one.',
+    },
+  ]);
+  expect(
+    await answersMatch(source, 'suggest-is-in', [
+      text('a'),
+      text('b'),
+      num(3),
+      text('c'),
+    ]),
+  ).toBe(
+    pickHandler('if c is in ["a", "b", 3] then return "listed"\nreturn "not"'),
+  );
+  for (const negative of [
+    source.replace(' or c = 3', ''),
+    source.replace('c = 3', 'd = 3'),
+    source.replace('c = 3', 'c = d'),
+    source.replace('c = 3', 'c is not 3'),
+    source.replace('or c = 3', 'and c = 3'),
+    source.replace('c = 3', 'c = 3 ignoring case'),
+  ]) {
+    expect(idiomLints(negative, 'suggest-is-in')).toEqual([]);
+  }
+});
+
+test('otherwise advice needs a Nothing test choosing what one put writes', async () => {
+  const args = [text('given'), text(''), num(0)];
+  const either = pickHandler(
+    'put the name of {} into missing\nif c = 0 then put missing into c\nif c is nothing then\n  put "none" into label\nelse\n  put c into label\nend if\nreturn label',
+  );
+  expect(idiomLints(either, 'suggest-otherwise')).toMatchObject([
+    {
+      span: { line: 4, col: 1 },
+      message:
+        'Consider `put c otherwise … into label`, which uses the default only when c is Nothing.',
+    },
+  ]);
+  expect(await answersMatch(either, 'suggest-otherwise', args)).toBe(
+    pickHandler(
+      'put the name of {} into missing\nif c = 0 then put missing into c\nput c otherwise "none" into label\nreturn label',
+    ),
+  );
+  const negated = either
+    .replace('c is nothing', 'c is not nothing')
+    .replace(
+      '"none" into label\nelse\n  put c',
+      'c into label\nelse\n  put "none"',
+    );
+  expect(await answersMatch(negated, 'suggest-otherwise', args)).toBe(
+    rewrite(either, 'suggest-otherwise')!,
+  );
+  const fill = pickHandler(
+    'put the name of {} into missing\nif c = 0 then put missing into c\nif c = nothing then put "none" into c\nreturn c',
+  );
+  expect(await answersMatch(fill, 'suggest-otherwise', args)).toBe(
+    pickHandler(
+      'put the name of {} into missing\nif c = 0 then put missing into c\nput c otherwise "none" into c\nreturn c',
+    ),
+  );
+  for (const negative of [
+    either.replace('put c into label', 'put c into other'),
+    either.replace('put c into label', 'put d into label'),
+    either.replace('c is nothing', 'c is empty'),
+    either.replace(
+      '  put "none" into label',
+      '  put "none" into label\n  say 1',
+    ),
+    fill.replace('put "none" into c', 'put "none" into d'),
+    fill.replace('c = nothing', 'c <> nothing'),
+  ]) {
+    expect(idiomLints(negative, 'suggest-otherwise')).toEqual([]);
+  }
+  // A comment inside the `if` would be lost, so there is no rewrite.
+  expect(
+    rewrite(either.replace('else', 'else -- keep'), 'suggest-otherwise'),
   ).toBeUndefined();
 });

@@ -604,7 +604,33 @@ test('hover honors detached blocks, lexical shadowing and Built-in catalogue doc
   );
 });
 
+// The whole of one line, which every Lint on it overlaps.
+const lineRange = (line: number) => ({
+  range: {
+    start: { line, character: 0 },
+    end: { line, character: 40 },
+  },
+  context: { diagnostics: [] },
+});
+
 describe('language server', () => {
+  test('offers the idiom rewrites as quick fixes', () => {
+    const { request } = setup(
+      'on demo c\nput c * 2 into c\nif c = 1 or c = 2 or c = 3 then say c\nend demo',
+    );
+    expect(request('textDocument/codeAction', lineRange(1))).toMatchObject([
+      {
+        title: 'Rewrite as a command',
+        edit: { changes: { [uri]: [{ newText: 'multiply c by 2' }] } },
+      },
+    ]);
+    expect(request('textDocument/codeAction', lineRange(2))).toMatchObject([
+      {
+        title: 'Rewrite as is in',
+        edit: { changes: { [uri]: [{ newText: 'c is in [1, 2, 3]' }] } },
+      },
+    ]);
+  });
   test('offers the suggest-match rewrite as a quick fix', () => {
     const { request } = setup(
       'on demo c\nif c = 1 then\nsay 1\nelse if c = 2 then\nsay 2\nelse if c = 3 then\nsay 3\nend if\nend demo',

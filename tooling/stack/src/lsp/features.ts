@@ -14,7 +14,7 @@ import {
 } from '@northtalk/ts';
 import { builtinDocs } from '@northtalk/ts/session';
 import { formatSource } from '../format';
-import { suggestMatchEdit } from '../lint';
+import { idiomEdit } from '../lint';
 import {
   boundFuel,
   defaultFuelCaps,
@@ -1374,26 +1374,33 @@ export const formatting = (analysis: Analysis): TextEdit[] => {
         },
       ];
 };
-const suggestMatchActions = (analysis: Analysis, requested: Range) =>
+const idiomTitles = {
+  'suggest-arithmetic-command': 'Rewrite as a command',
+  'suggest-is-in': 'Rewrite as is in',
+  'suggest-match': 'Rewrite as match',
+  'suggest-otherwise': 'Rewrite with otherwise',
+} as const;
+const idiomActions = (analysis: Analysis, requested: Range) =>
   analysis.lints
     .filter(
       l =>
-        l.id === 'suggest-match' &&
+        l.id in idiomTitles &&
         overlaps(
           rangeAt(analysis.document.text, l.span.start, l.span.end),
           requested,
         ),
     )
     .flatMap(l => {
-      const edit = suggestMatchEdit(
+      const edit = idiomEdit(
         analysis.syntax,
         analysis.document.text,
+        l.id,
         l.span.start,
       );
       return edit
         ? [
             {
-              title: 'Rewrite as match',
+              title: idiomTitles[l.id as keyof typeof idiomTitles],
               kind: 'quickfix',
               isPreferred: true,
               diagnostics: analysis.diagnostics.filter(
@@ -1473,7 +1480,7 @@ const explicitEndActions = (analysis: Analysis, requested: Range) =>
 
 export const codeActions = (analysis: Analysis, requested: Range) => [
   ...explicitEndActions(analysis, requested),
-  ...suggestMatchActions(analysis, requested),
+  ...idiomActions(analysis, requested),
 ];
 
 /**
