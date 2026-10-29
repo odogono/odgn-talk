@@ -1,0 +1,12 @@
+# A fired `wait for` binds its names when it fires, so while its Run is
+# ready its frame counts the new value in place of the earlier one, and the
+# retained event counts only its message (chapter 8, #1754).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

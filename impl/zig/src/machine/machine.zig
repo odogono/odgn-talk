@@ -11495,14 +11495,14 @@ fn failureMap(gpa: Allocator, f: Failure) !*Value {
 
 /// What a settled wait retains: an answer or reply, a failure's Data (an
 /// empty map when it has none), a failed send's error, or a matched
-/// event's message and a slot for each value its test bound.
+/// event's message, since its bound values are in its frame already.
 fn retained(r: Resume) u64 {
     return switch (r) {
         .answer => |x| costs.size(x.value),
         .reply => |v| costs.size(v),
         .send_failed => |x| if (x.err) |e| costs.size(e) else 0,
         .failed => |f| if (f.data) |d| costs.size(d) else 16,
-        .event => |x| (if (x.message) |v| costs.size(v) else 0) + 8 * @as(u64, x.binds),
+        .event => |x| if (x.message) |v| costs.size(v) else 0,
         else => 0,
     };
 }

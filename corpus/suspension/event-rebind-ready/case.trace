@@ -1,0 +1,26 @@
+> load s identity=78095c6a37a4f1e765951933f8eb6edaa9228e846f872a49433e90ee16e20660
+> deliver d1 to=s message=watch
+> pump clock=2026-09-30T10:00:00Z
+seg s/r1 start delivery=d1 handler=watch clause=1 fuel=20 alloc=24 state=248 end=wait-for
+pumped state=idle fuel=20
+> deliver d2 to=s message=ping args=["a"]
+> pump clock=2026-09-30T10:00:01Z fuel-cap=1
+preempt s/r2 start delivery=d2 handler=ping clause=1 by=cap fuel=0 alloc=0
+pumped state=sliced fuel=7
+> pump clock=2026-09-30T10:00:02Z
+seg s/r2 continue fuel=7 alloc=0 state=390 end=return
+run s/r2 outcome=completed delivery=d2 handler=ping fuel=7 alloc=0
+seg s/r1 resume fuel=24 alloc=25 state=416 end=wait-for
+pumped state=idle fuel=31
+> deliver d3 to=s message=ping args=["a much longer text"]
+> pump clock=2026-09-30T10:00:03Z fuel-cap=1
+preempt s/r3 start delivery=d3 handler=ping clause=1 by=cap fuel=0 alloc=0
+pumped state=sliced fuel=7
+> pump clock=2026-09-30T10:00:04Z
+seg s/r3 continue fuel=7 alloc=0 state=583 end=return
+run s/r3 outcome=completed delivery=d3 handler=ping fuel=7 alloc=0
+seg s/r1 resume fuel=17 alloc=42 state=83 end=return
+run s/r1 outcome=completed delivery=d1 handler=watch fuel=75 alloc=190
+pumped state=idle fuel=24
+> vars
+vars s got=["a", "a much longer text"]

@@ -389,6 +389,7 @@ suspension/answers
 suspension/argument-labels
 suspension/capability-resumption
 suspension/computed-durations
+suspension/event-rebind-ready
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/join-block-deadline-tie

@@ -18,7 +18,7 @@ pumped state=idle fuel=248 next=2026-09-30T09:00:01Z
 > deliver d3 to=a message=move:to: args=["knight", "e4"]
 > pump clock=2026-09-30T09:00:00Z
 raise a/r2 code="wrong kind" at=a:63 pos=17:12
-seg a/r2 start delivery=d3 handler=move:to: clause=2 fuel=24 alloc=0 state=536 end=error
+seg a/r2 start delivery=d3 handler=move:to: clause=2 fuel=24 alloc=0 state=520 end=error
 run a/r2 outcome=errored delivery=d3 handler=move:to: error={code: "wrong kind", expected: "number", got: "text", value: "knight", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=24 alloc=0
 seg a/r1 resume fuel=21 alloc=504 state=920 end=return
 run a/r1 outcome=completed delivery=d1 handler=go fuel=180 alloc=813
@@ -40,7 +40,7 @@ pumped state=idle fuel=45 next=2026-09-30T09:00:03Z
 > deliver d7 to=a message=move:to: args=["bishop", "e4"]
 > pump clock=2026-09-30T09:00:02Z
 raise a/r6 code="wrong kind" at=a:63 pos=17:12
-seg a/r6 start delivery=d7 handler=move:to: clause=2 fuel=24 alloc=0 state=792 end=error
+seg a/r6 start delivery=d7 handler=move:to: clause=2 fuel=24 alloc=0 state=776 end=error
 run a/r6 outcome=errored delivery=d7 handler=move:to: error={code: "wrong kind", expected: "number", got: "text", value: "bishop", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=24 alloc=0
 seg a/r3 resume fuel=28 alloc=504 state=1176 end=return
 run a/r3 outcome=completed delivery=d4 handler=branch fuel=66 alloc=576

@@ -9,7 +9,7 @@ seg a/r1 start delivery=d1 handler=relay clause=1 fuel=14 alloc=0 state=288 end=
 pumped state=idle fuel=14
 > deliver d2 to=a message=note args=["hello"]
 > pump clock=2026-10-05T09:00:00Z
-seg a/r2 start delivery=d2 fuel=0 alloc=0 state=446 end=unhandled
+seg a/r2 start delivery=d2 fuel=0 alloc=0 state=438 end=unhandled
 run a/r2 outcome=unhandled delivery=d2 fuel=0 alloc=0
 unhandled d2 message=note args=["hello"]
 send a/r1.c1 to=b message=note args=["hello"] wait=yes
@@ -25,7 +25,7 @@ seg a/r3 start delivery=d3 handler=relay2 clause=1 fuel=15 alloc=0 state=326 end
 pumped state=idle fuel=15 next=2026-10-05T09:00:01Z
 > deliver d4 to=a message=move:to: args=["knight", "e4"]
 > pump clock=2026-10-05T09:00:00Z
-seg a/r4 start delivery=d4 fuel=0 alloc=0 state=534 end=unhandled
+seg a/r4 start delivery=d4 fuel=0 alloc=0 state=518 end=unhandled
 run a/r4 outcome=unhandled delivery=d4 fuel=0 alloc=0
 unhandled d4 message=move:to: args=["knight", "e4"]
 send a/r3.c1 to=b message=move:to: args=["knight", "e4"] wait=yes
