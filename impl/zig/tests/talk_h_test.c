@@ -1428,7 +1428,7 @@ static int router_test(void) {
     talk_owned_bytes checkpoint = {0};
     bad |= talk_router_save(router_under_test, group, &checkpoint) != TALK_OK;
     store_revision = 1;
-    talk_restore_options restore = {"g", 1, record, NULL, NULL, 0, rebind, NULL, NULL, NULL, TALK_REJECT_MISMATCH, NULL, 0};
+    talk_restore_options restore = {"g", 1, record, NULL, NULL, 0, rebind, NULL, NULL, NULL, TALK_REJECT_MISMATCH, false, NULL, 0};
     talk_group *restored = NULL;
     talk_restore_result *result = NULL;
     talk_routing_result *routing = NULL;
@@ -2155,7 +2155,7 @@ static int save_test(void) {
     bad |= talk_core_state_fingerprint(core, saved.data, 3, again) != TALK_INVALID_SAVE;
     /* The live form writes nothing to the Trace: only the two saves. */
     bad |= strncmp(trace + traced, "> save s1\n> save s2\n", 20) != 0 || strlen(trace) != traced + 20;
-    talk_restore_options ro = {"g", 1, record, NULL, NULL, 0, NULL, NULL, NULL, NULL, TALK_REJECT_MISMATCH, NULL, 0};
+    talk_restore_options ro = {"g", 1, record, NULL, NULL, 0, NULL, NULL, NULL, NULL, TALK_REJECT_MISMATCH, false, NULL, 0};
     talk_group *restored = NULL;
     talk_restore_result *result = NULL;
     bad |= talk_restore(core, saved.data, saved.len, &ro, &restored, &result) != TALK_OK;

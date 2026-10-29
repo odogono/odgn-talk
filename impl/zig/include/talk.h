@@ -1577,6 +1577,10 @@ typedef struct talk_restore_options {
      * TALK_LOAD_REFUSED, and carried variables over the Persistent State cap
      * TALK_STATE_TOO_LARGE. */
     talk_mismatch_policy mismatch;
+    /* With TALK_RELOAD_CHANGED, a Partial Restore keeps each changed
+     * Script's mailbox, as talk_reload_options.keep_mailbox does; ignored
+     * otherwise. Its messages count toward the Persistent State cap. */
+    bool keep_mailbox;
     /* C only: as talk_group_options. */
     const talk_allocator *allocator;
     size_t memory_cap;

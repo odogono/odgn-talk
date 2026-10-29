@@ -589,3 +589,58 @@ func TestReloadChangedRebuildsOnlyChangedScripts(t *testing.T) {
 		t.Fatalf("matched Run did not go on: %s", got)
 	}
 }
+
+func TestReloadChangedKeepsChangedMailbox(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		t.Run(fmt.Sprint("keep=", keep), func(t *testing.T) {
+			c := New()
+			compile := func(source string) *Library {
+				l, err := c.CompileLibrary(LibrarySource{Name: "lib", Version: "1", Source: source}, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return l
+			}
+			first, second := compile("function label x\n return \"v1 \" & x\nend label\n"), compile("function label x\n return \"v2 \" & x\nend label\n")
+			g := c.NewGroup(GroupOptions{})
+			if err := g.AddLibrary(first); err != nil {
+				t.Fatal(err)
+			}
+			a, err := g.Load(LoadOptions{Name: "a", Source: "use label from lib\nscript variable got = \"\"\non go\n repeat 10 times\n  put label(\"go\") into got\n end repeat\n wait 10 s\nend go\non note x\n put label(x) into got\nend note"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.Deliver(Message{Name: "go"})
+			x, err := Text("x")
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.Deliver(Message{Name: "note", Args: []Value{x}})
+			// The Fuel Slice preempts go, so note stays in a's mailbox.
+			if _, err := g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 50}); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := g.Save()
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, result, err := c.Restore(saved, RestoreOptions{Libraries: []*Library{second}, Mismatch: ReloadChanged, KeepMailbox: keep})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fmt.Sprint(result.Reloaded) != "[a]" || (len(result.DroppedMessages) == 0) != keep {
+				t.Fatalf("Partial Restore result: %#v", result)
+			}
+			if _, err := restored.Pump(time.Unix(2, 0), PumpOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			want := `""`
+			if keep {
+				want = `"v2 x"`
+			}
+			if got := restored.Inspect().Scripts[0].Vars[0].Val.String(); got != want {
+				t.Fatalf("got = %s, want %s", got, want)
+			}
+		})
+	}
+}

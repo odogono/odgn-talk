@@ -1755,7 +1755,7 @@ pub const Session = struct {
         const saved = s.saves.get(name) orelse return s.say("! no such save");
         var libraries: std.ArrayList(?*c.talk_library) = .empty;
         for (s.libraries.values()) |l| try libraries.append(s.alloc(), l.library);
-        const options: c.talk_restore_options = .{ .name = "session", .name_len = 7, .trace = traceSink, .trace_context = s, .libraries = @ptrCast(libraries.items.ptr), .libraries_len = libraries.items.len, .grants = rebind, .grants_context = s, .resolve = restoreResolve, .resolve_context = s, .mismatch = c.TALK_REJECT_MISMATCH, .allocator = null, .memory_cap = 0 };
+        const options: c.talk_restore_options = .{ .name = "session", .name_len = 7, .trace = traceSink, .trace_context = s, .libraries = @ptrCast(libraries.items.ptr), .libraries_len = libraries.items.len, .grants = rebind, .grants_context = s, .resolve = restoreResolve, .resolve_context = s, .mismatch = c.TALK_REJECT_MISMATCH, .keep_mailbox = false, .allocator = null, .memory_cap = 0 };
         var group: ?*c.talk_group = null;
         var result: ?*c.talk_restore_result = null;
         var routing: ?*c.talk_routing_result = null;

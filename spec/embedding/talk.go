@@ -1311,6 +1311,10 @@ type RestoreOptions struct {
 	Grants   func(script, name string) *Grant
 	Resolve  func(kind, id string) (native any, ok bool)
 	Mismatch MismatchPolicy
+	// KeepMailbox keeps each changed Script's mailbox in a Partial Restore,
+	// as Reload's keepMailbox does. Ignored unless Mismatch is ReloadChanged
+	// and the restore is partial.
+	KeepMailbox bool
 }
 
 type MismatchPolicy int

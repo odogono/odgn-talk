@@ -1612,6 +1612,8 @@ pub const RestoreOptions = extern struct {
     resolve: ResolveFn,
     resolve_context: ?*anyopaque,
     mismatch: MismatchPolicy,
+    /// With `reload_changed`, keep each changed Script's mailbox.
+    keep_mailbox: bool,
     allocator: ?*const HostAllocator,
     memory_cap: usize,
 };
@@ -1692,6 +1694,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
         .kinds = .{ .context = &bridges, .call = Bridges.kindNamed },
         .variables_only = o.mismatch == .variables_only,
         .reload_changed = o.mismatch == .reload_changed,
+        .keep_mailbox = o.keep_mailbox,
     }, &report) catch |err| {
         g.flush();
         talk_group_release(g);
@@ -4204,7 +4207,7 @@ test "a restore reports its accounting baseline, and a Reload its discards" {
     var saved: Buffer = .{};
     try std.testing.expectEqual(HostErrorCode.ok, talk_save(group.?, &saved));
     defer talk_owned_bytes_release(&saved);
-    const restore_options: RestoreOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null, .libraries = null, .libraries_len = 0, .grants = null, .grants_context = null, .resolve = null, .resolve_context = null, .mismatch = .reject_mismatch, .allocator = null, .memory_cap = 0 };
+    const restore_options: RestoreOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null, .libraries = null, .libraries_len = 0, .grants = null, .grants_context = null, .resolve = null, .resolve_context = null, .mismatch = .reject_mismatch, .keep_mailbox = false, .allocator = null, .memory_cap = 0 };
     var restored: ?*Group = null;
     var outcome: ?*RestoreResult = null;
     try std.testing.expectEqual(HostErrorCode.ok, talk_restore(core, saved.data, saved.len, &restore_options, &restored, &outcome));

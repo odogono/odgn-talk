@@ -1450,7 +1450,7 @@ fn roundTrip(a: std.mem.Allocator, core: ?*c.talk_core, sink: *Sink, group: ?*c.
     while (it.next()) |l| try given.append(a, l.*);
     var rebinding: Rebinding = .{ .grants = grants, .unbound = &.{} };
     var resolving: Resolving = .{ .refused = &.{} };
-    const options: c.talk_restore_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = sink, .libraries = @ptrCast(given.items.ptr), .libraries_len = given.items.len, .grants = Rebinding.call, .grants_context = &rebinding, .resolve = Resolving.call, .resolve_context = &resolving, .mismatch = c.TALK_REJECT_MISMATCH, .allocator = null, .memory_cap = 1 << 30 };
+    const options: c.talk_restore_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = sink, .libraries = @ptrCast(given.items.ptr), .libraries_len = given.items.len, .grants = Rebinding.call, .grants_context = &rebinding, .resolve = Resolving.call, .resolve_context = &resolving, .mismatch = c.TALK_REJECT_MISMATCH, .keep_mailbox = false, .allocator = null, .memory_cap = 1 << 30 };
     var restored: ?*c.talk_group = null;
     var result: ?*c.talk_restore_result = null;
     try check(c.talk_restore(core, saved.data, saved.len, &options, &restored, &result));
@@ -1787,6 +1787,7 @@ pub const Host = struct {
                 .resolve = Resolving.call,
                 .resolve_context = &resolving,
                 .mismatch = mismatchPolicy(field(input, "mismatch") orelse ""),
+                .keep_mailbox = std.mem.eql(u8, field(input, "mailbox") orelse "", "keep"),
                 .allocator = null,
                 .memory_cap = 1 << 30,
             };

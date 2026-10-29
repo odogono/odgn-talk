@@ -3713,11 +3713,12 @@ const Restoring = struct {
 };
 
 /// The fields `restore` reads: the save, the Libraries by identity and the
-/// mismatch policy.
+/// mismatch policy, and whether a Partial Restore keeps changed mailboxes.
 const RestoreRequest = struct {
     save: []u8,
     libraries: []*machine.Library,
     mismatch: talk.MismatchPolicy,
+    keep_mailbox: bool,
 
     fn of(s: *Session, msg: Json) ?RestoreRequest {
         const text = asText(field(field(msg, "save") orelse return null, "$bytes")) orelse return null;
@@ -3749,7 +3750,12 @@ const RestoreRequest = struct {
             s.gpa.free(save);
             return null;
         };
-        return .{ .save = save, .libraries = libraries, .mismatch = mismatch };
+        const keep_mailbox = if (field(msg, "keepMailbox")) |k| asBool(k) orelse {
+            s.gpa.free(libraries);
+            s.gpa.free(save);
+            return null;
+        } else false;
+        return .{ .save = save, .libraries = libraries, .mismatch = mismatch, .keep_mailbox = keep_mailbox };
     }
 
     fn deinit(r: RestoreRequest, gpa: Allocator) void {
@@ -3772,7 +3778,7 @@ fn restoreReply(s: *Session, msg: Json, ref: i64, frame: []const u8) []u8 {
     var result: ?*talk.RestoreResult = null;
     var probe: GroupEntry = .{ .gpa = s.gpa, .name = &.{}, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false };
     defer freeTrace(s.gpa, takeTrace(&probe));
-    const options: talk.RestoreOptions = .{ .name = handle_name.ptr, .name_len = handle_name.len, .trace = traceSink, .trace_context = &probe, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = &resolving, .resolve = Resolving.resolve, .resolve_context = &resolving, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
+    const options: talk.RestoreOptions = .{ .name = handle_name.ptr, .name_len = handle_name.len, .trace = traceSink, .trace_context = &probe, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = &resolving, .resolve = Resolving.resolve, .resolve_context = &resolving, .mismatch = request.mismatch, .keep_mailbox = request.keep_mailbox, .allocator = null, .memory_cap = std.math.maxInt(usize) };
     const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
     Direct.restoreResultRelease(result);
     if (group) |g| Direct.groupRelease(g);
@@ -3876,7 +3882,7 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .instance = s.nextInstance(), .climb = s.climb, .gone = s.gone };
     var group: ?*talk.Group = null;
     var result: ?*talk.RestoreResult = null;
-    const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
+    const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .keep_mailbox = request.keep_mailbox, .allocator = null, .memory_cap = std.math.maxInt(usize) };
     const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
     if (code != .ok) {
         const reply = restoreError(s, entry, ref, code);
@@ -7156,6 +7162,20 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "restore reads an optional boolean keepMailbox" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"group-exchanges-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":false}}", .{2}));
+    const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{3}))).object.get("save").?.object.get("$bytes").?.string;
+    const bad = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"h\",\"name\":\"h\",\"save\":{{\"$bytes\":\"{s}\"}},\"libraries\":[],\"mismatch\":\"reload changed\",\"keepMailbox\":\"yes\",\"trace\":false}}", .{ 4, save });
+    try std.testing.expectEqualStrings("invalid value", bad.object.get("err").?.object.get("code").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"h\",\"name\":\"h\",\"save\":{{\"$bytes\":\"{s}\"}},\"libraries\":[],\"mismatch\":\"reload changed\",\"keepMailbox\":true,\"trace\":false}}", .{ 5, save }));
 }
 
 test "a restored Group refuses a Function Value token from before the restore, even under its old handle" {
