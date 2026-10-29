@@ -2182,6 +2182,12 @@ export class TsGroup implements Group {
           invalidSave();
         }
         if (r.suspended?.k !== 'join') {
+          // A preempted Join sets its members' timers at its end, each in
+          // the place its wait has here.
+          const open = r.join?.members[w.member];
+          if (open) {
+            open.order = this.waits.reserve();
+          }
           continue;
         }
         const join = joinOf(x);
@@ -3992,6 +3998,7 @@ export class TsGroup implements Group {
         this.issued.set(runId, ranges);
       },
       waitOrder: () => ++this.waitOrder,
+      timerOrder: () => this.waits.reserve(),
       drawRandom: n => this.drawRandom(n),
       holdsObject: v => this.holdsObject(v),
       crossing: () => {
@@ -4376,23 +4383,32 @@ export class TsGroup implements Group {
         members: sus.members,
         answers: new Map<string, Resumption>(),
       };
-      // Set first, so that it fires before a member's timer at the same
-      // deadline.
+      // A member's wait took its place when the member started, perhaps in
+      // an earlier Pump that preempted the Join (#1752). Of equal deadlines,
+      // the block's wins over its members' (chapter 5, Timeout Blocks).
+      const orders = sus.members.map(m => m.order ?? this.waits.reserve());
       if (block) {
-        join.deadline = this.waits.timer(block.at, deadline({ join }), running);
+        join.deadline = this.waits.timer(
+          block.at,
+          deadline({ join }),
+          running,
+          Math.min(this.waits.reserve(), ...orders) - 0.5,
+        );
       }
-      // A member's wait started with its call, which a preempted Join made
-      // in an earlier Pump.
-      for (const m of sus.members) {
+      sus.members.forEach((m, i) => {
         const timer = this.waits.timer(
           m.at,
           { k: 'call', id: m.id, ms: m.ms },
           running,
+          orders[i],
         );
         this.waits.add(m.id, s, running, timer, join);
-      }
+      });
+      // A sibling's failure may already have cut a retained reply's member.
       for (const { id, reply } of running.run.takeJoinReplies()) {
-        this.settleReply(id, reply);
+        if (this.waits.has(id)) {
+          this.settleReply(id, reply);
+        }
       }
       return block ? block.at : null;
     }

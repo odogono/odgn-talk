@@ -89,7 +89,6 @@ export type RunInternals = {
   join: {
     frame: Frame;
     members: Member[];
-    replies?: { id: string; reply: Resumption }[];
     start: number;
   } | null;
   limits: Run['limits'];
@@ -1205,9 +1204,6 @@ export const runFromRecord = (
       frame: joinFrame,
       members,
       start: j.start,
-      replies: suspendedAtEnd
-        ? []
-        : members.flatMap(m => (m.reply ? [{ id: m.id, reply: m.reply }] : [])),
     };
   }
   const cut = rec.join

@@ -233,3 +233,14 @@ test('a save exports the table and a restore rebuilds it', () => {
   expect(restored.timer(30n, { k: 'wake', s, running: r }).seq).toBe(3);
   expect(restored.next()).toBe(10n);
 });
+
+test('a timer set with a reserved order fires in that place (#1752)', () => {
+  const w = new Waits<Bare, Script>();
+  const r = bare();
+  // A Join Member's wait takes its place when the member starts...
+  const order = w.reserve();
+  const between = w.timer(10n, { k: 'wake', s, running: r }, r);
+  // ...though its timer is set only when the Join suspends at its end.
+  const member = w.timer(10n, { k: 'wake', s, running: r }, r, order);
+  expect([...w.takeDue(10n)]).toEqual([member, between]);
+});

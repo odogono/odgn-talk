@@ -850,6 +850,8 @@ export type Member = {
   answer?: Value;
   /** Its deadline: the Clock of the Pump that started it, plus `ms`. */
   at: bigint;
+  /** Its wait's place in the timer order, taken when it starts (#1752). */
+  order?: number;
   call: CallContext | null;
   id: string;
   ms: number;
@@ -933,6 +935,8 @@ export type RunHost = {
   sendUp(message: string, args: Value[], reply: string | null): string | null;
   /** The next wait's place in the order waits began. */
   waitOrder?(): number;
+  /** Reserves a Join Member's place among timers, set when the Join suspends. */
+  timerOrder?(): number;
 };
 const listItems = (v: Value): Value[] =>
   Array.from({ length: v.length }, (_, i) => v.index(i + 1));
@@ -1177,7 +1181,6 @@ export class Run {
   private join: {
     frame: Frame;
     members: Member[];
-    replies?: { id: string; reply: Resumption }[];
     start: number;
   } | null = null;
   // What a woken Run had suspended on, until its resume.
@@ -2937,17 +2940,18 @@ export class Run {
     if (reply.k === 'reply' || reply.k === 'answer') {
       member.answer = reply.value;
     }
-    (join.replies ??= []).push({ id, reply });
     return true;
   }
 
-  /** Replay buffered replies in arrival order once the Join starts waiting. */
+  /**
+   * The replies retained while the Join's body was preempted, replayed in
+   * member start order once it starts waiting, so the earliest-started
+   * member's failure is raised (chapter 5, Joins).
+   */
   takeJoinReplies(): { id: string; reply: Resumption }[] {
-    const replies = this.join?.replies ?? [];
-    if (this.join) {
-      this.join.replies = [];
-    }
-    return replies;
+    return (this.join?.members ?? []).flatMap(({ id, reply }) =>
+      reply ? [{ id, reply }] : [],
+    );
   }
 
   /** Make a suspended Run ready: its next step resumes it with `r`. */
@@ -4874,6 +4878,7 @@ export class Run {
           at: this.host!.now + BigInt(ms) * 1000n,
         };
         waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
+        m.order = this.host!.timerOrder?.();
         this.join!.members.push(m);
       } else {
         // The Host has consumed the operands. Retain the call, not another
@@ -5763,7 +5768,7 @@ export class Run {
       case Op.JoinStart:
         this.checkScopeBoundary();
         this.pay(rate);
-        this.join = { frame, members: [], replies: [], start: frame.pc };
+        this.join = { frame, members: [], start: frame.pc };
         return next(frame);
       case Op.JoinAsk: {
         this.joinWidth();
@@ -5918,6 +5923,7 @@ export class Run {
             at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1000n,
           };
           waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
+        m.order = this.host!.timerOrder?.();
           this.join!.members.push(m);
           return next(frame);
         }
