@@ -1,5 +1,3 @@
-# Unblessed: kept-mailbox Partial Restore cases from a TS Core prototype (#1821); first blessing awaits human review.
-#
 # - The Fuel Slice preempts a/r1, so b's Request b/r1.c1 stays in a's
 #   mailbox at the save.
 # - With the mailbox kept, b/r1 goes on waiting rather than failing with

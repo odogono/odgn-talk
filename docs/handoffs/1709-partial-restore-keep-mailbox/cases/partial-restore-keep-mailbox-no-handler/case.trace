@@ -1,5 +1,3 @@
-# Unblessed: kept-mailbox Partial Restore cases from a TS Core prototype (#1821); first blessing awaits human review.
-#
 # - The Fuel Slice preempts a/r1 so d2 stays in a's mailbox at the save.
 # - Under the new fmt, KIND is "v2", so d2 fails the `note` Guard and ends
 #   `unhandled`, by the ordinary rule.

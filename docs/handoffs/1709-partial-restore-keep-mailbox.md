@@ -5,7 +5,7 @@
 - **Required base:** the PR for [#1821](https://github.com/odogono/odgn-talk/issues/1821), or its merged successor. Relevant sections: [chapter 10, Partial Restore](../../spec/10-save-and-restore.md#partial-restore) (Keeping the mailbox, The cap with a kept mailbox, Across Scripts, Reported), the `restore` request in [chapter 9](../../spec/09-embedding.md), `RestoreOptions` in [`talk.ts`](../../spec/embedding/talk.ts) and [`talk.go`](../../spec/embedding/talk.go), the `restore` record's `mailbox` key in [`corpus.toml`](../../spec/data/corpus.toml), and [ADR 0143](../adr/0143-a-restore-may-reload-only-the-scripts-whose-code-changed.md#keeping-the-mailbox).
 - **Implemented in:** the specification, the TS embedding declaration, the ADR amendment and the Trace key ([#1821](https://github.com/odogono/odgn-talk/issues/1821)). No Core reads `keepMailbox` or `mailbox=keep` yet.
 - **Remaining work:** Zig and Go ([#1822](https://github.com/odogono/odgn-talk/issues/1822)), TS ([#1823](https://github.com/odogono/odgn-talk/issues/1823)) and Elixir ([#1824](https://github.com/odogono/odgn-talk/issues/1824)).
-- **Approval still needed:** first blessing of the three staged cases below.
+- **Approval still needed:** none for the three staged cases below; the maintainer approved their first blessing on 2026-10-29 for #1821. Re-blessing after an implementation changes them needs review again.
 
 ## Staged Go declaration
 
@@ -29,4 +29,4 @@ Both the TS and Zig corpus jobs run every case under `corpus/`, so these cases a
 | `partial-restore-keep-mailbox-request` | a matched Script's Request in the kept mailbox goes on waiting and gets the new code's reply, not `send failed` |
 | `partial-restore-keep-mailbox-no-handler` | a kept message no clause of the new code takes ends `unhandled` |
 
-The expectations came from a throwaway TS Core prototype (keep the queue in `reloadRestored`, count it in the cap check, write `mailbox=keep`), so they are Unblessed. A state-cap refusal case is left out: a Restore refused with `state too large` writes no Trace record on any Core today, so the case would pin unspecified output. Cover the cap with unit tests instead, and file a Trace issue if a record is wanted.
+The expectations came from a throwaway TS Core prototype (keep the queue in `reloadRestored`, count it in the cap check, write `mailbox=keep`), and the maintainer approved them as first blessings. A state-cap refusal case is left out: a Restore refused with `state too large` writes no Trace record on any Core today, so the case would pin unspecified output. Cover the cap with unit tests instead, and file a Trace issue if a record is wanted.
