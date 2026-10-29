@@ -34,6 +34,7 @@ import { browserSoundBackend } from './sounds';
 import { createElement, type HTMLAttributes } from 'preact';
 import { ElementView, renderElements } from './element-view';
 import { type PlayMode, type StackShell } from './stack';
+import { controls } from './play-controls';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { isPlayKey } from './shortcuts';
 import { InPlaceTextEditor } from './text-editor';
@@ -93,7 +94,7 @@ export const mountPlay = (shell: StackShell): void => {
       label,
     );
     button.addEventListener('click', () => {
-      if (session?.stoppedRun && !session.stopped) {
+      if (allowed().atStoppedRun) {
         post({ kind: 'statementStep', session: sessionId, step });
       }
     });
@@ -155,7 +156,7 @@ export const mountPlay = (shell: StackShell): void => {
   let captureEpoch: number | undefined;
   const profiler = new PerformanceWindow(
     epoch => {
-      if (session && !session.stopped && captureEpoch !== epoch) {
+      if (allowed().live && captureEpoch !== epoch) {
         captureEpoch = epoch;
         post({ kind: 'performance', session: sessionId, epoch });
       }
@@ -197,7 +198,7 @@ export const mountPlay = (shell: StackShell): void => {
     index => selectOwner(owners, generation, index),
     () => sendWatches(),
     (frame, index) => {
-      if (session && !session.stopped && session.stoppedRun) {
+      if (allowed().atStoppedRun) {
         post({ kind: 'selectFrame', session: sessionId, frame: index });
       }
       const at = stoppedAt(frame);
@@ -225,7 +226,7 @@ export const mountPlay = (shell: StackShell): void => {
   };
   let sentBreakpoints = '';
   const sendBreakpoints = () => {
-    if (mode !== 'browse' || !session || session.stopped) {
+    if (!allowed().browsing) {
       return;
     }
     const breakpoints = shell.breakpoints
@@ -245,7 +246,7 @@ export const mountPlay = (shell: StackShell): void => {
   shell.breakpoints.onChange(sendBreakpoints);
   // Like Breakpoints, an uncaught error stops a Run only while browsing.
   const sendPauseOnErrors = () => {
-    if (mode === 'browse' && session && !session.stopped) {
+    if (allowed().browsing) {
       post({
         kind: 'pauseOnErrors',
         session: sessionId,
@@ -268,7 +269,7 @@ export const mountPlay = (shell: StackShell): void => {
   };
   // Watches go to a browsing session; the worker runs them while paused.
   const sendWatches = () => {
-    if (mode === 'browse' && session && !session.stopped) {
+    if (allowed().browsing) {
       post({
         kind: 'watches',
         session: sessionId,
@@ -281,13 +282,7 @@ export const mountPlay = (shell: StackShell): void => {
   // Only while the window is open and Play is browsing; the worker answers
   // without values when no Pump has run since it was last asked.
   const refreshVariables = () => {
-    if (
-      variablesAsked ||
-      !variables.visible ||
-      mode !== 'browse' ||
-      !session ||
-      session.stopped
-    ) {
+    if (variablesAsked || !variables.visible || !allowed().browsing) {
       return;
     }
     const asked = sessionId;
@@ -315,7 +310,7 @@ export const mountPlay = (shell: StackShell): void => {
   reader.append(scaler);
   // A playing Page is the reader's app: secondary clicks go to its Scripts.
   pageNode.addEventListener('contextmenu', event => {
-    if (session && !session.stopped) {
+    if (allowed().live) {
       event.preventDefault();
     }
   });
@@ -343,6 +338,8 @@ export const mountPlay = (shell: StackShell): void => {
   let loadedScripts: string[] = [];
   let loadedLibraries: string[] = [];
   let mode: PlayMode | undefined;
+  /** What the session allows now (play-controls.ts). */
+  const allowed = () => controls(session, mode);
   errors.pauseOnErrors.subscribe(sendPauseOnErrors);
   let recorder: Recorder | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
@@ -395,7 +392,7 @@ export const mountPlay = (shell: StackShell): void => {
     args?: ReaderArg[],
     pageIndex = session?.page.index,
   ) => {
-    if (!session || session.stopped || session.navigating || session.paused) {
+    if (!allowed().takesInput) {
       return;
     }
     if (recorder && message === 'click' && !('index' in target)) {
@@ -525,8 +522,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (editor) {
       editor.node.contentEditable =
         session &&
-        !session.stopped &&
-        !session.navigating &&
+        allowed().textEditable &&
         editor.history.element.editable &&
         session.isVisible(editor.history.element)
           ? 'true'
@@ -535,13 +531,7 @@ export const mountPlay = (shell: StackShell): void => {
     toolbar.hidden = true;
   };
   const openText = (node: HTMLElement, element: TextElement) => {
-    if (
-      !session ||
-      session.stopped ||
-      session.navigating ||
-      session.paused ||
-      !element.editable
-    ) {
+    if (!session || !allowed().takesInput || !element.editable) {
       return;
     }
     if (activeText?.node === node) {
@@ -775,7 +765,7 @@ export const mountPlay = (shell: StackShell): void => {
       ...pageOffset(node, event),
     };
     const tick = () => {
-      if (!press || !session || session.stopped || session.paused) {
+      if (!press || !session || !allowed().running) {
         pressRequest = undefined;
         return;
       }
@@ -801,7 +791,7 @@ export const mountPlay = (shell: StackShell): void => {
     frameRequest = requestAnimationFrame(() => {
       frameRequest = undefined;
       // A paused session asks again when its Resume's view arrives.
-      if (!session || session.stopped || session.paused) {
+      if (!session || !allowed().running) {
         return;
       }
       post({ kind: 'frame', session: sessionId });
@@ -833,23 +823,18 @@ export const mountPlay = (shell: StackShell): void => {
     void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {
-    const live = Boolean(session && !session.stopped);
-    const paused = live && session!.paused;
+    const now = allowed();
     toggle.textContent = mode === 'present' ? 'Stop' : 'Play';
     toggle.setAttribute('aria-pressed', String(mode === 'present'));
-    pauseButton.textContent = paused ? 'Resume' : 'Pause';
-    pauseButton.setAttribute('aria-pressed', String(paused));
-    pauseButton.disabled = !live;
-    // A frame can't move on until a stopped Run finishes (ADR 0147).
-    const stopped = paused && Boolean(session!.stoppedRun);
-    stepButton.disabled = !paused || stopped;
+    pauseButton.textContent = now.pauseLabel;
+    pauseButton.setAttribute('aria-pressed', String(now.paused));
+    pauseButton.disabled = !now.live;
+    stepButton.disabled = !now.frameStepEnabled;
     for (const button of statementSteps) {
-      button.hidden = !stopped;
+      button.hidden = !now.statementStepsShown;
     }
-    stepButton.title = stopped
-      ? 'Finish the stopped Run first'
-      : "Step one frame (⌘')";
-    reader.classList.toggle('paused', paused);
+    stepButton.title = now.frameStepTitle;
+    reader.classList.toggle('paused', now.paused);
     browseTool.setAttribute(
       'aria-pressed',
       String(mode === 'browse' && !recorder),
@@ -1032,7 +1017,7 @@ export const mountPlay = (shell: StackShell): void => {
   editTool.addEventListener('click', () => leave());
   /** Pausing releases held keys first, as input while paused is dropped. */
   const togglePause = () => {
-    if (!session || session.stopped) {
+    if (!session || !allowed().live) {
       return;
     }
     if (!session.paused) {
@@ -1047,7 +1032,7 @@ export const mountPlay = (shell: StackShell): void => {
     post({ kind: session.paused ? 'resume' : 'pause', session: sessionId });
   };
   const step = () => {
-    if (session && !session.stopped && session.paused && !session.stoppedRun) {
+    if (allowed().frameStepEnabled) {
       post({ kind: 'step', session: sessionId });
     }
   };
@@ -1126,12 +1111,7 @@ export const mountPlay = (shell: StackShell): void => {
       leave();
       return;
     }
-    if (
-      session.stopped ||
-      session.navigating ||
-      session.paused ||
-      !reader.contains(event.target as Node)
-    ) {
+    if (!allowed().takesInput || !reader.contains(event.target as Node)) {
       return;
     }
     const node = (event.target as HTMLElement).closest<HTMLElement>(
@@ -1230,10 +1210,10 @@ export const mountPlay = (shell: StackShell): void => {
       return select;
     },
     pageName: () => session?.page.name,
-    session: () => (session && !session.stopped ? sessionId : undefined),
-    scripts: () => (session && !session.stopped ? session.messageTargets : []),
+    session: () => (allowed().live ? sessionId : undefined),
+    scripts: () => (allowed().live ? session!.messageTargets : []),
     run: async (text, expectedSession, target) => {
-      if (!session || session.stopped || sessionId !== expectedSession) {
+      if (!session || !allowed().live || sessionId !== expectedSession) {
         return { error: 'Play has stopped.' };
       }
       const reply = await supervisor.call({
