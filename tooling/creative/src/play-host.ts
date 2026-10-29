@@ -36,12 +36,13 @@ import {
   type Watch,
   type WatchResult,
 } from './variables';
-import { type PumpResult, type Report } from '@northtalk/ts';
+import { type Report } from '@northtalk/ts';
 import { type DebugInstruction } from '@northtalk/ts/debug';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
 import { pointerValue } from './pointer';
 import { pausableClock } from '@northtalk/tooling/pausable-clock';
+import { PlayClock } from './play-clock';
 
 const wallClock = pausableClock(
   () => BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n,
@@ -153,21 +154,21 @@ const evaluationError = (result: { error: string; line?: number }) =>
     ? result.error
     : `line ${result.line}: ${result.error}`;
 
-/** How far a Step moves the Play clock: one frame at 60 Hz, in ms. */
-const STEP = 1000 / 60;
+/** Runs `callback` after `delay` ms; the Play worker's only timer. */
+export type Scheduler = {
+  cancel(timer: unknown): void;
+  schedule(callback: () => void, delay: number): unknown;
+};
+const timers: Scheduler = {
+  schedule: (callback, delay) => setTimeout(callback, delay),
+  cancel: timer => clearTimeout(timer as ReturnType<typeof setTimeout>),
+};
 
 export class PlayHost {
   #session: PlaySession | undefined;
-  #paused = false;
-  #pausedSince = 0;
-  // Paused milliseconds so far, less the time Steps have moved on.
-  #pausedTotal = 0;
-  // Whether the Pumps running now belong to a Step, not the Message Box.
-  #stepping = false;
+  readonly #play: PlayClock;
   // Watches (ADR 0129): evaluated in their own Pump, only while paused.
   #watches: Watch[] = [];
-  #watchDue = false;
-  #watching = false;
   #watchReports: Report[] = [];
   // Each running Watch's Request, and the Watches whose Run caused others.
   #watchRuns = new Map<number, string>();
@@ -175,16 +176,11 @@ export class PlayHost {
   // Breakpoints (ADR 0147), and the loaded Scripts they were last placed in.
   #breakpoints: BreakpointView[] = [];
   #placedIn: string | undefined;
-  // The stopped Run's selected frame, innermost first, and that Run.
-  #frame = 0;
-  #frameOf: string | undefined;
-  // Continues the Run a Breakpoint stopped, in the next Pump.
-  #continue: (() => PumpResult) | undefined;
   // The Play clock: Host time less paused time, never going back (ADR 0128).
   readonly #clock: () => bigint;
   #id = 0;
   #performanceTimer: ReturnType<typeof setInterval> | undefined;
-  #timer: ReturnType<typeof setTimeout> | undefined;
+  #timer: unknown;
   #owners = new Map<unknown, number>();
   // What the page last received: each Element's JSON, by name.
   #sent = new Map<string, string>();
@@ -210,8 +206,10 @@ export class PlayHost {
     private readonly post: (reply: Reply<PlayResponse>) => void,
     private readonly now: () => bigint = wallClock,
     private readonly performanceNow: () => number = () => performance.now(),
+    private readonly scheduler: Scheduler = timers,
   ) {
-    this.#clock = pausableClock(this.now, this.#pausedTime.bind(this));
+    this.#play = new PlayClock(performanceNow);
+    this.#clock = pausableClock(this.now, () => this.#play.pausedTime());
   }
 
   receive({ id, request }: Envelope<PlayRequest>): void {
@@ -260,7 +258,7 @@ export class PlayHost {
       }
       case 'send': {
         // Reader input while paused is dropped, not queued.
-        if (this.#paused) {
+        if (this.#play.paused) {
           break;
         }
         // Only a release can name a Page left since its press; its Message
@@ -293,7 +291,7 @@ export class PlayHost {
       case 'text': {
         const element = session.elementsOf().find(e => e.name === request.name);
         if (
-          !this.#paused &&
+          !this.#play.paused &&
           request.pageIndex === session.pageIndex &&
           element?.kind === 'text' &&
           element.editable &&
@@ -334,7 +332,7 @@ export class PlayHost {
         break;
       }
       case 'selectFrame': {
-        this.#frame = request.frame;
+        this.#play.selectFrame(request.frame);
         if (session.debugPaused) {
           this.#evaluateWatches(session);
         }
@@ -343,27 +341,24 @@ export class PlayHost {
       case 'statementStep': {
         if (session.debugPaused) {
           const debug = session.debug;
-          this.#continue =
+          this.#play.continueWith(
             request.step === 'in'
               ? () => debug.step()
               : request.step === 'over'
                 ? () => debug.stepOver()
-                : () => debug.stepOut();
+                : () => debug.stepOut(),
+          );
         }
         break;
       }
       case 'frame': {
-        if (!this.#paused) {
+        if (!this.#play.paused) {
           session.frame(this.#clock());
         }
         break;
       }
       case 'pause': {
-        if (!this.#paused) {
-          this.#paused = true;
-          this.#pausedSince = this.performanceNow();
-          this.#watchDue = true;
-        }
+        this.#play.pause();
         break;
       }
       case 'watches': {
@@ -374,7 +369,7 @@ export class PlayHost {
           }
         }
         this.#watches = request.watches;
-        this.#watchDue = this.#paused;
+        this.#play.watchesChanged();
         if (session.debugPaused) {
           this.#evaluateWatches(session);
         }
@@ -382,20 +377,15 @@ export class PlayHost {
       }
       case 'resume': {
         if (session.debugPaused) {
-          this.#continue = () => session.debug.resume();
+          this.#play.continueWith(() => session.debug.resume());
         }
-        this.#resumeClock();
+        this.#play.resume();
         break;
       }
       case 'step': {
-        // A frame can't move on until a stopped Run finishes.
-        if (!this.#paused || session.debugPaused) {
-          break;
+        if (this.#play.frameStep(session.debugPaused)) {
+          session.frame(this.#clock());
         }
-        this.#pausedTotal -= STEP;
-        this.#stepping = true;
-        this.#watchDue = true;
-        session.frame(this.#clock());
         break;
       }
       case 'inspect': {
@@ -465,7 +455,7 @@ export class PlayHost {
               }
             : { error: `${shown.error}\n${line}` };
         };
-        this.#watchDue ||= this.#paused;
+        this.#play.messageSent();
         this.#schedule();
         void started.result.then(
           value =>
@@ -508,21 +498,17 @@ export class PlayHost {
     this.#variablesPumps = -1;
     this.#voices.clear();
     this.#watches = [];
-    this.#watchDue = false;
-    this.#watching = false;
     this.#watchReports = [];
     this.#watchRuns.clear();
     this.#watchEffects.clear();
     this.#breakpoints = [];
     this.#placedIn = undefined;
-    this.#continue = undefined;
-    // A new session starts unpaused; its paused time stays in the clock.
-    this.#resumeClock();
+    this.#play.newSession();
     this.#session = new PlaySession(request.project, request.pageIndex, {
       // A different game each time (ADR 0096).
       seed: request.seed,
       // The Performance window leaves out paused time too.
-      performanceNow: () => this.performanceNow() - this.#pausedTime(),
+      performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
     });
     if (request.performanceEpoch !== undefined) {
@@ -636,21 +622,6 @@ export class PlayHost {
     }
   }
 
-  #pausedTime(): number {
-    return (
-      this.#pausedTotal +
-      (this.#paused ? this.performanceNow() - this.#pausedSince : 0)
-    );
-  }
-
-  #resumeClock(): void {
-    if (this.#paused) {
-      this.#pausedTotal += this.performanceNow() - this.#pausedSince;
-      this.#paused = false;
-    }
-    this.#stepping = false;
-  }
-
   #publishPerformance(): void {
     const session = this.#session;
     const snapshot = session?.performance.snapshot(PUMP_FUEL);
@@ -679,7 +650,7 @@ export class PlayHost {
   }
 
   #close(): void {
-    clearTimeout(this.#timer);
+    this.scheduler.cancel(this.#timer);
     this.#timer = undefined;
     clearInterval(this.#performanceTimer);
     this.#performanceTimer = undefined;
@@ -694,77 +665,49 @@ export class PlayHost {
       if (delay !== 0) {
         return;
       }
-      clearTimeout(this.#timer);
+      this.scheduler.cancel(this.#timer);
     }
-    this.#timer = setTimeout(() => {
+    this.#timer = this.scheduler.schedule(() => {
       this.#timer = undefined;
       if (this.#session !== session) {
         return;
       }
-      // A stopped Run holds the whole session until it is continued.
-      const advance = this.#continue;
-      this.#continue = undefined;
-      if (session.debugPaused && !advance) {
+      // A Stopped Run holds the whole session until it is continued.
+      const next = this.#play.nextPump(session.debugPaused);
+      if (!next) {
         return;
       }
-      if (!advance) {
+      if (!next.advance) {
         this.#placeBreakpoints(session);
       }
       const clock = this.#clock();
-      // While paused, only a Step's Pumps count as frames of work.
-      const result = session.pump(
-        clock,
-        this.#paused && !this.#stepping,
-        advance,
-      );
+      const result = session.pump(clock, next.outOfBand, next.advance);
       if (session.debugPaused) {
-        // A Breakpoint hit is a Pause (ADR 0147).
-        if (!this.#paused) {
-          this.#paused = true;
-          this.#pausedSince = this.performanceNow();
-        }
-        this.#stepping = false;
-        // Another Run's stop starts at its innermost frame.
-        const run = session.debug.current!.run;
-        if (run !== this.#frameOf) {
-          this.#frameOf = run;
-          this.#frame = 0;
-        }
+        this.#play.stoppedAt(session.debug.current!.run);
         this.#publish();
         this.#evaluateWatches(session);
         return;
       }
-      if (this.#watching) {
+      if (this.#play.watching) {
         this.#watchReports.push(...result.reports);
       }
-      if (result.state === 'sliced') {
+      const after = this.#play.afterPump(result, clock);
+      if (after.sliced) {
         this.#publish();
         this.#schedule();
         return;
       }
-      this.#stepping = false;
-      if (this.#watching) {
-        this.#watching = false;
+      if (after.finishWatches) {
         this.#finishWatches(session.changed);
       }
       this.#publish();
-      // Once a Step's or the Message Box's Pump ends, Watches get their own.
-      if (this.#paused && this.#watchDue) {
-        this.#watchDue = false;
-        if (this.#startWatches(session)) {
-          this.#watching = true;
-          this.#schedule();
-          return;
-        }
+      if (after.startWatches && this.#startWatches(session)) {
+        this.#play.watchesStarted();
+        this.#schedule();
+        return;
       }
-      // No time passes while paused, so no deadline can come due.
-      if (!this.#paused && result.nextDeadline !== undefined) {
-        this.#schedule(
-          Math.min(
-            2_147_483_647,
-            Math.max(0, Number((result.nextDeadline - clock) / 1000n)),
-          ),
-        );
+      if (after.delay !== undefined) {
+        this.#schedule(after.delay);
       }
     }, delay);
   }
@@ -832,7 +775,7 @@ export class PlayHost {
     // The Core counts frames outermost first.
     const result = session.debug.evaluate(
       body,
-      Math.max(0, frames - 1 - this.#frame),
+      Math.max(0, frames - 1 - this.#play.frame),
     );
     // A Script Variable may have changed, though no Pump ran.
     this.#variablesPumps = -1;
@@ -1013,7 +956,7 @@ export class PlayHost {
     const stoppedRun = this.#stoppedRun(session);
     const state = JSON.stringify([
       stoppedRun,
-      this.#paused,
+      this.#play.paused,
       session.navigating,
       session.stopped,
       session.wantsFrames,
@@ -1052,7 +995,7 @@ export class PlayHost {
         pageHandles: this.#pageHandles,
         heldElements: this.#heldElements,
         navigating: session.navigating,
-        paused: this.#paused,
+        paused: this.#play.paused,
         ...(stoppedRun ? { stoppedRun } : {}),
         stopped: session.stopped,
         wantsFrames: session.wantsFrames,
