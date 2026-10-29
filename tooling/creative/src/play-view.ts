@@ -30,6 +30,7 @@ import { browserSoundBackend } from './sounds';
 import { paintCanvas } from './canvas-view';
 import { renderElement, type PlayMode, type StackShell } from './stack';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
+import { isPlayKey } from './shortcuts';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
 import {
@@ -53,7 +54,7 @@ export const mountPlay = (shell: StackShell): void => {
     {
       type: 'button',
       'aria-pressed': 'false',
-      title: 'Play: present the Project',
+      title: 'Play: present the Project (⌘↩)',
     },
     'Play',
   );
@@ -965,6 +966,18 @@ export const mountPlay = (shell: StackShell): void => {
       event.preventDefault();
       if (!event.repeat) {
         profiler.toggle();
+      }
+      return;
+    }
+    // ⌘↩ starts and stops Present, from Edit, Browse or Present.
+    if (
+      isPlayKey(event) &&
+      !isTyping(event.target) &&
+      !prompts.contains(event.target as Node)
+    ) {
+      event.preventDefault();
+      if (!event.repeat) {
+        toggle.click();
       }
       return;
     }

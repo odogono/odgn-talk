@@ -1,5 +1,6 @@
 // The header's Folio, File and Edit menus, and the About window.
 import { byId } from './dom';
+import { menuButtonForKey } from './shortcuts';
 
 /**
  * Keeps one header menu open at a time. A menu closes when one of its
@@ -31,6 +32,17 @@ export const mountMenus = (core: string): void => {
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
       menus.forEach(m => (m.open = false));
+      return;
+    }
+    // A hidden or disabled command, such as Save without disk access, is off.
+    const id = menuButtonForKey(event);
+    const button = id ? (byId(id) as HTMLButtonElement) : undefined;
+    if (button) {
+      event.preventDefault();
+      if (!event.repeat && !button.hidden && !button.disabled) {
+        menus.forEach(m => (m.open = false));
+        button.click();
+      }
     }
   });
 

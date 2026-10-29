@@ -32,3 +32,28 @@ export const commandForKey = (
   }
   return undefined;
 };
+
+/**
+ * The File menu button a shortcut clicks. Browsers keep ⌘N, ⌘T and ⌘W for
+ * themselves, so New Project has none.
+ */
+export const menuButtonForKey = (event: Key): string | undefined => {
+  if (event.altKey || !(event.metaKey || event.ctrlKey)) {
+    return undefined;
+  }
+  const key = event.key.toLowerCase();
+  if (key === 's') {
+    return event.shiftKey ? 'save-file-as' : 'save-file';
+  }
+  if (key === 'o') {
+    return event.shiftKey ? 'import-project' : 'show-projects';
+  }
+  return undefined;
+};
+
+/** Whether a key toggles Play's Present mode: ⌘↩ or Ctrl+Enter. */
+export const isPlayKey = (event: Key): boolean =>
+  (event.metaKey || event.ctrlKey) &&
+  !event.altKey &&
+  !event.shiftKey &&
+  event.key === 'Enter';
