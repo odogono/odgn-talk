@@ -1,3 +1,4 @@
+import { CallMeter } from './call-meter';
 import { deferFault, machineDebug } from './debug';
 import { trackOperation } from './operation-promises';
 /* eslint require-yield: "off" */
@@ -88,7 +89,6 @@ import { validComputedMessageName } from './selectors';
 import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
-  LimitReached,
   type ChargeRequest,
   mismatch,
   type Call,
@@ -1507,11 +1507,7 @@ export class Run {
    * Segment; a preempted Join body rolls its open one back.
    */
   requestedCharge(id: string, fuel: number): 'accepted' | 'limit' {
-    const left = this.cancelling
-      ? this.limits.cleanupBudget - (this.fuel - this.cleanupFrom!)
-      : this.limits.fuelPerRun - this.fuel;
-    if (fuel <= left) {
-      this.fuel += fuel;
+    if (this.spend(fuel)) {
       return 'accepted';
     }
     const suspension = this.suspended;
@@ -1523,7 +1519,7 @@ export class Run {
     // No instruction is executing, so a debugger has nowhere to pause: the
     // fault lands at once.
     this.faultNow(
-      this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
+      this.fuelLimit,
       site
         ? site.frame.code.unit.code[site.pc]!
         : this.frame.code.unit.code[this.frame.pc]!,
@@ -1548,9 +1544,7 @@ export class Run {
     const context = pending.call!;
     const abort = pending.abort!;
     const grant = this.host!.grants.get(grantName)!;
-    let starting = false;
-    let charged = 0;
-    let reached = false;
+    const meter = new CallMeter(this.spend);
     const call: Call<unknown> = {
       id,
       scriptName: this.script.name,
@@ -1571,17 +1565,7 @@ export class Run {
         error instanceof HostScriptError
           ? this.host!.fail(id, error)
           : this.host!.fail(id, null, hostDetail(error)),
-      charge: fuel => {
-        if (!starting || !Number.isSafeInteger(fuel) || fuel < 0) {
-          throw new HostError('invalid value');
-        }
-        if (this.fuel + fuel > this.limits.fuelPerRun) {
-          reached = true;
-          throw new LimitReached();
-        }
-        this.fuel += fuel;
-        charged += fuel;
-      },
+      charge: meter.charge,
     };
     const run = this;
     if (!reissue) {
@@ -1598,24 +1582,25 @@ export class Run {
     )!;
     context.op = op;
     const record = { kind: 'call' as const, id, op: context.opName, args };
-    starting = true;
     let failure: Resumption | undefined;
     try {
       if (op.mode !== 'suspending') {
         throw new Error('A saved call is not suspending');
       }
-      if (op.start) {
-        this.host?.expose?.(listValues(args));
-        op.start(call, ...args);
-      } else {
-        this.host?.expose?.(listValues(args));
-        this.forwardResult(op.run!(call, ...args), call);
-      }
-      this.records.push({ ...record, charged });
+      this.host?.expose?.(listValues(args));
+      meter.starting(() => {
+        if (op.start) {
+          op.start(call, ...args);
+        } else {
+          this.forwardResult(op.run!(call, ...args), call);
+        }
+      });
+      this.records.push({ ...record, charged: meter.charged });
     } catch (error) {
+      const reached = meter.refused;
       this.records.push({
         ...record,
-        charged,
+        charged: meter.charged,
         ...(reached
           ? {}
           : {
@@ -1633,16 +1618,14 @@ export class Run {
             ? { k: 'fail', error }
             : { k: 'fail', error: null, detail: hostDetail(error) };
       }
-    } finally {
-      starting = false;
     }
     // A later save records the reissued call (chapter 10, Reissue).
     const saved = callSites.get(context);
     if (saved) {
       saved.now = this.host!.now;
-      saved.charged = charged;
+      saved.charged = meter.charged;
     }
-    if (reached) {
+    if (meter.refused) {
       // The saved suspension committed its Segment. Reissue can't roll it back.
       // A preempted Join body keeps its saved segment base (chapter 10).
       if (suspension) {
@@ -1651,7 +1634,7 @@ export class Run {
       // It faults at the call: a Join member at its own site (#1413).
       const site = 'site' in pending ? (pending as Member).site : undefined;
       this.fault(
-        'fuelPerRun',
+        this.fuelLimit,
         site
           ? site.frame.code.unit.code[site.pc]!
           : this.frame.code.unit.code[this.frame.pc]!,
@@ -2541,21 +2524,35 @@ export class Run {
     );
   }
 
+  /** The Fuel the Run has left: of its Cleanup Budget while cancelling. */
+  private fuelLeft(): number {
+    return this.cancelling
+      ? this.limits.cleanupBudget - (this.fuel - this.cleanupFrom!)
+      : this.limits.fuelPerRun - this.fuel;
+  }
+
+  /** The limit a charge the Run can't cover faults on. */
+  private get fuelLimit(): LimitName {
+    return this.cancelling ? 'cleanupBudget' : 'fuelPerRun';
+  }
+
+  /** Spends Fuel the Run can cover; a call's `Take` (call-meter.ts). */
+  private readonly spend = (fuel: number): boolean => {
+    if (this.charging && fuel > this.fuelLeft()) {
+      return false;
+    }
+    this.fuel += fuel;
+    return true;
+  };
+
   // Charge an amount, faulting at the current instruction if it can't pay.
   private payAmount(fuel: number, alloc: number) {
     if (!this.charging) {
       return;
     }
     const frame = this.frame;
-    if (
-      this.cancelling
-        ? this.fuel - this.cleanupFrom! + fuel > this.limits.cleanupBudget
-        : this.fuel + fuel > this.limits.fuelPerRun
-    ) {
-      throw new LimitFaultError(
-        this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
-        frame.pc,
-      );
+    if (fuel > this.fuelLeft()) {
+      throw new LimitFaultError(this.fuelLimit, frame.pc);
     }
     if (this.alloc + alloc > this.limits.allocPerRun) {
       throw new LimitFaultError('allocPerRun', frame.pc);
@@ -4812,9 +4809,7 @@ export class Run {
         ? { args: [...args] }
         : {}),
     };
-    let charged = 0;
-    let reached = false;
-    let starting = true;
+    const meter = new CallMeter(this.spend);
     const abort = new AbortController();
     if (op.mode === 'suspending') {
       this.crossingCall = { abort, id };
@@ -4846,22 +4841,7 @@ export class Run {
       binding: grant.binding,
       now: host.now,
       signal: abort.signal,
-      charge: (fuel: number) => {
-        if (!starting) {
-          throw new HostError('invalid value', 'Charge only while starting');
-        }
-        if (
-          this.charging &&
-          (this.cancelling
-            ? this.fuel - this.cleanupFrom! + fuel > this.limits.cleanupBudget
-            : this.fuel + fuel > this.limits.fuelPerRun)
-        ) {
-          reached = true;
-          throw new LimitReached('the Run can’t cover this charge');
-        }
-        this.fuel += fuel;
-        charged += fuel;
-      },
+      charge: meter.charge,
       answer: (v: Value, late?: { fuel: number }) =>
         host.answer(id, v, late?.fuel ?? 0),
       requestCharge: (fuel: number) => host.requestCharge(id, fuel),
@@ -4885,34 +4865,40 @@ export class Run {
     let result: unknown;
     this.host?.expose?.(listValues(args));
     try {
-      if (op.mode === 'immediate') {
-        result = op.do(call, ...args);
-      } else if (op.mode === 'fire-and-forget') {
-        op.fire(call, ...args);
-        result = nothing;
-      } else if (op.start) {
-        op.start(call, ...args);
-      } else {
-        this.forwardResult(op.run!(call, ...args), call);
-      }
+      result = meter.starting(() => {
+        if (op.mode === 'immediate') {
+          return op.do(call, ...args);
+        }
+        if (op.mode === 'fire-and-forget') {
+          op.fire(call, ...args);
+          return nothing;
+        }
+        if (op.start) {
+          op.start(call, ...args);
+        } else {
+          this.forwardResult(op.run!(call, ...args), call);
+        }
+        return undefined;
+      });
     } catch (error) {
-      starting = false;
-      if (reached) {
+      if (meter.refused) {
         // Cut off by its own `Charge`: neither a result nor a failure.
-        this.hostCrossing({ ...record, charged, ...refusal });
-        throw new LimitFaultError(
-          this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
-          this.frame.pc,
-        );
+        this.hostCrossing({ ...record, charged: meter.charged, ...refusal });
+        throw new LimitFaultError(this.fuelLimit, this.frame.pc);
       }
       throw this.failure(
         ctx,
         error instanceof HostScriptError ? error : null,
-        failed => this.hostCrossing({ ...record, charged, error: failed }),
+        failed =>
+          this.hostCrossing({
+            ...record,
+            charged: meter.charged,
+            error: failed,
+          }),
         hostDetail(error),
       );
     }
-    starting = false;
+    const { charged } = meter;
     let acknowledgement: Extract<RunRecord, { kind: 'scope' }> | undefined;
     if (scope) {
       if ('opens' in scope) {
@@ -4936,12 +4922,9 @@ export class Run {
         action: 'opens' in scope ? 'opened' : 'closed',
       };
     }
-    if (reached) {
+    if (meter.refused) {
       this.hostCrossing({ ...record, charged, ...refusal }, acknowledgement);
-      throw new LimitFaultError(
-        this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
-        this.frame.pc,
-      );
+      throw new LimitFaultError(this.fuelLimit, this.frame.pc);
     }
     if (op.mode === 'suspending') {
       this.hostCrossing({ ...record, charged });

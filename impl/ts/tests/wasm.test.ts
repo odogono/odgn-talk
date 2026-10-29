@@ -162,6 +162,40 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     return { lines, ends: ends(result.reports) };
   });
 
+  both('charge rejects bad amounts and stays refused', (core, nt) => {
+    const lines: string[] = [];
+    const outcomes: string[] = [];
+    const api = core.defineCapability('api', {
+      fetch: {
+        mode: 'immediate',
+        cost: { fuel: 0 },
+        do: call => {
+          for (const fuel of [-5, 1.5, 10, 1000, 1]) {
+            try {
+              call.charge(fuel);
+              outcomes.push('ok');
+            } catch (error) {
+              outcomes.push(
+                error instanceof Error && error.name === 'LimitReached'
+                  ? 'limit'
+                  : (error as { code: string }).code,
+              );
+            }
+          }
+          return nt.text('done');
+        },
+      },
+    });
+    const g = core.newGroup({ name: 'g', trace: l => lines.push(l) });
+    g.load({
+      name: 's',
+      source: 'on go\n  ask api to fetch\n  return it\nend go',
+      grants: { api: api.grant('all', undefined) },
+    }).deliver({ name: 'go', limits: { fuelPerRun: 100 } });
+    const result = g.pump(0n);
+    return { outcomes, lines, ends: ends(result.reports) };
+  });
+
   both(
     'charge requests: refusals, accepted, limit and inactive outcomes',
     async (core, nt) => {
