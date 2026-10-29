@@ -114,6 +114,37 @@ const Out = struct {
     }
 };
 
+/// A table of encoded entries, each written once: an entry whose bytes
+/// equal an earlier one's is that one.
+const Shared = struct {
+    entries: std.ArrayList([]u8) = .empty,
+    seen: std.StringHashMapUnmanaged(usize) = .empty,
+
+    fn deinit(t: *Shared, gpa: Allocator) void {
+        for (t.entries.items) |e| gpa.free(e);
+        t.entries.deinit(gpa);
+        t.seen.deinit(gpa);
+    }
+
+    /// The entry `bytes` is, adding it if it is new; takes `bytes`.
+    fn add(t: *Shared, gpa: Allocator, bytes: []u8) !usize {
+        if (t.seen.get(bytes)) |at| {
+            gpa.free(bytes);
+            return at;
+        }
+        errdefer gpa.free(bytes);
+        try t.entries.ensureUnusedCapacity(gpa, 1);
+        try t.seen.put(gpa, bytes, t.entries.items.len);
+        t.entries.appendAssumeCapacity(bytes);
+        return t.entries.items.len - 1;
+    }
+
+    fn write(t: *const Shared, o: *Out) !void {
+        try o.int(t.entries.items.len);
+        for (t.entries.items) |e| try o.bytes.appendSlice(o.gpa, e);
+    }
+};
+
 /// A save being read. Every read is checked, so bytes that run short or
 /// say something impossible are `invalid save`, never a crash.
 const In = struct {
@@ -633,9 +664,12 @@ const Saving = struct {
     iterators: std.ArrayList(*machine.Iterator) = .empty,
     readers: std.ArrayList(*binary.Reader) = .empty,
     replacements: std.ArrayList(*machine.Replacement) = .empty,
+    /// Each Run's segment base, in the `runs` section's `bases`.
+    bases: std.AutoHashMapUnmanaged(*const Run, usize) = .empty,
 
     fn deinit(s: *Saving) void {
         const gpa = s.o.gpa;
+        s.bases.deinit(gpa);
         s.runs.deinit(gpa);
         s.waits.deinit(gpa);
         s.iterators.deinit(gpa);
@@ -995,8 +1029,7 @@ const Saving = struct {
         try s.o.int(r.base);
         try s.o.int(r.segments);
         try s.o.flag(r.verdict);
-        try s.o.flag(r.segment_base != null);
-        if (r.segment_base) |b| try s.values(b);
+        try s.o.ref(s.bases.get(r));
         try s.frames(r, r.frames.items);
     }
 
@@ -1241,34 +1274,49 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     Sections.end(&sections, &n, o);
     // 6: each Script, in load order, by its code identities.
     Sections.begin(&sections, &n, o, .scripts);
+    // The Grants' declarations, each written once, in the order the Grants
+    // first meet them.
+    var declarations: Shared = .{};
+    defer declarations.deinit(gpa);
+    var grants: std.ArrayList(usize) = .empty;
+    defer grants.deinit(gpa);
+    for (g.scripts.items) |x| for (x.grants) |sg| {
+        var d: Out = .{ .gpa = gpa };
+        errdefer d.bytes.deinit(gpa);
+        const json = sg.declarations orelse try fingerprint.grantJson(gpa, sg.grant.capability, sg.kept);
+        defer if (sg.declarations == null) gpa.free(json);
+        try d.str(json);
+        // The kept Operations, with what a Grant the restore can't re-bind
+        // still needs for checking code against.
+        try d.str(sg.grant.capability.name);
+        var kept: usize = 0;
+        for (sg.kept) |k| kept += @intFromBool(k);
+        try d.int(kept);
+        for (sg.grant.capability.operations, sg.kept) |op, k| if (k) {
+            try d.str(op.name);
+            try d.str(modeName(op.mode));
+            try d.int(op.required());
+            try d.int(op.args.len);
+            try d.flag(op.command);
+            try d.int(op.labels.len);
+            for (op.labels) |l| try d.str(l);
+        };
+        try grants.append(gpa, try declarations.add(gpa, try d.bytes.toOwnedSlice(gpa)));
+    };
+    try declarations.write(o);
     try o.int(g.scripts.items.len);
+    var at: usize = 0;
     for (g.scripts.items) |x| {
+        defer at += x.grants.len;
         try o.str(x.name);
         try o.bytes.appendSlice(gpa, &machine.codeIdentity(x.name, x.source, .script, x.imports));
         try o.int(x.extensions.items.len);
         for (x.extensions.items) |e| try o.bytes.appendSlice(gpa, &e.identity);
         try s.limits(x.limits);
         try o.int(x.grants.len);
-        for (x.grants) |sg| {
+        for (x.grants, at..) |sg, k| {
             try o.str(sg.name);
-            const json = sg.declarations orelse try fingerprint.grantJson(gpa, sg.grant.capability, sg.kept);
-            defer if (sg.declarations == null) gpa.free(json);
-            try o.str(json);
-            // The kept Operations, with what a Grant the restore can't
-            // re-bind still needs for checking code against.
-            try o.str(sg.grant.capability.name);
-            var kept: usize = 0;
-            for (sg.kept) |k| kept += @intFromBool(k);
-            try o.int(kept);
-            for (sg.grant.capability.operations, sg.kept) |op, k| if (k) {
-                try o.str(op.name);
-                try o.str(modeName(op.mode));
-                try o.int(op.required());
-                try o.int(op.args.len);
-                try o.flag(op.command);
-                try o.int(op.labels.len);
-                for (op.labels) |l| try o.str(l);
-            };
+            try o.int(grants.items[k]);
             try o.flag(sg.revoked);
             try o.flag(sg.disabled);
         }
@@ -1301,6 +1349,17 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     for (g.scripts.items) |x| try s.runs.appendSlice(gpa, x.live.items);
     try o.int(g.scripts.items.len);
     for (g.scripts.items) |x| try o.int(x.live.items.len);
+    // The segment bases, each written once, in the order the Runs first
+    // meet them. Writing a repeat meets no new Function Value.
+    var bases: Shared = .{};
+    defer bases.deinit(gpa);
+    for (s.runs.items) |r| if (r.segment_base) |b| {
+        var d: Out = .{ .gpa = gpa };
+        errdefer d.bytes.deinit(gpa);
+        try writeValues(&d, s.tables, b);
+        try s.bases.put(gpa, r, try bases.add(gpa, try d.bytes.toOwnedSlice(gpa)));
+    };
+    try bases.write(o);
     try o.int(s.runs.items.len);
     for (s.runs.items) |r| try s.oneRun(r);
     Sections.end(&sections, &n, o);
@@ -1526,6 +1585,13 @@ pub const Result = struct {
     }
 };
 
+/// A saved Grant declaration, shared by the Grants that refer to it.
+const SavedDeclaration = struct {
+    json: []const u8,
+    capability: []const u8,
+    ops: []SavedOperation,
+};
+
 /// A saved Grant, kept until its Script is built.
 const SavedGrant = struct {
     name: []const u8,
@@ -1547,6 +1613,10 @@ const Restoring = struct {
     libraries: []?*Library,
     runs: std.ArrayList(*Run) = .empty,
     calls: []*capabilities.Call = &.{},
+    /// The `scripts` section's Grant declarations.
+    declarations: []const SavedDeclaration = &.{},
+    /// The `runs` section's segment bases, each read once.
+    bases: [][]*Value = &.{},
     iterators: std.ArrayList(*machine.Iterator) = .empty,
     readers: std.ArrayList(*binary.Reader) = .empty,
     replacements: std.ArrayList(*machine.Replacement) = .empty,
@@ -2081,8 +2151,9 @@ const Restoring = struct {
         x.base = try r.i.small(usize);
         x.segments = try r.i.small(u32);
         x.verdict = try r.i.flag();
-        if (try r.i.flag()) {
-            const base = try r.values();
+        if (try r.i.ref(r.bases.len)) |at| {
+            const base = try a.dupe(*Value, r.bases[at]);
+            for (base) |v| _ = v.retain();
             x.segment_base = base;
             if (!r.skim and base.len > s.variables.len) return error.InvalidSave;
         }
@@ -2442,6 +2513,29 @@ const Saved = struct {
     }
 };
 
+/// Reads one entry of the `scripts` section's Grant declarations.
+fn readDeclaration(r: *Restoring) Error!SavedDeclaration {
+    const k = r.keep();
+    const i = &r.i;
+    const json = try r.kept();
+    const capability = try r.kept();
+    const ops = try k.alloc(SavedOperation, try i.count());
+    for (ops) |*o| {
+        o.name = try r.kept();
+        const mode = try i.str();
+        o.mode = for (std.enums.values(capabilities.Mode)) |m| {
+            if (std.mem.eql(u8, modeName(m), mode)) break m;
+        } else return error.InvalidSave;
+        o.required = try i.small(usize);
+        o.total = try i.small(usize);
+        o.command = try i.flag();
+        const labels = try k.alloc([]const u8, try i.count());
+        for (labels) |*l| l.* = try r.kept();
+        o.labels = labels;
+    }
+    return .{ .json = json, .capability = capability, .ops = ops };
+}
+
 /// Reads a Script's saved state, re-binding its Grants: each the Host
 /// returns must match its saved declarations, and each it doesn't is kept
 /// revoked with them.
@@ -2465,23 +2559,8 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     for (grants) |*sg| {
         const saved: SavedGrant = blk: {
             const name = try r.kept();
-            const json = try r.kept();
-            const capability = try r.kept();
-            const ops = try k.alloc(SavedOperation, try i.count());
-            for (ops) |*o| {
-                o.name = try r.kept();
-                const mode = try i.str();
-                o.mode = for (std.enums.values(capabilities.Mode)) |m| {
-                    if (std.mem.eql(u8, modeName(m), mode)) break m;
-                } else return error.InvalidSave;
-                o.required = try i.small(usize);
-                o.total = try i.small(usize);
-                o.command = try i.flag();
-                const labels = try k.alloc([]const u8, try i.count());
-                for (labels) |*l| l.* = try r.kept();
-                o.labels = labels;
-            }
-            break :blk .{ .name = name, .json = json, .capability = capability, .ops = ops, .revoked = try i.flag(), .disabled = try i.flag() };
+            const d = r.declarations[try i.index(r.declarations.len)];
+            break :blk .{ .name = name, .json = d.json, .capability = d.capability, .ops = d.ops, .revoked = try i.flag(), .disabled = try i.flag() };
         };
         const rebound: ?*capabilities.Grant = if (r.options.grants) |x| x.call(x.context, out.name, saved.name) else null;
         if (rebound) |grant| {
@@ -2772,6 +2851,9 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     r.calls = calls;
     // The Scripts, read whole, then compiled again as first compiled.
     try sectionAt(&header, i, .scripts);
+    const declarations = try r.keep().alloc(SavedDeclaration, try i.count());
+    for (declarations) |*d| d.* = try readDeclaration(&r);
+    r.declarations = declarations;
     const script_count = try i.count();
     const saved = try a.alloc(Saved, script_count);
     var read: usize = 0;
@@ -2871,6 +2953,17 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         n.* = try i.count();
         total_runs += n.*;
     }
+    const bases = try a.alloc([]*Value, try i.count());
+    var bases_read: usize = 0;
+    defer {
+        for (bases[0..bases_read]) |b| machine.releaseValues(b, a);
+        a.free(bases);
+    }
+    for (bases) |*b| {
+        b.* = try r.values();
+        bases_read += 1;
+    }
+    r.bases = bases;
     if (try i.count() != total_runs) return error.InvalidSave;
     for (g.scripts.items, reloading, per_script) |s, c, n| {
         r.skim = c;

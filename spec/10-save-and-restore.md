@@ -227,6 +227,7 @@ Each Script's identity, limits, Grants, objects, variables and counters.
 
 | Field | Type | Is |
 | --- | --- | --- |
+| declarations | `list of grant declaration` | Each distinct Grant declaration once, in the order the Grants first meet it: the Scripts in load order, each one's Grants in order. Two are the same when their encoded bytes are. A Grant's `declaration` points here. |
 | scripts | `list of script` | In load order. |
 
 #### 7: runs (required)
@@ -236,6 +237,7 @@ Every live Run, Script by Script, in each Script's live order.
 | Field | Type | Is |
 | --- | --- | --- |
 | per script | `list of uint` | How many Runs each Script has, one per Script. It comes first, so a reader knows each Run's Script before it reads the Run's code positions. |
+| bases | `list of segment base` | Each distinct segment base once, in the order the Runs in `runs` first meet it. Two are the same when their encoded bytes are. A Run's `segment base` points here, and a Function Value in a base is met here, before `runs`. |
 | runs | `list of run` | The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list. |
 
 #### 8: work (required)
@@ -582,11 +584,27 @@ A Script's Grant, with what a restore that can't re-bind it still needs to check
 | Field | Type | Is |
 | --- | --- | --- |
 | name | `text` | Its name. |
+| declaration | `index` | Its declaration, in the `scripts` section's `declarations`. |
+| revoked | `bool` | Whether it is revoked. |
+| disabled | `bool` | Whether it is disabled. |
+
+#### grant declaration
+
+What a Grant declares, shared by every Grant that declares the same.
+
+| Field | Type | Is |
+| --- | --- | --- |
 | declarations | `text` | Its Capability and kept Operations as Host Manifest JSON (chapter 9). |
 | capability | `text` | Its Capability's name. |
 | operations | `list of operation` | Its kept Operations, in the Capability's order. |
-| revoked | `bool` | Whether it is revoked. |
-| disabled | `bool` | Whether it is disabled. |
+
+#### segment base
+
+The Script Variables a Segment started from, shared by every Run that started from the same.
+
+| Field | Type | Is |
+| --- | --- | --- |
+| variables | `list of value` | The Script Variables' values, in declaration order. |
 
 #### operation
 
@@ -660,7 +678,7 @@ A live Run.
 | base | `uint` | Its Segment's base. |
 | segments | `uint` | How many Segments it has started. |
 | verdict | `bool` | Whether its Decision verdict is sealed. |
-| segment base | `optional list of value` | Its Segment's rollback base, if it has one. |
+| segment base | `ref` | Its Segment's rollback base, if it has one, in the `runs` section's `bases`. |
 | frames | `list of frame` | Its call frames, innermost last. |
 
 #### preemption

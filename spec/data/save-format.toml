@@ -262,6 +262,11 @@ required = true
 holds = "Each Script's identity, limits, Grants, objects, variables and counters."
 
 [[section.field]]
+name = "declarations"
+type = "list of grant declaration"
+is = "Each distinct Grant declaration once, in the order the Grants first meet it: the Scripts in load order, each one's Grants in order. Two are the same when their encoded bytes are. A Grant's `declaration` points here."
+
+[[section.field]]
 name = "scripts"
 type = "list of script"
 is = "In load order."
@@ -276,6 +281,11 @@ holds = "Every live Run, Script by Script, in each Script's live order."
 name = "per script"
 type = "list of uint"
 is = "How many Runs each Script has, one per Script. It comes first, so a reader knows each Run's Script before it reads the Run's code positions."
+
+[[section.field]]
+name = "bases"
+type = "list of segment base"
+is = "Each distinct segment base once, in the order the Runs in `runs` first meet it. Two are the same when their encoded bytes are. A Run's `segment base` points here, and a Function Value in a base is met here, before `runs`."
 
 [[section.field]]
 name = "runs"
@@ -685,6 +695,25 @@ type = "text"
 is = "Its name."
 
 [[record.field]]
+name = "declaration"
+type = "index"
+is = "Its declaration, in the `scripts` section's `declarations`."
+
+[[record.field]]
+name = "revoked"
+type = "bool"
+is = "Whether it is revoked."
+
+[[record.field]]
+name = "disabled"
+type = "bool"
+is = "Whether it is disabled."
+
+[[record]]
+name = "grant declaration"
+holds = "What a Grant declares, shared by every Grant that declares the same."
+
+[[record.field]]
 name = "declarations"
 type = "text"
 is = "Its Capability and kept Operations as Host Manifest JSON (chapter 9)."
@@ -699,15 +728,14 @@ name = "operations"
 type = "list of operation"
 is = "Its kept Operations, in the Capability's order."
 
-[[record.field]]
-name = "revoked"
-type = "bool"
-is = "Whether it is revoked."
+[[record]]
+name = "segment base"
+holds = "The Script Variables a Segment started from, shared by every Run that started from the same."
 
 [[record.field]]
-name = "disabled"
-type = "bool"
-is = "Whether it is disabled."
+name = "variables"
+type = "list of value"
+is = "The Script Variables' values, in declaration order."
 
 [[record]]
 name = "operation"
@@ -952,8 +980,8 @@ is = "Whether its Decision verdict is sealed."
 
 [[record.field]]
 name = "segment base"
-type = "optional list of value"
-is = "Its Segment's rollback base, if it has one."
+type = "ref"
+is = "Its Segment's rollback base, if it has one, in the `runs` section's `bases`."
 
 [[record.field]]
 name = "frames"
