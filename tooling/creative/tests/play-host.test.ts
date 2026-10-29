@@ -993,3 +993,52 @@ test('a Breakpoint in a Library stops the Run that calls it', async () => {
     ['click in go', 3],
   ]);
 });
+
+test('Statement Steps move a stopped Run, and the session stays paused after it ends', async () => {
+  const project = fixture();
+  project.libraries.push({
+    name: 'labels',
+    source:
+      'on relabel target\n set the label of target to "Library"\nend relabel',
+  });
+  project.pages[0]!.elements[0]!.script =
+    'use relabel from labels\non click\n relabel me\n put 2 into n\nend click';
+  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
+  const { mirror, request } = hosted(project);
+  const at = () =>
+    mirror.stoppedRun?.frames.map(f => `${f.label}:${f.line}`).join(' < ');
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'script', owner: go }, line: 3 }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => at() === 'click in go:3');
+  request({ kind: 'statementStep', session: 1, step: 'in' });
+  await until(() => at() === 'relabel in Library labels:2 < click in go:3');
+  request({ kind: 'statementStep', session: 1, step: 'out' });
+  await until(() => at() === 'click in go:4');
+  request({ kind: 'statementStep', session: 1, step: 'over' });
+  await until(() => at() === undefined);
+  expect(mirror.paused).toBe(true);
+  // A Step that ended its Run leaves nothing armed for the next one.
+  request({ kind: 'breakpoints', session: 1, breakpoints: [] });
+  request({ kind: 'resume', session: 1 });
+  await until(() => !mirror.paused);
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(at()).toBeUndefined();
+  expect(mirror.paused).toBe(false);
+});

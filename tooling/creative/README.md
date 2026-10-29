@@ -865,6 +865,13 @@ Clicking a frame shows its line. Step is held back until the Run finishes,
 and the Message Box refuses lines until then. **Resume** finishes the Run and
 Play goes on; returning to Edit abandons it.
 
+While a Run is stopped, the Play controls add **Step In**, **Step Over** and
+**Step Out**, which move it by statement as chapter 12 describes: Step In
+follows a call or `send … and wait` into its Handler, Step Over runs it to
+completion, and Step Out runs until the current Handler returns. Each stops
+again where it lands, and other Runs move on only while a stepped Run waits.
+A Step that ends the Run leaves Play paused, for Step or Resume.
+
 Breakpoints belong to this browser's editing, not the Project: they are never
 saved, and they go when another Project opens. Present ignores them. A
 Breakpoint in a source edited since Play began fades and doesn't stop

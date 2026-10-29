@@ -245,7 +245,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [play-host.ts](src/play-host.ts) places `breakpoints` requests in the loaded
   code through the Group's debug controller, turns a stop into a Pause, sends
-  the stopped Run's frames as `stoppedRun`, and continues it on `resume`;
+  the stopped Run's frames as `stoppedRun`, and continues it on `resume`
+  or moves it on `statementStep`;
   [play.ts](src/play.ts) holds the controller and the debugger-aware Pump.
 - [scripts.ts](src/scripts.ts) adds the shared editor's breakpoint gutter
   (`@northtalk/editor/breakpoints`), fades Breakpoints in edited source and
