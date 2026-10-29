@@ -28,7 +28,7 @@ import {
   messageHandler,
   type LoadedMessageTarget,
 } from './message-script';
-import { runInEdit, type MessageReply } from './message';
+import { runInEdit, sessionCommand, type MessageReply } from './message';
 import {
   ownerId,
   scriptManifest,
@@ -270,6 +270,14 @@ export const mountMessageWindow = (
   };
 
   const run = async (text: string, context: Context): Promise<MessageReply> => {
+    const named = sessionCommand(
+      text,
+      availableScripts.find(script => script.id === context.id)?.source ?? '',
+      shell.editor.project.libraries,
+    );
+    if (named) {
+      return named;
+    }
     if (context.session === undefined) {
       const reply = await runInEdit(shell.editor, text, context.id);
       shell.redraw();
@@ -384,6 +392,10 @@ export const mountMessageWindow = (
   lsp.onDiagnostics = (uri, diagnostics) => {
     if (uri !== URI) {
       return;
+    }
+    // A Session Command isn't NorthTalk, so it has no diagnostics.
+    if (/^:(?:describe|apropos)\b/u.test(command().trimStart())) {
+      diagnostics = [];
     }
     // Only the command's own lines; the hidden Handler isn't the author's.
     const first = view.state.field(firstLine) - 1;

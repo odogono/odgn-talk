@@ -2,6 +2,7 @@
 // while browsing, or in Edit against the authored Project as one undoable
 // edit, through a session that sends no events.
 import { type Value } from '@northtalk/ts';
+import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
 import { PlaySession } from './play';
 
@@ -10,6 +11,44 @@ export type MessageReply = { error?: string; text?: string };
 
 const show = (value: Value): string | undefined =>
   value.kind === 'nothing' ? undefined : (value.asText() ?? String(value));
+
+/**
+ * `:describe` and `:apropos`, read from the context Script's source and the
+ * Project's Libraries without running anything, so they answer alike in
+ * Edit and while browsing. Undefined when `command` is neither.
+ */
+export const sessionCommand = (
+  command: string,
+  source: string,
+  libraries: readonly { name: string; source: string }[],
+): MessageReply | undefined => {
+  const match = /^:(describe|apropos)(?:\s+([^]*))?$/u.exec(command.trim());
+  if (!match) {
+    return undefined;
+  }
+  // A refusal prints as the Session Host prints it.
+  let refused: string | undefined;
+  const names = scriptNames(
+    source,
+    new Map(libraries.map(l => [l.name, l.source])),
+    reason => {
+      refused = `! ${reason}`;
+      throw new Error(refused);
+    },
+  );
+  try {
+    const rows = (match[1] === 'describe' ? describe : apropos)(
+      names,
+      (match[2] ?? '').trim(),
+    );
+    return { text: rows.join('\n') || undefined };
+  } catch (error) {
+    if (refused !== undefined) {
+      return { error: refused };
+    }
+    throw error;
+  }
+};
 
 // Waits never finish in Edit, so a command gets this many Pumps.
 const EDIT_PUMPS = 200;
