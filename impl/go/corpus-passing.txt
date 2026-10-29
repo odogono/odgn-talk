@@ -342,6 +342,9 @@ rewind/store-write
 rewind/unparked-segment-base
 save-restore/overdue-waits-fire-in-deadline-order
 save-restore/partial-restore-join-member
+save-restore/partial-restore-keep-mailbox
+save-restore/partial-restore-keep-mailbox-no-handler
+save-restore/partial-restore-keep-mailbox-request
 save-restore/partial-restore-library-importers
 save-restore/partial-restore-resumes-matched
 save-restore/partial-restore-send-failed

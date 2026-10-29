@@ -3,9 +3,9 @@
 ## Required base and delivery boundary
 
 - **Required base:** the PR for [#1821](https://github.com/odogono/odgn-talk/issues/1821), or its merged successor. Relevant sections: [chapter 10, Partial Restore](../../spec/10-save-and-restore.md#partial-restore) (Keeping the mailbox, The cap with a kept mailbox, Across Scripts, Reported), the `restore` request in [chapter 9](../../spec/09-embedding.md), `RestoreOptions` in [`talk.ts`](../../spec/embedding/talk.ts) and [`talk.go`](../../spec/embedding/talk.go), the `restore` record's `mailbox` key in [`corpus.toml`](../../spec/data/corpus.toml), and [ADR 0143](../adr/0143-a-restore-may-reload-only-the-scripts-whose-code-changed.md#keeping-the-mailbox).
-- **Implemented in:** the specification, the TS embedding declaration, the ADR amendment and the Trace key ([#1821](https://github.com/odogono/odgn-talk/issues/1821)). No Core reads `keepMailbox` or `mailbox=keep` yet.
-- **Remaining work:** Zig and Go ([#1822](https://github.com/odogono/odgn-talk/issues/1822)), TS ([#1823](https://github.com/odogono/odgn-talk/issues/1823)) and Elixir ([#1824](https://github.com/odogono/odgn-talk/issues/1824)).
-- **Approval still needed:** none for the three staged cases below; the maintainer approved their first blessing on 2026-10-29 for #1821. Re-blessing after an implementation changes them needs review again.
+- **Implemented in:** the specification, the TS embedding declaration, the ADR amendment and the Trace key ([#1821](https://github.com/odogono/odgn-talk/issues/1821)); TS ([#1823](https://github.com/odogono/odgn-talk/issues/1823)); Zig and Go ([#1822](https://github.com/odogono/odgn-talk/issues/1822)), which moved the staged cases into `corpus/save-restore/`.
+- **Remaining work:** Elixir ([#1824](https://github.com/odogono/odgn-talk/issues/1824)).
+- **Approval still needed:** none for the three cases below; the maintainer approved their first blessing on 2026-10-29 for #1821. Re-blessing after an implementation changes them needs review again.
 
 ## Staged Go declaration
 
@@ -19,9 +19,9 @@ The Go API test requires [`talk.go`](../../spec/embedding/talk.go) to match `imp
 	KeepMailbox bool
 ```
 
-## Staged corpus cases
+## Corpus cases
 
-Both the TS and Zig corpus jobs run every case under `corpus/`, so these cases are staged in [`cases/`](1709-partial-restore-keep-mailbox/cases/) rather than `corpus/save-restore/`. Move them there in the first implementation PR that passes them, and re-bless on the other Core when it lands.
+Both the TS and Zig corpus jobs run every case under `corpus/`, so these cases were staged here until both passed them; they now live in [`corpus/save-restore/`](../../corpus/save-restore/), unchanged.
 
 | Case | Pins |
 | --- | --- |
