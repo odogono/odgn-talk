@@ -83,10 +83,14 @@ const breakpoints = StateField.define<{
   },
 });
 
-/** Each line with a breakpoint, from 1. */
+/** Each line with a breakpoint, from 1; none without the gutter. */
 export const breakpointLines = (state: EditorState): number[] => {
   const out: number[] = [];
-  const iter = state.field(breakpoints).lines.iter();
+  const field = state.field(breakpoints, false);
+  if (!field) {
+    return out;
+  }
+  const iter = field.lines.iter();
   while (iter.value) {
     out.push(state.doc.lineAt(iter.from).number);
     iter.next();

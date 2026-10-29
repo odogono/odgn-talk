@@ -137,7 +137,7 @@ export const variablesOf = (
   owners: ReadonlyMap<unknown, number>,
 ): VariableScript[] => {
   const vars = new Map(
-    play.group.inspect().scripts.map(script => [script.name, script.vars]),
+    play.inspection().scripts.map(script => [script.name, script.vars]),
   );
   const encodeValue = valueEncoder(play, owners);
   const ranked: [number, VariableScript][] = [];

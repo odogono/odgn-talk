@@ -14,6 +14,7 @@ import {
   type Project,
 } from '../src/model';
 import { firstView, PlayHost } from '../src/play-host';
+import { scriptOwners } from '../src/script-manifest';
 import { PlayMirror } from '../src/play-mirror';
 import {
   type PlayRequest,
@@ -899,4 +900,96 @@ test(':fuel reports what a command and the Runs it spawns spend', async () => {
     kind: 'message',
     error: 'Usage: :fuel <command>',
   });
+});
+
+test('a Breakpoint stops a Run partway as a Pause, and Resume finishes it', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'on click\n put 1 into n\n set the label of me to "half"\n set the label of me to "done " & n\nend click';
+  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
+  const { mirror, request, element } = hosted(project);
+  const label = () => {
+    const e = element('go');
+    return e.kind === 'button' ? e.label : undefined;
+  };
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'script', owner: go }, line: 4 }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  expect(mirror.paused).toBe(true);
+  expect(label()).toBe('half');
+  const [frame] = mirror.stoppedRun!.frames;
+  expect(frame).toMatchObject({
+    label: 'click in go',
+    line: 4,
+    place: { kind: 'script', owner: go },
+  });
+  expect(frame!.locals).toContainEqual(['n', { kind: 'plain', text: '1' }]);
+  // Frame Steps and Message Box lines wait for the stopped Run.
+  request({ kind: 'step', session: 1 });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(label()).toBe('half');
+  request({ kind: 'resume', session: 1 });
+  await until(() => label() === 'done 1');
+  expect(mirror.paused).toBe(false);
+  expect(mirror.stoppedRun).toBeUndefined();
+});
+
+test('Stop abandons a Run stopped at a Breakpoint', async () => {
+  const project = fixture();
+  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
+  const { mirror, request } = hosted(project);
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'script', owner: go }, line: 2 }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  request({ kind: 'stop', session: 1 });
+  await until(() => mirror.stopped);
+});
+
+test('a Breakpoint in a Library stops the Run that calls it', async () => {
+  const project = fixture();
+  project.libraries.push({
+    name: 'labels',
+    source:
+      'on relabel target\n set the label of target to "Library"\nend relabel',
+  });
+  project.pages[0]!.elements[0]!.script =
+    'use relabel from labels\non click\n relabel me\nend click';
+  const { mirror, request } = hosted(project);
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'library', index: 0 }, line: 2 }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  expect(mirror.stoppedRun!.frames.map(f => [f.label, f.line])).toEqual([
+    ['relabel in Library labels', 2],
+    ['click in go', 3],
+  ]);
 });

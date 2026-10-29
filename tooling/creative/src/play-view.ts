@@ -14,10 +14,13 @@ import { type Element, type Project, type TextElement } from './model';
 import { firstView } from './play-host';
 import { commitDrawings, PlayMirror, type MirrorPage } from './play-mirror';
 import { mountPlayPrompts } from './play-prompts';
+import { type CodeSelection } from './code-browser-panel';
 import {
+  type FrameView,
   type PlayRequest,
   type PlayResponse,
   type ReaderMessage,
+  type SourcePlace,
 } from './play-protocol';
 import { ReaderTextHistory } from './play-text';
 import {
@@ -171,7 +174,63 @@ export const mountPlay = (shell: StackShell): void => {
   const variables = new VariablesWindow(
     index => selectOwner(owners, generation, index),
     () => sendWatches(),
+    frame => {
+      const at = stoppedAt(frame);
+      if (at) {
+        shell.breakpoints.showStopped(at);
+      }
+    },
   );
+  // Breakpoints (ADR 0147) go to a browsing session, placed in the Project
+  // as it was loaded; those in source edited since then stay behind.
+  const placeOf = (source: CodeSelection): SourcePlace | undefined => {
+    if (source.kind === 'library') {
+      const index = libraries.findIndex(l => l.id === source.id);
+      return index < 0 ? undefined : { kind: 'library', index };
+    }
+    const owner = playing && ownerById(playing, source.id);
+    const index = owner ? owners.indexOf(owner) : -1;
+    return index < 0 ? undefined : { kind: 'script', owner: index };
+  };
+  const loadedSource = (source: CodeSelection): string | undefined => {
+    const place = placeOf(source);
+    return place?.kind === 'library'
+      ? loadedLibraries[place.index]
+      : place && loadedScripts[place.owner];
+  };
+  let sentBreakpoints = '';
+  const sendBreakpoints = () => {
+    if (mode !== 'browse' || !session || session.stopped) {
+      return;
+    }
+    const breakpoints = shell.breakpoints
+      .all()
+      .flatMap(({ lines, source, text }) => {
+        const place = placeOf(source);
+        return place && loadedSource(source) === text
+          ? lines.map(line => ({ line, place }))
+          : [];
+      });
+    const json = JSON.stringify(breakpoints);
+    if (json !== sentBreakpoints) {
+      sentBreakpoints = json;
+      post({ kind: 'breakpoints', session: sessionId, breakpoints });
+    }
+  };
+  shell.breakpoints.onChange(sendBreakpoints);
+  // Where a frame's line is in the authored Project, if it is still there.
+  const stoppedAt = (frame: FrameView | undefined) => {
+    const place = frame?.place;
+    const source: CodeSelection | undefined =
+      place?.kind === 'library'
+        ? libraries[place.index]?.id === undefined
+          ? undefined
+          : { kind: 'library', id: libraries[place.index]!.id! }
+        : place && owners[place.owner]
+          ? { kind: 'script', id: ownerId(owners[place.owner]!) }
+          : undefined;
+    return source && { line: frame!.line, source };
+  };
   // Watches go to a browsing session; the worker runs them while paused.
   const sendWatches = () => {
     if (mode === 'browse' && session && !session.stopped) {
@@ -244,6 +303,10 @@ export const mountPlay = (shell: StackShell): void => {
   // Problem owners by the place the worker names, in the authored Project.
   let owners: ReturnType<typeof scriptOwners<DeepReadonly<Project>>> = [];
   let libraries: DeepReadonly<Project['libraries']> = [];
+  // Each owner's Script and each Library's source as the session loaded
+  // them; authored edits change the owners in place.
+  let loadedScripts: string[] = [];
+  let loadedLibraries: string[] = [];
   let mode: PlayMode | undefined;
   let recorder: Recorder | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
@@ -369,9 +432,15 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     const wasPaused = session.paused;
+    const wasStopped = JSON.stringify(session.stoppedRun);
     session.apply(response);
     if (mode === 'browse') {
       variables.context(sessionId, session.messageTargets, session.paused);
+      variables.stoppedRun(session.stoppedRun);
+      if (JSON.stringify(session.stoppedRun) !== wasStopped) {
+        shell.breakpoints.showStopped(stoppedAt(session.stoppedRun?.frames[0]));
+        drawModes();
+      }
     }
     if (session.paused !== wasPaused) {
       drawModes();
@@ -711,6 +780,8 @@ export const mountPlay = (shell: StackShell): void => {
     clearInterval(variablesTimer);
     variablesTimer = undefined;
     variables.end();
+    shell.breakpoints.setLoaded(undefined);
+    shell.breakpoints.showStopped(undefined);
     void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {
@@ -721,7 +792,12 @@ export const mountPlay = (shell: StackShell): void => {
     pauseButton.textContent = paused ? 'Resume' : 'Pause';
     pauseButton.setAttribute('aria-pressed', String(paused));
     pauseButton.disabled = !live;
-    stepButton.disabled = !paused;
+    // A frame can't move on until a stopped Run finishes (ADR 0147).
+    const stopped = paused && Boolean(session!.stoppedRun);
+    stepButton.disabled = !paused || stopped;
+    stepButton.title = stopped
+      ? 'Finish the stopped Run first'
+      : "Step one frame (⌘')";
     reader.classList.toggle('paused', paused);
     browseTool.setAttribute(
       'aria-pressed',
@@ -792,6 +868,8 @@ export const mountPlay = (shell: StackShell): void => {
     playing = shell.editor.project as Project;
     owners = scriptOwners(shell.editor.project);
     libraries = [...shell.editor.project.libraries];
+    loadedScripts = owners.map(owner => owner.script ?? '');
+    loadedLibraries = libraries.map(library => library.source);
     sessionId++;
     profiler.reset(sessionId);
     captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
@@ -823,6 +901,9 @@ export const mountPlay = (shell: StackShell): void => {
     if (mode === 'browse') {
       variablesTimer = setInterval(refreshVariables, VARIABLES_REFRESH);
       sendWatches();
+      sentBreakpoints = '';
+      shell.breakpoints.setLoaded(loadedSource);
+      sendBreakpoints();
       byId('desk').append(toolbar, reader);
     } else {
       document.body.append(toolbar, reader);
@@ -914,7 +995,7 @@ export const mountPlay = (shell: StackShell): void => {
     post({ kind: session.paused ? 'resume' : 'pause', session: sessionId });
   };
   const step = () => {
-    if (session && !session.stopped && session.paused) {
+    if (session && !session.stopped && session.paused && !session.stoppedRun) {
       post({ kind: 'step', session: sessionId });
     }
   };
@@ -1082,6 +1163,8 @@ export const mountPlay = (shell: StackShell): void => {
       leave(false);
     } else {
       draw();
+      // An edit leaves its source's Breakpoints behind until the next Play.
+      sendBreakpoints();
     }
   });
   const syncMessage = mountMessageWindow(shell, {

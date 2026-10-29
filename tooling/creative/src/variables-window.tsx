@@ -2,12 +2,14 @@
 // Session, read-only. It keeps the last values it showed after the session
 // ends, until the next one starts, as the Errors window keeps its list.
 // Its Watches (#1210) are kept across sessions of one Project, and are
-// evaluated by the worker only while Play is paused (ADR 0129).
+// evaluated by the worker only while Play is paused (ADR 0129). A Run stopped
+// at a Breakpoint shows its frames and their locals first (ADR 0147).
 import { signal, type Signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import { render } from 'preact';
 import { byId } from './dom';
 import { copySource } from './copy-source';
+import { type FrameView, type StoppedRun } from './play-protocol';
 import {
   rowValues,
   sourceOf,
@@ -196,6 +198,61 @@ const InspectedSection = ({
         onSelect={shown.onSelect}
         value={shown.value}
       />
+    </section>
+  ) : null;
+};
+
+/** A stopped Run's frames, innermost first, each opening its line. */
+const StoppedSection = ({
+  expanded,
+  onFrame,
+  onSelect,
+  onToggle,
+  stopped,
+}: {
+  expanded: ReadonlySet<string>;
+  onFrame: (frame: FrameView) => void;
+  onSelect: (owner: number) => void;
+  onToggle: (key: string) => void;
+  stopped: Signal<StoppedRun | undefined>;
+}) => {
+  const run = stopped.value;
+  return run ? (
+    <section className="variables-stopped">
+      <h3>Stopped at a Breakpoint</h3>
+      {run.frames.map((frame, index) => (
+        <section className="variables-script variables-frame" key={index}>
+          <h4>
+            <button
+              disabled={!frame.place}
+              onClick={() => onFrame(frame)}
+              title={frame.place ? 'Show this line' : undefined}
+              type="button"
+            >
+              {frame.label} · line {frame.line}
+            </button>
+          </h4>
+          <ul>
+            {variableRows(
+              {
+                label: frame.label,
+                script: `frame:${run.run}:${index}`,
+                vars: frame.locals,
+              },
+              expanded,
+            ).map(row => (
+              <Row
+                changes={0}
+                key={row.key}
+                onSelect={onSelect}
+                onToggle={onToggle}
+                row={row}
+              />
+            ))}
+          </ul>
+          {frame.locals.length ? null : <p className="muted">No locals.</p>}
+        </section>
+      ))}
     </section>
   ) : null;
 };
@@ -425,22 +482,33 @@ let nextWatch = 1;
 
 const VariablesPanel = ({
   inspected,
+  onFrame,
   onSelect,
   onToggle,
   shown,
+  stopped,
   update,
   watching,
 }: {
   inspected: Signal<Inspected | undefined>;
+  onFrame: (frame: FrameView) => void;
   onSelect: (owner: number) => void;
   onToggle: (key: string) => void;
   shown: Signal<Shown>;
+  stopped: Signal<StoppedRun | undefined>;
   update: (change: (watches: readonly ShownWatch[]) => ShownWatch[]) => void;
   watching: Signal<Watching>;
 }) => {
   const { changes, ended, expanded, scripts } = shown.value;
   return (
     <>
+      <StoppedSection
+        expanded={expanded}
+        onFrame={onFrame}
+        onSelect={onSelect}
+        onToggle={onToggle}
+        stopped={stopped}
+      />
       <WatchesSection
         changes={changes}
         expanded={expanded}
@@ -497,20 +565,27 @@ export class VariablesWindow {
     watches: [],
   });
   readonly #inspected = signal<Inspected | undefined>(undefined);
+  readonly #stopped = signal<StoppedRun | undefined>(undefined);
   #inspections = 0;
   #values = new Map<string, string>();
 
-  /** `onWatches` hears each change to the list of Watches. */
+  /**
+   * `onWatches` hears each change to the list of Watches, and `onFrame` each
+   * click on a stopped Run's frame.
+   */
   constructor(
     onSelect: (owner: number) => void,
     private readonly onWatches: () => void = () => {},
+    onFrame: (frame: FrameView) => void = () => {},
   ) {
     render(
       <VariablesPanel
         inspected={this.#inspected}
+        onFrame={onFrame}
         onSelect={onSelect}
         onToggle={key => this.#toggle(key)}
         shown={this.#shown}
+        stopped={this.#stopped}
         update={change => {
           const current = this.#watching.value;
           this.#watching.value = {
@@ -650,6 +725,14 @@ export class VariablesWindow {
   /** Keeps the values shown, marked as from the ended session. */
   end(): void {
     this.#shown.value = { ...this.#shown.value, ended: true };
+    this.#stopped.value = undefined;
+  }
+
+  /** Shows the Run a Breakpoint stopped, or that none is. */
+  stoppedRun(run: StoppedRun | undefined): void {
+    if (JSON.stringify(run) !== JSON.stringify(this.#stopped.value)) {
+      this.#stopped.value = run;
+    }
   }
 
   /** Shows a refresh, counting a change for each row whose value differs. */

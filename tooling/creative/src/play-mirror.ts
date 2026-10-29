@@ -12,7 +12,11 @@ import { ReceivedDrawing } from './drawing';
 import { type StackEditor } from './editing';
 import { type Element, type RichText, type TextElement } from './model';
 import { ownerById, ownerId, type ScriptOwner } from './script-manifest';
-import { type PlayView, type PromptView } from './play-protocol';
+import {
+  type PlayView,
+  type PromptView,
+  type StoppedRun,
+} from './play-protocol';
 import { type ReaderTextPlay } from './play-text';
 
 export type MirrorPage = PlayView['page'] & { index: number };
@@ -24,6 +28,8 @@ export class PlayMirror implements ReaderTextPlay {
   designWidth = 0;
   navigating = false;
   paused = false;
+  /** The Run a Breakpoint stopped, while the session is paused there. */
+  stoppedRun: StoppedRun | undefined;
   stopped = false;
   wantsFrames = false;
   prompt: PromptView | undefined;
@@ -80,6 +86,7 @@ export class PlayMirror implements ReaderTextPlay {
     this.designWidth = view.designWidth;
     this.navigating = view.navigating;
     this.paused = view.paused;
+    this.stoppedRun = view.stoppedRun;
     this.stopped = view.stopped;
     this.wantsFrames = view.wantsFrames;
     this.prompt = view.prompt;

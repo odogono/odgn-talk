@@ -27,14 +27,15 @@ import {
   shape,
   text,
   type Call,
-  type Group,
   type HostObject,
   type ObjectElements,
   type ObjectKind,
   type PropDef,
   type PumpResult,
+  type TsGroup,
   type Value,
 } from '@northtalk/ts';
+import type { DebugController } from '@northtalk/ts/debug';
 import {
   type CanvasElement,
   type Element,
@@ -176,9 +177,35 @@ export class PlaySession {
   get owners(): ReadonlyMap<string, ScriptOwner> {
     return this.#owners;
   }
+  /** The Library a loaded code unit was compiled from, if it was one. */
+  libraryOf(unit: string): DeepReadonly<ProjectLibrary> | undefined {
+    return this.#librarySources.get(unit);
+  }
+
+  #debug: DebugController | undefined;
+  /**
+   * The Group's debug controller, made on first use: once made, the Group
+   * steps every instruction through it, so a session without Breakpoints
+   * never asks (ADR 0147).
+   */
+  get debug(): DebugController {
+    return (this.#debug ??= this.group.debug());
+  }
+  /** Whether the debug controller has been made. */
+  get debugging(): boolean {
+    return this.#debug !== undefined;
+  }
+  /** The Group's state, read without a Host Input while a Run is stopped. */
+  inspection() {
+    return this.debugPaused ? this.debug.snapshot() : this.group.inspect();
+  }
+  /** Whether a Run is stopped at a Breakpoint or Statement Step. */
+  get debugPaused(): boolean {
+    return this.#debug?.isPaused ?? false;
+  }
   /** This session's playing sounds, owned by the Scripts that started them. */
   readonly sounds: SoundBoard;
-  readonly group: Group;
+  readonly group: TsGroup;
   readonly performance: PerformanceCapture;
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
@@ -1154,8 +1181,13 @@ export class PlaySession {
   pumps = 0;
 
   /** One bounded turn; the browser schedules another turn only after yielding. */
-  /** `outOfBand` Pumps, run while paused, stay out of the Pump peaks. */
-  pump(now: bigint, outOfBand = false) {
+  /**
+   * `outOfBand` Pumps, run while paused, stay out of the Pump peaks.
+   * `advance`, given, continues a Pump the debugger stopped instead of
+   * starting one. A Pump that stops returns at once, its result provisional:
+   * it finishes, and is accounted, when a later `advance` completes it.
+   */
+  pump(now: bigint, outOfBand = false, advance?: () => PumpResult) {
     this.pumps++;
     if (
       this.#closing &&
@@ -1163,10 +1195,15 @@ export class PlaySession {
     ) {
       this.#finishNavigation();
     }
-    const result = this.group.pump(now, {
-      fuelSlice: 1000,
-      fuelCap: PUMP_FUEL,
-    });
+    const result =
+      advance?.() ??
+      this.group.pump(now, {
+        fuelSlice: 1000,
+        fuelCap: PUMP_FUEL,
+      });
+    if (this.debugPaused) {
+      return result;
+    }
     this.fuel.observe(result.reports);
     this.performance.reports(
       result.reports,
@@ -1297,6 +1334,14 @@ export class PlaySession {
 
   stop(now: bigint): void {
     if (this.stopped) {
+      return;
+    }
+    if (this.debugPaused) {
+      // The Group refuses every call while a Run is stopped, so the stopped
+      // Run is abandoned with the session rather than asked to stop.
+      this.stopped = true;
+      this.sounds.stopAll();
+      this.notices.length = 0;
       return;
     }
     this.stopped = true;
