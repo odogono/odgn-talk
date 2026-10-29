@@ -619,7 +619,7 @@ export const mountPlay = (shell: StackShell): void => {
         .map(element => {
           if (
             activeText?.history.element === element &&
-            (play.stopped ||
+            (play.ended ||
               play.navigating ||
               !play.isVisible(element) ||
               !element.editable)
@@ -677,7 +677,7 @@ export const mountPlay = (shell: StackShell): void => {
       hidden: !visible,
       ...(element.kind === 'text' && {
         contentEditable:
-          element.editable && visible && !play.stopped && !play.navigating
+          element.editable && visible && !play.ended && !play.navigating
             ? 'true'
             : 'false',
       }),
@@ -814,7 +814,7 @@ export const mountPlay = (shell: StackShell): void => {
       frameRequest = undefined;
     }
     silence();
-    session.stopped = true;
+    session.ended = true;
     clearInterval(variablesTimer);
     variablesTimer = undefined;
     variables.end();

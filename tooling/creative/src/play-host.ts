@@ -140,7 +140,7 @@ export const firstView = (
     heldElements: heldElements(play),
     navigating: false,
     paused: false,
-    stopped: false,
+    ended: false,
     wantsFrames: false,
     prompt: undefined,
     notices: [],
@@ -295,7 +295,7 @@ export class PlayHost {
           request.pageIndex === session.pageIndex &&
           element?.kind === 'text' &&
           element.editable &&
-          !session.stopped &&
+          !session.ended &&
           !session.navigating &&
           session.isVisible(element)
         ) {
@@ -658,7 +658,7 @@ export class PlayHost {
 
   #schedule(delay = 0): void {
     const session = this.#session;
-    if (!session || session.stopped) {
+    if (!session || session.ended) {
       return;
     }
     if (this.#timer !== undefined) {
@@ -958,7 +958,7 @@ export class PlayHost {
       stoppedRun,
       this.#play.paused,
       session.navigating,
-      session.stopped,
+      session.ended,
       session.wantsFrames,
       prompt?.id,
     ]);
@@ -997,7 +997,7 @@ export class PlayHost {
         navigating: session.navigating,
         paused: this.#play.paused,
         ...(stoppedRun ? { stoppedRun } : {}),
-        stopped: session.stopped,
+        ended: session.ended,
         wantsFrames: session.wantsFrames,
         prompt,
         notices,

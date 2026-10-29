@@ -165,6 +165,8 @@ export type PlayView = {
   drawings: DrawingView[];
   /** `edit` is the last reader edit the worker applied to that Element. */
   elements: { edit?: number; element: Element; shown: boolean }[];
+  /** Whether the session has ended; a Stopped Run is `stoppedRun`. */
+  ended: boolean;
   full: boolean;
   /** Elements a held press reports to, each frame, with `pointerHeld`. */
   heldElements: string[];
@@ -189,7 +191,6 @@ export type PlayView = {
   problems: ProblemView[];
   prompt: PromptView | undefined;
   session: number;
-  stopped: boolean;
   /** The Run a Breakpoint stopped, while the session is paused there. */
   stoppedRun?: StoppedRun;
   wantsFrames: boolean;

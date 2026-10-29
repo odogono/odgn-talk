@@ -170,7 +170,7 @@ test('sounds play through the page and stop with the session', async () => {
 test('Stop is acknowledged once the session has stopped, and ends it', () => {
   const { request, replies, views } = hosted(fixture());
   request({ kind: 'stop', session: 1 });
-  expect(views.at(-1)!.stopped).toBe(true);
+  expect(views.at(-1)!.ended).toBe(true);
   expect(replies.at(-1)).toEqual({ id: 2, response: { kind: 'done' } });
   // The ended session's input is answered and dropped.
   const count = views.length;
@@ -996,7 +996,7 @@ test('Stop abandons a Run stopped at a Breakpoint', async () => {
   });
   await until(() => mirror.stoppedRun !== undefined);
   request({ kind: 'stop', session: 1 });
-  await until(() => mirror.stopped);
+  await until(() => mirror.ended);
 });
 
 test('a Breakpoint in a Library stops the Run that calls it', async () => {

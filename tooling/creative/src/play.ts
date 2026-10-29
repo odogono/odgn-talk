@@ -475,7 +475,7 @@ export class PlaySession {
       user: {
         ask: (call, prompt) => this.#ask(call, prompt),
         notify: (message, title) => {
-          if (!this.stopped) {
+          if (!this.ended) {
             this.notices.push({ message, title });
             this.changed = true;
           }
@@ -575,7 +575,7 @@ export class PlaySession {
     }
   }
 
-  stopped = false;
+  ended = false;
   changed = false;
 
   constructor(
@@ -744,7 +744,7 @@ export class PlaySession {
     target: number | undefined,
     expression: boolean,
   ): MessageOutcome {
-    if (this.stopped || this.navigating) {
+    if (this.ended || this.navigating) {
       return { ok: false, error: 'The Page is changing; try again.' };
     }
     if (target !== undefined) {
@@ -824,7 +824,7 @@ export class PlaySession {
   #commandRequests = new Map<string, { error?: string }>();
 
   get messageTargets(): LoadedMessageTarget[] {
-    return this.stopped
+    return this.ended
       ? []
       : [...this.#targets.values()].map(({ id, label, source, manifest }) => ({
           id,
@@ -1024,7 +1024,7 @@ export class PlaySession {
 
   /** Changes Page as a Script's `go to` does, by closing this one first. */
   goTo(index: number): void {
-    if (!this.stopped && !this.#closing) {
+    if (!this.ended && !this.#closing) {
       this.#requestedPage = index;
     }
   }
@@ -1120,7 +1120,7 @@ export class PlaySession {
   }
 
   send(owner: ScriptOwner, name: PlayMessage, args: Value[] = []): void {
-    if (this.stopped || this.navigating) {
+    if (this.ended || this.navigating) {
       return;
     }
     try {
@@ -1141,7 +1141,7 @@ export class PlaySession {
 
   /** Whether any Script handles `frame`, so the browser should ask for frames. */
   get wantsFrames(): boolean {
-    return !this.stopped && this.#frames.size > 0;
+    return !this.ended && this.#frames.size > 0;
   }
 
   /**
@@ -1150,7 +1150,7 @@ export class PlaySession {
    * one; its next `elapsed` covers the time since the one it last got.
    */
   frame(now: bigint): void {
-    if (this.stopped || this.navigating) {
+    if (this.ended || this.navigating) {
       return;
     }
     for (const [name, state] of this.#frames) {
@@ -1212,7 +1212,7 @@ export class PlaySession {
     this.#releaseDrawings(result);
     const clones = this.#pendingClones;
     this.#pendingClones = [];
-    if (!this.stopped) {
+    if (!this.ended) {
       this.#load(
         clones.filter(element => this.#tree.pageOf(element) === this.page),
       );
@@ -1262,7 +1262,7 @@ export class PlaySession {
     }
     const target = this.#requestedPage;
     this.#requestedPage = undefined;
-    if (!this.stopped && target !== undefined && target !== this.pageIndex) {
+    if (!this.ended && target !== undefined && target !== this.pageIndex) {
       const cancel = new AbortController();
       const request = this.group.request(
         this.#objects.get(this.page)!,
@@ -1333,18 +1333,18 @@ export class PlaySession {
   }
 
   stop(now: bigint): void {
-    if (this.stopped) {
+    if (this.ended) {
       return;
     }
     if (this.debugPaused) {
       // The Group refuses every call while a Run is stopped, so the stopped
       // Run is abandoned with the session rather than asked to stop.
-      this.stopped = true;
+      this.ended = true;
       this.sounds.stopAll();
       this.notices.length = 0;
       return;
     }
-    this.stopped = true;
+    this.ended = true;
     // Stop silences every sound at once, before Scripts are asked to stop
     // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();

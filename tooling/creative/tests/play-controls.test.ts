@@ -5,14 +5,14 @@ import type { StoppedRun } from '../src/play-protocol';
 const view = (o: Partial<ControlsView> = {}): ControlsView => ({
   navigating: false,
   paused: false,
-  stopped: false,
+  ended: false,
   ...o,
 });
 const stoppedRun = { frames: [] } as unknown as StoppedRun;
 
 describe('controls', () => {
   test('with no session, or an ended one, nothing is allowed', () => {
-    for (const v of [undefined, view({ stopped: true, paused: true })]) {
+    for (const v of [undefined, view({ ended: true, paused: true })]) {
       expect(controls(v, 'browse')).toEqual({
         live: false,
         paused: false,
