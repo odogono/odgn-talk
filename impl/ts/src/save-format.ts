@@ -110,6 +110,33 @@ export class SaveWriter {
     }
   }
 
+  /** An unsigned LEB128 integer of any size, such as a Number's coefficient. */
+  wideUint(v: bigint): this {
+    if (v < 0n) {
+      throw new RangeError(`uint out of range: ${v}`);
+    }
+    while (v >= 0x80n) {
+      this.byte(Number(v & 0x7fn) | 0x80);
+      v >>= 7n;
+    }
+    return this.byte(Number(v));
+  }
+
+  /** A signed LEB128 integer of any size, such as a far deadline. */
+  wideSint(v: bigint): this {
+    for (;;) {
+      const low = Number(v & 0x7fn);
+      v >>= 7n;
+      if (
+        (v === 0n && (low & 0x40) === 0) ||
+        (v === -1n && (low & 0x40) !== 0)
+      ) {
+        return this.byte(low);
+      }
+      this.byte(low | 0x80);
+    }
+  }
+
   bool(b: boolean): this {
     return this.byte(b ? 1 : 0);
   }
@@ -217,6 +244,54 @@ export class SaveReader {
       }
       shift += 7n;
     }
+  }
+
+  /** An unsigned LEB128 integer below 2^`bits`, in its shortest form. */
+  wideUint(bits: number): bigint {
+    let out = 0n;
+    let shift = 0n;
+    for (;;) {
+      const b = this.byte();
+      out |= BigInt(b & 0x7f) << shift;
+      if (out >> BigInt(bits) !== 0n) {
+        invalid();
+      }
+      if ((b & 0x80) === 0) {
+        if (b === 0 && shift > 0n) {
+          invalid();
+        }
+        return out;
+      }
+      shift += 7n;
+    }
+  }
+
+  /** A signed LEB128 integer within ±2^`bits`, in its shortest form. */
+  wideSint(bits: number): bigint {
+    let out = 0n;
+    let shift = 0n;
+    let b = 0;
+    let prev = 0;
+    do {
+      if (shift > BigInt(bits) + 7n) {
+        invalid();
+      }
+      prev = b;
+      b = this.byte();
+      out |= BigInt(b & 0x7f) << shift;
+      shift += 7n;
+    } while ((b & 0x80) !== 0);
+    if ((b & 0x40) !== 0) {
+      out -= 1n << shift;
+    }
+    if (
+      shift > 7n &&
+      ((b === 0 && (prev & 0x40) === 0) || (b === 0x7f && (prev & 0x40) !== 0))
+    ) {
+      invalid();
+    }
+    const limit = 1n << BigInt(bits);
+    return out < -limit || out >= limit ? invalid() : out;
   }
 
   /** An unsigned LEB128 integer that fits a safe JS integer. */

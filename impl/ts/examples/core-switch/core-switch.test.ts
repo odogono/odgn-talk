@@ -27,7 +27,7 @@ describe.skipIf(!existsSync(artifact))('on the Zig reactor', () => {
     expect(wasm.ledger).toBe(ts.ledger);
     expect(wasm.pending).toBe(ts.pending);
     expect(wasm.trace).toEqual(ts.trace);
-    // Saves are each Core family's own (ADR 0008).
-    expect(wasm.saveBytes).not.toBe(ts.saveBytes);
+    // Both Cores write the shared save format (ADR 0144).
+    expect(wasm.saveBytes).toBe(ts.saveBytes);
   });
 });

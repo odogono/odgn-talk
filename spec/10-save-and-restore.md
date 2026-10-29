@@ -370,7 +370,7 @@ What a Run or Join Member resumes with; tag 0 for nothing yet.
 | 0 | none | Nothing yet. |  |
 | 1 | answer | An answer. | value: `value`; fuel: `uint` |
 | 2 | failed | A `Fail` with a Script error. | failure: `failure` |
-| 3 | broken | A failure that wasn't a Script error. |  |
+| 3 | broken | A failure that wasn't a Script error. | detail: `optional text` |
 | 4 | timeout | Its deadline passed. |  |
 | 5 | woke | A `wait` ran out. |  |
 | 6 | reply | The reply to a `send … and wait`. | value: `value` |
@@ -638,7 +638,7 @@ A live Run.
 | preempted in | `optional preemption` | Where a Fuel Slice preempted it, if one did. |
 | continuing | `bool` | Whether it continues past its current clause. |
 | clauses seen | `uint` | How many clauses it has tried. |
-| cleanup from | `optional uint` | The frame its cleanup started from, if it is cleaning up. |
+| cleanup from | `optional uint` | Its Fuel when its cancellation cleanup began, if it is cleaning up. |
 | cleanup limited | `bool` | Whether its cleanup hit the cleanup budget. |
 | controls | `list of control` | Its error control, innermost last. |
 | attempts | `uint` | Its attempt counter. |

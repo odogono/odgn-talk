@@ -174,8 +174,7 @@ test('Join completion reserves all target Fuel before writing any destination', 
 });
 
 test('restore rejects a Join destination associated with a missing frame or non-member instruction', async () => {
-  const { packGraph, unpackGraph } = await import('../src/snapshot-codec');
-  const { sha256 } = await import('../src/sha256');
+  const { editSave } = await import('./save-edit');
   const api = defineCapability('api', {
     hold: { mode: 'suspending', cost: { fuel: 0 }, start: () => {} },
   }).grant('all', undefined);
@@ -189,30 +188,16 @@ test('restore rejects a Join destination associated with a missing frame or non-
   g.pump(0n);
   const saved = g.save();
   for (const corruption of ['frame', 'pc'] as const) {
-    const envelope = JSON.parse(new TextDecoder().decode(saved)) as {
-      hash: string;
-      payload: { graph: import('../src/snapshot-codec').PackedGraph };
-    };
-    const graph = unpackGraph(envelope.payload.graph);
-    const member = graph.nodes.find(
-      n =>
-        n.kind === 'object' &&
-        (n.data as [string, unknown][]).some(([k]) => k === 'site'),
-    )!;
-    const siteRef = (member.data as [string, [string, number]][]).find(
-      ([k]) => k === 'site',
-    )![1];
-    const site = graph.nodes[siteRef[1]]!;
-    const entries = site.data as [
-      string,
-      import('../src/snapshot').Graph['root'],
-    ][];
-    entries.find(([k]) => k === corruption)![1] =
-      corruption === 'pc' ? 0 : ['undefined'];
-    envelope.payload.graph = packGraph(graph);
-    envelope.hash = sha256(JSON.stringify(envelope.payload));
+    const edited = editSave(saved, x => {
+      const member = x.runs[0]!.join!.members[0]!;
+      if (corruption === 'pc') {
+        member.start = 0;
+      } else {
+        member.frame = 99;
+      }
+    });
     expect(() =>
-      restore(new TextEncoder().encode(JSON.stringify(envelope)), {
+      restore(edited, {
         name: 'bad',
         libraries: [],
         grants: () => api,

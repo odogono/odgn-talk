@@ -292,7 +292,7 @@ go tool pprof -top cpu.out
 
 `bun bench/ts/src/snapshots.ts --samples=30` writes JSON measurements for native
 TS embedded-source and external-source snapshots. Each row reports raw bytes,
-base64 characters, serialized graph bytes, and separate median Save/Restore
+base64 characters, the bytes of the save's required (state) sections, and separate median Save/Restore
 milliseconds after five warmups. Restore includes checksum checks, source
 loading and state validation; it does not Pump or settle pending calls.
 

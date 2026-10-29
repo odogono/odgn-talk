@@ -271,6 +271,7 @@ type Saved = {
   observation: Observation;
   placements: Map<string, Placement>;
   stubs: Stubs;
+  unitDocs: Map<string, Map<string, string>>;
   units: number;
   virtual: bigint | null;
 };
@@ -592,6 +593,7 @@ export class SessionHost {
       declarations: this.declarations,
       has: name => this.has(name),
       refuse,
+      unitDocs: this.unitDocs,
       libraries: new Map(
         [...this.libraries].map(([name, l]) => [name, l.library.source]),
       ),
@@ -608,7 +610,20 @@ export class SessionHost {
    * means the value is not a Function Value.
    */
   functionDocumentation(value: Value): string | null {
-    return functionDoc(value);
+    return functionDoc(value, this.unitDocs);
+  }
+
+  /**
+   * Each defining-source version's Declaration Documentation, by unit
+   * identity, kept before code changes can discard it (chapter 9).
+   */
+  private unitDocs = new Map<string, Map<string, string>>();
+  private retainDocs() {
+    for (const [unit, docs] of this.group?.scriptUnitDocs(NAME) ?? []) {
+      if (docs.size && !this.unitDocs.has(unit)) {
+        this.unitDocs.set(unit, docs);
+      }
+    }
   }
 
   /**
@@ -631,6 +646,7 @@ export class SessionHost {
     this.callStart = this.recordedItems.length;
     this.recording = source.replace(/\n+$/, '');
     const out = this.entry(source);
+    this.retainDocs();
     this.recorded();
     return this.finished(out);
   }
@@ -1587,6 +1603,7 @@ export class SessionHost {
       implicit: new Set(this.implicit),
       lastEntry: this.lastEntry,
       units: this.units,
+      unitDocs: new Map(this.unitDocs),
       placements: new Map(this.placements),
       expressions: new Set(this.expressions),
       inspections: new Set(this.inspections),
@@ -1645,6 +1662,7 @@ export class SessionHost {
     this.implicit = new Set(saved.implicit);
     this.lastEntry = saved.lastEntry;
     this.units = saved.units;
+    this.unitDocs = new Map(saved.unitDocs);
     this.placements = new Map(saved.placements);
     this.expressions = new Set(saved.expressions);
     this.inspections = new Set(saved.inspections);
@@ -2281,7 +2299,7 @@ export class SessionHost {
               this.reader = value;
             }
             this.env.result?.(e.run, value);
-            return valueRows(value).join('\n');
+            return valueRows(value, this.unitDocs).join('\n');
           }
         }
         if (e.delivery && this.expressions.has(e.delivery)) {

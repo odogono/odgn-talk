@@ -75,7 +75,9 @@ const docOf = (group: TsGroup, name: string) =>
   functionDoc(group.inspect().scripts[0]!.vars.find(([n]) => n === name)![1]);
 
 describe('Function Value documentation', () => {
-  test('a stale Function Value keeps its documentation through restore', () => {
+  // A save keeps no documentation of a stale function's code: a Session
+  // Host keeps it by unit (chapter 9), as the Session tests show.
+  test('a stale Function Value keeps its documentation until a restore', () => {
     const g = newGroup({ name: 'g' });
     g.load({ name: 's', source: `${DOUBLED}\n${SETUP}` });
     g.script('s')!.deliver({ name: 'setup' });
@@ -87,7 +89,7 @@ describe('Function Value documentation', () => {
     );
     expect(docOf(g, 'f')).toBe('Doubles.');
     const { group: copy } = restore(g.save(), restoreOptions);
-    expect(docOf(copy, 'f')).toBe('Doubles.');
+    expect(docOf(copy, 'f')).toBe('');
   });
 
   test('a variables-only restore keeps the documentation of the saved code', () => {

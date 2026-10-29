@@ -17,8 +17,6 @@ import {
   list,
 } from '../src/index';
 import { languageVersion } from '../src/generated/machine';
-import { sha256 } from '../src/sha256';
-import { packGraph, unpackGraph } from '../src/snapshot-codec';
 
 const options = (trace: string[]) => ({
   name: 'resumed',
@@ -310,6 +308,8 @@ describe('pending calls after restore', () => {
   });
 });
 
+import { editSave, rawValue } from './save-edit';
+
 describe('restore compatibility and durable values', () => {
   test('a save from language 1.0-rc.2 rejects or restores variables only', () => {
     const g = newGroup({ name: 'g' });
@@ -320,12 +320,14 @@ describe('restore compatibility and durable values', () => {
     g.script('s')!.deliver({ name: 'go' });
     g.pump(0n);
     g.script('s')!.deliver({ name: 'go' });
-    const outer = JSON.parse(new TextDecoder().decode(g.save()));
-    const saved = outer.payload;
-    expect(saved.language).toBe(languageVersion);
-    saved.language = '1.0-rc.2';
-    outer.hash = sha256(JSON.stringify(saved));
-    const old = new TextEncoder().encode(JSON.stringify(outer));
+    const old = editSave(
+      g.save(),
+      () => {},
+      h => {
+        expect(h.language).toBe(languageVersion);
+        h.language = '1.0-rc.2';
+      },
+    );
     expect(() => restore(old, options([]))).toThrow('save mismatch');
     const { group: copy, result } = restore(old, {
       ...options([]),
@@ -667,54 +669,63 @@ test('shared declarations reissue through each owning Script rebound Grant', () 
   expect(starts).toEqual(['a:a', 'b:b']);
 });
 
-test('restore refuses checksummed non-canonical Value Encodings', () => {
+test('restore refuses values no Core writes', () => {
   const group = newGroup({ name: 'g' });
   group.load({ name: 's', source: 'script variable n = 3' });
   const bytes = group.save();
   expect(restore(bytes, options([])).group.inspect().scripts[0]!.vars).toEqual([
     ['n', num(3)],
   ]);
-  for (const source of ['{"$dec":"3"}', '{"$dec":"-9007199254740991"}']) {
-    const envelope = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = envelope.payload;
-    const graph = unpackGraph(saved.graph);
-    const node = graph.nodes.find(
-      (n: { data: unknown; kind: string }) =>
-        n.kind === 'value' && n.data === '3',
+  for (const value of [
+    // A coefficient of 35 digits.
+    [2, 0, ...leb(10n ** 34n), 0],
+    // A positive exponent.
+    [2, 0, 3, 2],
+    // A Text mark no Core sets.
+    [4, 8, 1, 0x61],
+    // A Quantity whose Unit doesn't show as written.
+    [3, 0, 3, 0, 3, 0x66, 0x6f, 0x6f],
+    // An unknown tag.
+    [99],
+  ]) {
+    const edited = editSave(bytes, x => {
+      x.scripts[0]!.variables[0] = rawValue(value);
+    });
+    expect(() => restore(edited, options([]))).toThrow(
+      expect.objectContaining({ code: 'invalid save' }),
     );
-    expect(node).toBeDefined();
-    node!.data = source;
-    saved.graph = packGraph(graph);
-    envelope.hash = sha256(JSON.stringify(saved));
-    expect(() =>
-      restore(new TextEncoder().encode(JSON.stringify(envelope)), options([])),
-    ).toThrow(expect.objectContaining({ code: 'invalid save' }));
   }
 });
 
-test('checksummed malformed graphs and unsupported formats are invalid saves', () => {
+const leb = (n: bigint) => {
+  const out: number[] = [];
+  while (n >= 0x80n) {
+    out.push(Number(n & 0x7fn) | 0x80);
+    n >>= 7n;
+  }
+  return [...out, Number(n)];
+};
+
+test('old formats and damaged bytes are invalid saves', () => {
   const bytes = newGroup({ name: 'g' }).save();
-  for (const mutate of [
-    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
-      s.graph.nodes[0]![1] = null;
-    },
-    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
-      s.format = 1;
-    },
-    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
-      s.format = 4;
-    },
-    // Format 7 held nanosecond Instants and Civil Dates (ADR 0091).
-    (s: { format: number; graph: { nodes: [number, unknown][] } }) => {
-      s.format = 7;
-    },
+  const damaged = (f: (b: Uint8Array) => Uint8Array) => f(bytes.slice());
+  for (const input of [
+    // The JSON saves this Core wrote before the shared format.
+    new TextEncoder().encode('{"hash":"","payload":{"format":11}}'),
+    // A body byte changed under its digest.
+    damaged(b => {
+      b.set([b.at(-1)! ^ 1], b.length - 1);
+      return b;
+    }),
+    // Cut short.
+    bytes.slice(0, -1),
+    // A byte after the last section.
+    Uint8Array.of(...bytes, 0),
+    // The magic alone.
+    bytes.subarray(0, 4),
   ]) {
-    const outer = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = outer.payload;
-    mutate(saved);
-    outer.hash = sha256(JSON.stringify(saved));
     try {
-      restore(new TextEncoder().encode(JSON.stringify(outer)), options([]));
+      restore(input, options([]));
       throw new Error('Accepted invalid save');
     } catch (error) {
       expect(error).toBeInstanceOf(HostError);
@@ -965,4 +976,37 @@ test('a reissue fault abandons only unanswered Join members', () => {
     'abandon s/r1.c2',
     'abandon s/r1.c3',
   ]);
+});
+
+test('a queued Host failure keeps its call failed detail through a save', () => {
+  let held: Call<unknown> | undefined;
+  const api = defineCapability('api', {
+    hold: {
+      mode: 'suspending',
+      cost: { fuel: 1 },
+      start: call => {
+        held = call;
+      },
+    },
+  }).grant('all', undefined);
+  const g = newGroup({ name: 'g' });
+  g.load({
+    name: 's',
+    source: 'on go\n  ask api to hold and wait\nend go',
+    grants: { api },
+  });
+  g.script('s')!.deliver({ name: 'go' });
+  g.pump(0n);
+  // Not a Script error: the Script sees `host error`, the Host the detail.
+  held!.fail(new Error('the disk is full') as never);
+  const { group: copy } = restore(g.save(), {
+    ...options([]),
+    grants: () => api,
+  });
+  const report = copy.pump(1n).reports.find(r => r.kind === 'call failed');
+  expect(report).toMatchObject({
+    kind: 'call failed',
+    call: 's/r1.c1',
+    detail: expect.stringContaining('the disk is full'),
+  });
 });

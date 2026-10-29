@@ -843,7 +843,9 @@ const Saving = struct {
                 try optValue(&s.o, s.tables, x.err);
             },
             .join_failed => |i| try s.o.int(i),
-            .broken, .timeout, .woke, .joined, .unparked, .cancelled, .lost, .limited, .revoked => {},
+            // This Core keeps no Host-only failure detail.
+            .broken => try s.o.flag(false),
+            .timeout, .woke, .joined, .unparked, .cancelled, .lost, .limited, .revoked => {},
         }
     }
 
@@ -1719,7 +1721,12 @@ const Restoring = struct {
                 break :blk .{ .send_failed = .{ .reason = reason, .err = try r.optValue() } };
             },
             .join_failed => .{ .join_failed = try r.i.small(usize) },
-            inline .broken, .timeout, .woke, .joined, .unparked, .cancelled, .lost, .limited, .revoked => |x| x,
+            .broken => blk: {
+                // A Host-only detail another Core kept, which this one drops.
+                _ = try r.i.optStr();
+                break :blk .broken;
+            },
+            inline .timeout, .woke, .joined, .unparked, .cancelled, .lost, .limited, .revoked => |x| x,
         };
     }
 

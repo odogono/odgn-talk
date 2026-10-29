@@ -11,9 +11,7 @@ import {
   type ScriptSources,
 } from '../src';
 import { operationalReports } from './operational-reports';
-import { sha256 } from '../src/sha256';
-import { packGraph, unpackGraph } from '../src/snapshot-codec';
-import { references, restoreGraph, saveGraph } from '../src/snapshot';
+import { editSave, recordsOf } from './save-edit';
 
 const options = (sources: Record<string, ScriptSources>): RestoreOptions => ({
   name: 'g',
@@ -56,8 +54,7 @@ test('external sources restore Libraries, extensions, captures, waits and cross-
   original.script('s')!.deliver({ name: 'invoke' });
   original.pump(0n);
   const bytes = original.save(external);
-  const saved = JSON.parse(new TextDecoder().decode(bytes)).payload;
-  expect(saved.scripts.every((s: object) => !('sources' in s))).toBe(true);
+  expect(recordsOf(bytes).records.sources).toBeUndefined();
   const requests: string[] = [];
   const opts = { ...options(sources), libraries: [library] };
   const { group: copy, result } = restore(bytes, {
@@ -274,7 +271,7 @@ test('external pending calls keep IDs, declaration costs and settlement ordering
   ]);
 });
 
-test('declarations are shared across Scripts and unbound external Grants still compile revoked', () => {
+test('unbound external Grants still compile revoked', () => {
   const source = 'on go\n  ask host to next and wait\nend go';
   const grant = defineCapability('host', {
     next: {
@@ -292,9 +289,6 @@ test('declarations are shared across Scripts and unbound external Grants still c
     g.load({ name, source, grants: { host: grant } });
   }
   const bytes = g.save(external);
-  expect(
-    JSON.parse(new TextDecoder().decode(bytes)).payload.declarations,
-  ).toHaveLength(1);
   const { group, result } = restore(bytes, options(sources));
   expect(result.variablesOnly).toBe(false);
   group.script('s0')!.deliver({ name: 'go' });
@@ -320,88 +314,77 @@ test('external snapshot size is independent of source length and scales with Scr
     const small = sizes(count, 100),
       large = sizes(count, 10_000);
     expect(large.external).toBe(small.external);
-    expect(large.embedded - small.embedded).toBe(count * 9900);
+    // Each source's length prefix grows by a byte, and the sources
+    // section's own length by at most two more.
+    const grown = large.embedded - small.embedded - count * 9901;
+    expect(grown).toBeGreaterThanOrEqual(0);
+    expect(grown).toBeLessThanOrEqual(2);
   }
   expect(sizes(12, 100).external).toBeLessThan(sizes(6, 100).external * 2);
 });
 
-test('the compact graph preserves aliases, cycles, order, absent fields and arbitrary integers', () => {
-  const shared = { value: 2n ** 100n, undefined };
-  const root = {
-    shared,
-    again: shared,
-    set: new Set([shared]),
-    map: new Map([
-      ['z', shared],
-      ['a', shared],
-    ]),
-    self: null as unknown,
-  };
-  root.self = root;
-  const graph = saveGraph(root, references());
-  const packed = packGraph(graph);
-  expect(JSON.stringify(packed).length).toBeLessThan(
-    JSON.stringify(graph).length,
-  );
-  const copy = restoreGraph(
-    // eslint-disable-next-line unicorn/prefer-structured-clone -- Verify the JSON wire round trip.
-    unpackGraph(JSON.parse(JSON.stringify(packed))),
-    references(),
-  ) as typeof root;
-  expect(copy.self).toBe(copy);
-  expect(copy.shared).toBe(copy.again);
-  expect(copy.map.get('z')).toBe(copy.shared);
-  expect([...copy.map.keys()]).toEqual(['z', 'a']);
-  expect(copy.shared.value).toBe(2n ** 100n);
-  expect(Object.hasOwn(copy.shared, 'undefined')).toBe(true);
-  expect(Object.hasOwn(copy.shared, 'absent')).toBe(false);
-});
-
-test('rechecksummed invalid dictionaries, references, declarations and old formats fail before Host resolution', () => {
+test('invalid objects, references, declarations and old formats fail before Host resolution', () => {
   const g = newGroup({ name: 'g' });
   g.load({ name: 's', source: 'on go\n  wait 1 s\nend go' });
   g.script('s')!.deliver({ name: 'go' });
   g.pump(0n);
   const bytes = g.save(external);
-  for (const mutate of [
-    (p: { format: number }) => {
-      p.format = 9;
-    },
-    (p: { graph: { keys: string[] } }) => {
-      p.graph.keys.push(p.graph.keys[0]!);
-    },
-    (p: { graph: { keys: string[] } }) => {
-      p.graph.keys[0] = '__proto__';
-    },
-    (p: { graph: { root: unknown } }) => {
-      p.graph.root = [3, -1];
-    },
-    (p: { graph: { root: unknown } }) => {
-      p.graph.root = [2, 999_999];
-    },
-    (p: { graph: { nodes: unknown[] } }) => {
-      p.graph.nodes.push([99, null]);
-    },
-    (p: { declarations: unknown[] }) => {
-      p.declarations.push({ capability: 'host', operations: 'invalid' });
-    },
-    (p: { scripts: { grants: unknown[] }[] }) => {
-      p.scripts[0]!.grants.push({ name: 'ui', declaration: 0 });
-    },
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- It closes over the test's options.
+  const restoring = (b: Uint8Array) => () =>
+    restore(b, {
+      ...options({}),
+      scriptSources: () => {
+        throw new Error('Source callback ran');
+      },
+      resolve: () => {
+        throw new Error('Object callback ran');
+      },
+    });
+  const grant = {
+    name: 'ui',
+    declarations: '{"capability":"host","operations":[]}',
+    capability: 'host',
+    operations: [
+      {
+        name: 'next',
+        mode: 'suspending',
+        required: 0,
+        args: 0,
+        command: false,
+        labels: [],
+      },
+    ],
+    revoked: false,
+    disabled: false,
+  };
+  for (const edited of [
+    // An old JSON save.
+    new TextEncoder().encode('{"hash":"","payload":{}}'),
+    // A Script named twice.
+    editSave(bytes, x => {
+      x.scripts.push({ ...x.scripts[0]! });
+      x.perScript.push(0);
+      x.work.push([]);
+    }),
+    // A Grant whose kept Operation its declarations don't have.
+    editSave(bytes, x => {
+      x.scripts[0]!.grants.push(grant);
+    }),
+    // Declarations that aren't Host Manifest JSON.
+    editSave(bytes, x => {
+      x.scripts[0]!.grants.push({
+        ...grant,
+        declarations: 'invalid',
+        operations: [],
+      });
+    }),
+    // A Run counted for a Script the save doesn't hold.
+    editSave(bytes, x => {
+      x.perScript.push(1);
+    }),
   ]) {
-    const envelope = JSON.parse(new TextDecoder().decode(bytes));
-    mutate(envelope.payload);
-    envelope.hash = sha256(JSON.stringify(envelope.payload));
-    expect(() =>
-      restore(new TextEncoder().encode(JSON.stringify(envelope)), {
-        ...options({}),
-        scriptSources: () => {
-          throw new Error('Source callback ran');
-        },
-        resolve: () => {
-          throw new Error('Object callback ran');
-        },
-      }),
-    ).toThrow(expect.objectContaining({ code: 'invalid save' }));
+    expect(restoring(edited)).toThrow(
+      expect.objectContaining({ code: 'invalid save' }),
+    );
   }
 });

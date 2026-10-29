@@ -3,65 +3,11 @@ import { expect, test } from 'bun:test';
 import cases from '../../../tools/machine/recovery-cases.json';
 import nested from '../../../tools/machine/recovery-nested-cases.json';
 import { newGroup, restore, type PumpOptions } from '../src';
-import { restoreGraph, type References } from '../src/snapshot';
-import { Run } from '../src/machine';
-import {
-  packGraph,
-  unpackGraph,
-  type PackedGraph,
-} from '../src/snapshot-codec';
+import { stateFingerprint } from '../src/save-format';
 
-// Stands one placeholder in for each referenced object, so two saves of the
-// same Group decode to equal graphs.
-class Placeholders extends Map<string, object> {
-  constructor(private readonly refs: References) {
-    super();
-  }
-  override get(key: string) {
-    let value = super.get(key);
-    if (!value) {
-      value = Object.freeze({ reference: key });
-      this.set(key, value);
-      this.refs.byObject.set(value, key);
-    }
-    return value;
-  }
-}
-
-const state = (bytes: Uint8Array) => {
-  const saved = JSON.parse(new TextDecoder().decode(bytes)).payload;
-  const refs: References = { byKey: new Map(), byObject: new Map() };
-  refs.byKey = new Placeholders(refs);
-  const decoded = restoreGraph(unpackGraph(saved.graph), refs);
-  const seen = new Set<object>();
-  const work = [decoded];
-  while (work.length) {
-    const value = work.pop();
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      seen.has(value) ||
-      refs.byObject.has(value)
-    ) {
-      continue;
-    }
-    seen.add(value);
-    if (Object.getPrototypeOf(value) === Run.prototype) {
-      Object.defineProperty(value, 'persistentState', { value: undefined });
-    }
-    work.push(
-      ...(Object.getPrototypeOf(value) === Map.prototype
-        ? [
-            ...(value as Map<unknown, unknown>).keys(),
-            ...(value as Map<unknown, unknown>).values(),
-          ]
-        : Object.getPrototypeOf(value) === Set.prototype
-          ? [...(value as Set<unknown>)]
-          : Object.values(value)),
-    );
-  }
-  return decoded;
-};
+// Every required section of a save: its whole state, Run by Run.
+const state = (bytes: Uint8Array) =>
+  Buffer.from(stateFingerprint(bytes)).toString('hex');
 
 const output = (lines: string[]) =>
   lines.filter(l => !l.startsWith('> save') && !l.startsWith('> restore'));
@@ -108,35 +54,22 @@ for (const fixture of [...cases, ...nested]) {
   }
 }
 
-import { sha256 } from '../src/sha256';
 import { HostError } from '../src/errors';
-import type { Graph } from '../src/snapshot';
+import type {
+  ControlRecord,
+  RunRecord,
+  SaveRecords,
+} from '../src/save-records';
+import { editSave, recordsOf, rawValue, type RawValue } from './save-edit';
 
-type Atom = Graph['root'];
-// Edits a decoded save's Run and its error control records.
+// A decoded save's Run and its error control records.
 class SnapshotEditor {
-  constructor(readonly graph: Graph) {}
-  node(a: Atom) {
-    return this.graph.nodes[Number((a as [string, number])[1])]!;
+  constructor(readonly records: SaveRecords<RawValue>) {}
+  run(): RunRecord<RawValue> {
+    return this.records.runs[0]!;
   }
-  get(a: Atom, key: string): Atom {
-    return (
-      (this.node(a).data as [string, Atom][]).find(p => p[0] === key)?.[1] ?? [
-        'undefined',
-      ]
-    );
-  }
-  set(a: Atom, key: string, value: Atom) {
-    (this.node(a).data as [string, Atom][]).find(p => p[0] === key)![1] = value;
-  }
-  items(a: Atom) {
-    return this.node(a).data as Atom[];
-  }
-  run() {
-    return this.graph.nodes.find(n => n.kind === 'run')!.data as Atom;
-  }
-  controls() {
-    return this.items(this.get(this.run(), 'controls'));
+  controls(): ControlRecord<RawValue>[] {
+    return this.run()?.controls ?? [];
   }
   control() {
     return this.controls().at(-1)!;
@@ -144,22 +77,28 @@ class SnapshotEditor {
   dispatch() {
     return [...this.controls()]
       .reverse()
-      .find(c => this.get(c, 'k') === 'dispatch')!;
+      .find(c => c.k === 'dispatch') as Extract<
+      ControlRecord<RawValue>,
+      { k: 'dispatch' }
+    >;
+  }
+  cleanup() {
+    return this.control() as Extract<ControlRecord<RawValue>, { k: 'cleanup' }>;
   }
   search() {
-    return this.get(this.dispatch(), 'search');
+    return this.dispatch().search;
   }
   held() {
-    return this.items(this.get(this.dispatch(), 'held'))[0]!;
+    return this.dispatch().held[0]!;
   }
   then() {
-    return this.get(this.control(), 'then');
+    return this.cleanup().then as Record<string, unknown> & { k: string };
   }
   steps() {
-    return this.items(this.get(this.control(), 'cleanups'));
+    return this.cleanup().cleanups;
   }
   step() {
-    return this.steps().find(s => this.get(s, 'leave') === false)!;
+    return this.steps().find(s => !s.leave)!;
   }
 }
 const cleanupSource = `function fail
@@ -246,18 +185,15 @@ for (const [name, source] of Object.entries(transferSources)) {
       expect(b).toEqual(a);
       expect(output(resumed)).toEqual(output(original));
       const saved = g.save();
-      const e = new SnapshotEditor(
-        unpackGraph(JSON.parse(new TextDecoder().decode(saved)).payload.graph),
-      );
+      const e = new SnapshotEditor(recordsOf(saved).records);
       // A dispatch above a transfer's cleanup.
-      const live = e.graph.nodes.some(n => n.kind === 'run');
-      const [below, top] = live ? e.controls().slice(-2) : [];
+      const [below, top] = e.controls().slice(-2);
       nested ||=
         !!top &&
         !!below &&
-        e.get(top, 'k') === 'dispatch' &&
-        e.get(below, 'k') === 'cleanup' &&
-        e.get(e.get(below, 'then'), 'k') === 'transfer';
+        top.k === 'dispatch' &&
+        below.k === 'cleanup' &&
+        below.then.k === 'transfer';
       expect(state(copy.save())).toEqual(state(saved));
       copy = restore(saved, options(resumed)).group;
       if (a.state === 'idle') {
@@ -294,22 +230,19 @@ const snapshotIn = (
   for (let step = 0; step < 300; step++) {
     g.pump(BigInt(step), { fuelCap: 1 });
     const bytes = g.save();
-    const payload = JSON.parse(new TextDecoder().decode(bytes)).payload;
-    const saved = { graph: unpackGraph(payload.graph) };
-    const e = new SnapshotEditor(saved.graph);
+    const e = new SnapshotEditor(recordsOf(bytes).records);
     const controls = e.controls();
     if (!controls.length) {
       continue;
     }
-    const dispatches = controls.filter(c => e.get(c, 'k') === 'dispatch');
+    const dispatches = controls.filter(c => c.k === 'dispatch');
     const top = e.control();
-    const then = e.get(top, 'k') === 'cleanup' ? e.get(e.then(), 'k') : null;
+    const then = top.k === 'cleanup' ? top.then.k : null;
     if (
       phase === 'nested'
         ? dispatches.length === 2
         : phase === 'selection'
-          ? e.get(top, 'k') === 'dispatch' &&
-            e.items(e.get(top, 'held')).length > 0
+          ? top.k === 'dispatch' && top.held.length > 0
           : phase === 'offer'
             ? then === 'transfer' && e.step()
             : phase === 'escape'
@@ -322,6 +255,8 @@ const snapshotIn = (
   throw new Error(`Missing snapshot phase ${phase}`);
 };
 
+const notMap = rawValue([2, 0, 7, 0]);
+const limit = { frame: 999, entry: 999 };
 const malformed: {
   mutate: (e: SnapshotEditor) => void;
   name: string;
@@ -331,268 +266,246 @@ const malformed: {
   {
     name: 'attempt counter rewind',
     phase: 'offer',
-    mutate: e => e.set(e.run(), 'offerAttempt', 0),
+    mutate: e => {
+      e.run().attempts = 0;
+    },
   },
   {
     name: 'cleanup start past the Fuel used',
     phase: 'selection',
-    mutate: e => e.set(e.run(), 'cleanupFrom', 1_000_000_000),
+    mutate: e => {
+      e.run().cleanupFrom = 1_000_000_000;
+    },
   },
   {
     name: 'cancellation without its cleanup',
     phase: 'selection',
-    mutate: e => e.set(e.run(), 'cleanupFrom', 0),
-  },
-  {
-    name: 'raised position',
-    phase: 'selection',
-    mutate: e => e.set(e.get(e.run(), 'raisedAt'), 'pc', -1),
+    mutate: e => {
+      e.run().cleanupFrom = 0;
+    },
   },
   // A dispatch.
   {
     name: 'dispatch error',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'error', 7),
+    mutate: e => {
+      e.dispatch().error = notMap;
+    },
   },
   {
     name: 'dispatch owner',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'owner', 999),
+    mutate: e => {
+      e.dispatch().owner = 999;
+    },
   },
   {
     name: 'dispatch place',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'place', -1),
+    mutate: e => {
+      e.dispatch().place = 100_000;
+    },
   },
   {
     name: 'owner PC',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'ownerPc', 100_000),
+    mutate: e => {
+      e.dispatch().ownerPc = 100_000;
+    },
   },
   {
-    name: 'owner stack',
+    name: 'held unit',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'ownerStack', 7),
+    mutate: e => {
+      e.held().unit = { k: 'extension', extension: 9 };
+    },
   },
   {
-    name: 'held list',
+    name: 'held body',
     phase: 'selection',
-    mutate: e => e.set(e.dispatch(), 'held', 7),
-  },
-  {
-    name: 'held code identity',
-    phase: 'selection',
-    mutate: e => e.set(e.held(), 'code', ['external', 'unknown']),
-  },
-  {
-    name: 'held body identity',
-    phase: 'selection',
-    mutate: e => e.set(e.held(), 'body', ['external', 'code/s/0/unwind/0']),
+    mutate: e => {
+      e.held().body = 999;
+    },
   },
   {
     name: 'held PC',
     phase: 'selection',
-    mutate: e => e.set(e.held(), 'pc', 100_000),
+    mutate: e => {
+      e.held().pc = 100_000;
+    },
   },
   {
     name: 'held local layout',
     phase: 'selection',
     mutate: e => {
-      e.items(e.get(e.held(), 'locals')).pop();
-    },
-  },
-  {
-    name: 'held twice',
-    phase: 'selection',
-    mutate: e => {
-      e.items(e.get(e.dispatch(), 'held')).push(e.held());
+      e.held().locals.pop();
     },
   },
   // A search.
   {
     name: 'search frame',
     phase: 'selection',
-    mutate: e => e.set(e.search(), 'frame', 999),
+    mutate: e => {
+      e.search().frame = 999;
+    },
   },
   {
     name: 'search entry',
     phase: 'selection',
-    mutate: e => e.set(e.search(), 'entry', 0),
-  },
-  {
-    name: 'search raised',
-    phase: 'selection',
-    mutate: e => e.set(e.search(), 'raised', -1),
-  },
-  {
-    name: 'search position',
-    phase: 'selection',
-    mutate: e => e.set(e.search(), 'position', -1),
+    mutate: e => {
+      e.search().entry = 0;
+    },
   },
   {
     name: 'search limit',
     phase: 'selection',
-    mutate: e => e.set(e.search(), 'limit', 7),
+    mutate: e => {
+      e.search().limit = limit;
+    },
   },
   {
     name: 'search skip',
     phase: 'selection',
-    mutate: e => e.set(e.search(), 'skip', 7),
+    mutate: e => {
+      e.search().skip = limit;
+    },
   },
   {
     name: 'nested dispatch owner',
     phase: 'nested',
-    mutate: e => e.set(e.dispatch(), 'owner', -1),
+    mutate: e => {
+      e.dispatch().owner = 999;
+    },
   },
   // A cleanup and its steps.
   {
-    name: 'cleanup error',
-    phase: 'offer',
-    mutate: e => e.set(e.control(), 'error', ['undefined']),
-  },
-  {
     name: 'cleanup next',
     phase: 'offer',
-    mutate: e => e.set(e.control(), 'next', 999),
-  },
-  {
-    name: 'cleanup left',
-    phase: 'offer',
-    mutate: e => e.set(e.control(), 'left', 'yes'),
-  },
-  {
-    name: 'cleanup failed',
-    phase: 'offer',
-    mutate: e => e.set(e.control(), 'failed', -1),
-  },
-  {
-    name: 'cleanup failed frame',
-    phase: 'offer',
-    mutate: e => e.set(e.control(), 'failedFrame', -1),
-  },
-  {
-    name: 'cleanup held',
-    phase: 'offer',
-    mutate: e => e.set(e.control(), 'held', 7),
+    mutate: e => {
+      e.cleanup().next = 999;
+    },
   },
   {
     name: 'step frame',
     phase: 'offer',
-    mutate: e => e.set(e.step(), 'frame', 999),
+    mutate: e => {
+      e.step().frame = 999;
+    },
   },
   {
     name: 'step entry',
     phase: 'offer',
-    mutate: e => e.set(e.step(), 'entry', 999),
+    mutate: e => {
+      e.step().entry = 999;
+    },
   },
   {
     name: 'step target',
     phase: 'offer',
-    mutate: e => e.set(e.step(), 'target', 0),
+    mutate: e => {
+      e.step().target = 0;
+    },
   },
   {
     name: 'step depth',
     phase: 'offer',
-    mutate: e => e.set(e.step(), 'depth', 99),
-  },
-  {
-    name: 'step leave',
-    phase: 'offer',
-    mutate: e => e.set(e.step(), 'leave', 'no'),
+    mutate: e => {
+      e.step().depth = 99;
+    },
   },
   {
     name: 'duplicate step',
     phase: 'offer',
     mutate: e => {
-      e.steps().push(e.step());
+      e.steps().push({ ...e.step() });
     },
-  },
-  {
-    name: 'then kind',
-    phase: 'offer',
-    mutate: e => e.set(e.then(), 'k', 'search-again'),
   },
   // A transfer.
   {
     name: 'transfer frame',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'frame', 999),
+    mutate: e => {
+      e.then().frame = 999;
+    },
   },
   {
     name: 'transfer offer entry',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'offerEntry', 999),
+    mutate: e => {
+      e.then().offerEntry = 999;
+    },
   },
   {
     name: 'transfer record',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'record', 999),
+    mutate: e => {
+      e.then().record = 999;
+    },
   },
   {
     name: 'transfer offer',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'offer', 999),
+    mutate: e => {
+      e.then().offer = 999;
+    },
   },
   {
     name: 'transfer argument count',
     phase: 'offer',
     mutate: e => {
-      e.items(e.get(e.then(), 'args')).pop();
+      (e.then().args as unknown[]).pop();
     },
   },
   {
     name: 'transfer attempt',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'attempt', 99),
+    mutate: e => {
+      e.then().attempt = 99;
+    },
   },
   {
     name: 'transfer limit',
     phase: 'offer',
-    mutate: e => e.set(e.then(), 'limit', 7),
+    mutate: e => {
+      e.then().limit = limit;
+    },
   },
   // A search after an escaped policy's cleanup.
   {
     name: 'then search frame',
     phase: 'escape',
-    mutate: e => e.set(e.get(e.then(), 'search'), 'frame', 999),
-  },
-  {
-    name: 'then search raised',
-    phase: 'escape',
-    mutate: e => e.set(e.get(e.then(), 'search'), 'raised', -1),
+    mutate: e => {
+      (e.then().search as { frame: number }).frame = 999;
+    },
   },
   {
     name: 'then search skip',
     phase: 'escape',
-    mutate: e => e.set(e.get(e.then(), 'search'), 'skip', 7),
+    mutate: e => {
+      (e.then().search as { skip: unknown }).skip = limit;
+    },
   },
   // An acceptance.
   {
     name: 'accept frame',
     phase: 'catch',
-    mutate: e => e.set(e.then(), 'frame', 999),
+    mutate: e => {
+      e.then().frame = 999;
+    },
   },
   {
     name: 'accept PC',
     phase: 'catch',
-    mutate: e => e.set(e.then(), 'pc', 0),
-  },
-  {
-    name: 'accept stack',
-    phase: 'catch',
-    mutate: e => e.set(e.then(), 'stack', 7),
+    mutate: e => {
+      e.then().pc = 0;
+    },
   },
 ];
 for (const { name, phase, mutate } of malformed) {
-  test(`refuse checksummed malformed control: ${name}`, () => {
-    const envelope = JSON.parse(
-      new TextDecoder().decode(snapshotIn(phase)),
-    ) as { hash: string; payload: { graph: PackedGraph } };
-    const graph = unpackGraph(envelope.payload.graph);
-    mutate(new SnapshotEditor(graph));
-    envelope.payload.graph = packGraph(graph);
-    envelope.hash = sha256(JSON.stringify(envelope.payload));
-    const bytes = new TextEncoder().encode(JSON.stringify(envelope));
+  test(`refuse malformed control: ${name}`, () => {
+    const bytes = editSave(snapshotIn(phase), records =>
+      mutate(new SnapshotEditor(records)),
+    );
     try {
       restore(bytes, options([]));
       throw new Error('Accepted malformed control');

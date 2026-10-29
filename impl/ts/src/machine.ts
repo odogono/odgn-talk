@@ -126,6 +126,7 @@ import {
 } from './values';
 import type { PatternElement } from './view';
 import { stateOf, type ObjectState } from './objects';
+import { callSites, nextCallOrder, waitOrders } from './save-marks';
 import {
   abandon,
   abandonMembers,
@@ -472,22 +473,26 @@ export const loadLibrary = (
 // Runs
 // ---------------------------------------------------------------------------
 
-type Iterator = {
+export type Iterator = {
   at: number;
   count: number;
   k: 'iterator';
   source: Value | null;
 };
-type Replacement = {
+export type Replacement = {
   at: number;
   cs: readonly string[];
   found: { end: number; start: number }[];
+  /** Where in `cs` the output so far ends: past the last replaced match. */
+  from: number;
   k: 'replacement';
   matches: Value[];
-  pieces: string[];
+  /** The output so far: the Text up to `from`, each match replaced. */
+  pieces: string;
   subject: Value;
 };
-type Item = Value | Iterator | Replacement | Reader | Receiver | Deadline;
+export type Item =
+  Value | Iterator | Replacement | Reader | Receiver | Deadline;
 /**
  * A Timeout Block's mathematical microsecond deadline and its duration
  * (ADR 0073). The count may lie outside the Clock's Instant range.
@@ -495,7 +500,7 @@ type Item = Value | Iterator | Replacement | Reader | Receiver | Deadline;
 export type Deadline = { after: Value; at: bigint; k: 'deadline' };
 // A duration in microseconds as ms, or s if ms exceeds the number range,
 // with no more decimal places than it needs.
-const msOf = (us: bigint): Value => {
+export const msOf = (us: bigint): Value => {
   const sign = us < 0n ? '-' : '';
   const n = us < 0n ? -us : us;
   const seconds = n / 1000n >= 10n ** 34n;
@@ -582,8 +587,8 @@ const homeConstant = (root: Value, home: Script): Value => {
 };
 
 // A Function Value's code: the code unit its body is in, and the body.
-type FunctionCode = { body: Body; code: Code; home: Script };
-type Dispatch = {
+export type FunctionCode = { body: Body; code: Code; home: Script };
+export type Dispatch = {
   args: Value[];
   clauses: Body[];
   code: Code;
@@ -594,7 +599,7 @@ type Dispatch = {
   fallback?: { clauses: Body[]; selector: string };
   next: number;
 };
-type Frame = {
+export type Frame = {
   body: Body;
   /** A clause's `clause` charge, added to its first instruction's. */
   clauseCharge: boolean;
@@ -613,14 +618,14 @@ type Frame = {
  * before `entry`, which lie inside the policy or `finally` block that bounds
  * it.
  */
-type Limit = { entry: number; frame: number };
+export type Limit = { entry: number; frame: number };
 /**
  * Where a catch search is: the frame and the first entry in it still to test,
  * the top frame's place, its bound, the frames below `position` it has yet to
  * charge for leaving, and the entries `skip` says already ran their `finally`
  * blocks.
  */
-type Search = {
+export type Search = {
   entry: number;
   frame: number;
   limit: Limit | null;
@@ -634,7 +639,7 @@ type Search = {
  * `ownerStack` and `ownerPc`. `search` goes on from the next entry when the
  * catch declines.
  */
-type DispatchControl = {
+export type DispatchControl = {
   error: Value;
   held: Frame[];
   k: 'dispatch';
@@ -649,7 +654,7 @@ type DispatchControl = {
  * starts at and its entry. `leave` ends the dispatch under the cleanup, once a
  * policy's own `finally` blocks have run.
  */
-type CleanupStep = {
+export type CleanupStep = {
   depth: number;
   entry: number;
   frame: number;
@@ -657,7 +662,7 @@ type CleanupStep = {
   target: number;
 };
 /** What a cleanup does after its last `finally` block. */
-type Then =
+export type Then =
   | { frame: number; k: 'accept'; pc: number; stack: Item[] }
   | { k: 'end' }
   | { k: 'cancel' }
@@ -679,7 +684,7 @@ type Then =
  * keeps the failed frames above the running block (chapter 8, Pending cleanup
  * state). A cancellation holds none.
  */
-type CleanupControl = {
+export type CleanupControl = {
   cleanups: CleanupStep[];
   error: Value;
   failed: number;
@@ -692,7 +697,7 @@ type CleanupControl = {
   then: Then;
 };
 /** A Run's error control, innermost last (chapter 8, The Unwind Table). */
-type Control = DispatchControl | CleanupControl;
+export type Control = DispatchControl | CleanupControl;
 const LEAVE: CleanupStep = {
   depth: 0,
   entry: 0,
@@ -793,7 +798,7 @@ export type RunRecord =
     };
 
 // A call in flight: what its answer or failure needs at the call.
-type CallContext = {
+export type CallContext = {
   adoptable?: boolean;
   /** A suspending Standard Capability call's arguments, for its answer rules. */
   args?: readonly Value[];
@@ -904,6 +909,8 @@ export type RunHost = {
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
+  /** Records a call id as issued, for the Group's lifetime. */
+  issue?(id: string): void;
   isUnbound?(name: string): boolean;
   /** The object the Script owns, or Nothing. */
   readonly me: Value;
@@ -924,6 +931,8 @@ export type RunHost = {
   ): string | null;
   /** Sends a Command Call with no Handler up the Message Path, as `send` does. */
   sendUp(message: string, args: Value[], reply: string | null): string | null;
+  /** The next wait's place in the order waits began. */
+  waitOrder?(): number;
 };
 const listItems = (v: Value): Value[] =>
   Array.from({ length: v.length }, (_, i) => v.index(i + 1));
@@ -993,7 +1002,7 @@ const namedSends = new Set<number>([
 const reservedKeys = new Set<string>(reservedErrorKeys);
 
 // A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
-type Receiver = { k: 'receiver'; name: string };
+export type Receiver = { k: 'receiver'; name: string };
 /** An instruction's code position and source position (chapter 9, Reports). */
 export type CodePosition = {
   col: number;
@@ -1276,6 +1285,7 @@ export class Run {
       }
       const scope = this.scopes.splice(i, 1)[0]!;
       const id = `${this.id}.c${++this.calls}`;
+      this.host?.issue?.(id);
       let contractFailure = false;
       // eslint-disable-next-line unicorn/consistent-function-scoping -- Each attempt tracks forbidden calls even if the Host catches their error.
       const forbidden = (): never => {
@@ -1657,8 +1667,22 @@ export class Run {
             snapshotCounter,
           )),
     );
+    // A bound names a frame the Run holds and an entry in its unit.
+    const levels =
+      this.frames.length + this.controls.reduce((n, c) => n + c.held.length, 0);
+    const maxEntries = Math.max(
+      0,
+      ...[...this.frames, ...this.controls.flatMap(c => c.held)].map(
+        f => f.code.unit.unwind.length,
+      ),
+    );
     const limit = (l: Limit | null) =>
-      l === null || (l && snapshotCounter(l.frame) && snapshotCounter(l.entry));
+      l === null ||
+      (l &&
+        snapshotCounter(l.frame) &&
+        snapshotCounter(l.entry) &&
+        l.frame < levels &&
+        l.entry <= maxEntries);
     const search = (x: Search) =>
       requireSnapshot(
         x &&
@@ -1936,7 +1960,8 @@ export class Run {
     for (const attempt of attempts) {
       lastAttempt = Math.max(lastAttempt, attempt);
     }
-    requireSnapshot(this.offerAttempt === lastAttempt);
+    // A save keeps no offer records, only the attempt count they number to.
+    requireSnapshot(this.offerAttempt >= lastAttempt);
   }
 
   get cancelling(): boolean {
@@ -2945,6 +2970,11 @@ export class Run {
       if (own !== undefined) {
         this.faultAbandons.push(own);
       }
+      // The wait was set, as a save counts waits, before its Segment's end
+      // measured it.
+      if (s.k !== 'join' || this.blockDeadline()) {
+        this.host?.waitOrder?.();
+      }
       throw new LimitFaultError('persistentState', this.frame.pc);
     }
     const deadline = this.blockDeadline();
@@ -3110,6 +3140,10 @@ export class Run {
       case 'fail':
         throw this.failure(call!, r.error, () => {}, r.detail);
       case 'answer':
+        // A save keeps a call's arguments only until its answer is checked.
+        if (call && callSites.has(call)) {
+          callSites.get(call)!.args = [];
+        }
         if (
           !functionsBelongTo([r.value], this.script.functionGroup) ||
           (call!.op.result && mismatch(r.value, call!.op.result)) ||
@@ -4688,6 +4722,7 @@ export class Run {
       throw new CrossingInterruptedError();
     }
     const id = `${this.id}.c${++this.calls}`;
+    host.issue?.(id);
     const ctx: CallContext = {
       id,
       op,
@@ -4706,6 +4741,20 @@ export class Run {
     const abort = new AbortController();
     if (op.mode === 'suspending') {
       this.crossingCall = { abort, id };
+      const at = this.frame.code.unit.code[this.frame.pc]!;
+      callSites.set(ctx, {
+        args: [...args],
+        charged: 0,
+        at: {
+          unit: this.frame.code.name,
+          pc: this.frame.pc,
+          line: at.line,
+          col: at.col,
+        },
+        now: host.now,
+        order: nextCallOrder(),
+        segment: this.segmentId,
+      });
     }
     const call: Call<unknown> = {
       id,
@@ -4813,16 +4862,19 @@ export class Run {
     }
     if (op.mode === 'suspending') {
       this.hostCrossing({ ...record, charged });
+      callSites.get(ctx)!.charged = charged;
       const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
       if (member) {
-        this.join!.members.push({
+        const m: Member = {
           site: { frame: this.frame, pc: this.frame.pc },
           id,
           call: ctx,
           abort,
           ms,
           at: this.host!.now + BigInt(ms) * 1000n,
-        });
+        };
+        waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
+        this.join!.members.push(m);
       } else {
         // The Host has consumed the operands. Retain the call, not another
         // copy of its arguments on the frame's operand stack.
@@ -5512,7 +5564,8 @@ export class Run {
           found: out.found,
           matches: out.matches,
           at: 0,
-          pieces: [],
+          pieces: '',
+          from: 0,
         };
         m.steps = out.steps;
         m.resultSize = partSize(
@@ -5539,18 +5592,21 @@ export class Run {
         const r = frame.stack.at(-2) as Replacement;
         this.pay(rate);
         this.pop();
-        r.pieces.push(textForm(piece));
+        const f = r.found[r.at]!;
+        r.pieces += r.cs.slice(r.from, f.start).join('') + textForm(piece);
+        r.from = f.end;
         r.at++;
         return next(frame);
       }
       case Op.ReplaceEnd: {
         const r = frame.stack.at(-1) as Replacement;
-        const out: string[] = [];
-        let from = 0;
-        r.found.forEach((f, i) => {
-          out.push(r.cs.slice(from, f.start).join(''), r.pieces[i] ?? '');
+        // Matches no piece replaced are dropped, as their pieces are empty.
+        const out = [r.pieces];
+        let from = r.from;
+        for (const f of r.found.slice(r.at)) {
+          out.push(r.cs.slice(from, f.start).join(''));
           from = f.end;
-        });
+        }
         out.push(r.cs.slice(from).join(''));
         m.result = text(out.join(''));
         this.pay(rate);
@@ -5853,14 +5909,16 @@ export class Run {
         }
         this.calls++;
         if (join) {
-          this.join!.members.push({
+          const m: Member = {
             site: { frame, pc: frame.pc },
             id,
             call: null,
             abort: null,
             ms: this.limits.maxWaitMs,
             at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1000n,
-          });
+          };
+          waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
+          this.join!.members.push(m);
           return next(frame);
         }
         this.suspend({ k: 'send', id, to: reached, message, args });

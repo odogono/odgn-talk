@@ -1,6 +1,6 @@
 import { costModel, languageVersion } from './generated/machine';
 import { unicodeVersion } from './generated/unicode';
-import { saveFormatVersion } from './snapshot';
+import { saveFormat } from './save-format';
 
 export type Versions = {
   core: string;
@@ -15,5 +15,5 @@ export const coreVersions: Versions = Object.freeze({
   costModel: String(costModel.version),
   unicode: unicodeVersion,
   core: 'ts/0.3.0',
-  saveFormat: String(saveFormatVersion),
+  saveFormat: String(saveFormat),
 });

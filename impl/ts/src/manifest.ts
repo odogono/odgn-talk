@@ -200,3 +200,114 @@ export const exportManifest = (m: ManifestSpec): string => {
     ...(m.ownerKind ? { ownerKind: m.ownerKind.name } : {}),
   })}\n`;
 };
+
+/** A Shape from its Host Manifest data, as `shapeData` writes it. */
+export const shapeOf = (data: unknown): Shape => {
+  if (typeof data === 'string') {
+    return data === 'any'
+      ? { k: 'any' }
+      : data === 'value'
+        ? { k: 'value' }
+        : { k: 'kind', kind: data };
+  }
+  const d = data as Record<string, unknown>;
+  if (typeof d.object === 'string') {
+    return { k: 'object', kind: d.object };
+  }
+  if (typeof d.quantity === 'string') {
+    return { k: 'quantity', unit: d.quantity };
+  }
+  if (typeof d.unitKind === 'string') {
+    return { k: 'unitKind', kind: d.unitKind };
+  }
+  if ('list' in d) {
+    return { k: 'list', of: shapeOf(d.list) };
+  }
+  if (Array.isArray(d.oneOf)) {
+    return { k: 'oneOf', of: d.oneOf.map(shapeOf) };
+  }
+  if ('optional' in d) {
+    return { k: 'optional', of: shapeOf(d.optional) };
+  }
+  if (Array.isArray(d.map)) {
+    return {
+      k: 'map',
+      fields: (
+        d.map as { key: string; optional?: boolean; shape: unknown }[]
+      ).map(f => ({
+        key: f.key,
+        optional: f.optional === true,
+        shape: shapeOf(f.shape),
+      })),
+      open: d.open === true,
+    };
+  }
+  throw new HostError('invalid save');
+};
+
+/**
+ * A Grant's Operations from their Host Manifest data, as a save keeps them:
+ * their shapes and declared costs, with no Host functions.
+ */
+export const operationsOf = (
+  json: string,
+): { capability: string; operations: Map<string, ValueOperation<unknown>> } => {
+  let data: { capability: string; operations: Record<string, unknown>[] };
+  try {
+    data = JSON.parse(json);
+  } catch {
+    throw new HostError('invalid save');
+  }
+  if (
+    !data ||
+    typeof data.capability !== 'string' ||
+    !Array.isArray(data.operations)
+  ) {
+    throw new HostError('invalid save');
+  }
+  return {
+    capability: data.capability,
+    operations: new Map(
+      data.operations.map(op => {
+        const cost = op.cost as { alloc: number; fuel: number };
+        const errors = op.errors as
+          | {
+              code: string;
+              fields: { key: string; optional?: boolean; shape: unknown }[];
+            }[]
+          | undefined;
+        const scope = op.scope as
+          { abandon: string; opens: string } | { closes: string } | undefined;
+        const decl = {
+          mode: op.mode,
+          args: (op.args as unknown[]).map(shapeOf),
+          ...(Array.isArray(op.labels) ? { labels: op.labels } : {}),
+          ...(op.result === undefined ? {} : { result: shapeOf(op.result) }),
+          cost: { fuel: cost.fuel, alloc: cost.alloc },
+          ...(typeof op.maxPending === 'number'
+            ? { maxPendingMs: op.maxPending }
+            : {}),
+          ...(errors
+            ? {
+                errors: errors.map(e => ({
+                  code: e.code,
+                  fields: Object.fromEntries(
+                    e.fields.map(f => [
+                      f.key,
+                      f.optional
+                        ? { optional: true, shape: shapeOf(f.shape) }
+                        : shapeOf(f.shape),
+                    ]),
+                  ),
+                })),
+              }
+            : {}),
+          ...(scope ? { scope } : {}),
+          ...(op.segmentBound ? { segmentBound: true } : {}),
+          ...(op.command ? { command: true } : {}),
+        } as unknown as ValueOperation<unknown>;
+        return [op.name as string, decl];
+      }),
+    ),
+  };
+};
