@@ -1,0 +1,23 @@
+# metering-charge-refused: a Metered Operation's `call` record marks a
+# refused `Charge` after the accepted prefix (spec/embedding/metered-operations.md,
+# Trace and message layer).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "index"
+name = "scan"
+mode = "immediate"
+result = "number"
+cost = { fuel = 0 }
+metering = "read-only"
+
+[[scripts]]
+name = "search"
+source = "search.talk"
+grants = { index = { ops = ["scan"] } }
+limits = { fuelPerRun = 100 }

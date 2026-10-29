@@ -105,6 +105,9 @@ type zigGroup struct {
 	handle string
 	// Settlements queued for the next settle-pump (#1320), and how many
 	// inputs are sending the queue ahead of themselves.
+	// Each queued charge request's future, until a Pump reports it.
+	chargesMu     sync.Mutex
+	charges       map[ChargeRequestID]*ChargeRequest
 	settlementsMu sync.Mutex
 	settlements   []zigSettlement
 	flushing      int
@@ -583,6 +586,17 @@ func (b *zigGroup) finishPump(result PumpResult, climbed []Report, gone []string
 	for _, id := range gone {
 		settle(DeliveryID(id), Nothing, sendFailure("function gone", nil))
 	}
+	b.chargesMu.Lock()
+	for _, report := range result.Reports {
+		if r, ok := report.(*ChargeResult); ok {
+			if q := b.charges[r.Request]; q != nil {
+				delete(b.charges, r.Request)
+				q.result = r
+				close(q.done)
+			}
+		}
+	}
+	b.chargesMu.Unlock()
 	unhandled := map[DeliveryID]bool{}
 	for _, report := range result.Reports {
 		if r, ok := report.(*Unhandled); ok {

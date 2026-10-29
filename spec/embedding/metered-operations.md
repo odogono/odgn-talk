@@ -55,7 +55,7 @@ Save returns `effects pending` if any asynchronous metered call remains pending 
 
 ## Trace and message layer
 
-The executable `corpus.toml` extensions are staged for implementation. Operation setup adds optional `metering` with the declaration values above. SQLite `[standard]` setup replaces `perRow` with `perStep` (default 0); the old key is rejected when the extension is activated, rather than silently changing its meaning. Existing fixtures must migrate deliberately. These are the required ordered Trace fields:
+`corpus.toml` carries these records and the optional Operation setup `metering` key, with the declaration values above. The SQLite extension remains staged: `[standard]` setup replaces `perRow` with `perStep` (default 0), and the old key is rejected when it is activated, rather than silently changing its meaning. Existing fixtures must migrate deliberately. These are the required ordered Trace fields:
 
 | Record | Direction | Positional ids | Ordered fields |
 | --- | --- | --- | --- |
@@ -74,7 +74,7 @@ The Message Layer adds `request-charge` with `call` and `fuel`; its immediate `o
 
 ## Target embedding declarations
 
-These declarations are the normative implementation target. The checked `talk.ts` carries the TS metering field, `requestCharge`, `ChargeRequest` and `ChargeResult`, which the TS Core implements; its SQLite `perStep` signatures, and all of `talk.go`, retain their pre-metering declarations until that runtime implementation lands, so the existing API comparison continues to verify the implemented contract without exemptions. Move the remaining additions and replacements into those files with implementation; all unrelated members stay unchanged.
+These declarations are the normative implementation target. The checked `talk.ts` and `talk.go` carry the metering field, the request API and `ChargeResult`, which the TS Core and the Go API implement; their SQLite `perStep` signatures retain their pre-metering declarations until that runtime implementation lands, so the existing API comparison continues to verify the implemented contract without exemptions. Move the remaining additions and replacements into those files with implementation; all unrelated members stay unchanged.
 
 In Go, add `Metering string` to `Operation` immediately after `SegmentBound`. Its values are empty, `"read-only"` and `"segment-bound"`, validated as above. Add the following request and report types; `ChargeResult` implements `Report`:
 

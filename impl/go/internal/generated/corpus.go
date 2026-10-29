@@ -506,8 +506,33 @@ var Corpus = CorpusTable{
 				CorpusTableRecordEntryKeyEntry{
 					Key:      "charge",
 					Type:     "count",
-					Is:       "the Fuel the Host function draws with `Charge`",
+					Is:       "the Fuel the Host function draws with `Charge`; with `charge-refused`, the accepted total before the refusal",
 					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "charge-refused",
+					Type: "word",
+					Is:   "after `charge`, a further `Charge` is refused and the call does no work; `value` and `error` are absent",
+					Words: []string{
+						"yes",
+					},
+					Optional: true,
+				},
+			},
+		},
+		CorpusTableRecordEntry{
+			Name:  "charge-request",
+			Input: true,
+			Ids: []string{
+				"call",
+				"request?",
+			},
+			Is: "a Metered Operation's queued charge request; a synchronous refusal has no request id and is followed by `refused`",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "fuel",
+					Type: "value",
+					Is:   "the requested Fuel: a whole number, or the text `\"invalid\"` for an amount that isn't one",
 				},
 			},
 		},
@@ -932,6 +957,15 @@ var Corpus = CorpusTable{
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:  "charge-refused",
+					Type: "word",
+					Is:   "a Metered Operation's further `Charge` was refused after the accepted `charged`; the call has neither `result` nor `error`",
+					Words: []string{
+						"yes",
+					},
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:  "automatic",
 					Type: "word",
 					Is:   "Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies",
@@ -939,6 +973,32 @@ var Corpus = CorpusTable{
 						"yes",
 					},
 					Optional: true,
+				},
+			},
+		},
+		CorpusTableRecordEntry{
+			Name:  "charge-result",
+			Input: false,
+			Ids: []string{
+				"call",
+				"request",
+			},
+			Is: "a charge request's outcome, when the Pump drains it, before any Stretch",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "fuel",
+					Type: "count",
+					Is:   "the requested Fuel; only `accepted` spends it",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "status",
+					Type: "word",
+					Is:   "`accepted` spends the Fuel, `limit` faults the call's Run at the call, and `inactive` is for a call no longer pending",
+					Words: []string{
+						"accepted",
+						"limit",
+						"inactive",
+					},
 				},
 			},
 		},
@@ -1910,6 +1970,15 @@ var Corpus = CorpusTable{
 			Is:    "for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait`",
 			Kinds: []string{
 				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
+			Table: "operations",
+			Key:   "metering",
+			Is:    "optional `read-only` (immediate or suspending) or `segment-bound` (immediate and `segmentBound`); a suspending `read-only` Operation may take `charge-request` inputs",
+			Kinds: []string{
+				"trace",
+				"disassembly",
 			},
 		},
 		CorpusTableSetupEntry{

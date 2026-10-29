@@ -1,0 +1,29 @@
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
+# metering-charge-refused: d1's scan returns. d2's pays 30, then has a
+# further increment refused, so it faults at its call with
+# `charge-refused=yes` and no result; d3's first increment is refused, so
+# its record has no `charged`. Each fault rolls `found` back.
+
+> load search identity=cec13c849bda5cccc376754f20048f9b56fcc96b7f8f8fa40945b16ce80c4395
+> stub index.scan value=7
+> stub index.scan charge=30 charge-refused=yes
+> stub index.scan charge-refused=yes
+> deliver d1 to=search message=go
+> deliver d2 to=search message=go
+> deliver d3 to=search message=go
+> pump clock=2026-10-29T09:00:00Z
+call search/r1.c1 op=index.scan args=[] result=7
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=32 state=80 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=32
+call search/r2.c1 op=index.scan args=[] charged=30 charge-refused=yes
+fault search/r2 limit=fuel at=search:10 pos=7:3 rollback=[found]
+seg search/r2 start delivery=d2 handler=go clause=1 fuel=54 alloc=16 state=48 end=fault
+run search/r2 outcome=limit-fault delivery=d2 handler=go limit=fuel fuel=54 alloc=16
+call search/r3.c1 op=index.scan args=[] charge-refused=yes
+fault search/r3 limit=fuel at=search:10 pos=7:3 rollback=[found]
+seg search/r3 start delivery=d3 handler=go clause=1 fuel=24 alloc=16 state=16 end=fault
+run search/r3 outcome=limit-fault delivery=d3 handler=go limit=fuel fuel=24 alloc=16
+pumped state=idle fuel=107
+
+> vars
+vars search found=1

@@ -1,0 +1,36 @@
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
+# metering-charge-requests: an invalid amount is refused at enqueue with no
+# request id. r1's q1 is accepted and spent
+# without a Stretch; r2's q2 is more than its Run has left, so r2 faults at
+# its call. After r1's answer, q3 is inactive and spends nothing.
+
+> load reader identity=abfde346c7c85d871c96a7cc22fcab9e5f5dfa15e3f0a8eeed3207ebad91e3bc
+> deliver d1 to=reader message=go
+> deliver d2 to=reader message=go
+> pump clock=2026-10-29T09:00:00Z
+call reader/r1.c1 op=feed.fetch args=[]
+seg reader/r1 start delivery=d1 handler=go clause=1 fuel=14 alloc=0 state=288 end=ask-wait
+call reader/r2.c1 op=feed.fetch args=[]
+seg reader/r2 start delivery=d2 handler=go clause=1 fuel=14 alloc=0 state=496 end=ask-wait
+pumped state=idle fuel=28 next=2026-10-29T09:00:30Z
+> charge-request reader/r1.c1 fuel="invalid"
+refused code="invalid value"
+> charge-request reader/r1.c1 q1 fuel=5
+> charge-request reader/r2.c1 q2 fuel=1000
+> pump clock=2026-10-29T09:00:01Z
+charge-result reader/r1.c1 q1 fuel=5 status=accepted
+charge-result reader/r2.c1 q2 fuel=1000 status=limit
+fault reader/r2 limit=fuel at=reader:4 pos=6:3
+abandon reader/r2.c1
+run reader/r2 outcome=limit-fault delivery=d2 handler=go limit=fuel fuel=14 alloc=0
+pumped state=idle fuel=5 next=2026-10-29T09:00:30Z
+> answer reader/r1.c1 value="news"
+> charge-request reader/r1.c1 q3 fuel=2
+> pump clock=2026-10-29T09:00:02Z
+charge-result reader/r1.c1 q3 fuel=2 status=inactive
+seg reader/r1 resume fuel=14 alloc=48 state=44 end=return
+run reader/r1 outcome=completed delivery=d1 handler=go fuel=33 alloc=48
+pumped state=idle fuel=14
+
+> vars
+vars reader results=["news"]

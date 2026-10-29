@@ -38,12 +38,15 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl
 	SegmentBound bool
-	Command      bool     // also a Host Command, callable by its name alone (ADR 0094)
-	Description  string   // tooling only; nothing in the Core reads it (ADR 0076)
-	Examples     []string // tooling only
-	Do           func(c *Call, args []Value) (Value, error)
-	Start        func(c *Call, args []Value) error
-	Fire         func(c *Call, args []Value) error
+	// Metering is empty, "read-only" or "segment-bound" (Metered Operations).
+	// A suspending "read-only" Operation's Call may RequestCharge.
+	Metering    string
+	Command     bool     // also a Host Command, callable by its name alone (ADR 0094)
+	Description string   // tooling only; nothing in the Core reads it (ADR 0076)
+	Examples    []string // tooling only
+	Do          func(c *Call, args []Value) (Value, error)
+	Start       func(c *Call, args []Value) error
+	Fire        func(c *Call, args []Value) error
 }
 
 // operationChecks are private refinements installed only by Standard factories.
@@ -211,6 +214,19 @@ func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordi
 		}
 		if op.SegmentBound && (op.Mode != Immediate || lifecycle == nil && coordinate == nil) {
 			return invalid("Segment-bound Operations require immediate mode and lifecycle hooks")
+		}
+		switch op.Metering {
+		case "":
+		case "read-only":
+			if op.Mode == FireAndForget || op.SegmentBound || op.Scope != nil {
+				return invalid("read-only metering needs an immediate or suspending Operation without scope or SegmentBound")
+			}
+		case "segment-bound":
+			if op.Mode != Immediate || !op.SegmentBound {
+				return invalid("segment-bound metering needs an immediate SegmentBound Operation")
+			}
+		default:
+			return invalid("metering must be read-only or segment-bound")
 		}
 		if op.Scope != nil {
 			scope := *op.Scope

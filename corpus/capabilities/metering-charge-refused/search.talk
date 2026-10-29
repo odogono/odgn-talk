@@ -1,0 +1,8 @@
+-- search.talk: the metering-charge-refused case's Script.
+
+script variable found = 0
+
+on go
+  add 1 to found
+  ask index to scan
+end go

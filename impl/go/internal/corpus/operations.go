@@ -41,6 +41,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		name := row["capability"].(string)
 		op := talk.Operation{Name: row["name"].(string)}
 		op.SegmentBound, _ = row["segmentBound"].(bool)
+		op.Metering, _ = row["metering"].(string)
 		op.Command, _ = row["command"].(bool)
 		if labels, ok := row["labels"].([]any); ok {
 			for _, label := range labels {
@@ -433,6 +434,12 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 	if charge, ok := stub["charge"]; ok {
 		n, _ := strconv.ParseInt(charge.Raw, 10, 64)
 		if e := c.Charge(n); e != nil {
+			return talk.Nothing, e
+		}
+	}
+	// A refused increment, simulated with an amount no Run can cover.
+	if _, refused := stub["charge-refused"]; refused {
+		if e := c.Charge(9007199254740991); e != nil {
 			return talk.Nothing, e
 		}
 	}

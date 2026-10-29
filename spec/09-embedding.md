@@ -4,7 +4,7 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0002](../docs/
 
 A Host embeds a Core through one interface, declared in [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts). The two files have the same calls, and differ only in idiom: errors as values in Go and exceptions in TS, `Start` and `Answer` in Go and an optional Promise-returning `run` in TS, and maps built from pairs in Go and from a `Map` or `record()` in TS. No Script can observe the differences ([ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md)). They are declarations only, and are never compiled. This chapter states the rules they share, and the language-neutral message layer for a Host in any other language.
 
-The [Metered Operation target declarations](embedding/metered-operations.md#target-embedding-declarations) are staged outside those checked interface files until runtime implementation lands. They specify the new API and SQLite signatures; legacy interface comments do not override that contract.
+The checked interface files carry the [Metered Operation declarations](embedding/metered-operations.md#target-embedding-declarations) except the SQLite `perStep` signatures, which stay staged there until runtime implementation lands; legacy interface comments do not override that contract.
 
 ## Package names
 

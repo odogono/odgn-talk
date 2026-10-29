@@ -1,0 +1,8 @@
+-- reader.talk: the metering-charge-requests case's Script.
+
+script variable results = []
+
+on go
+  ask feed to fetch and wait
+  put it after results
+end go

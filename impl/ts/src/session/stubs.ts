@@ -10,6 +10,8 @@ export type Stub = {
   charge: number;
   error?: Value;
   malformed?: boolean;
+  /** After `charge`, a further `Charge` is refused (Metered Operations). */
+  refused?: boolean;
   value?: Value;
 };
 
@@ -30,9 +32,15 @@ export const stubLine = (operation: string, stub: Stub): string =>
       ['value', stub.value ? traceValue(stub.value) : null],
       ['error', stub.error ? traceValue(stub.error) : null],
       ['charge', stub.charge ? String(stub.charge) : null],
+      ['charge-refused', stub.refused ? 'yes' : null],
     ],
     true,
   );
+
+// A refused increment, simulated with an amount no Run can cover: the Core
+// latches the refusal and throws LimitReached.
+const refuse = (call: { charge(fuel: number): void }) =>
+  call.charge(Number.MAX_SAFE_INTEGER);
 
 /** The Stubs queued for each Operation, named `<capability>.<operation>`. */
 export class Stubs {
@@ -89,6 +97,9 @@ export class Stubs {
     if (stub.charge) {
       call.charge(stub.charge);
     }
+    if (stub.refused) {
+      refuse(call);
+    }
     if (stub.malformed) {
       // A normal Host return acknowledges a scope before result validation.
       return null as unknown as Value;
@@ -112,6 +123,9 @@ export class Stubs {
     const stub = queued ?? recorded;
     if (stub?.charge) {
       call.charge(stub.charge);
+    }
+    if (stub?.refused) {
+      refuse(call);
     }
     // A Stub's error, or a recorded one, fails the call as it starts.
     if (stub?.error) {

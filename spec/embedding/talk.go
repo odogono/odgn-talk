@@ -1,5 +1,5 @@
 // The NorthTalk Go embedding interface: declarations only, never compiled.
-// Metering extensions and SQLite perStep signatures are staged in
+// SQLite perStep signatures are staged in
 // metered-operations.md#target-embedding-declarations until runtime implementation.
 // The module is github.com/odogono/odgn-talk/impl/go; this is its root package.
 //
@@ -318,6 +318,7 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl // immediate only
 	SegmentBound bool       // immediate only; false by default
+	Metering     string     // "", "read-only" or "segment-bound" (Metered Operations)
 	Command      bool       // also callable as a Host Command by its name alone; refused on a Reserved Word
 	Description  string     // plain text for tooling; only the Host Manifest carries it
 	Examples     []string   // NorthTalk source, each calling this Operation; manifest only
@@ -447,6 +448,30 @@ func (c *Call) Charge(fuel int64) error
 func (c *Call) Answer(v Value)
 func (c *Call) AnswerWithCost(v Value, fuel int64)
 func (c *Call) Fail(e *ScriptError)
+
+// RequestCharge queues a charge request for a suspending Operation declared
+// Metering "read-only", from any goroutine. An invalid amount, an ineligible
+// call or a second unresolved request is HostError invalid value, with no id.
+func (c *Call) RequestCharge(fuel int64) (*ChargeRequest, error)
+
+type ChargeRequestID string // Group-wide q1, q2, … in enqueue order
+
+type ChargeRequest struct { /* opaque */
+}
+
+func (r *ChargeRequest) ID() ChargeRequestID
+func (r *ChargeRequest) Done() <-chan struct{}
+func (r *ChargeRequest) Result() *ChargeResult // read after Done closes at Pump end
+
+// ChargeResult is a charge request's outcome, also a Pump's Report.
+type ChargeResult struct {
+	Request ChargeRequestID
+	Call    CallID
+	Fuel    int64  // requested amount; only accepted contributes Fuel
+	Status  string // "accepted", "limit" or "inactive"
+}
+
+func (*ChargeResult) isReport()
 
 type CallID string
 

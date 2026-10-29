@@ -266,6 +266,10 @@ const capabilitiesOf = (
           ? {}
           : { segmentBound: op.segmentBound }),
         ...(op.command === undefined ? {} : { command: op.command }),
+        // defineValueCapability refuses a value the mode can't take.
+        ...(op.metering === undefined
+          ? {}
+          : { metering: op.metering as 'read-only' }),
         ...(op.labels === undefined ? {} : { labels: op.labels }),
         cost: { fuel: op.cost?.fuel ?? 0, alloc: op.cost?.alloc ?? 0 },
         ...(op.result === undefined ? {} : { result: shapeOf(op.result) }),
@@ -1067,6 +1071,7 @@ const driveReplay = function* (
     }
     return {
       charge: Number(r.fields.get('charged') ?? 0),
+      ...(r.fields.has('charge-refused') ? { refused: true } : {}),
       ...(r.fields.has('result')
         ? { value: value(r.fields.get('result')!) }
         : {}),
@@ -1736,6 +1741,31 @@ const driveReplay = function* (
           }
           break;
         }
+        case 'charge-request': {
+          // Replayed through the retained Call, so the Core recomputes the
+          // outcome; a line with no request id was refused at enqueue.
+          const call = calls.get(r.ids[0] ?? '');
+          if (!call) {
+            throw new DeferredCaseError('a charge request after a restore');
+          }
+          const amount = value(r.fields.get('fuel')!);
+          const fuel =
+            amount.kind === 'number' ? Number(amount.toString()) : Number.NaN;
+          const expected = r.ids[1];
+          try {
+            const request = call.requestCharge(fuel);
+            if (request.id !== expected) {
+              throw new Error(
+                `Charge request ${request.id} was recorded as ${expected ?? 'refused'}`,
+              );
+            }
+          } catch (error) {
+            if (!(error instanceof HostError) || expected !== undefined) {
+              throw error;
+            }
+          }
+          break;
+        }
         case 'stub': {
           // The runner's, written where the case has it; the Core never sees it.
           const op = r.ids[0]!;
@@ -1745,8 +1775,13 @@ const driveReplay = function* (
           ) {
             throw new Error('clock.now uses the Pump Clock, not a Stub');
           }
+          const refused = r.fields.has('charge-refused');
+          if (refused && (r.fields.has('value') || r.fields.has('error'))) {
+            throw new Error('A refusing Stub has neither value nor error');
+          }
           stubs.add(op, {
             charge: Number(r.fields.get('charge') ?? 0),
+            ...(refused ? { refused } : {}),
             ...(r.fields.has('value')
               ? { value: value(r.fields.get('value')!) }
               : {}),

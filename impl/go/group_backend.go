@@ -29,6 +29,7 @@ type groupBackend interface {
 	settle(CallID, Settlement) (*Call, error)
 	fingerprint() [32]byte
 	settleCall(*Call, string, Value, *ScriptError, int64)
+	requestCharge(*Call, int64) (*ChargeRequest, error)
 	grantNames(*Script) map[string][]string
 }
 
