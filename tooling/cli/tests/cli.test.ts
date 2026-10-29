@@ -893,3 +893,32 @@ test('test --only picks single Test Handlers in a Folio Project', async () => {
   );
   expect(code).toBe(0);
 });
+
+test('diff-save names the variable two saves differ in, and dump-save prints one', async () => {
+  const { createGroup } = await import('@northtalk/ts');
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-saves-'));
+  await using group = createGroup({ name: 'g' });
+  const script = group.load({
+    name: 'a',
+    source: 'script variable count = 0\non bump\n  add 1 to count\nend bump\n',
+  });
+  const before = join(dir, 'before.save');
+  const after = join(dir, 'after.save');
+  writeFileSync(before, group.save());
+  await script.invoke('bump');
+  writeFileSync(after, group.save());
+
+  const diff = run(['diff-save', before, after]);
+  expect(diff.code).toBe(1);
+  expect(diff.stdout).toContain(
+    'script "a" / variable count (#0): number 0 → number 1\n',
+  );
+  const first = run(['diff-save', '--first', '--json', before, after]);
+  expect(JSON.parse(first.stdout).differences).toHaveLength(1);
+  const same = run(['diff-save', before, before]);
+  expect([same.code, same.stdout]).toEqual([0, 'same state\n']);
+  const dump = run(['dump-save', after]);
+  expect(dump.code).toBe(0);
+  expect(dump.stdout).toContain('variable count (#0): number');
+  expect(run(['diff-save', before]).code).toBe(2);
+});

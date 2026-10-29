@@ -46,6 +46,7 @@ bun run northtalk replay session.transcript   # replay a recorded session
 bun run northtalk replay session.transcript --trace case.trace
 bun run corpus:run sessions                   # the corpus's Session Transcripts
 bun run northtalk test                        # run your own Test Scripts
+bun run northtalk diff-save a.save b.save     # show where two saves differ
 ```
 
 Enter a declaration, a statement or an expression at the `>` prompt. An unfinished one goes on at a `|` prompt until the whole Entry is complete. `:help` lists the Session Commands. Ctrl-C cancels the Run the prompt is waiting for, and Ctrl-D or `:quit` ends the session. `replay` exits with 1 and names the first line that differs when a Transcript doesn't replay the same. See [chapter 12](spec/12-sessions-and-tooling.md) for what a session does, and [`tooling/cli/`](tooling/cli/) for the command. `northtalk test` runs the `*.test.talk` Test Scripts and `*.transcript` files under a path; [Testing Scripts](tooling/cli/README.md#testing-scripts) describes the convention.

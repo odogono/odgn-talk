@@ -182,6 +182,7 @@ Files, grammar, or lowering.
 - Rules: [sessions and tooling](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
 - Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [worker supervisor tests](../../tooling/stack/tests/worker-supervisor.test.ts), [Session corpus](../../corpus/sessions/)
 - First check: `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts`
+- Save diff: [`diff-save` and `dump-save`](../../tooling/stack/src/save-diff.ts) decode saves through the generated schema copy that `bun run lints:generate` writes from [save-format.toml](../../spec/data/save-format.toml); `bun test tooling/stack/tests/save-diff.test.ts`
 
 ## Formatting source
 
