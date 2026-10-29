@@ -7295,12 +7295,13 @@ pub const Group = struct {
         try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
     }
 
-    /// The failed frames the Run's cleanups hold aside, which count toward
+    /// The failed frames the Run's dispatches and cleanups hold aside, which count toward
     /// its call depth.
     fn heldCount(run: *const Run) usize {
         var n: usize = 0;
-        for (run.controls.items) |c| if (c == .cleanup) {
-            n += c.cleanup.held.items.len;
+        for (run.controls.items) |c| n += switch (c) {
+            .cleanup => |u| u.held.items.len,
+            .dispatch => |d| d.held.len,
         };
         return n;
     }
