@@ -408,7 +408,25 @@ is = "an error to fail with instead, as for `fail`, or `{}` to fail with an erro
 key = "charge"
 type = "count"
 optional = true
-is = "the Fuel the Host function draws with `Charge`"
+is = "the Fuel the Host function draws with `Charge`; with `charge-refused`, the accepted total before the refusal"
+
+[[record.key]]
+key = "charge-refused"
+type = "word"
+optional = true
+words = ["yes"]
+is = "after `charge`, a further `Charge` is refused and the call does no work; `value` and `error` are absent"
+
+[[record]]
+name = "charge-request"
+input = true
+ids = ["call", "request?"]
+is = "a Metered Operation's queued charge request; a synchronous refusal has no request id and is followed by `refused`"
+
+[[record.key]]
+key = "fuel"
+type = "value"
+is = "the requested Fuel: a whole number, or the text `\"invalid\"` for an amount that isn't one"
 
 [[record]]
 name = "cancel-run"
@@ -779,11 +797,35 @@ optional = true
 is = "the Fuel `Charge` drew"
 
 [[record.key]]
+key = "charge-refused"
+type = "word"
+optional = true
+words = ["yes"]
+is = "a Metered Operation's further `Charge` was refused after the accepted `charged`; the call has neither `result` nor `error`"
+
+[[record.key]]
 key = "automatic"
 type = "word"
 optional = true
 words = ["yes"]
 is = "Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies"
+
+[[record]]
+name = "charge-result"
+input = false
+ids = ["call", "request"]
+is = "a charge request's outcome, when the Pump drains it, before any Stretch"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "the requested Fuel; only `accepted` spends it"
+
+[[record.key]]
+key = "status"
+type = "word"
+words = ["accepted", "limit", "inactive"]
+is = "`accepted` spends the Fuel, `limit` faults the call's Run at the call, and `inactive` is for a call no longer pending"
 
 [[record]]
 name = "prop"
@@ -1396,6 +1438,12 @@ table = "operations"
 key = "maxPending"
 is = "for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait`"
 kinds = ["trace"]
+
+[[setup]]
+table = "operations"
+key = "metering"
+is = "optional `read-only` (immediate or suspending) or `segment-bound` (immediate and `segmentBound`); a suspending `read-only` Operation may take `charge-request` inputs"
+kinds = ["trace", "disassembly"]
 
 [[setup]]
 table = "operations"

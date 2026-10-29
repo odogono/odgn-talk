@@ -73,6 +73,8 @@ capabilities/host-commands-load-checks
 capabilities/host-commands-shadowing
 capabilities/host-failures
 capabilities/load-checks
+capabilities/metering-charge-refused
+capabilities/metering-charge-requests
 capabilities/optional-args
 capabilities/optional-args-fuel
 capabilities/optional-args-join

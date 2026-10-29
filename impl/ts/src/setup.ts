@@ -56,6 +56,7 @@ export type OperationSpec = {
   /** Argument Labels, one per argument after the first (ADR 0115). */
   labels?: string[];
   maxPending?: number;
+  metering?: 'read-only' | 'segment-bound';
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
   name: string;
   result?: ShapeSpec;

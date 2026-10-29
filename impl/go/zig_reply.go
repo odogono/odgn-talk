@@ -345,6 +345,8 @@ func zigReportOf(kind string) (Report, error) {
 		return &CallFailed{}, nil
 	case "decided":
 		return &Decided{}, nil
+	case "charge result":
+		return &ChargeResult{}, nil
 	}
 	return nil, backendUnsupported("Report " + kind)
 }

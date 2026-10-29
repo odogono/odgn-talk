@@ -177,7 +177,7 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 
 ### Metering extensions
 
-[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. These normative extensions are staged separately from the generated catalogue tables below; the [handoff](../docs/handoffs/472-metered-operations.md) lists their activation work. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
+[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. The catalogue tables below carry them; SQLite `perStep` setup remains staged, as the [handoff](../docs/handoffs/472-metered-operations.md) lists. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
 
 ### What is recorded, and when
 
@@ -222,7 +222,8 @@ A record is written when what it records happens, so a Trace is in the order the
 | `answer` | `call` | `value`, `fuel`? | answers a suspending call |
 | `fail` | `call` | `error` | fails a suspending call |
 | `settle` | `call` | `how`, `value`?, `error`? | settles a pending call after a restore |
-| `stub` | `operation` | `value`?, `error`?, `charge`? | queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, a suspending call's error, which fails it as it starts, and any call's charge; the runner writes it, and the Core never sees it |
+| `stub` | `operation` | `value`?, `error`?, `charge`?, `charge-refused`? | queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, a suspending call's error, which fails it as it starts, and any call's charge; the runner writes it, and the Core never sees it |
+| `charge-request` | `call`, `request` (optional) | `fuel` | a Metered Operation's queued charge request; a synchronous refusal has no request id and is followed by `refused` |
 | `cancel-run` | `run` | `pc`? | cancels a Run |
 | `rewind-run` | `run` | `pc`? | rewinds a Run still in its first Segment: its message goes back to the head of its Script's mailbox |
 | `stop` | `script` | `reason`, `pc`? | stops a Script |
@@ -286,7 +287,9 @@ A record is written when what it records happens, so a Trace is in the order the
 | `settle` | `error` | `value` | the error, for `fail` |
 | `stub` | `value` | `value` | the result |
 | `stub` | `error` | `value` | an error to fail with instead, as for `fail`, or `{}` to fail with an error that isn't a Script error |
-| `stub` | `charge` | `count` | the Fuel the Host function draws with `Charge` |
+| `stub` | `charge` | `count` | the Fuel the Host function draws with `Charge`; with `charge-refused`, the accepted total before the refusal |
+| `stub` | `charge-refused` | `word` | after `charge`, a further `Charge` is refused and the call does no work; `value` and `error` are absent: `yes` |
+| `charge-request` | `fuel` | `value` | the requested Fuel: a whole number, or the text `"invalid"` for an amount that isn't one |
 | `cancel-run` | `pc` | `count` | for one that landed early, the instruction it landed before |
 | `rewind-run` | `pc` | `count` | for one that landed early, the instruction it landed before |
 | `stop` | `reason` | `value` | the Host's reason, as text |
@@ -327,7 +330,8 @@ A record is written when what it records happens, so a Trace is in the order the
 | --- | --- | --- | --- |
 | `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
 | `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
-| `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `automatic`? | a Capability call |
+| `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `charge-refused`?, `automatic`? | a Capability call |
+| `charge-result` | `call`, `request` | `fuel`, `status` | a charge request's outcome, when the Pump drains it, before any Stretch |
 | `prop` | `run` | `object`, `name`, `op`, `selector`?, `value`?, `error`? | a Host Object property call, or a call to its Object Kind's collection |
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
 | `raise` | `run` | `code`, `at`, `pos` | an error raised, whether or not it is caught |
@@ -387,7 +391,10 @@ A record is written when what it records happens, so a Trace is in the order the
 | `call` | `result` | `value` | for an immediate call that succeeded, the Host's result |
 | `call` | `error` | `value` | for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error or a result that broke its Shape; a call cut off by a `Charge` the Run can't cover has neither `result` nor `error` |
 | `call` | `charged` | `count` | the Fuel `Charge` drew |
+| `call` | `charge-refused` | `word` | a Metered Operation's further `Charge` was refused after the accepted `charged`; the call has neither `result` nor `error`: `yes` |
 | `call` | `automatic` | `word` | Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies: `yes` |
+| `charge-result` | `fuel` | `count` | the requested Fuel; only `accepted` spends it |
+| `charge-result` | `status` | `word` | `accepted` spends the Fuel, `limit` faults the call's Run at the call, and `inactive` is for a call no longer pending: `accepted`, `limit`, `inactive` |
 | `prop` | `object` | `value` | the object |
 | `prop` | `name` | `id` | the property, or `elements` for a collection call |
 | `prop` | `op` | `word` | a read or a write, or a collection's count, positional lookup or name lookup: `get`, `set`, `count`, `at`, `find` |
@@ -607,6 +614,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[operations]` | `result` | the result Shape; absent for a fire-and-forget Operation | trace, disassembly |
 | `[operations]` | `cost` | the declared cost, `{fuel, alloc}`, each 0 if absent | trace, disassembly |
 | `[operations]` | `maxPending` | for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait` | trace |
+| `[operations]` | `metering` | optional `read-only` (immediate or suspending) or `segment-bound` (immediate and `segmentBound`); a suspending `read-only` Operation may take `charge-request` inputs | trace, disassembly |
 | `[operations]` | `errors` | the declared error codes, each `{code, fields}`, where `fields` are `{key, shape, optional}` | trace, disassembly |
 | `[standard]` | `capability` | a Standard Capability the case uses | trace, disassembly |
 | `[standard]` | `costs` | the cost of each of its Operations, a table from Operation name to `{fuel, alloc}` | trace, disassembly |

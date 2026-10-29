@@ -115,6 +115,9 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 		if op.Command {
 			fields["command"] = true
 		}
+		if op.Metering != "" {
+			fields["metering"] = op.Metering
+		}
 		if len(op.Labels) > 0 {
 			fields["labels"] = op.Labels
 		}
@@ -241,6 +244,24 @@ func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fue
 		panic(err)
 	}
 	b.ready()
+}
+
+// requestCharge sends `request-charge`; the guest validates and records it,
+// and its Pump's `charge result` report settles the future.
+func (b *zigGroup) requestCharge(c *Call, fuel int64) (*ChargeRequest, error) {
+	reply, err := b.send("request-charge", map[string]any{"call": string(c.id), "fuel": fuel})
+	if err != nil {
+		return nil, err
+	}
+	q := &ChargeRequest{id: ChargeRequestID(zigText(reply.get("request"))), done: make(chan struct{})}
+	b.chargesMu.Lock()
+	if b.charges == nil {
+		b.charges = map[ChargeRequestID]*ChargeRequest{}
+	}
+	b.charges[q.id] = q
+	b.chargesMu.Unlock()
+	b.ready()
+	return q, nil
 }
 
 func (b *zigGroup) grantNames(s *Script) map[string][]string {

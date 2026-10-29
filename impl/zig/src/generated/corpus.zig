@@ -505,8 +505,33 @@ pub const corpus: CorpusTable = .{
                 .{
                     .key = "charge",
                     .type = "count",
-                    .is = "the Fuel the Host function draws with `Charge`",
+                    .is = "the Fuel the Host function draws with `Charge`; with `charge-refused`, the accepted total before the refusal",
                     .optional = true,
+                },
+                .{
+                    .key = "charge-refused",
+                    .type = "word",
+                    .is = "after `charge`, a further `Charge` is refused and the call does no work; `value` and `error` are absent",
+                    .words = &.{
+                        "yes",
+                    },
+                    .optional = true,
+                },
+            },
+        },
+        .{
+            .name = "charge-request",
+            .input = true,
+            .ids = &.{
+                "call",
+                "request?",
+            },
+            .is = "a Metered Operation's queued charge request; a synchronous refusal has no request id and is followed by `refused`",
+            .key = &.{
+                .{
+                    .key = "fuel",
+                    .type = "value",
+                    .is = "the requested Fuel: a whole number, or the text `\"invalid\"` for an amount that isn't one",
                 },
             },
         },
@@ -931,6 +956,15 @@ pub const corpus: CorpusTable = .{
                     .optional = true,
                 },
                 .{
+                    .key = "charge-refused",
+                    .type = "word",
+                    .is = "a Metered Operation's further `Charge` was refused after the accepted `charged`; the call has neither `result` nor `error`",
+                    .words = &.{
+                        "yes",
+                    },
+                    .optional = true,
+                },
+                .{
                     .key = "automatic",
                     .type = "word",
                     .is = "Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies",
@@ -938,6 +972,32 @@ pub const corpus: CorpusTable = .{
                         "yes",
                     },
                     .optional = true,
+                },
+            },
+        },
+        .{
+            .name = "charge-result",
+            .input = false,
+            .ids = &.{
+                "call",
+                "request",
+            },
+            .is = "a charge request's outcome, when the Pump drains it, before any Stretch",
+            .key = &.{
+                .{
+                    .key = "fuel",
+                    .type = "count",
+                    .is = "the requested Fuel; only `accepted` spends it",
+                },
+                .{
+                    .key = "status",
+                    .type = "word",
+                    .is = "`accepted` spends the Fuel, `limit` faults the call's Run at the call, and `inactive` is for a call no longer pending",
+                    .words = &.{
+                        "accepted",
+                        "limit",
+                        "inactive",
+                    },
                 },
             },
         },
@@ -1909,6 +1969,15 @@ pub const corpus: CorpusTable = .{
             .is = "for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait`",
             .kinds = &.{
                 "trace",
+            },
+        },
+        .{
+            .table = "operations",
+            .key = "metering",
+            .is = "optional `read-only` (immediate or suspending) or `segment-bound` (immediate and `segmentBound`); a suspending `read-only` Operation may take `charge-request` inputs",
+            .kinds = &.{
+                "trace",
+                "disassembly",
             },
         },
         .{

@@ -2,6 +2,7 @@ package corpus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -172,7 +173,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|extend|save|restore|settle|replace-library|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|rewind-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|extend|save|restore|settle|replace-library|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|rewind-run|cancel-delivery|answer|fail|charge-request|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -493,6 +494,28 @@ func (x *executionReplay) apply(i int) error {
 				m, _ := talk.Map(data...)
 				call.Fail(&talk.ScriptError{Code: v.Get("code").Text(), Message: v.Get("message").Text(), Data: m})
 			}
+		}
+	case "charge-request":
+		// Replayed through the retained Call, so the Core recomputes the
+		// outcome; a line with no request id was refused at enqueue.
+		call := operations.calls[talk.CallID(r.IDs[0])]
+		if call == nil {
+			return fmt.Errorf("unknown call %s", r.IDs[0])
+		}
+		fuel := int64(-1)
+		if raw := fields["fuel"].Raw; raw != `"invalid"` {
+			fuel, _ = strconv.ParseInt(raw, 10, 64)
+		}
+		q, e := call.RequestCharge(fuel)
+		if len(r.IDs) < 2 {
+			var refused *talk.HostError
+			if !errors.As(e, &refused) {
+				return fmt.Errorf("charge request for %s was recorded as refused", r.IDs[0])
+			}
+		} else if e != nil {
+			return e
+		} else if string(q.ID()) != r.IDs[1] {
+			return fmt.Errorf("charge request %s was recorded as %s", q.ID(), r.IDs[1])
 		}
 	case "stub":
 		x.lines = append(x.lines, r.Raw)

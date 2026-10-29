@@ -1520,7 +1520,9 @@ export class Run {
       this.segmentBase = [...this.script.variables];
     }
     const site = 'site' in pending ? (pending as Member).site : undefined;
-    this.fault(
+    // No instruction is executing, so a debugger has nowhere to pause: the
+    // fault lands at once.
+    this.faultNow(
       this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
       site
         ? site.frame.code.unit.code[site.pc]!

@@ -813,7 +813,7 @@ Go passing gate.
 
 Operation Declarations accept `Description` (text) and `Examples` (a list of source texts). The Message Layer validates both fields on `define-capability`, including refusing null. Documentation stays out of saves and Group Fingerprints, so rewording it does not cause a restore mismatch. Go does not yet export a Host Manifest.
 
-**Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. The [Zig Core](../zig/README.md#the-machine) implements the staged contract with Zig-only acceptance tests; the shared executable catalogues remain staged. See [#472](https://github.com/odogono/odgn-talk/issues/472).
+**Metering support:** an `Operation` may set `Metering` to `"read-only"` or `"segment-bound"`, validated at definition and passed to the embedded Zig Core, which implements the [incremental metering contract](../../spec/embedding/metered-operations.md). A suspending `"read-only"` Call may `RequestCharge(fuel)` from any goroutine; its `ChargeRequest`'s `Done` closes when the Pump that processes it reports a `*ChargeResult`. The corpus runner replays `charge-request` inputs and `charge-refused` Stubs. SQLite factories still use up-front `max × perRow` charging; [#1795](https://github.com/odogono/odgn-talk/issues/1795) tracks `perStep`.
 
 `Core.DefineCapability` copies Operation declarations and validates their modes,
 Shapes, costs and Host functions. `Grant` selects Operations, and `GrantAll`

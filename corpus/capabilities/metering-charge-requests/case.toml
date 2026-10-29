@@ -1,0 +1,23 @@
+# metering-charge-requests: a suspending Operation declared
+# `metering = "read-only"` takes charge requests by its issued call id
+# (spec/embedding/metered-operations.md, Asynchronous authorization).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+result = "text"
+cost = { fuel = 0 }
+metering = "read-only"
+
+[[scripts]]
+name = "reader"
+source = "reader.talk"
+grants = { feed = { ops = ["fetch"] } }
+limits = { fuelPerRun = 100 }
