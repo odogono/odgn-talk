@@ -28,8 +28,6 @@ export type Controls = {
   statementStepsShown: boolean;
   /** Reader input is taken: playing, not paused, not between Pages. */
   takesInput: boolean;
-  /** An editable Text Element may take typing: playing, not between Pages. */
-  textEditable: boolean;
 };
 
 export const controls = (
@@ -46,7 +44,6 @@ export const controls = (
     paused,
     running: live && !view!.paused,
     takesInput: live && !view!.navigating && !view!.paused,
-    textEditable: live && !view!.navigating,
     browsing: live && mode === 'browse',
     atStoppedRun: stoppedRun,
     pauseLabel: paused ? 'Resume' : 'Pause',

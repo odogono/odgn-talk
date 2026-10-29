@@ -242,15 +242,22 @@ export const runBrowserTests = async () => {
         const pictured = element('picture', true);
         const at = pictured.getBoundingClientRect();
         const scale = at.width / pictured.offsetWidth;
+        // An event's client position is whole pixels, so on a scaled Page
+        // the point nearest (10, 20) may be a fraction away from it.
+        const clientX = Math.round(at.x + 10 * scale);
+        const clientY = Math.round(at.y + 20 * scale);
         pictured.dispatchEvent(
           new MouseEvent('click', {
             bubbles: true,
             detail: 1,
-            clientX: at.x + 10 * scale,
-            clientY: at.y + 20 * scale,
+            clientX,
+            clientY,
           }),
         );
-        await until(() => output() === 'primary 10,20');
+        const x = Math.round((clientX - at.x) / scale);
+        const y = Math.round((clientY - at.y) / scale);
+        assert(Math.abs(x - 10) <= 1 && Math.abs(y - 20) <= 1, 'Click point');
+        await until(() => output() === `primary ${x},${y}`);
         const menu = new MouseEvent('contextmenu', {
           bubbles: true,
           cancelable: true,

@@ -1,4 +1,5 @@
 import { CallMeter } from './call-meter';
+import { callId } from './call-id';
 import { deferFault, machineDebug } from './debug';
 import { trackOperation } from './operation-promises';
 /* eslint require-yield: "off" */
@@ -1329,7 +1330,7 @@ export class Run {
         continue;
       }
       const scope = this.scopes.splice(i, 1)[0]!;
-      const id = `${this.id}.c${++this.calls}`;
+      const id = callId(this.id, ++this.calls);
       this.host?.issue?.(id);
       let contractFailure = false;
       // eslint-disable-next-line unicorn/consistent-function-scoping -- Each attempt tracks forbidden calls even if the Host catches their error.
@@ -4889,7 +4890,7 @@ export class Run {
     if (begun === 'unknown') {
       throw new CrossingInterruptedError();
     }
-    const id = `${this.id}.c${++this.calls}`;
+    const id = callId(this.id, ++this.calls);
     host.issue?.(id, op.mode === 'suspending' && op.metering === 'read-only');
     const ctx: CallContext = {
       id,
@@ -6034,7 +6035,7 @@ export class Run {
           this.checkScopeBoundary();
         }
         this.pay(rate);
-        const id = waits ? `${this.id}.c${this.calls + 1}` : null;
+        const id = waits ? callId(this.id, this.calls + 1) : null;
         const reached = up
           ? this.host!.sendUp(message, args, id)
           : this.host!.send(target!, message, args, id);
@@ -6225,7 +6226,7 @@ export class Run {
         if (foreign) {
           this.checkScopeBoundary();
           this.pay(rate);
-          const id = `${this.id}.c${this.calls + 1}`;
+          const id = callId(this.id, this.calls + 1);
           const to = this.host!.callValue(fn, args, id);
           this.calls++;
           drop(frame.stack, n + 1);

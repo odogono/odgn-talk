@@ -31,6 +31,11 @@ go.script = [
   'end click',
 ].join('\n');
 project.pages[0]!.elements.push(go);
+const note = createElement('text', 'note');
+Object.assign(note, { editable: true, top: 200 });
+project.pages[0]!.elements.push(note);
+const noteNode = () =>
+  document.querySelector<HTMLElement>('#reader [data-element="note"]')!;
 const shell = mountStack(project);
 mountPlay(shell);
 const mode = (label: string) =>
@@ -106,6 +111,10 @@ export const runBrowserTests = async () => {
     );
     assert(pause!.textContent === 'Resume', 'Pause did not become Resume');
     assert(
+      noteNode().contentEditable === 'false',
+      'A reader could type while paused at a Breakpoint',
+    );
+    assert(
       step!.disabled && step!.title === 'Finish the stopped Run first',
       'Step was not held back',
     );
@@ -124,6 +133,10 @@ export const runBrowserTests = async () => {
     pause!.click();
     await until(() => !stopped(), 'The stopped Run stayed');
     assert(pause!.textContent === 'Pause', 'Play stayed paused');
+    await until(
+      () => noteNode().contentEditable === 'true',
+      'Text stayed read-only after Resume',
+    );
     assert(
       document.querySelector('#code-browser .cm-paused') === null,
       'The paused line stayed',

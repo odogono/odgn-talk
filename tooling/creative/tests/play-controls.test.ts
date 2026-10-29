@@ -18,7 +18,6 @@ describe('controls', () => {
         paused: false,
         running: false,
         takesInput: false,
-        textEditable: false,
         browsing: false,
         atStoppedRun: false,
         pauseLabel: 'Pause',
@@ -34,7 +33,6 @@ describe('controls', () => {
       live: true,
       running: true,
       takesInput: true,
-      textEditable: true,
       browsing: false,
       frameStepEnabled: false,
     });
@@ -45,7 +43,6 @@ describe('controls', () => {
     expect(controls(view({ navigating: true }), 'browse')).toMatchObject({
       running: true,
       takesInput: false,
-      textEditable: false,
     });
   });
 
@@ -54,8 +51,6 @@ describe('controls', () => {
       paused: true,
       running: false,
       takesInput: false,
-      // As before: the open text editor checks navigation, not Pause.
-      textEditable: true,
       pauseLabel: 'Resume',
       frameStepEnabled: true,
       statementStepsShown: false,

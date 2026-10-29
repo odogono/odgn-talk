@@ -85,6 +85,7 @@ import {
 } from './group-snapshot';
 import { hexBytes, hexOf, invalidSave } from './save-format';
 import { openSave, type OpenSave } from './save-file';
+import { compareCallIds, parseCallId, senderRun } from './call-id';
 import {
   type DeliveryRecord,
   type Input,
@@ -826,7 +827,7 @@ export class TsGroup implements Group {
       if (d.id) {
         d.ancestry = { rootDelivery: d.id };
       } else {
-        const parentRun = d.from!.replace(/\.c\d+$/, '');
+        const parentRun = senderRun(d.from!);
         const parent = this.accounting.runs.get(parentRun);
         if (!parent) {
           throw new Error(`missing accounting parent ${parentRun}`);
@@ -1839,7 +1840,7 @@ export class TsGroup implements Group {
         rootDelivery: rec.root ? `d${rec.root}` : (id ?? invalidSave()),
         ...(rec.from
           ? {
-              parentRun: rec.from.replace(/\.c\d+$/, ''),
+              parentRun: senderRun(rec.from),
               ...(reply ? { parentCall: reply } : {}),
             }
           : {}),
@@ -2739,14 +2740,13 @@ export class TsGroup implements Group {
 
   // Whether an issued call may request charges; undefined if never issued.
   private issuedEligibility(id: string): boolean | undefined {
-    const dot = id.lastIndexOf('.c');
-    const digits = id.slice(dot + 2);
-    if (dot <= 0 || !/^[1-9]\d*$/.test(digits)) {
+    const call = parseCallId(id);
+    if (!call) {
       return undefined;
     }
-    const n = Number(digits);
+    const { runId, n } = call;
     return this.issued
-      .get(id.slice(0, dot))
+      .get(runId)
       ?.find(([first, last]) => first <= n && n <= last)?.[2];
   }
 
@@ -4227,9 +4227,7 @@ export class TsGroup implements Group {
     return {
       ...(delivery ? { delivery } : {}),
       issue: (id, metered = false) => {
-        const dot = id.lastIndexOf('.c');
-        const runId = id.slice(0, dot);
-        const n = Number(id.slice(dot + 2));
+        const { runId, n } = parseCallId(id)!;
         const ranges = this.issued.get(runId) ?? [];
         const last = ranges.at(-1);
         if (last && last[1] + 1 === n && last[2] === metered) {
@@ -6916,18 +6914,6 @@ const endReason = (outcome: Outcome): string => {
   }
 };
 
-const compareCallIds = (a: string, b: string) => {
-  const left = /^(.*)\/r(\d+)\.c(\d+)$/.exec(a);
-  const right = /^(.*)\/r(\d+)\.c(\d+)$/.exec(b);
-  if (!left || !right) {
-    return compareNames(a, b);
-  }
-  return (
-    compareNames(left[1]!, right[1]!) ||
-    Number(left[2]) - Number(right[2]) ||
-    Number(left[3]) - Number(right[3])
-  );
-};
 const byName = (a: { name: string }, b: { name: string }) =>
   compareNames(a.name, b.name);
 const validOverride = (name: string, value: unknown, cap: number): boolean =>

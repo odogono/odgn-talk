@@ -522,7 +522,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (editor) {
       editor.node.contentEditable =
         session &&
-        allowed().textEditable &&
+        allowed().takesInput &&
         editor.history.element.editable &&
         session.isVisible(editor.history.element)
           ? 'true'
@@ -619,8 +619,7 @@ export const mountPlay = (shell: StackShell): void => {
         .map(element => {
           if (
             activeText?.history.element === element &&
-            (play.ended ||
-              play.navigating ||
+            (!allowed().takesInput ||
               !play.isVisible(element) ||
               !element.editable)
           ) {
@@ -677,7 +676,7 @@ export const mountPlay = (shell: StackShell): void => {
       hidden: !visible,
       ...(element.kind === 'text' && {
         contentEditable:
-          element.editable && visible && !play.ended && !play.navigating
+          element.editable && visible && allowed().takesInput
             ? 'true'
             : 'false',
       }),

@@ -1,4 +1,5 @@
 // TS tooling state lives outside machine state and never enters a save.
+import { senderRun } from './call-id';
 import type { CodeUnit, Instruction } from './code-unit';
 import type { Inspection, Location, PumpResult } from './group';
 import type { LimitName, Run } from './machine';
@@ -239,7 +240,7 @@ export class DebugController {
   /** Internal scheduler integration. */
   attach(run: Run, from: string | null): void {
     if (from) {
-      this.parents.set(run.id, from.replace(/\.c\d+$/, ''));
+      this.parents.set(run.id, senderRun(from));
     }
     if (!machineDebug.has(run)) {
       machineDebug.set(run, {
