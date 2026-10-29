@@ -24,6 +24,7 @@ import {
   ownerById,
   ownerId,
   scriptOwners,
+  type ScriptOwner,
   scriptPage,
 } from './script-manifest';
 import { browserSoundBackend } from './sounds';
@@ -143,25 +144,31 @@ export const mountPlay = (shell: StackShell): void => {
       }
     },
   );
-  // Clicking an authored Element in the Variables window selects it.
+  // Clicking an authored Element in the Variables window selects it;
+  // `index` places it in `list`, which is `owners` but for Edit's `:inspect`.
+  const selectOwner = (
+    list: readonly ScriptOwner[],
+    of: number,
+    index: number,
+  ): void => {
+    const owner = list[index];
+    if (!owner || of !== shell.editor.generation) {
+      return;
+    }
+    const project = shell.editor.project;
+    const current = ownerById(project, ownerId(owner));
+    const page = current && scriptPage(project, current);
+    if (!current || !page || 'elements' in current) {
+      return;
+    }
+    const pageIndex = project.pages.indexOf(page);
+    if (pageIndex !== shell.editor.pageIndex) {
+      shell.editor.goToPage(pageIndex);
+    }
+    shell.editor.click(current.name);
+  };
   const variables = new VariablesWindow(
-    index => {
-      const owner = owners[index];
-      if (!owner || generation !== shell.editor.generation) {
-        return;
-      }
-      const project = shell.editor.project;
-      const current = ownerById(project, ownerId(owner));
-      const page = current && scriptPage(project, current);
-      if (!current || !page || 'elements' in current) {
-        return;
-      }
-      const pageIndex = project.pages.indexOf(page);
-      if (pageIndex !== shell.editor.pageIndex) {
-        shell.editor.goToPage(pageIndex);
-      }
-      shell.editor.click(current.name);
-    },
+    index => selectOwner(owners, generation, index),
     () => sendWatches(),
   );
   // Watches go to a browsing session; the worker runs them while paused.
@@ -1099,6 +1106,15 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   const syncMessage = mountMessageWindow(shell, {
+    inspected: (text, value, context, inspectedIn) => {
+      const [list, of] =
+        inspectedIn === undefined
+          ? [scriptOwners(shell.editor.project), shell.editor.generation]
+          : [owners, generation];
+      const select = (index: number) => selectOwner(list, of, index);
+      variables.inspect(text, value, context, select);
+      return select;
+    },
     pageName: () => session?.page.name,
     session: () => (session && !session.stopped ? sessionId : undefined),
     scripts: () => (session && !session.stopped ? session.messageTargets : []),
@@ -1116,6 +1132,7 @@ export const mountPlay = (shell: StackShell): void => {
         ? {
             ...(reply.error === undefined ? {} : { error: reply.error }),
             ...(reply.text === undefined ? {} : { text: reply.text }),
+            ...(reply.value === undefined ? {} : { value: reply.value }),
           }
         : { error: 'Play has stopped.' };
     },

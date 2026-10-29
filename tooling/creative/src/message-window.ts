@@ -29,6 +29,8 @@ import {
   type LoadedMessageTarget,
 } from './message-script';
 import { runInEdit, sessionCommand, type MessageReply } from './message';
+import { type VariableValue } from './variables';
+import { renderValueRows } from './variables-window';
 import {
   ownerId,
   scriptManifest,
@@ -39,6 +41,16 @@ import { bringWindowForward, setWindowOpener } from './windows';
 import { type StackShell } from './stack';
 
 export type MessageTarget = {
+  /**
+   * Hears an `:inspect` result; `select` selects an Element it names, which
+   * `session` places (undefined for Edit).
+   */
+  inspected(
+    text: string,
+    value: VariableValue,
+    context: string,
+    session: number | undefined,
+  ): (owner: number) => void;
   /** The playing session's Page name, if any; commands run there when it is. */
   pageName(): string | undefined;
   run(text: string, session: number, target?: number): Promise<MessageReply>;
@@ -308,13 +320,10 @@ export const mountMessageWindow = (
       history.splice(0, Math.max(0, history.length - HISTORY));
     }
     recalled = history.length;
+    const where = `${context.label} · ${context.session === undefined ? 'Edit' : `Play ${context.session}`}`;
     const row = print('entry', '');
     row.append(
-      h(
-        'div',
-        { class: 'context' },
-        `${context.label} · ${context.session === undefined ? 'Edit' : `Play ${context.session}`}`,
-      ),
+      h('div', { class: 'context' }, where),
       h('div', { class: 'command' }, text),
     );
     void run(text, context)
@@ -324,6 +333,17 @@ export const mountMessageWindow = (
       .then(reply => {
         if (reply.error) {
           row.append(h('div', { class: 'error' }, reply.error));
+        } else if (reply.value !== undefined) {
+          const expression = text.replace(/^:inspect\s*/u, '');
+          const select = target.inspected(
+            expression,
+            reply.value,
+            where,
+            context.session,
+          );
+          const rows = h('div', { class: 'result variables-script' });
+          row.append(rows);
+          renderValueRows(rows, expression, reply.value, select);
         } else if (reply.text !== undefined) {
           row.append(h('div', { class: 'result' }, reply.text));
         }

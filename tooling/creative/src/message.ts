@@ -4,10 +4,20 @@
 import { type Value } from '@northtalk/ts';
 import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
+import { inspectCommand } from './message-script';
 import { PlaySession } from './play';
+import { scriptOwners } from './script-manifest';
+import { valueEncoder, type VariableValue } from './variables';
 
-/** What a command printed: its value, nothing, or an error. */
-export type MessageReply = { error?: string; text?: string };
+/**
+ * What a command printed: its value, nothing, or an error. `:inspect` gives
+ * `value`, encoded as the Variables window shows it.
+ */
+export type MessageReply = {
+  error?: string;
+  text?: string;
+  value?: VariableValue;
+};
 
 const show = (value: Value): string | undefined =>
   value.kind === 'nothing' ? undefined : (value.asText() ?? String(value));
@@ -58,10 +68,12 @@ export const settle = async (
   play: PlaySession,
   result: Promise<Value>,
   pump: () => void,
+  encode?: (value: Value) => VariableValue,
 ): Promise<MessageReply> => {
   let done = false;
   const reply = result.then(
-    value => ({ text: show(value) }),
+    (value): MessageReply =>
+      encode ? { value: encode(value) } : { text: show(value) },
     (error: unknown) => ({
       error: error instanceof Error ? error.message : String(error),
     }),
@@ -84,6 +96,10 @@ export const runInEdit = async (
   command: string,
   target?: number,
 ): Promise<MessageReply> => {
+  const inspect = inspectCommand(command);
+  if (inspect && 'error' in inspect) {
+    return inspect;
+  }
   if (editor.readOnly) {
     return { error: 'This Project is read-only here.' };
   }
@@ -101,12 +117,21 @@ export const runInEdit = async (
         'That Script could not load; fix its problems before running a command.',
     };
   }
-  const started = play.runMessage(command, loadedTarget);
+  const started = inspect
+    ? play.runWatch(inspect.expression, loadedTarget)
+    : play.runMessage(command, loadedTarget);
   if (!started.ok) {
     play.stop(0n);
     return { error: started.error };
   }
-  const reply = await settle(play, started.result, () => play.pump(0n));
+  // Elements are placed in the authored Project, which `authored` maps to.
+  const encode = inspect
+    ? valueEncoder(
+        play,
+        new Map(scriptOwners(editor.project).map((owner, i) => [owner, i])),
+      )
+    : undefined;
+  const reply = await settle(play, started.result, () => play.pump(0n), encode);
   play.stop(0n);
   if (reply.error) {
     return reply;

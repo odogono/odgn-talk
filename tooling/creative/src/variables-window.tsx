@@ -13,6 +13,7 @@ import {
   variableRows,
   type VariableRow,
   type VariableScript,
+  type VariableValue,
   type Watch,
   type WatchResult,
 } from './variables';
@@ -92,6 +93,87 @@ const Row = ({
       </span>
     </li>
   );
+};
+
+/**
+ * One value's rows, as `:inspect` shows them (ADR 0141), with lists and maps
+ * opened here rather than in the window's shared state.
+ */
+const ValueRows = ({
+  name,
+  onSelect,
+  value,
+}: {
+  name: string;
+  onSelect: (owner: number) => void;
+  value: VariableValue;
+}) => {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) => {
+    const next = new Set(expanded);
+    if (!next.delete(key)) {
+      next.add(key);
+    }
+    setExpanded(next);
+  };
+  return (
+    <ul className="value-rows">
+      {variableRows(
+        { label: '', script: 'inspect', vars: [[name, value]] },
+        expanded,
+      ).map(row => (
+        <Row
+          changes={0}
+          key={row.key}
+          onSelect={onSelect}
+          onToggle={toggle}
+          row={row}
+        />
+      ))}
+    </ul>
+  );
+};
+
+/** Draws an inspected value's rows into `parent`, as the Message Box does. */
+export const renderValueRows = (
+  parent: Element,
+  name: string,
+  value: VariableValue,
+  onSelect: (owner: number) => void,
+): void => {
+  render(<ValueRows name={name} onSelect={onSelect} value={value} />, parent);
+};
+
+/**
+ * The Message Box's last `:inspect`, where it ran, and how its Elements are
+ * selected, since an Edit result places them in the Project as it was then.
+ */
+type Inspected = {
+  context: string;
+  id: number;
+  onSelect: (owner: number) => void;
+  text: string;
+  value: VariableValue;
+};
+
+const InspectedSection = ({
+  inspected,
+}: {
+  inspected: Signal<Inspected | undefined>;
+}) => {
+  const shown = inspected.value;
+  return shown ? (
+    <section className="variables-script variables-inspected">
+      <h3>Inspected · {shown.context}</h3>
+      {/* Keyed by inspection, so each one starts closed. */}
+      <ValueRows
+        key={shown.id}
+        name={shown.text}
+        onSelect={shown.onSelect}
+        value={shown.value}
+      />
+    </section>
+  ) : null;
 };
 
 const contextValue = (context: WatchContext | undefined) =>
@@ -318,12 +400,14 @@ const WatchesSection = ({
 let nextWatch = 1;
 
 const VariablesPanel = ({
+  inspected,
   onSelect,
   onToggle,
   shown,
   update,
   watching,
 }: {
+  inspected: Signal<Inspected | undefined>;
   onSelect: (owner: number) => void;
   onToggle: (key: string) => void;
   shown: Signal<Shown>;
@@ -341,6 +425,7 @@ const VariablesPanel = ({
         update={update}
         watching={watching}
       />
+      <InspectedSection inspected={inspected} />
       <p className="muted" hidden={scripts.length > 0} id="variables-empty">
         No Script Variables yet. They appear here while browsing.
       </p>
@@ -387,6 +472,8 @@ export class VariablesWindow {
     targets: [],
     watches: [],
   });
+  readonly #inspected = signal<Inspected | undefined>(undefined);
+  #inspections = 0;
   #values = new Map<string, string>();
 
   /** `onWatches` hears each change to the list of Watches. */
@@ -396,6 +483,7 @@ export class VariablesWindow {
   ) {
     render(
       <VariablesPanel
+        inspected={this.#inspected}
         onSelect={onSelect}
         onToggle={key => this.#toggle(key)}
         shown={this.#shown}
@@ -493,8 +581,25 @@ export class VariablesWindow {
     };
   }
 
-  /** Another Project: its Watches go. */
+  /** Shows the Message Box's latest `:inspect` result. */
+  inspect(
+    text: string,
+    value: VariableValue,
+    context: string,
+    onSelect: (owner: number) => void,
+  ): void {
+    this.#inspected.value = {
+      id: ++this.#inspections,
+      text,
+      value,
+      context,
+      onSelect,
+    };
+  }
+
+  /** Another Project: its Watches and inspected value go. */
   clearWatches(): void {
+    this.#inspected.value = undefined;
     this.#watching.value = {
       ...this.#watching.value,
       pageChanged: false,

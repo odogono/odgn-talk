@@ -17,6 +17,7 @@ import {
   type PlayView,
   type PromptView,
 } from './play-protocol';
+import { inspectCommand } from './message-script';
 import { scriptOwners } from './script-manifest';
 import {
   valueEncoder,
@@ -341,7 +342,14 @@ export class PlayHost {
         return;
       }
       case 'message': {
-        const started = session.runMessage(request.text, request.target);
+        const inspect = inspectCommand(request.text);
+        if (inspect && 'error' in inspect) {
+          reply({ kind: 'message', error: inspect.error });
+          return;
+        }
+        const started = inspect
+          ? session.runWatch(inspect.expression, request.target)
+          : session.runMessage(request.text, request.target);
         if (!started.ok) {
           reply({ kind: 'message', error: started.error });
           return;
@@ -352,9 +360,11 @@ export class PlayHost {
           value =>
             reply({
               kind: 'message',
-              ...(value.kind === 'nothing'
-                ? {}
-                : { text: value.asText() ?? String(value) }),
+              ...(inspect
+                ? { value: valueEncoder(session, this.#owners)(value) }
+                : value.kind === 'nothing'
+                  ? {}
+                  : { text: value.asText() ?? String(value) }),
             }),
           (error: unknown) =>
             reply({

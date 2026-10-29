@@ -1025,6 +1025,34 @@ export const runMessageBoxBrowserTests = async () => {
   set('the visible of welcomeText');
   enter();
   await until(() => log().at(-1) === 'true');
+  // `:inspect` shows rows in the Message Box and the Variables window.
+  set(':inspect [1, [2]]');
+  enter();
+  const inspected = () =>
+    [...win.querySelectorAll('.message-log .result li')].map(li =>
+      li.textContent?.trim(),
+    );
+  await until(
+    () =>
+      inspected().length > 0 ||
+      win.querySelector('.message-log li:last-child .error') !== null,
+  );
+  assert(
+    inspected()[0] === '▸ [1, [2]]list of 2',
+    `:inspect showed ${JSON.stringify([log(), inspected()])}`,
+  );
+  win.querySelector<HTMLButtonElement>('.message-log .result .toggle')!.click();
+  await until(() => inspected().length === 3);
+  assert(
+    inspected()[1] === '11' && inspected()[2] === '▸ 2list of 1',
+    `Opened rows read ${JSON.stringify(inspected())}`,
+  );
+  assert(
+    document
+      .querySelector('#variables-panel .variables-inspected')
+      ?.textContent?.includes('list of 2') === true,
+    'The Variables window did not show the inspected value',
+  );
   // Every window shares the title bar, and the Window menu shows and hides
   // them, with a tick for each one showing.
   document
@@ -1093,6 +1121,7 @@ export const runMessageBoxBrowserTests = async () => {
       'Ctrl-Space completes Page names from the language server',
       'hide in Edit is one undoable authored edit',
       'show while browsing changes only the session; expressions print',
+      ':inspect shows expandable rows in the Message Box and the Variables window',
     ],
   };
 };

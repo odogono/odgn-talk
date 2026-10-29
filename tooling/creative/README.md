@@ -1005,6 +1005,14 @@ Built-ins; `:apropos [query]` lists every name containing the query, with the
 `use` line an unimported Library export needs. The default context has only
 the Built-ins and the Project's Libraries; Script Variables show no value.
 
+`:inspect <expression>` ([ADR 0141](../../docs/adr/0141-folio-opens-projects-from-urls.md))
+does run: it evaluates one expression where any other command would, in the Play Session
+while browsing and in the Project in Edit, and shows the value as the
+Variables window's rows: lists and maps open from their row, and an Element
+selects itself when clicked. The same rows appear in the Variables window's
+Inspected section, which keeps the latest result until another Project
+opens. Unlike the Playground's, it reads no Host Object properties.
+
 Targeted commands use Extend ([ADR 0108](../../docs/adr/0108-folio-message-box-commands-can-extend-a-chosen-script.md));
 they accept statements and expressions, not Script-level declarations. Existing
 Script Variables can change, while new local variables disappear after the
