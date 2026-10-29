@@ -20,6 +20,7 @@ import type {
   Suspension,
   Then,
   WaitFor,
+  RunState,
 } from './machine';
 import type { ObjectState } from './objects';
 import type { AccountingState } from './run-accounting';
@@ -71,41 +72,6 @@ import type { Waits } from './waits';
 export type RunPlaces = UnitPlaces & {
   object(o: ObjectState | null | undefined): number | undefined;
 };
-
-/** A Run's private state, which only a save reads and a restore writes. */
-export type RunInternals = {
-  abandoning: string[];
-  alloc: number;
-  calls: number;
-  cancellationAbandons: string[];
-  clause: number;
-  cleanupFrom: number | null;
-  controls: Control[];
-  during: Value;
-  faultAbandons: string[];
-  frames: Frame[];
-  fuel: number;
-  id: string;
-  join: {
-    frame: Frame;
-    members: Member[];
-    start: number;
-  } | null;
-  limits: Run['limits'];
-  offerAttempt: number;
-  openVerdict: boolean;
-  raisedAt: RaisePosition | null;
-  records: Run['records'];
-  resumption: Resumption | null;
-  script: Run['script'];
-  segment: number;
-  segmentBase: Value[];
-  suspended: Suspension | null;
-  target: Value;
-  viaFallback: boolean;
-  waitedOn: Suspension | null;
-};
-export const internals = (run: Run) => run as unknown as RunInternals;
 
 /** What a save needs of a Group to write its Runs. */
 export type RunSource = {
@@ -218,7 +184,7 @@ const instantOf = (us: bigint) => {
 
 /** The Capability calls a Run holds: pending, or answered and not yet resumed. */
 const awaitedCalls = (running: Running): CallContext[] => {
-  const r = internals(running.run);
+  const r = running.run.savedState();
   const out: CallContext[] = [];
   const add = (ctx: CallContext | null | undefined) => {
     if (ctx && !out.includes(ctx)) {
@@ -427,7 +393,7 @@ class RunWriter {
     running: Running,
     s: Suspension,
   ): PendingRecord<Value> | undefined {
-    const r = internals(running.run);
+    const r = running.run.savedState();
     if (s.k === 'join') {
       const w = lastWaits.get(running)?.waiting;
       return w && s.deadline
@@ -531,10 +497,7 @@ class RunWriter {
     };
   }
 
-  private join(
-    running: Running,
-    r: RunInternals,
-  ): JoinRecord<Value> | undefined {
+  private join(running: Running, r: RunState): JoinRecord<Value> | undefined {
     const join = r.join;
     if (!join) {
       return undefined;
@@ -662,7 +625,7 @@ class RunWriter {
   }
 
   run(running: Running, s: ScriptState): RunRecord<Value> {
-    const r = internals(running.run);
+    const r = running.run.savedState();
     const row = this.g.accounting.runs.get(running.id);
     const first = r.frames[0];
     const d = first?.dispatch ?? null;
@@ -757,7 +720,7 @@ const scriptName = (name: string) => {
 const bytesValue = (b: Uint8Array) => bytes(b);
 const listOf = (vs: readonly Value[]) => listValues(vs);
 const eventEntry = (running: Running) => {
-  const f = internals(running.run).frames.at(-1)!;
+  const f = running.run.savedState().frames.at(-1)!;
   return f.code.unit.code[f.pc]!.operands[0] as number;
 };
 export const limitNames = Object.keys(defaultLimits) as LimitName[];
@@ -1081,7 +1044,7 @@ export const runFromRecord = (
 
   const delivery = ctx.delivery(rec.delivery);
   const run = ctx.make();
-  const r = internals(run);
+  const r = run.savedState();
   const first = frames[0];
   // The entry dispatch: the clause it is in, and those it would try next.
   if (first && rec.clauseBody && !delivery.fn) {
@@ -1368,6 +1331,7 @@ export const runFromRecord = (
     ...(rec.clauseBody && rec.selectAt === undefined ? { selected: true } : {}),
     recordsWritten: r.records.length,
   };
+  run.restoreState(r);
   run.id = rec.id;
   if (rec.waiting) {
     waitOrders.set(running, rec.waiting.order);
