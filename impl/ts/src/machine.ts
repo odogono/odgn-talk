@@ -850,11 +850,11 @@ export type Member = {
   answer?: Value;
   /** Its deadline: the Clock of the Pump that started it, plus `ms`. */
   at: bigint;
-  /** Its wait's place in the timer order, taken when it starts (#1752). */
-  order?: number;
   call: CallContext | null;
   id: string;
   ms: number;
+  /** Its wait's place in the timer order, taken when it starts (#1752). */
+  order?: number;
   /** A Script reply received before its preempted Join closes. */
   reply?: Resumption;
   /** The checked member instruction retains its destination and owning frame. */
@@ -933,10 +933,10 @@ export type RunHost = {
   ): string | null;
   /** Sends a Command Call with no Handler up the Message Path, as `send` does. */
   sendUp(message: string, args: Value[], reply: string | null): string | null;
-  /** The next wait's place in the order waits began. */
-  waitOrder?(): number;
   /** Reserves a Join Member's place among timers, set when the Join suspends. */
   timerOrder?(): number;
+  /** The next wait's place in the order waits began. */
+  waitOrder?(): number;
 };
 const listItems = (v: Value): Value[] =>
   Array.from({ length: v.length }, (_, i) => v.index(i + 1));
@@ -5923,7 +5923,7 @@ export class Run {
             at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1000n,
           };
           waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
-        m.order = this.host!.timerOrder?.();
+          m.order = this.host!.timerOrder?.();
           this.join!.members.push(m);
           return next(frame);
         }
