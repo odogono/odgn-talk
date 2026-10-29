@@ -400,7 +400,7 @@ on blink
   show light
   wait 500 ms                       -- a short pause is a Suspension Point
   hide light
-end blink
+end blink                           -- See this in Folio: https://northtalk.org/folio/lighthouse
 
 on flash
   blink and wait                    -- a call to a Handler that may suspend
@@ -794,6 +794,7 @@ end recoveryTour
 ## Further reading
 
 - [The REPL and Playground](../README.md#the-repl): run and explore Scripts.
+- Example Projects in Folio: [The Lighthouse Mystery](https://northtalk.org/folio/lighthouse), [Tetris](https://northtalk.org/folio/tetris), [Canvas Tetris](https://northtalk.org/folio/canvas-tetris) and [Sonar](https://northtalk.org/folio/sonar), each opened as your own editable copy.
 - [Testing Scripts](../tooling/cli/README.md#testing-scripts): black-box Test Scripts and Transcripts.
 - [Standard Capabilities](../spec/07-libraries-and-the-standard-library.md): Store notifications, SQLite, HTTP and user interaction.
 - [`GLOSSARY.md`](../GLOSSARY.md): the glossary.
