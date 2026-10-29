@@ -133,6 +133,35 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     },
   );
 
+  both('a metered call records a refused charge', (core, nt) => {
+    const lines: string[] = [];
+    const api = core.defineCapability('api', {
+      fetch: {
+        mode: 'immediate',
+        cost: { fuel: 0 },
+        metering: 'read-only',
+        do: call => {
+          for (const fuel of [13, 17, 1000]) {
+            try {
+              call.charge(fuel);
+            } catch {
+              // A suppressed refusal still latches.
+            }
+          }
+          return nt.text('done');
+        },
+      },
+    });
+    const g = core.newGroup({ name: 'g', trace: l => lines.push(l) });
+    g.load({
+      name: 's',
+      source: 'on go\n  ask api to fetch\n  return it\nend go',
+      grants: { api: api.grant('all', undefined) },
+    }).deliver({ name: 'go', limits: { fuelPerRun: 100 } });
+    const result = g.pump(0n);
+    return { lines, ends: ends(result.reports) };
+  });
+
   both(
     'charge requests: refusals, accepted, limit and inactive outcomes',
     async (core, nt) => {

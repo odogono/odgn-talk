@@ -745,6 +745,8 @@ export type RunRecord =
       args: Value[];
       automatic?: boolean;
       charged: number;
+      /** A metered call's refused `charge`, beside the accepted `charged`. */
+      chargeRefused?: boolean;
       error?: Value;
       id: string;
       kind: 'call';
@@ -4837,6 +4839,11 @@ export class Run {
       op: ctx.opName,
       args,
     };
+    // A metered call records a refused `charge` (Metered Operations).
+    const refusal =
+      op.mode !== 'fire-and-forget' && op.metering
+        ? { chargeRefused: true }
+        : {};
     let result: unknown;
     this.host?.expose?.(listValues(args));
     try {
@@ -4854,7 +4861,7 @@ export class Run {
       starting = false;
       if (reached) {
         // Cut off by its own `Charge`: neither a result nor a failure.
-        this.hostCrossing({ ...record, charged });
+        this.hostCrossing({ ...record, charged, ...refusal });
         throw new LimitFaultError(
           this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
           this.frame.pc,
@@ -4892,7 +4899,7 @@ export class Run {
       };
     }
     if (reached) {
-      this.hostCrossing({ ...record, charged }, acknowledgement);
+      this.hostCrossing({ ...record, charged, ...refusal }, acknowledgement);
       throw new LimitFaultError(
         this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
         this.frame.pc,

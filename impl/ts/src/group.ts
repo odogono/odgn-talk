@@ -6271,6 +6271,7 @@ export class TsGroup implements Group {
               ['result', rec.result ? traceValue(rec.result) : null],
               ['error', rec.error ? traceValue(rec.error) : null],
               ['charged', rec.charged ? String(rec.charged) : null],
+              ['charge-refused', rec.chargeRefused ? 'yes' : null],
               ['automatic', rec.automatic ? 'yes' : null],
             ],
           ),

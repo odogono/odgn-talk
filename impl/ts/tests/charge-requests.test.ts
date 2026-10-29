@@ -352,3 +352,104 @@ describe('declarations', () => {
     expect(fingerprint(true)).not.toBe(fingerprint(false));
   });
 });
+
+// An immediate Operation charging 13, 17, then more than the Run has.
+const refusing = (metering: boolean, suppress: boolean) => {
+  const lines: string[] = [];
+  const api = defineCapability('api', {
+    fetch: {
+      mode: 'immediate',
+      cost: { fuel: 0 },
+      ...(metering ? { metering: 'read-only' as const } : {}),
+      do: call => {
+        for (const fuel of [0, 13, 17, 1_000_000]) {
+          try {
+            call.charge(fuel);
+          } catch (error) {
+            if (!suppress) {
+              throw error;
+            }
+          }
+        }
+        return text('done');
+      },
+    },
+  });
+  const g = newGroup({ name: 'g', trace: line => lines.push(line) });
+  g.load({
+    name: 's',
+    source: 'on go\n  ask api to fetch\n  return it\nend go',
+    grants: { api: api.grant('all', undefined) },
+  }).deliver({ name: 'go', limits: { fuelPerRun: 100 } });
+  const result = g.pump(0n);
+  return {
+    call: lines.find(line => line.startsWith('call ')),
+    end: result.reports.find(r => r.kind === 'run end'),
+  };
+};
+
+describe('synchronous refusal', () => {
+  for (const suppress of [false, true]) {
+    test(`a metered call records its refusal after the accepted prefix${suppress ? ', even suppressed' : ''}`, () => {
+      const { call, end } = refusing(true, suppress);
+      expect(call).toBe(
+        'call s/r1.c1 op=api.fetch args=[] charged=30 charge-refused=yes',
+      );
+      expect(end).toMatchObject({ outcome: 'limit fault', limit: 'fuel' });
+    });
+  }
+
+  test('an unmetered call keeps its legacy record', () => {
+    expect(refusing(false, false).call).toBe(
+      'call s/r1.c1 op=api.fetch args=[] charged=30',
+    );
+  });
+});
+
+describe('a preempted Join body', () => {
+  test('a limit rolls back its open Segment, with no Stretch', () => {
+    const lines: string[] = [];
+    const calls: Call<void>[] = [];
+    const remote = defineCapability('remote', {
+      read: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        metering: 'read-only',
+        start: c => {
+          calls.push(c);
+        },
+      },
+    });
+    const g = newGroup({ name: 'g', trace: line => lines.push(line) });
+    g.load({
+      name: 's',
+      source:
+        'script variable results = []\non go\n  put 1 after results\n  wait for all\n    ask remote to read and wait\n    ask remote to read and wait\n  end wait\nend go',
+      grants: { remote: remote.grant('all', undefined) },
+    }).deliver({ name: 'go', limits: { fuelPerRun: 100 } });
+    // The slice preempts the body after both members start.
+    g.pump(0n, { fuelSlice: 35 });
+    expect(calls).toHaveLength(2);
+    expect(g.inspect().scripts[0]!.runs[0]!.status).toBe('preempted');
+    calls[1]!.requestCharge(1_000_000);
+    const before = lines.length;
+    const result = g.pump(0n);
+    const out = lines.slice(before);
+    expect(out.some(line => /^(seg|preempt) /.test(line))).toBe(false);
+    expect(out.find(line => line.startsWith('fault'))).toMatch(
+      /^fault s\/r1 limit=fuel at=s:\d+ pos=6:\d+ rollback=\[results]$/,
+    );
+    expect(out.filter(line => line.startsWith('abandon'))).toEqual([
+      'abandon s/r1.c1',
+      'abandon s/r1.c2',
+    ]);
+    expect(calls.every(c => c.signal.aborted)).toBe(true);
+    expect(result.reports).toContainEqual(
+      expect.objectContaining({ kind: 'run end', outcome: 'limit fault' }),
+    );
+    const vars = g.inspect().scripts[0]!.vars;
+    expect(vars.map(([name, value]) => [name, value.toString()])).toEqual([
+      ['results', '[]'],
+    ]);
+  });
+});
