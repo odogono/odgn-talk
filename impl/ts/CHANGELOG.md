@@ -7,6 +7,41 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-29
+
+### Breaking
+
+- **ts:** `@northtalk/ts` saves are no longer JSON: `save()` writes the binary save format both Cores share (chapter 10, ADR 0144), so a TS save restores on the Zig Core and a Zig save on the TS Core. Saves written by earlier versions are refused as `invalid save`. A stale Function Value's documentation now survives a restore only in a Session, which keeps it by code unit (#1722).
+- **spec:** SQLite charges `perStep` Fuel before every statement step instead of `max × perRow` up front. `sqliteCapability(impl, costs, perStep)` in TS and `Core.SqliteCapability(impl, costs, perStep)` in Go pass `query` and `change` a `beforeStep` callback, which every `SqliteImpl` must call once immediately before each step, the completion check and the probe past `max` included, propagating its refusal without stepping; the `node:sqlite` and Go drivers do. `query` is metered `read-only` and `change` `segment-bound`, so a refused step writes `charge-refused=yes`. Corpus setup takes `perStep`, and `perRow` is refused (#1795).
+
+### Added
+
+- **spec:** Report `unit without number` instead of `unexpected token` when a Unit follows a name or a bracketed expression, as in `wait tick s`. A Unit can only follow a number, so the message suggests `tick as s`, `tick * 1 s` or putting the Unit in the Constant.
+- **ts:** Add `group.stateFingerprint()` and `core.stateFingerprint(save)` to the TS Core, so a Host can tell whether two saves hold the same state even though each save's bytes differ (#1697).
+- **ts:** The TS Core's `restore` accepts `onMismatch: 'reload changed'`. When the only mismatch is Script code, it continues the Scripts whose code matches and rebuilds each changed Script from its new code with its Script Variables carried over, as a Reload would. `RestoreResult.reloaded` and the Trace `restore` record (`mode=partial`, `reloaded=[…]`) list the rebuilt Scripts (#1707).
+- **ts:** The TS Core accepts Operation `metering` declarations and lets a suspending `read-only` call queue `call.requestCharge(fuel)`, settled by the next Pump as accepted, limit or inactive, with the same Trace as the Zig Core. Issued calls keep their eligibility and the request counter across saves, and a pending metered call or unresolved request refuses Save with `effects pending`. Late answers to ended calls are recorded and ignored (#1748).
+- **spec:** A Session can make charge requests: `:mock <capability>.<operation> suspending read-only` defines a metered mock, and `:charge <call> <fuel>` queues a request for its pending call and pumps, in the TS, Zig and Go REPLs. The Zig Core now writes a refused charge request before the next Host Input record, as the TS Core does (#1795).
+- **ts:** A metered Operation whose callback has a `charge` refused now writes `charge-refused=yes` in its `call` record after the accepted `charged`, as the Zig Core does (#1795).
+- **spec:** A save taken after a reissue records the reissued call: its `now` is the Clock reading of the Pump that reissued it, and its `charged` is the Fuel its reissued `Start` charged (#1781).
+- **ts:** The TS Core's debug controller can `evaluate` a Handler body in a paused Run's Script, seeing a chosen frame's locals read-only and writing Script Variables, without touching the Trace (#1769).
+- **ts:** Add the TS Core's codec for the save format both Cores share: its primitives, header, section frames and digests, and an incremental SHA-256. Saves don't use it yet.
+
+### Fixed
+
+- **ts:** An error inside a Join's body that runs a `finally` block in the Join's frame, then is caught outside the body, now abandons the Join's pending members, as the Zig Core does (#1742).
+- **ts:** In the TS Core, a Run unparked by a `queued` clause goes on in a new Segment, so its later Segment ids and saves match the Zig Core's.
+- **ts:** Declare the TS `sqlite` Capability's errors with their catalogue fields, as the Zig Core does, so a save that holds a `sqlite` Grant restores on either Core instead of failing with `save mismatch` (#1751).
+- **spec:** Write a charge request refused while another is still queued after that request, in the order the Host made the calls, so a Trace with an overlap refusal replays in every Core (#1807).
+- **ts:** Make `call.charge(fuel)` follow the Metered Operations rules on every call the TS Core makes, as the Zig Core already does. An amount that isn't a whole number of Fuel, such as `-5` or `1.5`, is now `invalid value` instead of being accepted. Once a charge is refused, later charges in the same callback are refused too, instead of a smaller one getting through. A call reissued after restore draws on the Cleanup Budget while its Run is cancelling.
+- **ts:** List a `try`'s Unwind Table entries after those of a `try` inside its catch handler or its `finally` block, as chapter 8 orders them and the Zig Core does. This changes TS disassembly only (#1738).
+- **ts:** When an error escapes a Recovery policy, run the policy's own `finally` blocks and the failure's retained cleanup before searching outward from the catching `try`, as chapter 6 says and the Zig Core does. A Guard on an outer catch now sees what those blocks wrote, and the Fuel follows (#1737).
+- **ts:** Save the same bytes as the Zig Core after a restore. A reissued call records its reissue's Clock reading and Charge, and a Run that waited on a restored call keeps that call's id as its last wait (#1746, #1781).
+
+### Performance
+
+- **spec:** Shrink the shared save format before its first release: Grants share their declarations, concurrent Runs share the Script Variables they start from, names and other repeated texts are written once in a new `texts` section, and Operation modes and Mark outcomes are single bytes. A Function Value with code no longer repeats its home Script. Saves are now smaller than the old TS JSON saves, and restore is faster (#1758).
+- **ts:** Make `core.stateFingerprint(save)` read the State Fingerprint from the save's header instead of hashing every section, as chapter 10 specifies: about 4.3 ms down to 13 µs for an 800 KB save.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added
