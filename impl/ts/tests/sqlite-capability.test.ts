@@ -4,7 +4,6 @@ import {
   HostError,
   newGroup,
   parseInstant,
-  readDisplay,
   shape,
   sqliteCapability,
   type Costs,
@@ -55,12 +54,14 @@ const recording = (answer: SqlRows = { columns: [], rows: [] }) => {
 };
 
 // One Delivery of `go`, whose body calls the Grant `db`.
-const run = (body: string, impl: SqliteImpl, perRow = 0) => {
+const run = (body: string, impl: SqliteImpl, perStep = 0) => {
   const g = newGroup({ name: 'g' });
   g.load({
     name: 's',
     source: `script variable seen = nothing\non go\n${body}\nend go\n`,
-    grants: { db: sqliteCapability(impl, costs, perRow).grant('all', binding) },
+    grants: {
+      db: sqliteCapability(impl, costs, perStep).grant('all', binding),
+    },
   });
   g.script('s')!.deliver({ name: 'go', args: [] });
   const report = operationalReports(g.pump(now).reports).find(
@@ -74,7 +75,7 @@ const run = (body: string, impl: SqliteImpl, perRow = 0) => {
   };
 };
 
-test('sqliteCapability needs every function, every cost and a whole perRow', () => {
+test('sqliteCapability needs every function, every cost and a whole perStep', () => {
   const { impl } = recording();
   for (const name of [
     'coordinator',
@@ -95,8 +96,8 @@ test('sqliteCapability needs every function, every cost and a whole perRow', () 
   const missing: Record<string, { fuel: number }> = { ...costs };
   delete missing.commit;
   expect(() => sqliteCapability(impl, missing, 0)).toThrow(HostError);
-  for (const perRow of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
-    expect(() => sqliteCapability(impl, costs, perRow)).toThrow(HostError);
+  for (const perStep of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+    expect(() => sqliteCapability(impl, costs, perStep)).toThrow(HostError);
   }
 });
 
@@ -203,26 +204,51 @@ test('results convert values the Core can hold, and refuse the rest', () => {
   );
 });
 
-test('each call charges max times perRow before the implementation runs', () => {
-  const { impl, seen } = recording();
-  const g = newGroup({ name: 'g' });
+// The implementation pays for one step per row it was given, then the
+// completion check, and ignores a refusal to show the Core latches it.
+const steps = (rows: number) => {
+  const impl: SqliteImpl = {
+    ...recording().impl,
+    query: (_call, _sql, _params, _max, beforeStep) => {
+      for (let i = 0; i <= rows; i++) {
+        try {
+          beforeStep();
+        } catch {
+          // Suppressed: the call still faults.
+        }
+      }
+      return { columns: ['n'], rows: [] };
+    },
+  };
+  const lines: string[] = [];
+  const g = newGroup({ name: 'g', trace: line => lines.push(line) });
   g.load({
     name: 's',
-    source: 'on go max\nask db to query "Q", [], max\nend go\n',
+    source: 'on go\nask db to query "Q", []\nend go\n',
     grants: { db: sqliteCapability(impl, costs, 7).grant('all', binding) },
     limits: { fuelPerRun: 60 },
   });
-  const fuelOf = (max: Value) => {
-    g.script('s')!.deliver({ name: 'go', args: [max] });
-    return operationalReports(g.pump(now).reports).find(
-      r => r.kind === 'run end',
-    )!;
-  };
-  const zero = fuelOf(readDisplay('0'));
-  const three = fuelOf(readDisplay('3'));
-  expect(three.fuel - zero.fuel).toBe(21);
-  expect(fuelOf(readDisplay('nothing')).outcome).toBe('limit fault');
-  expect(seen.length).toBe(2);
+  g.script('s')!.deliver({ name: 'go', args: [] });
+  const end = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
+  return { call: lines.find(l => l.startsWith('call ')), end };
+};
+
+test('each step the implementation takes costs perStep, and a refused one latches', () => {
+  expect(steps(0).call).toEndWith('result=[] charged=7');
+  expect(steps(2).call).toEndWith('result=[] charged=21');
+  const refused = steps(9);
+  expect(refused.call).toMatch(/ charged=\d+ charge-refused=yes$/);
+  expect(refused.end).toMatchObject({ outcome: 'limit fault', limit: 'fuel' });
+});
+
+test('query is read-only metered and change segment-bound metered', () => {
+  const { operations } = sqliteCapability(recording().impl, costs, 0);
+  expect(operations.get('query')).toMatchObject({ metering: 'read-only' });
+  expect(operations.get('change')).toMatchObject({
+    metering: 'segment-bound',
+  });
 });
 
 test('the Operations declare each error with its catalogue fields', () => {

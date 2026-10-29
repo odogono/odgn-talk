@@ -16,11 +16,27 @@ type sqliteHost struct {
 }
 
 func (h *sqliteHost) Coordinator(string) *SegmentLifecycle { return h.life }
-func (h *sqliteHost) Query(c *Call, sql string, p SqlParams, max int64) (SqlRows, error) {
-	return h.query(c, sql, p, max)
+func (h *sqliteHost) Query(c *Call, sql string, p SqlParams, max int64, beforeStep func() error) (SqlRows, error) {
+	return stepped(h.query(c, sql, p, max))(max, beforeStep)
 }
-func (h *sqliteHost) Change(c *Call, sql string, p SqlParams, max int64) (SqlRows, error) {
-	return h.change(c, sql, p, max)
+func (h *sqliteHost) Change(c *Call, sql string, p SqlParams, max int64, beforeStep func() error) (SqlRows, error) {
+	return stepped(h.change(c, sql, p, max))(max, beforeStep)
+}
+
+// stepped pays for the steps a driver would take to give rows: one per row
+// up to max, then the completion check or the probe past max.
+func stepped(rows SqlRows, err error) func(int64, func() error) (SqlRows, error) {
+	return func(max int64, beforeStep func() error) (SqlRows, error) {
+		if err != nil {
+			return rows, err
+		}
+		for i := int64(0); i <= min(int64(len(rows.Rows)), max); i++ {
+			if err := beforeStep(); err != nil {
+				return SqlRows{}, err
+			}
+		}
+		return rows, nil
+	}
 }
 func (h *sqliteHost) Begin(*Call) error    { return nil }
 func (h *sqliteHost) Commit(*Call) error   { return nil }
@@ -37,10 +53,10 @@ func sqliteCosts() Costs {
 }
 
 // sqliteCalls runs body and gives its `call` Trace lines.
-func sqliteCalls(t *testing.T, body string, h *sqliteHost, perRow int64) []string {
+func sqliteCalls(t *testing.T, body string, h *sqliteHost, perStep int64) []string {
 	t.Helper()
 	core := New()
-	def, err := core.SqliteCapability(h, sqliteCosts(), perRow)
+	def, err := core.SqliteCapability(h, sqliteCosts(), perStep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,9 +95,9 @@ func TestSqliteFactoryRefusals(t *testing.T) {
 	if _, err := core.SqliteCapability(typedNil, sqliteCosts(), 0); !errors.As(err, &host) {
 		t.Fatalf("typed nil impl: %v", err)
 	}
-	for _, perRow := range []int64{-1, 9007199254740992} {
-		if _, err := core.SqliteCapability(newSqliteHost(), sqliteCosts(), perRow); !errors.As(err, &host) || host.Code != InvalidValue {
-			t.Fatalf("perRow %d: %v", perRow, err)
+	for _, perStep := range []int64{-1, 9007199254740992} {
+		if _, err := core.SqliteCapability(newSqliteHost(), sqliteCosts(), perStep); !errors.As(err, &host) || host.Code != InvalidValue {
+			t.Fatalf("perStep %d: %v", perStep, err)
 		}
 	}
 	if _, err := core.SqliteCapability(newSqliteHost(), Costs{"query": {}}, 0); !errors.As(err, &host) {
@@ -220,11 +236,20 @@ func TestSqliteResultFailures(t *testing.T) {
 	}
 }
 
-func TestSqliteChargesRows(t *testing.T) {
+func TestSqliteChargesSteps(t *testing.T) {
 	h := newSqliteHost()
+	h.query = func(*Call, string, SqlParams, int64) (SqlRows, error) {
+		return SqlRows{Columns: []string{"n"}, Rows: [][]SqlValue{{int64(1)}, {int64(2)}}}, nil
+	}
+	// Two rows and the completion check; an empty result pays one step.
 	lines := sqliteCalls(t, `ask db to query "q", [], 4
-ask db to query "q", []`, h, 3)
-	if !strings.Contains(lines[0], "charged=12") || !strings.Contains(lines[1], "charged=30") {
+ask db to change "q", []`, h, 3)
+	if !strings.Contains(lines[0], "charged=9") || !strings.Contains(lines[1], "charged=3") {
+		t.Fatalf("got\n%s", strings.Join(lines, "\n"))
+	}
+	// A step the Run can't pay latches a refusal after the accepted prefix.
+	lines = sqliteCalls(t, `ask db to query "q", [], 4`, h, 9007199254740991)
+	if !strings.HasSuffix(lines[0], "charge-refused=yes") {
 		t.Fatalf("got\n%s", strings.Join(lines, "\n"))
 	}
 }

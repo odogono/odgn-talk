@@ -677,9 +677,6 @@ const talk_segment_lifecycle *talk_store_coordinator(talk_core *c, const talk_st
  * values and rows by chapter 7's rules, raising sql for a column named twice
  * and unrepresentable for a value it can't hold. */
 talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, int64_t per_step, talk_capability_def **out);
-/* C only: compatibility for staged executable perRow catalogue replay.
- * Its Host owns up-front charging; ordinary embedding uses the step factory. */
-talk_host_error_code talk_sqlite_legacy_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, talk_capability_def **out);
 /* user is optional (chapter 7), and has no binding. The Core refuses an
  * empty items with out of domain before calling choose. */
 talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *impl, const talk_costs *costs, talk_capability_def **out);

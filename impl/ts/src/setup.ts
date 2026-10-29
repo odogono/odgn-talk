@@ -123,7 +123,7 @@ export type Setup = {
   standard?: {
     capability: string;
     costs: Record<string, { alloc?: number; fuel?: number }>;
-    perRow?: number;
+    perStep?: number;
   }[];
 };
 

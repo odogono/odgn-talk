@@ -177,7 +177,7 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 
 ### Metering extensions
 
-[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. The catalogue tables below carry them; SQLite `perStep` setup remains staged, as the [handoff](../docs/handoffs/472-metered-operations.md) lists. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
+[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. The catalogue tables below carry them, and SQLite `[standard]` setup takes `perStep`. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
 
 ### What is recorded, and when
 
@@ -618,7 +618,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[operations]` | `errors` | the declared error codes, each `{code, fields}`, where `fields` are `{key, shape, optional}` | trace, disassembly |
 | `[standard]` | `capability` | a Standard Capability the case uses | trace, disassembly |
 | `[standard]` | `costs` | the cost of each of its Operations, a table from Operation name to `{fuel, alloc}` | trace, disassembly |
-| `[standard]` | `perRow` | for `sqlite`, the per-row Fuel cost its factory takes, 0 if absent | trace, disassembly |
+| `[standard]` | `perStep` | for `sqlite`, the Fuel its factory charges before each SQLite statement step, 0 if absent; a Stub's rows stand for that many steps plus the completion check or the probe past `max`, and its error for one step | trace, disassembly |
 | `[objectKinds]` | `name` | an Object Kind's name | trace, encoding |
 | `[objectKinds]` | `parentKinds` | the kinds its objects' parents may have | trace, encoding |
 | `[objectKinds]` | `props` | its properties, each `{name, shape, readOnly, getCost, setCost}` | trace |

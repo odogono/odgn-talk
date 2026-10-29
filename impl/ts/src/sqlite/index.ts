@@ -35,10 +35,10 @@ export const sqliteDatabases = (
   };
   return {
     coordinator: database => named(database).coordinator,
-    query: (call, sql, params, max) =>
-      named(call.binding.database).query(call, sql, params, max),
-    change: (call, sql, params, max) =>
-      named(call.binding.database).change(call, sql, params, max),
+    query: (call, sql, params, max, beforeStep) =>
+      named(call.binding.database).query(call, sql, params, max, beforeStep),
+    change: (call, sql, params, max, beforeStep) =>
+      named(call.binding.database).change(call, sql, params, max, beforeStep),
     begin: call => named(call.binding.database).begin(call),
     commit: call => named(call.binding.database).commit(call),
     rollback: call => named(call.binding.database).rollback(call),

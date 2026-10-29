@@ -1,6 +1,4 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
-// SQLite perStep signatures are staged in
-// metered-operations.md#target-embedding-declarations until runtime implementation.
 // The package is @northtalk/ts. Its Core, Group and Script are interfaces that
 // the TS Core and the Zig Host Adapter (@northtalk/ts/wasm) both implement
 // (ADR 0121); each Core's own extras are noted where they apply.
@@ -487,8 +485,10 @@ export interface SqlRows {
   readonly rows: readonly (readonly SqlValue[])[]; // each in column order
 }
 /**
- * The Core has checked the Shapes and max, converted params by the chapter 7
- * rules and charged max × perRow. It converts the result, raising `sql` for a
+ * The Core has checked the Shapes and max and converted params by the chapter 7
+ * rules. query and change call beforeStep exactly once immediately before every
+ * SQLite step, including the completion check and the probe past max, and let
+ * its LimitReached propagate without stepping. The Core converts the result, raising `sql` for a
  * column named twice and `unrepresentable` for a double it can't hold.
  * change, begin, commit and rollback are Segment-bound: they act inside the
  * calling Segment's transaction, which the coordinator publishes or discards.
@@ -500,8 +500,8 @@ export interface SqlRows {
 export interface SqliteImpl {
   /** Called once per Grant. The same database gives the same coordinator. */
   coordinator(database: string): SegmentCoordinator;
-  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows;
-  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows & { readonly changes: number };
+  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows;
+  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows & { readonly changes: number };
   begin(call: Call<SqliteBinding>): void;
   commit(call: Call<SqliteBinding>): void;
   rollback(call: Call<SqliteBinding>): void;
@@ -669,8 +669,8 @@ export interface Core {
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
   storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name; impl coordinates every binding
-  /** Optional for Hosts. perRow is whole Fuel charged per row of max; a bad one throws "invalid value". */
-  sqliteCapability(impl: SqliteImpl, costs: Costs, perRow: number): CapabilityDef<SqliteBinding>;
+  /** Optional for Hosts. perStep is whole Fuel charged before each SQLite step; a bad one throws "invalid value". */
+  sqliteCapability(impl: SqliteImpl, costs: Costs, perStep: number): CapabilityDef<SqliteBinding>;
   /** Optional for Hosts. */
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Optional for Hosts. */

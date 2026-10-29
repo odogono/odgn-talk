@@ -58,13 +58,14 @@ on editNote noteId, body
 end editNote
 ```
 
-Current implementations charge each `query` and `change` its Operation cost plus
-`max × perRow` Fuel before execution, regardless of how many rows come back.
-Choose a small `max` when the result size is known. The specified
+Each `query` and `change` charges its Operation cost, then the factory's
+`perStep` Fuel before every SQLite statement step, as the
 [step-metering contract](../spec/embedding/metered-operations.md#sqlite-step-authorization)
-replaces this with `perStep`, including completion and overflow probes, but is
-not yet implemented; see the [Go support note](../impl/go/README.md#ordinary-capability-operations)
-and [TS support note](../impl/ts/README.md#process-wide-core-and-host-manifests).
+says: one step per returned row, plus the completion check or the probe that
+finds a row past `max`. An empty result, and a change that returns no rows,
+costs one step. A step the Run can't pay is a Limit Fault at the call, before
+the step runs; earlier steps stay charged, and a refused `change` rolls back
+its Segment.
 
 ## Values crossing the SQL boundary
 

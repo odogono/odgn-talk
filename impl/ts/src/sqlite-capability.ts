@@ -1,5 +1,5 @@
 // Chapter 7's `sqlite` declarations and chapter 9's factory. The Core checks
-// the Shapes and `max`, converts `params` and results, charges the rows and
+// the Shapes and `max`, converts `params` and results, charges each step and
 // keeps the `transaction` scope; running SQL, with the database's
 // transactions and the authorizer, is the Host implementation's obligation.
 import {
@@ -48,8 +48,11 @@ export type SqlRows = {
   readonly rows: readonly (readonly SqlValue[])[];
 };
 /**
- * The Core has checked the Shapes and max, converted params by the chapter 7
- * rules and charged max × perRow. It converts the result, raising `sql` for a
+ * The Core has checked the Shapes and max and converted params by the chapter
+ * 7 rules. query and change call `beforeStep` exactly once immediately before
+ * every SQLite statement step, including the completion check and the probe
+ * past max, and let its LimitReached propagate without stepping (Metered
+ * Operations, SQLite step authorization). The Core converts the result, raising `sql` for a
  * column named twice and `unrepresentable` for a double it can't hold.
  * change, begin, commit and rollback are Segment-bound: they act inside the
  * calling Segment's transaction, which the coordinator publishes or discards.
@@ -65,6 +68,7 @@ export type SqliteImpl = {
     sql: string,
     params: SqlParams,
     max: number,
+    beforeStep: () => void,
   ): SqlRows & { readonly changes: number };
   commit(call: Call<SqliteBinding>): void;
   /** Called once per Grant. The same database gives the same coordinator. */
@@ -74,11 +78,11 @@ export type SqliteImpl = {
     sql: string,
     params: SqlParams,
     max: number,
+    beforeStep: () => void,
   ): SqlRows;
   rollback(call: Call<SqliteBinding>): void;
 };
 
-const MAX_WHOLE = Number.MAX_SAFE_INTEGER;
 const isWhole = (n: unknown): n is number =>
   Number.isSafeInteger(n) && (n as number) >= 0;
 const INT64_MIN = -(2n ** 63n);
@@ -318,11 +322,11 @@ const rowsOf = (result: SqlRows): Value => {
   );
 };
 
-/** Optional for Hosts. perRow is whole Fuel charged per row of max. */
+/** Optional for Hosts. perStep is whole Fuel charged before each SQLite step. */
 export const sqliteCapability = (
   impl: SqliteImpl,
   costs: Costs,
-  perRow: number,
+  perStep: number,
 ): CapabilityDef<SqliteBinding> => {
   for (const name of [
     'coordinator',
@@ -336,16 +340,12 @@ export const sqliteCapability = (
       throw new HostError('invalid value', `sqlite needs ${name}`);
     }
   }
-  if (!isWhole(perRow)) {
+  if (!isWhole(perStep)) {
     throw new HostError(
       'invalid value',
-      'The per-row cost must be a whole number',
+      'The per-step cost must be a whole number',
     );
   }
-  // Charged before the work, whatever the statement then gives. A product
-  // past every Fuel limit faults the same as the exact one would.
-  const chargeRows = (call: Call<SqliteBinding>, max: number) =>
-    call.charge(Math.min(max * perRow, MAX_WHOLE));
   const statement =
     (
       run: (
@@ -353,13 +353,17 @@ export const sqliteCapability = (
         sql: string,
         params: SqlParams,
         max: number,
+        beforeStep: () => void,
       ) => Value,
     ) =>
-    (call: Call<SqliteBinding>, ...args: Value[]) => {
-      const max = rowsAllowed(args[2], call.binding);
-      chargeRows(call, max);
-      return run(call, args[0]!.asText()!, paramsOf(args[1]!), max);
-    };
+    (call: Call<SqliteBinding>, ...args: Value[]) =>
+      run(
+        call,
+        args[0]!.asText()!,
+        paramsOf(args[1]!),
+        rowsAllowed(args[2], call.binding),
+        () => call.charge(perStep),
+      );
   const statementArgs = [shape.text, paramsShape, maxShape];
   const scoped = (
     name: 'begin' | 'commit' | 'rollback',
@@ -390,8 +394,9 @@ export const sqliteCapability = (
         'unrepresentable',
       ),
       cost: costOf(costs, 'query'),
-      do: statement((call, sql, params, max) => {
-        const result = impl.query(call, sql, params, max);
+      metering: 'read-only',
+      do: statement((call, sql, params, max, beforeStep) => {
+        const result = impl.query(call, sql, params, max, beforeStep);
         checkForm(result, max, false);
         return rowsOf(result);
       }),
@@ -412,8 +417,9 @@ export const sqliteCapability = (
       ),
       cost: costOf(costs, 'change'),
       segmentBound: true,
-      do: statement((call, sql, params, max) => {
-        const result = impl.change(call, sql, params, max);
+      metering: 'segment-bound',
+      do: statement((call, sql, params, max, beforeStep) => {
+        const result = impl.change(call, sql, params, max, beforeStep);
         checkForm(result, max, true);
         const rows = rowsOf(result);
         return map([

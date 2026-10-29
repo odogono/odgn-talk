@@ -557,6 +557,30 @@ const capabilitiesOf = (
           crossing(call.id);
         }
       };
+      // As a driver steps: one step before a Stub's error, and one per row
+      // up to max, then the completion check or the probe past max.
+      const stepped = (
+        operation: string,
+        call: Call<SqliteBinding>,
+        max: number,
+        beforeStep: () => void,
+      ): SqlRows => {
+        let given: Value;
+        try {
+          given = answer(operation, call);
+        } catch (error) {
+          // A Stub's refused charge is no step; its error is one.
+          if ((error as Error).name !== 'LimitReached') {
+            beforeStep();
+          }
+          throw error;
+        }
+        const result = sqlRowsOf(given);
+        for (let i = 0; i <= Math.min(result.rows.length, max); i++) {
+          beforeStep();
+        }
+        return result;
+      };
       const nothingStub = (operation: string, call: Call<SqliteBinding>) => {
         if (answer(operation, call).kind !== 'nothing') {
           throw new Error(`A sqlite.${operation} Stub must give nothing`);
@@ -577,9 +601,10 @@ const capabilitiesOf = (
               }
               return databases.get(database)!;
             },
-            query: call => sqlRowsOf(answer('query', call)),
-            change: call =>
-              sqlRowsOf(answer('change', call)) as SqlRows & {
+            query: (call, _sql, _params, max, beforeStep) =>
+              stepped('query', call, max, beforeStep),
+            change: (call, _sql, _params, max, beforeStep) =>
+              stepped('change', call, max, beforeStep) as SqlRows & {
                 changes: number;
               },
             begin: call => nothingStub('begin', call),
@@ -587,7 +612,7 @@ const capabilitiesOf = (
             rollback: call => nothingStub('rollback', call),
           },
           costs,
-          standard.perRow ?? 0,
+          standard.perStep ?? 0,
         ) as CapabilityDef<unknown>,
       );
     } else if (capability === 'user') {

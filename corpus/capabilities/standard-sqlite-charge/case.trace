@@ -1,29 +1,32 @@
-# Unblessed: sqlite row charges (#467); first blessing awaits human review.
-# A call charges max times perRow, 10, after its declared cost and before the
-# implementation runs. 5 rows fit the Run's 100 Fuel; 9 do not, so the call
-# has a Limit Fault and takes no Stub. An omitted max is the binding's cap,
-# whose charge is past every Fuel limit.
+# Unblessed: sqlite step charges (#467, #1795); first blessing awaits human review.
+# Each SQLite step costs perStep, 10, after the declared cost: one per row up
+# to max, then the completion check. d1's one row takes 2 steps. d2's 8 rows
+# need 9 steps, more than the Run's 100 Fuel leaves, so the step that can't be
+# paid latches a refusal after the accepted prefix and faults at the call. An
+# omitted max is the binding's cap, which no longer charges up front: d3's one
+# row takes 2 steps.
 > load s identity=79ed77e0549191936b16510a7793b240391a11d4d1efcca51f4a391202487189
+> stub sqlite.query value={columns: ["n"], rows: [[1]]}
+> stub sqlite.query value={columns: ["n"], rows: [[1], [2], [3], [4], [5], [6], [7], [8]]}
 > stub sqlite.query value={columns: ["n"], rows: [[1]]}
 > deliver d1 to=s message=read args=[5]
 > pump clock=2026-10-09T12:00:00Z
-call s/r1.c1 op=db.query args=["SELECT 1 AS n", [], 5] result=[{n: 1}] charged=50
-seg s/r1 start delivery=d1 handler=read clause=1 fuel=86 alloc=113 state=16 end=return
-run s/r1 outcome=completed delivery=d1 handler=read fuel=86 alloc=113
-pumped state=idle fuel=86
+call s/r1.c1 op=db.query args=["SELECT 1 AS n", [], 5] result=[{n: 1}] charged=20
+seg s/r1 start delivery=d1 handler=read clause=1 fuel=56 alloc=113 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=read fuel=56 alloc=113
+pumped state=idle fuel=56
 > deliver d2 to=s message=read args=[9]
 > pump clock=2026-10-09T12:00:00Z
-call s/r2.c1 op=db.query args=["SELECT 1 AS n", [], 9]
+call s/r2.c1 op=db.query args=["SELECT 1 AS n", [], 9] charged=70 charge-refused=yes
 fault s/r2 limit=fuel at=s:11 pos=4:3 rollback=[count]
-seg s/r2 start delivery=d2 handler=read clause=1 fuel=29 alloc=32 state=16 end=fault
-run s/r2 outcome=limit-fault delivery=d2 handler=read limit=fuel fuel=29 alloc=32
-pumped state=idle fuel=29
+seg s/r2 start delivery=d2 handler=read clause=1 fuel=99 alloc=32 state=16 end=fault
+run s/r2 outcome=limit-fault delivery=d2 handler=read limit=fuel fuel=99 alloc=32
+pumped state=idle fuel=99
 > deliver d3 to=s message=read args=[nothing]
 > pump clock=2026-10-09T12:00:00Z
-call s/r3.c1 op=db.query args=["SELECT 1 AS n", [], nothing]
-fault s/r3 limit=fuel at=s:11 pos=4:3 rollback=[count]
-seg s/r3 start delivery=d3 handler=read clause=1 fuel=29 alloc=32 state=16 end=fault
-run s/r3 outcome=limit-fault delivery=d3 handler=read limit=fuel fuel=29 alloc=32
-pumped state=idle fuel=29
+call s/r3.c1 op=db.query args=["SELECT 1 AS n", [], nothing] result=[{n: 1}] charged=20
+seg s/r3 start delivery=d3 handler=read clause=1 fuel=56 alloc=113 state=16 end=return
+run s/r3 outcome=completed delivery=d3 handler=read fuel=56 alloc=113
+pumped state=idle fuel=56
 > vars
-vars s count=1
+vars s count=2

@@ -1,6 +1,4 @@
 // The NorthTalk Go embedding interface: declarations only, never compiled.
-// SQLite perStep signatures are staged in
-// metered-operations.md#target-embedding-declarations until runtime implementation.
 // The module is github.com/odogono/odgn-talk/impl/go; this is its root package.
 //
 // This file and talk.ts are the handoff interface (#72). They differ only in
@@ -600,8 +598,10 @@ type SqlRows struct {
 	Changes int64        // Change only
 }
 
-// The Core has checked the Shapes and max, converted params by the chapter 7
-// rules and charged max × perRow. It converts the result, raising `sql` for a
+// The Core has checked the Shapes and max and converted params by the chapter
+// 7 rules. Query and Change call beforeStep exactly once immediately before
+// every SQLite step, including the completion check and the probe past max,
+// and return its error without stepping. The Core converts the result, raising `sql` for a
 // column named twice and `unrepresentable` for a double it can't hold or a
 // string that isn't valid UTF-8. Change, Begin, Commit and Rollback are
 // Segment-bound: they act inside the calling Segment's transaction, which the
@@ -612,17 +612,17 @@ type SqlRows struct {
 type SqliteImpl interface {
 	// Coordinator is called once per Grant. The same database gives the same pointer.
 	Coordinator(database string) *SegmentLifecycle
-	Query(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
-	Change(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
+	Query(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
+	Change(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
 	Begin(c *Call) error
 	Commit(c *Call) error
 	Rollback(c *Call) error
 }
 
-// SqliteCapability is optional for Hosts. perRow is whole Fuel charged per row
-// of max; a bad one is HostError `invalid value`. Every binding must be a
-// SqliteBinding.
-func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*CapabilityDef, error)
+// SqliteCapability is optional for Hosts. perStep is whole Fuel charged before
+// each SQLite step; a bad one is HostError `invalid value`. Every binding must
+// be a SqliteBinding.
+func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perStep int64) (*CapabilityDef, error)
 
 // user is optional (chapter 7, ADR 0077), and has no binding. The Core has
 // checked the Shapes and refused an empty items with `out of domain`; an

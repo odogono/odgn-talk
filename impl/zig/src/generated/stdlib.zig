@@ -41,6 +41,7 @@ pub const StdlibTableOperationEntry = struct {
     call: []const u8,
     gives: []const u8,
     errors: ?[]const []const u8 = null,
+    metering: ?[]const u8 = null,
 };
 
 pub const stdlib: StdlibTable = .{
@@ -1507,6 +1508,7 @@ pub const stdlib: StdlibTable = .{
                 "unrepresentable",
                 "out of range",
             },
+            .metering = "read-only",
         },
         .{
             .capability = "sqlite",
@@ -1522,6 +1524,7 @@ pub const stdlib: StdlibTable = .{
                 "unrepresentable",
                 "out of range",
             },
+            .metering = "segment-bound",
         },
         .{
             .capability = "sqlite",
