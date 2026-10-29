@@ -2172,9 +2172,13 @@ export class Run {
     this.segmentBase = [...this.script.variables];
   }
 
-  /** A parked Run resumes after dispatch, with no resumption instruction. */
+  /**
+   * A parked Run resumes after dispatch, with no resumption instruction, in a
+   * new Segment: its park ended the first (chapter 11, Segment ids).
+   */
   beginReadySegment() {
     if (!this.resumption) {
+      this.segment++;
       this.segmentBase = [...this.script.variables];
     }
   }
