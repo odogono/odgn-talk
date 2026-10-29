@@ -8,6 +8,22 @@ const SUFFIX = '\nend runMessage';
 /** The lines around one Message Box command that make it a Script. */
 export const messageParts = () => ({ prefix: PREFIX, suffix: SUFFIX });
 
+/**
+ * A `:inspect <expression>` line's expression (ADR 0141), an error for one
+ * without it, or undefined for an ordinary command.
+ */
+export const inspectCommand = (
+  command: string,
+): { error: string } | { expression: string } | undefined => {
+  const match = /^:inspect(?![\w:])\s*(.*)$/su.exec(command.trim());
+  if (!match) {
+    return undefined;
+  }
+  return match[1]
+    ? { expression: match[1] }
+    : { error: 'Usage: :inspect <expression>' };
+};
+
 export const messageSource = (command: string) => PREFIX + command + SUFFIX;
 
 /** The line of the wrapped Script on which the command starts. */

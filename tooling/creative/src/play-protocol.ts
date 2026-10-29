@@ -8,7 +8,12 @@ import { type ReaderArg } from './pointer';
 import { type LoadedMessageTarget } from './message-script';
 import { type Asset, type Element, type Project, type RichText } from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
-import { type VariableScript, type Watch, type WatchResult } from './variables';
+import {
+  type VariableScript,
+  type VariableValue,
+  type Watch,
+  type WatchResult,
+} from './variables';
 
 /** Element messages the page sends for reader input. */
 export type ReaderMessage = Extract<
@@ -134,7 +139,7 @@ export type PlayResponse =
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }
   | { kind: 'done' }
-  | { error?: string; kind: 'message'; text?: string }
+  | { error?: string; kind: 'message'; text?: string; value?: VariableValue }
   /** The Group's inspection as JSON, big integers as strings. */
   | { inspection: string; kind: 'inspection' }
   /** The Variables window's Scripts; absent if no Pump ran since last asked. */

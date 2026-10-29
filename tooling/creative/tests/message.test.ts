@@ -417,3 +417,28 @@ test(':describe and :apropos read the context Script and the Project Libraries',
   });
   expect(sessionCommand('3 + 4', script, libraries)).toBeUndefined();
 });
+
+test(':inspect in Edit gives the value as the Variables window shows it', async () => {
+  const editor = new StackEditor(fixture());
+  expect(await runInEdit(editor, ':inspect [1, "two"]')).toEqual({
+    value: {
+      kind: 'list',
+      length: 2,
+      items: [
+        { kind: 'plain', text: '1' },
+        { kind: 'plain', text: '"two"' },
+      ],
+    },
+  });
+  expect(await runInEdit(editor, ':inspect button1')).toMatchObject({
+    value: { kind: 'object', name: 'button1', live: true, owner: 2 },
+  });
+  expect(await runInEdit(editor, ':inspect')).toEqual({
+    error: 'Usage: :inspect <expression>',
+  });
+  expect(
+    (await runInEdit(editor, ':inspect set the label of button1 to "Go"'))
+      .error,
+  ).toBeDefined();
+  expect(editor.page.elements[0]).toHaveProperty('label', 'Button');
+});

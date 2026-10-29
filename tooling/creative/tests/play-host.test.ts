@@ -191,6 +191,12 @@ test('Message Box commands answer once their Run ends', async () => {
     kind: 'message',
     text: '3',
   });
+  request({ kind: 'message', session: 1, text: ':inspect [1 + 2]' });
+  await until(() => replies.some(r => r.id === 3));
+  expect(replies.find(r => r.id === 3)!.response).toEqual({
+    kind: 'message',
+    value: { kind: 'list', length: 1, items: [{ kind: 'plain', text: '3' }] },
+  });
 });
 
 test('a paused session drops frames and reader input, and a Step delivers one frame', async () => {
