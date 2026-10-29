@@ -4,7 +4,7 @@
 
 The Host defines a `stock` Capability. Its `price` Operation answers at once, and its `reserve` Operation is suspending. The Host loads a Script whose `order` Handler calls both, and Pumps it until it waits on `reserve`. It saves the Group, and restores the save into a fresh Group, which on the reactor is a fresh guest instance. It answers the pending call there with `settle` and Pumps the Run to its end.
 
-Both Cores give the same result, ledger and Trace. Only the saves differ, since each is its own Core's format.
+Both Cores give the same result, ledger and Trace, and both write their saves in the one format either Core can restore.
 
 ```sh
 (cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)
