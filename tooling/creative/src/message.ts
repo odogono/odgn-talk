@@ -90,7 +90,7 @@ export const settle = async (
   void reply.then(() => {
     done = true;
   });
-  for (let i = 0; i < EDIT_PUMPS && !done && !play.stopped; i++) {
+  for (let i = 0; i < EDIT_PUMPS && !done && !play.ended; i++) {
     pump();
     await Promise.resolve();
   }

@@ -6,7 +6,7 @@ import type { PlayMode } from './stack';
 /** The parts of a session's view the controls depend on. */
 export type ControlsView = Pick<
   PlayView,
-  'navigating' | 'paused' | 'stopped' | 'stoppedRun'
+  'navigating' | 'paused' | 'ended' | 'stoppedRun'
 >;
 
 export type Controls = {
@@ -36,7 +36,7 @@ export const controls = (
   view: ControlsView | undefined,
   mode: PlayMode | undefined,
 ): Controls => {
-  const live = Boolean(view && !view.stopped);
+  const live = Boolean(view && !view.ended);
   const paused = live && view!.paused;
   const stoppedRun = live && Boolean(view!.stoppedRun);
   // A frame can't move on until a Stopped Run finishes (ADR 0147).

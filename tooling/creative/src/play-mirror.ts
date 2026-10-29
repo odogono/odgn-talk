@@ -30,7 +30,7 @@ export class PlayMirror implements ReaderTextPlay {
   paused = false;
   /** The Run a Breakpoint stopped, while the session is paused there. */
   stoppedRun: StoppedRun | undefined;
-  stopped = false;
+  ended = false;
   wantsFrames = false;
   prompt: PromptView | undefined;
   pageHandles = { keyDown: false, keyUp: false };
@@ -89,7 +89,7 @@ export class PlayMirror implements ReaderTextPlay {
     this.navigating = view.navigating;
     this.paused = view.paused;
     this.stoppedRun = view.stoppedRun;
-    this.stopped = view.stopped;
+    this.ended = view.ended;
     this.wantsFrames = view.wantsFrames;
     this.prompt = view.prompt;
     this.pageHandles = view.pageHandles;

@@ -10,9 +10,9 @@ export type ReaderTextPlay = {
     next: DeepReadonly<RichText>,
   ): void;
   elementsOf(): readonly DeepReadonly<Element>[];
+  readonly ended: boolean;
   isVisible(element: DeepReadonly<TextElement>): boolean;
   readonly navigating: boolean;
-  readonly stopped: boolean;
 };
 
 export class ReaderTextHistory implements TextHistory {
@@ -43,7 +43,7 @@ export class ReaderTextHistory implements TextHistory {
   }
   #change(next: DeepReadonly<RichText>): boolean {
     if (
-      this.play.stopped ||
+      this.play.ended ||
       this.play.navigating ||
       !this.element.editable ||
       !this.play.isVisible(this.element) ||

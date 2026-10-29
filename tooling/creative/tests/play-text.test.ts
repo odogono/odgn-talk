@@ -125,7 +125,7 @@ test('a Script replacing the same plain text clears formatting and resets reader
 });
 
 for (const blocked of [
-  'stopped',
+  'ended',
   'navigating',
   'other Page',
   'read-only',
@@ -134,7 +134,7 @@ for (const blocked of [
   test(`${blocked} reader text cannot change Play State or enqueue textChanged`, () => {
     const { play, element, history } = fixture();
     drain(play);
-    if (blocked === 'stopped') {
+    if (blocked === 'ended') {
       play.stop(0n);
     } else if (blocked === 'navigating') {
       play.send(play.page, 'click');
