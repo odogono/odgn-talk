@@ -13,7 +13,7 @@ import {
 import { ScriptError } from '@northtalk/ts';
 import type { DeepReadonly } from './readonly';
 
-/** The Playground's Operations without `size`; one unit is one Page pixel. */
+/** The canvas Operations without `size`; one unit is one Page pixel. */
 export const DRAWING_OPERATIONS = Object.keys(CANVAS_SIGNATURES).filter(
   op => op !== 'size',
 );

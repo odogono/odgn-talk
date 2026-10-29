@@ -44,7 +44,7 @@ Reading is the harder half. A hand-edited and re-zipped file may come from any t
 
 Reading through the central directory, not the local headers, handles bit 3 for free. The reader rejects encryption, methods other than 0 and 8, and ZIP64. ZIP64 is needed only past 4 GiB or 65,535 entries (§4.4.1.4), and a Project should never get near either.
 
-[fflate](https://github.com/101arrowz/fflate) is the fallback if our reader proves fragile. It is MIT licensed and has no runtime dependencies ([`package.json`](https://github.com/101arrowz/fflate/blob/master/package.json)). Its README gives about 8 kB minified for the core, and an extra 3 kB for zip. The Playground's only dependencies are CodeMirror, Lezer and our own packages ([`tooling/playground/package.json`](../../tooling/playground/package.json)). A zip subset of a few hundred lines that we own fits that better.
+[fflate](https://github.com/101arrowz/fflate) is the fallback if our reader proves fragile. It is MIT licensed and has no runtime dependencies ([`package.json`](https://github.com/101arrowz/fflate/blob/master/package.json)). Its README gives about 8 kB minified for the core, and an extra 3 kB for zip. The Playground's only dependencies are CodeMirror, Lezer and our own packages ([`tooling/playground/package.json`](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/package.json)). A zip subset of a few hundred lines that we own fits that better.
 
 The zip code uses only web platform APIs (`CompressionStream`, `Blob`, `Uint8Array`), so it also runs under Node, Deno and Bun for tests.
 
@@ -144,7 +144,7 @@ The reasons:
 
 OPFS is worth revisiting only if large audio makes Blob reads from IndexedDB slow in practice.
 
-The Playground's [`storage.ts`](../../tooling/playground/src/storage.ts) uses `localStorage`, which suits its small text buffers. It doesn't suit Projects: Web Storage is synchronous and string-only ([web.dev, Storage for the web](https://web.dev/articles/storage-for-the-web)), and is capped at about 5 MiB per origin ([MDN, quotas](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)). Its pattern of validating each field on load and treating a failure as "nothing saved" carries over.
+The Playground's [`storage.ts`](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/storage.ts) uses `localStorage`, which suits its small text buffers. It doesn't suit Projects: Web Storage is synchronous and string-only ([web.dev, Storage for the web](https://web.dev/articles/storage-for-the-web)), and is capped at about 5 MiB per origin ([MDN, quotas](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)). Its pattern of validating each field on load and treating a failure as "nothing saved" carries over.
 
 ### Suggested stores
 

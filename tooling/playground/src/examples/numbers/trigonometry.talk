@@ -1,8 +1,0 @@
--- Angles are in radians; `radians` and `degrees` convert. `pi` is a Built-in Constant.
-on main
-  repeat for each angle in [0, 30, 45, 60, 90]
-    put radians(angle) into r
-    say angle & "°  sin " & round(sin(r), 4) & "  cos " & round(cos(r), 4)
-  end repeat
-  say "atan2(1, 1) in degrees: " & round(degrees(atan2(1, 1)), 6)
-end main

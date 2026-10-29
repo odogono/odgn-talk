@@ -619,8 +619,8 @@ Project picker has no extension filter, are recorded in
 A canvas Element shows its Drawing over its `fill`: the commands Scripts and
 the Message Box have drawn on it since its last `clear` or `background`
 ([ADR 0116](../../docs/adr/0116-a-canvas-element-keeps-a-retained-drawing-across-play-and-edit.md)).
-Every Script and the Message Box get the `canvas` Grant, the Playground's
-drawing Operations without `size`, each taking the Canvas first:
+Every Script and the Message Box get the `canvas` Grant, the tooling
+stack.s drawing Operations without `size`, each taking the Canvas first:
 
 ```talk
 on frame elapsed
@@ -640,7 +640,7 @@ end frame
 `strokeCap`, `strokeJoin`, `point`, `line`, `triangle`, `rectangle`,
 `roundedRectangle`, `ellipse`, `circle`, `arc`, `text`, `textSize`, `push`,
 `pop`, `translate`, `rotate` and `scale` each cost 1 Fuel; their arguments are those in the
-[Playground's table](../playground/README.md#static-canvas), after the Canvas.
+[tooling stack.s table](../stack/README.md#canvas), after the Canvas.
 Coordinates are the Element's own, one unit to one Page pixel, and drawing is
 clipped to its frame; `ellipse`, `circle` and `arc` take their centre, and
 `arc` angles are radians. Colours are `#RRGGBB` or `#RRGGBBAA`. `clear` and
@@ -662,7 +662,7 @@ the rest of Play State. In Edit, a Message Box line that draws is one
 undoable edit. Info shows the command count and **Clear drawing**, which
 empties the Drawing back to the default style. Duplicating a Canvas, and
 cloning it in Play, copy its Drawing. The Project file stores the
-Drawing as `{op, args}` commands, checked with the Playground's validation.
+Drawing as `{op, args}` commands, checked with the tooling stack.s validation.
 See this in Folio: [Canvas Tetris](https://northtalk.org/folio/canvas-tetris) and
 [Sonar](https://northtalk.org/folio/sonar) draw on a canvas every frame.
 
@@ -1020,7 +1020,7 @@ while browsing and in the Project in Edit, and shows the value as the
 Variables window's rows: lists and maps open from their row, and an Element
 selects itself when clicked. The same rows appear in the Variables window's
 Inspected section, which keeps the latest result until another Project
-opens. Unlike the Playground's, it reads no Host Object properties.
+opens. It reads no Host Object properties.
 
 `:fuel <command>` runs a command only while browsing, and is refused in Edit,
 whose session sends no events. After the command's value it prints the line's

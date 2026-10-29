@@ -1,6 +1,6 @@
 # NorthTalk browser editor
 
-The NorthTalk editor that the [Playground](../playground/) and the [creative tool](../creative/) share. It is CodeMirror 6 with NorthTalk highlighting, the language server's diagnostics, completion, hover, go to definition, references and rename, and its suspension marks. The language server itself is the tooling stack's ([`@northtalk/tooling/lsp`](../stack/)), run in a worker. None of this is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+The NorthTalk editor of [Folio](../creative/), the creative tool. It is CodeMirror 6 with NorthTalk highlighting, the language server's diagnostics, completion, hover, go to definition, references and rename, and its suspension marks. The language server itself is the tooling stack's ([`@northtalk/tooling/lsp`](../stack/)), run in a worker. None of this is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ## Using it
 

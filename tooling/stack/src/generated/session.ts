@@ -3,7 +3,7 @@ export const sessionCommands = [
   {
     "name": ":grant",
     "usage": ":grant <name> <capability> [<binding>]",
-    "does": "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included"
+    "does": "Grants the session a Capability the REPL Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included"
   },
   {
     "name": ":mock",

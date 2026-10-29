@@ -1,5 +1,5 @@
-// The Session Driver: the loop that feeds a Session Host from a REPL or the
-// Playground (chapter 12). It collects multiline Entries, routes `:help` and
+// The Session Driver: the loop that feeds a Session Host from a REPL
+// (chapter 12). It collects multiline Entries, routes `:help` and
 // `:quit`, queues lines typed while the session sleeps, refuses them while a
 // debugger holds it paused, and wakes it at its deadlines. It is not
 // normative: everything a session prints and records comes from the Session

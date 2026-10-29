@@ -77,7 +77,7 @@ const operatorWords = follow.filter(word =>
     'otherwise',
   ].includes(word),
 );
-// Contextual words worth colouring wherever they stand, as the Playground does.
+// Contextual words worth colouring wherever they stand.
 const contextual = [
   ...follow.filter(word => !operatorWords.includes(word)),
   'all',

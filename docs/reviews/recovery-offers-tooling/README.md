@@ -7,7 +7,7 @@ expectation changes are made; first-blessing review remains in #392.
 
 Current support is described in the [TS](../../../impl/ts/README.md#tooling-debug-hooks),
 [Go](../../../impl/go/README.md), [tooling](../../../tooling/stack/README.md)
-and [Playground](../../../tooling/playground/README.md#what-it-does) guides.
+and [Playground](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/README.md#what-it-does) guides.
 The debugger is a TS-only tooling surface; both Cores replay the same execution
 Traces. Chapter 9's Inspect schema stays unchanged.
 
@@ -44,7 +44,7 @@ They assert `[5, 0, 7]`, preserving accumulated Library work, and replay the
 recorded Transcript. The native suites also compare the complete replayed Trace
 and choice/entry pairing.
 
-[Playground tests](../../../tooling/playground/tests/session.test.ts) save a
+[Playground tests](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/tests/session.test.ts) save a
 Library tab, apply a Script tab, pause and step through caller policy, and
 display the Library action with its preserved accumulator and bound argument.
 They verify the reversed panel's owning-frame index, shared locals and tab

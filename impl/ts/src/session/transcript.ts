@@ -131,7 +131,7 @@ export type ReplayOptions = {
   capabilities?: SessionEnvironment['capabilities'];
   /**
    * Where the Session Host turns once the Transcript runs out, so a
-   * Playground can go on live from a replayed session: its Clock, its
+   * Host can go on live from a replayed session: its Clock, its
    * built-in Capabilities, and where later items and echoed values go.
    */
   live?: Pick<

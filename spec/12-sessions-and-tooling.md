@@ -3,7 +3,7 @@
 
 _Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [#61](https://github.com/odogono/odgn-talk/issues/61), [#69](https://github.com/odogono/odgn-talk/issues/69), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72), [ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
 
-A REPL or Playground session is an ordinary Host running an ordinary Script Group. The Cores have no session concept ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)). This chapter states how that Host, the **Session Host**, turns Entries and Session Commands into Host Inputs, and what it prints. Its behaviour is normative, because a Session Transcript is a Conformance Corpus case, which must replay the same on the Go REPL and the TS REPL. The rest of the tooling is one TS stack, and nothing it produces is normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+A REPL session is an ordinary Host running an ordinary Script Group. The Cores have no session concept ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)). This chapter states how that Host, the **Session Host**, turns Entries and Session Commands into Host Inputs, and what it prints. Its behaviour is normative, because a Session Transcript is a Conformance Corpus case, which must replay the same on the Go REPL and the TS REPL. The rest of the tooling is one TS stack, and nothing it produces is normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 The normative [Session observation contract](session-observation.md) defines Declaration Documentation, `:describe`, `:inspect`, `:apropos`, dispatched-Run tracing, Fuel Measurements and object-crossing replay. These commands are part of Session Transcript parity, not the tooling-freedom exception in ADR 0028.
 
@@ -21,7 +21,7 @@ The normative [Session observation contract](session-observation.md) defines Dec
 
 ### The Session Store
 
-`store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
+`store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 
 - **In memory:** each Session Store lives in the Session Host's memory, and starts empty, so a Transcript replays the same way wherever it runs. `:store load` is the only way contents come in from outside.
 - **Named by the binding:** `:grant <name> store [<store>]` grants all eight Operations, including `watch` and `unwatch`, on the Store named `<store>`, or `default`. Two Grants of one name share one Store.
@@ -69,10 +69,10 @@ The second `set` changes nothing, so it sends nothing. `:store clear` removes `a
 
 ### Prompts
 
-`user` is an optional Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#user)), and every REPL and Playground builds it in ([ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)).
+`user` is an optional Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#user)), and every REPL builds it in ([ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)).
 
-- **Granting:** `:grant user user` grants it under the name `user`, with all four Operations. It takes no binding, and isn't granted unless asked for. The Playground asks for it in each new session that doesn't replay a Transcript, as it does `canvas`.
-- **Asking:** when the foreground Run waits on `confirm`, `choose` or `enter`, the Session Host asks the person, answers the call with what they give, and pumps. The Transcript records the answer as a `~` line. How a REPL or Playground shows the prompt, and how the person answers or cancels, is its own, and prints nothing.
+- **Granting:** `:grant user user` grants it under the name `user`, with all four Operations. It takes no binding, and isn't granted unless asked for.
+- **Asking:** when the foreground Run waits on `confirm`, `choose` or `enter`, the Session Host asks the person, answers the call with what they give, and pumps. The Transcript records the answer as a `~` line. How a REPL shows the prompt, and how the person answers or cancels, is its own, and prints nothing.
 - **Background prompts** wait, as a background `read` does, until their Run is cancelled or a deadline abandons the call.
 - **One at a time:** while the Session Script has a prompt unanswered, the Session Host fails its next one with `user busy`, recorded as a `~` line with `fail`.
 - **`notify`** prints `* `, then the title and `: ` when the title isn't empty, then the message, as `console`'s `write` prints a text, with `[<run>] ` before it for a Run in the background.
@@ -172,7 +172,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 
 | Command | Written | Does | Notes |
 | --- | --- | --- | --- |
-| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included | before the session starts |
+| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included | before the session starts |
 | `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
 | `:stub` | `:stub <capability>.<operation> <value> \| :stub <capability>.<operation> fail <error>` | Queues the result of the next call of a mock immediate Operation, or an error map to fail it with |  |
 | `:answer` | `:answer <call> <value>` | Answers a pending call of a mock suspending Operation |  |
@@ -203,9 +203,9 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Values** in a command, such as a Stub's value or an error map, are written in the display form ([chapter 11](11-the-trace-and-conformance.md#the-display-form)). An error map needs a text `code`.
 - **Mocks:** `:mock` defines an Operation whose result has the `any` Shape, and which declares eight arguments, each an Optional `any`, so a call may give from none to eight. It declares no error codes. A call to one prints a `call` line, which names it by its Capability, whichever Grant the call goes through, and lists the arguments the call gave. An immediate one takes the next `:stub` queued for it, as a Trace Case's runner does ([chapter 11](11-the-trace-and-conformance.md#stubs)), and with none fails as `host error`. A suspending one waits for `:answer` or `:fail`, and a fire-and-forget one just succeeds.
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
-- **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
+- **`:grant`** names a Capability the REPL Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
   - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, a default BCP 47 tag for `locale`, and a Store name for `store`. With none, they bind `UTC`, `und` and `default`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
-  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar`, `locale`, `store` or `user`, or the name of a registered Host capability.
+  - **A mock** can't take the name of a Standard Capability a REPL may build in: `clock`, `calendar`, `locale`, `store` or `user`, or the name of a registered Host capability.
 - **`:clock`:**
   - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
   - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
@@ -235,19 +235,18 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
   - **`:store clear`** empties the Store and prints `cleared <store>`.
   - **Routing:** `:store load` and `:store clear` are commits, routed by their net changes. The Session Host pumps after one that admits a Notification, as the Pump the command causes.
   - **Between Pumps:** each form runs between Pumps, when no Segment has uncommitted Store writes, and no form is a Host Input.
-  - **In the Playground,** `<path>` names a slot that the page keeps in its own storage, such as `localStorage`, since the session's worker has no file system.
 - **`:export`** prints the session source, its `use` lines included. Given a directory, it writes the session source as `session.talk` and each user Library as `<name>.talk`, and prints `wrote <file>` for each, with the file's name in the directory.
 - **`:help` and `:quit`** aren't recorded, and what they print is outside parity.
 
 ### Observation commands
 
-[Session observation](session-observation.md) fixes the command-specific input grammar, rows and failure behavior for `:describe`, `:inspect`, `:apropos`, `:trace`, `:untrace` and `:fuel`. All six commands and their output are recorded. `:inspect` and `:fuel` use expression/Entry completeness rather than treating every `:` line as immediately complete. Leading `--|` documentation blocks follow the same [prompt attachment rules](session-observation.md#declaration-documentation) in both REPLs and the Playground.
+[Session observation](session-observation.md) fixes the command-specific input grammar, rows and failure behavior for `:describe`, `:inspect`, `:apropos`, `:trace`, `:untrace` and `:fuel`. All six commands and their output are recorded. `:inspect` and `:fuel` use expression/Entry completeness rather than treating every `:` line as immediately complete. Leading `--|` documentation blocks follow the same [prompt attachment rules](session-observation.md#declaration-documentation) in both REPLs.
 
 The Session save also includes the [observation state](session-observation.md#save-and-restore). It is replaced, not merged, when restored. Snapshot reads performed by passive describe of a Script Variable are explicit `vars` Host Inputs; source metadata lookup and cached Fuel queries add none.
 
 ## Session Transcripts
 
-A Session Transcript records a session in a form a user can read and share: its Entries and Session Commands in order, with everything the session saw from outside, and what it printed ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). A REPL writes one as the session goes, and a Playground link can carry one. In the Corpus, it is a `session.transcript` file with a blessed `case.trace` beside it ([chapter 11](11-the-trace-and-conformance.md#session-transcripts)).
+A Session Transcript records a session in a form a user can read and share: its Entries and Session Commands in order, with everything the session saw from outside, and what it printed ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). A REPL writes one as the session goes. In the Corpus, it is a `session.transcript` file with a blessed `case.trace` beside it ([chapter 11](11-the-trace-and-conformance.md#session-transcripts)).
 
 <!-- generated: ebnf.transcript-lines -->
 
@@ -306,7 +305,7 @@ OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
 
 The command is `northtalk`, the editor language ID is `northtalk`, and the language server launches as `northtalk lsp` ([ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md)).
 
-The LSP, the formatter, the debugger and the Lint engine are one TypeScript tooling stack, under Bun or Node for editors and in a browser worker for the Playground, built on the TS Core's own parser and checker ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)). The Go REPL is the only Go tooling, and has no Lints, formatter or debugger. A Script in a Go Host is debugged by replaying its Trace on the TS Core.
+The LSP, the formatter, the debugger and the Lint engine are one TypeScript tooling stack, under Bun or Node for editors and in a browser worker for Folio, built on the TS Core's own parser and checker ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)). The Go REPL is the only Go tooling, and has no Lints, formatter or debugger. A Script in a Go Host is debugged by replaying its Trace on the TS Core.
 
 ### The Script Runner
 
@@ -331,7 +330,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **Every Core accepts everything,** whatever the Host or profile. A layer never changes what loads, what the Corpus covers or how a Script runs, and a beginner's Script can import any Library.
 - **The tags:** an Advanced Construct is one [`grammar.toml`](data/grammar.toml) tags `advanced` ([chapter 2](02-grammar.md#advanced-constructs)). A construct is tagged only if a Beginner Surface form does the same ordinary job and a beginner reading it couldn't guess what it means, and its tag names that form. Moving a construct between layers changes only `grammar.toml`.
 - **A Lint** is advice about a Script that loads, and never rejects it. Each has a stable kebab-case id, and a level in each Lint Profile: `off`, `hint` or `warning`. There is no `error` level.
-- **Lint Profiles:** `beginner` and `standard`. The Host sets the default, such as a beginner Playground, and a user may override it.
+- **Lint Profiles:** `beginner` and `standard`. The Host sets the default, such as a beginner Host, and a user may override it.
 - **Explicit endings:** `prefer-explicit-end` flags each bare block-ending `end` at that token, suggesting the matching `end <name>` or `end <keyword>`. It is a warning in `beginner` and off in `standard`, using the existing suppression convention. It never prevents loading or execution. Bare endings are a style choice, not Advanced Constructs; beginner examples use explicit endings.
 - **List splicing:** `suggest-list-splice` hints in `beginner` and is off in `standard`. For `put xs after acc` with clear list evidence, it explains that `xs` becomes one element and suggests `put ...xs after acc` to append its items instead. Nesting is valid, so there is no automatic rewrite. The [tooling guide](../tooling/stack/README.md#lints) describes its conservative evidence and limits (#381).
 - **Suppressing:** `-- lint: ignore <id>` on the line before suppresses one Lint there. It is a comment, not syntax.
@@ -383,7 +382,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 
 ### The debugger
 
-- **Two modes:** live, against the TS Core in the Playground or a Bun Host, and replay, from any Trace, including one taken on a Go Host.
+- **Two modes:** live, against the TS Core in a Bun Host, and replay, from any Trace, including one taken on a Go Host.
 - **Breakpoints** map through the source map to an instruction, and pause the whole Group at that instruction's boundary, through the [TS Core's tooling-only hook](../impl/ts/README.md#tooling-debug-hooks).
 - **A pause isn't a Host Input:** it costs no Fuel and leaves the Trace unchanged, and Fuel Slices count Fuel, not time. While paused, the Group is shown in the same form as `:runs`, `:mailbox` and `:vars`, read through the tooling hook rather than `Inspect()`, which is a Host Input. Resuming continues the same Run.
 - **Stepping** in, over and out works by statement. Stepping over a Suspension Point goes on until this Run resumes past it, while other Runs execute, and a breakpoint in any of them pauses the Group. Stepping into a `send … and wait`, or a call to a Function Value in another Script, follows the message into the receiving Run. Each Run's view shows its Segment number and the Fuel it has used.
@@ -396,21 +395,11 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 
 ### The Host Manifest
 
-Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, with any `description` and `examples` the Host wrote for them, the Libraries a Script may import, the messages it may receive with their argument Shapes and any documentation, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). In a Handler for a declared message, tooling treats `the target` as an object of one of the kinds the message is delivered to, or of the Owner Kind when it is delivered to a Script; a Fallback Handler's `the target` stays unknown. With an Owner Kind, tooling treats `me` as an object of that kind: it completes and hovers its properties, and the Lints `unknown-property` and `read-only-property` flag a literal property the kind lacks and a `set` of a read-only one, for `me` and `the target` alike. The checker's `can't write` needs the live `me` at load, so from the manifest these stay advice. The Core never reads it, so a stale manifest can only mislead tooling. The Playground builds its manifest from its own Grants.
+Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, with any `description` and `examples` the Host wrote for them, the Libraries a Script may import, the messages it may receive with their argument Shapes and any documentation, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). In a Handler for a declared message, tooling treats `the target` as an object of one of the kinds the message is delivered to, or of the Owner Kind when it is delivered to a Script; a Fallback Handler's `the target` stays unknown. With an Owner Kind, tooling treats `me` as an object of that kind: it completes and hovers its properties, and the Lints `unknown-property` and `read-only-property` flag a literal property the kind lacks and a `set` of a read-only one, for `me` and `the target` alike. The checker's `can't write` needs the live `me` at load, so from the manifest these stay advice. The Core never reads it, so a stale manifest can only mislead tooling.
 
-### The Playground
+### Static graphics
 
-- **Public name:** NorthTalk Playground.
-- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Inspect, Canvas, live Debug, Replay, Setup and a Dictionary of the session's Grants and their Operations.
-- **Syntax** is a readable projection of the recovering parser tree of the current editor text, including errors. Source selection and tree selection are linked; it does not describe the last loaded session.
-- **Run fresh** prepares a replacement from the setup, current Library tabs and Script tab. Failed loading preserves the live session. Successful loading replaces it, starts a fresh Transcript, then evaluates the launch Entry if nonempty; an execution fault belongs to that new session.
-- **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. While the debugger is paused in a Run that can be rewound, Apply is Fix and Continue: it lists the effects that will happen again, and on confirmation enters `:fix` with the changed declarations. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.
-- **Do it, Print it and Inspect it** enter the editor's selection as an ordinary Entry, or as `:inspect` with it, against the live session. Print it shows what the Entry printed beside the selection; Inspect it shows the rows in the inspector.
-- **It ships** the LSP in a worker, the formatter, live debugging, and replay debugging of a pasted Trace.
-- **Ending a stuck session:** the Session Host runs in its own worker, which reads no request while a Pump runs. Cancel, Restart and Run fresh wait 500 ms for the worker to answer; without an answer, the page ends the worker and starts a fresh session in a new one from the setup and the tabs, without the launch Entry ([#1216](https://github.com/odogono/odgn-talk/issues/1216)).
-- **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`. A Session Script can choose a Library offer; the CLI and Playground run the same forms through the shared stack. The live and replay panels show retained/dispatch roles, shared owner locals and the owning frame.
-- **Sharing** carries Script and Library sources, the launch Entry, setup commands and optionally a Session Transcript, which replays on opening. Older links default to an empty launch Entry. Locally restored sources and setup do not execute automatically.
-- **Static graphics:** the TS CLI and Playground supply a typed `canvas` Host capability, granted with `:grant canvas canvas`. The Playground grants it to each new session that does not replay a Transcript. Its operations, state and bounds are documented in the [Playground guide](../tooling/playground/README.md#static-canvas). Live evaluation preserves drawing state; fresh execution resets it. Browser display projects successful calls from the Trace; the CLI replays the same operations headlessly. Graphics are Host behavior, outside language parity. Go REPL support is a separate compatibility requirement.
+The TS CLI supplies a typed `canvas` Host capability, granted with `:grant canvas canvas`, and Folio gives one to every Script. Its operations, state and bounds are documented in the [tooling stack guide](../tooling/stack/README.md#canvas). Live evaluation preserves drawing state; fresh execution resets it. The CLI replays the same operations headlessly. Graphics are Host behavior, outside language parity. Go REPL support is a separate compatibility requirement.
 
 ## Fenced text in sessions and tooling
 
@@ -422,5 +411,5 @@ The formatter preserves literal values, including all trailing whitespace and ad
 
 - **The tooling:** the formatter's output, the LSP's features, the debugger, the Lint catalogue and its wording, and the Advanced tags ([ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 - **The REPL's own interface:** its prompt, line editing, colours, `:help` and `:quit`, and how it is told where to write a Transcript.
-- **Built-in Capabilities:** which ones a REPL or Playground offers to `:grant`, and their answers, which a Transcript records.
+- **Built-in Capabilities:** which ones a REPL offers to `:grant`, and their answers, which a Transcript records.
 - **The TS Core's tooling hooks,** for pausing and for landing an early `Stop`, `CancelRun` or `RewindRun` in replay ([TS implementation guide](../impl/ts/README.md#tooling-debug-hooks)).
