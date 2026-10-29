@@ -303,6 +303,18 @@ export class PlayHost {
         }
         break;
       }
+      case 'statementStep': {
+        if (session.debugPaused) {
+          const debug = session.debug;
+          this.#continue =
+            request.step === 'in'
+              ? () => debug.step()
+              : request.step === 'over'
+                ? () => debug.stepOver()
+                : () => debug.stepOut();
+        }
+        break;
+      }
       case 'frame': {
         if (!this.#paused) {
           session.frame(this.#clock());

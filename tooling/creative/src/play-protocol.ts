@@ -71,6 +71,11 @@ export type PlayRequest =
   /** Replaces the Watches, which are evaluated only while paused (ADR 0129). */
   | { kind: 'watches'; session: number; watches: Watch[] }
   | { kind: 'stop'; session: number }
+  /**
+   * A Statement Step of the Run stopped at a Breakpoint (ADR 0147). The
+   * session stays paused, at the next stop or once the Run has moved on.
+   */
+  | { kind: 'statementStep'; session: number; step: StatementStep }
   /** Replaces the Breakpoints (ADR 0147). */
   | { breakpoints: BreakpointView[]; kind: 'breakpoints'; session: number }
   /**
@@ -89,6 +94,9 @@ export type PromptView = UserPrompt & { id: number };
  */
 export type SourcePlace =
   { index: number; kind: 'library' } | { kind: 'script'; owner: number };
+
+/** Step In, Step Over or Step Out. */
+export type StatementStep = 'in' | 'over' | 'out';
 
 /** A Breakpoint: a line, from 1, of the Script or Library at `place`. */
 export type BreakpointView = { line: number; place: SourcePlace };

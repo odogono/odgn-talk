@@ -78,6 +78,27 @@ export const mountPlay = (shell: StackShell): void => {
     { type: 'button', disabled: true, title: "Step one frame (⌘')" },
     'Step',
   );
+  // Statement Steps (ADR 0147) show only while a Run is stopped; each is
+  // named with its qualifier, as a bare Step is the frame Step.
+  const statementSteps = (
+    [
+      ['in', 'Step In', 'Step into the next statement, following calls'],
+      ['over', 'Step Over', 'Step to the next statement in this Handler'],
+      ['out', 'Step Out', 'Run until this Handler returns'],
+    ] as const
+  ).map(([step, label, title]) => {
+    const button = h(
+      'button',
+      { type: 'button', hidden: true, title, 'data-step': step },
+      label,
+    );
+    button.addEventListener('click', () => {
+      if (session?.stoppedRun && !session.stopped) {
+        post({ kind: 'statementStep', session: sessionId, step });
+      }
+    });
+    return button;
+  });
   byId('menu').append(
     h(
       'div',
@@ -85,6 +106,7 @@ export const mountPlay = (shell: StackShell): void => {
       toggle,
       pauseButton,
       stepButton,
+      ...statementSteps,
     ),
   );
   // Browse and Edit head the Tools window, as HyperCard's browse tool did.
@@ -795,6 +817,9 @@ export const mountPlay = (shell: StackShell): void => {
     // A frame can't move on until a stopped Run finishes (ADR 0147).
     const stopped = paused && Boolean(session!.stoppedRun);
     stepButton.disabled = !paused || stopped;
+    for (const button of statementSteps) {
+      button.hidden = !stopped;
+    }
     stepButton.title = stopped
       ? 'Finish the stopped Run first'
       : "Step one frame (⌘')";

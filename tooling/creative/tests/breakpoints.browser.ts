@@ -125,6 +125,22 @@ export const runBrowserTests = async () => {
     );
   });
 
+  await test('Step Over past the last line ends the Run, still paused', async () => {
+    const over = document.querySelector<HTMLButtonElement>(
+      '#play-controls [data-step="over"]',
+    )!;
+    assert(over.hidden, 'Step Over showed with no Run stopped');
+    document.querySelector<HTMLElement>('#reader [data-element="go"]')!.click();
+    await until(() => !!stopped(), 'The Run did not stop again');
+    assert(!over.hidden, 'Step Over did not show');
+    over.click();
+    await until(() => !stopped(), 'Step Over did not end the Run');
+    assert(pause!.textContent === 'Resume', 'Play did not stay paused');
+    assert(over.hidden, 'Step Over stayed after the Run ended');
+    pause!.click();
+    await until(() => pause!.textContent === 'Pause', 'Resume did not resume');
+  });
+
   await test('an edited source fades its Breakpoints until the next Play', async () => {
     const editor = view();
     editor.dispatch({
