@@ -8,6 +8,8 @@ import {
   shape,
   type Call,
   type CapabilityDef,
+  type ErrorDecl,
+  type FieldShape,
   type ValueImmediateOp,
   type SegmentCoordinator,
   type Shape,
@@ -115,7 +117,17 @@ const errorFields: Record<string, (data: Value) => boolean> = {
   'too many rows': data => data.get('max').kind === 'number',
   unrepresentable: data => isText(data, 'column'),
 };
-const errors = (...codes: string[]) => codes.map(code => ({ code }));
+// The catalogue fields each code declares (chapter 6), as the save records them.
+const declaredFields: Record<string, Record<string, FieldShape>> = {
+  sql: { reason: shape.text },
+  constraint: { kind: shape.text },
+  'too many rows': { max: shape.number },
+  unrepresentable: { column: shape.text },
+};
+const errors = (...codes: string[]): ErrorDecl[] =>
+  codes.map(code =>
+    declaredFields[code] ? { code, fields: declaredFields[code] } : { code },
+  );
 // A Core-raised failure, which carries no message, as the Core's own errors don't.
 const coreFailure = (code: string, field: string, value: string) =>
   new HostScriptError(code, '', map([[field, text(value)]]));
