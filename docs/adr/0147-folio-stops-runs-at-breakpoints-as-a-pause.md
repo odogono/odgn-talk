@@ -21,5 +21,7 @@ Breakpoints are set in the Code Browser's gutter and belong to the author's work
 
 ## Consequences
 
+- The Group refuses every call while a Run is stopped, so a Watch, `:inspect` or Message Box line there runs through the TS Core's `evaluate` debug hook instead ([#1769](https://github.com/odogono/odgn-talk/issues/1769)): at once, alone, and without the Trace. A send, wait, random draw or Operation call fails it, which an ordinary Message Box line allows.
+
 - Statement Step and the frame Step are different actions; neither is ever labelled a bare "Step" for statements.
 - Pausing on an uncaught error reuses this stopped-Run state, but needs the Core to stop before the error unwinds, and is left to its own issue.

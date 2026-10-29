@@ -42,6 +42,12 @@ export type DebugSnapshot = Omit<Inspection, 'scripts'> & {
     })[];
   })[];
 };
+/**
+ * What `evaluate` gave: the body's result, or why it failed. A failure to
+ * compile gives each diagnostic's line in the body, from 1.
+ */
+export type DebugEvaluation =
+  { error: string; line?: number } | { value: Value };
 export type DebugSource = {
   script?: string;
   statements: number[];
@@ -102,6 +108,10 @@ export class DebugController {
     private readonly read: () => DebugSnapshot,
     private readonly advance: () => PumpResult,
     private readonly readSources: () => DebugSource[],
+    private readonly evaluateIn: (
+      body: string,
+      frame: number | undefined,
+    ) => DebugEvaluation,
   ) {}
   /** Detached lowerings of the code actually loaded, including extensions. */
   sources(): DebugSource[] {
@@ -135,6 +145,20 @@ export class DebugController {
       throw new Error('The Group is not debug-paused');
     }
     return this.read();
+  }
+  /**
+   * Runs a Handler body in the paused Run's Script, where Script Variables
+   * read and write as in any of its Handlers, and the named locals of the
+   * paused Run's frame `frame` (an index into its snapshot's frames, the
+   * innermost by default) read as parameters but can't be assigned. The body
+   * runs at once, alone, and writes no Trace: a send, wait, random draw or
+   * Operation call fails it, as does running out of Fuel.
+   */
+  evaluate(body: string, frame?: number): DebugEvaluation {
+    if (!this.pause) {
+      throw new Error('The Group is not debug-paused');
+    }
+    return this.evaluateIn(body, frame);
   }
   pausedTime(): number {
     return this.elapsed + (this.pause ? performance.now() - this.since : 0);
