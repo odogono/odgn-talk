@@ -90,6 +90,8 @@ export type PlayRequest =
   | { frame: number; kind: 'selectFrame'; session: number }
   /** Replaces the Breakpoints (ADR 0147). */
   | { breakpoints: BreakpointView[]; kind: 'breakpoints'; session: number }
+  /** Whether an uncaught Script error stops its Run as a Breakpoint does. */
+  | { kind: 'pauseOnErrors'; on: boolean; session: number }
   /**
    * Pause, Resume and Step act on the session's Play clock (ADR 0128).
    * Resume also continues a Run stopped at a Breakpoint; Step is refused
@@ -123,8 +125,11 @@ export type FrameView = {
   place?: SourcePlace;
 };
 
-/** A Run stopped at a Breakpoint, or partway through a Statement Step. */
-export type StoppedRun = { frames: FrameView[]; run: string };
+/**
+ * A Run stopped at a Breakpoint, partway through a Statement Step, or before
+ * an uncaught error, given by `error`, unwinds.
+ */
+export type StoppedRun = { error?: string; frames: FrameView[]; run: string };
 
 /** A Script problem, its owner given by place in `scriptOwners(project)`. */
 export type ProblemView = {

@@ -243,6 +243,16 @@ export const mountPlay = (shell: StackShell): void => {
     }
   };
   shell.breakpoints.onChange(sendBreakpoints);
+  // Like Breakpoints, an uncaught error stops a Run only while browsing.
+  const sendPauseOnErrors = () => {
+    if (mode === 'browse' && session && !session.stopped) {
+      post({
+        kind: 'pauseOnErrors',
+        session: sessionId,
+        on: errors.pauseOnErrors.value,
+      });
+    }
+  };
   // Where a frame's line is in the authored Project, if it is still there.
   const stoppedAt = (frame: FrameView | undefined) => {
     const place = frame?.place;
@@ -333,6 +343,7 @@ export const mountPlay = (shell: StackShell): void => {
   let loadedScripts: string[] = [];
   let loadedLibraries: string[] = [];
   let mode: PlayMode | undefined;
+  errors.pauseOnErrors.subscribe(sendPauseOnErrors);
   let recorder: Recorder | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
@@ -944,6 +955,7 @@ export const mountPlay = (shell: StackShell): void => {
       sentBreakpoints = '';
       shell.breakpoints.setLoaded(loadedSource);
       sendBreakpoints();
+      sendPauseOnErrors();
       byId('desk').append(toolbar, reader);
     } else {
       document.body.append(toolbar, reader);

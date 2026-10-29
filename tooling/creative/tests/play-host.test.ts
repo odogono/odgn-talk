@@ -944,6 +944,40 @@ test('a Breakpoint stops a Run partway as a Pause, and Resume finishes it', asyn
   expect(mirror.stoppedRun).toBeUndefined();
 });
 
+test('Pause on errors stops a Run before an uncaught error unwinds', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'on click\n try\n  throw "caught"\n catch e\n end try\n set the label of me to "half"\n throw "boom"\nend click';
+  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
+  const { mirror, request, element, views } = hosted(project);
+  const problems = () => views.flatMap(view => view.problems);
+  const label = () => {
+    const e = element('go');
+    return e.kind === 'button' ? e.label : undefined;
+  };
+  request({ kind: 'pauseOnErrors', session: 1, on: true });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  expect(mirror.paused).toBe(true);
+  expect(label()).toBe('half');
+  expect(mirror.stoppedRun).toMatchObject({
+    error: 'boom',
+    frames: [{ line: 7, place: { kind: 'script', owner: go } }],
+  });
+  expect(problems()).toEqual([]);
+  // Resuming lets the error end the Run as it would have.
+  request({ kind: 'resume', session: 1 });
+  await until(() => problems().length > 0);
+  expect(mirror.stoppedRun).toBeUndefined();
+  expect(problems()[0]).toMatchObject({ line: 7 });
+});
+
 test('Stop abandons a Run stopped at a Breakpoint', async () => {
   const project = fixture();
   const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);

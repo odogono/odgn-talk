@@ -57,6 +57,8 @@ type Fault = {
   error?: Value;
   limit?: LimitName;
   reason: 'error' | 'limitFault';
+  /** No catch or guard covers the error, so it will end the Run. */
+  uncaught?: boolean;
 };
 type MachineDebug = {
   fault: Fault | null;
@@ -82,7 +84,7 @@ export const deferFault = (
 export class DebugController {
   paused: ((pause: DebugPause) => void) | null = null;
   private breaks = new Map<number, DebugInstruction[]>();
-  private faults = { error: false, limitFault: false };
+  private faults = { error: false, limitFault: false, uncaughtError: false };
   private stepping: {
     depth: number;
     mode: 'in' | 'over' | 'out';
@@ -134,10 +136,22 @@ export class DebugController {
   clearBreaks(): void {
     this.breaks.clear();
   }
-  pauseOn(options: { error?: boolean; limitFault?: boolean }): void {
+  /**
+   * Pause before a raised error unwinds (`error`), only before one no catch
+   * or guard covers (`uncaughtError`), or before a Limit Fault. A catch
+   * whose tests all decline still counts as covering, so `uncaughtError`
+   * can miss an error such a catch lets past, but never stops at one that
+   * is caught.
+   */
+  pauseOn(options: {
+    error?: boolean;
+    limitFault?: boolean;
+    uncaughtError?: boolean;
+  }): void {
     this.faults = {
       error: options.error ?? false,
       limitFault: options.limitFault ?? false,
+      uncaughtError: options.uncaughtError ?? false,
     };
   }
   snapshot(): DebugSnapshot {
@@ -231,7 +245,11 @@ export class DebugController {
       machineDebug.set(run, {
         fault: null,
         pending: null,
-        wants: f => this.faults[f.reason],
+        wants: f =>
+          this.faults[f.reason] ||
+          (f.reason === 'error' &&
+            f.uncaught === true &&
+            this.faults.uncaughtError),
       });
     }
   }

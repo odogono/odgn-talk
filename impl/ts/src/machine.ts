@@ -2641,7 +2641,9 @@ export class Run {
             },
           };
         };
-        if (!deferFault(this, { reason: 'error', error }, finish)) {
+        if (
+          !deferFault(this, { reason: 'error', error, uncaught: true }, finish)
+        ) {
           finish();
         }
         return;
@@ -3923,9 +3925,43 @@ export class Run {
         this.fault(error_.limit, ins);
       }
     };
-    if (!deferFault(this, { reason: 'error', error }, search)) {
+    if (
+      !deferFault(
+        this,
+        { reason: 'error', error, uncaught: this.uncovered() },
+        search,
+      )
+    ) {
       search();
     }
+  }
+
+  /**
+   * Whether no guard or catch in any frame covers the place an error is
+   * raised now, so its search would end the Run. A covering catch whose
+   * tests decline still counts as covering.
+   */
+  private uncovered(): boolean {
+    if (this.cancelling) {
+      return false;
+    }
+    const top = this.frames.length - 1;
+    for (let index = top; index >= 0; index--) {
+      const frame = this.frames[index]!;
+      const pc = index === top ? this.frame.pc : frame.pc;
+      for (const e of frame.code.unit.unwind) {
+        if (
+          (e.kind === 'catch' || (index === top && e.kind === 'guard')) &&
+          pc >= e.start &&
+          pc < e.end &&
+          e.start >= frame.body.start &&
+          e.end <= frame.body.end
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   private unwindNow(error: Value, ins: Instruction) {

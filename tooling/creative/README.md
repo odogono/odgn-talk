@@ -893,8 +893,17 @@ Breakpoint in a source edited since Play began fades and doesn't stop
 anything until the next Play; if a Run stops in such a source, a note says so
 in place of the paused line. A Breakpoint on a line with no code never stops.
 
+**Pause on errors**, at the top of the Errors window and off by default,
+stops a Run the same way at the statement raising an error that no `try`
+catches, before it unwinds, so its frames and locals are still there to read.
+The Variables window names the error. **Resume** lets it end the Run, and the
+Errors window lists it as usual. A `catch` whose tests all decline still
+counts as catching, so such an error never stops. Like Breakpoints, the option
+belongs to this browser, applies only while browsing and is never saved.
+
 The Play worker makes the Group's debug controller only once a Breakpoint is
-set, since a Group with one runs every instruction through it.
+set or Pause on errors is on, since a Group with one runs every instruction
+through it.
 
 ## Play
 

@@ -218,7 +218,10 @@ List files with `rg --files tooling/creative` before opening one by name.
   after it ends, each linking to its Script and line. `ErrorsWindow` keeps
   them in a signal, labelled when reported, and the Preact `ErrorsPanel`
   renders `#errors-panel` (the empty note, `#error-list` and Clear) from it.
-  The problems come from `PlayProblem` in [play.ts](src/play.ts).
+  The problems come from `PlayProblem` in [play.ts](src/play.ts). Its Pause
+  on errors option reaches the worker as `pauseOnErrors`, which
+  [play-host.ts](src/play-host.ts) turns into the Core's
+  `pauseOn({ uncaughtError })`; a stop is then a Breakpoint's.
 - Tests: problem reporting in [play.test.ts](tests/play.test.ts); the window
   in [errors.browser.ts](tests/errors.browser.ts) (append, labels, opening,
   vanished owners, Clear and Close) and, during Play,

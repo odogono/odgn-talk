@@ -109,6 +109,28 @@ test('fault breaks retain variables before Limit Fault rollback and caught error
   }
 });
 
+test('uncaught error breaks stop only before an error no catch covers', () => {
+  const group = newGroup({ name: 'g' });
+  const s = group.load({
+    name: 's',
+    source:
+      'script variable n = 0\nfunction fail\n put 1 into n\n throw "late"\nend fail\non go\n try\n  throw "early"\n catch e\n  put 2 into n\n end try\n put fail() into n\nend',
+  });
+  const debug = group.debug();
+  debug.pauseOn({ uncaughtError: true });
+  s.deliver({ name: 'go' });
+  group.pump(0n);
+  expect(debug.current).toMatchObject({ reason: 'error', line: 4 });
+  expect(debug.current?.error?.get('code').asText()).toBe('late');
+  // It stops before unwinding: the raising frame is still there.
+  expect(debug.snapshot().scripts[0]!.runs[0]!.frames.length).toBe(2);
+  expect(debug.snapshot().scripts[0]!.vars[0]![1].equals(num(1))).toBe(true);
+  expect(operationalReports(debug.resume().reports)).toContainEqual(
+    expect.objectContaining({ outcome: 'errored' }),
+  );
+  expect(debug.isPaused).toBe(false);
+});
+
 test('statement stepping stops at statement starts and reports monotonic paused time', () => {
   const group = newGroup({ name: 'g' });
   const s = group.load({ name: 's', source });
