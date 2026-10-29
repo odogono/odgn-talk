@@ -26,6 +26,9 @@ broader matrix on `main` or manually:
   changes, with full Git history. Assignment and label changes do not rerun it.
 - `.woodpecker/sqlite.yaml` runs vet, tests and race tests for the separate Go
   SQLite module, reusing the Go build and module caches.
+- `.woodpecker/cross-core.yaml` runs chapter 11's cross-Core replay
+  (`bun run corpus:cross`) on the `zig` worker image, for TS, Zig, Corpus and
+  Spec changes.
 - `.woodpecker/nightly.yaml` runs the nightly fuzz campaign and the Zig Core's
   format, test and Corpus checks, on the `nightly` cron registered in the
   repository's Woodpecker settings (daily at 03:17) or by hand. It uses the
@@ -61,9 +64,9 @@ its Go step skips PR events because Actions supplies that check.
 | Root README, `docs/` or changelog only | None |
 | Go embedding | Actions Go core and Woodpecker Go SQLite |
 | Go SQLite module only | Go SQLite |
-| TS Core | TS core step, package and tooling |
+| TS Core | TS core step, cross-Core, package and tooling |
 | `tooling/` or `bench/ts/` only | Tooling |
-| Zig Core or native sidecar checks | Actions macOS sidecar |
+| Zig Core or native sidecar checks | Cross-Core and Actions macOS sidecar |
 | Spec, dependency lock or shared bootstrap inputs | All consumers |
 | Workflow or worker image | Affected workflows |
 
@@ -177,7 +180,7 @@ colima stop woodpecker
 
 ### Zig worker image
 
-The nightly pipeline needs Zig. Build this variant on each general Linux Docker
+The nightly and cross-Core pipelines need Zig. Build this variant on each general Linux Docker
 worker after the default image:
 
 ```sh

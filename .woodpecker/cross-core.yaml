@@ -1,0 +1,41 @@
+# Chapter 11's cross-Core replay: every save of each Trace Case restored on
+# the TS Core and the Zig reactor. Uses the `zig` worker image.
+when:
+  - event: pull_request
+    path: &paths
+      include:
+        - 'impl/ts/**'
+        - 'impl/zig/**'
+        - 'corpus/**'
+        - 'spec/**'
+        - 'package.json'
+        - 'bun.lock'
+        - 'tools/unicode/**'
+        - 'tools/ci/Dockerfile'
+        - 'tools/ci/Dockerfile.zig'
+        - '.woodpecker/cross-core.yaml'
+      on_empty: true
+  - event: push
+    branch: main
+    path: *paths
+  - event: manual
+
+labels:
+  backend: docker
+
+clone:
+  - name: git
+    image: woodpeckerci/plugin-git:2.10.1
+
+steps:
+  - name: cross-core
+    image: odgn-talk-ci:2026-10-19-2-zig
+    environment:
+      # Reuse Zig's compiled dependencies between runs on the same worker.
+      ZIG_GLOBAL_CACHE_DIR: /woodpecker-go-cache/${CI_REPO}/zig-global
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      - bun install --frozen-lockfile --network-concurrency 16
+      - bun run unicode:check
+      - bun run wasm:build
+      - bun run corpus:cross --quiet
