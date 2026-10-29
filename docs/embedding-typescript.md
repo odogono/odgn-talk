@@ -469,9 +469,9 @@ input values and execution details. See [Trace support](../impl/ts/README.md#the
   and Libraries with `exportManifest`. Bindings are omitted. See
   [Host Manifests](../impl/ts/README.md#process-wide-core-and-host-manifests).
 - **Persistence and reload:** save a Quiescent Group with `group.save()` and
-  restore it with Host-supplied Grants, Libraries and Object resolution. Saves
-  use the originating Core family's format; they cannot transfer a TS Group to
-  the Zig Core. Live effects can prevent saving. See
+  restore it with Host-supplied Grants, Libraries and Object resolution. Every
+  Core writes the same save format, so a save taken on the TS Core restores on
+  the Zig Core and the other way round. Live effects can prevent saving. See
   [save and restore](../spec/10-save-and-restore.md) and the
   [core-switch example](../impl/ts/examples/core-switch/README.md). When two
   saves' State Fingerprints differ, `northtalk diff-save` shows where
