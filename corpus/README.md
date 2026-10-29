@@ -48,7 +48,9 @@ support and limitations belong in the [TS](../impl/ts/README.md),
   Trace Case on the other Core as well, in all four directions, and requires
   the same Trace, byte-identical saves and equal State Fingerprints
   ([chapter 11](../spec/11-the-trace-and-conformance.md#cross-core-replays)).
-  No runner does this yet; it arrives with the shared save format (#1719).
+  `bun run corpus:cross` runs it after `bun run wasm:build`, and Linux CI runs
+  it on every pull request. A case whose save is past the reactor's 64 MiB
+  frame limit is reported, not failed.
 - **Session Transcript:** drive the Session Host with `session.transcript` and
   compare both printed output and the emitted `case.trace`, as the
   [conformance requirement](../spec/11-the-trace-and-conformance.md#conformance)

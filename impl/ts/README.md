@@ -191,12 +191,13 @@ It differs from the TS Core in these ways:
 (cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)
 bun test tests/wasm.test.ts examples/core-switch # the same Host code on both Cores
 bun tools/wasm-corpus.ts                         # every Trace Case, through the facade
+bun tools/cross-core.ts                          # every save restored on each Core
 bun tools/wasm-browser.ts                        # both Cores in headless Chromium, with figures
 bun tools/request-pump-browser.ts                # TS transfers and WASM callbacks in real workers
 bun test tests/wasm-runtimes.test.ts              # callbacks and Trace Cases, Bun/Node × binary/JSON
 ```
 
-`wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. Its `--json-callbacks` flag retains the compatibility layout. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
+`wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. Its `--json-callbacks` flag retains the compatibility layout. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `cross-core.ts` is chapter 11's cross-Core replay: it replays each Trace Case on both Cores, restoring every save on the Core that took it and on the other. It requires the same Trace, byte-identical saves from both Cores, and a save of each restored Group that equals the one it came from apart from the save id counter. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
 
 ## Transferable Message Layer codecs
 

@@ -21,6 +21,7 @@
     "typecheck": "tsc",
     "test": "bun test tests examples",
     "corpus:run": "bun tools/corpus.ts",
+    "corpus:cross": "bun tools/cross-core.ts",
     "build": "bun tools/package/build.ts",
     "test:browser": "bun tools/browser-smoke.ts",
     "package:check": "bun tools/package/check.ts"
