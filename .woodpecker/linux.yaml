@@ -6,7 +6,6 @@ when:
     path: &paths
       include:
         - 'impl/ts/**'
-        - 'impl/zig/**'
         - 'impl/testdata/**'
         - 'corpus/**'
         - 'tools/syntax/**'
@@ -112,25 +111,6 @@ steps:
       - bun test --timeout 30000 tests
       - bun run build
       - bun run corpus:run
-
-  # Chapter 11's cross-Core replay: every save restored on each Core.
-  - name: cross-core
-    when:
-      - path:
-          include:
-            - 'impl/ts/**'
-            - 'impl/zig/**'
-            - 'corpus/**'
-            - 'spec/**'
-            - 'package.json'
-            - 'bun.lock'
-            - '.woodpecker/linux.yaml'
-          on_empty: true
-    image: odgn-talk-ci:2026-10-19-2-zig
-    depends_on: [workspace]
-    commands:
-      - bun run wasm:build
-      - bun run corpus:cross --quiet
 
   - name: go-core
     when:
