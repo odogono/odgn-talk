@@ -8,7 +8,7 @@ Evidence for #467 on 2026-10-09. The normative rules are chapter 7's [`sqlite`](
 
 | Case | Pins |
 | --- | --- |
-| [`standard-sqlite`](../../../corpus/capabilities/standard-sqlite/) | each SQL value's conversion out, rows in column order, `RETURNING` rows, a query that never enrolls, the binding's row cap as the default `max`, and `max` × `perRow` charges |
+| [`standard-sqlite`](../../../corpus/capabilities/standard-sqlite/) | each SQL value's conversion out, rows in column order, `RETURNING` rows, a query that never enrolls, the binding's row cap as the default `max`, and `perStep` charges per row and completion check |
 | [`standard-sqlite-transfer`](../../../corpus/capabilities/standard-sqlite-transfer/) | chapter 7's `transfer` example, committed, and abandoned by an ordinary error with the rest of the Segment committed |
 | [`standard-sqlite-limit-fault`](../../../corpus/capabilities/standard-sqlite-limit-fault/) | a Limit Fault after an explicit `commit` rolling back the whole Segment, with no abandonment call |
 | [`standard-sqlite-abandon`](../../../corpus/capabilities/standard-sqlite-abandon/) | abandonment at Run end by an automatic `rollback`, and an explicit `rollback` followed by a change that commits |
@@ -17,7 +17,9 @@ Evidence for #467 on 2026-10-09. The normative rules are chapter 7's [`sqlite`](
 | [`standard-sqlite-validation`](../../../corpus/capabilities/standard-sqlite-validation/) | the Core's `max` and `params` checks, in order, `not encodable` for a Function Value, and a whole `max` written with zeros |
 | [`standard-sqlite-results`](../../../corpus/capabilities/standard-sqlite-results/) | the Core's result checks in order (form, column names, values), `unrepresentable` for NaN, infinities and 10^34, and Host failures passed through or refused |
 | [`standard-sqlite-errors`](../../../corpus/capabilities/standard-sqlite-errors/) | caught `sqlite busy`, `constraint` and `too many rows` from `change` and `begin`, and `host error` for a bad constraint kind or a negative `changes` |
-| [`standard-sqlite-charge`](../../../corpus/capabilities/standard-sqlite-charge/) | a row charge the Run can't cover faulting at the call, before its Stub, including the binding's cap past every Fuel limit |
+| [`standard-sqlite-charge`](../../../corpus/capabilities/standard-sqlite-charge/) | step charges after the Stub, a step the Run can't cover latching `charge-refused=yes` after the accepted prefix and faulting at the call, and the binding's cap, which no longer charges up front (re-blessed for `perStep` under #1795) |
+
+On 2026-10-29 (#1795) all ten were re-blessed when `perStep` replaced `perRow`: their Fuel figures now count steps, and `standard-sqlite-charge` was rewritten for step charging. Approval is still pending for all ten.
 
 Both Cores wrote these expectations through `bun run corpus:bless`: the TS runner wrote them, and TS and Go each replay them in ordinary and save/restore replay. The Go passing gate lists all ten.
 

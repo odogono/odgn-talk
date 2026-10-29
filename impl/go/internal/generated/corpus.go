@@ -2010,8 +2010,8 @@ var Corpus = CorpusTable{
 		},
 		CorpusTableSetupEntry{
 			Table: "standard",
-			Key:   "perRow",
-			Is:    "for `sqlite`, the per-row Fuel cost its factory takes, 0 if absent",
+			Key:   "perStep",
+			Is:    "for `sqlite`, the Fuel its factory charges before each SQLite statement step, 0 if absent; a Stub's rows stand for that many steps plus the completion check or the probe past `max`, and its error for one step",
 			Kinds: []string{
 				"trace",
 				"disassembly",

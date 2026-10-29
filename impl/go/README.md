@@ -199,7 +199,7 @@ Calendar, Locale, Store, sqlite and user factory argument checks run in the
 guest before charging; result and failure refinements run at return or
 asynchronous resumption. The
 adapter forwards the original arguments to Go's factory wrappers, which retain
-default resolution, SQL parameter/result conversion and per-row charging.
+default resolution, SQL parameter/result conversion and per-step charging.
 Locale default tags and sqlite row caps are copied to guest bindings; Host
 implementation and coordinator identity stay in Go. Ordinary declarations with
 the same public name do not acquire factory checks or catalogue failures.
@@ -813,7 +813,7 @@ Go passing gate.
 
 Operation Declarations accept `Description` (text) and `Examples` (a list of source texts). The Message Layer validates both fields on `define-capability`, including refusing null. Documentation stays out of saves and Group Fingerprints, so rewording it does not cause a restore mismatch. Go does not yet export a Host Manifest.
 
-**Metering support:** an `Operation` may set `Metering` to `"read-only"` or `"segment-bound"`, validated at definition and passed to the embedded Zig Core, which implements the [incremental metering contract](../../spec/embedding/metered-operations.md). A suspending `"read-only"` Call may `RequestCharge(fuel)` from any goroutine; its `ChargeRequest`'s `Done` closes when the Pump that processes it reports a `*ChargeResult`. The corpus runner replays `charge-request` inputs and `charge-refused` Stubs. SQLite factories still use up-front `max × perRow` charging; [#1795](https://github.com/odogono/odgn-talk/issues/1795) tracks `perStep`.
+**Metering support:** an `Operation` may set `Metering` to `"read-only"` or `"segment-bound"`, validated at definition and passed to the embedded Zig Core, which implements the [incremental metering contract](../../spec/embedding/metered-operations.md). A suspending `"read-only"` Call may `RequestCharge(fuel)` from any goroutine; its `ChargeRequest`'s `Done` closes when the Pump that processes it reports a `*ChargeResult`. The corpus runner replays `charge-request` inputs and `charge-refused` Stubs. The SQLite factory charges `perStep` per driver step, below.
 
 `Core.DefineCapability` copies Operation declarations and validates their modes,
 Shapes, costs and Host functions. `Grant` selects Operations, and `GrantAll`
@@ -1184,7 +1184,7 @@ required and copied; the implementation must be non-nil.
 For Script examples, transaction behavior and the implementation overview, see
 [Using SQLite](../../docs/sqlite.md).
 
-`Core.SqliteCapability(SqliteImpl, Costs, perRow)` supplies the optional
+`Core.SqliteCapability(SqliteImpl, Costs, perStep)` supplies the optional
 `sqlite` Operations (ADR 0070): immediate `query sql, params [, max]` and
 Segment-bound `change`, plus `begin`, `commit` and `rollback`, which open and
 close the `transaction` scope. Each binding must be a `SqliteBinding`; the
@@ -1193,8 +1193,11 @@ every Grant on one database shares a participant. A binding of another type, or
 with `MaxRows` outside 0 to 2^53−1, is refused there. After the Shape checks,
 uncharged argument checks give `out of range` for a `max` that isn't a whole
 number up to `MaxRows`, and `wrong kind` for `params` that isn't a list or map
-or holds a value outside nothing, number, text, bytes and boolean. The call then
-charges `max × perRow`, saturating at 2^53−1, before calling the Host with
+or holds a value outside nothing, number, text, bytes and boolean. `query` is
+`Metering: "read-only"` and `change` `"segment-bound"`. The call passes the Host
+a `beforeStep` that charges `perStep`, which `Query` and `Change` call once
+immediately before every SQLite step, the completion check and the probe past
+`max` included, returning its error without stepping. It calls the Host with
 converted params: a whole number that fits int64 binds as INTEGER, any other as
 REAL, and a boolean as 1 or 0.
 

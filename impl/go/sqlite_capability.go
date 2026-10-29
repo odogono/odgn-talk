@@ -39,8 +39,11 @@ type SqlRows struct {
 	Changes int64        // Change only
 }
 
-// The Core has checked the Shapes and max, converted params by the chapter 7
-// rules and charged max × perRow. It converts the result, raising `sql` for a
+// The Core has checked the Shapes and max and converted params by the chapter
+// 7 rules. Query and Change call beforeStep exactly once immediately before
+// every SQLite statement step, including the completion check and the probe
+// past max, and return its error without stepping (Metered Operations, SQLite
+// step authorization). The Core converts the result, raising `sql` for a
 // column named twice and `unrepresentable` for a double it can't hold or a
 // string that isn't valid UTF-8. Change, Begin, Commit and Rollback are
 // Segment-bound: they act inside the calling Segment's transaction, which the
@@ -51,8 +54,8 @@ type SqlRows struct {
 type SqliteImpl interface {
 	// Coordinator is called once per Grant. The same database gives the same pointer.
 	Coordinator(database string) *SegmentLifecycle
-	Query(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
-	Change(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
+	Query(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
+	Change(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
 	Begin(c *Call) error
 	Commit(c *Call) error
 	Rollback(c *Call) error
@@ -69,15 +72,15 @@ var (
 // errMalformedSqlRows is the `host error` for a result whose form is broken.
 var errMalformedSqlRows = errors.New("a sqlite implementation gave a malformed result")
 
-// SqliteCapability is optional for Hosts. perRow is whole Fuel charged per row
-// of max; a bad one is HostError `invalid value`. Every binding must be a
-// SqliteBinding.
-func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*CapabilityDef, error) {
+// SqliteCapability is optional for Hosts. perStep is whole Fuel charged before
+// each SQLite step; a bad one is HostError `invalid value`. Every binding must
+// be a SqliteBinding.
+func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perStep int64) (*CapabilityDef, error) {
 	if standardImplementationMissing(impl) {
 		return nil, &HostError{InvalidValue, "missing sqlite implementation"}
 	}
-	if perRow < 0 || perRow > sqliteMaxWhole {
-		return nil, &HostError{InvalidValue, "the per-row cost must be a whole number"}
+	if perStep < 0 || perStep > sqliteMaxWhole {
+		return nil, &HostError{InvalidValue, "the per-step cost must be a whole number"}
 	}
 	errs := func(codes ...string) []ErrorDecl {
 		out := []ErrorDecl{}
@@ -86,16 +89,7 @@ func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*Ca
 		}
 		return out
 	}
-	// Charged before the work, whatever the statement then gives. A product
-	// past every Fuel limit faults the same as the exact one would.
-	chargeRows := func(call *Call, max int64) error {
-		fuel := int64(sqliteMaxWhole)
-		if perRow == 0 || max <= sqliteMaxWhole/perRow {
-			fuel = min(max*perRow, sqliteMaxWhole)
-		}
-		return call.Charge(fuel)
-	}
-	statement := func(run func(*Call, string, SqlParams, int64) (corevalue.Value, error)) func(*Call, []Value) (Value, error) {
+	statement := func(run func(*Call, string, SqlParams, int64, func() error) (corevalue.Value, error)) func(*Call, []Value) (Value, error) {
 		return func(call *Call, args []Value) (Value, error) {
 			binding, _ := sqliteBindingOf(call.Binding())
 			var max corevalue.Value
@@ -106,11 +100,8 @@ func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*Ca
 			if failure != nil {
 				return Nothing, scriptError(*failure)
 			}
-			if err := chargeRows(call, allowed); err != nil {
-				return Nothing, err
-			}
 			sql, _ := args[0].AsText()
-			v, err := run(call, sql, sqliteParamsOf(args[1].inner), allowed)
+			v, err := run(call, sql, sqliteParamsOf(args[1].inner), allowed, func() error { return call.Charge(perStep) })
 			return Value{v}, err
 		}
 	}
@@ -121,8 +112,8 @@ func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*Ca
 		}}
 	}
 	ops := []Operation{
-		{Name: "query", Args: statementArgs, Result: ListOf(AnyShape), Errors: errs("sql", "not read-only", "too many rows", "unrepresentable"), Do: statement(func(call *Call, sql string, params SqlParams, max int64) (corevalue.Value, error) {
-			result, err := impl.Query(call, sql, params, max)
+		{Name: "query", Args: statementArgs, Result: ListOf(AnyShape), Metering: "read-only", Errors: errs("sql", "not read-only", "too many rows", "unrepresentable"), Do: statement(func(call *Call, sql string, params SqlParams, max int64, beforeStep func() error) (corevalue.Value, error) {
+			result, err := impl.Query(call, sql, params, max, beforeStep)
 			if err != nil {
 				return corevalue.Value{}, err
 			}
@@ -131,8 +122,8 @@ func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*Ca
 			}
 			return sqliteRowsOf(result)
 		})},
-		{Name: "change", Args: statementArgs, Result: MapShape(Field{Key: "changes", Shape: NumberShape}, Field{Key: "rows", Shape: ListOf(AnyShape)}), SegmentBound: true, Errors: errs("sql", "constraint", "sqlite busy", "too many rows", "unrepresentable"), Do: statement(func(call *Call, sql string, params SqlParams, max int64) (corevalue.Value, error) {
-			result, err := impl.Change(call, sql, params, max)
+		{Name: "change", Args: statementArgs, Result: MapShape(Field{Key: "changes", Shape: NumberShape}, Field{Key: "rows", Shape: ListOf(AnyShape)}), SegmentBound: true, Metering: "segment-bound", Errors: errs("sql", "constraint", "sqlite busy", "too many rows", "unrepresentable"), Do: statement(func(call *Call, sql string, params SqlParams, max int64, beforeStep func() error) (corevalue.Value, error) {
+			result, err := impl.Change(call, sql, params, max, beforeStep)
 			if err != nil {
 				return corevalue.Value{}, err
 			}

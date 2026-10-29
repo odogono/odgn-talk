@@ -85,8 +85,14 @@ func (h *bridgeSqlite) Coordinator(database string) *talk.SegmentLifecycle {
 	*h.calls = append(*h.calls, "coordinator:"+database)
 	return h.lifecycle
 }
-func (h *bridgeSqlite) Query(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (h *bridgeSqlite) Query(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	*h.calls = append(*h.calls, fmt.Sprintf("query:%s:%v:%d", sql, params.List, max))
+	// One row, then the completion check.
+	for range 2 {
+		if err := beforeStep(); err != nil {
+			return talk.SqlRows{}, err
+		}
+	}
 	return talk.SqlRows{Columns: []string{"n"}, Rows: [][]talk.SqlValue{{int64(7)}}}, nil
 }
 func (h *bridgeSqlite) Begin(c *talk.Call) error {

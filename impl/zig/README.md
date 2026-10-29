@@ -785,16 +785,11 @@ therefore keeps a fixed number of history entries in memory and in saves.
 Eligibility changes and gaps for non-Operation calls require separate ranges;
 historical eligibility remains available for the Group's lifetime.
 
-The [#472 handoff](../../docs/handoffs/472-metered-operations.md) still stages the
-shared executable catalogues and Go/TS target declarations. The maintainer
-authorized Zig to lead with Zig-only tests under
-[#911](https://github.com/odogono/odgn-talk/issues/911). Zig-only unit,
-C Host, Message Layer and replay tests exercise the target contract without
-blessing shared expectations. Its replay consumers understand the metering
-Trace/setup extensions, including accepted-prefix-plus-refusal replay. Existing
-shared SQLite fixtures use `talk_sqlite_legacy_capability` and their explicit
-up-front `perRow` replay Host until every consumer migrates; ordinary embedding
-uses the metered step factory below.
+The shared corpus carries the metering Trace and setup extensions, which the
+Zig replay consumers understand, including accepted-prefix-plus-refusal replay.
+SQLite fixtures set `perStep`, and the replay Host pays a step per Stub row up
+to `max`, plus the completion check or the probe past it, through the metered
+step factory below; a fixture's `perRow` is refused.
 
 `talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
 `talk_script_request`, `talk_pending_result`, `talk_pump`, `talk_inspect` and

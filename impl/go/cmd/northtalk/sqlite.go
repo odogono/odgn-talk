@@ -84,20 +84,20 @@ func (l *lazySqlite) Coordinator(database string) *talk.SegmentLifecycle {
 	return &l.coordinator
 }
 
-func (l *lazySqlite) Query(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (l *lazySqlite) Query(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	impl, err := l.opened()
 	if err != nil {
 		return talk.SqlRows{}, err
 	}
-	return impl.Query(c, sql, params, max)
+	return impl.Query(c, sql, params, max, beforeStep)
 }
 
-func (l *lazySqlite) Change(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (l *lazySqlite) Change(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	impl, err := l.opened()
 	if err != nil {
 		return talk.SqlRows{}, err
 	}
-	return impl.Change(c, sql, params, max)
+	return impl.Change(c, sql, params, max, beforeStep)
 }
 
 func (l *lazySqlite) Begin(c *talk.Call) error {

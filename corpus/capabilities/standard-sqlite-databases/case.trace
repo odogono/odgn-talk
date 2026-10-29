@@ -12,13 +12,13 @@
 > deliver d1 to=s message=go
 > pump clock=2026-10-09T12:00:00Z
 effect s/r1.s1 grant=db phase=begin status=ok
-call s/r1.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []}
-call s/r1.c2 op=alias.change args=["INSERT INTO t (n) VALUES (?)", [2], 0] result={changes: 1, rows: []}
-call s/r1.c3 op=other.query args=["SELECT count(*) AS n FROM log", [], 1] result=[{n: 4}] charged=1
+call s/r1.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []} charged=1
+call s/r1.c2 op=alias.change args=["INSERT INTO t (n) VALUES (?)", [2], 0] result={changes: 1, rows: []} charged=1
+call s/r1.c3 op=other.query args=["SELECT count(*) AS n FROM log", [], 1] result=[{n: 4}] charged=2
 raise s/r1 code="segment participant conflict" at=s:30 pos=7:3
 effect s/r1.s1 grant=db phase=commit status=ok
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=102 alloc=488 state=16 end=error
-run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "other", operation: "change", participant: "db", at: {unit: "s", handler: "go", line: 7, column: 3}} fuel=102 alloc=488
-pumped state=idle fuel=102
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=105 alloc=488 state=16 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "other", operation: "change", participant: "db", at: {unit: "s", handler: "go", line: 7, column: 3}} fuel=105 alloc=488
+pumped state=idle fuel=105
 > vars
 vars s count=4

@@ -118,7 +118,7 @@ func authorizer(binding talk.SqliteBinding) func(sqlite3.AuthorizerActionCode, s
 }
 
 // statement runs one statement under the binding's authorizer.
-func statement(conn *sqlite3.Conn, binding talk.SqliteBinding, sql string, params talk.SqlParams, max int64, readOnly bool) (rows talk.SqlRows, err error) {
+func statement(conn *sqlite3.Conn, binding talk.SqliteBinding, sql string, params talk.SqlParams, max int64, beforeStep func() error, readOnly bool) (rows talk.SqlRows, err error) {
 	// VACUUM INTO writes a copy without consulting the authorizer.
 	if strings.EqualFold(firstWord(sql), "VACUUM") {
 		return rows, sqlFailure("VACUUM is not allowed")
@@ -157,7 +157,15 @@ func statement(conn *sqlite3.Conn, binding talk.SqliteBinding, sql string, param
 		rows.Columns[i] = stmt.ColumnName(i)
 	}
 	rows.Rows = [][]talk.SqlValue{}
-	for stmt.Step() {
+	// Each step is paid for first: the completion check and the probe past
+	// max too.
+	for {
+		if err := beforeStep(); err != nil {
+			return talk.SqlRows{}, err
+		}
+		if !stmt.Step() {
+			break
+		}
 		if int64(len(rows.Rows)) == max {
 			return talk.SqlRows{}, failure("too many rows", talk.KV("max", talk.Int(max)))
 		}

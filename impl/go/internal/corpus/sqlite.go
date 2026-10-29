@@ -1,6 +1,7 @@
 package corpus
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -29,11 +30,31 @@ func (h *replaySqlite) Coordinator(database string) *talk.SegmentLifecycle {
 	h.databases[database] = c
 	return c
 }
-func (h *replaySqlite) Query(c *talk.Call, _ string, _ talk.SqlParams, _ int64) (talk.SqlRows, error) {
-	return h.rows("query", c)
+func (h *replaySqlite) Query(c *talk.Call, _ string, _ talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
+	return h.stepped("query", c, max, beforeStep)
 }
-func (h *replaySqlite) Change(c *talk.Call, _ string, _ talk.SqlParams, _ int64) (talk.SqlRows, error) {
-	return h.rows("change", c)
+func (h *replaySqlite) Change(c *talk.Call, _ string, _ talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
+	return h.stepped("change", c, max, beforeStep)
+}
+
+// stepped pays for steps as a driver would: one before a Stub's error, and
+// one per row up to max, then the completion check or the probe past max.
+func (h *replaySqlite) stepped(operation string, c *talk.Call, max int64, beforeStep func() error) (talk.SqlRows, error) {
+	rows, err := h.rows(operation, c)
+	if err != nil {
+		if !errors.Is(err, talk.ErrLimit) {
+			if step := beforeStep(); step != nil {
+				return talk.SqlRows{}, step
+			}
+		}
+		return rows, err
+	}
+	for i := int64(0); i <= min(int64(len(rows.Rows)), max); i++ {
+		if err := beforeStep(); err != nil {
+			return talk.SqlRows{}, err
+		}
+	}
+	return rows, nil
 }
 func (h *replaySqlite) Begin(c *talk.Call) error    { return h.nothing("begin", c) }
 func (h *replaySqlite) Commit(c *talk.Call) error   { return h.nothing("commit", c) }

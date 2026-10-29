@@ -3340,16 +3340,10 @@ fn sqliteCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinat
 }
 
 export fn talk_sqlite_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_step: i64, out: *?*caps.Capability) HostErrorCode {
-    return sqliteCapability(c, impl, costs, per_step, true, out);
+    return sqliteCapability(c, impl, costs, per_step, out);
 }
 
-/// The executable corpus still specifies perRow until every Core migrates.
-/// Its C replay uses this compatibility factory, never Core internals.
-export fn talk_sqlite_legacy_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
-    return sqliteCapability(c, impl, costs, 0, false, out);
-}
-
-fn sqliteCapability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_step: i64, metered: bool, out: *?*caps.Capability) HostErrorCode {
+fn sqliteCapability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_step: i64, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     if (per_step < 0 or per_step > sqlite.max_whole) return .invalid_value;
     if (impl.coordinator == null or impl.query == null or impl.change == null) return .invalid_value;
@@ -3372,7 +3366,7 @@ fn sqliteCapability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per
         own[i] = .{ .call = sqlCall, .context = bridge };
     }
     const defined = defineStandardWith(c, .sqlite, &.{ impl.begin, null, impl.commit, null, impl.rollback }, &own, impl.context, costs, .{ .call = sqliteCoordinator, .context = kept }, out);
-    if (defined == .ok and metered) {
+    if (defined == .ok) {
         out.*.?.operations[1].metering = .segment_bound;
         out.*.?.operations[3].metering = .read_only;
     }

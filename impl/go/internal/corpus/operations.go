@@ -225,15 +225,18 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"respond": {Mode: talk.Immediate},
 			}
 		case "sqlite":
-			perRow := int64(0)
-			if raw, present := row["perRow"]; present {
+			if _, old := row["perRow"]; old {
+				return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "sqlite perRow is replaced by perStep"}
+			}
+			perStep := int64(0)
+			if raw, present := row["perStep"]; present {
 				n, ok := raw.(int64)
 				if !ok {
-					return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "invalid sqlite perRow"}
+					return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "invalid sqlite perStep"}
 				}
-				perRow = n
+				perStep = n
 			}
-			def, err = core.SqliteCapability(&replaySqlite{replay: out, databases: map[string]*talk.SegmentLifecycle{}}, costs, perRow)
+			def, err = core.SqliteCapability(&replaySqlite{replay: out, databases: map[string]*talk.SegmentLifecycle{}}, costs, perStep)
 			statement := []talk.Shape{talk.TextShape, talk.AnyShape, talk.Optional(talk.NumberShape)}
 			out.declarations[name] = map[string]talk.OperationCheck{
 				"query":    {Mode: talk.Immediate, Args: statement},

@@ -4,7 +4,7 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0002](../docs/
 
 A Host embeds a Core through one interface, declared in [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts). The two files have the same calls, and differ only in idiom: errors as values in Go and exceptions in TS, `Start` and `Answer` in Go and an optional Promise-returning `run` in TS, and maps built from pairs in Go and from a `Map` or `record()` in TS. No Script can observe the differences ([ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md)). They are declarations only, and are never compiled. This chapter states the rules they share, and the language-neutral message layer for a Host in any other language.
 
-The checked interface files carry the [Metered Operation declarations](embedding/metered-operations.md#target-embedding-declarations) except the SQLite `perStep` signatures, which stay staged there until runtime implementation lands; legacy interface comments do not override that contract.
+The checked interface files carry the [Metered Operation declarations](embedding/metered-operations.md#target-embedding-declarations), including the SQLite `perStep` signatures; legacy interface comments do not override that contract.
 
 ## Package names
 
@@ -467,7 +467,7 @@ independently of the declaration's handle name. It carries the whole factory's
 Operations and copied costs. The guest applies that family's precharge checks,
 result refinements and permitted catalogue failures, while `op` needs retain
 the supplied Script arguments. Host callbacks perform the factory's normal
-default resolution and, for sqlite, parameter/result conversion and per-row
+default resolution and, for sqlite, parameter/result conversion and per-step
 charging. A Locale Grant carries its effective default tag in `locale`; a
 sqlite Grant carries its row cap in `maxRows`, independently of its shared
 `coordinator`. These fields copy only the data the guest needs to validate

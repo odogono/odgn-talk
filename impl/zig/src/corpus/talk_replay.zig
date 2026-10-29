@@ -873,13 +873,11 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             try check(c.talk_store_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "sqlite")) {
             const context = try a.create(SqliteHost);
-            context.* = .{ .hosts = hosts, .effects = effects, .per_row = number(case_setup.field(t, "perRow")) };
+            context.* = .{ .hosts = hosts, .effects = effects };
             const impl: c.talk_sqlite_impl = .{ .context = context, .coordinator = databaseCoordinator, .query = sqlHost("sqlite.query"), .change = sqlHost("sqlite.change"), .begin = sqliteHost("sqlite.begin"), .commit = sqliteHost("sqlite.commit"), .rollback = sqliteHost("sqlite.rollback"), .release_rows = null };
-            if (case_setup.field(t, "perStep")) |rate| {
-                if (case_setup.field(t, "perRow") != null) return error.MalformedCase;
-                context.per_step = true;
-                try check(c.talk_sqlite_capability(core, &impl, &all_costs, number(rate), &def));
-            } else try check(c.talk_sqlite_legacy_capability(core, &impl, &all_costs, &def));
+            // The old per-row key is refused rather than read as a step rate.
+            if (case_setup.field(t, "perRow") != null) return error.MalformedCase;
+            try check(c.talk_sqlite_capability(core, &impl, &all_costs, number(case_setup.field(t, "perStep")), &def));
         } else return error.Unsupported;
         try defs.put(a, which, def);
     }
@@ -1064,7 +1062,7 @@ fn coordinatorFor(context: ?*anyopaque, binding: ?*anyopaque) callconv(.c) [*c]c
 
 /// `sqlite`'s context: the Stubs for its Operations, and the case's Segment
 /// Coordinators for its databases.
-const SqliteHost = struct { per_step: bool = false, per_row: i64 = 0, hosts: *std.StringHashMapUnmanaged(*OperationHost), effects: *Effects };
+const SqliteHost = struct { hosts: *std.StringHashMapUnmanaged(*OperationHost), effects: *Effects };
 
 /// A `sqlite` database's coordinator: one per database.
 fn databaseCoordinator(context: ?*anyopaque, database: [*c]const u8, len: usize) callconv(.c) [*c]const c.talk_segment_lifecycle {
@@ -1184,28 +1182,26 @@ fn sqlRowsOf(a: std.mem.Allocator, shown: []const u8, rows: *c.talk_sql_rows) bo
 /// `query` or `change`: the next Stub for it, as rows or an error.
 fn sqlHost(comptime key: []const u8) c.talk_sql_fn {
     return struct {
-        fn f(context: ?*anyopaque, call: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, before_step: c.talk_before_step_fn, step_context: ?*anyopaque, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        fn f(context: ?*anyopaque, _: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, before_step: c.talk_before_step_fn, step_context: ?*anyopaque, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
             cross();
             _ = sql;
             _ = sql_len;
             _ = params;
             const sqlite_host: *SqliteHost = @ptrCast(@alignCast(context.?));
-            const amount = std.math.mul(i64, max, sqlite_host.per_row) catch return c.TALK_CALL_LIMITED;
-            if (amount > 0 and c.talk_call_charge(call, amount) != c.TALK_OK) return c.TALK_CALL_LIMITED;
             const hosts = sqlite_host.hosts;
             const h = hosts.get(key) orelse return c.TALK_CALL_BROKEN;
             if (h.next >= h.stubs.items.len) return c.TALK_CALL_BROKEN;
             const stub = h.stubs.items[h.next];
             h.next += 1;
             if (stub.err) |shown| {
-                if (sqlite_host.per_step and before_step.?(step_context) != c.TALK_OK) return c.TALK_CALL_LIMITED;
+                if (before_step.?(step_context) != c.TALK_OK) return c.TALK_CALL_LIMITED;
                 return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
             }
             const shown = stub.value orelse return c.TALK_CALL_BROKEN;
             if (!sqlRowsOf(h.a, shown, rows)) return c.TALK_CALL_BROKEN;
-            if (sqlite_host.per_step) for (0..@min(rows.*.rows_len, @as(usize, @intCast(max))) + 1) |_| {
+            for (0..@min(rows.*.rows_len, @as(usize, @intCast(max))) + 1) |_| {
                 if (before_step.?(step_context) != c.TALK_OK) return c.TALK_CALL_LIMITED;
-            };
+            }
             return c.TALK_CALL_ANSWERED;
         }
     }.f;

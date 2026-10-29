@@ -360,10 +360,19 @@ export class SqliteDatabase {
     sql: string,
     params: SqlParams,
     max: number,
+    beforeStep: () => void,
   ): SqlRows {
     const connection =
       this.holder === this.key(call) ? this.writer : this.reader;
-    return this.statement(connection, call.binding, sql, params, max, true);
+    return this.statement(
+      connection,
+      call.binding,
+      sql,
+      params,
+      max,
+      beforeStep,
+      true,
+    );
   }
 
   change(
@@ -371,6 +380,7 @@ export class SqliteDatabase {
     sql: string,
     params: SqlParams,
     max: number,
+    beforeStep: () => void,
   ): SqlRows & { readonly changes: number } {
     this.acquire(call, () => failure('sqlite busy'));
     // A call that fails, even after changing rows, changes nothing.
@@ -383,6 +393,7 @@ export class SqliteDatabase {
         sql,
         params,
         max,
+        beforeStep,
         false,
       );
       const { changes, total } = this.changeCounts();
@@ -524,6 +535,7 @@ export class SqliteDatabase {
     sql: string,
     params: SqlParams,
     max: number,
+    beforeStep: () => void,
     readOnly: boolean,
   ): SqlRows {
     const scanned = scan(sql);
@@ -562,15 +574,26 @@ export class SqliteDatabase {
       const bound = Array.isArray(params)
         ? (params as SqlValue[])
         : [Object.fromEntries(params as ReadonlyMap<string, SqlValue>)];
-      // Stepped no further than max + 1 rows.
-      const stepped = prepared.iterate(...(bound as SqlValue[]));
-      for (const row of stepped as Iterable<SqlValue[]>) {
-        if (rows.length === max) {
-          throw failure('too many rows', [['max', dec(String(max))]]);
+      // Stepped no further than max + 1 rows, each step paid for first:
+      // the completion check and the probe past max too.
+      const stepped = (
+        prepared.iterate(...(bound as SqlValue[])) as Iterable<SqlValue[]>
+      )[Symbol.iterator]();
+      try {
+        for (;;) {
+          beforeStep();
+          const next = stepped.next();
+          if (next.done) {
+            return { columns, rows };
+          }
+          if (rows.length === max) {
+            throw failure('too many rows', [['max', dec(String(max))]]);
+          }
+          rows.push(next.value.map((value, i) => decoded(value, columns[i]!)));
         }
-        rows.push(row.map((value, i) => decoded(value, columns[i]!)));
+      } finally {
+        stepped.return?.();
       }
-      return { columns, rows };
     } catch (error) {
       throw translated(error);
     } finally {

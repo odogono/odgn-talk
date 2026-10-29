@@ -83,6 +83,7 @@
           "capability": { "$ref": "#/$defs/name" },
           "name": { "$ref": "#/$defs/name" },
           "mode": { "enum": ["immediate", "suspending", "fire-and-forget"] },
+          "metering": { "enum": ["read-only", "segment-bound"] },
           "call": { "$ref": "#/$defs/sentence" },
           "gives": { "$ref": "#/$defs/sentence" },
           "errors": { "$ref": "#/$defs/errors" }

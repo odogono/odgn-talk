@@ -108,17 +108,17 @@ func (d *Database) Close() error {
 
 // ------------------------------------------------------------ Operations
 
-func (d *Database) query(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (d *Database) query(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	conn := d.reader
 	if d.holds(at(c)) {
 		conn = d.writer
 	}
-	return statement(conn, bindingOf(c), sql, params, max, true)
+	return statement(conn, bindingOf(c), sql, params, max, beforeStep, true)
 }
 
-func (d *Database) change(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (d *Database) change(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.acquire(at(c)); err != nil {
@@ -129,7 +129,7 @@ func (d *Database) change(c *talk.Call, sql string, params talk.SqlParams, max i
 	if err := d.writer.Exec("SAVEPOINT northtalk_call"); err != nil {
 		return talk.SqlRows{}, err
 	}
-	rows, err := statement(d.writer, bindingOf(c), sql, params, max, false)
+	rows, err := statement(d.writer, bindingOf(c), sql, params, max, beforeStep, false)
 	if err != nil {
 		return talk.SqlRows{}, errors.Join(err, d.writer.Exec("ROLLBACK TO northtalk_call; RELEASE northtalk_call"))
 	}
@@ -272,20 +272,20 @@ func (m impl) Coordinator(database string) *talk.SegmentLifecycle {
 	return nil
 }
 
-func (m impl) Query(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (m impl) Query(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	d, err := m.db(c)
 	if err != nil {
 		return talk.SqlRows{}, err
 	}
-	return d.query(c, sql, params, max)
+	return d.query(c, sql, params, max, beforeStep)
 }
 
-func (m impl) Change(c *talk.Call, sql string, params talk.SqlParams, max int64) (talk.SqlRows, error) {
+func (m impl) Change(c *talk.Call, sql string, params talk.SqlParams, max int64, beforeStep func() error) (talk.SqlRows, error) {
 	d, err := m.db(c)
 	if err != nil {
 		return talk.SqlRows{}, err
 	}
-	return d.change(c, sql, params, max)
+	return d.change(c, sql, params, max, beforeStep)
 }
 
 func (m impl) Begin(c *talk.Call) error {
