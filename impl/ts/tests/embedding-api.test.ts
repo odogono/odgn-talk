@@ -224,6 +224,7 @@ const tsOnly = new Set([
   'disassemble',
   'exportsOf',
   'grammar',
+  'kindNames',
   'loadScript',
   'lowerTree',
   'parseEntry',

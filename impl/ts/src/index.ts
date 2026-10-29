@@ -113,6 +113,8 @@ export {
   type ToValueOptions,
 } from './plain';
 export { encodeValue } from './encoding';
+/** Chapter 3's kind names, as `kindOf` gives them and `is a` tests them. */
+export { kindNames } from './constructs';
 export { decodeJson, encodeJson } from './json';
 export { coreVersions, type Versions } from './versions';
 export { createCore, type TsCore } from './core';
