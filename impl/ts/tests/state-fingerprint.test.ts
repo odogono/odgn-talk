@@ -13,7 +13,6 @@ import {
   shape,
   type RestoreOptions,
 } from '../src/index';
-import { sha256 } from '../src/sha256';
 
 const source =
   'script variable n = 0\non go x\n  add x to n\n  wait 2 s\n  add 1 to n\nend go';
@@ -136,20 +135,15 @@ describe('the State Fingerprint', () => {
     expect(codeOf(() => core.stateFingerprint(new Uint8Array([1, 2])))).toBe(
       'invalid save',
     );
-    const resealed = (mutate: (payload: Record<string, unknown>) => void) => {
-      const outer = JSON.parse(new TextDecoder().decode(bytes));
-      mutate(outer.payload);
-      outer.hash = sha256(JSON.stringify(outer.payload));
-      return new TextEncoder().encode(JSON.stringify(outer));
-    };
-    expect(
-      codeOf(() => core.stateFingerprint(resealed(p => (p.format = 1)))),
-    ).toBe('save mismatch');
-    expect(
-      codeOf(() => core.stateFingerprint(resealed(p => (p.family = 'other')))),
-    ).toBe('save mismatch');
-    expect(
-      codeOf(() => core.stateFingerprint(resealed(p => (p.scripts = 1)))),
-    ).toBe('invalid save');
+    // The format version follows the four magic bytes.
+    const other = bytes.slice();
+    other[4] = 2;
+    expect(codeOf(() => core.stateFingerprint(other))).toBe('save mismatch');
+    const magic = bytes.slice();
+    magic[0] = 0x58;
+    expect(codeOf(() => core.stateFingerprint(magic))).toBe('invalid save');
+    expect(codeOf(() => core.stateFingerprint(bytes.slice(0, -1)))).toBe(
+      'invalid save',
+    );
   });
 });

@@ -35,6 +35,8 @@ export type Names = {
   readonly libraries: ReadonlyMap<string, string>;
   /** Refuses the command with `! <reason>`. */
   refuse(reason: string): never;
+  /** Retained Declaration Documentation, by unit identity and function name. */
+  readonly unitDocs?: ReadonlyMap<string, ReadonlyMap<string, string>>;
   /** A current Script Variable's value, from one explicit snapshot. */
   variable(name: string): Value | undefined;
 };
@@ -273,7 +275,7 @@ export const describe = (names: Names, rest: string): string[] => {
     if (d.variable !== undefined) {
       const value = names.variable(d.variable);
       if (value) {
-        out.push(...valueRows(value));
+        out.push(...valueRows(value, names.unitDocs));
       }
     }
   }

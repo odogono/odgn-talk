@@ -35,7 +35,7 @@ import {
   ScriptError,
   sendFailed,
   type HostErrorCode,
-  type ScriptError as HostScriptError,
+  ScriptError as HostScriptError,
 } from './errors';
 import { formatInstant, isInstant } from './dates';
 import { lowerTree } from './lowering';
@@ -48,9 +48,13 @@ import {
   type Limits,
   type Outcome,
   type Resumption,
-  type RunRecord,
+  type RunRecord as MachineRunRecord,
   Run,
   type RunHost,
+  type Member,
+  type CallContext,
+  type Frame,
+  msOf,
   type Suspension,
   type Script as Loaded,
 } from './machine';
@@ -65,21 +69,31 @@ import {
 } from './waits';
 import { type Grant, type Call, type ReleaseReason } from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
-import { canonicalJSON, grantData } from './manifest';
-import type { References } from './snapshot';
+import { canonicalJSON, grantData, operationsOf } from './manifest';
 import {
   compareNames,
-  decodeGroup,
+  decodeSave,
   encodeGroup,
+  invalidSave,
   stateFingerprint,
+  type DecodedSave,
   type GroupSnapshot,
   hexOf,
-  restoreState,
-  savedRuns,
-  snapshotReferences,
-  versionMismatch,
-  libraryMismatch,
 } from './group-snapshot';
+import { saveSections } from './save-format';
+import {
+  RecordReader,
+  type DeliveryRecord,
+  type Input,
+  type Mark,
+  type Part,
+  type ResumeRecord,
+  type RunRecord,
+  type Unit,
+} from './save-records';
+import { ValueReader, placeOf } from './save-values';
+import { functionHead, type Body } from './code-unit';
+import { standardChecks } from './standard-capability-checks';
 import {
   makeObject,
   propertyChecks,
@@ -113,6 +127,7 @@ import {
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
 import {
+  functionValue,
   functionsBelongTo,
   displayText,
   listValues,
@@ -125,6 +140,19 @@ import {
 } from './values';
 import { compareText } from './text';
 import { nextRandom, seedState } from './random';
+import {
+  baseLengths,
+  callSites,
+  lastWaits,
+  markRest,
+  waitOrders,
+} from './save-marks';
+import {
+  internals as runInternals,
+  limitNames,
+  microsOf,
+  runFromRecord,
+} from './save-runs';
 import type { CodeUnit } from './code-unit';
 
 // Process-wide compiled code. Checks and initialisation still happen for every
@@ -428,6 +456,8 @@ export type Decision = {
 };
 type Ballot = {
   decision: Decision;
+  /** Its recipient Delivery's id. */
+  delivery?: string;
   result?: {
     undecided?: Decided['undecided'][number];
     verdict: Verdict;
@@ -736,6 +766,14 @@ export class TsGroup implements Group {
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private broadcasts = 0;
+  /** Each Run's issued call ids' ranges, for the Group's lifetime. */
+  private issued = new Map<string, [number, number][]>();
+  /** How many waits have been set: the next wait's order. */
+  private waitOrder = 0;
+  /** Each root's discarded messages, for the Group's lifetime. */
+  private rootDiscards = new Map<number, number>();
+  /** The name a restored Group's save gave it, which its saves keep. */
+  private savedName: string | undefined;
   private saves = 0;
   private lastClock: bigint | null = null;
   private randomState = seedState(0n);
@@ -840,6 +878,58 @@ export class TsGroup implements Group {
   private accountDrop(d: Delivery) {
     const a = this.ancestry(d);
     this.accounting.roots.get(a.rootDelivery)!.discarded++;
+    const root = Number(a.rootDelivery.slice(1));
+    this.rootDiscards.set(root, (this.rootDiscards.get(root) ?? 0) + 1);
+  }
+
+  /**
+   * The roots whose work changed since the last accounting tail, which its
+   * next tail reports: as a save holds them, without reporting them.
+   */
+  private changedRoots(): number[] {
+    const queued = new Map<string, number>();
+    const live = new Map<string, number>();
+    const changed = new Set<string>();
+    const count = (d: Delivery) => {
+      const a = this.ancestry(d);
+      queued.set(a.rootDelivery, (queued.get(a.rootDelivery) ?? 0) + 1);
+    };
+    for (const s of this.scripts) {
+      for (const r of this.runsOf(s)) {
+        const row = this.accounting.runs.get(r.id);
+        if (row) {
+          const root = row.report.rootDelivery;
+          live.set(root, (live.get(root) ?? 0) + 1);
+          if (row.reportedFuel !== r.run.fuel) {
+            changed.add(root);
+          }
+        }
+      }
+      for (const item of s.queue) {
+        if (!('run' in item)) {
+          count(item);
+        }
+      }
+    }
+    for (const input of this.inputs) {
+      if (input.action.k === 'delivery') {
+        count(input.action.delivery);
+      }
+    }
+    for (const [id, row] of this.accounting.runs) {
+      if (row.report.state !== 'live' && !live.has(id)) {
+        changed.add(row.report.rootDelivery);
+      }
+    }
+    return [...this.accounting.roots]
+      .filter(
+        ([root, row]) =>
+          changed.has(root) ||
+          row.reported !==
+            `${live.get(root) ?? 0}/${queued.get(root) ?? 0}/${row.discarded}`,
+      )
+      .map(([root]) => Number(root.slice(1)))
+      .sort((a, b) => a - b);
   }
 
   private flushAccounting(reports: Report[]) {
@@ -975,12 +1065,6 @@ export class TsGroup implements Group {
     );
   }
 
-  /** Worker. Host callbacks, bindings and native objects aren't in the bytes. */
-  // The objects a save names rather than stores.
-  private references(): References {
-    return snapshotReferences(this.functionGroup, this.scripts, this.objects);
-  }
-
   save(o: SaveOptions = {}): Uint8Array {
     this.worker();
     if (
@@ -1004,7 +1088,6 @@ export class TsGroup implements Group {
     }
     const bytes = encodeGroup({
       ...this.snapshot(),
-      id,
       sources: o.sources ?? 'embedded',
     });
     this.trace?.(recordLine('save', [id], [], true));
@@ -1029,21 +1112,25 @@ export class TsGroup implements Group {
     );
   }
 
-  private snapshot(): Omit<GroupSnapshot, 'id' | 'sources'> {
+  private snapshot(): Omit<GroupSnapshot, 'sources'> {
     return {
       accounting: this.accounting,
       broadcasts: this.broadcasts,
+      changedRoots: this.changedRoots(),
+      rootDiscards: this.rootDiscards,
       deliveries: this.deliveries,
       discardedDecisions: this.discardedDecisions,
       fingerprint: this.fingerprint(),
       inputs: this.inputs,
+      issued: this.issued,
       lastClock: this.lastClock,
       libraries: this.libraries,
-      name: this.name,
+      name: this.savedName ?? this.name,
       objects: this.objects,
       randomState: this.randomState,
-      references: this.references(),
+      saves: this.saves,
       scripts: this.scripts,
+      waitOrder: this.waitOrder,
       waits: this.waits,
     };
   }
@@ -1053,7 +1140,7 @@ export class TsGroup implements Group {
     bytes: Uint8Array,
     o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult } {
-    const saved = decodeGroup(bytes);
+    const save = decodeSave(bytes);
     let emitting = false;
     const group = new TsGroup({
       name: o.name,
@@ -1066,9 +1153,11 @@ export class TsGroup implements Group {
           }
         : undefined,
     });
+    const saveId = `s${save.saveIdCounter}`;
     const disposed: [string, string][] = [];
     const unbound: string[] = [];
-    for (const object of saved.objects) {
+    const objects: ObjectState[] = [];
+    for (const object of save.objects) {
       const kind = objectKind(object.kind);
       if (!kind) {
         throw new HostError(
@@ -1076,32 +1165,50 @@ export class TsGroup implements Group {
           `Unknown Object Kind ${object.kind}`,
         );
       }
+      const key = `${object.kind}\u0000${object.id}`;
+      if (group.objects.has(key)) {
+        invalidSave();
+      }
       const state = makeObject(kind, object.id, undefined);
       state.disposed = object.disposed;
-      group.objects.set(object.key, state);
+      group.objects.set(key, state);
+      objects.push(state);
     }
-    for (const object of saved.objects) {
-      group.objects.get(object.key)!.parent = object.parent
-        ? group.objects.get(object.parent)!
-        : null;
-    }
+    save.objects.forEach((object, i) => {
+      objects[i]!.parent =
+        object.parent === undefined ? null : objects[object.parent]!;
+    });
     for (const library of o.libraries) {
       group.libraries.set(library.name, library);
     }
-    let mismatch = libraryMismatch(saved, group.libraries);
+    let mismatch = save.libraries.some(
+      l =>
+        !group.libraries.has(l.name) ||
+        identityOf(group.libraries.get(l.name)!) !== hexOf(l.identity),
+    );
     // A mismatch in anything but Script code is never partial (ADR 0143).
-    let wholeGroup = versionMismatch(saved);
+    let wholeGroup =
+      save.language !== languageVersion || save.costModel !== costModel.version;
     const changed = new Set<string>();
     let loadFailure: LoadError | undefined;
-    for (const script of saved.scripts) {
-      const supplied =
-        saved.sourceMode === 'external'
-          ? o.scriptSources?.({
-              name: script.name,
-              identities: [...script.identities],
-            })
-          : undefined;
-      if (saved.sourceMode === 'external' && !supplied) {
+    const names = new Set<string>();
+    for (const [i, script] of save.scripts.entries()) {
+      if (names.has(script.name)) {
+        invalidSave();
+      }
+      names.add(script.name);
+      const identities = [script.identity, ...script.extensions].map(hexOf);
+      const embedded = save.sources?.[i];
+      if (
+        save.sources &&
+        (!embedded || embedded.extensions.length !== script.extensions.length)
+      ) {
+        invalidSave();
+      }
+      const supplied = save.sources
+        ? undefined
+        : o.scriptSources?.({ name: script.name, identities: [...identities] });
+      if (!save.sources && !supplied) {
         throw new HostError(
           'save mismatch',
           `Missing sources for Script ${script.name}`,
@@ -1109,13 +1216,25 @@ export class TsGroup implements Group {
       }
       const sources = supplied
         ? [supplied.source, ...(supplied.extensions ?? [])]
-        : script.sources!;
+        : [embedded!.source, ...embedded!.extensions];
       if (sources.some(source => typeof source !== 'string')) {
         throw new HostError('invalid value', 'Script sources must be text');
       }
       const grants: Record<string, Grant<unknown>> = Object.create(null);
       const revoked = new Set<string>();
+      const grantNames = new Set<string>();
       for (const grant of script.grants) {
+        if (grantNames.has(grant.name)) {
+          invalidSave();
+        }
+        grantNames.add(grant.name);
+        const declared = operationsOf(grant.declarations);
+        if (
+          declared.capability !== grant.capability ||
+          grant.operations.some(op => !declared.operations.has(op.name))
+        ) {
+          invalidSave();
+        }
         const offered = o.grants(script.name, grant.name);
         const rebound = offered
           ? keepOperations(
@@ -1130,9 +1249,7 @@ export class TsGroup implements Group {
           ops: new Set(grant.operations.map(op => op.name)),
           capability: {
             name: grant.capability,
-            operations: new Map(
-              grant.operations.map(op => [op.name, op.declaration]),
-            ),
+            operations: declared.operations,
             grant: () => {
               throw new HostError(
                 'invalid value',
@@ -1144,10 +1261,7 @@ export class TsGroup implements Group {
         if (!rebound) {
           revoked.add(grant.name);
           unbound.push(`${script.name}.${grant.name}`);
-        } else if (
-          canonicalJSON(grantData(rebound)) !==
-          canonicalJSON(grantData(placeholder))
-        ) {
+        } else if (canonicalJSON(grantData(rebound)) !== grant.declarations) {
           wholeGroup = true;
         }
         grants[grant.name] = rebound ?? placeholder;
@@ -1159,15 +1273,17 @@ export class TsGroup implements Group {
         group.load({
           name: script.name,
           source: sources[0]!,
-          limits: script.limits,
+          limits: limitsOf(script.limits),
           grants,
-          owner: script.owner
-            ? group.objects.get(script.owner)!.handle
-            : undefined,
+          owner:
+            script.owner === undefined
+              ? undefined
+              : objects[script.owner]!.handle,
           objects: Object.fromEntries(
-            script.objects.map(([name, key]) => [
-              name,
-              group.objects.get(key)!.handle,
+            script.objects.map(x => [
+              x.name,
+              (x.object === undefined ? invalidSave() : objects[x.object]!)
+                .handle,
             ]),
           ),
         });
@@ -1176,8 +1292,8 @@ export class TsGroup implements Group {
           group.applyExtension(state, source, undefined, false);
         }
         if (
-          state.units.length !== script.identities.length ||
-          state.units.some((unit, i) => unit.identity !== script.identities[i])
+          state.units.length !== identities.length ||
+          state.units.some((unit, i) => unit.identity !== identities[i])
         ) {
           changed.add(script.name);
         }
@@ -1190,22 +1306,26 @@ export class TsGroup implements Group {
         loadFailure = error;
       }
     }
-    for (const object of saved.objects) {
-      group.objects.get(object.key)!.owner = object.owner;
-    }
+    save.objects.forEach((object, i) => {
+      objects[i]!.owner = object.ownerOf ?? null;
+    });
+    const savedFingerprint = hexOf(save.groupFingerprint);
     mismatch ||=
       wholeGroup ||
       changed.size > 0 ||
-      hexOf(group.fingerprint()) !== saved.fingerprint;
+      hexOf(group.fingerprint()) !== savedFingerprint;
     const partial =
       mismatch && !wholeGroup && o.onMismatch === 'reload changed';
     const variablesOnly = mismatch && !partial;
+    const withheld = save.libraries
+      .filter(l => !group.libraries.has(l.name))
+      .map(l => l.name);
     const restoreLine = (result?: RestoreResult) =>
       recordLine(
         'restore',
         [],
         [
-          ['from', saved.id],
+          ['from', saveId],
           [
             'mismatch',
             o.onMismatch === 'variables only'
@@ -1215,18 +1335,8 @@ export class TsGroup implements Group {
                 : null,
           ],
           ['unbound', unbound.length ? idList(unbound) : null],
-          [
-            'withheld',
-            saved.libraries.filter(([name]) => !group.libraries.has(name))
-              .length
-              ? idList(
-                  saved.libraries
-                    .filter(([name]) => !group.libraries.has(name))
-                    .map(([name]) => name),
-                )
-              : null,
-          ],
-          ['fingerprint', saved.fingerprint],
+          ['withheld', withheld.length ? idList(withheld) : null],
+          ['fingerprint', savedFingerprint],
           [
             'mode',
             result
@@ -1287,30 +1397,30 @@ export class TsGroup implements Group {
     if (loadFailure) {
       throw loadFailure;
     }
-    for (const object of saved.objects) {
+    for (const [i, object] of save.objects.entries()) {
       const resolved = o.resolve(object.kind, object.id);
-      const state = group.objects.get(object.key)!;
+      const state = objects[i]!;
       rebindObject(state, resolved?.native);
       state.disposed = object.disposed || !resolved;
       if (!resolved) {
         disposed.push([object.kind, object.id]);
       }
     }
-    for (const [i, script] of saved.scripts.entries()) {
+    for (const [i, script] of save.scripts.entries()) {
       group.scripts[i]!.objects = Object.fromEntries(
-        script.objects.map(([name, key]) => [
-          name,
-          group.objects.get(key)!.handle,
-        ]),
+        script.objects.map(x => [x.name, objects[x.object!]!.handle]),
       );
     }
-    const refs = group.references();
-    const state = restoreState(saved, refs, partial ? changed : variablesOnly);
+    const state = group.readState(
+      save,
+      objects,
+      partial ? changed : variablesOnly,
+    );
     const result: RestoreResult = {
       reports: [],
       variablesOnly,
       reloaded: partial
-        ? saved.scripts.flatMap(s => (changed.has(s.name) ? [s.name] : []))
+        ? save.scripts.flatMap(s => (changed.has(s.name) ? [s.name] : []))
         : [],
       pending: [],
       disposed,
@@ -1318,117 +1428,623 @@ export class TsGroup implements Group {
       droppedMessages: [],
       abandonedCalls: [],
     };
-    group.accounting = state.accounting;
     group.drainReports = result.reports;
-    for (const row of group.accounting.runs.values()) {
-      delete row.reportedFuel;
+    group.saves = save.saveIdCounter;
+    group.savedName = save.group.name;
+    group.applyState(state, { partial, changed, variablesOnly, result });
+    group.flushAccounting(result.reports);
+    emitting = true;
+    o.trace?.(restoreLine(result));
+    if (o.session) {
+      group.attachSession(o.session);
     }
-    for (const row of group.accounting.roots.values()) {
-      delete row.reported;
+    return { group, result };
+  }
+
+  /**
+   * A save's second pass: its values, read against the restored Scripts'
+   * code, and every section that holds them.
+   */
+  private readState(
+    save: DecodedSave,
+    objects: readonly ObjectState[],
+    changed: boolean | ReadonlySet<string>,
+  ) {
+    const stale = (home: string) =>
+      changed === true || (changed !== false && changed.has(home));
+    const byName = new Map(this.scripts.map(s => [s.name, s]));
+    const codes = save.functions.map((f): unknown => {
+      const s = byName.get(f.home);
+      if (f.body && s && !stale(f.home)) {
+        const code = this.unitCode(s, f.body.unit, save);
+        const body = code.unit.bodies[f.body.body] ?? invalidSave();
+        const head = functionHead({ body })!;
+        if (
+          head.min !== f.required ||
+          head.max !== f.total ||
+          (head.name ?? '') !== f.name ||
+          code.identity !== hexOf(f.unit)
+        ) {
+          invalidSave();
+        }
+        return { code, body, home: s.loaded };
+      }
+      if (f.total < f.required) {
+        invalidSave();
+      }
+      // A stale named function still answers its documentation, from its
+      // unit if the Script still holds it.
+      const unit = s?.loaded.units.find(u => u.identity === hexOf(f.unit));
+      const body = f.name
+        ? unit?.unit.bodies.find(
+            b => b.kind === 'function' && b.name === f.name,
+          )
+        : undefined;
+      return {
+        home: { live: false },
+        ...(body?.doc ? { doc: body.doc } : {}),
+        head: { min: f.required, max: f.total, name: f.name || null },
+        unit: hexOf(f.unit),
+      };
+    });
+    const values = new ValueReader(
+      objects,
+      codes.length,
+      (i, display, home, captures) => {
+        const { home: displayHome, place } = placeOf(display);
+        const c = (
+          i === undefined
+            ? {
+                home: { live: false },
+                head: { min: 0, max: 0, name: null },
+                unit: '',
+              }
+            : codes[i]
+        ) as {
+          body?: Body;
+          code?: Code;
+          home: { live?: boolean; name?: string };
+          unit?: string;
+        };
+        const live = !!c.body && !!c.code;
+        if (live && c.home.name !== home) {
+          invalidSave();
+        }
+        const v = functionValue({
+          group: this.functionGroup,
+          home,
+          displayHome,
+          place,
+          identity: live
+            ? `${home}#${c.code!.identity || c.code!.name}#${c.body!.index}`
+            : `${home}#${c.unit}#${place}`,
+          maySuspend: live ? c.body!.maySuspend : false,
+          captures,
+          code: c,
+        });
+        return v.toString() === display ? v : invalidSave();
+      },
+    );
+    const tables = {
+      calls: 0,
+      libraries: save.libraries.length,
+      objects: objects.length,
+      runs: 0,
+    };
+    const section = <T>(
+      tag: number,
+      read: (r: RecordReader<Value>) => T,
+    ): T => {
+      const r = new RecordReader(save.reader(tag), values, tables);
+      const out = read(r);
+      r.r.end();
+      return out;
+    };
+    const calls = section(saveSections.calls, r => r.calls());
+    tables.calls = calls.length;
+    const scripts = section(saveSections.scripts, r => r.scripts());
+    const { perScript, runs } = section(saveSections.runs, r => r.runs());
+    tables.runs = runs.length;
+    const work = section(saveSections.work, r => r.work());
+    const waits = section(saveSections.waits, r => r.waits());
+    const inputs = section(saveSections.inputs, r => r.inputs());
+    const decisions = section(saveSections.decisions, r => r.decisions());
+    const accounting = section(saveSections.accounting, r => r.accounting());
+    if (
+      perScript.length !== scripts.length ||
+      work.length !== scripts.length ||
+      perScript.reduce((a, b) => a + b, 0) !== runs.length
+    ) {
+      invalidSave();
     }
-    group.discardedDecisions = state.discardedDecisions;
-    group.deliveries = state.deliveries;
-    group.broadcasts = state.broadcasts;
-    group.lastClock = state.lastClock;
-    group.randomState = state.randomState;
-    group.waits.importTimerSeq(state.timerSeq);
-    group.saves = Number(saved.id.slice(1));
-    // Each changed Script's carried Script Variables, set once its Runs end.
+    return {
+      calls,
+      scripts,
+      perScript,
+      runs,
+      work,
+      waits,
+      inputs,
+      decisions,
+      accounting,
+      group: save.group,
+      save,
+    };
+  }
+
+  /** A unit's code, relative to a Script, as a save names it. */
+  private unitCode(s: ScriptState, unit: Unit, save: DecodedSave): Code {
+    switch (unit.k) {
+      case 'own':
+        return s.loaded.units[0]!;
+      case 'extension':
+        return s.loaded.units[unit.extension + 1] ?? invalidSave();
+      case 'library':
+      case 'stdlib': {
+        const name =
+          unit.k === 'stdlib'
+            ? unit.name
+            : (save.libraries[unit.library] ?? invalidSave()).name;
+        const seen = new Set<Code>();
+        const work = [...s.loaded.units];
+        while (work.length) {
+          const code = work.pop()!;
+          for (const [n, imported] of code.libraries) {
+            if (n === name && imported.stdlib === (unit.k === 'stdlib')) {
+              return imported;
+            }
+            if (!seen.has(imported)) {
+              seen.add(imported);
+              work.push(imported);
+            }
+          }
+        }
+        return invalidSave();
+      }
+    }
+  }
+
+  /** Publishes a save's state in the restored Group. */
+  private applyState(
+    state: ReturnType<TsGroup['readState']>,
+    o: {
+      changed: ReadonlySet<string>;
+      partial: boolean;
+      result: RestoreResult;
+      variablesOnly: boolean;
+    },
+  ) {
+    const { result, variablesOnly, partial, changed } = o;
+    const objects = [...this.objects.values()];
+    const g = state.group;
+    this.deliveries = g.deliveries;
+    this.broadcasts = g.broadcasts;
+    this.lastClock = g.clock.seconds * 1_000_000n + BigInt(g.clock.micros);
+    this.randomState = g.randomState;
+    this.waitOrder = g.timers;
+    for (const x of g.issued) {
+      if (!x.ranges.length) {
+        invalidSave();
+      }
+      this.issued.set(
+        x.run,
+        x.ranges.map(r => [r.first, r.last]),
+      );
+    }
+    for (const d of state.accounting.discards) {
+      this.rootDiscards.set(d.root, d.discarded);
+    }
+    const object = (i: number | undefined) =>
+      i === undefined ? null : (objects[i] ?? invalidSave());
+    // Every Decision a save holds, by its id, so its ballots are shared.
+    const decisions = new Map<string, Decision>();
+    const decisionOf = (id: string, broadcast: boolean) => {
+      let d = decisions.get(id);
+      if (!d) {
+        d = { id, broadcast, ballots: [], resolve: () => {} };
+        decisions.set(id, d);
+      }
+      return d;
+    };
+    const markOf = (m: Mark<Value>) => m;
+    const resultOf = (part: Part<Value>): Ballot['result'] =>
+      part.k === 'allowed'
+        ? { verdict: 'allowed' }
+        : part.k === 'vetoed'
+          ? {
+              verdict: 'vetoed',
+              veto: {
+                script: markOf(part.mark).script,
+                run: part.mark.run,
+                reason: part.mark.reason ?? nothing,
+              },
+            }
+          : part.k === 'undecided'
+            ? {
+                verdict: 'undecided',
+                undecided: {
+                  script: part.mark.script,
+                  ...(part.mark.run ? { run: part.mark.run } : {}),
+                  outcome: part.mark.outcome as RunOutcome,
+                },
+              }
+            : undefined;
+    const openParts = new Map<number, Part<Value>>();
+    for (const b of state.decisions.open) {
+      const d = decisionOf(`b${b.id}`, true);
+      for (const p of b.parts) {
+        const ballot: Ballot = { decision: d, delivery: `d${p.delivery}` };
+        const r = resultOf(p.part);
+        if (r) {
+          ballot.result = r;
+        }
+        d.ballots.push(ballot);
+        openParts.set(p.delivery, p.part);
+      }
+    }
+    const deliveryOf = (
+      rec: DeliveryRecord<Value>,
+      s: ScriptState | null,
+      verdict = false,
+    ): Delivery => {
+      const id = rec.id ? `d${rec.id}` : null;
+      const reply = rec.waits ? (rec.from ?? invalidSave()) : null;
+      const target = object(rec.target);
+      const at = object(rec.at);
+      const passedBy = object(rec.passedBy);
+      const owner = s?.owner ?? null;
+      const d: Delivery = {
+        id,
+        from: rec.from ?? null,
+        message: rec.message,
+        args: rec.args,
+        limits: Object.fromEntries(
+          Object.entries(rec.limits ?? {}).filter(([, v]) => v !== undefined),
+        ) as LimitOverride,
+        reply,
+        // The Host's future belongs to the old Group; a restored Delivery
+        // keeps only that its sender waits.
+        request: rec.request ? detachedRequest : null,
+        ...(rec.during ? { during: rec.during } : {}),
+        ...(rec.function ? { fn: rec.function } : {}),
+        ...(rec.broadcast ? { broadcast: `b${rec.broadcast}` } : {}),
+        // A message on an object's path reads it from the object it is
+        // at, or after a climb from the parent of the one that passed it.
+        ...(passedBy
+          ? { path: { after: true, from: passedBy } }
+          : at
+            ? { path: { after: false, from: at } }
+            : {}),
+        target: passedBy || at ? target : rec.broadcast ? null : owner,
+        at: passedBy ? at : at ? (this.route(at)?.at ?? null) : owner,
+      };
+      if (rec.function && rec.function.kind !== 'function') {
+        invalidSave();
+      }
+      d.ancestry = {
+        rootDelivery: rec.root ? `d${rec.root}` : (id ?? invalidSave()),
+        ...(rec.from
+          ? {
+              parentRun: rec.from.replace(/\.c\d+$/, ''),
+              ...(reply ? { parentCall: reply } : {}),
+            }
+          : {}),
+      };
+      if (rec.decides) {
+        const d0 = rec.broadcast
+          ? decisionOf(`b${rec.broadcast}`, true)
+          : decisionOf(id ?? invalidSave(), false);
+        let ballot = d0.ballots.find(b => b.delivery === id);
+        if (!ballot) {
+          ballot = { decision: d0, delivery: id! };
+          d0.ballots.push(ballot);
+          if (!rec.decision && !verdict) {
+            ballot.result = { verdict: 'allowed' };
+          }
+        }
+        d.ballot = ballot;
+      }
+      this.ancestry(d);
+      return d;
+    };
+
+    // Accounting: each live Run's row, and each root's work.
+    this.accounting.next = g.runOrder;
+    // Calls, as their Runs' contexts: the Operation comes from their waits.
+    const operations = new Map<number, string>();
+    for (const r of state.runs) {
+      for (const w of [
+        r.waiting,
+        r.waited,
+        ...(r.join?.members.flatMap(m => [m.pending, m.waited]) ?? []),
+      ]) {
+        if (w?.call !== undefined) {
+          operations.set(w.call, w.operation);
+        }
+      }
+    }
+    const contexts = new Map<number, CallContext>();
+    const runIndex = new Map<string, number>();
+    state.runs.forEach((r, i) => runIndex.set(r.id, i));
+    const callOf = (i: number, s: ScriptState): CallContext => {
+      let ctx = contexts.get(i);
+      if (ctx) {
+        return ctx;
+      }
+      const c = state.calls[i] ?? invalidSave();
+      const operation = operations.get(i) ?? invalidSave();
+      if (c.script !== s.name) {
+        invalidSave();
+      }
+      const grant = s.grants.get(c.grant) ?? invalidSave();
+      const op = grant.capability.operations.get(operation) ?? invalidSave();
+      const unit =
+        [...s.loaded.units].find(u => u.name === c.atUnit) ??
+        this.libraryCode(s, c.atUnit);
+      const ins = unit?.unit.code[c.atPc];
+      ctx = {
+        id: c.id,
+        op,
+        rate: ins?.rate ?? -1,
+        named: [
+          ['capability', text(c.grant)],
+          ['operation', text(operation)],
+        ],
+        declared: op.cost.fuel,
+        opName: `${c.grant}.${operation}`,
+        adoptable: c.start,
+        ...(op.mode === 'suspending' && standardChecks(op)?.result
+          ? { args: [...c.args] }
+          : {}),
+      };
+      callSites.set(ctx, {
+        args: c.args,
+        charged: c.charged,
+        at: { unit: c.atUnit, pc: c.atPc, line: c.atLine, col: c.atColumn },
+        now: c.now.seconds * 1_000_000n + BigInt(c.now.micros),
+        // Before any call this Group makes, in the order they were made.
+        order: Number.MIN_SAFE_INTEGER + i,
+        segment: c.segment,
+      });
+      contexts.set(i, ctx);
+      return ctx;
+    };
+
+    // Each Script's counters, variables and Runs.
+    let at = 0;
+    const restored: {
+      pendingId?: string;
+      rec: (typeof state.runs)[number];
+      running: Running;
+      s: ScriptState;
+    }[] = [];
     const carried = new Map<ScriptState, Value[]>();
-    for (const [i, runtime] of state.scripts.entries()) {
-      const script = group.scripts[i]!;
-      script.runs = runtime.runs;
-      script.fuelTotal = runtime.fuelTotal;
-      script.allocTotal = runtime.allocTotal;
-      script.faults = runtime.faults;
-      script.disabled = new Set(runtime.disabled ?? []);
-      for (const name of runtime.revoked) {
-        script.revoked.add(name);
+    for (const [i, sr] of state.scripts.entries()) {
+      const script = this.scripts[i]!;
+      if (sr.name !== script.name) {
+        invalidSave();
+      }
+      script.runs = sr.runs;
+      script.fuelTotal = sr.fuelTotal;
+      script.allocTotal = sr.allocTotal;
+      script.faults = sr.faults;
+      script.disabled = new Set(
+        sr.grants.filter(x => x.disabled).map(x => x.name),
+      );
+      for (const x of sr.grants) {
+        if (x.revoked) {
+          script.revoked.add(x.name);
+        }
+      }
+      if (sr.variableNames.length !== sr.variables.length) {
+        invalidSave();
       }
       const reloading = partial && changed.has(script.name);
-      let variables = runtime.variables;
-      if (variablesOnly || reloading) {
-        for (const r of savedRuns(runtime)) {
-          if (
-            !r.parked &&
-            !r.resuming &&
-            !r.cleanupReady &&
-            !r.run.suspended &&
-            !r.run.done
-          ) {
-            variables = r.run.segmentBase;
+      const skim = variablesOnly || reloading;
+      const records = state.runs.slice(at, at + state.perScript[i]!);
+      at += state.perScript[i]!;
+      for (const rec of records) {
+        if (!rec.id.startsWith(`${script.name}/r`)) {
+          invalidSave();
+        }
+        const verdictHeld = rec.verdict;
+        const running = skim
+          ? skimRun(
+              rec,
+              script,
+              deliveryOf(rec.delivery, script, verdictHeld),
+              c => (state.calls[c] ?? invalidSave()).id,
+            )
+          : (() => {
+              const out = runFromRecord(rec, {
+                script,
+                now: this.lastClock!,
+                invalid: invalidSave,
+                code: unit => this.unitCode(script, unit, state.save),
+                call: c => callOf(c, script),
+                delivery: d => deliveryOf(d, script, verdictHeld),
+                make: () => {
+                  const run = new Run(
+                    script.loaded,
+                    script.loaded.unit.bodies[0]!,
+                    [],
+                    limitsOf(rec.limits),
+                  );
+                  return run;
+                },
+              });
+              return out;
+            })();
+        const r = 'running' in running ? running.running : running;
+        if (skim) {
+          skimmed.add(r);
+        }
+        restored.push({
+          running: r,
+          rec,
+          s: script,
+          ...('pendingId' in running && running.pendingId
+            ? { pendingId: running.pendingId }
+            : {}),
+        });
+        this.accounting.runs.set(rec.id, {
+          order: rec.order,
+          report: {
+            kind: 'run accounting',
+            ...this.ancestry(r.delivery),
+            script: script.name,
+            run: rec.id,
+            fuel: rec.fuel,
+            state: 'live',
+          },
+        });
+        markRest(r, { fuel: rec.segmentFuel, alloc: rec.segmentAlloc });
+      }
+      let variables = sr.variables;
+      if (skim) {
+        for (const x of restored.filter(x => x.s === script)) {
+          if (x.rec.continuing && x.rec.segmentBase) {
+            variables = x.rec.segmentBase;
           }
         }
       }
       const kept = script.loaded.variableNames.map((name, j) => {
-        const old = runtime.variableNames.indexOf(name);
+        const old = sr.variableNames.indexOf(name);
         return old >= 0 ? variables[old]! : script.loaded.variables[j]!;
       });
       if (reloading) {
         carried.set(script, kept);
+      } else if (!variablesOnly) {
+        // Only a full restore's Runs see the extensions' first values, as
+        // their segment bases do.
+        script.loaded.variables = kept;
       } else {
         script.loaded.variables = kept;
       }
-      if (variablesOnly) {
-        result.discardedRuns.push(...savedRuns(runtime).map(r => r.id));
-        result.droppedMessages.push(
-          ...runtime.queue
-            .filter((q): q is Delivery => !('run' in q))
-            .flatMap(d => (d.id ? [d.id] : [])),
-        );
-        for (const running of savedRuns(runtime)) {
-          group.accountEnd(running, 'discarded', 'variables-only restore');
-          group.accumulateRunCosts(script, running.run);
-          group.discardDecision(running.delivery, script.name, running.id);
+      if (!skim) {
+        script.loaded.live = sr.stopped === undefined;
+        const definitions = script.loaded.units.flatMap(u => u.definitions);
+        if (sr.definitions.length !== definitions.length) {
+          invalidSave();
         }
-        for (const item of runtime.queue) {
-          if (!('run' in item)) {
-            group.accountDrop(item);
-            group.discardDecision(item, script.name);
+        let d = 0;
+        for (const unit of script.loaded.units) {
+          for (let k = 0; k < unit.definitions.length; k++) {
+            unit.definitions[k] = sr.definitions[d++]!;
           }
-        }
-        script.stopped = false;
-        if (script.loaded.variablesSize() > script.limits.persistentState) {
-          throw new HostError('state too large');
-        }
-      } else {
-        Object.assign(script, {
-          debt: runtime.debt,
-          incoming: runtime.incoming,
-          parked: runtime.parked,
-          queue: runtime.queue,
-          stopped: runtime.stopped,
-          stopReason: runtime.stopReason,
-          suspended: runtime.suspended,
-        });
-        group.waits.importWaiters(script, runtime.waiters);
-        // A changed Script's saved Runs point into code it no longer has.
-        if (reloading) {
-          continue;
-        }
-        script.loaded.live = runtime.live;
-        runtime.definitions.forEach((values, j) => {
-          script.loaded.units[j]!.definitions.splice(
-            0,
-            values.length,
-            ...values,
-          );
-        });
-        for (const running of group.runsOf(script)) {
-          running.run.validateSnapshot(new Set(refs.byObject.keys()));
-          running.run.host = group.hostFor(
-            script,
-            running.run,
-            running.delivery.id,
-          );
-          running.run.rebindCalls();
-          running.run.persistentState = () => group.persistentState(script, 1);
         }
       }
     }
+    // Each Script's work, suspended and parked Runs.
+    const runningAt = (i: number) => restored[i]?.running ?? invalidSave();
+    for (const [i, script] of this.scripts.entries()) {
+      const mine = restored.filter(x => x.s === script);
+      const queue = state.work[i]!.map(item =>
+        item.k === 'run'
+          ? restored[item.run]?.s === script
+            ? runningAt(item.run)
+            : invalidSave()
+          : deliveryOf(item.delivery, script),
+      );
+      const queued = new Set(queue.filter((q): q is Running => 'run' in q));
+      const suspended = new Set<Running>();
+      const parked: Running[] = [];
+      for (const x of mine) {
+        if (x.rec.parked) {
+          parked.push(x.running);
+        } else if (!queued.has(x.running)) {
+          suspended.add(x.running);
+        }
+        if (x.rec.parked && queued.has(x.running)) {
+          invalidSave();
+        }
+      }
+      const sr = state.scripts[i]!;
+      Object.assign(script, {
+        debt: sr.debt,
+        incoming: 0,
+        parked,
+        queue,
+        stopped: sr.stopped !== undefined,
+        ...(sr.stopped !== undefined ? { stopReason: sr.stopped } : {}),
+        suspended,
+      });
+    }
+    // Discarded Decisions a variables-only restore left for the first Pump.
+    for (const x of state.decisions.deferred) {
+      const d = decisionOf(
+        x.broadcast ? `b${x.broadcast}` : `d${x.id}`,
+        !!x.broadcast,
+      );
+      d.discarded = true;
+      const ballot: Ballot = {
+        decision: d,
+        delivery: `d${x.id}`,
+        ...(x.mark
+          ? {
+              result: resultOf({
+                k: x.mark.outcome === 'vetoed' ? 'vetoed' : 'undecided',
+                mark: x.mark,
+              } as Part<Value>)!,
+            }
+          : {}),
+      };
+      d.ballots.push(ballot);
+      if (!this.discardedDecisions.includes(d)) {
+        this.discardedDecisions.push(d);
+      }
+    }
+    // The Host inputs queued for the next Pump.
+    const inputs = state.inputs.map(x =>
+      this.inputOf(x, deliveryOf, object, decisionOf),
+    );
+    for (const input of inputs) {
+      if (input.action.k === 'delivery' && input.action.state) {
+        input.action.state.incoming++;
+      }
+    }
+
     if (variablesOnly) {
-      result.abandonedCalls = [...state.pending.keys()].sort(compareCallIds);
-      for (const input of state.inputs) {
+      for (const [i, script] of this.scripts.entries()) {
+        const mine = restored.filter(x => x.s === script);
+        result.discardedRuns.push(...mine.map(x => x.running.id));
+        result.droppedMessages.push(
+          ...script.queue
+            .filter((q): q is Delivery => !('run' in q))
+            .flatMap(d => (d.id ? [d.id] : [])),
+        );
+        for (const x of mine) {
+          this.accountEnd(x.running, 'discarded', 'variables-only restore');
+          this.accumulateRunCosts(script, x.running.run);
+          this.discardDecision(x.running.delivery, script.name, x.running.id);
+        }
+        for (const item of script.queue) {
+          if (!('run' in item)) {
+            this.accountDrop(item);
+            this.discardDecision(item, script.name);
+          }
+        }
+        Object.assign(script, {
+          queue: [],
+          suspended: new Set(),
+          parked: [],
+          debt: 0,
+        });
+        script.stopped = false;
+        delete script.stopReason;
+        void i;
+        if (script.loaded.variablesSize() > script.limits.persistentState) {
+          throw new HostError('state too large');
+        }
+      }
+      const pending = new Set<string>();
+      for (const x of restored) {
+        for (const id of awaitedCallIds(x.rec, state.calls)) {
+          pending.add(id);
+        }
+      }
+      result.abandonedCalls = [...pending].sort(compareCallIds);
+      for (const input of inputs) {
         if (input.action.k === 'delivery') {
           const delivery = input.action.delivery;
           if (delivery.id) {
@@ -1439,27 +2055,34 @@ export class TsGroup implements Group {
             action.state?.name ??
             (typeof action.to === 'string' ? action.to : action.to.owner) ??
             '';
-          group.accountDrop(delivery);
-          group.discardDecision(delivery, name);
+          this.accountDrop(delivery);
+          this.discardDecision(delivery, name);
         } else if (input.action.k === 'broadcast' && input.action.decision) {
           input.action.decision.discarded = true;
-          group.discardedDecisions.push(input.action.decision);
+          this.discardedDecisions.push(input.action.decision);
         }
       }
+      for (const s of this.scripts) {
+        s.incoming = 0;
+      }
     } else {
-      group.waits.importWaits(state.pending, state.timers);
-      group.inputs = state.inputs.map(input => ({
-        ...input,
-        line:
-          input.line ??
-          (() =>
-            group.broadcastLine(
-              input.action as Extract<InputAction, { k: 'broadcast' }>,
-            )),
-      }));
+      this.importWaits(state, restored);
+      this.inputs = inputs;
+      for (const x of restored) {
+        if (partial && changed.has(x.s.name)) {
+          continue;
+        }
+        x.running.run.validateSnapshot(this.knownCode());
+        x.running.run.host = this.hostFor(
+          x.s,
+          x.running.run,
+          x.running.delivery.id,
+        );
+        x.running.run.persistentState = () => this.persistentState(x.s, 1);
+      }
       const abandoned: string[] = [];
       for (const [script, variables] of carried) {
-        const ended = group.reloadRestored(script);
+        const ended = this.reloadRestored(script);
         result.discardedRuns.push(...ended.runs);
         result.droppedMessages.push(...ended.messages);
         abandoned.push(...ended.pendingCalls);
@@ -1469,24 +2092,432 @@ export class TsGroup implements Group {
         }
       }
       result.abandonedCalls = abandoned.sort(compareCallIds);
-      result.pending = group.pendingOperations();
+      result.pending = this.pendingOperations();
       const settled = new Set(
-        state.inputs.flatMap(input =>
+        inputs.flatMap(input =>
           input.action.k === 'settle' ? [input.action.id] : [],
         ),
       );
-      group.unsettled = new Set(
+      this.unsettled = new Set(
         result.pending.map(p => p.id).filter(id => !settled.has(id)),
       );
-      group.restored = true;
+      this.restored = true;
     }
-    group.flushAccounting(result.reports);
-    emitting = true;
-    o.trace?.(restoreLine(result));
-    if (o.session) {
-      group.attachSession(o.session);
+    // A restore reports every live Run and root afresh.
+    for (const [root, row] of this.accounting.roots) {
+      row.discarded = this.rootDiscards.get(Number(root.slice(1))) ?? 0;
     }
-    return { group, result };
+    for (const row of this.accounting.runs.values()) {
+      delete row.reportedFuel;
+    }
+    for (const row of this.accounting.roots.values()) {
+      delete row.reported;
+    }
+  }
+
+  /** Restores the wait table: each wait's timers, in the order waits began. */
+  private importWaits(
+    state: ReturnType<TsGroup['readState']>,
+    restored: {
+      pendingId?: string;
+      rec: RunRecord<Value>;
+      running: Running;
+      s: ScriptState;
+    }[],
+  ) {
+    const joins = new Map<Running, JoinWait>();
+    const joinOf = (x: (typeof restored)[number]) => {
+      let join = joins.get(x.running);
+      if (!join) {
+        const r = runInternals(x.running.run);
+        const sus = r.suspended;
+        if (sus?.k !== 'join') {
+          return invalidSave();
+        }
+        join = { members: sus.members, answers: new Map() };
+        x.rec.join?.members.forEach((m, i) => {
+          const member = sus.members[i]!;
+          if (!m.pending && member.answer !== undefined) {
+            join!.answers.set(member.id, {
+              k: m.with.k === 'reply' ? 'reply' : 'answer',
+              value: member.answer,
+              fuel: m.with.k === 'answer' ? m.with.fuel : 0,
+            } as Resumption);
+          }
+        });
+        if (sus.deadline && x.rec.waiting) {
+          join.deadline = this.waits.timer(
+            x.rec.waiting.deadline ?? invalidSave(),
+            {
+              k: 'deadline',
+              s: x.s,
+              running: x.running,
+              after: sus.deadline.after,
+              join,
+            },
+            x.running,
+          );
+        }
+        joins.set(x.running, join);
+      }
+      return join;
+    };
+    const seen = new Set<string>();
+    for (const w of state.waits) {
+      const x = restored[w.run] ?? invalidSave();
+      const key = `${w.run}:${w.member}`;
+      if (seen.has(key)) {
+        invalidSave();
+      }
+      seen.add(key);
+      // A Partial Restore discards a changed Script's Runs, waits and all.
+      if (skimmed.has(x.running)) {
+        continue;
+      }
+      const r = runInternals(x.running.run);
+      const { s, running, rec } = x;
+      if (w.member !== undefined) {
+        const m = rec.join?.members[w.member];
+        if (!m?.pending) {
+          invalidSave();
+        }
+        if (r.suspended?.k !== 'join') {
+          continue;
+        }
+        const join = joinOf(x);
+        const member = join.members[w.member]!;
+        const timer = this.waits.timer(
+          member.at,
+          {
+            k: 'call',
+            id: member.id,
+            ms: member.ms,
+            ...(member.abort ? { abort: member.abort } : {}),
+          },
+          running,
+        );
+        this.waits.add(member.id, s, running, timer, join);
+        continue;
+      }
+      const p = rec.waiting ?? invalidSave();
+      const sus = r.suspended ?? invalidSave();
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- Each wait closes over its own Run and Script.
+      const deadline = (extra: Partial<TimerAction> = {}) =>
+        ({
+          k: 'deadline',
+          s,
+          running,
+          after: sus.deadline?.after ?? msOf(p.after),
+          ...extra,
+        }) as TimerAction;
+      if (sus.k === 'wait') {
+        this.waits.timer(
+          p.deadline ?? invalidSave(),
+          p.block ? deadline() : { k: 'wake', s, running },
+          running,
+        );
+      } else if (sus.k === 'wait-for') {
+        const waiter: Waiter = { running, timers: [] };
+        if (p.block) {
+          waiter.timers.push(
+            this.waits.timer(
+              p.deadline ?? invalidSave(),
+              deadline({ waiter }),
+              running,
+            ),
+          );
+        } else {
+          const fire = (branch: number): TimerAction => ({
+            k: 'event',
+            s,
+            waiter,
+            branch,
+          });
+          if (
+            sus.timeout !== null &&
+            p.branch === 0 &&
+            p.deadline !== undefined
+          ) {
+            waiter.timers.push(this.waits.timer(p.deadline, fire(0), running));
+          }
+          const branches = p.event?.branches ?? [];
+          branches.forEach((b, n) => {
+            if (b.k === 'after') {
+              waiter.timers.push(this.waits.timer(b.at, fire(n + 1), running));
+            }
+          });
+        }
+        this.waits.addWaiter(s, waiter);
+      } else if (sus.k === 'join') {
+        joinOf(x);
+      } else {
+        const id = x.pendingId ?? invalidSave();
+        const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
+        const timer = this.waits.timer(
+          p.deadline ?? invalidSave(),
+          {
+            k: 'call',
+            id,
+            ms,
+            ...(sus.k === 'ask' ? { abort: sus.abort } : {}),
+            ...(p.block
+              ? { deadline: sus.deadline?.after ?? msOf(p.after) }
+              : {}),
+          },
+          running,
+        );
+        this.waits.add(id, s, running, timer);
+      }
+    }
+    // A suspended Join always waits on its members, so each must have a wait.
+    for (const x of restored) {
+      if (
+        !skimmed.has(x.running) &&
+        runInternals(x.running.run).suspended?.k === 'join'
+      ) {
+        joinOf(x);
+      }
+    }
+    this.waits.importTimerSeq(this.waits.exportState().timerSeq);
+  }
+
+  /** A queued Host input from its record, with the Trace line it was given. */
+  private inputOf(
+    x: Input<Value>,
+    deliveryOf: (d: DeliveryRecord<Value>, s: ScriptState | null) => Delivery,
+    object: (i: number | undefined) => ObjectState | null,
+    decisionOf: (id: string, broadcast: boolean) => Decision,
+  ): QueuedInput {
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- It reads this Group's Scripts.
+    const scriptOfRun = (id: string) =>
+      this.scripts.find(s => id.startsWith(`${s.name}/r`))?.name ??
+      invalidSave();
+    const failOf = (w: ResumeRecord<Value>): HostScriptError | null =>
+      w.k === 'failed'
+        ? new HostScriptError(
+            w.failure.code,
+            w.failure.message ?? '',
+            w.failure.data ?? nothing,
+          )
+        : w.k === 'broken'
+          ? null
+          : invalidSave();
+    switch (x.k) {
+      case 'deliver': {
+        const to: string | ObjectState = x.script
+          ? x.script
+          : (object(x.delivery.target) ?? invalidSave());
+        const s =
+          typeof to === 'string'
+            ? (this.scripts.find(s => s.name === to) ?? invalidSave())
+            : (this.route(to)?.s ?? null);
+        const delivery = deliveryOf(x.delivery, s);
+        if (typeof to !== 'string') {
+          delivery.target = to;
+          delivery.path = { after: false, from: to };
+          delivery.at = null;
+        }
+        const record = delivery.fn
+          ? 'call-value'
+          : delivery.ballot
+            ? 'decide'
+            : x.delivery.request
+              ? 'request'
+              : 'deliver';
+        const toText =
+          typeof to === 'string' ? to : traceValue(to.handle.value);
+        return {
+          line: this.deliveryLine(
+            record,
+            delivery.id,
+            toText,
+            {
+              name: delivery.message,
+              args: delivery.args,
+              ...(Object.keys(delivery.limits).length
+                ? { limits: delivery.limits }
+                : {}),
+            },
+            delivery.fn,
+          ),
+          action: { k: 'delivery', to, state: s, delivery },
+        };
+      }
+      case 'settle': {
+        if (x.with.k === 'answer') {
+          const { value, fuel } = x.with;
+          return {
+            line: recordLine(
+              'answer',
+              [x.id],
+              [
+                ['value', traceValue(value)],
+                ['fuel', fuel ? String(fuel) : null],
+              ],
+              true,
+            ),
+            action: { k: 'answer', id: x.id, value, fuel },
+          };
+        }
+        const error = failOf(x.with);
+        const detail = x.with.k === 'broken' ? x.with.detail : undefined;
+        return {
+          line: recordLine(
+            'fail',
+            [x.id],
+            [['error', traceValue(failMap(error))]],
+            true,
+          ),
+          action: {
+            k: 'fail',
+            id: x.id,
+            error,
+            ...(detail === undefined ? {} : { detail }),
+          },
+        };
+      }
+      case 'settlement': {
+        const settlement: Settlement =
+          x.how === 0
+            ? { answer: x.with.k === 'answer' ? x.with.value : invalidSave() }
+            : x.how === 1
+              ? { fail: failOf(x.with) ?? invalidSave() }
+              : x.how === 2
+                ? { reissue: true }
+                : { adopt: true };
+        return {
+          line: settleLine(x.id, settlement),
+          action: { k: 'settle', id: x.id, settlement },
+        };
+      }
+      case 'set parent': {
+        const child = object(x.object) ?? invalidSave();
+        const up = object(x.parent);
+        return {
+          line: recordLine(
+            'set-parent',
+            [],
+            [
+              ['object', traceValue(child.handle.value)],
+              ['parent', up ? traceValue(up.handle.value) : 'nothing'],
+            ],
+            true,
+          ),
+          action: { k: 'set-parent', child, up },
+        };
+      }
+      case 'dispose': {
+        const state = object(x.object) ?? invalidSave();
+        return {
+          line: recordLine(
+            'dispose',
+            [],
+            [['object', traceValue(state.handle.value)]],
+            true,
+          ),
+          action: { k: 'dispose', state },
+        };
+      }
+      case 'broadcast': {
+        const action: Extract<InputAction, { k: 'broadcast' }> = {
+          k: 'broadcast',
+          id: `b${x.id}`,
+          m: {
+            name: x.message,
+            args: x.args,
+            ...(x.limits
+              ? {
+                  limits: Object.fromEntries(
+                    Object.entries(x.limits).filter(([, v]) => v !== undefined),
+                  ) as LimitOverride,
+                }
+              : {}),
+          },
+          ...(x.decision ? { decision: decisionOf(`b${x.id}`, true) } : {}),
+        };
+        return { action, line: () => this.broadcastLine(action) };
+      }
+      case 'revoke':
+        return {
+          line: recordLine('revoke', [x.script], [['grant', x.grant]], true),
+          action: { k: 'revoke', name: x.script, grant: x.grant },
+        };
+      case 'cancel run':
+        return {
+          urgent: true,
+          line: recordLine('cancel-run', [x.run], [], true),
+          action: { k: 'cancel-run', name: scriptOfRun(x.run), id: x.run },
+        };
+      case 'rewind run':
+        return {
+          urgent: true,
+          line: recordLine('rewind-run', [x.run], [], true),
+          action: { k: 'rewind-run', name: scriptOfRun(x.run), id: x.run },
+        };
+      case 'stop':
+        return {
+          urgent: true,
+          line: recordLine(
+            'stop',
+            [x.script],
+            [['reason', JSON.stringify(x.reason)]],
+            true,
+          ),
+          action: { k: 'stop', name: x.script, reason: x.reason },
+        };
+      case 'cancel delivery':
+      case 'cancel broadcast': {
+        const id =
+          x.k === 'cancel delivery' ? `d${x.delivery}` : `b${x.broadcast}`;
+        return {
+          line: recordLine('cancel-delivery', [id], [], true),
+          action: { k: 'cancel-delivery', id },
+        };
+      }
+    }
+  }
+
+  /**
+   * Tooling: each of a Script's code units by identity, with its named
+   * functions' Declaration Documentation, so a Session Host can keep it
+   * for Function Values that go stale (chapter 9, `script-units`).
+   */
+  scriptUnitDocs(name: string): [string, Map<string, string>][] {
+    const s = this.scripts.find(x => x.name === name);
+    return (s?.loaded.units ?? []).map(u => [
+      u.identity,
+      new Map(
+        u.unit.bodies.flatMap(b =>
+          b.kind === 'function' && b.doc
+            ? [[b.name, b.doc] as [string, string]]
+            : [],
+        ),
+      ),
+    ]);
+  }
+
+  /** The code units restored Runs may name. */
+  private knownCode(): Set<object> {
+    const known = new Set<object>();
+    const work: Code[] = this.scripts.flatMap(s => s.loaded.units);
+    while (work.length) {
+      const code = work.pop()!;
+      if (!known.has(code)) {
+        known.add(code);
+        work.push(...code.libraries.values());
+      }
+    }
+    return known;
+  }
+
+  /** A Library's code a Script imports, by its unit name. */
+  private libraryCode(s: ScriptState, name: string): Code | undefined {
+    for (const code of this.knownCode()) {
+      if ((code as Code).name === name && s.loaded.units.length >= 0) {
+        return code as Code;
+      }
+    }
+    return undefined;
   }
 
   private discardedDecisions: Decision[] = [];
@@ -1512,31 +2543,7 @@ export class TsGroup implements Group {
 
   /** Queued, and accepted only before the restored Group's first Pump. */
   settle(id: string, settlement: Settlement): Call<unknown> | undefined {
-    const line = recordLine(
-      'settle',
-      [id],
-      [
-        [
-          'how',
-          'answer' in settlement
-            ? 'answer'
-            : 'fail' in settlement
-              ? 'fail'
-              : 'reissue' in settlement
-                ? 'reissue'
-                : 'adopt',
-        ],
-        [
-          'value',
-          'answer' in settlement ? traceValue(settlement.answer) : null,
-        ],
-        [
-          'error',
-          'fail' in settlement ? traceValue(failMap(settlement.fail)) : null,
-        ],
-      ],
-      true,
-    );
+    const line = settleLine(id, settlement);
     const pending = this.pendingCall(id);
     if (!this.restored || !this.unsettled.has(id) || !pending) {
       this.recordRefusal(line, 'unknown call');
@@ -2770,6 +3777,9 @@ export class TsGroup implements Group {
     }
     const added = extension.variables.slice(s.loaded.variables.length);
     for (const r of this.runsOf(s)) {
+      if (!baseLengths.has(r.run.segmentBase)) {
+        baseLengths.set(r.run.segmentBase, r.run.segmentBase.length);
+      }
       r.run.segmentBase.push(...added);
     }
     s.loaded.attach(extension);
@@ -2968,6 +3978,20 @@ export class TsGroup implements Group {
     const group = this;
     return {
       ...(delivery ? { delivery } : {}),
+      issue: id => {
+        const dot = id.lastIndexOf('.c');
+        const runId = id.slice(0, dot);
+        const n = Number(id.slice(dot + 2));
+        const ranges = this.issued.get(runId) ?? [];
+        const last = ranges.at(-1);
+        if (last && last[1] + 1 === n) {
+          last[1] = n;
+        } else {
+          ranges.push([n, n]);
+        }
+        this.issued.set(runId, ranges);
+      },
+      waitOrder: () => ++this.waitOrder,
       drawRandom: n => this.drawRandom(n),
       holdsObject: v => this.holdsObject(v),
       crossing: () => {
@@ -3156,6 +4180,14 @@ export class TsGroup implements Group {
   // A suspended Run made ready: it joins the back of its Script's queue.
   private ready(s: ScriptState, running: Running, r: Resumption) {
     s.suspended.delete(running);
+    const last = lastWaits.get(running);
+    if (last?.waiting) {
+      lastWaits.set(running, {
+        ...last,
+        waited: last.waiting,
+        waiting: undefined,
+      });
+    }
     running.run.wake(r);
     running.resuming = true;
     s.queue.push(running);
@@ -3199,7 +4231,85 @@ export class TsGroup implements Group {
   // A Run that suspended: wait on its timer, its answer or its reply.
   private suspended(s: ScriptState, running: Running, sus: Suspension) {
     s.suspended.add(running);
+    markRest(running, running.run);
     const now = this.lastClock!;
+    const deadline = this.suspendedWait(s, running, sus, now);
+    this.markWait(running, sus, now);
+    return deadline;
+  }
+
+  /**
+   * What a save keeps of a Run's wait: its order among waits, its Suspension
+   * Point and, once the wait settles, what it waited on.
+   */
+  private markWait(running: Running, sus: Suspension, now: bigint) {
+    const last = lastWaits.get(running);
+    const suspendedAt =
+      sus.k === 'wait-for' && sus.any ? 'wait-for-any' : suspendReasons[sus.k];
+    const block = sus.deadline;
+    if (sus.k === 'join') {
+      // Only a Timeout Block's deadline makes a Join's own wait.
+      if (block) {
+        waitOrders.set(running, ++this.waitOrder);
+      }
+      lastWaits.set(running, {
+        ...last,
+        suspendedAt,
+        waiting: block
+          ? {
+              id: '',
+              block: true,
+              grant: '',
+              operation: '',
+              declared: false,
+              after: microsOf(block.after),
+            }
+          : undefined,
+      });
+      return;
+    }
+    waitOrders.set(running, ++this.waitOrder);
+    const own =
+      sus.k === 'ask'
+        ? BigInt(sus.ms) * 1000n
+        : sus.k === 'send' || sus.k === 'call-value'
+          ? BigInt(running.run.limits.maxWaitMs) * 1000n
+          : null;
+    const bounded =
+      !!block &&
+      (sus.k === 'wait'
+        ? block.at <= now + sus.us
+        : sus.k === 'wait-for'
+          ? true
+          : own !== null && block.at <= now + own);
+    const [grant, operation] =
+      sus.k === 'ask' ? sus.call.opName.split('.') : ['', ''];
+    lastWaits.set(running, {
+      ...last,
+      suspendedAt,
+      waiting: {
+        id:
+          sus.k === 'ask'
+            ? sus.call.id
+            : sus.k === 'send' || sus.k === 'call-value'
+              ? sus.id
+              : '',
+        block: bounded,
+        ...(sus.k === 'ask' ? { call: sus.call } : {}),
+        grant: grant!,
+        operation: operation!,
+        declared: sus.k === 'ask',
+        after: bounded ? microsOf(block!.after) : (own ?? 0n),
+      },
+    });
+  }
+
+  private suspendedWait(
+    s: ScriptState,
+    running: Running,
+    sus: Suspension,
+    now: bigint,
+  ) {
     // A Timeout Block's deadline wins over the wait's own when it is no
     // later, and then is the wait's only timer (ADR 0073).
     const block = sus.deadline;
@@ -3434,6 +4544,7 @@ export class TsGroup implements Group {
     decision.ballots.push(ballot);
     const delivery = this.queueDelivery('decide', to, m, null, ballot);
     decision.id = delivery.id!;
+    ballot.delivery = delivery.id!;
     this.watchCancellation(delivery, o?.signal);
     return { id: decision.id, decided };
   }
@@ -3538,12 +4649,16 @@ export class TsGroup implements Group {
         if (ballot) {
           decision!.ballots.push(ballot);
         }
+        const deliveryId = `d${++this.deliveries}`;
+        if (ballot) {
+          ballot.delivery = deliveryId;
+        }
         return {
           s,
           delivery: {
             ballot,
             broadcast: id,
-            id: `d${++this.deliveries}`,
+            id: deliveryId,
             from: null,
             at: s.owner,
             target: null,
@@ -4550,6 +5665,11 @@ export class TsGroup implements Group {
     if (running.parked && !outcome) {
       s.queue.shift();
       s.parked.push(running);
+      markRest(running, running.run);
+      lastWaits.set(running, {
+        ...lastWaits.get(running),
+        suspendedAt: 'park',
+      });
       this.trace?.(
         recordLine(
           'seg',
@@ -4603,6 +5723,7 @@ export class TsGroup implements Group {
       return;
     }
     if (!outcome) {
+      markRest(running, running.run);
       this.trace?.(
         recordLine(
           'preempt',
@@ -4661,7 +5782,7 @@ export class TsGroup implements Group {
   // The Host-side report of a `host error`, beside its `call-failed` record.
   private callFailed(
     script: string,
-    rec: Extract<RunRecord, { kind: 'call-failed' }>,
+    rec: Extract<MachineRunRecord, { kind: 'call-failed' }>,
   ): Report {
     const dot = rec.op.indexOf('.');
     const grant = rec.op.slice(0, dot);
@@ -5336,6 +6457,144 @@ const location = (at: CodePosition): Location => ({
   pc: at.pc,
 });
 // A `Fail` as the Trace's `fail` line writes it: `{}` for what isn't a Script error.
+/** A restored Request's future, which the old Group's Host held. */
+const detachedRequest: NonNullable<Delivery['request']> = {
+  resolve: () => {},
+  reject: () => {},
+};
+
+/** A `settle` Host input's Trace line. */
+const settleLine = (id: string, settlement: Settlement) =>
+  recordLine(
+    'settle',
+    [id],
+    [
+      [
+        'how',
+        'answer' in settlement
+          ? 'answer'
+          : 'fail' in settlement
+            ? 'fail'
+            : 'reissue' in settlement
+              ? 'reissue'
+              : 'adopt',
+      ],
+      ['value', 'answer' in settlement ? traceValue(settlement.answer) : null],
+      [
+        'error',
+        'fail' in settlement ? traceValue(failMap(settlement.fail)) : null,
+      ],
+    ],
+    true,
+  );
+
+/** A Script's or Run's limits, in `limits.toml` order. */
+const limitsOf = (values: readonly number[]): Limits => {
+  if (values.length !== limitNames.length) {
+    invalidSave();
+  }
+  return Object.fromEntries(
+    limitNames.map((name, i) => [name, values[i]!]),
+  ) as Limits;
+};
+
+/**
+ * A Run a restore only discards: its costs, its Delivery and what it waits
+ * on, so its calls are abandoned, without its code positions.
+ */
+/** Runs a restore built only to discard. */
+const skimmed = new WeakSet<Running>();
+
+const skimRun = (
+  rec: RunRecord<Value>,
+  s: ScriptState,
+  delivery: Delivery,
+  callId: (i: number) => string,
+): Running => {
+  const run = new Run(
+    s.loaded,
+    s.loaded.unit.bodies[0]!,
+    [],
+    limitsOf(rec.limits),
+  );
+  const r = runInternals(run);
+  run.id = rec.id;
+  r.frames = [];
+  r.fuel = rec.fuel;
+  r.alloc = rec.alloc;
+  r.calls = rec.calls;
+  r.segmentBase = [...(rec.segmentBase ?? s.loaded.variables)];
+  r.cancellationAbandons = [...rec.abandoned];
+  const w = rec.waiting;
+  if (w?.call !== undefined) {
+    r.suspended = {
+      k: 'ask',
+      call: {
+        id: callId(w.call),
+        opName: `${w.grant}.${w.operation}`,
+      } as CallContext,
+      abort: new AbortController(),
+      ms: 0,
+    };
+  } else if (w?.id) {
+    r.suspended = { k: 'send', id: w.id, to: '', message: '', args: [] };
+  } else if (w) {
+    r.suspended = { k: 'wait', us: 0n };
+  }
+  if (rec.join) {
+    const members = rec.join.members.map((m): Member => ({
+      id: m.waited.id,
+      call: null,
+      abort: m.waited.call === undefined ? null : new AbortController(),
+      ms: 0,
+      at: 0n,
+      site: { frame: undefined as unknown as Frame, pc: m.start },
+      ...(m.with.k === 'answer' || m.with.k === 'reply'
+        ? { answer: m.with.value }
+        : {}),
+    }));
+    r.join = {
+      frame: undefined as unknown as Frame,
+      members,
+      start: rec.join.start,
+    };
+    if (!w && rec.suspendedAt === 'join-end' && !rec.continuing) {
+      r.suspended = { k: 'join', members };
+    }
+  }
+  return {
+    id: rec.id,
+    delivery,
+    run,
+    resuming: rec.resumeWith.k !== 'none',
+    ...(rec.parked ? { parked: true } : {}),
+  };
+};
+
+/** The calls and replies a saved Run waits on, as a variables-only restore abandons them. */
+const awaitedCallIds = (
+  rec: RunRecord<Value>,
+  calls: readonly { id: string }[],
+): string[] => {
+  const ids: string[] = [];
+  const w = rec.waiting;
+  if (w) {
+    if (w.call !== undefined) {
+      ids.push(calls[w.call]!.id);
+    } else if (w.id) {
+      ids.push(w.id);
+    }
+  }
+  if (rec.join && rec.suspendedAt === 'join-end' && !rec.continuing) {
+    for (const m of rec.join.members) {
+      if (m.pending) {
+        ids.push(m.waited.id);
+      }
+    }
+  }
+  return ids;
+};
+
 const failMap = (error: HostScriptError | null): Value =>
   error
     ? map([

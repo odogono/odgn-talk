@@ -42,7 +42,10 @@ export const propertyNames = (value: Value): string[] =>
 const cost = (c?: { alloc?: number; fuel: number }) =>
   declarationValue({ fuel: c?.fuel ?? 0, alloc: c?.alloc ?? 0 });
 
-export const valueRows = (value: Value): string[] => {
+export const valueRows = (
+  value: Value,
+  unitDocs?: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): string[] => {
   const out = [
     `value ${map([
       ['kind', text(value.kind)],
@@ -86,7 +89,7 @@ export const valueRows = (value: Value): string[] => {
         ],
         ['home', text(fn.home)],
       ])}`,
-      `doc ${text(functionDoc(value) ?? '')}`,
+      `doc ${text(functionDoc(value, unitDocs) ?? '')}`,
     );
   }
   if (value.kind === 'object') {

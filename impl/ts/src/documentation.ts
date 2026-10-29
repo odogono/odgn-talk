@@ -104,9 +104,21 @@ export const leadingDoc = (entry: SyntaxNode): EntryDoc => {
  * for any other value. A Lambda's is empty, and a stale Function Value keeps
  * its code's documentation, through save and restore too.
  */
-export const functionDoc = (value: Value): string | null => {
+export const functionDoc = (
+  value: Value,
+  retained?: ReadonlyMap<string, ReadonlyMap<string, string>>,
+): string | null => {
   const fn = value.asFunction();
-  return fn ? codeDoc(fn.code) : null;
+  if (!fn) {
+    return null;
+  }
+  const doc = codeDoc(fn.code);
+  // A stale value restored from a save names its unit; a Session Host
+  // keeps that unit's documentation.
+  const stale = fn.code as { head?: { name: string | null }; unit?: string };
+  return doc || !stale.unit || !stale.head?.name
+    ? doc
+    : (retained?.get(stale.unit)?.get(stale.head.name) ?? '');
 };
 
 // Live code holds its body; a save retains stale code's documentation and head.

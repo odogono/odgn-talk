@@ -1,36 +1,57 @@
-// The TS Core's save format: what a Group's save holds, its versions and
-// checks, and the reference table its graph names objects through. The
-// Group gathers its state and rebuilds from a decoded save; graph mechanics
-// live in snapshot.ts, wait state in waits.ts (ADR 0105).
-import type { ValueOperation } from './capabilities';
+// The TS Core's save: its Group's state as the shared save format's
+// sections (ADR 0144, chapter 10). The Group gathers its state and rebuilds
+// from what a restore reads; a Run's records are save-runs.ts's, wait state
+// waits.ts's (ADR 0105).
 import { HostError } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import type {
   Decision,
+  Delivery,
   InputAction,
-  Pending,
   Running,
   ScriptState,
-  Timer,
-  Waiter,
 } from './group';
 import { identityOf, type Library } from './library';
-import type { Code, Limits } from './machine';
-import { canonicalJSON } from './manifest';
+import type { Code } from './machine';
 import type { ObjectState } from './objects';
 import type { AccountingState } from './run-accounting';
-import { sha256 } from './sha256';
 import {
-  reference,
-  references,
-  restoreGraph,
-  saveFormatVersion,
-  saveGraph,
-  type ChangedCode,
-  type Graph,
-  type References,
-} from './snapshot';
-import { packGraph, unpackGraph, type PackedGraph } from './snapshot-codec';
+  readSave,
+  saveSections,
+  SaveReader,
+  stateFingerprint as headerFingerprint,
+} from './save-format';
+import { RecordReader } from './save-records';
+import { skipValue } from './save-values';
+import { operationsOf } from './manifest';
+import type {
+  DeliveryRecord,
+  FunctionRecord,
+  GroupRecord,
+  Input,
+  LibraryRecord,
+  ObjectRecord,
+  ScriptRecord,
+  ValueIO,
+  Mark,
+  OpenBroadcast,
+  ResumeRecord,
+  Work,
+} from './save-records';
+import {
+  deliveryNumber,
+  deliveryRecord,
+  limitNames,
+  overrideRecord as override,
+  runRecords,
+  type RunPlaces,
+} from './save-runs';
+import {
+  encodeSections,
+  grantRecord,
+  hexBytes,
+  ValueWriter,
+} from './save-state';
 import type { Value } from './values';
 import type { Waits } from './waits';
 
@@ -38,487 +59,493 @@ import type { Waits } from './waits';
 export type GroupSnapshot = {
   accounting: AccountingState;
   broadcasts: number;
+  /** The roots whose work changed since the last accounting tail. */
+  changedRoots: readonly number[];
   deliveries: number;
   discardedDecisions: Decision[];
   fingerprint: Uint8Array;
-  id: string;
   inputs: readonly { action: InputAction; line: unknown; urgent?: boolean }[];
+  /** Each Run's issued call numbers, by Run id. */
+  issued: ReadonlyMap<string, readonly (readonly [number, number])[]>;
   lastClock: bigint | null;
   libraries: ReadonlyMap<string, Library>;
   name: string;
   objects: ReadonlyMap<string, ObjectState>;
   randomState: bigint;
-  references: References;
+  /** Each root's discarded messages, for the Group's lifetime. */
+  rootDiscards: ReadonlyMap<number, number>;
+  saves: number;
   scripts: readonly ScriptState[];
   sources: 'embedded' | 'external';
+  /** How many waits have been set: the next wait's order. */
+  waitOrder: number;
   waits: Waits<Running, ScriptState>;
 };
 
 /** A Group's save bytes. */
 export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
-  const payload = wireOf(savedGroup(g));
-  return new TextEncoder().encode(
-    JSON.stringify({ hash: sha256(JSON.stringify(payload)), payload }),
+  const objectIndex = new Map<ObjectState, number>();
+  for (const o of g.objects.values()) {
+    objectIndex.set(o, objectIndex.size);
+  }
+  const libraryCodes = new Map<Code, number>();
+  const libraryList = [...g.libraries.values()];
+  const scriptUnits = new Map(g.scripts.map(s => [s.name, s.loaded.units]));
+  const places: RunPlaces = {
+    scriptUnits: name => scriptUnits.get(name),
+    library: code => {
+      if (!libraryCodes.size) {
+        for (const s of g.scripts) {
+          for (const unit of s.loaded.units) {
+            collectLibraries(unit, libraryList, libraryCodes);
+          }
+        }
+      }
+      return libraryCodes.get(code);
+    },
+    object: o => (o ? objectIndex.get(o) : undefined),
+  };
+  const values = new ValueWriter(objectIndex, places);
+  const ref = (o: ObjectState | null | undefined) =>
+    o ? objectIndex.get(o) : undefined;
+  const runs = runRecords(g, places);
+  const delivery = (d: Delivery): DeliveryRecord<Value> =>
+    deliveryRecord(d, ref);
+  return encodeSections(
+    {
+      language: languageVersion,
+      costModel: costModel.version,
+      groupFingerprint: g.fingerprint,
+      saveIdCounter: g.saves,
+    },
+    values,
+    {
+      group: w =>
+        w.group({
+          name: g.name,
+          clock: clockOf(g.lastClock ?? 0n),
+          deliveries: g.deliveries,
+          broadcasts: g.broadcasts,
+          timers: g.waitOrder,
+          runOrder: g.accounting.next,
+          chargeCounter: 0,
+          randomState: g.randomState,
+          issued: [...g.issued]
+            .sort(([a], [b]) => compareBytes(a, b))
+            .map(([run, ranges]) => ({
+              run,
+              ranges: ranges.map(([first, last]) => ({
+                first,
+                last,
+                eligible: false,
+              })),
+            })),
+        }),
+      libraries: w =>
+        w.libraries(
+          libraryList.map(l => ({
+            name: l.name,
+            version: l.version,
+            identity: l.identity,
+          })),
+        ),
+      objects: w =>
+        w.objects(
+          [...g.objects.values()].map(o => ({
+            kind: o.handle.kind.name,
+            id: o.handle.id,
+            parent: ref(o.parent),
+            disposed: o.disposed,
+            ownerOf:
+              o.owner !== null &&
+              g.scripts.some(s => s.name === o.owner && s.owner === o)
+                ? o.owner
+                : undefined,
+          })),
+        ),
+      calls: w => w.calls(runs.calls),
+      scripts: w =>
+        w.scripts(
+          g.scripts.map(s => ({
+            name: s.name,
+            identity: hexBytes(s.units[0]!.identity),
+            extensions: s.units.slice(1).map(u => hexBytes(u.identity)),
+            limits: limitNames.map(n => s.limits[n]),
+            grants: [...s.grants].map(([name, grant]) =>
+              grantRecord(
+                name,
+                grant,
+                s.revoked.has(name),
+                s.disabled.has(name),
+              ),
+            ),
+            owner: ref(s.owner),
+            objects: Object.entries(s.objects).map(([name, o]) => ({
+              name,
+              object: ref(o.value.asObjectRef()!.handle as ObjectState),
+            })),
+            variableNames: s.loaded.variableNames,
+            variables: s.loaded.variables,
+            definitions: s.loaded.units.flatMap(u => u.definitions),
+            runs: s.runs,
+            fuelTotal: s.fuelTotal,
+            allocTotal: s.allocTotal,
+            faults: s.faults,
+            debt: s.debt,
+            stopped: s.stopped ? (s.stopReason ?? '') : undefined,
+          })),
+        ),
+      runs: w => w.runs(runs.perScript, runs.runs),
+      work: w =>
+        w.work(
+          g.scripts.map(s =>
+            s.queue.map((item): Work<Value> =>
+              'run' in item
+                ? { k: 'run', run: runs.index.get(item)! }
+                : { k: 'message', delivery: delivery(item) },
+            ),
+          ),
+        ),
+      waits: w => w.waits(runs.waits),
+      inputs: w =>
+        w.inputs(g.inputs.map(x => inputRecord(x.action, delivery, ref))),
+      decisions: w => w.decisions(decisionRecords(g)),
+      accounting: w => {
+        w.accounting(
+          [...g.rootDiscards]
+            .sort(([a], [b]) => a - b)
+            .map(([root, discarded]) => ({ root, discarded })),
+          g.changedRoots,
+        );
+      },
+      ...(g.sources === 'embedded'
+        ? {
+            sources: w =>
+              w.sources(
+                g.scripts.map(s => ({
+                  source: s.units[0]!.source,
+                  extensions: s.units.slice(1).map(u => u.source),
+                })),
+              ),
+          }
+        : {}),
+    },
   );
+};
+
+const compareBytes = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+const clockOf = (us: bigint) => {
+  let seconds = us / 1_000_000n;
+  let micros = us % 1_000_000n;
+  if (micros < 0n) {
+    micros += 1_000_000n;
+    seconds -= 1n;
+  }
+  return { seconds, micros: Number(micros) };
+};
+
+const collectLibraries = (
+  unit: Code,
+  libraries: readonly Library[],
+  out: Map<Code, number>,
+) => {
+  for (const [name, code] of unit.libraries) {
+    if (out.has(code) || code.stdlib) {
+      continue;
+    }
+    const at = libraries.findIndex(l => l.name === name);
+    if (at >= 0) {
+      out.set(code, at);
+    }
+    collectLibraries(code, libraries, out);
+  }
+};
+
+const resumeOfSettlement = (action: InputAction): ResumeRecord<Value> => {
+  switch (action.k) {
+    case 'answer':
+      return { k: 'answer', value: action.value, fuel: action.fuel };
+    case 'fail':
+      return action.error
+        ? {
+            k: 'failed',
+            failure: {
+              code: action.error.code,
+              message: action.error.message || undefined,
+              data:
+                action.error.data === undefined
+                  ? undefined
+                  : (action.error.data as Value),
+            },
+          }
+        : { k: 'broken', detail: action.detail };
+    default:
+      return { k: 'none' };
+  }
+};
+
+const inputRecord = (
+  action: InputAction,
+  delivery: (d: Delivery) => DeliveryRecord<Value>,
+  ref: (o: ObjectState | null | undefined) => number | undefined,
+): Input<Value> => {
+  switch (action.k) {
+    case 'answer':
+    case 'fail':
+      return { k: 'settle', id: action.id, with: resumeOfSettlement(action) };
+    case 'settle': {
+      const s = action.settlement;
+      return 'answer' in s
+        ? {
+            k: 'settlement',
+            id: action.id,
+            how: 0,
+            with: { k: 'answer', value: s.answer, fuel: 0 },
+          }
+        : 'fail' in s
+          ? {
+              k: 'settlement',
+              id: action.id,
+              how: 1,
+              with: resumeOfSettlement({
+                k: 'fail',
+                id: action.id,
+                error: s.fail,
+              }),
+            }
+          : {
+              k: 'settlement',
+              id: action.id,
+              how: 'reissue' in s ? 2 : 3,
+              with: { k: 'none' },
+            };
+    }
+    case 'delivery':
+      return {
+        k: 'deliver',
+        script: typeof action.to === 'string' ? action.to : '',
+        delivery: delivery(action.delivery),
+      };
+    case 'set-parent':
+      return {
+        k: 'set parent',
+        object: ref(action.child),
+        parent: ref(action.up),
+      };
+    case 'dispose':
+      return { k: 'dispose', object: ref(action.state) };
+    case 'broadcast':
+      return {
+        k: 'broadcast',
+        id: deliveryNumber(action.id),
+        message: action.m.name,
+        args: action.m.args ?? [],
+        decision: !!action.decision,
+        limits: override(action.m.limits ?? {}),
+      };
+    case 'revoke':
+      return { k: 'revoke', script: action.name, grant: action.grant };
+    case 'cancel-run':
+      return { k: 'cancel run', run: action.id };
+    case 'rewind-run':
+      return { k: 'rewind run', run: action.id };
+    case 'stop':
+      return { k: 'stop', script: action.name, reason: action.reason };
+    case 'cancel-delivery':
+      return action.id.startsWith('b')
+        ? { k: 'cancel broadcast', broadcast: deliveryNumber(action.id) }
+        : { k: 'cancel delivery', delivery: deliveryNumber(action.id) };
+    case 'refusal':
+      throw new Error('A save never holds a queued refusal');
+  }
+};
+
+const markOf = (
+  r: NonNullable<Decision['ballots'][number]['result']>,
+): Mark<Value> =>
+  r.veto
+    ? {
+        script: r.veto.script,
+        run: r.veto.run,
+        reason: r.veto.reason,
+        outcome: 'vetoed',
+      }
+    : {
+        script: r.undecided!.script,
+        run: r.undecided!.run ?? '',
+        reason: undefined,
+        outcome: r.undecided!.outcome,
+      };
+
+const decisionRecords = (g: GroupSnapshot) => {
+  const open = new Map<string, Decision>();
+  const visit = (d: Delivery | undefined) => {
+    const decision = d?.ballot?.decision;
+    if (decision?.broadcast && !decision.settled) {
+      open.set(decision.id, decision);
+    }
+  };
+  for (const s of g.scripts) {
+    for (const item of s.queue) {
+      visit('run' in item ? item.delivery : item);
+    }
+    for (const r of [...s.suspended, ...s.parked]) {
+      visit(r.delivery);
+    }
+  }
+  for (const x of g.inputs) {
+    if (x.action.k === 'delivery') {
+      visit(x.action.delivery);
+    }
+  }
+  const records: OpenBroadcast<Value>[] = [...open.values()]
+    .sort((a, b) => deliveryNumber(a.id) - deliveryNumber(b.id))
+    .map(d => ({
+      id: deliveryNumber(d.id),
+      parts: d.ballots.map(b => ({
+        delivery: deliveryNumber(b.delivery),
+        part: !b.result
+          ? { k: 'none' }
+          : b.result.veto
+            ? { k: 'vetoed', mark: markOf(b.result) }
+            : b.result.undecided
+              ? { k: 'undecided', mark: markOf(b.result) }
+              : { k: 'allowed' },
+      })),
+    }));
+  const deferred = g.discardedDecisions.flatMap(d =>
+    d.ballots.map(b => ({
+      id: deliveryNumber(b.delivery ?? (d.broadcast ? undefined : d.id)),
+      broadcast: d.broadcast ? deliveryNumber(d.id) : 0,
+      mark: b.result ? markOf(b.result) : undefined,
+    })),
+  );
+  return { open: records, deferred };
 };
 
 /**
- * A Group's State Fingerprint: its save's payload without the Trace save id,
- * the source mode or the sources, as code counts by identity (ADR 0142).
+ * A Group's State Fingerprint: its save's, without the source mode or the
+ * Trace save id counter (ADR 0142).
  */
-export const stateFingerprint = (g: Omit<GroupSnapshot, 'id' | 'sources'>) =>
-  fingerprintOf(wireOf(savedGroup({ ...g, id: '', sources: 'external' })));
+export const stateFingerprint = (g: Omit<GroupSnapshot, 'sources'>) =>
+  headerFingerprint(encodeGroup({ ...g, sources: 'external' }));
 
 /** A save's State Fingerprint, without restoring it. */
-export const saveStateFingerprint = (bytes: Uint8Array): Uint8Array => {
-  const payload = readPayload(bytes);
-  if (
-    payload.family !== 'odgn-talk-ts' ||
-    payload.format !== saveFormatVersion
-  ) {
-    throw new HostError('save mismatch');
-  }
-  // Rejects the bytes a restore can't read.
-  decodeGroup(bytes);
-  return fingerprintOf(payload);
-};
+export const saveStateFingerprint = (bytes: Uint8Array): Uint8Array =>
+  readSave(bytes).stateFingerprint;
 
-const fingerprintOf = (payload: SavedWire): Uint8Array => {
-  const { id: _id, sourceMode: _mode, scripts, ...rest } = payload;
-  const hex = sha256(
-    JSON.stringify({
-      ...rest,
-      scripts: scripts.map(({ sources: _sources, ...script }) => script),
-    }),
-  );
-  return Uint8Array.from(hex.match(/../g)!, byte => Number.parseInt(byte, 16));
-};
-
-const savedGroup = (g: GroupSnapshot): SavedGroup => {
-  const { timers, pending, timerSeq } = g.waits.exportState();
-  const state = {
-    scripts: g.scripts.map(s => ({
-      name: s.name,
-      variables: s.loaded.variables,
-      variableNames: s.loaded.variableNames,
-      definitions: s.loaded.units.map(unit => unit.definitions),
-      live: s.loaded.live,
-      debt: s.debt,
-      incoming: s.incoming,
-      parked: s.parked,
-      queue: s.queue,
-      runs: s.runs,
-      fuelTotal: s.fuelTotal,
-      allocTotal: s.allocTotal,
-      faults: s.faults,
-      stopped: s.stopped,
-      stopReason: s.stopReason,
-      suspended: s.suspended,
-      waiters: g.waits.waitersOf(s),
-      revoked: s.revoked,
-      disabled: s.disabled,
-    })),
-    accounting: g.accounting,
-    inputs: g.inputs.map(input => ({
-      action: input.action,
-      urgent: input.urgent,
-      line: typeof input.line === 'string' ? input.line : undefined,
-    })),
-    timers,
-    pending,
-    deliveries: g.deliveries,
-    broadcasts: g.broadcasts,
-    timerSeq,
-    lastClock: g.lastClock,
-    randomState: g.randomState,
-    discardedDecisions: g.discardedDecisions,
-  };
-  return {
-    family: 'odgn-talk-ts',
-    format: saveFormatVersion,
-    language: languageVersion,
-    costModel: costModel.version,
-    fingerprint: hexOf(g.fingerprint),
-    name: g.name,
-    id: g.id,
-    sourceMode: g.sources,
-    libraries: [...g.libraries.values()].map(l => [l.name, identityOf(l)]),
-    objects: [...g.objects].map(([key, o]) => ({
-      key,
-      kind: o.handle.kind.name,
-      id: o.handle.id,
-      disposed: o.disposed,
-      owner: o.owner,
-      parent: o.parent
-        ? `${o.parent.handle.kind.name}\u0000${o.parent.handle.id}`
-        : null,
-    })),
-    scripts: g.scripts.map(s => ({
-      name: s.name,
-      identities: s.units.map(unit => unit.identity),
-      ...(g.sources === 'external'
-        ? {}
-        : { sources: s.units.map(unit => unit.source) }),
-      limits: s.limits,
-      grants: [...s.grants].map(([name, grant]) => ({
-        name,
-        capability: grant.capability.name,
-        operations: [...grant.ops].sort(compareNames).map(name => ({
-          name,
-          declaration: savedOperation(grant.capability.operations.get(name)!),
-        })),
-      })),
-      objects: Object.entries(s.objects).map(([name, o]) => [
-        name,
-        `${o.kind.name}\u0000${o.id}`,
-      ]),
-      owner: s.owner
-        ? `${s.owner.handle.kind.name}\u0000${s.owner.handle.id}`
-        : null,
-    })),
-    graph: saveGraph(state, g.references),
-  };
-};
-
-export const snapshotReferences = (
-  functionGroup: object,
-  scripts: readonly ScriptState[],
-  objects: ReadonlyMap<string, ObjectState>,
-): References => {
-  const refs = references();
-  reference(refs, 'function-group', functionGroup);
-  const code = (key: string, unit: Code) => {
-    if (refs.byObject.has(unit)) {
-      return;
-    }
-    reference(refs, key, unit);
-    unit.unit.bodies.forEach((body, i) =>
-      reference(refs, `${key}/body/${i}`, body),
-    );
-    unit.unit.unwind.forEach((entry, i) =>
-      reference(refs, `${key}/unwind/${i}`, entry),
-    );
-    for (const [name, imported] of unit.libraries) {
-      code(`library/${name}`, imported);
-    }
-  };
-  for (const s of scripts) {
-    reference(refs, `script/${s.name}`, s);
-    s.loaded.units.forEach((unit, i) => code(`code/${s.name}/${i}`, unit));
-    for (const [name, grant] of s.grants) {
-      for (const op of grant.ops) {
-        reference(
-          refs,
-          `operation/${s.name}/${name}/${op}`,
-          grant.capability.operations.get(op)!,
-        );
-      }
-    }
-  }
-  for (const [key, object] of objects) {
-    reference(refs, `object/${key}`, object);
-  }
-  return refs;
-};
-
-/** Whether a save comes from other format, language or Cost Model versions. */
-export const versionMismatch = (saved: SavedGroup): boolean =>
-  saved.format !== saveFormatVersion ||
-  saved.language !== languageVersion ||
-  saved.costModel !== costModel.version;
-
-/** Whether a save comes from other Libraries than these. */
-export const libraryMismatch = (
-  saved: SavedGroup,
-  libraries: ReadonlyMap<string, Library>,
-): boolean =>
-  saved.libraries.some(
-    ([name, identity]) =>
-      !libraries.has(name) || identityOf(libraries.get(name)!) !== identity,
-  );
-
-/** A save's state graph, its references resolved and its accounting checked. */
-export const restoreState = (
-  saved: SavedGroup,
-  refs: References,
-  changed: ChangedCode,
-): SavedState => {
-  const state = restoreGraph(saved.graph, refs, changed) as SavedState;
-  validateSavedAccounting(state);
-  return state;
-};
-
-type SavedGrant = {
-  capability: string;
-  name: string;
-  operations: { declaration: ValueOperation<unknown>; name: string }[];
-};
-export type SavedGroup = {
-  costModel: number;
-  family: string;
-  fingerprint: string;
-  format: number;
-  graph: Graph;
-  id: string;
-  language: string;
-  libraries: [string, string][];
-  name: string;
-  objects: {
-    disposed: boolean;
-    id: string;
-    key: string;
-    kind: string;
-    owner: string | null;
-    parent: string | null;
-  }[];
-  scripts: {
-    grants: SavedGrant[];
-    identities: string[];
-    limits: Limits;
-    name: string;
-    objects: [string, string][];
-    owner: string | null;
-    sources?: string[];
-  }[];
-  sourceMode: 'embedded' | 'external';
-};
-export type SavedScriptState = Pick<
-  ScriptState,
-  | 'name'
-  | 'fuelTotal'
-  | 'allocTotal'
-  | 'faults'
-  | 'debt'
-  | 'incoming'
-  | 'parked'
-  | 'queue'
-  | 'runs'
-  | 'stopped'
-  | 'stopReason'
-  | 'suspended'
-  | 'revoked'
-  | 'disabled'
-> & {
-  definitions: Value[][];
-  live: boolean;
-  variableNames: string[];
-  variables: Value[];
-  waiters: Waiter[];
-};
-export type SavedState = {
-  accounting: AccountingState;
-  broadcasts: number;
-  deliveries: number;
-  discardedDecisions: Decision[];
-  inputs: { action: InputAction; line?: string; urgent?: boolean }[];
-  lastClock: bigint | null;
-  pending: Map<string, Pending>;
-  randomState: bigint;
-  scripts: SavedScriptState[];
-  timers: Timer[];
-  timerSeq: number;
-};
-const invalidAccounting = (): never => {
-  throw new HostError('invalid save', 'Invalid saved Run accounting');
-};
-export const validateSavedAccounting = (state: SavedState) => {
-  const a = state.accounting;
-
-  if (
-    !a ||
-    Object.prototype.toString.call(a.runs) !== '[object Map]' ||
-    Object.prototype.toString.call(a.roots) !== '[object Map]' ||
-    !Number.isSafeInteger(a.next) ||
-    a.next < 0
-  ) {
-    invalidAccounting();
-  }
-  const orders = new Set<number>();
-  let count = 0;
-  for (const s of state.scripts) {
-    for (const r of savedRuns(s)) {
-      count++;
-      const row = a.runs.get(r.id);
-      if (
-        !row ||
-        row.report.run !== r.id ||
-        row.report.script !== s.name ||
-        row.report.state !== 'live' ||
-        row.report.fuel !== r.run.fuel ||
-        !a.roots.has(row.report.rootDelivery) ||
-        !Number.isSafeInteger(row.order) ||
-        row.order <= 0 ||
-        row.order > a.next ||
-        orders.has(row.order)
-      ) {
-        invalidAccounting();
-      }
-      orders.add(row!.order);
-    }
-  }
-  if (count !== a.runs.size) {
-    invalidAccounting();
-  }
-  for (const [id, row] of a.roots) {
-    const n = Number(id.slice(1));
-    if (
-      id !== `d${n}` ||
-      !Number.isSafeInteger(n) ||
-      n <= 0 ||
-      n > state.deliveries ||
-      !row ||
-      !Number.isSafeInteger(row.discarded) ||
-      row.discarded < 0
-    ) {
-      invalidAccounting();
-    }
-  }
-};
 export const compareNames = (a: string, b: string) =>
   a < b ? -1 : a > b ? 1 : 0;
 export const hexOf = (bytes: Uint8Array) =>
   [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
-export const savedRuns = (s: SavedScriptState) =>
-  [
-    ...s.queue.filter((q): q is Running => 'run' in q),
-    ...s.suspended,
-    ...s.parked,
-  ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
-// Callbacks are executable and documentation is manifest-only.
-const unsavedOperationKeys = new Set([
-  'do',
-  'fire',
-  'run',
-  'start',
-  'description',
-  'examples',
-]);
-const savedOperation = (op: ValueOperation<unknown>): ValueOperation<unknown> =>
-  Object.fromEntries(
-    Object.entries(op).filter(([key]) => !unsavedOperationKeys.has(key)),
-  ) as ValueOperation<unknown>;
-type SavedWire = Omit<SavedGroup, 'graph' | 'scripts'> & {
-  declarations: Omit<SavedGrant, 'name'>[];
-  graph: PackedGraph;
-  scripts: (Omit<SavedGroup['scripts'][number], 'grants'> & {
-    grants: { declaration: number; name: string }[];
-  })[];
+
+export { identityOf, saveSections };
+
+/** A save as a restore's first pass reads it: everything but its values. */
+export type DecodedSave = {
+  costModel: number;
+  functions: FunctionRecord[];
+  group: GroupRecord;
+  groupFingerprint: Uint8Array;
+  language: string;
+  libraries: LibraryRecord[];
+  objects: ObjectRecord[];
+  /** A section's reader, for the second pass. */
+  reader(tag: number): SaveReader;
+  saveIdCounter: number;
+  scripts: ScriptRecord<undefined>[];
+  sources: { extensions: string[]; source: string }[] | undefined;
 };
-const wireOf = (saved: SavedGroup): SavedWire => {
-  const declarations: SavedWire['declarations'] = [];
-  const seen = new Map<string, number>();
-  const scripts = saved.scripts.map(script => ({
-    ...script,
-    grants: script.grants.map(({ name, ...declaration }) => {
-      const key = canonicalJSON(declaration);
-      let id = seen.get(key);
-      if (id === undefined) {
-        id = declarations.length;
-        declarations.push(declaration);
-        seen.set(key, id);
+
+const skipping: ValueIO<undefined> = {
+  read: r => {
+    skipValue(r);
+    return undefined;
+  },
+  write: () => {},
+};
+
+/**
+ * Reads a save's frames and the sections a restore needs before it can
+ * load code: the Group's counters, Libraries, objects, functions, Scripts
+ * and sources. Another magic, such as an old JSON save, is `invalid save`.
+ */
+export const decodeSave = (bytes: Uint8Array): DecodedSave => {
+  const save = readSave(bytes);
+  const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
+  const reader = (tag: number) => new SaveReader(save.body(tag)!);
+  const section = <T>(
+    tag: number,
+    read: (r: RecordReader<undefined>) => T,
+  ): T => {
+    const r = new RecordReader(reader(tag), skipping, tables);
+    const out = read(r);
+    r.r.end();
+    return out;
+  };
+  const group = section(saveSections.group, r => r.group());
+  const libraries = section(saveSections.libraries, r => r.libraries());
+  tables.libraries = libraries.length;
+  const objects = section(saveSections.objects, r => r.objects());
+  tables.objects = objects.length;
+  const functions = section(saveSections.functions, r => r.functions());
+  const scripts = section(saveSections.scripts, r => r.scripts());
+  const sources = save.body(saveSections.sources)
+    ? section(saveSections.sources, r => r.sources())
+    : undefined;
+  // Every other section's structure, so a save no Core could have written
+  // fails before any Host callback runs.
+  tables.calls = section(saveSections.calls, r => r.calls()).length;
+  const { perScript, runs } = section(saveSections.runs, r => r.runs());
+  tables.runs = runs.length;
+  const work = section(saveSections.work, r => r.work());
+  section(saveSections.waits, r => r.waits());
+  section(saveSections.inputs, r => r.inputs());
+  section(saveSections.decisions, r => r.decisions());
+  section(saveSections.accounting, r => r.accounting());
+  const names = new Set(scripts.map(s => s.name));
+  if (
+    names.size !== scripts.length ||
+    perScript.length !== scripts.length ||
+    work.length !== scripts.length ||
+    perScript.reduce((a, b) => a + b, 0) !== runs.length
+  ) {
+    invalidSave();
+  }
+  for (const script of scripts) {
+    const grants = new Set(script.grants.map(g => g.name));
+    if (grants.size !== script.grants.length) {
+      invalidSave();
+    }
+    for (const grant of script.grants) {
+      const declared = operationsOf(grant.declarations);
+      if (
+        declared.capability !== grant.capability ||
+        grant.operations.some(op => !declared.operations.has(op.name))
+      ) {
+        invalidSave();
       }
-      return { name, declaration: id };
-    }),
-  }));
+    }
+  }
+  if (sources && sources.length !== scripts.length) {
+    invalidSave();
+  }
   return {
-    ...saved,
-    declarations,
+    language: save.language,
+    costModel: save.costModel,
+    groupFingerprint: save.groupFingerprint,
+    saveIdCounter: save.saveIdCounter,
+    group,
+    libraries,
+    objects,
+    functions,
     scripts,
-    graph: packGraph(saved.graph),
+    sources,
+    reader,
   };
 };
-// A save's payload, its hash checked.
-const readPayload = (bytes: Uint8Array): SavedWire => {
-  try {
-    const outer = JSON.parse(
-      new TextDecoder('utf-8', { fatal: true }).decode(bytes),
-    ) as { hash: string; payload: SavedWire };
-    if (
-      !outer.payload ||
-      typeof outer.payload !== 'object' ||
-      sha256(JSON.stringify(outer.payload)) !== outer.hash
-    ) {
-      throw new Error('Corrupt save');
-    }
-    return outer.payload;
-  } catch {
-    throw new HostError('invalid save');
-  }
-};
-export const decodeGroup = (bytes: Uint8Array): SavedGroup => {
-  const saved = readPayload(bytes);
-  try {
-    if (
-      saved.family !== 'odgn-talk-ts' ||
-      saved.format !== saveFormatVersion ||
-      !/^s[1-9]\d*$/.test(saved.id) ||
-      !Array.isArray(saved.scripts) ||
-      !Array.isArray(saved.objects) ||
-      !Array.isArray(saved.libraries) ||
-      !Array.isArray(saved.declarations) ||
-      !['embedded', 'external'].includes(saved.sourceMode) ||
-      !Array.isArray(saved.graph.nodes)
-    ) {
-      throw new Error('Unreadable save');
-    }
-    const names = new Set<string>();
-    const scripts = saved.scripts.map(script => {
-      if (
-        typeof script.name !== 'string' ||
-        names.has(script.name) ||
-        !Array.isArray(script.identities) ||
-        !script.identities.length ||
-        script.identities.some(
-          id => typeof id !== 'string' || !/^[\da-f]{64}$/.test(id),
-        ) ||
-        (saved.sourceMode === 'embedded' &&
-          (!Array.isArray(script.sources) ||
-            script.sources.length !== script.identities.length ||
-            script.sources.some(s => typeof s !== 'string'))) ||
-        (saved.sourceMode === 'external' && script.sources !== undefined) ||
-        !Array.isArray(script.grants)
-      ) {
-        throw new Error('Invalid saved Script');
-      }
-      names.add(script.name);
-      const grants = new Set<string>();
-      return {
-        ...script,
-        grants: script.grants.map(grant => {
-          if (
-            typeof grant.name !== 'string' ||
-            grants.has(grant.name) ||
-            !Number.isSafeInteger(grant.declaration) ||
-            grant.declaration < 0 ||
-            grant.declaration >= saved.declarations.length
-          ) {
-            throw new Error('Invalid saved Grant');
-          }
-          grants.add(grant.name);
-          return {
-            ...saved.declarations[grant.declaration]!,
-            name: grant.name,
-          };
-        }),
-      };
-    });
-    for (const declaration of saved.declarations) {
-      if (
-        !declaration ||
-        typeof declaration.capability !== 'string' ||
-        !Array.isArray(declaration.operations) ||
-        declaration.operations.some(
-          op =>
-            typeof op.name !== 'string' ||
-            !op.declaration ||
-            typeof op.declaration !== 'object',
-        )
-      ) {
-        throw new Error('Invalid saved declaration');
-      }
-    }
-    return { ...saved, scripts, graph: unpackGraph(saved.graph) };
-  } catch {
-    throw new HostError('invalid save');
-  }
+
+export const invalidSave = (): never => {
+  throw new HostError('invalid save');
 };

@@ -1849,7 +1849,7 @@ export const splice = (
   return makePatternValue(els);
 };
 
-const subjectText = (s: Value) => {
+export const subjectText = (s: Value) => {
   if (s.kind !== 'text') {
     throw wrongKind('text', s);
   }

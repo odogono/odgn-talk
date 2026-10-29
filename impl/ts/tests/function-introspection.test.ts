@@ -1,7 +1,6 @@
-import { packGraph, unpackGraph } from '../src/snapshot-codec';
+import { editSave } from './save-edit';
 import { expect, test } from 'bun:test';
 import { compileLibrary, HostError, newGroup, restore } from '../src/index';
-import { sha256 } from '../src/sha256';
 import { operationalReports } from './operational-reports';
 
 const original = 'function double n, m = 1\n  return n * 2\nend double';
@@ -97,32 +96,18 @@ test('restore rejects malformed stale Function Value metadata', () => {
   group.pump(0n);
   group.script('s')!.reload(`${replacement}\n${variables}`, 'carry variables');
   const bytes = group.save();
-  for (const [field, value] of [
-    ['min', -1],
-    ['max', 0],
-    ['name', 1],
-  ]) {
-    const outer = JSON.parse(new TextDecoder().decode(bytes));
-    const saved = outer.payload;
-    const graph = unpackGraph(saved.graph);
-    const head = graph.nodes.find(
-      node =>
-        node.kind === 'object' &&
-        Array.isArray(node.data) &&
-        node.data.some(([key]) => key === 'min'),
-    )!;
-    (head.data as [string, unknown][]).find(([key]) => key === field)![1] =
-      value;
-    saved.graph = packGraph(graph);
-    outer.hash = sha256(JSON.stringify(saved));
-    expect(() =>
-      restore(new TextEncoder().encode(JSON.stringify(outer)), {
-        name: 'resumed',
-        libraries: [],
-        grants: () => undefined,
-        resolve: () => undefined,
-        onMismatch: 'reject',
-      }),
-    ).toThrow(HostError);
-  }
+  // A stale function's arity: more required parameters than it has.
+  const edited = editSave(bytes, x => {
+    const f = x.functions.find(f => f.body === undefined)!;
+    f.required = f.total + 1;
+  });
+  expect(() =>
+    restore(edited, {
+      name: 'resumed',
+      libraries: [],
+      grants: () => undefined,
+      resolve: () => undefined,
+      onMismatch: 'reject',
+    }),
+  ).toThrow(HostError);
 });

@@ -843,7 +843,7 @@ is = "How many clauses it has tried."
 [[record.field]]
 name = "cleanup from"
 type = "optional uint"
-is = "The frame its cleanup started from, if it is cleaning up."
+is = "Its Fuel when its cancellation cleanup began, if it is cleaning up."
 
 [[record.field]]
 name = "cleanup limited"
@@ -2162,6 +2162,11 @@ is = "The error."
 tag = 3
 name = "broken"
 is = "A failure that wasn't a Script error."
+
+[[union.variant.field]]
+name = "detail"
+type = "optional text"
+is = "The Host-side detail its `call failed` report carries, if the Core keeps it. It is Host-only and outside parity: a Core that keeps none writes none, and a reader may drop it."
 
 [[union.variant]]
 tag = 4

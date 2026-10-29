@@ -1,5 +1,6 @@
 // Synthetic snapshot workloads. Run the same file against a baseline checkout
 // with --baseline, or bundle it for Node to verify runtime-neutral embedding.
+import { readSave } from '../../../impl/ts/src/save-format';
 import { Buffer } from 'node:buffer';
 import { performance } from 'node:perf_hooks';
 import {
@@ -165,11 +166,10 @@ end timer
       : ['embedded', 'external']) as SaveOptions['sources'][]) {
       const saveOptions = { sources: mode };
       const bytes = group.save(saveOptions);
-      const envelope = JSON.parse(new TextDecoder().decode(bytes));
-      const payload =
-        typeof envelope.payload === 'string'
-          ? JSON.parse(envelope.payload)
-          : envelope.payload;
+      // The state the save holds: every required section's body.
+      const state = readSave(bytes)
+        .sections.filter(x => !x.optional)
+        .reduce((sum, x) => sum + x.body.length, 0);
       const restoreOptions = {
         name: 'snapshot-bench',
         libraries: [],
@@ -205,7 +205,7 @@ end timer
         rows: fixture.rows,
         raw: bytes.length,
         base64: Buffer.from(bytes).toString('base64').length,
-        graph: Buffer.byteLength(JSON.stringify(payload.graph)),
+        graph: state,
         saveMs: median(saveTimes),
         restoreMs: median(restoreTimes),
       });
