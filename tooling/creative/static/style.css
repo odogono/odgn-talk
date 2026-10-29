@@ -13,6 +13,7 @@
   --comment: #8a8478;
   --operator: #4a4a4a;
   --error: #b3261e;
+  --paused: #fff3c4;
   color-scheme: light;
   font-family: system-ui, sans-serif;
 }
@@ -454,6 +455,24 @@ button:disabled {
   margin: 0.4rem 0 0.2rem;
   font-size: inherit;
 }
+.variables-stopped {
+  background: var(--paused);
+  margin: 0 -0.5rem 0.4rem;
+  padding: 0.1rem 0.5rem 0.3rem;
+}
+.variables-frame h4 {
+  margin: 0.3rem 0 0.1rem;
+  font-size: inherit;
+}
+.variables-frame h4 button {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.variables-frame h4 button:disabled {
+  cursor: default;
+  text-decoration: none;
+}
 .variables-script ul {
   list-style: none;
   margin: 0 0 0.4rem;
@@ -864,6 +883,27 @@ button:disabled {
 }
 .script-problems.bad {
   color: var(--error);
+}
+
+/* Breakpoints and the line a stopped Run is at (ADR 0147). */
+.cm-breakpoints {
+  width: 1.2em;
+  cursor: pointer;
+}
+.bp {
+  color: var(--error);
+}
+.bp-unverified {
+  opacity: 0.4;
+}
+.cm-paused {
+  background: var(--paused) !important;
+}
+.stopped-note {
+  background: var(--paused);
+  border-bottom: 1px solid var(--line);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
 }
 
 /* Header menus stay above the desk and floating windows. */

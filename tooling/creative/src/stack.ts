@@ -31,7 +31,12 @@ import {
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { importSound, SOUND_ACCEPT } from './sounds';
-import { CodeBrowser } from './scripts';
+import { type CodeSelection } from './code-browser-panel';
+import {
+  CodeBrowser,
+  type SourceBreakpoints,
+  type LoadedSource,
+} from './scripts';
 import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
@@ -186,6 +191,13 @@ export type PlayMode = 'browse' | 'present';
 
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
+  /** The Code Browser's Breakpoints and paused line (ADR 0147). */
+  breakpoints: {
+    all(): SourceBreakpoints[];
+    onChange(listener: () => void): void;
+    setLoaded(loaded: LoadedSource | undefined): void;
+    showStopped(at: { line: number; source: CodeSelection } | undefined): void;
+  };
   editor: StackEditor;
   images: ImageAssets;
   onRedraw(listener: () => void): void;
@@ -1078,6 +1090,12 @@ export const mountStack = (
     untracked(drawNow);
   });
   return {
+    breakpoints: {
+      all: () => scripts.breakpoints(),
+      onChange: listener => scripts.onBreakpointsChanged(listener),
+      setLoaded: loaded => scripts.setLoaded(loaded),
+      showStopped: at => scripts.showStopped(at),
+    },
     editor,
     images,
     get readOnly() {

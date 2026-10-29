@@ -852,6 +852,28 @@ a Pump has run since it last asked. The Play worker calls the Group's
 After the session ends the window keeps the last values, marked as from the
 ended session, until the next session starts.
 
+## Breakpoints
+
+Click the Code Browser's gutter beside a line of a Script or Library to set a
+Breakpoint, and again to clear it
+([ADR 0147](../../docs/adr/0147-folio-stops-runs-at-breakpoints-as-a-pause.md)).
+While browsing, a Run that reaches one stops there, and the whole Play Session
+Pauses: Pause becomes **Resume**, no other Run or frame moves on, and reader
+input is dropped. The Code Browser opens the stopped line, and the Variables
+window shows the stopped Run's frames, innermost first, with their locals.
+Clicking a frame shows its line. Step is held back until the Run finishes,
+and the Message Box refuses lines until then. **Resume** finishes the Run and
+Play goes on; returning to Edit abandons it.
+
+Breakpoints belong to this browser's editing, not the Project: they are never
+saved, and they go when another Project opens. Present ignores them. A
+Breakpoint in a source edited since Play began fades and doesn't stop
+anything until the next Play; if a Run stops in such a source, a note says so
+in place of the paused line. A Breakpoint on a line with no code never stops.
+
+The Play worker makes the Group's debug controller only once a Breakpoint is
+set, since a Group with one runs every instruction through it.
+
 ## Play
 
 There are two ways to run a Project, both on the Page being edited

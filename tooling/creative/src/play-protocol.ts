@@ -71,11 +71,40 @@ export type PlayRequest =
   /** Replaces the Watches, which are evaluated only while paused (ADR 0129). */
   | { kind: 'watches'; session: number; watches: Watch[] }
   | { kind: 'stop'; session: number }
-  /** Pause, Resume and Step act on the session's Play clock (ADR 0128). */
+  /** Replaces the Breakpoints (ADR 0147). */
+  | { breakpoints: BreakpointView[]; kind: 'breakpoints'; session: number }
+  /**
+   * Pause, Resume and Step act on the session's Play clock (ADR 0128).
+   * Resume also continues a Run stopped at a Breakpoint; Step is refused
+   * while one is stopped.
+   */
   | { kind: 'pause' | 'resume' | 'step'; session: number };
 
 /** A prompt as the page shows it; its answer names the prompt's id. */
 export type PromptView = UserPrompt & { id: number };
+
+/**
+ * A Script, by its owner's place in `scriptOwners(project)`, or a Library,
+ * by its place in the Project's Libraries.
+ */
+export type SourcePlace =
+  { index: number; kind: 'library' } | { kind: 'script'; owner: number };
+
+/** A Breakpoint: a line, from 1, of the Script or Library at `place`. */
+export type BreakpointView = { line: number; place: SourcePlace };
+
+/** One frame of a stopped Run, innermost first. */
+export type FrameView = {
+  /** The Handler and the Script it is in, as the author knows them. */
+  label: string;
+  line: number;
+  locals: [string, VariableValue][];
+  /** Absent for code an author cannot open, as a Message Box line. */
+  place?: SourcePlace;
+};
+
+/** A Run stopped at a Breakpoint, or partway through a Statement Step. */
+export type StoppedRun = { frames: FrameView[]; run: string };
 
 /** A Script problem, its owner given by place in `scriptOwners(project)`. */
 export type ProblemView = {
@@ -130,6 +159,8 @@ export type PlayView = {
   prompt: PromptView | undefined;
   session: number;
   stopped: boolean;
+  /** The Run a Breakpoint stopped, while the session is paused there. */
+  stoppedRun?: StoppedRun;
   wantsFrames: boolean;
 };
 

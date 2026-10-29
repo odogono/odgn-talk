@@ -12,11 +12,14 @@ import { type CanvasElement, type Element, type Project } from './model';
 import { type MessageReply, valueReply } from './message';
 import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
+  type BreakpointView,
   type DrawingView,
   type PlayRequest,
   type PlayResponse,
   type PlayView,
   type PromptView,
+  type SourcePlace,
+  type StoppedRun,
 } from './play-protocol';
 import { fuelText } from './fuel';
 import { fuelCommand, inspectCommand } from './message-script';
@@ -27,7 +30,8 @@ import {
   type Watch,
   type WatchResult,
 } from './variables';
-import { type Report } from '@northtalk/ts';
+import { type PumpResult, type Report } from '@northtalk/ts';
+import { type DebugInstruction } from '@northtalk/ts/debug';
 import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
 import { pointerValue } from './pointer';
@@ -149,6 +153,11 @@ export class PlayHost {
   // Each running Watch's Request, and the Watches whose Run caused others.
   #watchRuns = new Map<number, string>();
   #watchEffects = new Set<number>();
+  // Breakpoints (ADR 0147), and the loaded Scripts they were last placed in.
+  #breakpoints: BreakpointView[] = [];
+  #placedIn: string | undefined;
+  // Continues the Run a Breakpoint stopped, in the next Pump.
+  #continue: (() => PumpResult) | undefined;
   // The Play clock: Host time less paused time, never going back (ADR 0128).
   readonly #clock: () => bigint;
   #id = 0;
@@ -286,6 +295,14 @@ export class PlayHost {
           ?.answer(request.value);
         break;
       }
+      case 'breakpoints': {
+        this.#breakpoints = request.breakpoints;
+        this.#placedIn = undefined;
+        if (!session.debugPaused) {
+          this.#placeBreakpoints(session);
+        }
+        break;
+      }
       case 'frame': {
         if (!this.#paused) {
           session.frame(this.#clock());
@@ -312,11 +329,15 @@ export class PlayHost {
         break;
       }
       case 'resume': {
+        if (session.debugPaused) {
+          this.#continue = () => session.debug.resume();
+        }
         this.#resumeClock();
         break;
       }
       case 'step': {
-        if (!this.#paused) {
+        // A frame can't move on until a stopped Run finishes.
+        if (!this.#paused || session.debugPaused) {
           break;
         }
         this.#pausedTotal -= STEP;
@@ -328,7 +349,7 @@ export class PlayHost {
       case 'inspect': {
         reply({
           kind: 'inspection',
-          inspection: JSON.stringify(session.group.inspect(), (_key, value) =>
+          inspection: JSON.stringify(session.inspection(), (_key, value) =>
             typeof value === 'bigint' ? String(value) : value,
           ),
         });
@@ -344,6 +365,13 @@ export class PlayHost {
         return;
       }
       case 'message': {
+        if (session.debugPaused) {
+          reply({
+            kind: 'message',
+            error: 'A Run is stopped at a Breakpoint. Resume it first.',
+          });
+          return;
+        }
         const inspect = inspectCommand(request.text);
         const fuel = fuelCommand(request.text);
         const refused =
@@ -431,6 +459,9 @@ export class PlayHost {
     this.#watchReports = [];
     this.#watchRuns.clear();
     this.#watchEffects.clear();
+    this.#breakpoints = [];
+    this.#placedIn = undefined;
+    this.#continue = undefined;
     // A new session starts unpaused; its paused time stays in the clock.
     this.#resumeClock();
     this.#session = new PlaySession(request.project, request.pageIndex, {
@@ -616,9 +647,32 @@ export class PlayHost {
       if (this.#session !== session) {
         return;
       }
+      // A stopped Run holds the whole session until it is continued.
+      const advance = this.#continue;
+      this.#continue = undefined;
+      if (session.debugPaused && !advance) {
+        return;
+      }
+      if (!advance) {
+        this.#placeBreakpoints(session);
+      }
       const clock = this.#clock();
       // While paused, only a Step's Pumps count as frames of work.
-      const result = session.pump(clock, this.#paused && !this.#stepping);
+      const result = session.pump(
+        clock,
+        this.#paused && !this.#stepping,
+        advance,
+      );
+      if (session.debugPaused) {
+        // A Breakpoint hit is a Pause (ADR 0147).
+        if (!this.#paused) {
+          this.#paused = true;
+          this.#pausedSince = this.performanceNow();
+        }
+        this.#stepping = false;
+        this.#publish();
+        return;
+      }
       if (this.#watching) {
         this.#watchReports.push(...result.reports);
       }
@@ -652,6 +706,88 @@ export class PlayHost {
         );
       }
     }, delay);
+  }
+
+  /** Where a loaded code unit's source is in the Project, if an author can open it. */
+  #placeOf(session: PlaySession, unit: string): SourcePlace | undefined {
+    const library = session.libraryOf(unit);
+    if (library) {
+      return {
+        kind: 'library',
+        index: session.project.libraries.findIndex(
+          l => l.name === library.name,
+        ),
+      };
+    }
+    const owner = session.owners.get(unit);
+    const index =
+      owner && this.#owners.get(session.authored.get(owner) ?? owner);
+    return index === undefined ? undefined : { kind: 'script', owner: index };
+  }
+
+  /**
+   * Places the Breakpoints in the loaded code, again whenever the loaded
+   * Scripts change. A line with no code places nothing.
+   */
+  #placeBreakpoints(session: PlaySession): void {
+    if (!this.#breakpoints.length && !session.debugging) {
+      return;
+    }
+    const loaded = session.group.scriptNames().join('\n');
+    if (loaded === this.#placedIn) {
+      return;
+    }
+    this.#placedIn = loaded;
+    const at: DebugInstruction[] = [];
+    for (const { unit, script } of session.debug.sources()) {
+      const place = this.#placeOf(session, unit.name);
+      if (!place) {
+        continue;
+      }
+      for (const breakpoint of this.#breakpoints) {
+        if (JSON.stringify(breakpoint.place) !== JSON.stringify(place)) {
+          continue;
+        }
+        const pc = unit.code.findIndex(i => i.line === breakpoint.line);
+        if (pc >= 0) {
+          at.push({ pc, unit: unit.name, ...(script ? { script } : {}) });
+        }
+      }
+    }
+    session.debug.breakAt(at);
+  }
+
+  /** The Run a Breakpoint stopped, with its frames' locals. */
+  #stoppedRun(session: PlaySession): StoppedRun | undefined {
+    const pause = session.debugPaused ? session.debug.current : null;
+    if (!pause) {
+      return undefined;
+    }
+    const run = session.debug
+      .snapshot()
+      .scripts.find(s => s.name === pause.script)
+      ?.runs.find(r => r.id === pause.run);
+    const encode = valueEncoder(session, this.#owners);
+    return {
+      run: pause.run,
+      // The Core lists frames outermost first.
+      frames: [...(run?.frames ?? [])].reverse().map(frame => {
+        const place = this.#placeOf(session, frame.unit);
+        const owner = session.owners.get(frame.unit);
+        const library = session.libraryOf(frame.unit);
+        const where = library
+          ? `Library ${library.name}`
+          : owner === session.project
+            ? 'Project'
+            : (owner?.name ?? unitLabel(frame.unit));
+        return {
+          label: `${frame.handler} in ${where}`,
+          line: frame.line,
+          locals: frame.locals.map(([name, value]) => [name, encode(value)]),
+          ...(place ? { place } : {}),
+        };
+      }),
+    };
   }
 
   /** Sends the page what changed since it last heard, if anything did. */
@@ -737,7 +873,9 @@ export class PlayHost {
     const targetKey = targets.map(target => target.id).join(',');
     const targetsChanged = full || targetKey !== this.#sentTargets;
     this.#sentTargets = targetKey;
+    const stoppedRun = this.#stoppedRun(session);
     const state = JSON.stringify([
+      stoppedRun,
       this.#paused,
       session.navigating,
       session.stopped,
@@ -777,6 +915,7 @@ export class PlayHost {
         heldElements: this.#heldElements,
         navigating: session.navigating,
         paused: this.#paused,
+        ...(stoppedRun ? { stoppedRun } : {}),
         stopped: session.stopped,
         wantsFrames: session.wantsFrames,
         prompt,

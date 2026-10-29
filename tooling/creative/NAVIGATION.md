@@ -241,6 +241,20 @@ List files with `rg --files tooling/creative` before opening one by name.
   `/variables-test.html`.
 - First check: `bun test tooling/creative/tests/play-host.test.ts`.
 
+## Breakpoints
+
+- [play-host.ts](src/play-host.ts) places `breakpoints` requests in the loaded
+  code through the Group's debug controller, turns a stop into a Pause, sends
+  the stopped Run's frames as `stoppedRun`, and continues it on `resume`;
+  [play.ts](src/play.ts) holds the controller and the debugger-aware Pump.
+- [scripts.ts](src/scripts.ts) adds the shared editor's breakpoint gutter
+  (`@northtalk/editor/breakpoints`), fades Breakpoints in edited source and
+  shows the paused line; [play-view.ts](src/play-view.ts) sends them and
+  shows stops; [variables-window.tsx](src/variables-window.tsx) draws frames.
+- Tests: [play-host.test.ts](tests/play-host.test.ts) and
+  [breakpoints.browser.ts](tests/breakpoints.browser.ts).
+- First check: `bun test tooling/creative/tests/play-host.test.ts`.
+
 ## Performance window
 
 - [performance.ts](src/performance.ts): typed Run accounting, frame counts and

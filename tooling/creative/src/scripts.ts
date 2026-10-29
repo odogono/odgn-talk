@@ -2,6 +2,12 @@
 // never navigates the canvas; each source retains its own editor state.
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
+import {
+  breakpointGutter,
+  breakpointLines,
+  markVerified,
+  pausedAt,
+} from '@northtalk/editor/breakpoints';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
 import { clickAdvice } from './click-advice';
 import { readDictionary } from '@northtalk/tooling/dictionary';
@@ -51,6 +57,34 @@ type SavedEditor = {
   scroll: ReturnType<EditorView['scrollSnapshot']>;
   state: EditorState;
 };
+/** A Script's or Library's Breakpoints, with the text they are set in. */
+export type SourceBreakpoints = {
+  lines: number[];
+  source: CodeSelection;
+  text: string;
+};
+/** Each Script's or Library's source as the Play Session loaded it. */
+export type LoadedSource = (source: CodeSelection) => string | undefined;
+
+// The selection a `sourceKey` was made from.
+const selectionOf = (key: string): CodeSelection => {
+  const [kind, id] = key.split(':');
+  return { kind: kind as CodeSelection['kind'], id: Number(id) };
+};
+
+// Marks a source's Breakpoints as placed, unless it was edited since the
+// session loaded it; with no session, all are.
+const verifiedLines = (
+  loaded: LoadedSource | undefined,
+  source: CodeSelection,
+  state: EditorState,
+) =>
+  markVerified(
+    !loaded || loaded(source) === state.doc.toString()
+      ? breakpointLines(state)
+      : [],
+  );
+
 type BrowserWindow = {
   addAction: HTMLButtonElement;
   node: HTMLElement;
@@ -60,6 +94,7 @@ type BrowserWindow = {
   recipes: HTMLElement;
   server: LanguageServer;
   sourceTitle: HTMLElement;
+  stoppedNote: HTMLElement;
   view: EditorView;
 };
 
@@ -71,6 +106,11 @@ export class CodeBrowser {
   #editing = new Compartment();
   #syncing = false;
   #tests: TestRun;
+  // Breakpoints (ADR 0147): the session's loaded sources while browsing,
+  // and who to tell when a Breakpoint is toggled.
+  #loaded: LoadedSource | undefined;
+  #stopped: { line: number; source: CodeSelection } | undefined;
+  #breakpointsChanged = () => {};
   readonly dictionary = new DictionaryWindow();
 
   constructor(
@@ -155,9 +195,16 @@ export class CodeBrowser {
   }
 
   #state(server: LanguageServer): EditorState {
+    const source = this.#selected;
     return EditorState.create({
       doc: this.#text(),
       extensions: [
+        source.kind === 'test'
+          ? []
+          : breakpointGutter(() => {
+              this.#markBreakpoints();
+              this.#breakpointsChanged();
+            }, 'Breakpoint in source changed since Play began: it applies from the next Play'),
         lineNumbers(),
         this.#editing.of(EditorState.readOnly.of(this.editor.readOnly)),
         northtalkEditor(
@@ -183,6 +230,8 @@ export class CodeBrowser {
               });
               this.redraw();
               server.lsp.change(this.#uri(source), text);
+              // After this update: an edit fades its source's Breakpoints.
+              queueMicrotask(() => this.#markBreakpoints());
             },
             goTo: (uri, line) => {
               const library = this.editor.project.libraries.find(
@@ -261,6 +310,11 @@ export class CodeBrowser {
       'Checking…',
     );
     const parent = h('div', { class: 'code-editor script-editor' });
+    const stoppedNote = h('div', {
+      class: 'stopped-note',
+      role: 'status',
+      hidden: true,
+    });
     body.append(
       sourceTitle,
       h(
@@ -272,6 +326,7 @@ export class CodeBrowser {
         showDictionary,
       ),
       recipes,
+      stoppedNote,
       parent,
       problems,
     );
@@ -290,6 +345,7 @@ export class CodeBrowser {
       recipes,
       problems,
       server,
+      stoppedNote,
       view,
     };
     this.#window = browser;
@@ -317,6 +373,87 @@ export class CodeBrowser {
     this.sync();
     server.lsp.open(this.#uri(), this.#text());
     return browser;
+  }
+
+  /** Every Script's and Library's Breakpoints, in shown or saved editors. */
+  breakpoints(): SourceBreakpoints[] {
+    const states = new Map(
+      [...this.#states].map(([key, saved]) => [key, saved.state]),
+    );
+    if (this.#window) {
+      states.set(sourceKey(this.#selected), this.#window.view.state);
+    }
+    return [...states].flatMap(([key, state]) => {
+      const source = selectionOf(key);
+      const lines = breakpointLines(state);
+      return lines.length && source.kind !== 'test'
+        ? [{ source, lines, text: state.doc.toString() }]
+        : [];
+    });
+  }
+  onBreakpointsChanged(listener: () => void): void {
+    this.#breakpointsChanged = listener;
+  }
+
+  /**
+   * While browsing, `loaded` gives each source as the session loaded it:
+   * Breakpoints in a source edited since then fade, and don't trigger.
+   */
+  setLoaded(loaded: LoadedSource | undefined): void {
+    this.#loaded = loaded;
+    this.#markBreakpoints();
+  }
+
+  /**
+   * Shows where a Run is stopped, opening its source, or clears it. A
+   * source edited since Play began gets a note instead of a paused line.
+   */
+  showStopped(at: { line: number; source: CodeSelection } | undefined): void {
+    const before = this.#stopped;
+    this.#stopped = at;
+    if (at && sourceKey(at.source) !== sourceKey(this.#selected)) {
+      this.#show(at.source, at.line);
+    } else if (at && before?.line !== at.line) {
+      this.#show(at.source, at.line);
+    }
+    this.#drawStopped();
+  }
+
+  #drawStopped(): void {
+    const win = this.#window;
+    if (!win) {
+      return;
+    }
+    const at = this.#stopped;
+    const here =
+      at && sourceKey(at.source) === sourceKey(this.#selected) ? at : undefined;
+    const changed =
+      here !== undefined &&
+      this.#loaded?.(here.source) !== win.view.state.doc.toString();
+    win.view.dispatch({
+      effects: pausedAt(here && !changed ? here.line : null),
+    });
+    win.stoppedNote.hidden = !changed;
+    win.stoppedNote.textContent = here
+      ? `Stopped at line ${here.line} of this source as Play loaded it; it has changed since.`
+      : '';
+  }
+
+  // Fades each Breakpoint set in source edited since the session loaded it.
+  #markBreakpoints(): void {
+    for (const [key, saved] of this.#states) {
+      saved.state = saved.state.update({
+        effects: verifiedLines(this.#loaded, selectionOf(key), saved.state),
+      }).state;
+    }
+    this.#window?.view.dispatch({
+      effects: verifiedLines(
+        this.#loaded,
+        this.#selected,
+        this.#window.view.state,
+      ),
+    });
+    this.#drawStopped();
   }
 
   open(owner: ScriptOwner, line?: number): void {
@@ -379,6 +516,7 @@ export class CodeBrowser {
       }
       this.sync();
       win.server.lsp.open(this.#uri(), this.#text());
+      this.#markBreakpoints();
     }
     win.node.hidden = false;
     bringWindowForward(win.node);
