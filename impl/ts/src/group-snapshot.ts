@@ -61,12 +61,14 @@ export type GroupSnapshot = {
   broadcasts: number;
   /** The roots whose work changed since the last accounting tail. */
   changedRoots: readonly number[];
+  /** The last charge request id issued. */
+  chargeCounter: number;
   deliveries: number;
   discardedDecisions: Decision[];
   fingerprint: Uint8Array;
   inputs: readonly { action: InputAction; line: unknown; urgent?: boolean }[];
-  /** Each Run's issued call numbers, by Run id. */
-  issued: ReadonlyMap<string, readonly (readonly [number, number])[]>;
+  /** Each Run's issued call numbers and their charge eligibility, by Run id. */
+  issued: ReadonlyMap<string, readonly (readonly [number, number, boolean])[]>;
   lastClock: bigint | null;
   libraries: ReadonlyMap<string, Library>;
   name: string;
@@ -128,16 +130,16 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
           broadcasts: g.broadcasts,
           timers: g.waitOrder,
           runOrder: g.accounting.next,
-          chargeCounter: 0,
+          chargeCounter: g.chargeCounter,
           randomState: g.randomState,
           issued: [...g.issued]
             .sort(([a], [b]) => compareBytes(a, b))
             .map(([run, ranges]) => ({
               run,
-              ranges: ranges.map(([first, last]) => ({
+              ranges: ranges.map(([first, last, eligible]) => ({
                 first,
                 last,
-                eligible: false,
+                eligible,
               })),
             })),
         }),
@@ -291,6 +293,9 @@ const inputRecord = (
   ref: (o: ObjectState | null | undefined) => number | undefined,
 ): Input<Value> => {
   switch (action.k) {
+    // An unresolved charge request refuses the save (Metered Operations).
+    case 'charge':
+      throw new Error('A queued charge request reached a save');
     case 'answer':
     case 'fail':
       return { k: 'settle', id: action.id, with: resumeOfSettlement(action) };

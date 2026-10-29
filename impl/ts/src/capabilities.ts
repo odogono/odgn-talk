@@ -1056,12 +1056,35 @@ export type Call<B, R = Value> = {
   readonly group: Group;
   readonly id: string;
   readonly now: bigint;
+  /**
+   * Queues a request for more Fuel, settled at the end of the Pump that
+   * processes it (Metered Operations). Only a suspending Operation declared
+   * `metering: 'read-only'` may ask, one request at a time.
+   */
+  requestCharge(fuel: number): ChargeRequest;
   readonly runId: string;
   readonly scopeName?: string;
   readonly scriptName: string;
   readonly segmentId: string;
   readonly signal: AbortSignal;
 };
+
+/** A queued charge request: its Group-wide id and its outcome. */
+export type ChargeRequest = {
+  readonly id: string;
+  /** Settles at the end of the Pump that processes the request. */
+  readonly result: Promise<ChargeResult>;
+};
+export type ChargeResult = {
+  readonly call: string;
+  /** The requested amount; only an accepted request spends it. */
+  readonly fuel: number;
+  readonly kind: 'charge result';
+  readonly request: string;
+  readonly status: 'accepted' | 'limit' | 'inactive';
+};
+/** How an Operation may charge as it works (Metered Operations). */
+export type Metering = 'read-only' | 'segment-bound';
 
 /**
  * The JS type a Host function receives for an argument of Shape S (#1420):
@@ -1091,6 +1114,7 @@ export type ImmediateOp<
   R = Shape,
 > = OpBase<A, R> & {
   do(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): PlainResult<R>;
+  metering?: Metering;
   mode: 'immediate';
   scope?: ScopeDecl;
   segmentBound?: boolean;
@@ -1101,6 +1125,7 @@ export type SuspendingOp<
   R = Shape,
 > = OpBase<A, R> & {
   maxPendingMs?: number;
+  metering?: 'read-only';
   mode: 'suspending';
   /**
    * Must honour `call.signal` and settle once it aborts: `drive.close()`
@@ -1126,12 +1151,14 @@ export type Operation<B, A extends readonly Shape[] = Shape[], R = Shape> =
 /** The Core's own form: every argument and result is a Value. */
 export type ValueImmediateOp<B> = OpBase & {
   do(call: Call<B>, ...args: Value[]): Value;
+  metering?: Metering;
   mode: 'immediate';
   scope?: ScopeDecl;
   segmentBound?: boolean;
 };
 export type ValueSuspendingOp<B> = OpBase & {
   maxPendingMs?: number;
+  metering?: 'read-only';
   mode: 'suspending';
   run?(call: Call<B>, ...args: Value[]): Promise<Value>;
   start?(call: Call<B>, ...args: Value[]): void;
@@ -1220,6 +1247,33 @@ const hasHooks = (lifecycle: unknown): lifecycle is SegmentLifecycle<never> =>
       typeof (lifecycle as Record<string, unknown>)[phase] === 'function',
   );
 
+// A metering declaration's mode and effect rules (Metered Operations).
+const checkMetering = (op: {
+  metering?: unknown;
+  mode: string;
+  scope?: unknown;
+  segmentBound?: boolean;
+}) => {
+  if (op.metering === undefined) {
+    return;
+  }
+  if (op.metering === 'read-only') {
+    if (op.mode === 'fire-and-forget' || op.segmentBound || op.scope) {
+      invalidValue(
+        'read-only metering needs an immediate or suspending Operation without scope or segmentBound',
+      );
+    }
+  } else if (op.metering === 'segment-bound') {
+    if (op.mode !== 'immediate' || op.segmentBound !== true) {
+      invalidValue(
+        'segment-bound metering needs an immediate segmentBound Operation',
+      );
+    }
+  } else {
+    invalidValue('metering must be read-only or segment-bound');
+  }
+};
+
 /**
  * Define a Capability whose Host functions take and return Values. The
  * standard Capabilities and replay Stubs use this form.
@@ -1286,9 +1340,11 @@ export const defineValueCapability = <B = void>(
       invalidValue('examples must be a list of text');
     }
     const metadata = op as ValueOperation<B> & {
+      metering?: unknown;
       scope?: ScopeDecl;
       segmentBound?: boolean;
     };
+    checkMetering(metadata);
     if (
       metadata.segmentBound !== undefined &&
       typeof metadata.segmentBound !== 'boolean'

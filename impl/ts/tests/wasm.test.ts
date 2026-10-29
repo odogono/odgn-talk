@@ -134,6 +134,71 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
   );
 
   both(
+    'charge requests: refusals, accepted, limit and inactive outcomes',
+    async (core, nt) => {
+      const lines: string[] = [];
+      const calls: wasm.Call<void>[] = [];
+      const remote = core.defineCapability('remote', {
+        read: {
+          mode: 'suspending',
+          cost: { fuel: 0 },
+          metering: 'read-only',
+          start: c => {
+            calls.push(c);
+          },
+        },
+        plain: {
+          mode: 'suspending',
+          cost: { fuel: 0 },
+          start: c => {
+            calls.push(c);
+          },
+        },
+      });
+      const g = core.newGroup({ name: 'g', trace: l => lines.push(l) });
+      const s = g.load({
+        name: 's',
+        source:
+          'on go\n  ask remote to plain and wait\n  ask remote to read and wait\n  ask remote to read and wait\nend go',
+        grants: { remote: remote.grant('all', undefined) },
+      });
+      s.deliver({ name: 'go', limits: { fuelPerRun: 200 } });
+      g.pump(0n);
+      const refused = (f: () => unknown) => {
+        try {
+          f();
+        } catch (error) {
+          return (error as wasm.HostError).code;
+        }
+        return null;
+      };
+      const codes = [refused(() => calls[0]!.requestCharge(1))];
+      calls[0]!.answer(nt.text('x'));
+      g.pump(0n);
+      codes.push(refused(() => calls[1]!.requestCharge(-1)));
+      const accepted = calls[1]!.requestCharge(5);
+      codes.push(refused(() => calls[1]!.requestCharge(1)));
+      const first = g.pump(0n);
+      calls[1]!.answer(nt.text('y'));
+      g.pump(0n);
+      const inactive = calls[1]!.requestCharge(1);
+      const limit = calls[2]!.requestCharge(1000);
+      const last = g.pump(0n);
+      return {
+        codes,
+        results: [
+          await accepted.result,
+          await inactive.result,
+          await limit.result,
+        ],
+        first: [first.fuelUsed, kinds(first.reports)],
+        last: [last.fuelUsed, kinds(last.reports), ends(last.reports)],
+        lines,
+      };
+    },
+  );
+
+  both(
     'Operations: immediate, fire-and-forget, failures and charges',
     (core, nt) => {
       const fired: string[] = [];

@@ -94,6 +94,9 @@ export const operationData = (name: string, op: ValueOperation<unknown>) => ({
     : {}),
   ...(op.mode === 'immediate' && op.segmentBound ? { segmentBound: true } : {}),
   ...(op.command ? { command: true } : {}),
+  ...(op.mode !== 'fire-and-forget' && op.metering
+    ? { metering: op.metering }
+    : {}),
 });
 export const grantData = (
   grant: Grant<unknown>,
@@ -305,6 +308,7 @@ export const operationsOf = (
           ...(scope ? { scope } : {}),
           ...(op.segmentBound ? { segmentBound: true } : {}),
           ...(op.command ? { command: true } : {}),
+          ...(op.metering ? { metering: op.metering } : {}),
         } as unknown as ValueOperation<unknown>;
         return [op.name as string, decl];
       }),
