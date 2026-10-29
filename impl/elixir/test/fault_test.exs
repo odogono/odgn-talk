@@ -160,12 +160,12 @@ defmodule NorthTalk.FaultTest do
 
   test "a reactor with another save format or without a required feature is refused" do
     Process.flag(:trap_exit, true)
-    hello = %{"saveFormat" => "zig/1"}
+    hello = %{"saveFormat" => "zig/17"}
 
     assert {:error, %HostError{code: "incompatible core", detail: detail}} =
              NorthTalk.start_link(transport: Faulty, hello: hello)
 
-    assert detail =~ "zig/1"
+    assert detail =~ "zig/17"
     assert Artifact.save_format() == "zig/1"
   end
 
