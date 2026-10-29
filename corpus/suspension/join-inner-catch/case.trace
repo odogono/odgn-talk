@@ -1,5 +1,3 @@
-# Unblessed: Join body catches preserve members (#1732); first blessing awaits human review.
-
 > load board identity=308eea54d5a9221d81a81ebc6c75f8d1c6275ef972c8ae22a877e44e03a7fae4
 > deliver d1 to=board message=probe
 > pump clock=2026-09-30T09:00:00Z
