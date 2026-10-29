@@ -16,7 +16,6 @@ import type { ObjectState } from './objects';
 import type { AccountingState } from './run-accounting';
 import {
   hexBytes,
-  readSave,
   saveSections,
   stateFingerprint as headerFingerprint,
 } from './save-format';
@@ -423,10 +422,6 @@ const decisionRecords = (g: GroupSnapshot) => {
  */
 export const stateFingerprint = (g: Omit<GroupSnapshot, 'sources'>) =>
   headerFingerprint(encodeGroup({ ...g, sources: 'external' }));
-
-/** A save's State Fingerprint, without restoring it. */
-export const saveStateFingerprint = (bytes: Uint8Array): Uint8Array =>
-  readSave(bytes).stateFingerprint;
 
 export const compareNames = (a: string, b: string) =>
   a < b ? -1 : a > b ? 1 : 0;

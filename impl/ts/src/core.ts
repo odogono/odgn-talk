@@ -3,8 +3,8 @@
 import { defineCapability } from './capabilities';
 import type { Core } from './embedding';
 import { newGroup, restore } from './group';
-import { saveStateFingerprint } from './group-snapshot';
 import { compileLibrary } from './library';
+import { stateFingerprint } from './save-format';
 import { localeCapability } from './locale-capability';
 import { defineObjectKind } from './objects';
 import {
@@ -33,7 +33,7 @@ export type TsCore = Omit<
   defineObjectKind: typeof defineObjectKind;
   newGroup: typeof newGroup;
   restore: typeof restore;
-  stateFingerprint: typeof saveStateFingerprint;
+  stateFingerprint: typeof stateFingerprint;
 };
 
 const core: TsCore = Object.freeze({
@@ -51,7 +51,7 @@ const core: TsCore = Object.freeze({
   compileLibrary,
   newGroup,
   restore,
-  stateFingerprint: saveStateFingerprint,
+  stateFingerprint,
   versions: coreVersions,
 });
 
