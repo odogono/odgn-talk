@@ -36,6 +36,7 @@
     "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
     "corpus:run": "bun run --cwd impl/ts corpus:run",
+    "corpus:cross": "bun run --cwd impl/ts corpus:cross",
     "repl": "bun tooling/cli/src/main.ts",
     "bench": "bun bench/ts/src/main.ts",
     "bench:compare": "bun bench/ts/src/compare.ts",

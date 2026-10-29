@@ -17,6 +17,7 @@ import {
   list,
 } from '../src/index';
 import { languageVersion } from '../src/generated/machine';
+import { rawIO, readRecords } from '../tools/save-raw';
 
 const options = (trace: string[]) => ({
   name: 'resumed',
@@ -263,6 +264,63 @@ describe('pending calls after restore', () => {
     adopted.answer(num(7));
     const r = operationalReports(copy.pump(6_000_000n).reports)[0]!;
     expect(r).toMatchObject({ delivery: 'd2', outcome: 'completed' });
+  });
+  test("a save after a reissue records the reissue's Clock reading and Charge", () => {
+    const capability = defineCapability('stock', {
+      check: {
+        mode: 'suspending',
+        result: shape.number,
+        cost: { fuel: 100 },
+        start: call => {
+          if (call.now > 0n) {
+            call.charge(50);
+          }
+        },
+      },
+    });
+    const grant = capability.grant('all', undefined);
+    const g = newGroup({ name: 'g' });
+    g.load({
+      name: 's',
+      source: 'on go\n  ask stock to check and wait\nend go',
+      grants: { stock: grant },
+    }).deliver({ name: 'go' });
+    g.pump(0n);
+    const { group: copy } = restore(g.save(), {
+      ...options([]),
+      grants: () => grant,
+    });
+    copy.settle('s/r1.c1', { reissue: true });
+    copy.pump(5_000_000n);
+    const [call] = readRecords(copy.save(), rawIO).calls;
+    expect(call).toMatchObject({ charged: 50 });
+    expect(call!.now.seconds).toBe(5n);
+  });
+  test("a restored call keeps its id as the Run's last wait once answered", () => {
+    const capability = defineCapability('stock', {
+      check: {
+        mode: 'suspending',
+        result: shape.number,
+        cost: { fuel: 1 },
+        start: () => {},
+      },
+    });
+    const grant = capability.grant('all', undefined);
+    const g = newGroup({ name: 'g' });
+    g.load({
+      name: 's',
+      source: 'on go\n  ask stock to check and wait\n  wait 1 s\nend go',
+      grants: { stock: grant },
+    }).deliver({ name: 'go' });
+    g.pump(0n);
+    const { group: copy } = restore(g.save(), {
+      ...options([]),
+      grants: () => grant,
+    });
+    copy.settle('s/r1.c1', { adopt: true })!.answer(num(1));
+    copy.pump(0n);
+    const [run] = readRecords(copy.save(), rawIO).runs;
+    expect(run!.waited.id).toBe('s/r1.c1');
   });
   test("answered calls leave a long-lived Run's save, and its pending call keeps its arguments", () => {
     const calls: Call<void>[] = [];
