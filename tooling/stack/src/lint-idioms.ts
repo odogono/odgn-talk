@@ -176,6 +176,7 @@ const suggestMatchEdit = (
 };
 
 export type IdiomId =
+  | 'if-then-return-bool'
   | 'impossible-kind'
   | 'kindof-comparison'
   | 'suggest-arithmetic-command'
@@ -187,7 +188,8 @@ export type IdiomAdvice = {
   at: Token;
   id: IdiomId;
   params: Record<string, string>;
-  subject: Token;
+  /** Absent when the advice holds whatever the code's names bind to. */
+  subject?: Token;
   /** What the subject must name: a variable, or the Built-in function. */
   subjectIs?: 'builtin function';
 };
@@ -419,6 +421,76 @@ const kindComparison = (node: SyntaxNode) => {
 const kindTest = (kind: string, negated: boolean) =>
   `is ${negated ? 'not ' : ''}${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind}`;
 
+// `return true` or `return false`, alone in a branch.
+const returnsBool = (branch: SyntaxNode | undefined) => {
+  let statement = branch;
+  if (statement?.rule === 'Block') {
+    const inner = nodes(statement);
+    statement = inner.length === 1 ? inner[0] : undefined;
+  }
+  if (statement?.rule === 'Statement') {
+    statement = core(statement);
+  }
+  const [value] = statement ? nodes(statement) : [];
+  const word = value && nameToken(value)?.v;
+  return statement?.rule === 'SimpleStatement' &&
+    tokens(statement)
+      .map(token => token.v)
+      .join(' ') === 'return' &&
+    nodes(statement).length === 1 &&
+    (word === 'true' || word === 'false')
+    ? { statement, value: word === 'true' }
+    : undefined;
+};
+// A condition that gives a boolean or raises: a comparison, or an `and`, `or`
+// or `not`, each of which raises `wrong kind` on any other operand. `if` raises
+// on a non-boolean too, so returning such a condition changes no outcome.
+const booleanCondition = (expression: SyntaxNode) => {
+  const inner = core(expression);
+  return ['Comparison', 'Not', 'And', 'Or'].includes(inner.rule) &&
+    tokens(inner).length > 0
+    ? inner
+    : undefined;
+};
+// `if c then return b else return not b`, or the `if` with no `else` followed
+// by the `return`, as the `if` and the statement that ends the rewrite.
+const returnedCondition = (node: SyntaxNode, next?: SyntaxNode) => {
+  if (node.rule !== 'If') {
+    return undefined;
+  }
+  const children = node.children;
+  const direct = tokens(node).map(token => token.v);
+  const condition = children[1];
+  const test =
+    condition?.kind === 'node' && condition.rule === 'Expression'
+      ? booleanCondition(condition)
+      : undefined;
+  const after = (word: string) => {
+    const index = children.findIndex(
+      child => child.kind === 'token' && child.v === word,
+    );
+    const branch = children
+      .slice(index + 1)
+      .find(child => child.kind === 'node' || child.t !== 'nl');
+    return index >= 0 && branch?.kind === 'node' ? branch : undefined;
+  };
+  const then = returnsBool(after('then'));
+  const hasElse = direct.includes('else');
+  if (
+    !test ||
+    !then ||
+    (hasElse && direct[direct.indexOf('else') + 1] === 'if')
+  ) {
+    return undefined;
+  }
+  const otherwise = hasElse ? returnsBool(after('else')) : returnsBool(next);
+  return otherwise && otherwise.value !== then.value
+    ? { test, negated: !then.value, last: hasElse ? node : next! }
+    : undefined;
+};
+const returnText = (test: SyntaxNode, negated: boolean, text: string) =>
+  negated ? `not ${test.rule === 'Comparison' ? text : `(${text})`}` : text;
+
 /** Advice for one node of the tree, before its subjects' bindings are known. */
 export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
   const first = tokensIn(node)[0];
@@ -470,6 +542,18 @@ export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
         command: update.command('…', update.put.target.v),
       },
     });
+  }
+  // Every statement sits in a Block, beside the statement after it.
+  const statements = node.rule === 'Block' ? nodes(node).map(core) : [];
+  for (const [i, statement] of statements.entries()) {
+    const returned = returnedCondition(statement, statements[i + 1]);
+    if (returned) {
+      out.push({
+        id: 'if-then-return-bool',
+        at: tokensIn(statement)[0]!,
+        params: { value: returnText(returned.test, returned.negated, '…') },
+      });
+    }
   }
   const kinded = kindComparison(node);
   if (kinded) {
@@ -552,6 +636,45 @@ export const idiomEdit = (
           ),
         }
       : undefined;
+  }
+  if (id === 'if-then-return-bool') {
+    const branch = find(
+      tree,
+      node => node.rule === 'If' && startsAt(node, start),
+    );
+    const parent =
+      branch && find(tree, node => nodes(node).map(core).includes(branch));
+    const siblings = parent ? nodes(parent).map(core) : [];
+    const returned =
+      branch &&
+      returnedCondition(branch, siblings[siblings.indexOf(branch) + 1]);
+    if (!returned || !parent) {
+      return undefined;
+    }
+    const range = {
+      start: spanOf(branch).start,
+      end: spanOf(returned.last).end,
+    };
+    // Line endings between the statements sit in their Block, and carry the
+    // comments that end those lines.
+    if (
+      tokensIn(parent, true).some(
+        token =>
+          token.pos > range.start &&
+          token.pos < range.end &&
+          token.leadingTrivia.some(trivia => trivia.kind === 'comment'),
+      )
+    ) {
+      return undefined;
+    }
+    return {
+      ...range,
+      newText: `return ${returnText(
+        returned.test,
+        returned.negated,
+        sourceOf(source, returned.test),
+      )}`,
+    };
   }
   if (id === 'kindof-comparison') {
     const comparison = find(

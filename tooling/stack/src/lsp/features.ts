@@ -1375,6 +1375,7 @@ export const formatting = (analysis: Analysis): TextEdit[] => {
       ];
 };
 const idiomTitles = {
+  'if-then-return-bool': 'Return the condition',
   'kindof-comparison': 'Rewrite as is a',
   'suggest-arithmetic-command': 'Rewrite as a command',
   'suggest-is-in': 'Rewrite as is in',

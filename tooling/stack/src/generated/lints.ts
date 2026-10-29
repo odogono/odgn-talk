@@ -233,6 +233,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "if-then-return-bool",
+    "flags": "an `if` on a comparison, `and`, `or` or `not` whose branches only `return true` and `return false`, by `else` or by the statement after it",
+    "beginner": "hint",
+    "standard": "hint",
+    "message": "Consider `return {value}`, since the condition is already true or false.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",

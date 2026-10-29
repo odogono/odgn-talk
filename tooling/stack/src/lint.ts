@@ -574,8 +574,10 @@ export const lintSyntax = (
       // A Constant or Built-in never changes, so a rewrite for one is
       // unusual; advise only on names whose value the Script holds. A
       // Built-in call is advice only if the Script hasn't shadowed it.
-      const kind = names.get(subject.pos)?.binding?.kind;
-      if (
+      const kind = subject && names.get(subject.pos)?.binding?.kind;
+      if (!subject) {
+        emit(id, at, params);
+      } else if (
         kind &&
         (subjectIs === 'builtin function'
           ? kind === 'builtin function'
