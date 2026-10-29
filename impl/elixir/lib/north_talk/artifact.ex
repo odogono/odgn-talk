@@ -15,8 +15,8 @@ defmodule NorthTalk.Artifact do
   """
 
   # The release CI's `Elixir reactor` workflow published, and its digest.
-  @release "reactor-v0.13.6"
-  @sha256 "fc9532b47c3bd5c01e7e3268d3eadc3257909a2f69855fac51501388548c70de"
+  @release "reactor-v0.14.0"
+  @sha256 "707390cde78ed20ce7b3ecf10b73af879725ecbf4cf596a475f2f65433faa537"
   @repository "odogono/odgn-talk"
 
   # What this Host reads: the save format it was written against, and the
