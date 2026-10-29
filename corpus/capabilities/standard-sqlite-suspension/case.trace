@@ -1,4 +1,4 @@
-# Unblessed: sqlite's transaction at a suspension (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # A wait with the transaction open raises `scope open` and suspends nothing.
 # After commit closes the scope, the wait suspends: the Segment commits there,
 # and the Run continues in a new Segment.

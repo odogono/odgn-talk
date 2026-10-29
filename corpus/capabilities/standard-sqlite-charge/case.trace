@@ -1,4 +1,4 @@
-# Unblessed: sqlite step charges (#467, #1795); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # Each SQLite step costs perStep, 10, after the declared cost: one per row up
 # to max, then the completion check. d1's one row takes 2 steps. d2's 8 rows
 # need 9 steps, more than the Run's 100 Fuel leaves, so the step that can't be

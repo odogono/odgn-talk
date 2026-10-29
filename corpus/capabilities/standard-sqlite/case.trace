@@ -1,4 +1,4 @@
-# Unblessed: sqlite values, rows and charges (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # A Stub stands for the implementation's SQL values, which the Core converts:
 # NULL to Nothing, INTEGER and REAL to numbers, a REAL by its shortest
 # round-trip digits, TEXT to text and a BLOB to Bytes, each row a map in

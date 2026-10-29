@@ -1,4 +1,4 @@
-# Unblessed: sqlite Host failures a Script catches (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # `sqlite busy` from change and begin, a constraint with its kind, and
 # `too many rows` are caught like any Script error. A failed call still
 # enrolls its Grant, so the Segment commits; a begin that fails opens no scope.

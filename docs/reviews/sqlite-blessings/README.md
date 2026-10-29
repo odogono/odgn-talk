@@ -4,7 +4,7 @@ Evidence for #467 on 2026-10-09. The normative rules are chapter 7's [`sqlite`](
 
 ## Proposed first expectations
 
-**Approval is pending.** Every header below remains `Unblessed`. Agreement verifies execution; it does not replace the [required human first-blessing review](../../../corpus/README.md#checking).
+**Approved.** The maintainer approved all ten first blessings on 2026-10-29, after their `perStep` re-blessing for #1795, and each header records it. Agreement verified execution; the [human first-blessing review](../../../corpus/README.md#checking) is separate from it.
 
 | Case | Pins |
 | --- | --- |
@@ -19,7 +19,7 @@ Evidence for #467 on 2026-10-09. The normative rules are chapter 7's [`sqlite`](
 | [`standard-sqlite-errors`](../../../corpus/capabilities/standard-sqlite-errors/) | caught `sqlite busy`, `constraint` and `too many rows` from `change` and `begin`, and `host error` for a bad constraint kind or a negative `changes` |
 | [`standard-sqlite-charge`](../../../corpus/capabilities/standard-sqlite-charge/) | step charges after the Stub, a step the Run can't cover latching `charge-refused=yes` after the accepted prefix and faulting at the call, and the binding's cap, which no longer charges up front (re-blessed for `perStep` under #1795) |
 
-On 2026-10-29 (#1795) all ten were re-blessed when `perStep` replaced `perRow`: their Fuel figures now count steps, and `standard-sqlite-charge` was rewritten for step charging. Approval is still pending for all ten.
+On 2026-10-29 (#1795) all ten were re-blessed when `perStep` replaced `perRow`: their Fuel figures now count steps, and `standard-sqlite-charge` was rewritten for step charging. They were approved the same day.
 
 Both Cores wrote these expectations through `bun run corpus:bless`: the TS runner wrote them, and TS and Go each replay them in ordinary and save/restore replay. The Go passing gate lists all ten.
 

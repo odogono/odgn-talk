@@ -1,4 +1,4 @@
-# Unblessed: the sqlite transfer example (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # Chapter 7's worked example. In d1 both updates commit with the Segment. In
 # d2 the debit changes no row, so the throw abandons the open transaction,
 # whose rollback discards the scope, and the Segment commits the log insert.

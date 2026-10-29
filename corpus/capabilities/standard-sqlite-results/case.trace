@@ -1,4 +1,4 @@
-# Unblessed: the Core's sqlite result checks (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # Each Stub stands for an implementation's answer. The Core checks its form
 # (host error), then its column names (sql), then each value row by row
 # (unrepresentable), and raises the first failure. The last few show Host

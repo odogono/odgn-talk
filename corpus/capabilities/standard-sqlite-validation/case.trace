@@ -1,4 +1,4 @@
-# Unblessed: the Core's sqlite argument checks (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # After the Shape checks the Core checks max, a whole number from 0 to the
 # binding's cap of 10, then each parameter's kind, before it charges the call
 # or runs the implementation. A whole max written with zeros is accepted.
