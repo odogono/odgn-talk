@@ -975,6 +975,8 @@ export interface RestoreOptions extends GroupOptions {
   /** An id it can't resolve restores as a disposed Host Object. */
   resolve(kind: string, id: string): { native: unknown } | undefined;
   onMismatch: "reject" | "variables only" | "reload changed";
+  /** With "reload changed", keep each changed Script's mailbox, as Reload's keepMailbox does; ignored otherwise. */
+  keepMailbox?: boolean;
   /** Native TS external-source snapshots only; called synchronously once per Script. */
   scriptSources?(request: ScriptCodeRequest): ScriptSources | undefined;
 }

@@ -1,0 +1,31 @@
+# Unblessed: kept-mailbox Partial Restore cases from a TS Core prototype (#1821); first blessing awaits human review.
+#
+# - The Fuel Slice preempts a/r1 so d2 stays in a's mailbox at the save.
+# - Under the new fmt, KIND is "v2", so d2 fails the `note` Guard and ends
+#   `unhandled`, by the ordinary rule.
+
+> add-library fmt identity=26e43ea2266a53c5969cee0810b45d948f3edd2aecc91b4ed9a750ef288077bc
+> load a identity=8c2d4d970e405f4e540cc9bb030dfab83185dafd074130871b52d152c0adabbb
+
+> deliver d1 to=a message=go
+> deliver d2 to=a message=note args=["v1"]
+> pump clock=2026-10-28T10:00:00Z fuel-slice=20
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=20 alloc=24
+pumped state=sliced fuel=20
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="constant KIND = " & quote & "v2" & quote & newline identity=d1040678396bc0901a7f88e59548a12074e8d84d3db8be065f6472902cd19b29
+stopped a reason="reload" discarded=[a/r1] dropped=[d2]
+
+> restore from=s1 mismatch=reload-changed mailbox=keep fingerprint=2439382891328c1ab35274f6b98a5d6a02688a99bcabb15e183d717530c8c6bc mode=partial reloaded=[a] discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:01Z
+seg a/r2 start delivery=d2 handler=note fuel=12 alloc=0 state=16 end=unhandled
+run a/r2 outcome=unhandled delivery=d2 handler=note fuel=12 alloc=0
+unhandled d2 message=note args=["v1"]
+pumped state=idle fuel=12
+
+> vars
+vars a got=""

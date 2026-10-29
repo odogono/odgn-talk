@@ -1,0 +1,23 @@
+# partial-restore-keep-mailbox-request: with `mailbox=keep`, a matched Script's
+# Request still in a changed Script's mailbox isn't dropped: its sender goes on
+# waiting, and the new code replies (spec chapter 10, "Partial Restore",
+# Across Scripts).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

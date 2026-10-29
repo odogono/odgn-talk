@@ -1,0 +1,37 @@
+# Unblessed: kept-mailbox Partial Restore cases from a TS Core prototype (#1821); first blessing awaits human review.
+#
+# - The Fuel Slice preempts a/r1, so b's Request b/r1.c1 stays in a's
+#   mailbox at the save.
+# - With the mailbox kept, b/r1 goes on waiting rather than failing with
+#   `send failed`; a's new code replies, so b keeps got="v2 x".
+
+> add-library fmt identity=de77b1077eeef53714979e74ffbab8e0f9616e4e3492c5dc30df68ee1ccae063
+> load a identity=0c5813684797ab983763cfa8cac2427b45062133a3062f08883a8c942bc6a816
+> load b identity=0b318e985c19bf38391dda096769c88b0d4783199fb43767efbc2887cfddca64
+
+> deliver d1 to=a message=go
+> deliver d2 to=b message=start
+> pump clock=2026-10-28T10:00:00Z fuel-slice=50
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=50 alloc=66
+send b/r1.c1 to=a message=note args=["x"] wait=yes
+seg b/r1 start delivery=d2 handler=start clause=1 fuel=28 alloc=49 state=288 end=send-wait
+pumped state=sliced fuel=78 next=2026-10-28T10:00:30Z
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload" discarded=[a/r1]
+
+> restore from=s1 mismatch=reload-changed mailbox=keep fingerprint=cacdd756397ad37fa22b3594a3587edc9d35bb381127ba2f519214b2e6e86782 mode=partial reloaded=[a] discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:01Z
+seg a/r2 start from=b/r1.c1 handler=note clause=1 fuel=23 alloc=20 state=16 end=return
+run a/r2 outcome=completed handler=note value="v2 x" fuel=23 alloc=20
+seg b/r1 resume fuel=8 alloc=0 state=20 end=return
+run b/r1 outcome=completed delivery=d2 handler=start fuel=36 alloc=49
+pumped state=idle fuel=31
+
+> vars
+vars a last=""
+vars b got="v2 x"

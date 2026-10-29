@@ -666,6 +666,15 @@ var Corpus = CorpusTable{
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:  "mailbox",
+					Type: "word",
+					Is:   "`keep` when the Host asked a Partial Restore to keep each changed Script's mailbox",
+					Words: []string{
+						"keep",
+					},
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:      "unbound",
 					Type:     "ids",
 					Is:       "the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked",
