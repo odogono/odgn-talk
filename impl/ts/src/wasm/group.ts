@@ -1493,6 +1493,7 @@ export class WasmGroup implements Group {
         save: bytesFrame(save),
         libraries: o.libraries.map(l => bytesFrame(l.identity)),
         mismatch: o.onMismatch,
+        keepMailbox: o.keepMailbox,
         trace: !!o.trace,
       });
     } finally {

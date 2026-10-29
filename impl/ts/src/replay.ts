@@ -1446,6 +1446,7 @@ const driveReplay = function* (
                 : r.fields.get('mismatch') === 'reload-changed'
                   ? 'reload changed'
                   : 'reject',
+            keepMailbox: r.fields.get('mailbox') === 'keep',
           });
           if (restoreBetweenPumps) {
             // A restore rewinds the visible Save counter as well as the Core's

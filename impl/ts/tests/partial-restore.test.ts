@@ -8,6 +8,7 @@ import {
   newGroup,
   restore,
   shape,
+  text,
   type Group,
   type RestoreOptions,
   type ScriptSources,
@@ -349,4 +350,111 @@ test('external sources: a changed bundle, including one with fewer extensions, r
     scriptSources: ({ name }) => sources[name as 's' | 't'],
   });
   expect(exact.result).toMatchObject({ variablesOnly: false, reloaded: [] });
+});
+
+// keepMailbox: a changed Script's saved mailbox goes to its new code.
+const busy =
+  'use label from fmt\non go\n  repeat forever\n  end repeat\nend go\non note x\n  return label(x)\nend note';
+
+test('keepMailbox gives a changed Script its mailbox; without it the mailbox is dropped', () => {
+  const g = group({ a: busy });
+  g.script('a')!.deliver({ name: 'go' });
+  g.script('a')!.deliver({ name: 'note', args: [text('x')] });
+  g.pump(0n, { fuelSlice: 5 });
+  const bytes = g.save();
+  const dropped = restore(bytes, options());
+  expect(dropped.result.droppedMessages).toEqual(['d2']);
+  const trace: string[] = [];
+  const kept = restore(bytes, { ...options(trace), keepMailbox: true });
+  expect(kept.result).toMatchObject({
+    reloaded: ['a'],
+    discardedRuns: ['a/r1'],
+    droppedMessages: [],
+  });
+  expect(kept.result.reports).toContainEqual(
+    expect.objectContaining({
+      kind: 'stop',
+      script: 'a',
+      reason: 'reload',
+      droppedMessages: [],
+    }),
+  );
+  expect(trace.at(-1)).toContain('mismatch=reload-changed mailbox=keep');
+  expect(
+    runEnds(kept.group, later).map(r => [r.run, r.result?.toString()]),
+  ).toEqual([['a/r2', '"2x"']]);
+});
+
+test('keepMailbox is written but ignored when the restore is not partial', () => {
+  const g = group({ a: busy });
+  g.script('a')!.deliver({ name: 'go' });
+  g.script('a')!.deliver({ name: 'note', args: [text('x')] });
+  g.pump(0n, { fuelSlice: 5 });
+  const trace: string[] = [];
+  const { result } = restore(g.save(), {
+    ...options(trace),
+    onMismatch: 'variables only',
+    keepMailbox: true,
+  });
+  expect(result).toMatchObject({
+    variablesOnly: true,
+    droppedMessages: ['d2'],
+  });
+  expect(trace.at(-1)).toContain('mailbox=keep');
+});
+
+test("a kept Request's sender goes on waiting for the new code's reply", () => {
+  const g = group({
+    a: busy,
+    b: 'script variable got = ""\non start\n  send note with "x" to a and wait\n  put it into got\nend start',
+  });
+  g.script('a')!.deliver({ name: 'go' });
+  g.script('b')!.deliver({ name: 'start' });
+  g.pump(0n, { fuelSlice: 5 });
+  const { group: copy, result } = restore(g.save(), {
+    ...options(),
+    keepMailbox: true,
+  });
+  expect(result.droppedMessages).toEqual([]);
+  copy.pump(later);
+  expect(vars(copy).b).toEqual({ got: '"2x"' });
+});
+
+test('a kept Decision recipient whose Run had not begun stays open', () => {
+  const g = group({
+    a: 'use label from fmt\non go\n  repeat forever\n  end repeat\nend go\non pick, deciding\n  return label("y")\nend pick',
+  });
+  g.script('a')!.deliver({ name: 'go' });
+  g.script('a')!.decide({ name: 'pick' });
+  g.pump(0n, { fuelSlice: 5 });
+  const { group: copy } = restore(g.save(), {
+    ...options(),
+    keepMailbox: true,
+  });
+  expect(
+    operationalReports(copy.pump(1n).reports).filter(r => r.kind === 'decided'),
+  ).toMatchObject([{ delivery: 'd2', verdict: 'allowed' }]);
+});
+
+test("a changed Script's kept mailbox counts toward its Persistent State cap", () => {
+  const source =
+    'on go\n  repeat forever\n  end repeat\nend go\non note x\nend note';
+  const g = newGroup({ name: 'g' });
+  g.load({ name: 'a', source, limits: { persistentState: 200 } });
+  g.script('a')!.deliver({ name: 'go' });
+  g.script('a')!.deliver({ name: 'note', args: [text('x'.repeat(150))] });
+  g.pump(0n, { fuelSlice: 5 });
+  const bytes = g.save({ sources: 'external' });
+  // The new code fits the cap alone, but not with the kept message.
+  const grown = `${source}\nscript variable t = "${'z'.repeat(60)}"`;
+  const edited = sources({ source: grown });
+  expect(restore(bytes, edited).result.droppedMessages).toEqual(['d2']);
+  expect(() => restore(bytes, { ...edited, keepMailbox: true })).toThrow(
+    expect.objectContaining({ code: 'state too large' }),
+  );
+  // A live Reload that keeps the mailbox counts it the same way.
+  expect(() =>
+    g.script('a')!.reload(grown, 'reset variables', { keepMailbox: true }),
+  ).toThrow(expect.objectContaining({ code: 'state too large' }));
+  expect(() => g.script('a')!.reload(grown, 'reset variables')).not.toThrow();
 });

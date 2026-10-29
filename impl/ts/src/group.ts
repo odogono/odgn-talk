@@ -263,6 +263,8 @@ export type ScriptCodeRequest = {
 export type ScriptSources = { extensions?: readonly string[]; source: string };
 export type RestoreOptions = GroupOptions & {
   grants(script: string, name: string): Grant<unknown> | undefined;
+  /** With "reload changed", keep each changed Script's mailbox, as Reload's keepMailbox does; ignored otherwise. */
+  keepMailbox?: boolean;
   libraries: readonly Library[];
   onMismatch: 'reject' | 'variables only' | 'reload changed';
   resolve(kind: string, id: string): { native: unknown } | undefined;
@@ -1486,6 +1488,7 @@ export class TsGroup implements Group {
                 ? 'reload-changed'
                 : null,
           ],
+          ['mailbox', o.keepMailbox ? 'keep' : null],
           ['unbound', unbound.length ? idList(unbound) : null],
           ['withheld', withheld.length ? idList(withheld) : null],
           ['fingerprint', savedFingerprint],
@@ -1583,7 +1586,13 @@ export class TsGroup implements Group {
     group.drainReports = result.reports;
     group.saves = save.saveIdCounter;
     group.savedName = save.group.name;
-    group.applyState(state, { partial, changed, variablesOnly, result });
+    group.applyState(state, {
+      partial,
+      changed,
+      variablesOnly,
+      result,
+      keepMailbox: partial && !!o.keepMailbox,
+    });
     group.flushAccounting(result.reports);
     emitting = true;
     o.trace?.(restoreLine(result));
@@ -1723,12 +1732,13 @@ export class TsGroup implements Group {
     state: ReturnType<TsGroup['readState']>,
     o: {
       changed: ReadonlySet<string>;
+      keepMailbox: boolean;
       partial: boolean;
       result: RestoreResult;
       variablesOnly: boolean;
     },
   ) {
-    const { result, variablesOnly, partial, changed } = o;
+    const { result, variablesOnly, partial, changed, keepMailbox } = o;
     const objects = [...this.objects.values()];
     const g = state.group;
     this.deliveries = g.deliveries;
@@ -2197,12 +2207,16 @@ export class TsGroup implements Group {
       }
       const abandoned: string[] = [];
       for (const [script, variables] of carried) {
-        const ended = this.reloadRestored(script);
+        const ended = this.reloadRestored(script, keepMailbox);
         result.discardedRuns.push(...ended.runs);
         result.droppedMessages.push(...ended.messages);
         abandoned.push(...ended.pendingCalls);
         script.loaded.variables = variables;
-        if (script.loaded.variablesSize() > script.limits.persistentState) {
+        // A kept mailbox counts toward the cap, as a live Reload's does.
+        if (
+          script.loaded.variablesSize() + this.mailboxSize(script) >
+          script.limits.persistentState
+        ) {
           throw new HostError('state too large');
         }
       }
@@ -3396,9 +3410,11 @@ export class TsGroup implements Group {
    * runs: this Script's Grants, Segments and scopes were never live here.
    * Its open Decision recipients are discarded, reported at the first Pump.
    */
-  private reloadRestored(s: ScriptState) {
+  private reloadRestored(s: ScriptState, keepMailbox: boolean) {
     const runs = this.runsOf(s);
-    const messages = s.queue.filter((q): q is Delivery => !('run' in q));
+    const mailbox = s.queue.filter((q): q is Delivery => !('run' in q));
+    // A kept mailbox goes to the new code, its Decisions still open.
+    const messages = keepMailbox ? [] : mailbox;
     const pendingCalls: string[] = [];
     for (const r of runs) {
       this.accumulateRunCosts(s, r.run);
@@ -3411,7 +3427,7 @@ export class TsGroup implements Group {
     for (const d of messages) {
       this.discardDecision(d, s.name);
     }
-    s.queue = [];
+    s.queue = keepMailbox ? mailbox : [];
     if (!s.stopped) {
       this.reportStop(s, 'reload', runs, messages, pendingCalls, null);
     }
@@ -3756,6 +3772,7 @@ export class TsGroup implements Group {
     carry: CarryOver,
     libraries = this.libraries,
     extensions: readonly string[] = [],
+    keepMailbox = false,
   ) {
     const grants = availableGrants(s);
     const p = prepare(
@@ -3817,9 +3834,11 @@ export class TsGroup implements Group {
         }
       }
     }
+    // A kept mailbox counts toward the cap with the new Script Variables.
     if (
-      (carry === 'carry variables' || extensions.length > 0) &&
-      loaded.variablesSize() > s.limits.persistentState
+      (carry === 'carry variables' || extensions.length > 0 || keepMailbox) &&
+      loaded.variablesSize() + (keepMailbox ? this.mailboxSize(s) : 0) >
+        s.limits.persistentState
     ) {
       this.trace?.(
         recordLine(
@@ -3857,7 +3876,14 @@ export class TsGroup implements Group {
         true,
       ),
     );
-    const replacement = this.replacement(s, source, carry);
+    const replacement = this.replacement(
+      s,
+      source,
+      carry,
+      this.libraries,
+      [],
+      keepMailbox,
+    );
     return this.replaceScripts([{ s, ...replacement }], keepMailbox);
   }
 
@@ -6548,15 +6574,18 @@ export class TsGroup implements Group {
       total += r.run.size();
     }
     for (const item of s.queue.slice(skip)) {
-      total +=
-        'run' in item
-          ? item.run.size()
-          : partSize(
-              'message',
-              0,
-              item.args.reduce((sum, v) => sum + sizeOf(v), 0) +
-                (item.fn ? sizeOf(item.fn) : 0),
-            );
+      total += 'run' in item ? item.run.size() : messageSize(item);
+    }
+    return total;
+  }
+
+  /** The logical size of a Script's queued messages, without its Runs. */
+  private mailboxSize(s: ScriptState): number {
+    let total = 0;
+    for (const item of s.queue) {
+      if (!('run' in item)) {
+        total += messageSize(item);
+      }
     }
     return total;
   }
@@ -6937,6 +6966,13 @@ const messageFields = (m: Message): [string, string | null][] => {
 };
 
 export const newGroup = (o: TsGroupOptions): TsGroup => new TsGroup(o);
+
+const messageSize = (d: Delivery) =>
+  partSize(
+    'message',
+    0,
+    d.args.reduce((sum, v) => sum + sizeOf(v), 0) + (d.fn ? sizeOf(d.fn) : 0),
+  );
 
 export const restore = (bytes: Uint8Array, options: TsRestoreOptions) =>
   TsGroup.restore(bytes, options);
