@@ -14,6 +14,6 @@ export const coreVersions: Versions = Object.freeze({
   language: languageVersion,
   costModel: String(costModel.version),
   unicode: unicodeVersion,
-  core: 'ts/0.3.0',
+  core: 'ts/0.4.0',
   saveFormat: String(saveFormat),
 });
