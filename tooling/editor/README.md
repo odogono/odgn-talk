@@ -5,6 +5,7 @@ The NorthTalk editor of [Folio](../creative/), the creative tool. It is CodeMirr
 ## Using it
 
 - **`@northtalk/editor/editor`:** `northtalkEditor(uri, lsp, hooks, bindings)` returns the editor's extensions for one document. A page puts its own gutters and marks before them, and passes its own keys in `bindings`. `diagnosticsSpec` turns the language server's diagnostics into a CodeMirror transaction, and `refreshHints` fetches the suspension marks.
+- **`@northtalk/editor/breakpoints`:** `breakpointGutter(changed, unverified?)` returns the breakpoint gutter and paused line. `breakpointLines` reads a document's breakpoints, `markVerified` marks those in loaded code, and `pausedAt` shows or clears the paused line. A page styles `.bp`, `.bp-unverified` and `.cm-paused`.
 - **`@northtalk/editor/lsp-client`:** `LspClient` talks to the LSP worker over `postMessage`.
 - **`@northtalk/editor/language`:** the NorthTalk highlighting.
 - **`@northtalk/editor/lsp-protocol`:** the messages between a page and the LSP worker.

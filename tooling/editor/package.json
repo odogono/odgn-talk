@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./breakpoints": "./src/breakpoints.ts",
     "./editor": "./src/editor.ts",
     "./language": "./src/language.ts",
     "./lsp-client": "./src/lsp-client.ts",
