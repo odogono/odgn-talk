@@ -79,17 +79,13 @@ import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData, operationsOf } from './manifest';
 import {
   compareNames,
-  decodeSave,
   encodeGroup,
-  invalidSave,
   stateFingerprint,
-  type DecodedSave,
   type GroupSnapshot,
-  hexOf,
 } from './group-snapshot';
-import { saveSections } from './save-format';
+import { hexBytes, hexOf, invalidSave } from './save-format';
+import { openSave, type OpenSave } from './save-file';
 import {
-  RecordReader,
   type DeliveryRecord,
   type Input,
   type Mark,
@@ -1300,7 +1296,7 @@ export class TsGroup implements Group {
     bytes: Uint8Array,
     o: TsRestoreOptions,
   ): { group: TsGroup; result: RestoreResult } {
-    const save = decodeSave(bytes);
+    const save = openSave(bytes);
     let emitting = false;
     const group = new TsGroup({
       name: o.name,
@@ -1606,7 +1602,7 @@ export class TsGroup implements Group {
    * code, and every section that holds them.
    */
   private readState(
-    save: DecodedSave,
+    save: OpenSave,
     objects: readonly ObjectState[],
     changed: boolean | ReadonlySet<string>,
   ) {
@@ -1685,55 +1681,17 @@ export class TsGroup implements Group {
         return v.toString() === display ? v : invalidSave();
       },
     );
-    const tables = {
-      calls: 0,
-      libraries: save.libraries.length,
-      objects: objects.length,
-      runs: 0,
-    };
-    const section = <T>(
-      tag: number,
-      read: (r: RecordReader<Value>) => T,
-    ): T => {
-      const r = new RecordReader(save.reader(tag), values, tables);
-      const out = read(r);
-      r.r.end();
-      return out;
-    };
-    const calls = section(saveSections.calls, r => r.calls());
-    tables.calls = calls.length;
-    const scripts = section(saveSections.scripts, r => r.scripts());
-    const { perScript, runs } = section(saveSections.runs, r => r.runs());
-    tables.runs = runs.length;
-    const work = section(saveSections.work, r => r.work());
-    const waits = section(saveSections.waits, r => r.waits());
-    const inputs = section(saveSections.inputs, r => r.inputs());
-    const decisions = section(saveSections.decisions, r => r.decisions());
-    const accounting = section(saveSections.accounting, r => r.accounting());
-    if (
-      perScript.length !== scripts.length ||
-      work.length !== scripts.length ||
-      perScript.reduce((a, b) => a + b, 0) !== runs.length
-    ) {
-      invalidSave();
-    }
+    const { discards, changedRoots, ...records } = save.values(values);
     return {
-      calls,
-      scripts,
-      perScript,
-      runs,
-      work,
-      waits,
-      inputs,
-      decisions,
-      accounting,
+      ...records,
+      accounting: { discards, changedRoots },
       group: save.group,
       save,
     };
   }
 
   /** A unit's code, relative to a Script, as a save names it. */
-  private unitCode(s: ScriptState, unit: Unit, save: DecodedSave): Code {
+  private unitCode(s: ScriptState, unit: Unit, save: OpenSave): Code {
     switch (unit.k) {
       case 'own':
         return s.loaded.units[0]!;
@@ -6961,8 +6919,6 @@ const compareCallIds = (a: string, b: string) => {
 };
 const byName = (a: { name: string }, b: { name: string }) =>
   compareNames(a.name, b.name);
-const hexBytes = (hex: string) =>
-  Uint8Array.from(hex.match(/../g)!, byte => Number.parseInt(byte, 16));
 const validOverride = (name: string, value: unknown, cap: number): boolean =>
   overridable.has(name) &&
   typeof value === 'number' &&

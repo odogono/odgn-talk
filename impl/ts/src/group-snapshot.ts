@@ -2,7 +2,6 @@
 // sections (ADR 0144, chapter 10). The Group gathers its state and rebuilds
 // from what a restore reads; a Run's records are save-runs.ts's, wait state
 // waits.ts's (ADR 0105).
-import { HostError } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import type {
   Decision,
@@ -16,23 +15,15 @@ import type { Code } from './machine';
 import type { ObjectState } from './objects';
 import type { AccountingState } from './run-accounting';
 import {
+  hexBytes,
   readSave,
   saveSections,
-  SaveReader,
   stateFingerprint as headerFingerprint,
 } from './save-format';
-import { RecordReader } from './save-records';
-import { skipValue } from './save-values';
-import { operationsOf } from './manifest';
+import { writeSections } from './save-file';
 import type {
   DeliveryRecord,
-  FunctionRecord,
-  GroupRecord,
   Input,
-  LibraryRecord,
-  ObjectRecord,
-  ScriptRecord,
-  ValueIO,
   Mark,
   OpenBroadcast,
   ResumeRecord,
@@ -46,12 +37,7 @@ import {
   runRecords,
   type RunPlaces,
 } from './save-runs';
-import {
-  encodeSections,
-  grantRecord,
-  hexBytes,
-  ValueWriter,
-} from './save-state';
+import { grantRecord, ValueWriter } from './save-state';
 import type { Value } from './values';
 import type { Waits } from './waits';
 
@@ -113,7 +99,7 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
   const runs = runRecords(g, places);
   const delivery = (d: Delivery): DeliveryRecord<Value> =>
     deliveryRecord(d, ref);
-  return encodeSections(
+  return writeSections(
     {
       language: languageVersion,
       costModel: costModel.version,
@@ -212,6 +198,8 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
       inputs: w =>
         w.inputs(g.inputs.map(x => inputRecord(x.action, delivery, ref))),
       decisions: w => w.decisions(decisionRecords(g)),
+      // Last, once every value has added its function.
+      functions: w => w.functions(values.functions),
       accounting: w => {
         w.accounting(
           [...g.rootDiscards]
@@ -442,118 +430,4 @@ export const saveStateFingerprint = (bytes: Uint8Array): Uint8Array =>
 
 export const compareNames = (a: string, b: string) =>
   a < b ? -1 : a > b ? 1 : 0;
-export const hexOf = (bytes: Uint8Array) =>
-  [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
-
 export { identityOf, saveSections };
-
-/** A save as a restore's first pass reads it: everything but its values. */
-export type DecodedSave = {
-  costModel: number;
-  functions: FunctionRecord[];
-  group: GroupRecord;
-  groupFingerprint: Uint8Array;
-  language: string;
-  libraries: LibraryRecord[];
-  objects: ObjectRecord[];
-  /** A section's reader, for the second pass. */
-  reader(tag: number): SaveReader;
-  saveIdCounter: number;
-  scripts: ScriptRecord<undefined>[];
-  sources: { extensions: string[]; source: string }[] | undefined;
-};
-
-const skipping: ValueIO<undefined> = {
-  read: r => {
-    skipValue(r);
-    return undefined;
-  },
-  write: () => {},
-};
-
-/**
- * Reads a save's frames and the sections a restore needs before it can
- * load code: the Group's counters, Libraries, objects, functions, Scripts
- * and sources. Another magic, such as an old JSON save, is `invalid save`.
- */
-export const decodeSave = (bytes: Uint8Array): DecodedSave => {
-  const save = readSave(bytes);
-  const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
-  const texts = new SaveReader(save.body(saveSections.texts)!);
-  const textList = texts.list(r => r.text());
-  texts.end();
-  const reader = (tag: number) => new SaveReader(save.body(tag)!, textList);
-  const section = <T>(
-    tag: number,
-    read: (r: RecordReader<undefined>) => T,
-  ): T => {
-    const r = new RecordReader(reader(tag), skipping, tables);
-    const out = read(r);
-    r.r.end();
-    return out;
-  };
-  const group = section(saveSections.group, r => r.group());
-  const libraries = section(saveSections.libraries, r => r.libraries());
-  tables.libraries = libraries.length;
-  const objects = section(saveSections.objects, r => r.objects());
-  tables.objects = objects.length;
-  const functions = section(saveSections.functions, r => r.functions());
-  const scripts = section(saveSections.scripts, r => r.scripts());
-  const sources = save.body(saveSections.sources)
-    ? section(saveSections.sources, r => r.sources())
-    : undefined;
-  // Every other section's structure, so a save no Core could have written
-  // fails before any Host callback runs.
-  tables.calls = section(saveSections.calls, r => r.calls()).length;
-  const { perScript, runs } = section(saveSections.runs, r => r.runs());
-  tables.runs = runs.length;
-  const work = section(saveSections.work, r => r.work());
-  section(saveSections.waits, r => r.waits());
-  section(saveSections.inputs, r => r.inputs());
-  section(saveSections.decisions, r => r.decisions());
-  section(saveSections.accounting, r => r.accounting());
-  const names = new Set(scripts.map(s => s.name));
-  if (
-    names.size !== scripts.length ||
-    perScript.length !== scripts.length ||
-    work.length !== scripts.length ||
-    perScript.reduce((a, b) => a + b, 0) !== runs.length
-  ) {
-    invalidSave();
-  }
-  for (const script of scripts) {
-    const grants = new Set(script.grants.map(g => g.name));
-    if (grants.size !== script.grants.length) {
-      invalidSave();
-    }
-    for (const grant of script.grants) {
-      const declared = operationsOf(grant.declarations);
-      if (
-        declared.capability !== grant.capability ||
-        grant.operations.some(op => !declared.operations.has(op.name))
-      ) {
-        invalidSave();
-      }
-    }
-  }
-  if (sources && sources.length !== scripts.length) {
-    invalidSave();
-  }
-  return {
-    language: save.language,
-    costModel: save.costModel,
-    groupFingerprint: save.groupFingerprint,
-    saveIdCounter: save.saveIdCounter,
-    group,
-    libraries,
-    objects,
-    functions,
-    scripts,
-    sources,
-    reader,
-  };
-};
-
-export const invalidSave = (): never => {
-  throw new HostError('invalid save');
-};

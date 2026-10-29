@@ -2,40 +2,14 @@
 // spec/data/save-format.toml), and back. The Group gathers its state and
 // rebuilds from what a restore reads; a Run's own records are save-runs.ts's.
 import type { Grant, ValueOperation } from './capabilities';
-import { HostError } from './errors';
-import { costModel, languageVersion } from './generated/machine';
-import type { Library } from './library';
 import type { Code, Script } from './machine';
 import { canonicalJSON, grantData } from './manifest';
 import type { ObjectState } from './objects';
-import {
-  type SaveReader,
-  type SaveSection,
-  SaveWriter,
-  readSave,
-  saveSections,
-  TextTable,
-  writeSave,
-} from './save-format';
-import {
-  RecordWriter,
-  type FunctionRecord,
-  type SaveRecords,
-  type Unit,
-  type ValueIO,
-} from './save-records';
+import { hexBytes, invalidSave as invalid, SaveWriter } from './save-format';
+import { type FunctionRecord, type Unit, type ValueIO } from './save-records';
 import { decimalParts, map, Value } from './values';
 import { coreRaised } from './machine';
 import { functionHead } from './code-unit';
-
-const invalid = (): never => {
-  throw new HostError('invalid save');
-};
-
-export const hexBytes = (hex: string): Uint8Array =>
-  Uint8Array.from(hex.match(/../g) ?? [], b => Number.parseInt(b, 16));
-export const bytesHex = (bytes: Uint8Array) =>
-  [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
 
 /** A Script value's Script-name mark, for a Receiver on an operand stack. */
 export const scriptNames = new WeakSet<Value>();
@@ -267,53 +241,6 @@ const quantityUnit = (v: Value): string => {
 };
 
 /** What a Group's save reads from it. */
-export type GroupSnapshot = {
-  libraries: ReadonlyMap<string, Library>;
-  name: string;
-};
-
-export const versions = {
-  language: languageVersion,
-  costModel: costModel.version,
-};
-export type SectionWriter = (w: RecordWriter<Value>) => void;
-
-/** Frames each section in tag order, the functions section written last. */
-export const encodeSections = (
-  header: Parameters<typeof writeSave>[0],
-  values: ValueWriter,
-  bodies: Partial<Record<keyof typeof saveSections, SectionWriter>>,
-): Uint8Array => {
-  const sections: SaveSection[] = [];
-  const written = new Map<number, Uint8Array>();
-  // Every section but `functions` and `texts` adds to the texts table as it
-  // is written; `functions` adds last, and `texts` holds the table.
-  const texts = new TextTable();
-  for (const [name, tag] of Object.entries(saveSections)) {
-    const body = bodies[name as keyof typeof saveSections];
-    if (!body || tag === saveSections.functions) {
-      continue;
-    }
-    const w = new SaveWriter(texts);
-    body(new RecordWriter(w, values));
-    written.set(tag, w.finish());
-  }
-  const fw = new SaveWriter(texts);
-  new RecordWriter(fw, values).functions(values.functions);
-  written.set(saveSections.functions, fw.finish());
-  written.set(
-    saveSections.texts,
-    new SaveWriter().list(texts.texts, (w, t) => w.text(t)).finish(),
-  );
-  for (const [, tag] of Object.entries(saveSections)) {
-    const body = written.get(tag);
-    if (body) {
-      sections.push({ tag, body, optional: tag === saveSections.sources });
-    }
-  }
-  return writeSave(header, sections);
-};
-
 export const operationRecord = (name: string, op: ValueOperation<unknown>) => {
   const args = op.args ?? [];
   let required = args.length;
@@ -345,6 +272,3 @@ export const grantRecord = (
   revoked,
   disabled,
 });
-
-export { readSave, invalid as invalidSave };
-export type { SaveReader, SaveRecords };

@@ -30,9 +30,16 @@ const lastRequired = saveSections.accounting;
 const isKnown = (tag: number) => tag >= 1 && tag <= saveSections.sources;
 const isOptionalKnown = (tag: number) => tag === saveSections.sources;
 
-const invalid = (): never => {
+export const invalidSave = (): never => {
   throw new HostError('invalid save');
 };
+const invalid = invalidSave;
+
+/** Bytes as lower-case hex, and back. */
+export const hexOf = (bytes: Uint8Array) =>
+  [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+export const hexBytes = (hex: string): Uint8Array =>
+  Uint8Array.from(hex.match(/../g) ?? [], b => Number.parseInt(b, 16));
 
 const magicBytes = new TextEncoder().encode(saveMagic);
 const utf8 = new TextEncoder();
