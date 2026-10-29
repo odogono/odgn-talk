@@ -1,6 +1,7 @@
 # First blessing approved by the maintainer on 2026-10-29 for #1795.
 # metering-charge-requests: an invalid amount is refused at enqueue with no
-# request id. r1's q1 is accepted and spent
+# request id, and so is a second request for r1's call while q1 is
+# unresolved, written after q1 in call order. r1's q1 is accepted and spent
 # without a Stretch; r2's q2 is more than its Run has left, so r2 faults at
 # its call. After r1's answer, q3 is inactive and spends nothing.
 
@@ -16,6 +17,8 @@ pumped state=idle fuel=28 next=2026-10-29T09:00:30Z
 > charge-request reader/r1.c1 fuel="invalid"
 refused code="invalid value"
 > charge-request reader/r1.c1 q1 fuel=5
+> charge-request reader/r1.c1 fuel=1
+refused code="invalid value"
 > charge-request reader/r2.c1 q2 fuel=1000
 > pump clock=2026-10-29T09:00:01Z
 charge-result reader/r1.c1 q1 fuel=5 status=accepted

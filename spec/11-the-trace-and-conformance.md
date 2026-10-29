@@ -177,7 +177,7 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 
 ### Metering extensions
 
-[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. The catalogue tables below carry them, and SQLite `[standard]` setup takes `perStep`. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
+[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. The catalogue tables below carry them, and SQLite `[standard]` setup takes `perStep`. Synchronous replay must preserve accepted prefix charges before refusal. A refusal made while a queued `charge-request` waits to be written is held and written among the queued inputs in call order, so an overlap refusal follows the request it overlaps. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
 
 ### What is recorded, and when
 

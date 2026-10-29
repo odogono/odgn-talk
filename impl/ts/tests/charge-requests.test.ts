@@ -97,7 +97,7 @@ describe('admission', () => {
       'refused code="invalid value"',
     ]);
 
-    const { calls, lines } = setup({ metering: 'read-only' });
+    const { calls, group, lines } = setup({ metering: 'read-only' });
     for (const fuel of [-1, 1.5, Number.NaN, 2 ** 53]) {
       expect(codeOf(() => calls[0]!.requestCharge(fuel))).toBe('invalid value');
       expect(lines.slice(-2)).toEqual([
@@ -107,9 +107,14 @@ describe('admission', () => {
     }
     expect(calls[0]!.requestCharge(0).id).toBe('q1');
     expect(codeOf(() => calls[0]!.requestCharge(2))).toBe('invalid value');
-    expect(lines.slice(-2)).toEqual([
+    // Held behind q1, the overlap refusal is written after it (#1807).
+    const before = lines.length;
+    group.pump(0n);
+    expect(lines.slice(before, before + 4)).toEqual([
+      '> charge-request s/r1.c1 q1 fuel=0',
       '> charge-request s/r1.c1 fuel=2',
       'refused code="invalid value"',
+      expect.stringMatching(/^> pump /),
     ]);
   });
 
