@@ -5,6 +5,7 @@ import {
   newGroup,
   parseInstant,
   readDisplay,
+  shape,
   sqliteCapability,
   type Costs,
   type SegmentCoordinator,
@@ -222,4 +223,24 @@ test('each call charges max times perRow before the implementation runs', () => 
   expect(three.fuel - zero.fuel).toBe(21);
   expect(fuelOf(readDisplay('nothing')).outcome).toBe('limit fault');
   expect(seen.length).toBe(2);
+});
+
+test('the Operations declare each error with its catalogue fields', () => {
+  const { operations } = sqliteCapability(recording().impl, costs, 0);
+  const fields = (op: string) =>
+    Object.fromEntries(
+      operations.get(op)!.errors!.map(e => [e.code, e.fields ?? {}]),
+    );
+  const statement = {
+    sql: { reason: shape.text },
+    'too many rows': { max: shape.number },
+    unrepresentable: { column: shape.text },
+  };
+  expect(fields('query')).toEqual({ ...statement, 'not read-only': {} });
+  expect(fields('change')).toEqual({
+    ...statement,
+    constraint: { kind: shape.text },
+    'sqlite busy': {},
+  });
+  expect(fields('begin')).toEqual({ 'sqlite busy': {} });
 });
