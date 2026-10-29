@@ -5705,12 +5705,11 @@ export class TsGroup implements Group {
       }
     };
     this.active = { s, running, records: run.records.length };
-    if (running.cleanupReady) {
+    const cleanupReady = !!running.cleanupReady;
+    if (cleanupReady) {
       running.cleanupReady = false;
-      run.beginCleanupSegment();
-    } else if (how === 'resume' && !run.suspended && !run.cancelling) {
-      run.beginReadySegment();
     }
+    run.enterDispatch(how, cleanupReady);
     selected();
     charge(run.fuel - fuel0);
     let last = run.fuel;

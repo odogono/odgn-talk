@@ -1547,7 +1547,7 @@ export class Run {
     const suspension = this.suspended;
     const pending = this.pendingCall(id)!;
     if (suspension) {
-      this.segmentBase = [...this.script.variables];
+      this.rebase();
     }
     const site = 'site' in pending ? (pending as Member).site : undefined;
     // No instruction is executing, so a debugger has nowhere to pause: the
@@ -1663,7 +1663,7 @@ export class Run {
       // The saved suspension committed its Segment. Reissue can't roll it back.
       // A preempted Join body keeps its saved segment base (chapter 10).
       if (suspension) {
-        this.segmentBase = [...this.script.variables];
+        this.rebase();
       }
       // It faults at the call: a Join member at its own site (#1413).
       const site = 'site' in pending ? (pending as Member).site : undefined;
@@ -2109,11 +2109,10 @@ export class Run {
     }
     const { frames, controls } = this;
     this.cancellationAbandons = this.discard('cancelled', betweenSegments);
-    this.segment++;
+    this.newSegment();
     this.frames = frames;
     this.controls = controls;
     this.cleanupFrom = this.fuel;
-    this.beginCleanupSegment();
     // A cleanup it was preempted in ends. A catch dispatch it was preempted
     // in runs its policy's own `finally` blocks, then leaves, bringing its
     // failed frames back with theirs.
@@ -2239,19 +2238,34 @@ export class Run {
     return depth;
   }
 
-  /** Other Runs may have committed since cancellation made this Run ready. */
-  beginCleanupSegment() {
+  /** A new Segment: its id moves on, and a rollback returns to here. */
+  private newSegment() {
+    this.segment++;
+    this.rebase();
+  }
+
+  /** The same Segment, rolled back to here from now on. */
+  private rebase() {
     this.segmentBase = [...this.script.variables];
   }
 
   /**
-   * A parked Run resumes after dispatch, with no resumption instruction, in a
-   * new Segment: its park ended the first (chapter 11, Segment ids).
+   * Where the Segment stands as the Run is dispatched. A Run that
+   * cancellation made ready rolls back to here, as other Runs may have
+   * committed since. A parked Run resumes after dispatch, with no resumption
+   * instruction, in a new Segment: its park ended the first (chapter 11,
+   * Segment ids).
    */
-  beginReadySegment() {
-    if (!this.resumption) {
-      this.segment++;
-      this.segmentBase = [...this.script.variables];
+  enterDispatch(how: 'continue' | 'resume' | 'start', cleanupReady: boolean) {
+    if (cleanupReady) {
+      this.rebase();
+    } else if (
+      how === 'resume' &&
+      !this.suspended &&
+      !this.cancelling &&
+      !this.resumption
+    ) {
+      this.newSegment();
     }
   }
 
@@ -3168,8 +3182,7 @@ export class Run {
   private resume(r: Resumption) {
     const s = this.waitedOn!;
     this.waitedOn = null;
-    this.segment++;
-    this.segmentBase = [...this.script.variables];
+    this.newSegment();
     const frame = this.frame;
     if (r.k === 'deadline') {
       // What it waited on is abandoned, as a timeout's is (ADR 0073).
