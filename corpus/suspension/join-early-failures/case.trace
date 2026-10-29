@@ -1,0 +1,22 @@
+# Unblessed: which early member failure a preempted Join raises (#1753); first blessing awaits human review.
+
+> load a identity=2be158e99d42f37a5f92ee18bbfe03d64f88d8f7f7abe83f208637bfa431c8a9
+
+> deliver d1 to=a message=go
+> pump clock=2026-10-06T10:00:00Z fuel-slice=34
+call a/r1.c1 op=stock.check args=["A1"]
+call a/r1.c2 op=stock.check args=["B2"]
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=38 alloc=0
+pumped state=sliced fuel=38
+> fail a/r1.c2 error={code: "second"}
+> fail a/r1.c1 error={code: "first"}
+> pump clock=2026-10-06T10:00:00Z
+seg a/r1 continue fuel=10 alloc=0 state=272 end=join-end
+raise a/r1 code="first" at=a:7 pos=9:5
+abandon a/r1.c2
+seg a/r1 resume fuel=22 alloc=85 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value=["first", 1] fuel=70 alloc=85
+pumped state=idle fuel=32
+
+> vars
+vars a

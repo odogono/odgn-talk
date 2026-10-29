@@ -1,0 +1,7 @@
+-- b.talk: part of the join-member-wait-order case. Its wait is set after
+-- a's first member starts, with the same deadline.
+
+on go
+  wait 1 s
+  return "waited"
+end go

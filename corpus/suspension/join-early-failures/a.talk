@@ -1,0 +1,13 @@
+-- a.talk: the join-early-failures case's Script. Its Join is preempted
+-- after starting both members, which then fail in reverse order.
+
+on go
+  try
+    wait for all
+      ask stock to check "A1" and wait
+      ask stock to check "B2" and wait
+    end wait
+  catch {code: c, index: i}
+    return [c, i]
+  end try
+end go

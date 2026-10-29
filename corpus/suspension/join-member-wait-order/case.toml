@@ -1,0 +1,27 @@
+# join-member-wait-order: a Join Member's wait takes its place in the wait
+# order when the member starts, not when the Join suspends at its closing
+# `end` (spec chapter 5, "Joins" and "A Pump"; #1752).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 1 }
+maxPending = 1000
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+grants = { stock = { ops = ["check"] } }
+
+[[scripts]]
+name = "b"
+source = "b.talk"

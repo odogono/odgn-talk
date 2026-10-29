@@ -149,9 +149,22 @@ export class Waits<R extends Owner, S> {
   /** Each Script's pending `wait for`s, in the order the waits began. */
   private waiters = new Map<S, Waiter<R, S>[]>();
 
-  /** Sets a timer. Of equal deadlines, the earlier set fires first. */
-  timer(deadline: bigint, action: TimerAction<R, S>, running?: R) {
-    const t = { deadline, action, live: true, seq: this.timerSeq++, running };
+  /** Takes the next timer's order now, for a timer set later. */
+  reserve(): number {
+    return this.timerSeq++;
+  }
+
+  /**
+   * Sets a timer. Of equal deadlines, the earlier set fires first, or the
+   * one whose order was reserved first.
+   */
+  timer(
+    deadline: bigint,
+    action: TimerAction<R, S>,
+    running?: R,
+    seq = this.reserve(),
+  ) {
+    const t = { deadline, action, live: true, seq, running };
     this.timers.push(t);
     return t;
   }

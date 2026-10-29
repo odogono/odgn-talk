@@ -418,14 +418,21 @@ pub const Waits = struct {
     }
 
     /// The Wait due first at `now`: by deadline, then by the order its
-    /// deadline was set.
+    /// deadline was set. Of equal deadlines, a Join's Timeout Block wins
+    /// over its own members, though its wait is set after theirs.
     pub fn due(w: *const Waits, now: Ticks) ?*Pending {
         var first: ?*Pending = null;
         for (w.pending.items) |p| {
             if (p.deadline > now) continue;
-            if (first == null or p.deadline < first.?.deadline or (p.deadline == first.?.deadline and p.order < first.?.order)) first = p;
+            if (first == null or p.deadline < first.?.deadline or (p.deadline == first.?.deadline and before(p, first.?))) first = p;
         }
         return first;
+    }
+
+    fn before(p: *const Pending, q: *const Pending) bool {
+        if (p.run == q.run and p.block and p.member == null and q.member != null) return true;
+        if (p.run == q.run and q.block and q.member == null and p.member != null) return false;
+        return p.order < q.order;
     }
 
     /// The earliest deadline still pending.
@@ -560,6 +567,28 @@ test "a Join Member's Wait is referenced by its member until taken" {
     // A preempted Run's members aren't timers yet.
     run.state = .preempted;
     try t.expectEqual(@as(?Ticks, null), w.next());
+}
+
+test "of equal deadlines, a Join's Timeout Block wins over its members" {
+    var w: Waits = .{};
+    defer w.deinit(t.allocator);
+    var run = bareRun();
+    var other = bareRun();
+    var join: machine.Join = .{};
+    defer join.members.deinit(t.allocator);
+    run.join = &join;
+    var m0: Pending = .{ .run = &run, .deadline = 10, .order = 0, .id = "r1.c1" };
+    var between: Pending = .{ .run = &other, .deadline = 10, .order = 0, .id = "r2.c1" };
+    var block: Pending = .{ .run = &run, .deadline = 10, .order = 0, .block = true };
+    try w.addMember(t.allocator, &m0);
+    try w.add(t.allocator, &between);
+    try w.add(t.allocator, &block);
+    // The block takes its first member's place, ahead of a wait set since.
+    try t.expectEqual(&block, w.due(10).?);
+    w.take(&block);
+    try t.expectEqual(&m0, w.due(10).?);
+    w.take(&m0);
+    try t.expectEqual(&between, w.due(10).?);
 }
 
 const TestRuns = struct {
