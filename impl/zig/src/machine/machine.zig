@@ -1512,7 +1512,12 @@ pub const Input = union(enum) {
     /// Cancels each recipient of a Broadcast Decision that hasn't sealed
     /// its part, by broadcast number.
     cancel_broadcast: u64,
+    /// A charge request refused while another is queued, held so the Trace
+    /// shows it after that request, in call order. Its call is owned.
+    charge_refusal: ChargeRefusal,
 };
+
+pub const ChargeRefusal = struct { call: []const u8, fuel: i64, valid: bool, code: []const u8 };
 
 pub const Broadcast = struct {
     id: u64,
@@ -1551,7 +1556,7 @@ pub const Group = struct {
     batch: std.ArrayList(Input) = .empty,
     on_ready: ?*const fn (?*anyopaque) callconv(.c) void = null,
     ready_context: ?*anyopaque = null,
-    refused_charges: std.ArrayList(struct { call: []const u8, fuel: i64, valid: bool, code: []const u8 }) = .empty,
+    refused_charges: std.ArrayList(ChargeRefusal) = .empty,
     deliveries: u64 = 0,
     trace: ?*std.Io.Writer,
     /// Reusable scratch memory for a single instruction.
@@ -1953,6 +1958,7 @@ pub const Group = struct {
                 g.gpa.free(x.script);
                 g.gpa.free(x.reason);
             },
+            .charge_refusal => |x| g.gpa.free(x.call),
             .set_parent, .dispose, .cancel_delivery, .cancel_broadcast, .charge_request => {},
         };
     }
@@ -3822,6 +3828,7 @@ pub const Group = struct {
             },
             .cancel_delivery => |id| out.print("> cancel-delivery d{d}", .{id}) catch {},
             .cancel_broadcast => |id| out.print("> cancel-delivery b{d}", .{id}) catch {},
+            .charge_refusal => |x| writeChargeRefusal(out, x),
             .broadcast => |b| {
                 out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
                 // A refused Broadcast never had an id.
@@ -4015,7 +4022,13 @@ pub const Group = struct {
     fn refuseChargeLocked(g: *Group, id: []const u8, fuel: i64, valid: bool, code: []const u8) void {
         // A foreign thread must not write the worker's Trace writer/arena.
         const call = g.gpa.dupe(u8, id) catch return;
-        g.refused_charges.append(g.gpa, .{ .call = call, .fuel = fuel, .valid = valid, .code = code }) catch g.gpa.free(call);
+        const x: ChargeRefusal = .{ .call = call, .fuel = fuel, .valid = valid, .code = code };
+        // Behind a queued charge request, it waits to be written after it.
+        for (g.inputs.items) |input| if (input == .charge_request) {
+            g.inputs.append(g.gpa, .{ .charge_refusal = x }) catch g.gpa.free(call);
+            return;
+        };
+        g.refused_charges.append(g.gpa, x) catch g.gpa.free(call);
     }
 
     pub fn flushChargeRefusals(g: *Group) void {
@@ -4027,10 +4040,16 @@ pub const Group = struct {
         defer owned.deinit(g.gpa);
         for (rows.items) |x| {
             defer g.gpa.free(x.call);
-            g.write("> charge-request {s} fuel=", .{x.call});
-            if (x.valid) g.write("{d}", .{x.fuel}) else g.write("\"invalid\"", .{});
-            g.write("\nrefused code=\"{s}\"\n", .{x.code});
+            const w = g.trace orelse continue;
+            writeChargeRefusal(w, x);
+            w.writeAll("\n") catch {};
         }
+    }
+
+    fn writeChargeRefusal(out: anytype, x: ChargeRefusal) void {
+        out.print("> charge-request {s} fuel=", .{x.call}) catch {};
+        if (x.valid) out.print("{d}", .{x.fuel}) catch {} else out.writeAll("\"invalid\"") catch {};
+        out.print("\nrefused code=\"{s}\"", .{x.code}) catch {};
     }
 
     fn drainCharge(g: *Group, q: *capabilities.ChargeRequest) !void {
@@ -4121,6 +4140,7 @@ pub const Group = struct {
     fn drainOne(g: *Group, input: Input) !void {
         switch (input) {
             .charge_request => |q| try g.drainCharge(q),
+            .charge_refusal => |x| g.gpa.free(x.call),
             .deliver => |d| {
                 defer g.gpa.free(d.script);
                 if (d.delivery.target != null) {

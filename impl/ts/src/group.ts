@@ -2770,15 +2770,19 @@ export class TsGroup implements Group {
           ? 'invalid value'
           : null;
     if (code) {
-      this.recordRefusal(
-        recordLine(
-          'charge-request',
-          [call],
-          [['fuel', valid ? String(fuel) : '"invalid"']],
-          true,
-        ),
-        code,
+      const line = recordLine(
+        'charge-request',
+        [call],
+        [['fuel', valid ? String(fuel) : '"invalid"']],
+        true,
       );
+      // Behind a queued charge request, it waits to be written after it.
+      if (this.inputs.some(i => !i.urgent && i.action.k === 'charge')) {
+        this.combinedAdmission = false;
+        this.inputs.push({ line, action: { k: 'refusal', code } });
+      } else {
+        this.recordRefusal(line, code);
+      }
       throw new HostError(code);
     }
     const id = `q${++this.chargeCounter}`;
@@ -5397,7 +5401,18 @@ export class TsGroup implements Group {
         inputLines.push(
           typeof input.line === 'string' ? input.line : input.line(),
         );
-        this.applyInput(input.action);
+        // A held charge refusal's `refused` stays with its input line.
+        if (input.action.k === 'refusal') {
+          inputLines.push(
+            recordLine(
+              'refused',
+              [],
+              [['code', JSON.stringify(input.action.code)]],
+            ),
+          );
+        } else {
+          this.applyInput(input.action);
+        }
       }
     } finally {
       this.drainingTrace = null;

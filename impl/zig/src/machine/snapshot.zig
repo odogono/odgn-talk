@@ -1096,10 +1096,11 @@ const Saving = struct {
 
     fn input(s: *Saving, x: machine.Input) !void {
         // A charge request has no tag: it refuses the save.
-        if (x == .charge_request) return error.EffectsPending;
+        // A held refusal waits behind one, so it never reaches a save.
+        if (x == .charge_request or x == .charge_refusal) return error.EffectsPending;
         try s.o.byte(@as(u8, @backingInt(std.meta.activeTag(x))) - 1);
         switch (x) {
-            .charge_request => unreachable,
+            .charge_request, .charge_refusal => unreachable,
             .deliver => |d| {
                 try s.o.name(d.script);
                 try s.delivery(d.delivery);
@@ -2454,7 +2455,7 @@ const Restoring = struct {
         if (tag == 255) return error.InvalidSave;
         const t = std.enums.fromInt(Tag3, tag + 1) orelse return error.InvalidSave;
         return switch (t) {
-            .charge_request => error.InvalidSave,
+            .charge_request, .charge_refusal => error.InvalidSave,
             .deliver => blk: {
                 const script = try r.ownedName();
                 errdefer a.free(script);
