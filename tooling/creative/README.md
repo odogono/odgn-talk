@@ -594,7 +594,8 @@ Page stops its Page and Element Scripts' sounds; the Project Script's sounds
 carry on across navigation. Stop and Escape stop all audio at
 once (ADR 0086), as does deleting an Element whose Script started a sound.
 Replaying a name restarts that Script's voice for it. Script Recipes offer
-**Play a sound**, **Loop a sound** and **Stop a sound** for every owner.
+**Play a sound**, **Loop a sound** and **Stop a sound** for every owner. See this in Folio:
+[The Lighthouse Mystery](https://northtalk.org/folio/lighthouse) plays its bell and waves.
 
 [`src/sounds.ts`](src/sounds.ts) owns sound intake, the per-session
 `SoundBoard` of playing voices and the browser `<audio>` backend; Play wires
@@ -662,6 +663,8 @@ undoable edit. Info shows the command count and **Clear drawing**, which
 empties the Drawing back to the default style. Duplicating a Canvas, and
 cloning it in Play, copy its Drawing. The Project file stores the
 Drawing as `{op, args}` commands, checked with the Playground's validation.
+See this in Folio: [Canvas Tetris](https://northtalk.org/folio/canvas-tetris) and
+[Sonar](https://northtalk.org/folio/sonar) draw on a canvas every frame.
 
 [`src/drawing.ts`](src/drawing.ts) holds the retained list and its reset
 rule; [`src/canvas-view.ts`](src/canvas-view.ts) paints it with Canvas 2D in
@@ -923,7 +926,8 @@ Page's Message Path (Page or Project Script). This lets arrow keys and space
 drive a game rather than scroll; unhandled events keep their defaults.
 Operating-system auto-repeat continues to send `keyDown`, with no additional
 argument. Scripts can use `keyDown` and `keyUp` to track several held keys and
-implement their own repeat timing through `frame`.
+implement their own repeat timing through `frame`. See this in Folio:
+[Tetris](https://northtalk.org/folio/tetris) moves, turns and drops on `keyDown`.
 
 Focus changes, window blur and hiding the tab send one `keyUp` for each held
 key to its original recipient, using the key reported on its first `keyDown`
@@ -1162,7 +1166,8 @@ end click
 The browser schedules the next Pump from the Core's earliest deadline; a wait
 does not block reader input, other handlers or other Scripts. A handler can
 repeat an effect by waiting and then sending itself another message. No timer
-Capability or additional Grant is needed.
+Capability or additional Grant is needed. See this in Folio:
+[The Lighthouse Mystery](https://northtalk.org/folio/lighthouse) waits in its lamp room.
 
 For animation and games, declare an `on frame elapsed` Handler
 ([ADR 0095](../../docs/adr/0095-folio-delivers-a-frame-message-to-scripts-that-handle-it.md)).
@@ -1183,6 +1188,9 @@ on frame elapsed
   end if
 end frame
 ```
+
+See this in Folio: [Tetris](https://northtalk.org/folio/tetris) adds up `elapsed` for gravity,
+and [Sonar](https://northtalk.org/folio/sonar) sweeps its sea on `frame`.
 
 Leaving a Page cancels its Page and Element Scripts' pending waits, including
 `closePage` if it exceeds the one-second navigation deadline. The Project
@@ -1310,7 +1318,8 @@ whose click the Page Script answers through the Message Path — is
 written by hand, as an author would after inserting a Recipe. The
 illustrations are SVG and the bell and waves are generated WAV, all
 from [`src/examples/lighthouse.ts`](src/examples/lighthouse.ts), so it
-exports, reopens offline and plays the same anywhere.
+exports, reopens offline and plays the same anywhere. See this in Folio:
+<https://northtalk.org/folio/lighthouse>.
 
 Unit tests play the mystery end to end against the Play Host —
 including that the ending stays locked without both clues, that
@@ -1335,12 +1344,14 @@ changes their fills. The whole game is that one Page Script, in Handlers
 split by concern: `frame` adds up `elapsed` for gravity, `keyDown` moves,
 turns and drops, and `fits`, `tryMove`, `rotate`, `lockPiece`, `clearLines`
 and `paint` keep the board as a list of lists. `paint` changes only the
-rectangles whose colour differs from what they show.
+rectangles whose colour differs from what they show. See this in Folio:
+<https://northtalk.org/folio/tetris>.
 
 **Projects → Open Canvas Tetris** adds the same game with a board and preview
 drawn through the `canvas` Grant instead of pre-placed cells
 ([#1379](https://github.com/odogono/odgn-talk/issues/1379)), built from
-[`src/examples/tetris-canvas.ts`](src/examples/tetris-canvas.ts). Both builders
+[`src/examples/tetris-canvas.ts`](src/examples/tetris-canvas.ts), at
+<https://northtalk.org/folio/canvas-tetris>. Both builders
 embed the same `tetrisRules` Library from
 [`src/examples/tetris-rules.ts`](src/examples/tetris-rules.ts). The Library holds
 Constants, grid creation, collision checks, rotation calculations, full-row
