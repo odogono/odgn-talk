@@ -1,0 +1,22 @@
+# A caught error inside the body preserves pending Join members (#1732).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+errors = [{ code = "no feed" }]
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { feed = { ops = ["fetch"] } }
+

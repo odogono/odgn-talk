@@ -1,0 +1,51 @@
+script variable results = []
+
+on probe
+  wait for all
+    ask feed to fetch "x" and wait
+    try
+      throw {code: "inner"}
+    catch e
+      put the code of e after results
+    end try
+    ask feed to fetch "y" and wait
+  end wait
+  put it after results
+  return results
+end probe
+
+on filtered
+  wait for all
+    ask feed to fetch "x" and wait
+    try
+      try
+        throw {code: "filtered"}
+      catch {code: "other"}
+        put "wrong catch" after results
+      finally
+        put "finally" after results
+      end try
+    catch e
+      put the code of e after results
+    end try
+    ask feed to fetch "y" and wait
+  end wait
+  put it after results
+end filtered
+
+on failNow
+  throw {code: "helper"}
+end failNow
+
+on helper
+  wait for all
+    ask feed to fetch "x" and wait
+    try
+      failNow
+    catch e
+      put the code of e after results
+    end try
+    ask feed to fetch "y" and wait
+  end wait
+  put it after results
+end helper

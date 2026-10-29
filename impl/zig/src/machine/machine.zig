@@ -8089,7 +8089,7 @@ pub const Group = struct {
             run.frames.items[top].pc = entry.target;
             return null;
         }
-        g.raiseRecord(run, err, pc, ins);
+        g.writeRaise(run, err, pc, ins);
         return g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged);
     }
 
@@ -8102,13 +8102,6 @@ pub const Group = struct {
         }
         run.fuel += fuel;
         return null;
-    }
-
-    /// A raise's record, and its Join's members abandoned: an error leaving
-    /// a Join abandons the members still pending.
-    fn raiseRecord(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
-        g.writeRaise(run, err, pc, ins);
-        g.abandonJoin(run);
     }
 
     /// Searches for a catch from `s`'s frame and entry outward, within its
@@ -8137,6 +8130,7 @@ pub const Group = struct {
             }
         }
         if (s.limit == null) {
+            g.abandonJoin(run);
             if (charged) if (g.chargeUnwind(run, 4 * position)) |end| {
                 err.release();
                 return end;
@@ -8249,6 +8243,13 @@ pub const Group = struct {
         // The activation's stack goes with the acceptance.
         f.stack = .empty;
         const ended = g.endDispatch(run);
+        // A catch inside the Join's body keeps its members. Only an
+        // accepted catch outside that body abandons them; rejected catches
+        // leave the Join intact while the search continues.
+        if (run.join) |join| {
+            const entry = unitOf(run, &run.frames.items[ended.owner]).unwind[ended.search.entry - 1];
+            if (ended.owner < join.frame or (ended.owner == join.frame and entry.first <= join.start)) g.abandonJoin(run);
+        }
         var cleanups: std.ArrayList(Cleanup) = .empty;
         errdefer cleanups.deinit(g.gpa);
         try g.collect(run, &cleanups, ended.owner, ended.search.entry - 1, ended.search.skip, ended.search.raised);

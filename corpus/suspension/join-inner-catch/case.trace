@@ -1,0 +1,44 @@
+# Unblessed: Join body catches preserve members (#1732); first blessing awaits human review.
+
+> load board identity=308eea54d5a9221d81a81ebc6c75f8d1c6275ef972c8ae22a877e44e03a7fae4
+> deliver d1 to=board message=probe
+> pump clock=2026-09-30T09:00:00Z
+call board/r1.c1 op=feed.fetch args=["x"]
+raise board/r1 code="inner" at=board:9 pos=7:7
+call board/r1.c2 op=feed.fetch args=["y"]
+seg board/r1 start delivery=d1 handler=probe clause=1 fuel=119 alloc=142 state=958 end=join-end
+pumped state=idle fuel=119 next=2026-09-30T09:00:05Z
+> answer board/r1.c1 value=1
+> answer board/r1.c2 value=2
+> pump clock=2026-09-30T09:00:01Z
+seg board/r1 resume fuel=15 alloc=168 state=117 end=return
+run board/r1 outcome=completed delivery=d1 handler=probe value=["inner", [1, 2]] fuel=134 alloc=310
+pumped state=idle fuel=15
+> deliver d2 to=board message=filtered
+> pump clock=2026-09-30T09:00:04Z
+call board/r2.c1 op=feed.fetch args=["x"]
+raise board/r2 code="filtered" at=board:45 pos=22:9
+call board/r2.c2 op=feed.fetch args=["y"]
+seg board/r2 start delivery=d2 handler=filtered clause=1 fuel=139 alloc=179 state=1483 end=join-end
+pumped state=idle fuel=139 next=2026-09-30T09:00:09Z
+> answer board/r2.c1 value=3
+> answer board/r2.c2 value=4
+> pump clock=2026-09-30T09:00:05Z
+seg board/r2 resume fuel=15 alloc=168 state=252 end=return
+run board/r2 outcome=completed delivery=d2 handler=filtered fuel=154 alloc=347
+pumped state=idle fuel=15
+> deliver d3 to=board message=helper
+> pump clock=2026-09-30T09:00:06Z
+call board/r3.c1 op=feed.fetch args=["x"]
+raise board/r3 code="helper" at=board:113 pos=37:3
+call board/r3.c2 op=feed.fetch args=["y"]
+seg board/r3 start delivery=d3 handler=helper clause=1 fuel=135 alloc=144 state=1202 end=join-end
+pumped state=idle fuel=135 next=2026-09-30T09:00:11Z
+> answer board/r3.c1 value=5
+> answer board/r3.c2 value=6
+> pump clock=2026-09-30T09:00:07Z
+seg board/r3 resume fuel=15 alloc=168 state=354 end=return
+run board/r3 outcome=completed delivery=d3 handler=helper fuel=150 alloc=312
+pumped state=idle fuel=15
+> vars
+vars board results=["inner", [1, 2], "finally", "filtered", [3, 4], "helper", [5, 6]]

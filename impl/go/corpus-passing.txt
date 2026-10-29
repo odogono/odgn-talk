@@ -400,6 +400,7 @@ suspension/join-finally-abandon
 suspension/join-member-deadline
 suspension/join-member-wait-order
 suspension/join-preemption
+suspension/join-inner-catch
 suspension/joins
 suspension/late-failure
 suspension/nested-waits
