@@ -30,7 +30,7 @@ import {
   type LoadedMessageTarget,
 } from './message-script';
 import { runInEdit, sessionCommand, type MessageReply } from './message';
-import { sourceOf, type VariableValue } from './variables';
+import { type VariableValue } from './variables';
 import { renderValueRows } from './variables-window';
 import {
   ownerId,
@@ -348,11 +348,15 @@ export const mountMessageWindow = (
         } else if (reply.text !== undefined) {
           row.append(h('div', { class: 'result' }, reply.text));
         }
-        if (!reply.error && (reply.value ?? reply.text) !== undefined) {
-          const source =
-            reply.value === undefined ? reply.source : sourceOf(reply.value);
+        // An inspected value's rows copy themselves.
+        if (
+          !reply.error &&
+          reply.value === undefined &&
+          reply.text !== undefined
+        ) {
+          const { source } = reply;
           // Only the last result copies as source.
-          for (const old of log.querySelectorAll('.copy')) {
+          for (const old of log.querySelectorAll(':scope > li > .copy')) {
             old.remove();
           }
           const copy = h(
