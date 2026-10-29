@@ -1042,3 +1042,65 @@ test('Statement Steps move a stopped Run, and the session stays paused after it 
   expect(at()).toBeUndefined();
   expect(mirror.paused).toBe(false);
 });
+
+test('while a Run is stopped, the Message Box and Watches run in the selected frame', async () => {
+  const project = fixture();
+  project.libraries.push({
+    name: 'labels',
+    source:
+      'on relabel target, word\n set the label of target to word\nend relabel',
+  });
+  project.pages[0]!.elements[0]!.script =
+    'use relabel from labels\nscript variable presses = 0\non click\n put 7 into n\n relabel me, "hi"\n put presses + n into presses\nend click';
+  const { mirror, replies, request } = hosted(project);
+  const messages = () =>
+    replies.flatMap(r => (r.response.kind === 'message' ? [r.response] : []));
+  const watched = () =>
+    replies.flatMap(r =>
+      r.response.kind === 'watches' ? r.response.results : [],
+    );
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'library', index: 0 }, line: 2 }],
+  });
+  request({
+    kind: 'watches',
+    session: 1,
+    watches: [{ id: 1, text: 'word & "!"' }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  // The innermost frame is selected first.
+  await until(() =>
+    watched().some(
+      r => r.id === 1 && r.state === 'value' && r.value.kind === 'plain',
+    ),
+  );
+  expect(watched().at(-1)).toMatchObject({
+    state: 'value',
+    value: { kind: 'plain', text: '"hi!"' },
+  });
+  // The caller's frame sees its own locals and Script Variables.
+  request({ kind: 'selectFrame', session: 1, frame: 1 });
+  request({ kind: 'message', session: 1, text: ':inspect n * 2' });
+  request({ kind: 'message', session: 1, text: 'put 100 into presses' });
+  request({ kind: 'message', session: 1, text: 'put 1 into n' });
+  request({ kind: 'message', session: 1, text: 'presses' });
+  await until(() => messages().length === 4);
+  expect(messages()[0]).toMatchObject({
+    value: { kind: 'plain', text: '14' },
+  });
+  expect(messages()[1]!.error).toBeUndefined();
+  expect(messages()[2]!.error).toContain('n is a local of the stopped Run');
+  expect(messages()[3]).toMatchObject({ text: '100' });
+  expect(watched().at(-1)).toMatchObject({ id: 1, state: 'error' });
+  request({ kind: 'resume', session: 1 });
+  await until(() => !mirror.paused);
+});

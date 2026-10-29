@@ -113,6 +113,11 @@ export const runBrowserTests = async () => {
       document.querySelector('#code-browser .cm-paused') !== null,
       'The paused line was not shown',
     );
+    const frame = stopped()!.querySelector('.variables-frame')!;
+    assert(
+      frame.getAttribute('aria-current') === 'true',
+      'The innermost frame was not selected',
+    );
   });
 
   await test('Resume finishes the stopped Run', async () => {

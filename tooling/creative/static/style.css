@@ -469,9 +469,8 @@ button:disabled {
   cursor: pointer;
   text-decoration: underline;
 }
-.variables-frame h4 button:disabled {
-  cursor: default;
-  text-decoration: none;
+.variables-frame[aria-current='true'] h4 button {
+  font-weight: bold;
 }
 .variables-script ul {
   list-style: none;

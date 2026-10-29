@@ -202,18 +202,23 @@ const InspectedSection = ({
   ) : null;
 };
 
-/** A stopped Run's frames, innermost first, each opening its line. */
+/**
+ * A stopped Run's frames, innermost first. Clicking one selects it, as the
+ * context Watches and the Message Box run in, and opens its line.
+ */
 const StoppedSection = ({
   expanded,
   onFrame,
   onSelect,
   onToggle,
+  selected,
   stopped,
 }: {
   expanded: ReadonlySet<string>;
-  onFrame: (frame: FrameView) => void;
+  onFrame: (frame: FrameView, index: number) => void;
   onSelect: (owner: number) => void;
   onToggle: (key: string) => void;
+  selected: Signal<number>;
   stopped: Signal<StoppedRun | undefined>;
 }) => {
   const run = stopped.value;
@@ -221,12 +226,15 @@ const StoppedSection = ({
     <section className="variables-stopped">
       <h3>Stopped at a Breakpoint</h3>
       {run.frames.map((frame, index) => (
-        <section className="variables-script variables-frame" key={index}>
+        <section
+          aria-current={index === selected.value ? 'true' : undefined}
+          className="variables-script variables-frame"
+          key={index}
+        >
           <h4>
             <button
-              disabled={!frame.place}
-              onClick={() => onFrame(frame)}
-              title={frame.place ? 'Show this line' : undefined}
+              onClick={() => onFrame(frame, index)}
+              title="Run Watches and the Message Box here, and show this line"
               type="button"
             >
               {frame.label} · line {frame.line}
@@ -485,15 +493,17 @@ const VariablesPanel = ({
   onFrame,
   onSelect,
   onToggle,
+  selected,
   shown,
   stopped,
   update,
   watching,
 }: {
   inspected: Signal<Inspected | undefined>;
-  onFrame: (frame: FrameView) => void;
+  onFrame: (frame: FrameView, index: number) => void;
   onSelect: (owner: number) => void;
   onToggle: (key: string) => void;
+  selected: Signal<number>;
   shown: Signal<Shown>;
   stopped: Signal<StoppedRun | undefined>;
   update: (change: (watches: readonly ShownWatch[]) => ShownWatch[]) => void;
@@ -507,6 +517,7 @@ const VariablesPanel = ({
         onFrame={onFrame}
         onSelect={onSelect}
         onToggle={onToggle}
+        selected={selected}
         stopped={stopped}
       />
       <WatchesSection
@@ -566,6 +577,7 @@ export class VariablesWindow {
   });
   readonly #inspected = signal<Inspected | undefined>(undefined);
   readonly #stopped = signal<StoppedRun | undefined>(undefined);
+  readonly #frame = signal(0);
   #inspections = 0;
   #values = new Map<string, string>();
 
@@ -576,14 +588,18 @@ export class VariablesWindow {
   constructor(
     onSelect: (owner: number) => void,
     private readonly onWatches: () => void = () => {},
-    onFrame: (frame: FrameView) => void = () => {},
+    onFrame: (frame: FrameView, index: number) => void = () => {},
   ) {
     render(
       <VariablesPanel
         inspected={this.#inspected}
-        onFrame={onFrame}
+        onFrame={(frame, index) => {
+          this.#frame.value = index;
+          onFrame(frame, index);
+        }}
         onSelect={onSelect}
         onToggle={key => this.#toggle(key)}
+        selected={this.#frame}
         shown={this.#shown}
         stopped={this.#stopped}
         update={change => {
@@ -731,6 +747,10 @@ export class VariablesWindow {
   /** Shows the Run a Breakpoint stopped, or that none is. */
   stoppedRun(run: StoppedRun | undefined): void {
     if (JSON.stringify(run) !== JSON.stringify(this.#stopped.value)) {
+      // Another Run's stop starts at its innermost frame, as the worker's does.
+      if (run?.run !== this.#stopped.value?.run) {
+        this.#frame.value = 0;
+      }
       this.#stopped.value = run;
     }
   }

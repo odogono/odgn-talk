@@ -32,6 +32,7 @@ import { scriptOwners } from './script-manifest';
 import {
   valueEncoder,
   variablesOf,
+  type VariableValue,
   type Watch,
   type WatchResult,
 } from './variables';
@@ -146,6 +147,12 @@ export const firstView = (
   };
 };
 
+// An evaluation's failure as the Message Box shows one.
+const evaluationError = (result: { error: string; line?: number }) =>
+  result.line === undefined
+    ? result.error
+    : `line ${result.line}: ${result.error}`;
+
 /** How far a Step moves the Play clock: one frame at 60 Hz, in ms. */
 const STEP = 1000 / 60;
 
@@ -168,6 +175,9 @@ export class PlayHost {
   // Breakpoints (ADR 0147), and the loaded Scripts they were last placed in.
   #breakpoints: BreakpointView[] = [];
   #placedIn: string | undefined;
+  // The stopped Run's selected frame, innermost first, and that Run.
+  #frame = 0;
+  #frameOf: string | undefined;
   // Continues the Run a Breakpoint stopped, in the next Pump.
   #continue: (() => PumpResult) | undefined;
   // The Play clock: Host time less paused time, never going back (ADR 0128).
@@ -315,6 +325,13 @@ export class PlayHost {
         }
         break;
       }
+      case 'selectFrame': {
+        this.#frame = request.frame;
+        if (session.debugPaused) {
+          this.#evaluateWatches(session);
+        }
+        break;
+      }
       case 'statementStep': {
         if (session.debugPaused) {
           const debug = session.debug;
@@ -350,6 +367,9 @@ export class PlayHost {
         }
         this.#watches = request.watches;
         this.#watchDue = this.#paused;
+        if (session.debugPaused) {
+          this.#evaluateWatches(session);
+        }
         break;
       }
       case 'resume': {
@@ -392,8 +412,10 @@ export class PlayHost {
         if (session.debugPaused) {
           reply({
             kind: 'message',
-            error: 'A Run is stopped at a Breakpoint. Resume it first.',
+            ...this.#evaluateMessage(session, request.text),
           });
+          this.#evaluateWatches(session);
+          this.#publish();
           return;
         }
         const inspect = inspectCommand(request.text);
@@ -694,7 +716,14 @@ export class PlayHost {
           this.#pausedSince = this.performanceNow();
         }
         this.#stepping = false;
+        // Another Run's stop starts at its innermost frame.
+        const run = session.debug.current!.run;
+        if (run !== this.#frameOf) {
+          this.#frameOf = run;
+          this.#frame = 0;
+        }
         this.#publish();
+        this.#evaluateWatches(session);
         return;
       }
       if (this.#watching) {
@@ -779,6 +808,73 @@ export class PlayHost {
       }
     }
     session.debug.breakAt(at);
+  }
+
+  /**
+   * Runs a body in the selected frame of the stopped Run, through the Core's
+   * `evaluate`, which writes no Trace (ADR 0147).
+   */
+  #evaluate(session: PlaySession, body: string) {
+    const frames =
+      session.debug
+        .snapshot()
+        .scripts.flatMap(s =>
+          s.runs.filter(r => r.id === session.debug.current!.run),
+        )[0]?.frames.length ?? 1;
+    // The Core counts frames outermost first.
+    const result = session.debug.evaluate(
+      body,
+      Math.max(0, frames - 1 - this.#frame),
+    );
+    // A Script Variable may have changed, though no Pump ran.
+    this.#variablesPumps = -1;
+    return result;
+  }
+
+  // A Message Box line in the selected frame: an expression, or failing
+  // that a command; `:inspect` gives its value's rows.
+  #evaluateMessage(
+    session: PlaySession,
+    text: string,
+  ): MessageReply & {
+    value?: VariableValue;
+  } {
+    const encode = valueEncoder(session, this.#owners);
+    const inspect = inspectCommand(text);
+    if (fuelCommand(text)) {
+      return { error: ':fuel waits until the stopped Run finishes.' };
+    }
+    if (inspect && 'error' in inspect) {
+      return { error: inspect.error };
+    }
+    if (inspect) {
+      const result = this.#evaluate(session, `return ${inspect.expression}`);
+      return 'value' in result
+        ? { value: encode(result.value) }
+        : { error: evaluationError(result) };
+    }
+    // An expression first: a bare name compiles as a command that sends,
+    // which a stopped Run refuses.
+    let result = this.#evaluate(session, `return ${text}`);
+    if ('error' in result && result.line !== undefined) {
+      result = this.#evaluate(session, text);
+    }
+    return 'value' in result
+      ? valueReply(result.value)
+      : { error: evaluationError(result) };
+  }
+
+  // Every Watch, again, in the selected frame.
+  #evaluateWatches(session: PlaySession): void {
+    const encode = valueEncoder(session, this.#owners);
+    this.#postWatches(
+      this.#watches.map(({ id, text }): WatchResult => {
+        const result = this.#evaluate(session, `return ${text}`);
+        return 'value' in result
+          ? { id, state: 'value', value: encode(result.value), effects: false }
+          : { id, state: 'error', error: evaluationError(result) };
+      }),
+    );
   }
 
   /** The Run a Breakpoint stopped, with its frames' locals. */

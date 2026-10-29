@@ -83,6 +83,11 @@ export type PlayRequest =
    * session stays paused, at the next stop or once the Run has moved on.
    */
   | { kind: 'statementStep'; session: number; step: StatementStep }
+  /**
+   * Chooses the stopped Run's frame, innermost first, that Watches and the
+   * Message Box run in (ADR 0147).
+   */
+  | { frame: number; kind: 'selectFrame'; session: number }
   /** Replaces the Breakpoints (ADR 0147). */
   | { breakpoints: BreakpointView[]; kind: 'breakpoints'; session: number }
   /**

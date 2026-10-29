@@ -867,8 +867,17 @@ While browsing, a Run that reaches one stops there, and the whole Play Session
 Pauses: Pause becomes **Resume**, no other Run or frame moves on, and reader
 input is dropped. The Code Browser opens the stopped line, and the Variables
 window shows the stopped Run's frames, innermost first, with their locals.
-Clicking a frame shows its line. Step is held back until the Run finishes,
-and the Message Box refuses lines until then. **Resume** finishes the Run and
+Clicking a frame shows its line and selects it; the innermost is selected at
+each stop. Step is held back until the Run finishes.
+
+While a Run is stopped, Watches, `:inspect` and Message Box lines run in the
+selected frame, through the TS Core's `evaluate` debug hook rather than as
+Runs: they see its locals and the Script's Script Variables, and a line can
+set a Script Variable, which the stopped Run then sees. A line is tried as an
+expression first, then as a command. The frame's locals can't be assigned,
+and a send, wait, random draw or Operation call fails, since nothing else may
+run until the stopped Run moves on. `:fuel` waits until it does. Watches
+update at each stop, on choosing a frame, and after each line. **Resume** finishes the Run and
 Play goes on; returning to Edit abandons it.
 
 While a Run is stopped, the Play controls add **Step In**, **Step Over** and
