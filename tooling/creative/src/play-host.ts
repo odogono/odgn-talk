@@ -325,6 +325,14 @@ export class PlayHost {
         }
         break;
       }
+      case 'pauseOnErrors': {
+        // Made only when wanted: once made, the Group steps every instruction
+        // through it.
+        if (request.on || session.debugging) {
+          session.debug.pauseOn({ uncaughtError: request.on });
+        }
+        break;
+      }
       case 'selectFrame': {
         this.#frame = request.frame;
         if (session.debugPaused) {
@@ -877,7 +885,7 @@ export class PlayHost {
     );
   }
 
-  /** The Run a Breakpoint stopped, with its frames' locals. */
+  /** The stopped Run, with its frames' locals and any error stopping it. */
   #stoppedRun(session: PlaySession): StoppedRun | undefined {
     const pause = session.debugPaused ? session.debug.current : null;
     if (!pause) {
@@ -888,8 +896,17 @@ export class PlayHost {
       .scripts.find(s => s.name === pause.script)
       ?.runs.find(r => r.id === pause.run);
     const encode = valueEncoder(session, this.#owners);
+    const message = pause.error?.get('message');
     return {
       run: pause.run,
+      ...(pause.error
+        ? {
+            error:
+              message?.kind === 'text' && message.asText()
+                ? message.asText()!
+                : (pause.error.get('code').asText() ?? ''),
+          }
+        : {}),
       // The Core lists frames outermost first.
       frames: [...(run?.frames ?? [])].reverse().map(frame => {
         const place = this.#placeOf(session, frame.unit);

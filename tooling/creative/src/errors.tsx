@@ -36,17 +36,32 @@ const isPage = (owner: ScriptOwner): owner is DeepReadonly<Page> =>
   'elements' in owner;
 
 const ErrorsPanel = ({
+  pauseOnErrors,
   problems,
   onClear,
   onOpen,
+  onPauseOnErrors,
 }: {
   onClear: () => void;
   onOpen: (problem: ReportedProblem) => void;
+  onPauseOnErrors: (on: boolean) => void;
+  pauseOnErrors: Signal<boolean>;
   problems: Signal<readonly ReportedProblem[]>;
 }) => {
   const list = problems.value;
   return (
     <>
+      <label
+        id="pause-on-errors"
+        title="While browsing, stop a Run at the statement raising an error no try catches"
+      >
+        <input
+          checked={pauseOnErrors.value}
+          onChange={event => onPauseOnErrors(event.currentTarget.checked)}
+          type="checkbox"
+        />
+        Pause on errors
+      </label>
       <p className="muted" hidden={list.length > 0} id="errors-empty">
         No errors. Script errors from browsing or presenting appear here.
       </p>
@@ -79,6 +94,8 @@ const ErrorsPanel = ({
 export class ErrorsWindow {
   readonly #window = byId('errors-window');
   readonly #problems = signal<readonly ReportedProblem[]>([]);
+  /** Whether an uncaught error stops its Run while browsing; off at first. */
+  readonly pauseOnErrors = signal(false);
   #nextKey = 0;
 
   constructor(readonly shell: StackShell) {
@@ -89,6 +106,10 @@ export class ErrorsWindow {
       <ErrorsPanel
         onClear={() => this.clear()}
         onOpen={problem => this.#open(problem)}
+        onPauseOnErrors={on => {
+          this.pauseOnErrors.value = on;
+        }}
+        pauseOnErrors={this.pauseOnErrors}
         problems={this.#problems}
       />,
       byId('errors-panel'),

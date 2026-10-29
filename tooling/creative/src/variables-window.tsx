@@ -224,7 +224,11 @@ const StoppedSection = ({
   const run = stopped.value;
   return run ? (
     <section className="variables-stopped">
-      <h3>Stopped at a Breakpoint</h3>
+      <h3>
+        {run.error === undefined
+          ? 'Stopped at a Breakpoint'
+          : `Stopped at an error: ${run.error}`}
+      </h3>
       {run.frames.map((frame, index) => (
         <section
           aria-current={index === selected.value ? 'true' : undefined}

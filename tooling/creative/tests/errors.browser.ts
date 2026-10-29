@@ -51,6 +51,15 @@ export const runBrowserTests = async () => {
     assert(!items().length && errors.count === 0, 'Errors listed at start');
   });
 
+  await test('Pause on errors starts off and follows its checkbox', async () => {
+    const box = node('pause-on-errors').querySelector('input')!;
+    assert(!box.checked && !errors.pauseOnErrors.value, 'Starts on');
+    box.click();
+    assert(errors.pauseOnErrors.value, 'Checking did not turn it on');
+    box.click();
+    assert(!errors.pauseOnErrors.value, 'Unchecking did not turn it off');
+  });
+
   await test('problems append with labels and show the window', async () => {
     errors.add([
       { line: 3, message: 'Project problem', owner: shell.editor.project },

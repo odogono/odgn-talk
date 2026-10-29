@@ -417,6 +417,12 @@ button:disabled {
 #errors-panel p {
   margin: 0 0 0.5rem;
 }
+#pause-on-errors {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.5rem;
+}
 #error-list {
   list-style: none;
   margin: 0 0 0.6rem;
