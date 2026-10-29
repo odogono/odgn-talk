@@ -1,4 +1,4 @@
-# Unblessed: sqlite transaction abandonment (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # In d1 the Run ends with the scope open, so the Core abandons it with an
 # automatic rollback, and the Segment then commits the rest. In d2 an explicit
 # rollback closes the scope, and the change after it commits with the Segment.

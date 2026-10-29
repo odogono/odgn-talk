@@ -1,4 +1,4 @@
-# Unblessed: a sqlite Limit Fault after an explicit commit (#467); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # The scope's commit only releases its savepoint, so a Limit Fault later in
 # the Segment rolls back everything, the committed scope included, with one
 # rollback hook and no abandonment call, since no scope is open.
