@@ -413,6 +413,10 @@ _Avoid_: stop point, trap
 To move a Run stopped at a Breakpoint on by one statement: Step In follows a call or `send … and wait` into its callee, Step Over runs it to completion, and Step Out runs until the current frame returns. Always named with its qualifier; a bare Step is the frame Step.
 _Avoid_: Step (alone), single-step, next
 
+**Stopped Run**:
+A Run held partway through at a Breakpoint or after a Statement Step while its Play Session is Paused; Watches and the Message Box evaluate in one of its frames, and a Resume or Statement Step continues it.
+_Avoid_: halted Run, broken Run, stopped session
+
 **Message Box**:
 A window in Folio where an author types one line of NorthTalk and runs it at once. While browsing it acts on the Play Session; in Edit it changes the Project as one undoable edit.
 _Avoid_: console, REPL, Message (for the window)
