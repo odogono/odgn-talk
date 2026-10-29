@@ -8089,7 +8089,7 @@ pub const Group = struct {
             run.frames.items[top].pc = entry.target;
             return null;
         }
-        g.raiseRecord(run, err, pc, ins);
+        g.writeRaise(run, err, pc, ins);
         return g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged);
     }
 
@@ -8102,13 +8102,6 @@ pub const Group = struct {
         }
         run.fuel += fuel;
         return null;
-    }
-
-    /// A raise's record, and its Join's members abandoned: an error leaving
-    /// a Join abandons the members still pending.
-    fn raiseRecord(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
-        g.writeRaise(run, err, pc, ins);
-        g.abandonJoin(run);
     }
 
     /// Searches for a catch from `s`'s frame and entry outward, within its
@@ -8137,6 +8130,11 @@ pub const Group = struct {
             }
         }
         if (s.limit == null) {
+            // Nothing catches it, so it leaves any Join; a caught error
+            // abandons one in `catchLeavesJoin`. A limited search goes on
+            // in a later one, or ends a cancelled Run, whose Join is
+            // already dropped.
+            g.abandonJoin(run);
             if (charged) if (g.chargeUnwind(run, 4 * position)) |end| {
                 err.release();
                 return end;
@@ -8249,11 +8247,23 @@ pub const Group = struct {
         // The activation's stack goes with the acceptance.
         f.stack = .empty;
         const ended = g.endDispatch(run);
+        if (catchLeavesJoin(run, ended)) g.abandonJoin(run);
         var cleanups: std.ArrayList(Cleanup) = .empty;
         errdefer cleanups.deinit(g.gpa);
         try g.collect(run, &cleanups, ended.owner, ended.search.entry - 1, ended.search.skip, ended.search.raised);
         try g.startCleanup(run, ended.err, cleanups, .{ .accept = accept });
         return g.nextCleanup(run, charged);
+    }
+
+    /// Whether an accepted catch is outside the Join's body, so the error
+    /// left it and abandons its members. A catch inside the body keeps
+    /// them; rejected catches leave the Join intact while the search goes
+    /// on. An uncaught error abandons them in `search`.
+    fn catchLeavesJoin(run: *Run, ended: Dispatch) bool {
+        const join = run.join orelse return false;
+        if (ended.owner != join.frame) return ended.owner < join.frame;
+        const entry = unitOf(run, &run.frames.items[ended.owner]).unwind[ended.search.entry - 1];
+        return entry.first <= join.start;
     }
 
     /// An error escaping a Recovery policy: its original error becomes the

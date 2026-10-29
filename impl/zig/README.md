@@ -1236,7 +1236,9 @@ A Script named as a receiver is its name, and `me` with no owner is the
 Script itself. A Join starts its members where they stand and suspends once at
 its `end`: it resumes with every answer in start order, or with the first
 failure, `index` added, and an error leaving the Join abandons its pending
-members. A Timeout Block's deadline sits on the frame's stack, bounds every
+members. A catch inside the body preserves the Join, including while inner
+catch tests reject the error and exited `finally` blocks run.
+A Timeout Block's deadline sits on the frame's stack, bounds every
 Suspension Point inside it, and raises `timeout` with `deadline: true`, at once
 when it has already passed.
 
@@ -1490,8 +1492,9 @@ comes before the faulting instruction's charge, so none of it is made:
   else, through `error.LimitFault`.
 - **Fuel and allocation:** every other instruction faults when its whole
   charge, dispatch's `clause` rate included, won't fit. A search's `unwind`
-  is part of the charge of the instruction driving it, and an error is
-  raised, with its record and its Join abandoned, before that charge. A
+  is part of the charge of the instruction driving it. An error's raise
+  record precedes that charge; its Join is abandoned only when the error
+  leaves the Join's body. A
   Capability call checks its declared cost before the Host is called; one
   whose `Charge` is refused spends its own charge, and one whose result's
   conversion faults on allocation keeps its Fuel before the conversion.

@@ -397,6 +397,7 @@ suspension/join-block-deadline-tie
 suspension/join-closing-position
 suspension/join-early-failures
 suspension/join-finally-abandon
+suspension/join-inner-catch
 suspension/join-member-deadline
 suspension/join-member-wait-order
 suspension/join-preemption
