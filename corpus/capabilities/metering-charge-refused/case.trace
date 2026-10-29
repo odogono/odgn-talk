@@ -1,4 +1,4 @@
-# Unblessed: synchronous charge refusal records (#1795); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-29 for #1795.
 # metering-charge-refused: d1's scan returns. d2's pays 30, then has a
 # further increment refused, so it faults at its call with
 # `charge-refused=yes` and no result; d3's first increment is refused, so
