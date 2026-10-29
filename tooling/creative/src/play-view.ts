@@ -551,7 +551,9 @@ export const mountPlay = (shell: StackShell): void => {
         ) {
           if (activeText?.node === existing) {
             activeText.refresh();
-          } else {
+          } else if (existing.innerHTML !== fresh.innerHTML) {
+            // Replacing unchanged children between a press and its release
+            // would cost the reader the click.
             existing.replaceChildren(...fresh.childNodes);
           }
         }
