@@ -26,13 +26,16 @@ import {
   type SourcePlace,
   type StoppedRun,
 } from './play-protocol';
-import { fuelText } from './fuel';
-import { fuelCommand, inspectCommand } from './message-script';
+import {
+  runLine,
+  whenReady,
+  type LineEngine,
+  type MeasuredReply,
+} from './message-line';
 import { scriptOwners } from './script-manifest';
 import {
   valueEncoder,
   variablesOf,
-  type VariableValue,
   type Watch,
   type WatchResult,
 } from './variables';
@@ -407,71 +410,20 @@ export class PlayHost {
         return;
       }
       case 'message': {
+        const answer = (shown: MessageReply) =>
+          reply({ kind: 'message', ...shown });
         if (session.debugPaused) {
-          reply({
-            kind: 'message',
-            ...this.#evaluateMessage(session, request.text),
-          });
+          // A Stopped Run's engine is synchronous: the reply comes first.
+          answer(
+            runLine(request.text, this.#stoppedEngine(session)) as MessageReply,
+          );
           this.#evaluateWatches(session);
           this.#publish();
           return;
         }
-        const inspect = inspectCommand(request.text);
-        const fuel = fuelCommand(request.text);
-        const refused =
-          (inspect && 'error' in inspect && inspect) ||
-          (fuel && 'error' in fuel && fuel);
-        if (refused) {
-          reply({ kind: 'message', error: refused.error });
-          return;
-        }
-        const started =
-          inspect && 'expression' in inspect
-            ? session.runWatch(inspect.expression, request.target)
-            : session.runMessage(
-                fuel && 'command' in fuel ? fuel.command : request.text,
-                request.target,
-              );
-        if (!started.ok) {
-          reply({ kind: 'message', error: started.error });
-          return;
-        }
-        if (fuel) {
-          session.fuel.measure(started.delivery);
-        }
-        // Reports reach the measurement before the result settles.
-        // The Fuel line follows the command's value or error.
-        const measured = (shown: MessageReply): MessageReply => {
-          const row = fuel && session.fuel.take(started.delivery);
-          if (!row) {
-            return shown;
-          }
-          const line = fuelText(row);
-          return shown.error === undefined
-            ? {
-                ...shown,
-                text:
-                  shown.text === undefined ? line : `${shown.text}\n${line}`,
-              }
-            : { error: `${shown.error}\n${line}` };
-        };
-        this.#play.messageSent();
-        this.#schedule();
-        void started.result.then(
-          value =>
-            reply({
-              kind: 'message',
-              ...(inspect
-                ? { value: valueEncoder(session, this.#owners)(value) }
-                : measured(valueReply(value))),
-            }),
-          (error: unknown) =>
-            reply({
-              kind: 'message',
-              ...measured({
-                error: error instanceof Error ? error.message : String(error),
-              }),
-            }),
+        void whenReady(
+          runLine(request.text, this.#runningEngine(session, request.target)),
+          answer,
         );
         return;
       }
@@ -784,35 +736,73 @@ export class PlayHost {
 
   // A Message Box line in the selected frame: an expression, or failing
   // that a command; `:inspect` gives its value's rows.
-  #evaluateMessage(
-    session: PlaySession,
-    text: string,
-  ): MessageReply & {
-    value?: VariableValue;
-  } {
-    const encode = valueEncoder(session, this.#owners);
-    const inspect = inspectCommand(text);
-    if (fuelCommand(text)) {
-      return { error: ':fuel waits until the stopped Run finishes.' };
-    }
-    if (inspect && 'error' in inspect) {
-      return { error: inspect.error };
-    }
-    if (inspect) {
-      const result = this.#evaluate(session, `return ${inspect.expression}`);
-      return 'value' in result
-        ? { value: encode(result.value) }
-        : { error: evaluationError(result) };
-    }
-    // An expression first: a bare name compiles as a command that sends,
-    // which a stopped Run refuses.
-    let result = this.#evaluate(session, `return ${text}`);
-    if ('error' in result && result.line !== undefined) {
-      result = this.#evaluate(session, text);
-    }
-    return 'value' in result
-      ? valueReply(result.value)
-      : { error: evaluationError(result) };
+  /** Runs Message Box lines in a running session, as a Run of their own. */
+  #runningEngine(session: PlaySession, target?: number): LineEngine {
+    const run = (
+      text: string,
+      expression: boolean,
+      fuel: boolean,
+    ): MeasuredReply | Promise<MeasuredReply> => {
+      const started = expression
+        ? session.runWatch(text, target)
+        : session.runMessage(text, target);
+      if (!started.ok) {
+        return { reply: { error: started.error } };
+      }
+      if (fuel) {
+        session.fuel.measure(started.delivery);
+      }
+      this.#play.messageSent();
+      this.#schedule();
+      // Reports reach the measurement before the result settles.
+      const row = () =>
+        fuel ? session.fuel.take(started.delivery) : undefined;
+      return started.result.then(
+        value => ({
+          reply: expression
+            ? { value: valueEncoder(session, this.#owners)(value) }
+            : valueReply(value),
+          row: row(),
+        }),
+        (error: unknown) => ({
+          reply: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+          row: row(),
+        }),
+      );
+    };
+    const replyOf = (measured: ReturnType<typeof run>) =>
+      whenReady(measured, m => m.reply);
+    return {
+      inspect: expression => replyOf(run(expression, true, false)),
+      command: text => replyOf(run(text, false, false)),
+      fuel: command => run(command, false, true),
+    };
+  }
+
+  /** Evaluates Message Box lines in the Stopped Run's selected frame. */
+  #stoppedEngine(session: PlaySession): LineEngine {
+    return {
+      fuelRefusal: ':fuel waits until the stopped Run finishes.',
+      inspect: expression => {
+        const result = this.#evaluate(session, `return ${expression}`);
+        return 'value' in result
+          ? { value: valueEncoder(session, this.#owners)(result.value) }
+          : { error: evaluationError(result) };
+      },
+      command: text => {
+        // An expression first: a bare name compiles as a command that sends,
+        // which a Stopped Run refuses.
+        let result = this.#evaluate(session, `return ${text}`);
+        if ('error' in result && result.line !== undefined) {
+          result = this.#evaluate(session, text);
+        }
+        return 'value' in result
+          ? valueReply(result.value)
+          : { error: evaluationError(result) };
+      },
+    };
   }
 
   // Every Watch, again, in the selected frame.
