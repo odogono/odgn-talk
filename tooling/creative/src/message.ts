@@ -5,7 +5,7 @@ import { type Value } from '@northtalk/ts';
 import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
-import { fuelCommand, inspectCommand } from './message-script';
+import { runLine } from './message-line';
 import { PlaySession } from './play';
 import { scriptOwners } from './script-manifest';
 import { valueEncoder, type VariableValue } from './variables';
@@ -104,16 +104,22 @@ export const runInEdit = async (
   editor: StackEditor,
   command: string,
   target?: number,
+): Promise<MessageReply> =>
+  runLine(command, {
+    // Edit runs a command in a session that sends no events, so Fuel there
+    // would not be what the line costs in Play.
+    fuelRefusal: ':fuel works only while browsing.',
+    inspect: expression => editRun(editor, target, expression, true),
+    command: text => editRun(editor, target, text, false),
+  });
+
+/** Runs `text` against the authored Project, as an expression or a command. */
+const editRun = async (
+  editor: StackEditor,
+  target: number | undefined,
+  text: string,
+  expression: boolean,
 ): Promise<MessageReply> => {
-  const inspect = inspectCommand(command);
-  if (inspect && 'error' in inspect) {
-    return inspect;
-  }
-  // Edit runs a command in a session that sends no events, so Fuel there
-  // would not be what the line costs in Play.
-  if (fuelCommand(command)) {
-    return { error: ':fuel works only while browsing.' };
-  }
   if (editor.readOnly) {
     return { error: 'This Project is read-only here.' };
   }
@@ -131,15 +137,15 @@ export const runInEdit = async (
         'That Script could not load; fix its problems before running a command.',
     };
   }
-  const started = inspect
-    ? play.runWatch(inspect.expression, loadedTarget)
-    : play.runMessage(command, loadedTarget);
+  const started = expression
+    ? play.runWatch(text, loadedTarget)
+    : play.runMessage(text, loadedTarget);
   if (!started.ok) {
     play.stop(0n);
     return { error: started.error };
   }
   // Elements are placed in the authored Project, which `authored` maps to.
-  const encode = inspect
+  const encode = expression
     ? valueEncoder(
         play,
         new Map(scriptOwners(editor.project).map((owner, i) => [owner, i])),
