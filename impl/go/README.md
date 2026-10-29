@@ -563,7 +563,7 @@ produce background lines when later resumed. Ctrl-C cancels the foreground Run
 or drops an unfinished Entry. Ctrl-D and `:quit` exit; `:help` lists Commands.
 Prompts, line editing and Ctrl-C presentation are outside Transcript parity.
 
-The Host supports `:grant`, `:mock`, `:stub`, `:answer`, `:fail`, `:clock`,
+The Host supports `:grant`, `:mock` (with a `read-only` metered suspending mock), `:stub`, `:answer`, `:fail`, `:charge`, `:clock`,
 `:limits`, `:cancel`, `:fix`, `:runs`, `:mailbox`, `:vars`, `:save`, `:restore`,
 `:library`, `:export` and `:store`, as specified in
 [chapter 12](../../spec/12-sessions-and-tooling.md). Configure Grants and mock

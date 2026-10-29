@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -15,6 +16,9 @@ import (
 
 var nameText = regexp.MustCompile(`^[\pL_][\pL\pN_]*$`)
 var digits = regexp.MustCompile(`^\d+$`)
+
+// A whole Fuel amount, in canonical digits.
+var wholeFuel = regexp.MustCompile(`^(0|[1-9]\d*)$`)
 
 func split(s string) (string, string) {
 	s = strings.TrimSpace(s)
@@ -91,7 +95,7 @@ func (h *Host) command(source string) []string {
 			}
 			return nil
 		}
-		if len(words) != 2 {
+		if len(words) != 2 && len(words) != 3 {
 			return refusal("bad arguments")
 		}
 		cap, op, ok := strings.Cut(words[0], ".")
@@ -107,7 +111,12 @@ func (h *Host) command(source string) []string {
 		if slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" || cap == "user" {
 			return refusal("bad arguments")
 		}
-		m := mock{cap, op, mode}
+		// Only a suspending mock may be metered (Metered Operations).
+		metered := len(words) == 3
+		if metered && (words[2] != "read-only" || mode != talk.Suspending) {
+			return refusal("bad arguments")
+		}
+		m := mock{cap, op, mode, metered}
 		replaced := false
 		for i, old := range h.mocks {
 			if old.capability == cap && old.operation == op {
@@ -122,7 +131,7 @@ func (h *Host) command(source string) []string {
 		return nil
 	}
 	switch name {
-	case "stub", "answer", "fail", "clock", "limits", "cancel", "fix", "save", "restore", "library", "export", "describe", "apropos":
+	case "stub", "answer", "fail", "charge", "clock", "limits", "cancel", "fix", "save", "restore", "library", "export", "describe", "apropos":
 		h.start()
 	case "runs", "mailbox", "vars":
 		if len(words) > 0 {
@@ -203,6 +212,28 @@ func (h *Host) command(source string) []string {
 			c.Answer(v)
 		} else {
 			c.Fail(failure)
+		}
+		return h.pump()
+	case "charge":
+		// Queues a charge request for a pending mock call, then pumps, as
+		// `answer` does; the Trace records the request and its outcome.
+		if len(words) != 2 || !wholeFuel.MatchString(words[1]) {
+			return refusal("bad arguments")
+		}
+		fuel, err := strconv.ParseInt(words[1], 10, 64)
+		if err != nil || fuel > 9007199254740991 {
+			return refusal("bad arguments")
+		}
+		c := h.pending[words[0]]
+		if c == nil || c.Context().Err() != nil {
+			return refusal("no such call")
+		}
+		if _, err := c.RequestCharge(fuel); err != nil {
+			var refused *talk.HostError
+			if errors.As(err, &refused) {
+				return refusal(string(refused.Code))
+			}
+			return refusal(err.Error())
 		}
 		return h.pump()
 	case "clock":

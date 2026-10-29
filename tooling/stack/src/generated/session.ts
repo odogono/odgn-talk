@@ -7,8 +7,8 @@ export const sessionCommands = [
   },
   {
     "name": ":mock",
-    "usage": ":mock <capability>.<operation> <mode>",
-    "does": "Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget`"
+    "usage": ":mock <capability>.<operation> <mode> [read-only]",
+    "does": "Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget`, and a `suspending` one may be declared `read-only` metered so `:charge` can take its calls"
   },
   {
     "name": ":stub",
@@ -19,6 +19,11 @@ export const sessionCommands = [
     "name": ":answer",
     "usage": ":answer <call> <value>",
     "does": "Answers a pending call of a mock suspending Operation"
+  },
+  {
+    "name": ":charge",
+    "usage": ":charge <call> <fuel>",
+    "does": "Requests `<fuel>`, a whole number, for a pending call of a `read-only` metered mock, then pumps; the Trace records the request and its outcome, and a Run that can't pay faults at the call"
   },
   {
     "name": ":fail",

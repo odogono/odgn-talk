@@ -75,6 +75,8 @@ const Mock = struct {
     capability: []const u8,
     operation: []const u8,
     mode: Mode,
+    /// A suspending mock declared `read-only`, whose calls `:charge` takes.
+    metered: bool = false,
     stubs: std.ArrayList(Stub) = .empty,
 };
 
@@ -491,6 +493,8 @@ pub const Session = struct {
                     .context = m,
                     .scope = null,
                     .segment_bound = false,
+                    .metering = if (m.metered) "read-only" else null,
+                    .metering_len = if (m.metered) "read-only".len else 0,
                 });
             };
             try check_(c.talk_define_capability(s.core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, null, 0, &def));
@@ -1410,6 +1414,7 @@ pub const Session = struct {
         try s.start();
         if (std.mem.eql(u8, name, ":stub")) return s.stubCommand(args, rest);
         if (std.mem.eql(u8, name, ":answer") or std.mem.eql(u8, name, ":fail")) return s.answerCommand(name, args, rest);
+        if (std.mem.eql(u8, name, ":charge")) return s.chargeCommand(args);
         if (std.mem.eql(u8, name, ":clock")) return s.clockCommand(args, rest);
         if (std.mem.eql(u8, name, ":limits")) return s.limitsCommand(args);
         if (std.mem.eql(u8, name, ":cancel")) return s.cancelCommand(args);
@@ -1451,16 +1456,19 @@ pub const Session = struct {
     }
 
     fn mockCommand(s: *Session, args: []const []const u8) !void {
-        if (args.len != 2) return s.say("! bad arguments");
+        if (args.len != 2 and args.len != 3) return s.say("! bad arguments");
         const dot = std.mem.indexOfScalar(u8, args[0], '.') orelse return s.say("! bad arguments");
         const capability = args[0][0..dot];
         const operation = args[0][dot + 1 ..];
         if (capability.len == 0 or operation.len == 0) return s.say("! bad arguments");
         if (isOneOf(capability, &reserved_capabilities)) return s.say("! bad arguments");
         const mode: Mode = if (std.mem.eql(u8, args[1], "immediate")) .immediate else if (std.mem.eql(u8, args[1], "suspending")) .suspending else if (std.mem.eql(u8, args[1], "fire-and-forget")) .fire_and_forget else return s.say("! bad arguments");
+        // Only a suspending mock may be metered (Metered Operations).
+        const metered = args.len == 3;
+        if (metered and (mode != .suspending or !std.mem.eql(u8, args[2], "read-only"))) return s.say("! bad arguments");
         if (s.started) return s.say("! session started");
         const m = try s.alloc().create(Mock);
-        m.* = .{ .session = s, .capability = s.dupe(capability), .operation = s.dupe(operation), .mode = mode };
+        m.* = .{ .session = s, .capability = s.dupe(capability), .operation = s.dupe(operation), .mode = mode, .metered = metered };
         try s.mocks.append(s.alloc(), m);
     }
 
@@ -1513,6 +1521,28 @@ pub const Session = struct {
         const p = s.pending.orderedRemove(i);
         try s.settleCall(p.call, .{ .shown = shown, .fail = fail });
         _ = try s.pump();
+    }
+
+    /// Queues a charge request for a pending mock call, then pumps, as
+    /// `:answer` does; the Trace records the request and its outcome.
+    fn chargeCommand(s: *Session, args: []const []const u8) !void {
+        if (args.len != 2) return s.say("! bad arguments");
+        const fuel = wholeFuel(args[1]) orelse return s.say("! bad arguments");
+        const p = for (s.pending.items) |p| {
+            if (p.kind == .mock and std.mem.eql(u8, p.id, args[0])) break p;
+        } else return s.say("! no such call");
+        var request: ?*c.talk_charge_request = null;
+        const code = c.talk_call_request_charge(p.call, fuel, &request);
+        if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
+        _ = try s.pump();
+    }
+
+    /// A whole Fuel amount, written in canonical digits.
+    fn wholeFuel(text: []const u8) ?i64 {
+        if (text.len == 0 or (text[0] == '0' and text.len > 1)) return null;
+        const n = std.fmt.parseInt(i64, text, 10) catch return null;
+        if (n < 0 or n > 9_007_199_254_740_991 or text[0] == '+') return null;
+        return n;
     }
 
     fn instantText(s: *Session, i: Instant) []const u8 {
