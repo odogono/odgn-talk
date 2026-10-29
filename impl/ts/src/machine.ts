@@ -3705,17 +3705,12 @@ export class Run {
 
   // An error caught outside an open Join's body, or not caught, abandons the
   // members it started, each written after the raise (chapter 5, Joins).
-  private leaveJoin(
-    handler: number,
-    target: number | undefined,
-    copied?: number,
-  ) {
+  private leaveJoin(handler: number, target: number | undefined) {
     const join = this.join;
     if (!join) {
       return;
     }
-    const found = this.frames.indexOf(join.frame);
-    const at = found === copied ? -1 : found;
+    const at = this.frames.indexOf(join.frame);
     if (handler > at) {
       return;
     }
@@ -4261,12 +4256,11 @@ export class Run {
         f.clauseCharge = false;
         return;
       }
-      const copied = this.copiedFrame(u);
       this.controls.pop();
       const then = u.then;
       switch (then.k) {
         case 'accept': {
-          this.leaveJoin(then.frame, then.pc, copied);
+          this.leaveJoin(then.frame, then.pc);
           this.frames.length = then.frame + 1;
           const f = this.frames[then.frame]!;
           f.stack = then.stack;
@@ -4288,7 +4282,7 @@ export class Run {
           this.outcome = { kind: 'cancelled' };
           return;
         case 'transfer':
-          return this.enterOffer(then, copied);
+          return this.enterOffer(then);
         case 'search':
           // The frames above the catching one are gone; it goes on from its
           // own place.
@@ -4299,17 +4293,6 @@ export class Run {
           });
       }
     }
-  }
-
-  /**
-   * The frame a failure's last `finally` block ran in, if one did after the
-   * dispatch under it ended. `leaveJoin` doesn't find a Join's frame there,
-   * as before these records, when that block's copy stood in for it; #1742
-   * tracks abandoning the Join then.
-   */
-  private copiedFrame(u: CleanupControl): number | undefined {
-    const step = u.cleanups[u.next - 1];
-    return step && !step.leave ? step.frame : undefined;
   }
 
   /**
@@ -4513,10 +4496,10 @@ export class Run {
    * Enters a chosen action: the frames above its `try` are gone, its
    * parameters bind at once, and it starts at its entry.
    */
-  private enterOffer(t: Then & { k: 'transfer' }, copied?: number) {
+  private enterOffer(t: Then & { k: 'transfer' }) {
     const frame = this.frames[t.frame]!;
     const offer = frame.code.unit.offers![t.record]!.offers[t.offer]!;
-    this.leaveJoin(t.frame, offer.target, copied);
+    this.leaveJoin(t.frame, offer.target);
     this.frames.length = t.frame + 1;
     frame.stack = frame.stack.slice(
       0,
