@@ -422,6 +422,39 @@ const inputTags = [
  * Writes records' fields. One per save: shared internal values are written
  * in full once, then by their place.
  */
+const latin1 = new TextDecoder('latin1');
+
+/**
+ * A table of entries, each written once: an entry whose bytes equal an
+ * earlier one's is that one. Returns each item's index and writes the table.
+ */
+const shared = <T>(
+  w: SaveWriter,
+  items: readonly T[],
+  encode: (w: SaveWriter, item: T) => void,
+): number[] => {
+  const seen = new Map<string, number>();
+  const entries: Uint8Array[] = [];
+  const at = items.map(item => {
+    const e = new SaveWriter();
+    encode(e, item);
+    const bytes = e.finish();
+    const key = latin1.decode(bytes);
+    let i = seen.get(key);
+    if (i === undefined) {
+      i = entries.length;
+      seen.set(key, i);
+      entries.push(bytes);
+    }
+    return i;
+  });
+  w.uint(entries.length);
+  for (const e of entries) {
+    w.raw(e);
+  }
+  return at;
+};
+
 export class RecordWriter<V> {
   private iterators = new Map<object, number>();
   private readers = new Map<object, number>();
@@ -695,7 +728,7 @@ export class RecordWriter<V> {
     });
   }
 
-  run(r: RunRecord<V>) {
+  run(r: RunRecord<V>, base: number | undefined) {
     const w = this.w;
     w.text(r.id).uint(r.order);
     this.optUint(r.reportedFuel);
@@ -740,7 +773,7 @@ export class RecordWriter<V> {
     w.bool(r.parked);
     w.list(r.abandoned, (w, id) => w.text(id));
     w.uint(r.base).uint(r.segments).bool(r.verdict);
-    w.optional(r.segmentBase, (_, b) => this.list(b));
+    w.ref(base);
     this.frames(r.frames);
   }
 
@@ -853,12 +886,11 @@ export class RecordWriter<V> {
   }
 
   scripts(ss: readonly ScriptRecord<V>[]) {
-    this.w.list(ss, (w, s) => {
-      w.text(s.name).digest(s.identity);
-      w.list(s.extensions, (w, e) => w.digest(e));
-      this.limits(s.limits);
-      w.list(s.grants, (w, g) => {
-        w.text(g.name).text(g.declarations).text(g.capability);
+    const declarations = shared(
+      this.w,
+      ss.flatMap(s => s.grants),
+      (w, g) => {
+        w.text(g.declarations).text(g.capability);
         w.list(g.operations, (w, op) =>
           w
             .text(op.name)
@@ -868,6 +900,15 @@ export class RecordWriter<V> {
             .bool(op.command)
             .list(op.labels, (w, l) => w.text(l)),
         );
+      },
+    );
+    let next = 0;
+    this.w.list(ss, (w, s) => {
+      w.text(s.name).digest(s.identity);
+      w.list(s.extensions, (w, e) => w.digest(e));
+      this.limits(s.limits);
+      w.list(s.grants, (w, g) => {
+        w.text(g.name).index(declarations[next++]!);
         w.bool(g.revoked).bool(g.disabled);
       });
       w.ref(s.owner);
@@ -886,9 +927,15 @@ export class RecordWriter<V> {
 
   runs(perScript: readonly number[], runs: readonly RunRecord<V>[]) {
     this.w.list(perScript, (w, n) => w.uint(n));
+    // Writing a repeated base meets no new Function Value.
+    const withBase = runs.filter(r => r.segmentBase !== undefined);
+    const at = shared(this.w, withBase, (w, r) =>
+      w.list(r.segmentBase!, (w, v) => this.values.write(w, v)),
+    );
+    const bases = new Map(withBase.map((r, i) => [r, at[i]!]));
     this.w.uint(runs.length);
     for (const r of runs) {
-      this.run(r);
+      this.run(r, bases.get(r));
     }
   }
 
@@ -981,6 +1028,9 @@ export class RecordReader<V> {
     readonly values: ValueIO<V>,
     readonly tables: Tables,
   ) {}
+
+  /** The `runs` section's segment bases, each read once. */
+  private bases: V[][] = [];
 
   value(): V {
     return this.values.read(this.r);
@@ -1363,7 +1413,8 @@ export class RecordReader<V> {
     const base = r.uint();
     const segments = r.uint();
     const verdict = r.bool();
-    const segmentBase = r.optional(() => this.list());
+    const at = r.ref(this.bases.length);
+    const segmentBase = at === undefined ? undefined : this.bases[at];
     const frames = this.frames();
     return {
       id,
@@ -1535,6 +1586,18 @@ export class RecordReader<V> {
   }
 
   scripts(): ScriptRecord<V>[] {
+    const declarations = this.r.list(r => ({
+      declarations: r.text(),
+      capability: r.text(),
+      operations: r.list(r => ({
+        name: r.text(),
+        mode: r.text(),
+        required: r.uint(),
+        args: r.uint(),
+        command: r.bool(),
+        labels: r.list(r => r.text()),
+      })),
+    }));
     return this.r.list(r => ({
       name: r.text(),
       identity: r.digest(),
@@ -1542,16 +1605,7 @@ export class RecordReader<V> {
       limits: this.limits(),
       grants: r.list(r => ({
         name: r.text(),
-        declarations: r.text(),
-        capability: r.text(),
-        operations: r.list(r => ({
-          name: r.text(),
-          mode: r.text(),
-          required: r.uint(),
-          args: r.uint(),
-          command: r.bool(),
-          labels: r.list(r => r.text()),
-        })),
+        ...declarations[r.index(declarations.length)]!,
         revoked: r.bool(),
         disabled: r.bool(),
       })),
@@ -1571,6 +1625,7 @@ export class RecordReader<V> {
 
   runs(): { perScript: number[]; runs: RunRecord<V>[] } {
     const perScript = this.r.list(r => r.uint());
+    this.bases = this.r.list(() => this.list());
     const runs = this.r.list(() => this.run());
     return { perScript, runs };
   }
