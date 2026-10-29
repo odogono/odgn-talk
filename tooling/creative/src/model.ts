@@ -139,7 +139,21 @@ export const ELEMENT_KINDS: readonly ElementKind[] = [
   'group',
 ];
 
+/** Where Present places a Page narrower or shorter than the window. */
+export const PAGE_ALIGNS_X = ['left', 'center', 'right'] as const;
+export const PAGE_ALIGNS_Y = ['top', 'center', 'bottom'] as const;
+export type PageAlignX = (typeof PAGE_ALIGNS_X)[number];
+export type PageAlignY = (typeof PAGE_ALIGNS_Y)[number];
+export const isPageAlignX = (value: unknown): value is PageAlignX =>
+  PAGE_ALIGNS_X.includes(value as PageAlignX);
+export const isPageAlignY = (value: unknown): value is PageAlignY =>
+  PAGE_ALIGNS_Y.includes(value as PageAlignY);
+
 export type Page = {
+  /** Horizontal placement when presented; absent means center. */
+  alignX?: PageAlignX;
+  /** Vertical placement when presented; absent means center. */
+  alignY?: PageAlignY;
   background: string;
   elements: Element[];
   height: number;

@@ -2,6 +2,8 @@ import {
   hasBorder,
   BUTTON_STYLES_PROSE,
   isButtonStyle,
+  isPageAlignX,
+  isPageAlignY,
   isTextAlign,
   setTextAlign,
   textAlignOf,
@@ -86,6 +88,21 @@ const thickness: PropertyDescriptor = {
       : undefined,
 };
 
+/** Authoring-only Page placement; absent reads as center. */
+const pageAlign = (
+  field: 'alignX' | 'alignY',
+  valid: (value: unknown) => boolean,
+  prose: string,
+): PropertyDescriptor => ({
+  shape: 'text',
+  script: false,
+  get: owner => (owner as DeepReadonly<Page>)[field] ?? 'center',
+  validate: (_owner, value) =>
+    valid(value) ? undefined : `${field} must be ${prose}`,
+  set: (_owner, value, writer) =>
+    writer.field(field, value === 'center' ? undefined : value),
+});
+
 const fields: Record<PropertyKind, Record<string, PropertyDescriptor>> = {
   project: {
     name,
@@ -95,6 +112,8 @@ const fields: Record<PropertyKind, Record<string, PropertyDescriptor>> = {
     name,
     background: scalar('background', 'text'),
     height: scalar('height', 'number'),
+    alignX: pageAlign('alignX', isPageAlignX, 'left, center or right'),
+    alignY: pageAlign('alignY', isPageAlignY, 'top, center or bottom'),
   },
   text: {
     ...common,

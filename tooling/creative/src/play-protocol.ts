@@ -6,7 +6,14 @@ import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { type PerformanceSnapshot } from './performance';
 import { type ReaderArg } from './pointer';
 import { type LoadedMessageTarget } from './message-script';
-import { type Asset, type Element, type Project, type RichText } from './model';
+import {
+  type Asset,
+  type Element,
+  type PageAlignX,
+  type PageAlignY,
+  type Project,
+  type RichText,
+} from './model';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
 import {
   type VariableScript,
@@ -120,7 +127,13 @@ export type PlayView = {
   notices: UserNotice[];
   /** The showing Page's Elements by name, in draw order; absent if unchanged. */
   order?: string[];
-  page: { background: string; height: number; name: string };
+  page: {
+    alignX?: PageAlignX;
+    alignY?: PageAlignY;
+    background: string;
+    height: number;
+    name: string;
+  };
   /** Whether the Page's Message Path handles each key message. */
   pageHandles: { keyDown: boolean; keyUp: boolean };
   pageIndex: number;

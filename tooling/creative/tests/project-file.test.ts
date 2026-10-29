@@ -292,6 +292,29 @@ test('an unknown paragraph alignment is damage', async () => {
   ]);
 });
 
+test('Page alignment survives a round trip and rejects unknown values', async () => {
+  const project = createProject('Placed');
+  project.pages[0]!.alignX = 'right';
+  project.pages[0]!.alignY = 'top';
+  const read = await readProjectFile(
+    await writeProjectFile(project, new Map()),
+  );
+  expect(read.project.pages[0]).toMatchObject({
+    alignX: 'right',
+    alignY: 'top',
+  });
+  const json = serializeProject(project) as {
+    pages: Record<string, unknown>[];
+  };
+  json.pages[0]!.alignY = 'middle';
+  const error = await readProjectFile(await fileWithJson(json)).catch(
+    (error_: unknown) => error_,
+  );
+  expect((error as ProjectFileError).issues!.map(i => i.path)).toEqual([
+    'pages[0].alignY',
+  ]);
+});
+
 test('invalid JSON and a missing project.json are errors, never a half-read Project', async () => {
   await expect(readProjectFile(await fileWithJson('{oops'))).rejects.toThrow(
     'project.json: not valid JSON',

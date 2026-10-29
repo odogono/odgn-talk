@@ -8,7 +8,12 @@ import {
   type Reply,
 } from '@northtalk/tooling/worker-supervisor';
 import type { DrawingMark } from './drawing';
-import { type CanvasElement, type Element, type Project } from './model';
+import {
+  type CanvasElement,
+  type Element,
+  type Page,
+  type Project,
+} from './model';
 import { type MessageReply, valueReply } from './message';
 import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
@@ -43,6 +48,12 @@ const wallClock = pausableClock(
  * without its Drawing, which travels as `DrawingView`s.
  */
 // Views cross `postMessage` as copies, so the readonly live node can go as is.
+/** The Page's presented placement, omitting the center default. */
+const pageAlign = ({ alignX, alignY }: DeepReadonly<Page>) => ({
+  ...(alignX ? { alignX } : {}),
+  ...(alignY ? { alignY } : {}),
+});
+
 const withoutMembers = (element: DeepReadonly<Element>): Element =>
   (element.kind === 'group'
     ? { ...element, members: [] }
@@ -111,6 +122,7 @@ export const firstView = (
       name: play.page.name,
       height: play.page.height,
       background: play.page.background,
+      ...pageAlign(play.page),
     },
     designWidth: play.project.designWidth,
     order: elements.map(({ element }) => element.name),
@@ -769,6 +781,7 @@ export class PlayHost {
           name: session.page.name,
           height: session.page.height,
           background: session.page.background,
+          ...pageAlign(session.page),
         },
         designWidth: session.project.designWidth,
         ...(orderChanged ? { order } : {}),

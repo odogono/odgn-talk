@@ -70,9 +70,11 @@ export class PlayMirror implements ReaderTextPlay {
       this.page = { ...view.page, index: view.pageIndex };
     } else if (
       view.page.height !== this.page.height ||
-      view.page.background !== this.page.background
+      view.page.background !== this.page.background ||
+      view.page.alignX !== this.page.alignX ||
+      view.page.alignY !== this.page.alignY
     ) {
-      Object.assign(this.page, view.page);
+      this.page = { ...view.page, index: view.pageIndex };
     }
     if (view.messageTargets) {
       this.messageTargets = view.messageTargets;
