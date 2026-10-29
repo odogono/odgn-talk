@@ -120,7 +120,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 
 ### Joins
 
-- **Fail fast:** the first Join Member failure to arrive resumes the Run and is raised at the Join's closing `end`, as the member's own error map plus `index`, its 1-based start position. A failed send member raises `send failed`, plus `index`.
+- **Fail fast:** of the Join Member failures that arrived before the Join's closing `end`, the earliest-started member's is raised there. After the Join suspends, the first member failure to arrive resumes the Run and is raised at its closing `end`. Either is raised as the member's own error map plus `index`, its 1-based start position. A failed send member raises `send failed`, plus `index`.
 - **`index`** is added only when it is missing, so a rethrow keeps it. It is a reserved key.
 - **A Timeout Block around the Join:** when its deadline runs out first, every pending member is abandoned and the Join raises `timeout` with `deadline: true` and no `index`, since no member failed.
 - **The rest** of the pending members are abandoned ([chapter 5](05-handlers-messages-and-scheduling.md#joins)).

@@ -553,7 +553,7 @@ What a Run suspended at a Suspension Point is waiting for: an Operation's answer
 _Avoid_: pending, promise, future
 
 **Join**:
-A `wait for all … end` block whose ending may also be written `end wait`. It starts every Join Member it reaches without waiting, then suspends once, at its closing `end`, until all of them answer. `it` then holds their answers as a list, in the order they were started. The first failure to arrive is raised, and the members still pending are abandoned.
+A `wait for all … end` block whose ending may also be written `end wait`. It starts every Join Member it reaches without waiting, then suspends once, at its closing `end`, until all of them answer. `it` then holds their answers as a list, in the order they were started. Of the failures that arrived before the Join's closing `end`, the earliest-started member's is raised. After the Join suspends, the first failure to arrive is raised. The members still pending are abandoned.
 _Avoid_: parallel block, gather, fan-out, Promise.all
 
 **Join Member**:
