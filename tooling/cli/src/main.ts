@@ -23,7 +23,10 @@ const usage = `Usage:
   northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
                                           print Lints (default: standard)
   northtalk test [--manifest <file>] [--only <text>] [<path>…]
-                                          run Test Scripts and Transcripts`;
+                                          run Test Scripts and Transcripts
+  northtalk diff-save [--first] [--json] <a> <b>
+                                          where two saves differ
+  northtalk dump-save [--json] <save>      a save as a tree`;
 
 const commands = new Set([
   'debug',
@@ -33,6 +36,8 @@ const commands = new Set([
   'fmt',
   'lint',
   'test',
+  'diff-save',
+  'dump-save',
   'help',
 ]);
 
@@ -156,6 +161,26 @@ const main = async (args: string[]): Promise<number> => {
     }
     const { runTests } = await import('./test');
     return await runTests(rest.length ? rest : ['.'], { manifest, only });
+  }
+  if (command === 'diff-save' || command === 'dump-save') {
+    const flags = new Set(rest.filter(arg => arg.startsWith('-')));
+    const files = rest.filter(arg => !arg.startsWith('-'));
+    const allowed =
+      command === 'diff-save' ? ['--first', '--json'] : ['--json'];
+    if (
+      [...flags].some(flag => !allowed.includes(flag)) ||
+      files.length !== (command === 'diff-save' ? 2 : 1)
+    ) {
+      throw new Error(usage);
+    }
+    const saves = await import('./saves');
+    const json = flags.has('--json');
+    return command === 'diff-save'
+      ? saves.diffSave(files[0]!, files[1]!, {
+          first: flags.has('--first'),
+          json,
+        })
+      : saves.dumpSave(files[0]!, json);
   }
   if (command === 'help' || command === '--help' || command === '-h') {
     console.log(usage);

@@ -14,6 +14,8 @@ northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
 northtalk lsp
 northtalk debug <script> [--trace <file>]
 northtalk test [--manifest <file>] [--only <text>] [<path>…]
+northtalk diff-save [--first] [--json] <a> <b>
+northtalk dump-save [--json] <save>
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt until the whole Entry is complete. This includes unfinished fences and interpolation holes, with blank literal lines preserved as content; final EOF reports the innermost unfinished construct at its opener.
@@ -23,6 +25,7 @@ northtalk test [--manifest <file>] [--only <text>] [<path>…]
 - **`:store load <path>` and `:store save <path>`** read and write a Session Store's contents as a JSON file, relative to the working directory. The Store itself is in memory and starts empty each session.
 - **`--transcript <file>`** records the session as it goes: each Entry and recorded Session Command, each real Clock reading, each line typed for `read`, each prompt's answer, and each line printed.
 - **`replay`** replays a Transcript through a fresh Session Host, and exits with 1, naming the first differing line, when it doesn't print the same. `--trace` writes the Trace the replay took, ending with `> vars`, as a corpus case's `case.trace` does.
+- **`diff-save`** decodes two saves, from either Core, and prints each part of their state that differs as `path: a → b`, such as `script "a" / variable count (#0): number 0 → number 1`. Equal State Fingerprints print `same state`; a differing Trace save id counter or optional section is a `note:`, outside the state. `--first` stops at the first difference, `--json` prints the result as JSON, and it exits with 1 when the states differ. **`dump-save`** prints one save as a tree. Both read the save format through its schema ([`save-diff.ts`](../stack/src/save-diff.ts), [#1713](https://github.com/odogono/odgn-talk/issues/1713)) and are outside parity.
 - **`fmt`** formats files in place with no layout options. `--check` writes nothing and exits with 1 on unformatted files; `-` reads stdin and writes source to stdout. Syntax errors leave source untouched, report the Core's error on stderr, and exit with 1. Other files are still processed. See the [formatter guide](../stack/README.md#formatter) for the layout rules and clean-checkout Bun and Node commands.
 - **Built-in Capabilities** for `:grant`: `clock`, and `calendar` and `locale` answered from the runtime's Intl data ([`builtins.ts`](../stack/src/builtins.ts)), as in `:grant cal calendar Europe/London` or `:grant loc locale de-CH`. Without a binding they default to `UTC` and `und`. Their answers are this Host's own, and a Transcript records each one as a `~` line, so a replay never consults Intl.
 
