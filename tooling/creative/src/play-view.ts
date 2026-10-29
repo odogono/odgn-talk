@@ -196,7 +196,10 @@ export const mountPlay = (shell: StackShell): void => {
   const variables = new VariablesWindow(
     index => selectOwner(owners, generation, index),
     () => sendWatches(),
-    frame => {
+    (frame, index) => {
+      if (session && !session.stopped && session.stoppedRun) {
+        post({ kind: 'selectFrame', session: sessionId, frame: index });
+      }
       const at = stoppedAt(frame);
       if (at) {
         shell.breakpoints.showStopped(at);
