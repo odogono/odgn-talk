@@ -1171,6 +1171,40 @@ const ordered = (opcode: number, x: number, y: number): boolean => {
   return x !== y;
 };
 
+/**
+ * A Run's state as a save writes it and a restore sets it (save-runs.ts).
+ * Its fields are the Run's own, so a change to one fails to compile here
+ * rather than at save time.
+ */
+export type RunState = {
+  abandoning: string[];
+  alloc: number;
+  calls: number;
+  cancellationAbandons: string[];
+  clause: number;
+  cleanupFrom: number | null;
+  controls: Control[];
+  during: Value;
+  faultAbandons: string[];
+  frames: Frame[];
+  fuel: number;
+  id: string;
+  join: { frame: Frame; members: Member[]; start: number } | null;
+  readonly limits: Limits;
+  offerAttempt: number;
+  openVerdict: boolean;
+  raisedAt: CodePosition | null;
+  records: RunRecord[];
+  resumption: Resumption | null;
+  readonly script: Script;
+  segment: number;
+  segmentBase: Value[];
+  suspended: Suspension | null;
+  target: Value;
+  viaFallback: boolean;
+  waitedOn: Suspension | null;
+};
+
 export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
   id = '';
@@ -2237,6 +2271,66 @@ export class Run {
         f.locals[f.body.duringSlot] = value;
       }
     }
+  }
+
+  /** This Run's state, for a save to write (save-runs.ts). */
+  savedState(): RunState {
+    return {
+      abandoning: this.abandoning,
+      alloc: this.alloc,
+      calls: this.calls,
+      cancellationAbandons: this.cancellationAbandons,
+      clause: this.clause,
+      cleanupFrom: this.cleanupFrom,
+      controls: this.controls,
+      during: this.during,
+      faultAbandons: this.faultAbandons,
+      frames: this.frames,
+      fuel: this.fuel,
+      id: this.id,
+      join: this.join,
+      limits: this.limits,
+      offerAttempt: this.offerAttempt,
+      openVerdict: this.openVerdict,
+      raisedAt: this.raisedAt,
+      records: this.records,
+      resumption: this.resumption,
+      script: this.script,
+      segment: this.segment,
+      segmentBase: this.segmentBase,
+      suspended: this.suspended,
+      target: this.target,
+      viaFallback: this.viaFallback,
+      waitedOn: this.waitedOn,
+    };
+  }
+
+  /** Sets this Run's state from a save, as `savedState` reads it. */
+  restoreState({ script: _, limits: __, ...state }: RunState): void {
+    this.abandoning = state.abandoning;
+    this.alloc = state.alloc;
+    this.calls = state.calls;
+    this.cancellationAbandons = state.cancellationAbandons;
+    this.clause = state.clause;
+    this.cleanupFrom = state.cleanupFrom;
+    this.controls = state.controls;
+    this.during = state.during;
+    this.faultAbandons = state.faultAbandons;
+    this.frames = state.frames;
+    this.fuel = state.fuel;
+    this.id = state.id;
+    this.join = state.join;
+    this.offerAttempt = state.offerAttempt;
+    this.openVerdict = state.openVerdict;
+    this.raisedAt = state.raisedAt;
+    this.records = state.records;
+    this.resumption = state.resumption;
+    this.segment = state.segment;
+    this.segmentBase = state.segmentBase;
+    this.suspended = state.suspended;
+    this.target = state.target;
+    this.viaFallback = state.viaFallback;
+    this.waitedOn = state.waitedOn;
   }
 
   constructor(

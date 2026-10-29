@@ -150,12 +150,7 @@ import {
   markRest,
   waitOrders,
 } from './save-marks';
-import {
-  internals as runInternals,
-  limitNames,
-  microsOf,
-  runFromRecord,
-} from './save-runs';
+import { limitNames, microsOf, runFromRecord } from './save-runs';
 import type { CodeUnit } from './code-unit';
 
 // Process-wide compiled code. Checks and initialisation still happen for every
@@ -2248,7 +2243,7 @@ export class TsGroup implements Group {
     const joinOf = (x: (typeof restored)[number]) => {
       let join = joins.get(x.running);
       if (!join) {
-        const r = runInternals(x.running.run);
+        const r = x.running.run.savedState();
         const sus = r.suspended;
         if (sus?.k !== 'join') {
           return invalidSave();
@@ -2293,7 +2288,7 @@ export class TsGroup implements Group {
       if (skimmed.has(x.running)) {
         continue;
       }
-      const r = runInternals(x.running.run);
+      const r = x.running.run.savedState();
       const { s, running, rec } = x;
       if (w.member !== undefined) {
         const m = rec.join?.members[w.member];
@@ -2398,7 +2393,7 @@ export class TsGroup implements Group {
     for (const x of restored) {
       if (
         !skimmed.has(x.running) &&
-        runInternals(x.running.run).suspended?.k === 'join'
+        x.running.run.savedState().suspended?.k === 'join'
       ) {
         joinOf(x);
       }
@@ -6810,8 +6805,8 @@ const skimRun = (
     [],
     limitsOf(rec.limits),
   );
-  const r = runInternals(run);
-  run.id = rec.id;
+  const r = run.savedState();
+  r.id = rec.id;
   r.frames = [];
   r.fuel = rec.fuel;
   r.alloc = rec.alloc;
@@ -6855,6 +6850,7 @@ const skimRun = (
       r.suspended = { k: 'join', members };
     }
   }
+  run.restoreState(r);
   return {
     id: rec.id,
     delivery,
