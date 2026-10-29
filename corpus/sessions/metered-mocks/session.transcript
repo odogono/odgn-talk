@@ -1,0 +1,36 @@
+# Unblessed: Session charge requests (#1795); first blessing awaits human review.
+# A suspending mock declared `read-only` takes `:charge`: an accepted request
+# spends Fuel at once, a request the Run can't pay faults it at the call, and
+# a mock that isn't metered refuses one. `read-only` needs a suspending mock,
+# and `:charge` a whole amount and a pending mock call.
+> :mock feed.fetch suspending read-only
+> :mock feed.plain suspending
+> :mock feed.now immediate read-only
+! bad arguments
+> :mock feed.poll suspending metered
+! bad arguments
+> :clock virtual 2026-09-30T10:00:00Z
+> on pull
+|   ask feed to fetch and wait
+|   say "got " & it
+| end pull
+> send pull to session
+[session/r2] call session/r2.c1 feed.fetch []
+> :charge session/r2.c1 5
+> :charge session/r2.c1 x
+! bad arguments
+> :charge session/r9.c1 1
+! no such call
+> :answer session/r2.c1 "news"
+[session/r2] got news
+> send pull to session
+[session/r4] call session/r4.c1 feed.fetch []
+> :charge session/r4.c1 9007199254740991
+[session/r4] ! limit fault fuel at session+1:2:3
+> on plain
+|   ask feed to plain and wait
+| end plain
+> send plain to session
+[session/r6] call session/r6.c1 feed.plain []
+> :charge session/r6.c1 1
+! invalid value

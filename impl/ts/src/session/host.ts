@@ -1012,6 +1012,7 @@ export class SessionHost {
                 ...base,
                 mode,
                 result: shapeOf(spec.result!),
+                ...(spec.metering ? { metering: 'read-only' as const } : {}),
                 start: (call, ...args) => {
                   this.mockCalls.set(call.id, { operation: key, args });
                   this.pending.set(call.id, call);
@@ -1046,8 +1047,10 @@ export class SessionHost {
         const w = rest.trim().split(/\s+/u).filter(Boolean);
         return this.grant(w.length === 3 ? w : words(rest, 2));
       }
-      case 'mock':
-        return this.mock(words(rest, 2));
+      case 'mock': {
+        const w = rest.trim().split(/\s+/u).filter(Boolean);
+        return this.mock(w.length === 3 ? w : words(rest, 2));
+      }
       case 'stub':
         this.start();
         return this.stub(rest);
@@ -1055,6 +1058,9 @@ export class SessionHost {
       case 'fail':
         this.start();
         return this.settle(name, rest);
+      case 'charge':
+        this.start();
+        return this.charge(words(rest, 2));
       case 'clock':
         this.start();
         return this.clock(rest);
@@ -1183,7 +1189,14 @@ export class SessionHost {
     );
   }
 
-  private mock([target, mode]: string[]): string[] {
+  private mock([target, mode, metering]: string[]): string[] {
+    // Only a suspending mock may be metered (Metered Operations).
+    if (
+      metering !== undefined &&
+      (metering !== 'read-only' || mode !== 'suspending')
+    ) {
+      refuse('bad arguments');
+    }
     this.beforeStart();
     const [capability, operation, more] = target!.split('.');
     if (
@@ -1203,6 +1216,7 @@ export class SessionHost {
       mode: mode as Mock['mode'],
       args: Array.from({ length: MOCK_ARGUMENTS }, () => ({ optional: 'any' })),
       ...(mode === 'fire-and-forget' ? {} : { result: 'any' }),
+      ...(metering ? { metering: 'read-only' as const } : {}),
       cost: { fuel: 0 },
     };
     const operations = this.setup0.operations!;
@@ -1260,6 +1274,27 @@ export class SessionHost {
       call.fail(settled);
     } else {
       call.answer(settled);
+    }
+    return this.pump();
+  }
+
+  // Queues a charge request for a pending mock call, then pumps, as `:answer`
+  // does; the Trace records the request and its outcome.
+  private charge([id, amount]: string[]): string[] {
+    if (
+      !/^(0|[1-9]\d*)$/u.test(amount!) ||
+      !Number.isSafeInteger(Number(amount))
+    ) {
+      return refuse('bad arguments');
+    }
+    const call = this.pending.get(id!);
+    if (!call || call.signal.aborted) {
+      return refuse('no such call');
+    }
+    try {
+      call.requestCharge(Number(amount));
+    } catch (error) {
+      return refuse((error as HostError).code);
     }
     return this.pump();
   }

@@ -95,6 +95,9 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 		if m.Mode != talk.FireAndForget {
 			op["result"] = "any"
 		}
+		if m.Metered {
+			op["metering"] = "read-only"
+		}
 		operations = append(operations, op)
 	}
 	standard := []any{Setup{"capability": "console", "costs": Setup{"write": Setup{"fuel": int64(0)}, "read": Setup{"fuel": int64(0)}}}}

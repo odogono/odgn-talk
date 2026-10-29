@@ -1,0 +1,51 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on pull" & newline & "  ask feed to fetch and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end pull" identity=2bf1eb46a338e9f0bf312b4779e303b5af8ffdd6b12a70383563f7a355462769
+> extend session source="on entry1" & newline & "send pull to session" & newline & "end entry1" & newline identity=cfa88a85bc129bec9d907014ab165fa630b36455554f80ca066fc00ee8ac0982
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+send session/r1 to=session message=pull
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=29 alloc=32 state=32 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=29 alloc=32
+call session/r2.c1 op=feed.fetch args=[]
+seg session/r2 start from=session/r1 handler=pull clause=1 fuel=14 alloc=0 state=224 end=ask-wait
+pumped state=idle fuel=43 next=2026-09-30T10:00:30Z
+> charge-request session/r2.c1 q1 fuel=5
+> pump clock=2026-09-30T10:00:00Z
+charge-result session/r2.c1 q1 fuel=5 status=accepted
+pumped state=idle fuel=5 next=2026-09-30T10:00:30Z
+> answer session/r2.c1 value="news"
+> pump clock=2026-09-30T10:00:00Z
+call session/r2.c2 op=console.write args=["got news"]
+seg session/r2 resume fuel=21 alloc=44 state=0 end=return
+run session/r2 outcome=completed handler=pull fuel=40 alloc=44
+pumped state=idle fuel=21
+> extend session source="on entry2" & newline & "send pull to session" & newline & "end entry2" & newline identity=e09dc90dae550ed2879fbe34a7a7a0cec8278fc8b14646d59f355e7dd36178a1
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+send session/r3 to=session message=pull
+seg session/r3 start delivery=d2 handler=entry2 clause=1 fuel=29 alloc=32 state=32 end=return
+run session/r3 outcome=completed delivery=d2 handler=entry2 fuel=29 alloc=32
+call session/r4.c1 op=feed.fetch args=[]
+seg session/r4 start from=session/r3 handler=pull clause=1 fuel=14 alloc=0 state=224 end=ask-wait
+pumped state=idle fuel=43 next=2026-09-30T10:00:30Z
+> charge-request session/r4.c1 q2 fuel=9007199254740991
+> pump clock=2026-09-30T10:00:00Z
+charge-result session/r4.c1 q2 fuel=9007199254740991 status=limit
+fault session/r4 limit=fuel at=session+1:2 pos=2:3
+abandon session/r4.c1
+run session/r4 outcome=limit-fault handler=pull limit=fuel fuel=14 alloc=0
+pumped state=idle fuel=0
+> extend session source="on plain" & newline & "  ask feed to plain and wait" & newline & "end plain" identity=7edda930eae3b3272cd831b18791ff3b1fede7f15303da96d87f3988b8e2c03c
+> extend session source="on entry3" & newline & "send plain to session" & newline & "end entry3" & newline identity=c76eb28846c68efbbea91effc8a30f3efcfb08944f90040d5653e6e685bfef8e
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+send session/r5 to=session message=plain
+seg session/r5 start delivery=d3 handler=entry3 clause=1 fuel=29 alloc=32 state=32 end=return
+run session/r5 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
+call session/r6.c1 op=feed.plain args=[]
+seg session/r6 start from=session/r5 handler=plain clause=1 fuel=14 alloc=0 state=224 end=ask-wait
+pumped state=idle fuel=43 next=2026-09-30T10:00:30Z
+> charge-request session/r6.c1 fuel=1
+refused code="invalid value"
+> vars
+vars session

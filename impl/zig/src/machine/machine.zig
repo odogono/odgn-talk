@@ -1987,6 +1987,7 @@ pub const Group = struct {
         defer parsed.deinit();
         s.imports = parsed.imports;
         s.identity = codeIdentity(name, source, .script, s.imports);
+        g.flushChargeRefusals();
         g.write("> load {s} identity={x}\n", .{ name, s.identity });
         const pa = parsed.arena.allocator();
         var context = try g.codeContext(pa, options.context, options.objects, options.owner);
@@ -2267,6 +2268,7 @@ pub const Group = struct {
         defer parsed.deinit();
         l.identity = codeIdentity(s.name, source, .extension, parsed.imports);
         const identity = extendedIdentity(s.identity, l.identity);
+        if (input) g.flushChargeRefusals();
         if (input) if (g.trace) |out| {
             out.print("> extend {s} source=", .{s.name}) catch {};
             display.writeSource(out, source) catch {};
@@ -2426,6 +2428,7 @@ pub const Group = struct {
         defer parsed.deinit();
         fresh.imports = parsed.imports;
         fresh.identity = codeIdentity(s.name, source, .script, fresh.imports);
+        g.flushChargeRefusals();
         if (g.trace) |out| {
             out.print("> reload {s} carry={s}", .{ s.name, if (carry) "yes" else "no" }) catch {};
             if (keep_mailbox) out.writeAll(" mailbox=keep") catch {};
@@ -2639,6 +2642,7 @@ pub const Group = struct {
     /// which outlive the Group.
     pub fn replaceLibrary(g: *Group, l: *Library, carry: bool, compiler: Allocator) !ReplaceResult {
         try g.checkCodeChange();
+        g.flushChargeRefusals();
         if (g.trace) |out| {
             out.print("> replace-library {s} carry={s} source=", .{ l.name, if (carry) "yes" else "no" }) catch {};
             display.writeSource(out, l.source) catch {};
@@ -2935,6 +2939,7 @@ pub const Group = struct {
     /// doesn't hold with the same identity `library mismatch`.
     pub fn addLibrary(g: *Group, l: *Library) !void {
         try g.checkWorker();
+        g.flushChargeRefusals();
         g.write("> add-library {s} identity={x}\n", .{ l.name, l.identity });
         const refusal: ?[]const u8 = blk: {
             for (stdlib_sources) |src| if (std.mem.eql(u8, src.name, l.name)) break :blk "reserved name";
@@ -4437,6 +4442,7 @@ pub const Group = struct {
         for (s.work.items) |w| if (w == .message) {
             out.mailbox_len += 1;
         };
+        g.flushChargeRefusals();
         g.write("> counters {s}\ncounters {s} fuel={d} alloc={d} runs={d} faults={d} state={d} mailbox={d}\n", .{ s.name, s.name, out.fuel_total, out.alloc_total, out.runs, out.faults, out.persistent_state, out.mailbox_len });
         return out;
     }
@@ -4558,6 +4564,8 @@ pub const Group = struct {
 
     /// Writes a `vars` record for each Script.
     pub fn vars(g: *Group) void {
+        // A refused charge request is written before the next Host Input.
+        g.flushChargeRefusals();
         g.write("> vars\n", .{});
         const w = g.trace orelse return;
         for (g.scripts.items) |s| {

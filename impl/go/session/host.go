@@ -69,6 +69,8 @@ type event struct {
 type mock struct {
 	capability, operation string
 	mode                  talk.Mode
+	// metered: a suspending mock declared read-only, whose calls `:charge` takes.
+	metered bool
 }
 type stub struct {
 	value   talk.Value
@@ -257,6 +259,9 @@ func (h *Host) start() {
 	for _, m := range h.mocks {
 		key := m.capability + "." + m.operation
 		op := talk.Operation{Name: m.operation, Mode: m.mode, Result: talk.AnyShape}
+		if m.metered {
+			op.Metering = "read-only"
+		}
 		for range 8 {
 			op.Args = append(op.Args, talk.Optional(talk.AnyShape))
 		}
@@ -724,12 +729,13 @@ func (h *Host) Inspect() talk.Inspection {
 type MockOperation struct {
 	Capability, Operation string
 	Mode                  talk.Mode
+	Metered               bool
 }
 
 func (h *Host) MockOperations() []MockOperation {
 	var out []MockOperation
 	for _, m := range h.mocks {
-		out = append(out, MockOperation{m.capability, m.operation, m.mode})
+		out = append(out, MockOperation{m.capability, m.operation, m.mode, m.metered})
 	}
 	return out
 }
