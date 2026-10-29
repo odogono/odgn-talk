@@ -141,3 +141,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0140: northtalk.org is one Cloudflare Worker, deployed from CI](0140-northtalk-org-is-one-cloudflare-worker-deployed-from-ci.md)
 - [0144: A save restores on either Core, in one shared binary format](0144-a-save-restores-on-either-core.md)
 - [0145: Pointer messages carry an event map](0145-pointer-messages-carry-an-event-map.md)
+- [0146: Folio Elements render through Preact](0146-folio-elements-render-through-preact.md)

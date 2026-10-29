@@ -361,6 +361,9 @@ List files with `rg --files tooling/creative` before opening one by name.
 - [stack.ts](src/stack.ts): the Page on the desk, Tools and Info windows,
   Page resizing and strip navigation/drag events; [main.ts](src/main.ts) boots
   the page.
+- [element-view.tsx](src/element-view.tsx): `ElementView`, the Preact
+  component that draws an Element on the desk, in the Page strip and in Play
+  (ADR 0146), and `renderElements`, which renders a Page's layer of them.
 - [info-panel.tsx](src/info-panel.tsx): the Preact Page, Element and
   multi-selection Info panel, observing editor, name-refusal and sound-preview
   signals; field and action events are handled by the shell.

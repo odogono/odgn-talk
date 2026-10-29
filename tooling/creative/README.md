@@ -89,7 +89,9 @@ rounded look, system font and 18 px text. Info changes participate in undo/redo;
 Script changes last only for the Play Session. The
 [`buttons` browser suite](tests/buttons.browser.ts) checks Info, history,
 invisible hit targets, keyboard input and Script-driven rendering in Browse
-and Present on `/buttons-test.html`.
+and Present on `/buttons-test.html`. The
+[`sonar` browser suite](tests/sonar.browser.ts) checks on `/sonar-test.html`
+that an idle animated Page changes no reader DOM.
 
 ## Grouping Elements
 

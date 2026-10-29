@@ -160,6 +160,10 @@ button:disabled {
 .el.line {
   pointer-events: none;
 }
+/* Preact's layer of a Page's Elements; they position against the Page. */
+.elements {
+  display: contents;
+}
 .el.line svg {
   position: absolute;
   overflow: visible;

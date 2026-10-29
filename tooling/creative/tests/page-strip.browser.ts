@@ -52,19 +52,30 @@ export const runBrowserTests = async () => {
     }
   };
   await settle();
-  // renderPage replaces a miniature's direct children. Count those calls,
-  // including calls that would leave identical pixels on an unchanged Page.
+  // Preact writes only what changed, so a miniature that changed records
+  // mutations and an unchanged one records none.
   const originals = miniatures();
   const draws = originals.map(() => 0);
   const observer = new MutationObserver(records => {
-    for (const record of records) {
-      const index = originals.indexOf(record.target as HTMLElement);
-      if (record.type === 'childList' && index !== -1) {
-        draws[index]!++;
+    const touched = new Set(
+      records.map(record =>
+        originals.findIndex(node => node.contains(record.target)),
+      ),
+    );
+    for (const index of touched) {
+      if (index !== -1) {
+        draws[index] = 1;
       }
     }
   });
-  originals.forEach(node => observer.observe(node, { childList: true }));
+  originals.forEach(node =>
+    observer.observe(node, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    }),
+  );
   const expectDraws = (expected: number[]) => {
     assert(
       draws.every((count, index) => count === expected[index]),
@@ -196,7 +207,8 @@ export const runBrowserTests = async () => {
       buttons()[2]!.textContent!.includes('3. renamed'),
       'Page label updates',
     );
-    expectDraws([1, 0, 0]);
+    // A Page's name isn't drawn, so its miniature doesn't change.
+    expectDraws([0, 0, 0]);
   });
   await test('Adding, undo, redo and Project replacement reconcile the strip', async () => {
     const before = buttons();
