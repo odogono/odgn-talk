@@ -74,7 +74,7 @@ chapter 2 already requires; it is implemented separately as the Spec fix in PR #
   `:vars` ([TS](../../impl/ts/src/session/host.ts#L1294),
   [Go](../../impl/go/session/commands.go#L398)), the debugger's variables
   ([stack](../../tooling/stack/src/debug.ts#L492),
-  [Playground](../../tooling/playground/src/session.ts#L80)) and `northtalk test`
+  [Playground](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/session.ts#L80)) and `northtalk test`
   failures ([test runner](../../tooling/cli/src/test.ts#L422)). The echo is
   normative because Session Transcripts replay it
   ([chapter 12](../../spec/12-sessions-and-tooling.md#the-foreground), line 81).

@@ -26,7 +26,7 @@ const manifest = (documentation: object) => ({
   objects: [],
 });
 
-test('the Playground dictionary model retains plain descriptions and source examples', () => {
+test('the dictionary model retains plain descriptions and source examples', () => {
   const description = '<b>Plain *text*</b>';
   const examples = ['ask api to read', 'not parsed'];
   expect(

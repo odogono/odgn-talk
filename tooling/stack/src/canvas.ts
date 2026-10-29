@@ -23,7 +23,7 @@ export const CANVAS_LIMITS = {
 } as const;
 /** A `polygon` or `polyline` argument: `[x, y]` pairs (ADR 0116). */
 const pointsShape = shape.listOf(shape.listOf(shape.number));
-/** Each Operation's arguments, shared by the Playground and Folio. */
+/** Each Operation's arguments, shared by the CLI and Folio. */
 export const CANVAS_SIGNATURES: Readonly<Record<string, readonly Shape[]>> = {
   size: [shape.number, shape.number],
   clear: [],

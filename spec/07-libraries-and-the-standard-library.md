@@ -1033,7 +1033,7 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 
 <!-- end -->
 
-`console` is the user's terminal or output pane. Every REPL and Playground session grants it, and any other Host may ([chapter 12](12-sessions-and-tooling.md#the-console)).
+`console` is the user's terminal or output pane. Every REPL session grants it, and any other Host may ([chapter 12](12-sessions-and-tooling.md#the-console)).
 
 - **`write value`** takes any value, and the Host shows its [text form](03-values.md#the-text-form). `say x` is short for `tell console to write x`.
 - **`read`** answers with the next line the user types, as text, without its line break. Its `maxPending` is 2,147,483,647 ms, the largest `MaxWait` every Core honours, so a user can take their time ([chapter 6](06-errors-and-limits.md#limits)).

@@ -32,7 +32,7 @@ A Host can create a Group ready to pump from the event loop with `newDrivenGroup
 | Import                        | Holds                                                                                                        |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `@northtalk/ts`               | Values, Groups, Scripts, Libraries, Capabilities, Object Kinds, save and restore, and the parser and checker |
-| `@northtalk/ts/session`       | The Session Host, for a REPL or playground, and Session Transcripts                                          |
+| `@northtalk/ts/session`       | The Session Host, for a REPL, and Session Transcripts                                                        |
 | `@northtalk/ts/driver`        | `newDrivenGroup` and `autoDrive`, which pump a Group from the event loop                                     |
 | `@northtalk/ts/store`         | The Store Standard Capability                                                                                |
 | `@northtalk/ts/notify`        | The Store notification router                                                                                |

@@ -239,13 +239,6 @@ Files, grammar, or lowering.
 - Tests and cases: [Navigation tests](../../tooling/stack/tests/replay-debug.test.ts), [Trace and Transcript parity](../../tooling/stack/tests/replay-debug-corpus.test.ts)
 - First check: `bun test tooling/stack/tests/replay-debug.test.ts`
 
-## The Playground
-
-- Implementation: [shared editor](../../tooling/editor/), [declaration Apply](../../tooling/playground/src/declarations.ts), [session](../../tooling/playground/src/session.ts), [workers](../../tooling/playground/src/session.worker.ts), [page](../../tooling/playground/src/main.ts)
-- Rules: [The Playground](../../spec/12-sessions-and-tooling.md#the-playground), [ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)
-- Tests and cases: [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser)
-- First check: `bun test tooling/playground/tests`
-
 ## northtalk.org (`tooling/site`)
 
 - Implementation: [published files](../../tooling/site/src/sources.ts), [link rewriting](../../tooling/site/src/rewrite.ts), [Starlight config](../../tooling/site/astro.config.mjs), [Worker](../../tooling/site/src/worker.ts)
@@ -286,6 +279,6 @@ cover its Preact JSX configuration and the app and browser-test bundles.
 
 The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
 
-Multiline Entry collection, input while the session sleeps and wake scheduling live in the [Session Driver](../../tooling/stack/src/session-driver.ts), shared by [CLI repl.ts](../../tooling/cli/src/repl.ts) and the [Playground worker](../../tooling/playground/src/session.worker.ts); editor highlighting lives in the [shared editor's language.ts](../../tooling/editor/src/language.ts). Corpus selection lives in [tools/corpus.ts](tools/corpus.ts), with Trace execution in [tools/trace-case.ts](tools/trace-case.ts) and Transcript execution in [tools/transcript-case.ts](tools/transcript-case.ts); use `bun run corpus:run sessions` for the Session cases. A new corpus case must also pass the Go gate; follow [the corpus guide](../../corpus/README.md#adding-a-case). Fixtures both Cores read, such as Declaration Documentation, live in [impl/testdata/](../testdata/).
+Multiline Entry collection, input while the session sleeps and wake scheduling live in the [Session Driver](../../tooling/stack/src/session-driver.ts), used by [CLI repl.ts](../../tooling/cli/src/repl.ts); editor highlighting lives in the [shared editor's language.ts](../../tooling/editor/src/language.ts). Corpus selection lives in [tools/corpus.ts](tools/corpus.ts), with Trace execution in [tools/trace-case.ts](tools/trace-case.ts) and Transcript execution in [tools/transcript-case.ts](tools/transcript-case.ts); use `bun run corpus:run sessions` for the Session cases. A new corpus case must also pass the Go gate; follow [the corpus guide](../../corpus/README.md#adding-a-case). Fixtures both Cores read, such as Declaration Documentation, live in [impl/testdata/](../testdata/).
 
 These checks start the feedback loop; use the implementation guide and CI workflows for broader validation before completing a change.

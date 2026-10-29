@@ -11,17 +11,67 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 ## Built-in Capabilities
 
-**Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Both Cores lower and execute these forms, including nested recovery and cancellation; see the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) support guides. Live and replay stepping follow the active dispatch path, with retained/dispatch frame roles, shared owner locals and an owning-frame index in the tooling-only snapshot. Sessions, CLI and Playground run Library offers chosen by a Session Script and replay their Transcripts; see the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [tooling contract](../../spec/12-sessions-and-tooling.md#the-debugger).
+**Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI consumes that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Both Cores lower and execute these forms, including nested recovery and cancellation; see the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) support guides. Live and replay stepping follow the active dispatch path, with retained/dispatch frame roles, shared owner locals and an owning-frame index in the tooling-only snapshot. Sessions and the CLI run Library offers chosen by a Session Script and replay their Transcripts; see the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [tooling contract](../../spec/12-sessions-and-tooling.md#the-debugger).
 
-`@northtalk/tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
+`@northtalk/tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL offers to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
 
 ## Session Driver
 
-`@northtalk/tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
+`@northtalk/tooling/session-driver` is the REPL's loop over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
 
 ## Worker supervisor
 
-`@northtalk/tooling/worker-supervisor` is a page's side of a browser Host that runs in a worker ([#1216](https://github.com/odogono/odgn-talk/issues/1216)). `call(request)` posts `{ id, request }` and resolves with the worker's reply that carries the same id; messages without an id go to `onMessage`. `supervise(request)` is `call` with a deadline, 500 ms by default. A worker reads no message while it runs, so its reply is the acknowledgement. Without a reply in time, the supervisor terminates the worker, resolves every pending request with the caller's `ended` response, drops the old worker's late messages, spawns another and calls `onTerminated`. Each app keeps its own Host and protocol in the worker, and decides what follows a termination. The [Playground](../playground/) supervises Cancel, Restart and Run fresh.
+`@northtalk/tooling/worker-supervisor` is a page's side of a browser Host that runs in a worker ([#1216](https://github.com/odogono/odgn-talk/issues/1216)). `call(request)` posts `{ id, request }` and resolves with the worker's reply that carries the same id; messages without an id go to `onMessage`. `supervise(request)` is `call` with a deadline, 500 ms by default. A worker reads no message while it runs, so its reply is the acknowledgement. Without a reply in time, the supervisor terminates the worker, resolves every pending request with the caller's `ended` response, drops the old worker's late messages, spawns another and calls `onTerminated`. Each app keeps its own Host and protocol in the worker, and decides what follows a termination. [Folio](../creative/) supervises its Play worker.
+
+## Canvas
+
+`@northtalk/tooling/canvas` declares the `canvas` Host capability and validates its calls, for the TS CLI, which grants it with `:grant canvas canvas` and replays it headlessly in `northtalk replay`, and for [Folio](../creative/README.md#canvas), whose Operations take the Canvas first and drop `size`. Canvas is a Host capability, not language syntax or a Standard Capability.
+
+```northtalk
+on draw
+  tell canvas
+    background "#f5f0e8"
+    noStroke
+    fill "#235f75"
+    rectangle 70, 70, 180, 180
+    fill "#e0a458"
+    ellipse 250, 250, 160, 160
+  end tell
+end draw
+```
+
+Send the Script `draw`. Operations are immediate and return Nothing. A `tell canvas` block calls each line as an `ask`, so no line takes `and wait`; a single call is `ask canvas to fill "#235f75"`.
+
+| Operation | Arguments and behavior |
+| --- | --- |
+| `size` | Integer width, height, each 1–4096; clears pixels and resets styles, the transform and the `push` stack |
+| `clear` | No arguments; clears pixels, preserving styles; resets the transform and empties the `push` stack |
+| `background` | Color; replaces all pixels, preserving styles; resets the transform and empties the `push` stack |
+| `fill`, `stroke` | Color; enables and sets that style |
+| `noFill`, `noStroke` | No arguments; disables that style |
+| `strokeWidth` | Nonnegative number; zero suppresses strokes |
+| `strokeCap` | `"butt"` (default), `"round"` or `"square"`; line ends |
+| `strokeJoin` | `"miter"` (default), `"round"` or `"bevel"`; corners |
+| `point` | x, y; a dot in the stroke color, as wide as the stroke |
+| `line` | x1, y1, x2, y2; uses stroke |
+| `triangle` | x1, y1, x2, y2, x3, y3 |
+| `rectangle` | x, y, positive width, positive height; top-left origin |
+| `roundedRectangle` | As `rectangle`, then a nonnegative corner radius |
+| `ellipse` | x, y, positive width, positive height; center origin |
+| `circle` | x, y, positive diameter; center origin |
+| `arc` | x, y, positive width, positive height, start, stop; center origin, angles in radians clockwise from the positive x-axis; fills a pie slice and strokes only the curve |
+| `text` | Text, x, y; left-aligned alphabetic baseline; uses fill/stroke |
+| `textSize` | Positive size in logical pixels; sans-serif |
+| `push`, `pop` | No arguments; save and restore styles and the transform; nest up to 64 deep; `pop` needs a matching `push` |
+| `translate` | x, y; moves the origin |
+| `rotate` | Angle in radians, clockwise |
+| `scale` | x, y factors; negative mirrors |
+
+Colors are `#RRGGBB` or `#RRGGBBAA`, case-insensitive. Coordinates and numeric arguments are bounded to ±1,000,000. Text is limited to 4096 UTF-16 code units. A session accepts at most 10,000 operations (including style changes). Each call costs one Fuel. Invalid values raise `invalid canvas argument`; exhaustion raises `canvas limit`. Core Shape checks reject wrong types and argument counts.
+
+The initial canvas is transparent, 400×400, with black fill, black one-pixel stroke and 12-pixel sans-serif text. Live evaluation keeps pixels and styles. Accepted drawing operations are not rolled back if later script work fails. Core `:save`/`:restore` does not rewind canvas pixels, styles or its session-wide operation budget.
+
+A replay reconstructs the drawing from successful typed Trace calls. The CLI validates/replays headlessly; pixel equality across browsers is not promised. Go replay requires the future Go Session Host to supply compatible declarations and validation (#137). Animation, input events, transforms, images and arbitrary browser access are not provided.
 
 ## Formatter
 

@@ -54,8 +54,8 @@ Apply is a sequence of Entries, not one source replacement.
   succeed while others fail. Removing or renaming an existing declaration needs a
   Restart. Apply with no changed declarations enters nothing.
   [ADR 0051](../adr/0051-the-playgrounds-script-tab-is-the-session-source.md),
-  [Apply planning](../../tooling/playground/src/declarations.ts),
-  [Apply execution](../../tooling/playground/src/session.ts).
+  [Apply planning](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/declarations.ts),
+  [Apply execution](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/session.ts).
 - Initialisers are restricted to literals, prior Constants and Built-ins, and
   loading and initialisation are not charged. Arbitrary migration code cannot
   simply be placed in that uncharged execution path.
@@ -251,7 +251,7 @@ The Playground cannot deliver one migration against the complete edit through
 today's per-declaration Apply. Worse, its existing variable redeclaration can
 overwrite the old value before a later Handler redefinition Reloads. A migration
 hook on Reload alone therefore does **not** solve the issue's main use case.
-[Apply](../../tooling/playground/src/session.ts),
+[Apply](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/session.ts),
 [variable redeclaration](../../impl/ts/src/session/host.ts).
 
 Choose one of two deliberate delivery boundaries in the ADR:

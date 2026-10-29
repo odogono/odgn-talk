@@ -217,33 +217,18 @@ To fill in a case's expected output from the Cores themselves, allowed only when
 _Avoid_: snapshot, record, accept
 
 **Session Transcript**:
-A recorded REPL or Playground session: its Entries and Session Commands in order, with the Clock readings, Capability answers and cancellations it saw. It is a Conformance Corpus case kind, kept in a readable form a user can share, and replaying it must give the same echoed output and Trace on every Core.
+A recorded REPL session: its Entries and Session Commands in order, with the Clock readings, Capability answers and cancellations it saw. It is a Conformance Corpus case kind, kept in a readable form a user can share, and replaying it must give the same echoed output and Trace on every Core.
 _Avoid_: history, log, recording, notebook
 
 ## Tooling
 
 **Tooling**:
-The programs that help authors write and debug Scripts (the LSP, the formatter, the Lint engine, the debugger and the Playground), built on the TS Core. Nothing they produce is normative.
+The programs that help authors write and debug Scripts (the LSP, the formatter, the Lint engine, the debugger and Folio), built on the TS Core. Nothing they produce is normative.
 _Avoid_: SDK, devtools
 
 **REPL**:
 A command-line Host where a user enters source a line at a time and sees each result straight away, against a live session. Each Core has one.
 _Avoid_: console, shell, interpreter
-
-**Playground**:
-The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
-_Avoid_: sandbox (that word means the security boundary), editor, IDE
-
-**Launch Entry**:
-The Entry a Playground author chooses to evaluate after loading a fresh session, or explicitly against the already loaded session.
-_Avoid_: main function, startup script
-
-**Syntax View**:
-The Playground's navigable view of how the current source is structured, including incomplete or invalid regions.
-_Avoid_: execution tree, runtime state
-
-**Restart**:
-In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
 
 **Fix and Continue**:
 In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them. A session makes it with `:fix`.
@@ -255,11 +240,11 @@ The Host a `northtalk` command becomes when given a Script file: it loads the fi
 _Avoid_: interpreter, launcher, server
 
 **Session Script**:
-The one ordinary Script a REPL or Playground session builds up, to which every definition the user enters is added.
+The one ordinary Script a REPL session builds up, to which every definition the user enters is added.
 _Avoid_: session (as a language concept), workspace, scratch script
 
 **Session Host**:
-The part of a REPL or Playground that runs a session as an ordinary Host: it turns each Entry and Session Command into Host Inputs on the Session Script, and prints what comes back. Its behaviour is normative, since Session Transcripts replay through it.
+The part of a REPL that runs a session as an ordinary Host: it turns each Entry and Session Command into Host Inputs on the Session Script, and prints what comes back. Its behaviour is normative, since Session Transcripts replay through it.
 _Avoid_: session (as a language concept), shell, kernel
 
 **Session Setup**:
@@ -267,11 +252,11 @@ The declaration of a Session Host's Script Group: its Grants and their bindings,
 _Avoid_: session config, session state
 
 **Session Driver**:
-The Tooling that feeds a Session Host from a REPL or Playground: it collects multiline Entries, queues input while the session sleeps, wakes it at its deadlines, and turns an interrupt into `:cancel`. Not normative.
+The Tooling that feeds a Session Host from a REPL: it collects multiline Entries, queues input while the session sleeps, wakes it at its deadlines, and turns an interrupt into `:cancel`. Not normative.
 _Avoid_: REPL loop, settle loop
 
 **Entry**:
-One unit of input at a REPL or Playground prompt: one declaration, one statement or one expression. A statement or expression executes as a Run of an implicit Handler of the Session Script.
+One unit of input at a REPL prompt: one declaration, one statement or one expression. A statement or expression executes as a Run of an implicit Handler of the Session Script.
 _Avoid_: line, cell, command, input
 
 **Session Source**:
@@ -283,7 +268,7 @@ The Run of the latest Entry, while the Session Host keeps the prompt for it: its
 _Avoid_: current run, active run
 
 **Session Command**:
-A `:`-prefixed instruction to the REPL, the Playground or Folio's Message Box itself, such as `:limits` or `:inspect`, that is not part of the language and cannot be issued by a Script.
+A `:`-prefixed instruction to the REPL or Folio's Message Box itself, such as `:limits` or `:inspect`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
 
 **Declaration Documentation**:

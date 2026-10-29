@@ -45,7 +45,7 @@ suspension marks.
   Words, FOLLOW set and Unit names and from the Built-ins in
   [`stdlib.toml`](../../spec/data/stdlib.toml). Edit the generator, then run
   `bun run --cwd tooling/vscode grammar:generate`. Contextual words are
-  coloured as keywords wherever they stand, as in the Playground; Argument
+  coloured as keywords wherever they stand; Argument
   Labels are not distinguished.
 - **The client** is [`src/extension.ts`](src/extension.ts). It launches
   `northtalk lsp` over stdio and passes `profile` and `manifest` as

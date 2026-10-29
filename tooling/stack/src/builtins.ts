@@ -1,4 +1,4 @@
-// The built-in `calendar` and `locale` of the REPL and the Playground
+// The built-in `calendar` and `locale` of the REPL
 // (chapter 7, Standard Capabilities), answered from the runtime's Intl data. Which zones and
 // Locales a Host supports, and its answers, are its own and outside parity;
 // a Session Transcript records each answer as a `~` line.

@@ -1,6 +1,5 @@
 // The checks of a Trace Case and a Session Transcript case, over a reader of
-// the case's files, so `corpus:run` under Bun and the Playground's browser
-// corpus page run exactly the same checks. No file or process access here.
+// the case's files, for `corpus:run` under Bun. No file or process access here.
 import { replayTrace, same, type Setup } from '../src/replay';
 import type { CaseCore } from '../src/setup';
 import type { TsGroup } from '../src/index';

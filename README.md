@@ -26,7 +26,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`impl/go/`](impl/go/): the Go embedding, module `github.com/odogono/odgn-talk/impl/go`, which runs the embedded Zig Core through wazero, with immutable values, decimal arithmetic, Value Encoding, Unicode text primitives, the Group embedding interface, a Session Host, REPL, Transcript replay and a corpus runner.
 - [`impl/zig/`](impl/zig/): the Zig Core for native C and WASI embedding, conforming beside the TS Core and embedded by the Go and Elixir Hosts ([#636](https://github.com/odogono/odgn-talk/issues/636)), with its C interface `talk.h`, the native Message Layer sidecar and WASI reactor, a Session Host, REPL, Transcript replay, a corpus runner and a fuzz worker; see its [implementation guide](impl/zig/README.md) for supported behavior and limitations and its [task map](impl/zig/NAVIGATION.md) for implementation work.
 - [`impl/elixir/`](impl/elixir/): the Elixir embedding, `:north_talk`, which drives the Zig Core's WASI reactor in Wasmex without Go ([#963](https://github.com/odogono/odgn-talk/issues/963)).
-- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server) and its [VS Code and Cursor extension](tooling/vscode/), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), the [Playground](tooling/playground/), its [shared browser editor](tooling/editor/), [Folio](tooling/creative/), the creative tool, and [northtalk.org](tooling/site/), the language site), none of it normative.
+- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server) and its [VS Code and Cursor extension](tooling/vscode/), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), [Folio](tooling/creative/), the creative tool, and its [browser editor](tooling/editor/), and [northtalk.org](tooling/site/), the language site), none of it normative.
 - [`bench/`](bench/): the Benchmark Suite, which times the same Scripts on each Core and checks their Fuel agrees, none of it normative.
 - [`tools/`](tools/): the Spec checks and the generators that write each Core's tables from the Data Files.
 - [`spikes/`](spikes/): finished experiments the ADRs cite, kept as evidence.
@@ -49,17 +49,6 @@ bun run northtalk test                        # run your own Test Scripts
 ```
 
 Enter a declaration, a statement or an expression at the `>` prompt. An unfinished one goes on at a `|` prompt until the whole Entry is complete. `:help` lists the Session Commands. Ctrl-C cancels the Run the prompt is waiting for, and Ctrl-D or `:quit` ends the session. `replay` exits with 1 and names the first line that differs when a Transcript doesn't replay the same. See [chapter 12](spec/12-sessions-and-tooling.md) for what a session does, and [`tooling/cli/`](tooling/cli/) for the command. `northtalk test` runs the `*.test.talk` Test Scripts and `*.transcript` files under a path; [Testing Scripts](tooling/cli/README.md#testing-scripts) describes the convention.
-
-## The Playground
-
-The NorthTalk Playground is the REPL's browser counterpart, on the TS Core. It is no longer published: [Folio](https://northtalk.org/folio/) is the way to try NorthTalk in a browser ([#1659](https://github.com/odogono/odgn-talk/issues/1659)). To run the Playground locally:
-
-```sh
-bun run playground          # build and serve it at http://127.0.0.1:3927/, rebuilding on change
-bun run --cwd tooling/playground build   # a static dist/ any web server can host
-```
-
-See [`tooling/playground/`](tooling/playground/) for what it does and how to run the corpus in a browser.
 
 ## Licence
 

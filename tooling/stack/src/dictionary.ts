@@ -1,5 +1,5 @@
 /** A dictionary of each Grant's Operations, read from a Host Manifest, for
- * LSP hover and completion and the Playground's Dictionary panel. Nothing it
+ * LSP hover and completion and Folio's Dictionary tab. Nothing it
  * produces is normative (ADR 0028). */
 import type { Shape } from '@northtalk/ts';
 import {

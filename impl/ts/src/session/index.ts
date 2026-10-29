@@ -1,4 +1,4 @@
-// The Session Host of chapter 12, for a REPL or Playground.
+// The Session Host of chapter 12, for a REPL.
 export {
   SessionObjects,
   parseEnvelope,

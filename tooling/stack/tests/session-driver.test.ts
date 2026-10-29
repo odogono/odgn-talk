@@ -145,12 +145,12 @@ test(':help prints the Session Commands, and :quit ends the session', () => {
   driver.input('1');
   expect(take()).toEqual([]);
 
-  const playground = driven({ noQuit: 'Close the page.' });
-  playground.driver.input(':help');
-  expect(playground.lines()).not.toContain('  :quit');
-  playground.driver.input(':quit');
-  expect(playground.lines()).toEqual(['Close the page.']);
-  expect(playground.driver.prompt).toBe('entry');
+  const page = driven({ noQuit: 'Close the page.' });
+  page.driver.input(':help');
+  expect(page.lines()).not.toContain('  :quit');
+  page.driver.input(':quit');
+  expect(page.lines()).toEqual(['Close the page.']);
+  expect(page.driver.prompt).toBe('entry');
 });
 
 test('an interrupt cancels a sleeping Run, or drops an unfinished Entry', () => {
