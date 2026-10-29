@@ -9,7 +9,7 @@ import {
 } from '@northtalk/tooling/worker-supervisor';
 import type { DrawingMark } from './drawing';
 import { type CanvasElement, type Element, type Project } from './model';
-import { valueReply } from './message';
+import { type MessageReply, valueReply } from './message';
 import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
   type DrawingView,
@@ -18,7 +18,8 @@ import {
   type PlayView,
   type PromptView,
 } from './play-protocol';
-import { inspectCommand } from './message-script';
+import { fuelText } from './fuel';
+import { fuelCommand, inspectCommand } from './message-script';
 import { scriptOwners } from './script-manifest';
 import {
   valueEncoder,
@@ -344,17 +345,44 @@ export class PlayHost {
       }
       case 'message': {
         const inspect = inspectCommand(request.text);
-        if (inspect && 'error' in inspect) {
-          reply({ kind: 'message', error: inspect.error });
+        const fuel = fuelCommand(request.text);
+        const refused =
+          (inspect && 'error' in inspect && inspect) ||
+          (fuel && 'error' in fuel && fuel);
+        if (refused) {
+          reply({ kind: 'message', error: refused.error });
           return;
         }
-        const started = inspect
-          ? session.runWatch(inspect.expression, request.target)
-          : session.runMessage(request.text, request.target);
+        const started =
+          inspect && 'expression' in inspect
+            ? session.runWatch(inspect.expression, request.target)
+            : session.runMessage(
+                fuel && 'command' in fuel ? fuel.command : request.text,
+                request.target,
+              );
         if (!started.ok) {
           reply({ kind: 'message', error: started.error });
           return;
         }
+        if (fuel) {
+          session.fuel.measure(started.delivery);
+        }
+        // Reports reach the measurement before the result settles.
+        // The Fuel line follows the command's value or error.
+        const measured = (shown: MessageReply): MessageReply => {
+          const row = fuel && session.fuel.take(started.delivery);
+          if (!row) {
+            return shown;
+          }
+          const line = fuelText(row);
+          return shown.error === undefined
+            ? {
+                ...shown,
+                text:
+                  shown.text === undefined ? line : `${shown.text}\n${line}`,
+              }
+            : { error: `${shown.error}\n${line}` };
+        };
         this.#watchDue ||= this.#paused;
         this.#schedule();
         void started.result.then(
@@ -363,12 +391,14 @@ export class PlayHost {
               kind: 'message',
               ...(inspect
                 ? { value: valueEncoder(session, this.#owners)(value) }
-                : valueReply(value)),
+                : measured(valueReply(value))),
             }),
           (error: unknown) =>
             reply({
               kind: 'message',
-              error: error instanceof Error ? error.message : String(error),
+              ...measured({
+                error: error instanceof Error ? error.message : String(error),
+              }),
             }),
         );
         return;

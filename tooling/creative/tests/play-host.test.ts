@@ -859,3 +859,44 @@ test('Watches run only while paused, and again after a Message Box line', async 
     replies.slice(count).some(reply => reply.response.kind === 'watches'),
   ).toBe(false);
 });
+
+// The Fuel a `:fuel` reply prints after the command's value.
+const fuelOf = (response: PlayResponse) =>
+  Number(/Fuel: (\d+)$/u.exec((response as { text: string }).text)![1]);
+
+test(':fuel reports what a command and the Runs it spawns spend', async () => {
+  const project = fixture();
+  project.pages[0]!.script =
+    'on keyDown k\nend keyDown\non twice n\n return n * 2\nend twice';
+  const { replies, request } = hosted(project);
+  request({ kind: 'message', session: 1, text: ':fuel 1 + 2' });
+  await until(() => replies.some(r => r.id === 2));
+  const plain = replies.find(r => r.id === 2)!.response;
+  expect(plain).toMatchObject({ kind: 'message', source: '3' });
+  expect(fuelOf(plain)).toBeGreaterThan(0);
+  // A waited send's Run counts too, so this costs more.
+  request({
+    kind: 'message',
+    session: 1,
+    text: ':fuel send twice with 1.5 to thisPage and wait',
+  });
+  await until(() => replies.some(r => r.id === 3));
+  const sent = replies.find(r => r.id === 3)!.response;
+  expect(fuelOf(sent)).toBeGreaterThan(fuelOf(plain));
+  // A detached send is still measured once the command returns.
+  request({
+    kind: 'message',
+    session: 1,
+    text: ':fuel send twice with 2 to thisPage',
+  });
+  await until(() => replies.some(r => r.id === 4));
+  expect(fuelOf(replies.find(r => r.id === 4)!.response)).toBeGreaterThan(
+    fuelOf(plain),
+  );
+  request({ kind: 'message', session: 1, text: ':fuel' });
+  await until(() => replies.some(r => r.id === 5));
+  expect(replies.find(r => r.id === 5)!.response).toEqual({
+    kind: 'message',
+    error: 'Usage: :fuel <command>',
+  });
+});

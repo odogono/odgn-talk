@@ -5,6 +5,7 @@ import { PUMP_FUEL } from './grants/elements';
 import { elementShape } from './grants/grant';
 import type { UserPrompt } from './grants/user';
 import { compileProjectLibraries } from './libraries';
+import { FuelMeasurements } from './fuel';
 import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
@@ -955,9 +956,9 @@ export class PlaySession {
         }
         const existing = this.group.script(name);
         if (existing) {
-          this.performance.reports(
-            existing.reload(owner.script, 'reset variables'),
-          );
+          const reports = existing.reload(owner.script, 'reset variables');
+          this.fuel.observe(reports);
+          this.performance.reports(reports);
         } else {
           this.group.load({
             name,
@@ -1146,6 +1147,9 @@ export class PlaySession {
     }
   }
 
+  /** `:fuel` commands' Fuel Measurements (ADR 0141). */
+  readonly fuel = new FuelMeasurements();
+
   /** How many turns have run, so readers of Script state can skip a repeat. */
   pumps = 0;
 
@@ -1163,6 +1167,7 @@ export class PlaySession {
       fuelSlice: 1000,
       fuelCap: PUMP_FUEL,
     });
+    this.fuel.observe(result.reports);
     this.performance.reports(
       result.reports,
       outOfBand ? undefined : result.fuelUsed,
