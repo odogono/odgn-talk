@@ -1385,3 +1385,18 @@ body.playing #performance-window {
 .variables-watches.stale li.watch {
   opacity: 0.6;
 }
+/* Copy as source (#1684). */
+.variables-script .copy,
+#message-window .message-log .copy {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  padding: 0 0.2rem;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+#message-window .message-log .copy {
+  float: right;
+}

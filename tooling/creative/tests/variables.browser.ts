@@ -34,6 +34,8 @@ const row = (name: string) =>
     ),
   ].find(li => li.querySelector('.name')?.textContent?.endsWith(name));
 const value = (name: string) => row(name)?.querySelector('.value');
+const copy = (name: string) =>
+  row(name)!.querySelector<HTMLButtonElement>('.copy')!;
 
 const project = createProject('Variables window');
 project.pages[0]!.name = 'Home';
@@ -111,6 +113,29 @@ export const runBrowserTests = async () => {
       () => shell.editor.selected.map(e => e.name).join() === 'go',
       'go was not selected',
     );
+  });
+
+  await test('a row copies its value as source, or says it has none', async () => {
+    let copied: string | undefined;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          copied = text;
+          return Promise.resolve();
+        },
+      },
+    });
+    copy('board').click();
+    await until(() => copied !== undefined, 'board was not copied');
+    assert(copied === '[[1, 2], [3]]', `board copied as ${copied}`);
+    copied = undefined;
+    copy('target').click();
+    await until(
+      () => copy('target').textContent === 'no source form',
+      'target did not say it has no source form',
+    );
+    assert(copied === undefined, 'A Host Object was copied');
   });
 
   await test('values stay after the session ends', async () => {

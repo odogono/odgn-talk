@@ -21,6 +21,7 @@ import {
   languageServer,
   showCodeWindow,
 } from './code-window';
+import { copySource } from './copy-source';
 import { h } from './dom';
 import {
   MESSAGE_FIRST_LINE,
@@ -346,6 +347,39 @@ export const mountMessageWindow = (
           renderValueRows(rows, expression, reply.value, select);
         } else if (reply.text !== undefined) {
           row.append(h('div', { class: 'result' }, reply.text));
+        }
+        // An inspected value's rows copy themselves.
+        if (
+          !reply.error &&
+          reply.value === undefined &&
+          reply.text !== undefined
+        ) {
+          const { source } = reply;
+          // Only the last result copies as source.
+          for (const old of log.querySelectorAll(':scope > li > .copy')) {
+            old.remove();
+          }
+          const copy = h(
+            'button',
+            {
+              'aria-label': 'Copy the result as source',
+              class: 'copy',
+              title: 'Copy as source',
+              type: 'button',
+            },
+            '⧉',
+          );
+          copy.addEventListener('click', () => {
+            void copySource(source).then(said => {
+              copy.title = said;
+              copy.textContent = source === undefined ? 'no source form' : '✓';
+              setTimeout(() => {
+                copy.title = 'Copy as source';
+                copy.textContent = '⧉';
+              }, 2000);
+            });
+          });
+          row.prepend(copy);
         }
         sync();
       });

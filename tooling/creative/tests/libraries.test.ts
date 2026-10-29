@@ -117,6 +117,7 @@ test('loaded Message Box contexts retain their Library source until the next ses
   if (command.ok) {
     expect(await settle(play, command.result, () => play.pump(0n))).toEqual({
       text: '8',
+      source: '8',
     });
   }
   play.stop(0n);

@@ -1038,13 +1038,13 @@ export const runMessageBoxBrowserTests = async () => {
       win.querySelector('.message-log li:last-child .error') !== null,
   );
   assert(
-    inspected()[0] === '▸ [1, [2]]list of 2',
+    inspected()[0] === '▸ [1, [2]]list of 2⧉',
     `:inspect showed ${JSON.stringify([log(), inspected()])}`,
   );
   win.querySelector<HTMLButtonElement>('.message-log .result .toggle')!.click();
   await until(() => inspected().length === 3);
   assert(
-    inspected()[1] === '11' && inspected()[2] === '▸ 2list of 1',
+    inspected()[1] === '11⧉' && inspected()[2] === '▸ 2list of 1⧉',
     `Opened rows read ${JSON.stringify(inspected())}`,
   );
   assert(

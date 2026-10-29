@@ -1112,6 +1112,7 @@ export const mountPlay = (shell: StackShell): void => {
             ...(reply.error === undefined ? {} : { error: reply.error }),
             ...(reply.text === undefined ? {} : { text: reply.text }),
             ...(reply.value === undefined ? {} : { value: reply.value }),
+            ...(reply.source === undefined ? {} : { source: reply.source }),
           }
         : { error: 'Play has stopped.' };
     },

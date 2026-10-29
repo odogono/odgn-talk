@@ -2,6 +2,7 @@
 // while browsing, or in Edit against the authored Project as one undoable
 // edit, through a session that sends no events.
 import { type Value } from '@northtalk/ts';
+import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
 import { inspectCommand } from './message-script';
@@ -11,16 +12,24 @@ import { valueEncoder, type VariableValue } from './variables';
 
 /**
  * What a command printed: its value, nothing, or an error. `:inspect` gives
- * `value`, encoded as the Variables window shows it.
+ * `value`, encoded as the Variables window shows it. A value's `source` is its
+ * source form, absent when it holds a Function Value or Host Object.
  */
 export type MessageReply = {
   error?: string;
+  source?: string;
   text?: string;
   value?: VariableValue;
 };
 
-const show = (value: Value): string | undefined =>
-  value.kind === 'nothing' ? undefined : (value.asText() ?? String(value));
+/** A command's value as its reply prints it. */
+export const valueReply = (value: Value): MessageReply =>
+  value.kind === 'nothing'
+    ? {}
+    : {
+        text: value.asText() ?? String(value),
+        ...(isReadable(value) ? { source: sourceForm(value) } : {}),
+      };
 
 /**
  * `:describe` and `:apropos`, read from the context Script's source and the
@@ -73,7 +82,7 @@ export const settle = async (
   let done = false;
   const reply = result.then(
     (value): MessageReply =>
-      encode ? { value: encode(value) } : { text: show(value) },
+      encode ? { value: encode(value) } : valueReply(value),
     (error: unknown) => ({
       error: error instanceof Error ? error.message : String(error),
     }),

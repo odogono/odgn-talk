@@ -838,7 +838,10 @@ refreshes. An Element reference shows the Element's name, and clicking an
 authored Element selects it; an Element that has gone shows as "(deleted)".
 Other Host Objects show their kind and id, and a Function shows as
 `function`. A value that changed since the last refresh is highlighted for
-600 ms.
+600 ms. Each row's ⧉ button copies its whole value in source form, even a
+list or map cut off at 100 items, so it pastes back into a Script as an equal
+value; a value holding a Function or Host Object has no source form, and its
+button says so instead ([#1684](https://github.com/odogono/odgn-talk/issues/1684)).
 
 The window reads the session at most every 100 ms, only while it is open and
 a Pump has run since it last asked. The Play worker calls the Group's
@@ -1021,7 +1024,8 @@ Script Variables can change, while new local variables disappear after the
 command. Commands run alongside other work and may wait; completed effects
 can survive a later error, and Browse commands are not undoable. Closing the
 Message Box hides it; stopping Play ends its commands. Each result or error
-stays beside its submitted command and original context.
+stays beside its submitted command and original context. The last result has
+a ⧉ button that copies it in source form, as the Variables window's rows do.
 
 A selection identifies one loaded Script in one Play Session. Navigation,
 deletion or Stop can make it unavailable, and returning to a Page or starting

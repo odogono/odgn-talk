@@ -139,7 +139,13 @@ export type PlayResponse =
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }
   | { kind: 'done' }
-  | { error?: string; kind: 'message'; text?: string; value?: VariableValue }
+  | {
+      error?: string;
+      kind: 'message';
+      source?: string;
+      text?: string;
+      value?: VariableValue;
+    }
   /** The Group's inspection as JSON, big integers as strings. */
   | { inspection: string; kind: 'inspection' }
   /** The Variables window's Scripts; absent if no Pump ran since last asked. */

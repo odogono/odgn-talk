@@ -2,7 +2,7 @@
 // Script Variables into plain values, and the page turns them into rows.
 // Nothing here touches the DOM.
 import type { DeepReadonly } from './readonly';
-import { sourceForm } from '@northtalk/ts/debug';
+import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { text, type Value } from '@northtalk/ts';
 import type { Element } from './model';
 import type { PlaySession } from './play';
@@ -12,13 +12,24 @@ export const ITEM_LIMIT = 100;
 
 /**
  * A Script Variable's value as it crosses to the page. Lists and maps carry
- * their first `ITEM_LIMIT` items and their full length. An Element carries
- * its live name and, if authored, its place in `scriptOwners(project)`.
+ * their first `ITEM_LIMIT` items and their full length, and a cut-off one
+ * that is readable carries its whole source form. An Element carries its
+ * live name and, if authored, its place in `scriptOwners(project)`.
  */
 export type VariableValue =
   | { kind: 'plain'; text: string }
-  | { items: VariableValue[]; kind: 'list'; length: number }
-  | { entries: [string, VariableValue][]; kind: 'map'; length: number }
+  | {
+      items: VariableValue[];
+      kind: 'list';
+      length: number;
+      source?: string;
+    }
+  | {
+      entries: [string, VariableValue][];
+      kind: 'map';
+      length: number;
+      source?: string;
+    }
   | {
       host: string;
       id: string;
@@ -36,8 +47,13 @@ export type VariableScript = {
   vars: [string, VariableValue][];
 };
 
+// As `sourceForm` writes a map key.
 const sourceKey = (key: string): string =>
-  /^[A-Z_a-z]\w*$/.test(key) ? key : sourceForm(text(key));
+  key !== 'offer' && /^[A-Z_a-z]\w*$/.test(key) ? key : sourceForm(text(key));
+
+// A cut-off list or map carries its whole source form, if it has one.
+const wholeSource = (value: Value, length: number): { source?: string } =>
+  length > ITEM_LIMIT && isReadable(value) ? { source: sourceForm(value) } : {};
 
 const encode = (
   value: Value,
@@ -49,7 +65,12 @@ const encode = (
       for (let i = 1; i <= Math.min(value.length, ITEM_LIMIT); i++) {
         items.push(encode(value.index(i), element));
       }
-      return { kind: 'list', items, length: value.length };
+      return {
+        kind: 'list',
+        items,
+        length: value.length,
+        ...wholeSource(value, value.length),
+      };
     }
     case 'map': {
       const all = value.entries();
@@ -59,6 +80,7 @@ const encode = (
           .slice(0, ITEM_LIMIT)
           .map(([key, entry]) => [sourceKey(key), encode(entry, element)]),
         length: all.length,
+        ...wholeSource(value, all.length),
       };
     }
     case 'function':
@@ -196,6 +218,43 @@ export const summary = (value: VariableValue): string => {
         : value.live
           ? value.name
           : '(deleted)';
+  }
+};
+
+/**
+ * A value's source form, which reads back as an equal value, or undefined
+ * when it holds a Function Value or Host Object.
+ */
+export const sourceOf = (value: VariableValue): string | undefined => {
+  switch (value.kind) {
+    case 'plain':
+      return value.text;
+    case 'function':
+    case 'object':
+      return undefined;
+    case 'list':
+    case 'map': {
+      if (value.source !== undefined) {
+        return value.source;
+      }
+      // Cut off and unreadable.
+      const shown =
+        value.kind === 'list' ? value.items.length : value.entries.length;
+      if (value.length > shown) {
+        return undefined;
+      }
+      const parts: string[] = [];
+      for (const [key, item] of childrenOf(value)) {
+        const part = sourceOf(item);
+        if (part === undefined) {
+          return undefined;
+        }
+        parts.push(value.kind === 'list' ? part : `${key}: ${part}`);
+      }
+      return value.kind === 'list'
+        ? `[${parts.join(', ')}]`
+        : `{${parts.join(', ')}}`;
+    }
   }
 };
 
