@@ -665,6 +665,15 @@ pub const corpus: CorpusTable = .{
                     .optional = true,
                 },
                 .{
+                    .key = "mailbox",
+                    .type = "word",
+                    .is = "`keep` when the Host asked a Partial Restore to keep each changed Script's mailbox",
+                    .words = &.{
+                        "keep",
+                    },
+                    .optional = true,
+                },
+                .{
                     .key = "unbound",
                     .type = "ids",
                     .is = "the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked",

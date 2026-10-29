@@ -1,0 +1,34 @@
+# - The Fuel Slice preempts a/r1 so d3 stays in a's mailbox at the save.
+# - a/r1 is discarded, but d3 is kept, so the restore lists no `dropped`.
+# - d3 runs the new fmt, so a keeps got="v2 x"; b/r1 resumes.
+
+> add-library fmt identity=a043d17427f34ef0d553a5cb558d4f989bc3904dfdd1453455f22a040623ba0d
+> load a identity=56e7ae39d46de2ab9794d8462f50f2bd2dfe4857c974604dff9ace1d78dab6a6
+> load b identity=b788a3a822c0ee9f29619ebe2fd4e8328a69a20e553319272125583b756aea37
+
+> deliver d1 to=a message=go
+> deliver d2 to=b message=go
+> deliver d3 to=a message=note args=["x"]
+> pump clock=2026-10-28T10:00:00Z fuel-slice=50
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=50 alloc=66
+seg b/r1 start delivery=d2 handler=go clause=1 fuel=15 alloc=0 state=192 end=wait until=2026-10-28T10:00:10Z
+pumped state=sliced fuel=65 next=2026-10-28T10:00:10Z
+
+> save s1
+
+# The Host now holds only the new fmt.
+> replace-library fmt carry=yes source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload" discarded=[a/r1] dropped=[d3]
+
+> restore from=s1 mismatch=reload-changed mailbox=keep fingerprint=e5074c771402a065febd3f09deb2182b53d13748c8d1069bd1b8a6ca4a813f17 mode=partial reloaded=[a] discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:11Z
+seg a/r2 start delivery=d3 handler=note clause=1 fuel=26 alloc=20 state=20 end=return
+run a/r2 outcome=completed delivery=d3 handler=note fuel=26 alloc=20
+seg b/r1 resume fuel=6 alloc=0 state=16 end=return
+run b/r1 outcome=completed delivery=d2 handler=go fuel=21 alloc=0
+pumped state=idle fuel=32
+
+> vars
+vars a got="v2 x"
+vars b n=1

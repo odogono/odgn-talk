@@ -1,0 +1,4 @@
+-- fmt.talk: partial-restore-keep-mailbox-no-handler's Library. Its Constant
+-- guards a's only `note` clause; the new fmt changes it.
+
+constant KIND = "v1"

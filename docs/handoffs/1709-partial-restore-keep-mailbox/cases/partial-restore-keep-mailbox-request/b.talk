@@ -1,0 +1,12 @@
+-- b.talk: the matched Script; its send to a waits through the restore.
+
+script variable got = ""
+
+on start
+  try
+    send note with "x" to a and wait
+    put it into got
+  catch e
+    put the code of e into got
+  end try
+end start

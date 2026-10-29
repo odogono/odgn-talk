@@ -1,0 +1,17 @@
+-- a.talk: the changed Script; its Run is discarded, and the note still in
+-- its mailbox goes to the new code.
+
+use label from fmt
+
+script variable got = ""
+
+on go
+  repeat 10 times
+    put label("go") into got
+  end repeat
+  wait 10 s
+end go
+
+on note x
+  put label(x) into got
+end note

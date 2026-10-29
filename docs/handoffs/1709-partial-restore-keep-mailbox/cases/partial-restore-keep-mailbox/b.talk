@@ -1,0 +1,8 @@
+-- b.talk: the matched Script; its Run resumes.
+
+script variable n = 0
+
+on go
+  wait 10 s
+  put 1 into n
+end go

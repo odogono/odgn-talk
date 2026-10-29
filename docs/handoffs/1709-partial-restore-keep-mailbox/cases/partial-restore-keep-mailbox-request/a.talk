@@ -1,0 +1,16 @@
+-- a.talk: the changed Script; b's Request waits in its mailbox while its
+-- Run is preempted, and the new code answers it.
+
+use label from fmt
+
+script variable last = ""
+
+on go
+  repeat 10 times
+    put label("go") into last
+  end repeat
+end go
+
+on note x
+  return label(x)
+end note

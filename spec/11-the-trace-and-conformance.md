@@ -231,7 +231,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `set-parent` |  | `object`, `parent` | sets a Host Object's parent |
 | `dispose` |  | `object` | disposes a Host Object |
 | `save` | `save` |  | saves the Group |
-| `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `reloaded`?\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
+| `restore` |  | `from`\*, `mismatch`?, `mailbox`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `reloaded`?\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
 | `counters` | `script` |  | reads the Script's Counters without draining Host Inputs; writes one `counters` record |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
 | `stub-effect` | `grant` | `phase`, `status` | queues a synchronous lifecycle hook result for the participant whose first enrolled Grant is <script>.<granted name>; a runner input, not a queued Core input |
@@ -300,6 +300,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `dispose` | `object` | `value` | the object |
 | `restore` | `from` | `id` | the save it restores |
 | `restore` | `mismatch` | `word` | the Host's policy for a mismatch, when it isn't to reject: `variables-only`, `reload-changed` |
+| `restore` | `mailbox` | `word` | `keep` when the Host asked a Partial Restore to keep each changed Script's mailbox: `keep` |
 | `restore` | `unbound` | `ids` | the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked |
 | `restore` | `withheld` | `ids` | the Libraries the Host doesn't pass, by name, so a save that needs one is a mismatch |
 | `restore` | `fingerprint` | `hex` | the save's Group Fingerprint |

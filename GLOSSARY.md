@@ -606,7 +606,7 @@ Rebuilding a Script Group from a Script Snapshot, on any Core, whichever Core sa
 _Avoid_: load, deserialize, rehydrate
 
 **Partial Restore**:
-A Restore whose only mismatch is that some Scripts' code changed. It continues the Scripts whose code matches exactly, and rebuilds each changed Script from its new code as a Reload would leave it, with its Script Variables carried over.
+A Restore whose only mismatch is that some Scripts' code changed. It continues the Scripts whose code matches exactly, and rebuilds each changed Script from its new code as a Reload would leave it, with its Script Variables carried over, and its mailbox kept if the Host asks.
 _Avoid_: selective restore, mixed restore
 
 **Resolve**:

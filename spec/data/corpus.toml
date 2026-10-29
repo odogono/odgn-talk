@@ -533,6 +533,13 @@ words = ["variables-only", "reload-changed"]
 is = "the Host's policy for a mismatch, when it isn't to reject"
 
 [[record.key]]
+key = "mailbox"
+type = "word"
+optional = true
+words = ["keep"]
+is = "`keep` when the Host asked a Partial Restore to keep each changed Script's mailbox"
+
+[[record.key]]
 key = "unbound"
 type = "ids"
 optional = true

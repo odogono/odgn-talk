@@ -1,0 +1,22 @@
+# partial-restore-keep-mailbox: with `mailbox=keep`, a changed Script's saved
+# mailbox survives a Partial Restore and its messages go to the new code
+# (spec chapter 10, "Partial Restore", Keeping the mailbox).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

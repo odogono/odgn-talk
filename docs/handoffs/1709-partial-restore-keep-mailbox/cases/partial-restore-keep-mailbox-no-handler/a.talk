@@ -1,0 +1,16 @@
+-- a.talk: the changed Script; its `note` clause's Guard reads fmt's KIND,
+-- so the kept note matches no clause of the new code.
+
+use KIND from fmt
+
+script variable got = ""
+
+on go
+  repeat 10 times
+    put KIND into got
+  end repeat
+end go
+
+on note x where x is KIND
+  put x into got
+end note
