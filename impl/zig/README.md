@@ -1237,7 +1237,7 @@ Script itself. A Join starts its members where they stand and suspends once at
 its `end`: it resumes with every answer in start order, or with the first
 failure, `index` added, and an error leaving the Join abandons its pending
 members. A catch inside the body preserves the Join, including while inner
-catch tests reject the error and exited `finally` blocks run (#1732).
+catch tests reject the error and exited `finally` blocks run.
 A Timeout Block's deadline sits on the frame's stack, bounds every
 Suspension Point inside it, and raises `timeout` with `deadline: true`, at once
 when it has already passed.

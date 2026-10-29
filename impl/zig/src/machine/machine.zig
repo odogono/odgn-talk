@@ -8130,6 +8130,10 @@ pub const Group = struct {
             }
         }
         if (s.limit == null) {
+            // Nothing catches it, so it leaves any Join; a caught error
+            // abandons one in `catchLeavesJoin`. A limited search goes on
+            // in a later one, or ends a cancelled Run, whose Join is
+            // already dropped.
             g.abandonJoin(run);
             if (charged) if (g.chargeUnwind(run, 4 * position)) |end| {
                 err.release();
@@ -8243,18 +8247,23 @@ pub const Group = struct {
         // The activation's stack goes with the acceptance.
         f.stack = .empty;
         const ended = g.endDispatch(run);
-        // A catch inside the Join's body keeps its members. Only an
-        // accepted catch outside that body abandons them; rejected catches
-        // leave the Join intact while the search continues.
-        if (run.join) |join| {
-            const entry = unitOf(run, &run.frames.items[ended.owner]).unwind[ended.search.entry - 1];
-            if (ended.owner < join.frame or (ended.owner == join.frame and entry.first <= join.start)) g.abandonJoin(run);
-        }
+        if (catchLeavesJoin(run, ended)) g.abandonJoin(run);
         var cleanups: std.ArrayList(Cleanup) = .empty;
         errdefer cleanups.deinit(g.gpa);
         try g.collect(run, &cleanups, ended.owner, ended.search.entry - 1, ended.search.skip, ended.search.raised);
         try g.startCleanup(run, ended.err, cleanups, .{ .accept = accept });
         return g.nextCleanup(run, charged);
+    }
+
+    /// Whether an accepted catch is outside the Join's body, so the error
+    /// left it and abandons its members. A catch inside the body keeps
+    /// them; rejected catches leave the Join intact while the search goes
+    /// on. An uncaught error abandons them in `search`.
+    fn catchLeavesJoin(run: *Run, ended: Dispatch) bool {
+        const join = run.join orelse return false;
+        if (ended.owner != join.frame) return ended.owner < join.frame;
+        const entry = unitOf(run, &run.frames.items[ended.owner]).unwind[ended.search.entry - 1];
+        return entry.first <= join.start;
     }
 
     /// An error escaping a Recovery policy: its original error becomes the
