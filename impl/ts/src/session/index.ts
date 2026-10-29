@@ -23,6 +23,8 @@ export {
   type ReplayOptions,
   type TranscriptItem,
 } from './transcript';
+/** `:describe` and `:apropos` over one Script, for hosts without a Session Host. */
+export { apropos, describe, scriptNames, type Names } from './describe';
 export type { Setup } from '../setup';
 /** Each Built-in's call notation and description, for editors. */
 export { builtinDocs } from '../generated/builtin-docs';

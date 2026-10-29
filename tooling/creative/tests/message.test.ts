@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
-import { runInEdit, settle } from '../src/message';
+import { runInEdit, sessionCommand, settle } from '../src/message';
 import {
   createElement,
   createPage,
@@ -378,4 +378,42 @@ test('deleting an Element invalidates its target and stopped sessions expose non
   );
   play.stop(0n);
   expect(play.messageTargets).toEqual([]);
+});
+
+test(':describe and :apropos read the context Script and the Project Libraries', () => {
+  const script = [
+    '--| Doubles a number.',
+    'function double n',
+    '  return n * 2',
+    'end double',
+    '',
+    'use square from shapes',
+  ].join('\n');
+  const libraries = [
+    {
+      name: 'shapes',
+      source:
+        '--| Squares a number.\nfunction square n\n  return n * n\nend square\n',
+    },
+  ];
+  expect(sessionCommand(':describe double', script, libraries)).toEqual({
+    text: [
+      'describe {target: {name: "double", origin: "session"}, origin: "session", declaration: "function", signature: "function double n"}',
+      'doc "Doubles a number."',
+      'arity 1..1',
+    ].join('\n'),
+  });
+  expect(sessionCommand(':describe square', script, libraries)?.text).toContain(
+    'doc "Squares a number."',
+  );
+  expect(sessionCommand(':apropos doub', script, libraries)?.text).toContain(
+    'name {target: {name: "double", origin: "session"}',
+  );
+  expect(sessionCommand(':apropos squ', '', libraries)?.text).toContain(
+    'import: "use square from shapes"',
+  );
+  expect(sessionCommand(':describe nope', script, libraries)).toEqual({
+    error: '! no such name',
+  });
+  expect(sessionCommand('3 + 4', script, libraries)).toBeUndefined();
 });

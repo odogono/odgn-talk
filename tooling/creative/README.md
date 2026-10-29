@@ -997,6 +997,14 @@ editor has the same completion (⌃Space), hover and diagnostics. While browsing
 and bindings, even after its authored source or Libraries are edited. The editor keeps that context and the command's wrapper hidden
 and protected.
 
+Two Session Commands answer without running anything, alike in Edit and
+while browsing, from the same name discovery and Declaration Documentation as
+the Session Host. `:describe <name>` prints a name's declaration, signature
+and documentation, from the selected Script, a Library it imports or the
+Built-ins; `:apropos [query]` lists every name containing the query, with the
+`use` line an unimported Library export needs. The default context has only
+the Built-ins and the Project's Libraries; Script Variables show no value.
+
 Targeted commands use Extend ([ADR 0108](../../docs/adr/0108-folio-message-box-commands-can-extend-a-chosen-script.md));
 they accept statements and expressions, not Script-level declarations. Existing
 Script Variables can change, while new local variables disappear after the

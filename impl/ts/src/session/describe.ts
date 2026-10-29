@@ -387,3 +387,55 @@ export const apropos = (names: Names, rest: string): string[] => {
   }
   return out;
 };
+
+/**
+ * The Names of one whole Script, for a host without a Session Host: each
+ * declaration of `source` in order, with the comments before it, and the
+ * given User Libraries. No Script Variable has a value to show.
+ */
+export const scriptNames = (
+  source: string,
+  libraries: ReadonlyMap<string, string>,
+  refuse: (reason: string) => never,
+): Names => {
+  const declarations: DeclaredName[] = [];
+  const tree = parseSource(source).tree;
+  const checked = checkSource(source).tree;
+  if (tree && checked) {
+    const nodes = tree.children.filter(
+      (c): c is SyntaxNode => c.kind === 'node' && c.rule === 'Declaration',
+    );
+    let from = 0;
+    viewSource(checked.root).forEach((decl, at) => {
+      const node = nodes[at]!;
+      const own = source.slice(from, node.end).replace(/^\s+/u, '');
+      from = node.end;
+      if (decl.k === 'use') {
+        const uses = decl.imports.map(i => ({
+          local: i.local.text,
+          name: i.name,
+        }));
+        declarations.push({
+          kind: 'use',
+          library: decl.library,
+          names: uses.map(u => u.local),
+          uses,
+          source: own,
+        });
+      } else {
+        const name =
+          decl.k === 'constant' || decl.k === 'variable'
+            ? decl.name.text
+            : decl.name;
+        declarations.push({ kind: decl.k, names: [name], source: own });
+      }
+    });
+  }
+  return {
+    declarations,
+    has: name => declarations.some(d => d.names.includes(name)),
+    libraries,
+    refuse,
+    variable: () => undefined,
+  };
+};
