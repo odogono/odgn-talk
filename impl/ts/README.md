@@ -122,7 +122,7 @@ The Host Manifest writes the declaration. The WASI adapter declares a
 collection only to a guest offering `object-elements-v1`, and answers its
 `prop` needs with an `op`; the Zig reactor does not offer it yet.
 
-**Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. The [Zig Core](../zig/README.md#the-machine) implements the staged contract with Zig-only acceptance tests; the shared executable catalogues remain staged. See [#472](https://github.com/odogono/odgn-talk/issues/472).
+**Metering support:** Operations may declare `metering: 'read-only'` (immediate or suspending) or `metering: 'segment-bound'` (immediate and `segmentBound`), validated at definition and carried by Operation Data, the Host Manifest and the Group Fingerprint, as the [incremental metering contract](../../spec/embedding/metered-operations.md) says. A suspending `read-only` call may queue `call.requestCharge(fuel)`, which returns the Group-wide request id (`q1`, `q2`, …) and a `result` Promise settled at the end of the Pump that processes it, beside a `charge result` report. The Pump drains requests in input order: `accepted` spends the Fuel at once, `limit` ends the Run with a Fuel Limit Fault at the call (a Join Member at its own) with no Stretch, and a call no longer pending gives `inactive`. Issued calls keep their eligibility for the Group's lifetime, and the request counter and eligibility are saved; a pending metered call or unresolved request refuses Save with `effects pending`. [Tests](tests/charge-requests.test.ts) cover these, and the WASM tests check the same Trace from the Zig Core. Still missing here: the synchronous `charge-refused=yes` call record, replay and corpus support for the new records, and SQLite `perStep` charging; SQLite factories still use up-front `max × perRow` charging. See [#472](https://github.com/odogono/odgn-talk/issues/472).
 
 `createCore()` returns the process-wide `Core` from chapter 9: Capability and Object Kind definitions, the six Standard Capability factories, Library compilation, Group creation and restore. Existing free-function helpers remain available and share that Core's definitions and compilation caches. Script code is cached by code identity across Groups, reloads and restores, while each load still checks its Grants, Object property declarations and limits and initialises separate Script state. Extension code is cached by the complete extended Script identity, since its bindings and variable slots depend on earlier definitions. Library compilation already shares code by identity; its Host version remains metadata.
 
@@ -259,6 +259,15 @@ Shape doesn't name fails as a wrong result. Conversion makes a `run` answer
 settle one microtask after its Promise. Ops built at run time with `Shape[]`
 type their arguments `unknown`. The Core's own Capabilities keep the
 Value-form `defineValueCapability`, which the package doesn't export.
+
+For a suspending Operation, retained `call.answer` and `call.fail` methods
+continue to queue inputs after the call ends, including after timeout, Stop
+or Reload. The next Pump records each late reply as `note … kind=late-answer`
+and ignores it, without charging late answer Fuel or resuming the Run.
+`group.settle` resolves pending calls from a restore before its first Pump;
+its `unknown call` refusal outside that window does not apply to these
+ordinary replies. [Regression tests](tests/late-answers.test.ts) cover late
+replies after settlement and teardown.
 
 ## Grant release hooks
 

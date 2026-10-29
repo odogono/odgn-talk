@@ -1,5 +1,5 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
-// Metering extensions and SQLite perStep signatures are staged in
+// SQLite perStep signatures are staged in
 // metered-operations.md#target-embedding-declarations until runtime implementation.
 // The package is @northtalk/ts. Its Core, Group and Script are interfaces that
 // the TS Core and the Zig Host Adapter (@northtalk/ts/wasm) both implement
@@ -312,6 +312,7 @@ export interface ImmediateOp<B, A extends readonly Shape[] = Shape[], R = Shape>
   mode: "immediate";
   scope?: ScopeDecl;
   segmentBound?: boolean; // absent/false: ordinary immediate effects
+  metering?: "read-only" | "segment-bound"; // absent: up-front charging only
   /** Return a result, or throw ScriptError, LimitReached, or anything else as `host error`. */
   do(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): PlainResult<R>;
 }
@@ -323,6 +324,7 @@ export interface ImmediateOp<B, A extends readonly Shape[] = Shape[], R = Shape>
 export interface SuspendingOp<B, A extends readonly Shape[] = Shape[], R = Shape> extends OpBase<A, R> {
   mode: "suspending";
   maxPendingMs?: number; // whole milliseconds; otherwise the Script's maxWaitMs
+  metering?: "read-only"; // permits call.requestCharge
   start?(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): void;
   run?(call: Call<B, PlainResult<R>>, ...args: PlainArgs<A>): Promise<PlainResult<R>>;
 }
@@ -379,6 +381,23 @@ export interface Call<B, R = Value> {
    */
   answer(v: R, lateCost?: { fuel: number }): void; // a suspending Operation's result form
   fail(e: ScriptError): void;
+  /**
+   * Queues a charge request for a suspending Operation declared metering "read-only".
+   * Throws HostError `invalid value`, allocating no id, for an invalid amount, an
+   * ineligible call or a second unresolved request.
+   */
+  requestCharge(fuel: number): ChargeRequest;
+}
+export interface ChargeRequest {
+  readonly id: string; // Group-wide "q1", "q2", … in enqueue order
+  readonly result: Promise<ChargeResult>; // settles at the processing Pump's end
+}
+export interface ChargeResult {
+  readonly kind: "charge result";
+  readonly request: string;
+  readonly call: string;
+  readonly fuel: number; // requested amount; only accepted contributes Fuel
+  readonly status: "accepted" | "limit" | "inactive";
 }
 
 // ---------------------------------------------------------------------------
@@ -905,6 +924,7 @@ export interface CausalWork {
 
 export type Report =
   | { kind: "host error"; code: HostErrorCode; detail?: string } // drain-time Host refusal; detail is outside parity
+  | ChargeResult
   | RunStarted | RunDiscarded | RunAccounting | CausalWork
   | {
       kind: "run end";

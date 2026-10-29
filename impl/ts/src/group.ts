@@ -68,7 +68,13 @@ import {
   type TimerAction as WaitTimerAction,
   type Waiter as WaitWaiter,
 } from './waits';
-import { type Grant, type Call, type ReleaseReason } from './capabilities';
+import {
+  type Grant,
+  type Call,
+  type ChargeRequest,
+  type ChargeResult,
+  type ReleaseReason,
+} from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData, operationsOf } from './manifest';
 import {
@@ -328,6 +334,7 @@ export type EffectFailure = {
 };
 export type Report =
   | AccountingReport
+  | ChargeResult
   | {
       code: HostErrorCode;
       detail?: string;
@@ -576,7 +583,16 @@ export type InputAction =
     }
   | { child: ObjectState; k: 'set-parent'; up: ObjectState | null }
   | { k: 'dispose'; state: ObjectState }
-  | { id: string; k: 'settle'; settlement: Settlement };
+  | { id: string; k: 'settle'; settlement: Settlement }
+  | { k: 'charge'; q: QueuedCharge };
+// An admitted charge request, until the Pump that processes it ends.
+type QueuedCharge = {
+  call: string;
+  fuel: number;
+  id: string;
+  result?: ChargeResult;
+  settle: (result: ChargeResult) => void;
+};
 type QueuedInput = {
   action: InputAction;
   line: string | (() => string);
@@ -767,8 +783,15 @@ export class TsGroup implements Group {
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private broadcasts = 0;
-  /** Each Run's issued call ids' ranges, for the Group's lifetime. */
-  private issued = new Map<string, [number, number][]>();
+  /**
+   * Each Run's issued call ids' ranges, for the Group's lifetime, with
+   * whether their calls may request charges (Metered Operations).
+   */
+  private issued = new Map<string, [number, number, boolean][]>();
+  /** The last charge request id issued. */
+  private chargeCounter = 0;
+  /** Admitted charge requests whose futures haven't settled, in order. */
+  private charges: QueuedCharge[] = [];
   /** How many waits have been set: the next wait's order. */
   private waitOrder = 0;
   /** Each root's discarded messages, for the Group's lifetime. */
@@ -1238,6 +1261,10 @@ export class TsGroup implements Group {
   private effectsPending(): boolean {
     return (
       this.effectStateUnknown ||
+      this.charges.length > 0 ||
+      this.waits
+        .awaitedCalls(() => this.holders(), compareCallIds)
+        .some(([id]) => this.issuedEligibility(id) === true) ||
       this.scripts.some(s =>
         this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
       )
@@ -1255,6 +1282,7 @@ export class TsGroup implements Group {
       fingerprint: this.fingerprint(),
       inputs: this.inputs,
       issued: this.issued,
+      chargeCounter: this.chargeCounter,
       lastClock: this.lastClock,
       libraries: this.libraries,
       name: this.savedName ?? this.name,
@@ -1754,13 +1782,14 @@ export class TsGroup implements Group {
     this.lastClock = g.clock.seconds * 1_000_000n + BigInt(g.clock.micros);
     this.randomState = g.randomState;
     this.waitOrder = g.timers;
+    this.chargeCounter = g.chargeCounter;
     for (const x of g.issued) {
       if (!x.ranges.length) {
         invalidSave();
       }
       this.issued.set(
         x.run,
-        x.ranges.map(r => [r.first, r.last]),
+        x.ranges.map(r => [r.first, r.last, r.eligible]),
       );
     }
     for (const d of state.accounting.discards) {
@@ -2755,6 +2784,124 @@ export class TsGroup implements Group {
     }
   }
 
+  // Whether an issued call may request charges; undefined if never issued.
+  private issuedEligibility(id: string): boolean | undefined {
+    const dot = id.lastIndexOf('.c');
+    const digits = id.slice(dot + 2);
+    if (dot <= 0 || !/^[1-9]\d*$/.test(digits)) {
+      return undefined;
+    }
+    const n = Number(digits);
+    return this.issued
+      .get(id.slice(0, dot))
+      ?.find(([first, last]) => first <= n && n <= last)?.[2];
+  }
+
+  /**
+   * Queues a charge request for an issued call (Metered Operations). A call
+   * the Group never issued is `unknown call`; an ineligible one, an invalid
+   * amount or a second unresolved request is `invalid value`, with no id.
+   */
+  private requestCharge(call: string, fuel: number): ChargeRequest {
+    const valid = Number.isSafeInteger(fuel) && fuel >= 0;
+    const eligible = this.issuedEligibility(call);
+    const code =
+      eligible === undefined
+        ? 'unknown call'
+        : !valid || !eligible || this.charges.some(q => q.call === call)
+          ? 'invalid value'
+          : null;
+    if (code) {
+      this.recordRefusal(
+        recordLine(
+          'charge-request',
+          [call],
+          [['fuel', valid ? String(fuel) : '"invalid"']],
+          true,
+        ),
+        code,
+      );
+      throw new HostError(code);
+    }
+    const id = `q${++this.chargeCounter}`;
+    let settle!: (result: ChargeResult) => void;
+    const result = new Promise<ChargeResult>(resolve => {
+      settle = resolve;
+    });
+    const q: QueuedCharge = { id, call, fuel, settle };
+    this.charges.push(q);
+    this.queueInput({
+      line: recordLine(
+        'charge-request',
+        [call, id],
+        [['fuel', String(fuel)]],
+        true,
+      ),
+      action: { k: 'charge', q },
+    });
+    return { id, result };
+  }
+
+  // A charge request's outcome, as the Pump drains it: spent, a Fuel Limit
+  // Fault ending the call's Run at once, or inactive.
+  private drainCharge(q: QueuedCharge) {
+    const pending = this.pendingCall(q.call);
+    const status = pending
+      ? pending.running.run.requestedCharge(q.call, q.fuel)
+      : 'inactive';
+    q.result = {
+      kind: 'charge result',
+      request: q.id,
+      call: q.call,
+      fuel: q.fuel,
+      status,
+    };
+    this.trace?.(
+      recordLine(
+        'charge-result',
+        [q.call, q.id],
+        [
+          ['fuel', String(q.fuel)],
+          ['status', status],
+        ],
+      ),
+    );
+    this.drainReports.push(q.result);
+    if (status === 'accepted') {
+      const s = pending!.s;
+      this.drainCharges.set(s, (this.drainCharges.get(s) ?? 0) + q.fuel);
+    } else if (status === 'limit') {
+      this.endFaulted(pending!.s, pending!.running);
+    }
+  }
+
+  // Each processed request's future, once its Pump has ended.
+  private settleCharges() {
+    const done = this.charges.filter(q => q.result);
+    this.charges = this.charges.filter(q => !q.result);
+    for (const q of done) {
+      q.settle(q.result!);
+    }
+  }
+
+  // A waiting Run a charge request faulted ends with no Stretch: its fault,
+  // abandonments, cleanup and terminal records only.
+  private endFaulted(s: ScriptState, running: Running) {
+    const run = running.run;
+    const outcome = run.ended!;
+    this.debugController?.ended(run);
+    this.forgetWait(s, running);
+    s.queue = s.queue.filter(item => item !== running);
+    this.writeEnding(running, outcome);
+    this.finalizeEffects(running);
+    if (run.effectStateUnknown) {
+      this.stopUnknownEffects();
+    }
+    this.writeCancellationAbandons(run);
+    const { handler, fallback } = this.handlerOf(s, running, outcome);
+    this.endRun(s, running, run.ended!, this.drainReports, handler, fallback);
+  }
+
   private pendingCall(
     id: string,
   ): { running: Running; s: ScriptState } | undefined {
@@ -2921,6 +3068,9 @@ export class TsGroup implements Group {
       }
       case 'settle':
         this.applySettlement(action.id, action.settlement);
+        break;
+      case 'charge':
+        this.drainCharge(action.q);
         break;
       case 'cancel-delivery':
         this.cancelDeliveryNow(action.id);
@@ -4119,19 +4269,20 @@ export class TsGroup implements Group {
     const group = this;
     return {
       ...(delivery ? { delivery } : {}),
-      issue: id => {
+      issue: (id, metered = false) => {
         const dot = id.lastIndexOf('.c');
         const runId = id.slice(0, dot);
         const n = Number(id.slice(dot + 2));
         const ranges = this.issued.get(runId) ?? [];
         const last = ranges.at(-1);
-        if (last && last[1] + 1 === n) {
+        if (last && last[1] + 1 === n && last[2] === metered) {
           last[1] = n;
         } else {
-          ranges.push([n, n]);
+          ranges.push([n, n, metered]);
         }
         this.issued.set(runId, ranges);
       },
+      requestCharge: (id, fuel) => this.requestCharge(id, fuel),
       waitOrder: () => ++this.waitOrder,
       timerOrder: () => this.waits.reserve(),
       drawRandom: n => this.drawRandom(n),
@@ -5419,6 +5570,7 @@ export class TsGroup implements Group {
       ),
     );
     this.flushAccounting(reports);
+    this.settleCharges();
     return {
       state,
       ...(next === null ? {} : { nextDeadline: next }),
@@ -5686,40 +5838,8 @@ export class TsGroup implements Group {
       this.debugController?.ended(run);
       s.suspended.delete(running);
     }
-    if (outcome?.kind === 'limit fault') {
-      this.trace?.(
-        recordLine(
-          'fault',
-          [running.id],
-          [
-            ['limit', faultNames[outcome.limit] ?? outcome.limit],
-            ['at', `${outcome.unit}:${outcome.pc}`],
-            ['pos', `${outcome.line}:${outcome.col}`],
-            ['rollback', idList(outcome.rollback)],
-          ],
-        ),
-      );
-      for (const id of run.faultAbandons) {
-        this.trace?.(recordLine('abandon', [id], []));
-      }
-    }
-    if (outcome?.kind === 'cancelled' && outcome.cleanupFailed) {
-      const failed = outcome.cleanupFailed;
-      this.trace?.(
-        recordLine(
-          'cleanup-failed',
-          [running.id],
-          [
-            ['code', 'code' in failed ? JSON.stringify(failed.code) : null],
-            [
-              'limit',
-              'limit' in failed
-                ? (faultNames[failed.limit] ?? failed.limit)
-                : null,
-            ],
-          ],
-        ),
-      );
+    if (outcome) {
+      this.writeEnding(running, outcome);
     }
     if ((run.done || run.suspended) && !s.stopped) {
       this.finalizeEffects(running);
@@ -5732,14 +5852,7 @@ export class TsGroup implements Group {
     if (run.suspended) {
       this.releaseRecords(running);
     }
-    // A Run a Fallback Handler clause took names the message's Selector as
-    // its Handler; one that ended unhandled took no clause (ADR 0064).
-    const fallback = run.fallback && outcome?.kind !== 'unhandled';
-    const handler =
-      !running.delivery.fn &&
-      (fallback || s.loaded.clauses.has(running.delivery.message))
-        ? running.delivery.message
-        : null;
+    const { handler, fallback } = this.handlerOf(s, running, outcome);
     const observe = (end: string, until?: bigint) =>
       this.session?.runs({
         k: 'seg',
@@ -5921,6 +6034,61 @@ export class TsGroup implements Group {
     this.writeCancellationAbandons(run);
     run.openVerdict = false;
     this.endRun(s, running, outcome, reports, handler, fallback);
+  }
+
+  // A Run a Fallback Handler clause took names the message's Selector as
+  // its Handler; one that ended unhandled took no clause (ADR 0064).
+  private handlerOf(
+    s: ScriptState,
+    running: Running,
+    outcome: Outcome | null,
+  ): { fallback: boolean; handler: string | null } {
+    const fallback = running.run.fallback && outcome?.kind !== 'unhandled';
+    const handler =
+      !running.delivery.fn &&
+      (fallback || s.loaded.clauses.has(running.delivery.message))
+        ? running.delivery.message
+        : null;
+    return { fallback, handler };
+  }
+
+  // A fault's records and its abandonments, or a failed cleanup's record.
+  private writeEnding(running: Running, outcome: Outcome) {
+    if (outcome.kind === 'limit fault') {
+      this.trace?.(
+        recordLine(
+          'fault',
+          [running.id],
+          [
+            ['limit', faultNames[outcome.limit] ?? outcome.limit],
+            ['at', `${outcome.unit}:${outcome.pc}`],
+            ['pos', `${outcome.line}:${outcome.col}`],
+            ['rollback', idList(outcome.rollback)],
+          ],
+        ),
+      );
+      for (const id of running.run.faultAbandons) {
+        this.trace?.(recordLine('abandon', [id], []));
+      }
+    }
+    if (outcome.kind === 'cancelled' && outcome.cleanupFailed) {
+      const failed = outcome.cleanupFailed;
+      this.trace?.(
+        recordLine(
+          'cleanup-failed',
+          [running.id],
+          [
+            ['code', 'code' in failed ? JSON.stringify(failed.code) : null],
+            [
+              'limit',
+              'limit' in failed
+                ? (faultNames[failed.limit] ?? failed.limit)
+                : null,
+            ],
+          ],
+        ),
+      );
+    }
   }
 
   private writeCancellationAbandons(run: Run) {

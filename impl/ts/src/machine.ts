@@ -89,6 +89,7 @@ import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
   LimitReached,
+  type ChargeRequest,
   mismatch,
   type Call,
   type Grant,
@@ -911,14 +912,19 @@ export type RunHost = {
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
-  /** Records a call id as issued, for the Group's lifetime. */
-  issue?(id: string): void;
+  /**
+   * Records a call id as issued, for the Group's lifetime, with whether it
+   * may request charges (Metered Operations).
+   */
+  issue?(id: string, metered?: boolean): void;
   isUnbound?(name: string): boolean;
   /** The object the Script owns, or Nothing. */
   readonly me: Value;
   readonly now: bigint;
   /** The well-known Host Object the Host bound to a name at load. */
   object(name: string): Value | undefined;
+  /** Queues a charge request for an issued call, as `call.requestCharge`. */
+  requestCharge(id: string, fuel: number): ChargeRequest;
   /**
    * Puts a message in the mailbox of a Script, or of an object's nearest
    * Owning Script, or throws ScriptError `mailbox full`; `reply` is the call
@@ -1314,6 +1320,7 @@ export class Run {
         charge: forbidden,
         answer: forbidden,
         fail: forbidden,
+        requestCharge: forbidden,
       };
       const record = {
         kind: 'call' as const,
@@ -1491,6 +1498,40 @@ export class Run {
     return this.pendingCall(id)?.call?.adoptable === true;
   }
 
+  /**
+   * Settles a charge request for a pending call (Metered Operations): an
+   * affordable one is spent, and one the Run can't pay faults it at the call,
+   * a Join Member at its own site. A suspended Run keeps its committed
+   * Segment; a preempted Join body rolls its open one back.
+   */
+  requestedCharge(id: string, fuel: number): 'accepted' | 'limit' {
+    const left = this.cancelling
+      ? this.limits.cleanupBudget - (this.fuel - this.cleanupFrom!)
+      : this.limits.fuelPerRun - this.fuel;
+    if (fuel <= left) {
+      this.fuel += fuel;
+      return 'accepted';
+    }
+    const suspension = this.suspended;
+    const pending = this.pendingCall(id)!;
+    if (suspension) {
+      this.segmentBase = [...this.script.variables];
+    }
+    const site = 'site' in pending ? (pending as Member).site : undefined;
+    this.fault(
+      this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
+      site
+        ? site.frame.code.unit.code[site.pc]!
+        : this.frame.code.unit.code[this.frame.pc]!,
+    );
+    if (suspension?.k === 'ask') {
+      abandon(pending.abort!, 'limit');
+      this.faultAbandons.push(id);
+    }
+    this.suspended = null;
+    return 'limit';
+  }
+
   /** Reconnect the Host side of a saved suspending Operation. */
   restoredCall(
     id: string,
@@ -1521,6 +1562,7 @@ export class Run {
         return run.host!.now;
       },
       answer: (value, cost) => this.host!.answer(id, value, cost?.fuel ?? 0),
+      requestCharge: fuel => this.host!.requestCharge(id, fuel),
       fail: error =>
         error instanceof HostScriptError
           ? this.host!.fail(id, error)
@@ -4717,7 +4759,7 @@ export class Run {
       throw new CrossingInterruptedError();
     }
     const id = `${this.id}.c${++this.calls}`;
-    host.issue?.(id);
+    host.issue?.(id, op.mode === 'suspending' && op.metering === 'read-only');
     const ctx: CallContext = {
       id,
       op,
@@ -4782,6 +4824,7 @@ export class Run {
       },
       answer: (v: Value, late?: { fuel: number }) =>
         host.answer(id, v, late?.fuel ?? 0),
+      requestCharge: (fuel: number) => host.requestCharge(id, fuel),
       // Anything but a ScriptError fails as `host error`.
       fail: (e: HostScriptError) =>
         e instanceof HostScriptError

@@ -74,7 +74,7 @@ The Message Layer adds `request-charge` with `call` and `fuel`; its immediate `o
 
 ## Target embedding declarations
 
-These declarations are the normative implementation target. The checked `talk.go` and `talk.ts` files retain their pre-metering declarations until the runtime implementation lands, so the existing API comparison continues to verify the implemented contract without exemptions. Move these additions and replacements into those files with implementation; all unrelated members stay unchanged.
+These declarations are the normative implementation target. The checked `talk.ts` carries the TS metering field, `requestCharge`, `ChargeRequest` and `ChargeResult`, which the TS Core implements; its SQLite `perStep` signatures, and all of `talk.go`, retain their pre-metering declarations until that runtime implementation lands, so the existing API comparison continues to verify the implemented contract without exemptions. Move the remaining additions and replacements into those files with implementation; all unrelated members stay unchanged.
 
 In Go, add `Metering string` to `Operation` immediately after `SegmentBound`. Its values are empty, `"read-only"` and `"segment-bound"`, validated as above. Add the following request and report types; `ChargeResult` implements `Report`:
 

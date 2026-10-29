@@ -128,6 +128,10 @@ const callOf = <B>(
   signal: new AbortController().signal,
   answer: () => {},
   charge: () => {},
+  // A driver kit runs immediate Operations, which can't request charges.
+  requestCharge: () => {
+    throw new Error('No charge requests in a driver kit');
+  },
   fail: () => {},
 });
 const contextOf = (

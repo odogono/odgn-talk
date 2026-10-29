@@ -94,6 +94,10 @@ const callOf = (step: Step, n: number): Call<string> =>
     signal: new AbortController().signal,
     answer: () => {},
     charge: () => {},
+    // A driver kit runs immediate Operations, which can't request charges.
+    requestCharge: () => {
+      throw new Error('No charge requests in a driver kit');
+    },
     fail: () => {},
   }) satisfies Call<string>;
 // The hooks see the Segment's enrolled Grants, the first being the one

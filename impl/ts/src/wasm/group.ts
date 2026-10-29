@@ -5,6 +5,8 @@
 import {
   LimitReached,
   type Call,
+  type ChargeRequest,
+  type ChargeResult,
   type EffectResult,
   type Grant,
   type ValueOperation,
@@ -223,6 +225,8 @@ export class WasmGroup implements Group {
   readonly #decisions = new Map<string, Deciding_>();
   readonly #runs = new Map<string, string>();
   readonly #calls = new Map<string, Pending>();
+  /** Each queued charge request's future, until a Pump reports it. */
+  readonly #charges = new Map<string, (result: ChargeResult) => void>();
   // Host-side detail the guest doesn't carry, for the reports it writes.
   readonly #failureDetails = new Map<string, string>();
   #propertyDetails: string[] = [];
@@ -429,6 +433,7 @@ export class WasmGroup implements Group {
       now: parseInstant(textOf(field(need, 'now'))!),
       signal: pending.abort.signal,
       charge,
+      requestCharge: (fuel: number) => this.#requestCharge(id, fuel),
       answer: (v: Value, late?: { fuel: number }) =>
         this.#settleCall(id, pending, 'answer', {
           value: encode(this.#codec, v),
@@ -440,6 +445,21 @@ export class WasmGroup implements Group {
           error: e instanceof ScriptError ? this.#failure(e) : undefined,
         }),
     });
+  }
+
+  // The guest validates and records the request; an amount that isn't a
+  // whole number reaches it as the `invalid` sentinel, as natively.
+  #requestCharge(call: string, fuel: number): ChargeRequest {
+    const ok = this.send('request-charge', {
+      call,
+      fuel: Number.isSafeInteger(fuel) ? fuel : 'invalid',
+    });
+    const id = textOf(field(ok, 'request'))!;
+    const result = new Promise<ChargeResult>(resolve => {
+      this.#charges.set(id, resolve);
+    });
+    this.#ready();
+    return { id, result };
   }
 
   #settleCall(
@@ -853,6 +873,10 @@ export class WasmGroup implements Group {
     );
     for (const r of rows) {
       switch (r.kind) {
+        case 'charge result':
+          this.#charges.get(r.request)?.(r);
+          this.#charges.delete(r.request);
+          break;
         case 'run started':
           if (r.delivery) {
             this.#runs.set(r.run, r.delivery);
