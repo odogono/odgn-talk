@@ -84,7 +84,6 @@ export const editSave = (
   edit(x);
   const h = { ...save };
   header(h);
-  // eslint-disable-next-line unicorn/consistent-function-scoping -- Kept beside the sections it writes.
   const body = (f: (w: RecordWriter<RawValue>) => void) => {
     const w = new SaveWriter(texts);
     f(new RecordWriter(w, raw));
