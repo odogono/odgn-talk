@@ -11,6 +11,8 @@ import {
 } from './editing';
 import {
   BUTTON_STYLES,
+  PAGE_ALIGNS_X,
+  PAGE_ALIGNS_Y,
   plainTextOf,
   TEXT_ALIGNS,
   textAlignOf,
@@ -415,6 +417,36 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
           }),
         )}
         {field('Background', color('background', page.background, disabled))}
+      </div>
+      <div className="row">
+        {field(
+          'Align across',
+          <select
+            data-field="alignX"
+            disabled={disabled}
+            value={page.alignX ?? 'center'}
+          >
+            {PAGE_ALIGNS_X.map(align => (
+              <option key={align} value={align}>
+                {align[0]!.toUpperCase() + align.slice(1)}
+              </option>
+            ))}
+          </select>,
+        )}
+        {field(
+          'Align down',
+          <select
+            data-field="alignY"
+            disabled={disabled}
+            value={page.alignY ?? 'center'}
+          >
+            {PAGE_ALIGNS_Y.map(align => (
+              <option key={align} value={align}>
+                {align[0]!.toUpperCase() + align.slice(1)}
+              </option>
+            ))}
+          </select>,
+        )}
       </div>
       <div className="row">
         <button

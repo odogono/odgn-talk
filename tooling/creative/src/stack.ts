@@ -512,6 +512,8 @@ export const mountStack = (
             'height',
             Math.max(MIN_PAGE_HEIGHT, value as number),
           );
+        } else if (key === 'alignX' || key === 'alignY') {
+          draft.tree.setProperty(page, key, String(value));
         } else if (key === 'background') {
           draft.tree.setProperty(page, 'background', String(value));
         } else if (key === 'projectName') {

@@ -12,6 +12,8 @@ import {
   BUTTON_STYLES_PROSE,
   isButtonStyle,
   isIdentifierName,
+  isPageAlignX,
+  isPageAlignY,
   isTextAlign,
   projectWithoutIds,
   type Asset,
@@ -408,6 +410,17 @@ const checkPage = (c: Checker, value: unknown, path: string): Page => {
     elements: checked.map(({ element }) => element),
   };
   setDefined(page, 'script', c.optStr(p.script, `${path}.script`));
+  for (const [key, valid, prose] of [
+    ['alignX', isPageAlignX, 'left, center or right'],
+    ['alignY', isPageAlignY, 'top, center or bottom'],
+  ] as const) {
+    const align = c.optStr(p[key], `${path}.${key}`);
+    if (align !== undefined && !valid(align)) {
+      c.fail(`${path}.${key}`, `expected ${prose}`);
+    } else if (align !== undefined && align !== 'center') {
+      page[key] = align as never;
+    }
+  }
   return page;
 };
 

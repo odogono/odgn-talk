@@ -59,6 +59,12 @@ The authored Project model and its zip file format — pure TypeScript with no U
 
 Group Elements compose ordinary Elements and other groups; see [Grouping Elements](#grouping-elements). Their rationale is [ADR 0103](../../docs/adr/0103-folio-groups-are-nested-elements-with-page-wide-names.md).
 
+Present places each Page in the window by its **Align across** (left,
+center or right) and **Align down** (top, center or bottom) in Page Info.
+Both default to center; a Page larger than the window scrolls from its
+top-left corner. Browse and Edit always show the Page at the top, centred
+across. Alignment is saved in `.folio` files and is not visible to Scripts.
+
 Rectangle and ellipse borders have a writable `thickness` in pixels, named
 like a line's thickness. Set **Thickness** in Info, or use
 `set the thickness of box to 1` in a Script. Zero removes the border;

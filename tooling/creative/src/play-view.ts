@@ -576,9 +576,21 @@ export const mountPlay = (shell: StackShell): void => {
         (reader.clientWidth - (mode === 'present' ? 32 : 0)) / play.designWidth,
       ),
     );
+    // Present places the Page by its alignment. Auto margins in the flex
+    // reader centre it without clipping a Page larger than the window.
+    const presenting = mode === 'present';
+    const before = (align: string | undefined, start: string) =>
+      presenting && align !== start ? 'auto' : '';
+    const after = (align: string | undefined, end: string) =>
+      presenting && align !== end ? 'auto' : '';
+    const { alignX, alignY } = play.page;
     Object.assign(scaler.style, {
       width: `${play.designWidth * scale}px`,
       height: `${play.page.height * scale}px`,
+      marginLeft: before(alignX, 'left'),
+      marginRight: after(alignX, 'right'),
+      marginTop: before(alignY, 'top'),
+      marginBottom: after(alignY, 'bottom'),
     });
     Object.assign(pageNode.style, {
       width: `${play.designWidth}px`,
