@@ -570,11 +570,17 @@ export const lintSyntax = (
   const bindings = bindingTree(tree, options);
   if (idioms.length) {
     const names = semanticNames(bindings.root);
-    for (const { id, at, subject, params } of idioms) {
+    for (const { id, at, subject, subjectIs, params } of idioms) {
       // A Constant or Built-in never changes, so a rewrite for one is
-      // unusual; advise only on names whose value the Script holds.
+      // unusual; advise only on names whose value the Script holds. A
+      // Built-in call is advice only if the Script hasn't shadowed it.
       const kind = names.get(subject.pos)?.binding?.kind;
-      if (kind && idiomSubjectKinds.has(kind)) {
+      if (
+        kind &&
+        (subjectIs === 'builtin function'
+          ? kind === 'builtin function'
+          : idiomSubjectKinds.has(kind))
+      ) {
         emit(id, at, params);
       }
     }

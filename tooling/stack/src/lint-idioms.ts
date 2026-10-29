@@ -1,6 +1,6 @@
 // Chapter 12: advice toward the Beginner Surface's idioms, and the rewrites
 // the LSP offers for it. Each rewrite means the same as the code it replaces.
-import type { SyntaxNode, Token } from '@northtalk/ts';
+import { kindNames, type SyntaxNode, type Token } from '@northtalk/ts';
 
 export const nodes = (node: SyntaxNode) =>
   node.children.filter((child): child is SyntaxNode => child.kind === 'node');
@@ -176,6 +176,8 @@ const suggestMatchEdit = (
 };
 
 export type IdiomId =
+  | 'impossible-kind'
+  | 'kindof-comparison'
   | 'suggest-arithmetic-command'
   | 'suggest-is-in'
   | 'suggest-match'
@@ -186,6 +188,8 @@ export type IdiomAdvice = {
   id: IdiomId;
   params: Record<string, string>;
   subject: Token;
+  /** What the subject must name: a variable, or the Built-in function. */
+  subjectIs?: 'builtin function';
 };
 type Edit = { end: number; newText: string; start: number };
 
@@ -367,6 +371,54 @@ const nothingDefault = (node: SyntaxNode) => {
     : undefined;
 };
 
+// `kindOf(e) = "k"`, or `"k" = kindOf(e)`, or with `is`, `is not` or `<>`.
+// `x is a k` is true exactly when `kindOf(x)` gives `k` (chapter 3), and
+// `kindOf` gives only chapter 3's kind names, so any other text never equals it.
+const kindComparison = (node: SyntaxNode) => {
+  const operator = tokens(node)
+    .map(token => token.v)
+    .join(' ');
+  const operands = nodes(node).filter(child => child.rule === 'Concat');
+  const ignoring = nodes(node).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  const negated = operator === 'is not' || operator === '<>';
+  if (
+    node.rule !== 'Comparison' ||
+    operands.length !== 2 ||
+    ignoring ||
+    (!negated && operator !== 'is' && operator !== '=')
+  ) {
+    return undefined;
+  }
+  const call = (operand: SyntaxNode) => {
+    const inner = core(operand);
+    const [name, open, ...rest] = inner.children.filter(
+      child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+    );
+    const argument = rest[0];
+    return inner.rule === 'Call' &&
+      name?.kind === 'token' &&
+      name.v === 'kindOf' &&
+      open?.kind === 'token' &&
+      open.v === '(' &&
+      rest.length === 2 &&
+      argument?.kind === 'node'
+      ? { name, argument }
+      : undefined;
+  };
+  const [left, right] = operands as [SyntaxNode, SyntaxNode];
+  const found = call(left) ?? call(right);
+  const other = call(left) ? right : left;
+  const literal = tokensIn(other);
+  if (!found || literal.length !== 1 || literal[0]!.t !== 'str') {
+    return undefined;
+  }
+  return { ...found, negated, kind: literal[0]!.v };
+};
+const kindTest = (kind: string, negated: boolean) =>
+  `is ${negated ? 'not ' : ''}${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind}`;
+
 /** Advice for one node of the tree, before its subjects' bindings are known. */
 export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
   const first = tokensIn(node)[0];
@@ -418,6 +470,26 @@ export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
         command: update.command('…', update.put.target.v),
       },
     });
+  }
+  const kinded = kindComparison(node);
+  if (kinded) {
+    out.push(
+      kindNames.has(kinded.kind)
+        ? {
+            id: 'kindof-comparison',
+            at: first,
+            subject: kinded.name,
+            subjectIs: 'builtin function',
+            params: { test: kindTest(kinded.kind, kinded.negated) },
+          }
+        : {
+            id: 'impossible-kind',
+            at: first,
+            subject: kinded.name,
+            subjectIs: 'builtin function',
+            params: { kind: kinded.kind },
+          },
+    );
   }
   const member = membership(node);
   if (member) {
@@ -480,6 +552,29 @@ export const idiomEdit = (
           ),
         }
       : undefined;
+  }
+  if (id === 'kindof-comparison') {
+    const comparison = find(
+      tree,
+      node => node.rule === 'Comparison' && startsAt(node, start),
+    );
+    const kinded = comparison && kindComparison(comparison);
+    if (!kinded || !kindNames.has(kinded.kind) || hasComment(comparison)) {
+      return undefined;
+    }
+    // A comparison's operands bind tighter than `and`, `or`, `not`, a
+    // comparison and `otherwise`, so an argument using one keeps parentheses.
+    const loose = ['Default', 'Or', 'And', 'Not', 'Comparison'].includes(
+      core(kinded.argument).rule,
+    );
+    const argument = sourceOf(source, kinded.argument);
+    return {
+      ...spanOf(comparison),
+      newText: `${loose ? `(${argument})` : argument} ${kindTest(
+        kinded.kind,
+        kinded.negated,
+      )}`,
+    };
   }
   if (id === 'suggest-is-in') {
     const chain = find(

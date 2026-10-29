@@ -41,10 +41,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships thirty-two implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(32);
+test('ships thirty-four implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(34);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(32);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(34);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -1262,5 +1262,53 @@ test('otherwise advice needs a Nothing test choosing what one put writes', async
   // A comment inside the `if` would be lost, so there is no rewrite.
   expect(
     rewrite(either.replace('else', 'else -- keep'), 'suggest-otherwise'),
+  ).toBeUndefined();
+});
+
+const kinded = (test: string) =>
+  pickHandler(`if ${test} then return "yes"\nreturn "no"`);
+
+test('kind advice rewrites kindOf comparisons and flags names kindOf never gives', async () => {
+  const args = [num(1), text('a'), text(''), num(0)];
+  const source = kinded('kindOf(c) = "number"');
+  expect(lint(source).lints).toMatchObject([
+    {
+      id: 'kindof-comparison',
+      level: 'hint',
+      span: { line: 2, col: 4 },
+      message: 'Consider `… is a number`, which tests the kind directly.',
+    },
+  ]);
+  for (const [from, to] of [
+    ['kindOf(c) = "number"', 'c is a number'],
+    ['"text" is kindOf(c)', 'c is a text'],
+    ['kindOf(c & "") is not "civil date"', 'c & "" is not a civil date'],
+    ['kindOf(c) <> "instant"', 'c is not an instant'],
+    // An argument that binds looser than a comparison keeps its parentheses.
+    ['kindOf(c = 1 or true) = "boolean"', '(c = 1 or true) is a boolean'],
+  ] as const) {
+    expect(await answersMatch(kinded(from), 'kindof-comparison', args)).toBe(
+      kinded(to),
+    );
+  }
+  for (const negative of [
+    kinded('kindOf(c) = "Number" ignoring case'),
+    kinded('kindOf(c) = kindOf(1)'),
+    kinded('kindOf(c) contains "num"'),
+    `function kindOf x\nreturn "number"\nend kindOf\n${source}`,
+  ]) {
+    expect(idiomLints(negative, 'kindof-comparison')).toEqual([]);
+  }
+  expect(lint(kinded('kindOf(c) = "integer"')).lints).toMatchObject([
+    {
+      id: 'impossible-kind',
+      level: 'warning',
+      span: { line: 2, col: 4 },
+      message:
+        'kindOf never gives "integer", so this comparison always has the same answer. Kinds are named as in chapter 3, such as "number" or "text".',
+    },
+  ]);
+  expect(
+    rewrite(kinded('kindOf(c) = "string"'), 'impossible-kind'),
   ).toBeUndefined();
 });

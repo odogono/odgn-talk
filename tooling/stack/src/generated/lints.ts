@@ -217,6 +217,22 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "kindof-comparison",
+    "flags": "`kindOf(e)` compared with a kind name using `=`, `is`, `is not` or `<>`",
+    "beginner": "hint",
+    "standard": "hint",
+    "message": "Consider `… {test}`, which tests the kind directly.",
+    "status": "implemented"
+  },
+  {
+    "id": "impossible-kind",
+    "flags": "`kindOf(e)` compared with text that isn't one of chapter 3's kind names, such as \"integer\" or \"string\"",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "kindOf never gives \"{kind}\", so this comparison always has the same answer. Kinds are named as in chapter 3, such as \"number\" or \"text\".",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",
