@@ -11,19 +11,20 @@ export const saveFormat = 1;
 
 /** The sections, by tag. Every one but `sources` is required. */
 export const saveSections = {
-  group: 1,
-  libraries: 2,
-  objects: 3,
-  functions: 4,
-  calls: 5,
-  scripts: 6,
-  runs: 7,
-  work: 8,
-  waits: 9,
-  inputs: 10,
-  decisions: 11,
-  accounting: 12,
-  sources: 13,
+  texts: 1,
+  group: 2,
+  libraries: 3,
+  objects: 4,
+  functions: 5,
+  calls: 6,
+  scripts: 7,
+  runs: 8,
+  work: 9,
+  waits: 10,
+  inputs: 11,
+  decisions: 12,
+  accounting: 13,
+  sources: 14,
 } as const;
 const lastRequired = saveSections.accounting;
 const isKnown = (tag: number) => tag >= 1 && tag <= saveSections.sources;
@@ -42,10 +43,44 @@ const i64Max = (1n << 63n) - 1n;
 
 // ---------------------------------------------------------------- primitives
 
+/**
+ * The `texts` table being written: each distinct text once, numbered in
+ * the order the writer first meets it.
+ */
+export class TextTable {
+  readonly texts: string[] = [];
+  private seen = new Map<string, number>();
+
+  /** `start` are texts already numbered, in order. */
+  constructor(start: readonly string[] = []) {
+    for (const s of start) {
+      this.add(s);
+    }
+  }
+
+  add(s: string): number {
+    let i = this.seen.get(s);
+    if (i === undefined) {
+      i = this.texts.length;
+      this.seen.set(s, i);
+      this.texts.push(s);
+    }
+    return i;
+  }
+}
+
 /** Bytes being written, in the format's primitives. */
 export class SaveWriter {
   private buffer = new Uint8Array(256);
   private length = 0;
+
+  /** `names` is the save's `texts` table, which `name` adds to. */
+  constructor(readonly names?: TextTable) {}
+
+  /** A text, as its position in the `texts` table. */
+  name(s: string): this {
+    return this.uint(this.names!.add(s));
+  }
 
   private reserve(n: number): void {
     if (this.length + n <= this.buffer.length) {
@@ -203,7 +238,22 @@ export class SaveWriter {
 export class SaveReader {
   pos = 0;
 
-  constructor(readonly input: Uint8Array) {}
+  /** `names` is the save's `texts` table, which `name` reads from. */
+  constructor(
+    readonly input: Uint8Array,
+    readonly names: readonly string[] = [],
+  ) {}
+
+  /** A text, by its position in the `texts` table. */
+  name(): string {
+    return this.names[this.index(this.names.length)]!;
+  }
+
+  /** A byte enum's value below `n`. */
+  enumByte(n: number): number {
+    const b = this.byte();
+    return b < n ? b : invalid();
+  }
 
   get remaining(): number {
     return this.input.length - this.pos;

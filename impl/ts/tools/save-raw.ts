@@ -15,7 +15,7 @@ const rawRest = (r: SaveReader, tag: number): Raw => {
       return r.list(r => rawIO.read(r));
     case 7: {
       const m = r.byte();
-      return { m, pairs: r.list(r => [r.text(), rawIO.read(r)]) };
+      return { m, pairs: r.list(r => [r.name(), rawIO.read(r)]) };
     }
     case 8:
       return [rawIO.read(r), rawIO.read(r)];
@@ -30,13 +30,13 @@ const rawRest = (r: SaveReader, tag: number): Raw => {
     }
     case 11:
       return r.text();
-    case 12:
-      return {
-        code: r.uint(),
-        display: r.text(),
-        home: r.text(),
-        captures: rawIO.read(r),
-      };
+    case 12: {
+      const code = r.uint();
+      const display = r.name();
+      // A value with code takes its home from it.
+      const home = code === 0 ? r.name() : undefined;
+      return { code, display, home, captures: rawIO.read(r) };
+    }
     case 13:
       return { object: r.uint() };
     default:
@@ -58,7 +58,7 @@ export const rawIO: ValueIO<Raw> = {
     }
     if (tag === 2 || tag === 3) {
       const d = { neg: r.bool(), c: String(r.wideUint(128)), e: r.sint() };
-      return tag === 2 ? { n: d } : { q: d, u: r.text() };
+      return tag === 2 ? { n: d } : { q: d, u: r.name() };
     }
     return { tag, v: rawRest(r, tag) };
   },
@@ -72,7 +72,10 @@ export const readRecords = <V>(
   io: ValueIO<V>,
 ): SaveRecords<V> => {
   const save = readSave(bytes);
-  const at = (tag: number) => new SaveReader(save.body(tag)!);
+  const names = new SaveReader(save.body(saveSections.texts)!).list(r =>
+    r.text(),
+  );
+  const at = (tag: number) => new SaveReader(save.body(tag)!, names);
   const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
   const rr = (tag: number) => new RecordReader(at(tag), io, tables);
   const group = rr(saveSections.group).group();

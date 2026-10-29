@@ -141,6 +141,7 @@ A save is a header followed by sections. Every integer is LEB128, and every dige
 | `raw` | Bytes whose length an earlier field gives. |
 | `digest` | 32 bytes: a SHA-256 digest or a code identity. |
 | `index` | A `uint` position in a list this save already holds, counting from 0. |
+| `name` | A `uint` position in the `texts` section's `texts`. |
 | `ref` | A `uint`: 0 for none, or a position in a list this save already holds plus 1. |
 
 <!-- end -->
@@ -173,7 +174,15 @@ Sections come in ascending tag order, each at most once. Every required section 
 
 <!-- generated: save-format.sections -->
 
-#### 1: group (required)
+#### 1: texts (required)
+
+Every text a `name` field holds, each once.
+
+| Field | Type | Is |
+| --- | --- | --- |
+| texts | `list of text` | Numbered in the order the writer first meets each text: the other sections in tag order with `functions` last, each one's fields in order, and each value depth-first as written. Two are the same when their bytes are. A shared table entry counts as met where the table holds it. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order. |
+
+#### 2: group (required)
 
 The Group's counters and its record of issued call ids.
 
@@ -189,7 +198,7 @@ The Group's counters and its record of issued call ids.
 | random state | `uint` | The Group's random generator state. |
 | issued calls | `list of issued` | Each Run's issued call numbers, by Run id in ascending byte order. |
 
-#### 2: libraries (required)
+#### 3: libraries (required)
 
 Every Library the Group holds, by identity.
 
@@ -197,7 +206,7 @@ Every Library the Group holds, by identity.
 | --- | --- | --- |
 | libraries | `list of library` | In the Group's order. |
 
-#### 3: objects (required)
+#### 4: objects (required)
 
 Every Host Object the Group has seen, by Object Kind and id.
 
@@ -205,7 +214,7 @@ Every Host Object the Group has seen, by Object Kind and id.
 | --- | --- | --- |
 | objects | `list of object` | In the order the Group first saw them. A Value's or field's object `index` or `ref` points here. |
 
-#### 4: functions (required)
+#### 5: functions (required)
 
 The code of every Function Value the save holds, and no other.
 
@@ -213,7 +222,7 @@ The code of every Function Value the save holds, and no other.
 | --- | --- | --- |
 | functions | `list of function` | Numbered in the order the writer first meets a Function Value with that code: the other sections in tag order, each one's fields in order, and each value depth-first as written, a Function Value before its captures. A Function Value's `code` points here. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order. |
 
-#### 5: calls (required)
+#### 6: calls (required)
 
 The Suspending Capability calls a Run still waits on.
 
@@ -221,24 +230,26 @@ The Suspending Capability calls a Run still waits on.
 | --- | --- | --- |
 | calls | `list of call` | In the order they were made. |
 
-#### 6: scripts (required)
+#### 7: scripts (required)
 
 Each Script's identity, limits, Grants, objects, variables and counters.
 
 | Field | Type | Is |
 | --- | --- | --- |
+| declarations | `list of grant declaration` | Each distinct Grant declaration once, in the order the Grants first meet it: the Scripts in load order, each one's Grants in order. Two are the same when their encoded bytes are. A Grant's `declaration` points here. |
 | scripts | `list of script` | In load order. |
 
-#### 7: runs (required)
+#### 8: runs (required)
 
 Every live Run, Script by Script, in each Script's live order.
 
 | Field | Type | Is |
 | --- | --- | --- |
 | per script | `list of uint` | How many Runs each Script has, one per Script. It comes first, so a reader knows each Run's Script before it reads the Run's code positions. |
+| bases | `list of segment base` | Each distinct segment base once, in the order the Runs in `runs` first meet it. Two are the same when their encoded bytes are. A Run's `segment base` points here, and a Function Value in a base is met here, before `runs`. |
 | runs | `list of run` | The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list. |
 
-#### 8: work (required)
+#### 9: work (required)
 
 Each Script's queued work.
 
@@ -246,7 +257,7 @@ Each Script's queued work.
 | --- | --- | --- |
 | work | `list of script work` | One per Script, in `scripts` order. |
 
-#### 9: waits (required)
+#### 10: waits (required)
 
 Every pending wait, with a deadline or not, in the order they were set.
 
@@ -254,7 +265,7 @@ Every pending wait, with a deadline or not, in the order they were set.
 | --- | --- | --- |
 | waits | `list of deadline wait` | Every Run's and Join Member's `pending`, in the order the waits were set. |
 
-#### 10: inputs (required)
+#### 11: inputs (required)
 
 The Host inputs queued for the next Pump.
 
@@ -262,7 +273,7 @@ The Host inputs queued for the next Pump.
 | --- | --- | --- |
 | inputs | `list of input` | In queue order. |
 
-#### 11: decisions (required)
+#### 12: decisions (required)
 
 Broadcast Decisions some recipient hasn't sealed, and those a variables-only restore left for the first Pump.
 
@@ -271,7 +282,7 @@ Broadcast Decisions some recipient hasn't sealed, and those a variables-only res
 | open | `list of open broadcast` | By Broadcast id, ascending. |
 | deferred | `list of deferred decision` | In the order they were deferred. |
 
-#### 12: accounting (required)
+#### 13: accounting (required)
 
 Run accounting: each root's discarded messages, and the roots whose work changed since the last report (chapter 9).
 
@@ -280,7 +291,7 @@ Run accounting: each root's discarded messages, and the roots whose work changed
 | discards | `list of root discards` | By root id, ascending. |
 | changed roots | `list of uint` | In the order they changed. |
 
-#### 13: sources (optional)
+#### 14: sources (optional)
 
 Each Script's base and extension sources, in an Embedded-source Snapshot.
 
@@ -305,7 +316,7 @@ A Script value. Text and Map values carry a mark byte: bit 0 for a core message,
 | 0 | nothing | Nothing. |  |
 | 1 | boolean | A Boolean. | value: `bool` |
 | 2 | number | A Number. | number: `decimal` |
-| 3 | quantity | A Quantity. | number: `decimal`; unit: `text` |
+| 3 | quantity | A Quantity. | number: `decimal`; unit: `name` |
 | 4 | text | A Text. | marks: `byte`; text: `text` |
 | 5 | bytes | A Bytes. | bytes: `bytes` |
 | 6 | list | A List. | items: `list of value` |
@@ -314,7 +325,7 @@ A Script value. Text and Map values carry a mark byte: bit 0 for a core message,
 | 9 | instant | An Instant. | instant: `instant` |
 | 10 | civil date | A civil date. | date: `civil date` |
 | 11 | pattern | A Text Pattern. | source: `text` |
-| 12 | function | A Function Value. | code: `ref`; display: `text`; home: `text`; captures: `value` |
+| 12 | function | A Function Value. | code: `ref`; display: `name`; home: `name`; captures: `value` |
 | 13 | object | A Host Object. | object: `index` |
 
 #### unit
@@ -326,7 +337,7 @@ Where a code unit is, relative to a Script.
 | 0 | own | The Script's own base unit. |  |
 | 1 | extension | One of the Script's extensions. | extension: `uint` |
 | 2 | library | A Library the Group holds. | library: `index` |
-| 3 | stdlib | A stdlib Library. | name: `text` |
+| 3 | stdlib | A stdlib Library. | name: `name` |
 
 #### slot
 
@@ -419,16 +430,16 @@ A queued Host input. A charge request in the queue refuses the save with `effect
 
 | Tag | Variant | Is | Then |
 | --- | --- | --- | --- |
-| 0 | settlement | A restored call's settlement, queued before the first Pump. | id: `text`; how: `byte`; with: `resume` |
-| 1 | deliver | A Delivery to a Script. | script: `text`; delivery: `delivery` |
+| 0 | settlement | A restored call's settlement, queued before the first Pump. | id: `name`; how: `byte`; with: `resume` |
+| 1 | deliver | A Delivery to a Script. | script: `name`; delivery: `delivery` |
 | 2 | set parent | `setParent`. | object: `ref`; parent: `ref` |
 | 3 | dispose | `dispose`. | object: `ref` |
-| 4 | settle | An answer or failure for a suspending call. | id: `text`; with: `resume` |
-| 5 | broadcast | A Broadcast or Broadcast Decision; its recipients are found as the queue drains. | id: `uint`; message: `text`; args: `list of value`; decision: `bool`; limits: `optional override` |
-| 6 | revoke | Revoking a Script's Grant. | script: `text`; grant: `text` |
-| 7 | cancel run | Cancelling a Run. | run: `text` |
-| 8 | rewind run | Rewinding a Run in its first Segment to its message. | run: `text` |
-| 9 | stop | Stopping a Script. | script: `text`; reason: `text` |
+| 4 | settle | An answer or failure for a suspending call. | id: `name`; with: `resume` |
+| 5 | broadcast | A Broadcast or Broadcast Decision; its recipients are found as the queue drains. | id: `uint`; message: `name`; args: `list of value`; decision: `bool`; limits: `optional override` |
+| 6 | revoke | Revoking a Script's Grant. | script: `name`; grant: `name` |
+| 7 | cancel run | Cancelling a Run. | run: `name` |
+| 8 | rewind run | Rewinding a Run in its first Segment to its message. | run: `name` |
+| 9 | stop | Stopping a Script. | script: `name`; reason: `name` |
 | 10 | cancel delivery | Cancelling a Delivery. | delivery: `uint` |
 | 11 | cancel broadcast | Cancelling a Broadcast. | broadcast: `uint` |
 
@@ -475,7 +486,7 @@ One Run's issued call numbers.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| run | `text` | The Run's id. |
+| run | `name` | The Run's id. |
 | ranges | `list of issued range` | Disjoint, ascending, and at least one. |
 
 #### issued range
@@ -494,8 +505,8 @@ A Library, by identity; the Host supplies its code on restore.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | Its name. |
-| version | `text` | Its version. |
+| name | `name` | Its name. |
+| version | `name` | Its version. |
 | identity | `digest` | Its code identity (chapter 9). |
 
 #### object
@@ -504,11 +515,11 @@ A Host Object.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| kind | `text` | Its Object Kind. |
-| id | `text` | Its id. |
+| kind | `name` | Its Object Kind. |
+| id | `name` | Its id. |
 | parent | `ref` | Its parent, in `objects`. |
 | disposed | `bool` | Whether it is disposed. |
-| owner of | `optional text` | The Script it owns, if it is a Script's owner. |
+| owner of | `optional name` | The Script it owns, if it is a Script's owner. |
 
 #### function
 
@@ -516,8 +527,8 @@ A Function Value's code. A stale one, whose home Script has since been reloaded,
 
 | Field | Type | Is |
 | --- | --- | --- |
-| home | `text` | Its home Script. |
-| name | `text` | Its name. |
+| home | `name` | Its home Script. |
+| name | `name` | Its name. |
 | required | `uint` | Its required parameter count. |
 | total | `uint` | Its total parameter count. |
 | unit | `digest` | The code identity of the unit that holds it. |
@@ -538,16 +549,16 @@ A Suspending Capability call a Run waits on.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| id | `text` | Its call id. |
-| script | `text` | The Script that made it. |
-| grant | `text` | The Grant it went through. |
-| run | `text` | The Run that made it. |
-| segment | `text` | The Segment it was made in. |
+| id | `name` | Its call id. |
+| script | `name` | The Script that made it. |
+| grant | `name` | The Grant it went through. |
+| run | `name` | The Run that made it. |
+| segment | `name` | The Segment it was made in. |
 | now | `instant` | The Clock reading it was made at. |
 | args | `list of value` | Its arguments. |
 | start | `bool` | Whether the Host's Operation took it with `start` rather than `run`, which decides whether the Host may Adopt it. A Core whose Host Operations have no `run` form, such as Zig's, writes true. |
 | charged | `uint` | The Fuel charged for it. |
-| at unit | `text` | The unit of its call site, where a refused reissue faults. |
+| at unit | `name` | The unit of its call site, where a refused reissue faults. |
 | at pc | `uint` | The call site's instruction. |
 | at line | `uint` | The call site's line. |
 | at column | `uint` | The call site's column. |
@@ -558,14 +569,14 @@ A Script, without its Runs, work or sources.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | Its name. |
+| name | `name` | Its name. |
 | identity | `digest` | Its base code identity. |
 | extensions | `list of digest` | Its extensions' code identities, in order. |
 | limits | `list of uint` | Its limits, in `limits.toml` order. |
 | grants | `list of grant` | Its Grants, in order. |
 | owner | `ref` | Its owner, in `objects`. |
 | objects | `list of named object` | Its named Host Objects, in order. |
-| variable names | `list of text` | Its Script Variables' names, in declaration order. |
+| variable names | `list of name` | Its Script Variables' names, in declaration order. |
 | variables | `list of value` | Its Script Variables' values, in the same order. |
 | definitions | `list of value` | Its base unit's definitions, then each extension's, in order. |
 | runs | `uint` | Its Run counter. |
@@ -573,7 +584,7 @@ A Script, without its Runs, work or sources.
 | alloc total | `uint` | Its total Allocation used. |
 | faults | `uint` | Its fault count. |
 | debt | `uint` | Its Fuel debt. |
-| stopped | `optional text` | Why it was stopped, if it was. |
+| stopped | `optional name` | Why it was stopped, if it was. |
 
 #### grant
 
@@ -581,12 +592,28 @@ A Script's Grant, with what a restore that can't re-bind it still needs to check
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | Its name. |
-| declarations | `text` | Its Capability and kept Operations as Host Manifest JSON (chapter 9). |
-| capability | `text` | Its Capability's name. |
-| operations | `list of operation` | Its kept Operations, in the Capability's order. |
+| name | `name` | Its name. |
+| declaration | `index` | Its declaration, in the `scripts` section's `declarations`. |
 | revoked | `bool` | Whether it is revoked. |
 | disabled | `bool` | Whether it is disabled. |
+
+#### grant declaration
+
+What a Grant declares, shared by every Grant that declares the same.
+
+| Field | Type | Is |
+| --- | --- | --- |
+| declarations | `text` | Its Capability and kept Operations as Host Manifest JSON (chapter 9). |
+| capability | `name` | Its Capability's name. |
+| operations | `list of operation` | Its kept Operations, in the Capability's order. |
+
+#### segment base
+
+The Script Variables a Segment started from, shared by every Run that started from the same.
+
+| Field | Type | Is |
+| --- | --- | --- |
+| variables | `list of value` | The Script Variables' values, in declaration order. |
 
 #### operation
 
@@ -594,12 +621,12 @@ An Operation's shape.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | Its name. |
-| mode | `text` | `immediate`, `suspending` or `fire-and-forget`. |
+| name | `name` | Its name. |
+| mode | `byte` | 0 for `immediate`, 1 for `suspending` and 2 for `fire-and-forget`. Any other byte is `invalid save`. |
 | required | `uint` | Its required argument count. |
 | args | `uint` | Its total argument count. |
 | command | `bool` | Whether it is a command. |
-| labels | `list of text` | Its argument labels. |
+| labels | `list of name` | Its argument labels. |
 
 #### named object
 
@@ -607,7 +634,7 @@ A Script's named Host Object.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| name | `text` | Its name. |
+| name | `name` | Its name. |
 | object | `ref` | The object, in `objects`. |
 
 #### script sources
@@ -625,13 +652,13 @@ A live Run.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| id | `text` | Its id. |
+| id | `name` | Its id. |
 | order | `uint` | Its place in the Group's Run order. |
 | reported fuel | `optional uint` | The Fuel last reported for it, if any was. |
 | fuel | `uint` | The Fuel it has used. |
 | alloc | `uint` | The Allocation it has used. |
 | delivery | `delivery` | The Delivery it handles. |
-| handler | `text` | The Handler it runs. |
+| handler | `name` | The Handler it runs. |
 | clause | `uint` | The Handler clause it runs. |
 | limits | `list of uint` | Its limits, in `limits.toml` order. |
 | clause fuel | `uint` | The Fuel used in its current clause. |
@@ -648,7 +675,7 @@ A live Run.
 | started | `bool` | Whether it has started. |
 | waiting | `optional pending` | Its wait, if it is suspended. |
 | resume with | `resume` | What it resumes with, if it is ready to resume. |
-| suspended at | `text` | Where it suspended, as its Trace shows. |
+| suspended at | `name` | Where it suspended, as its Trace shows. |
 | waited | `waited` | Its last wait. |
 | raised at | `optional position` | Where its current error was raised, if it has one. |
 | join | `optional join` | Its Join, if it is in one. |
@@ -656,11 +683,11 @@ A live Run.
 | fallback | `bool` | Whether it runs a fallback clause. |
 | select at | `optional uint` | The instruction its clause selection resumes at, if it is selecting. |
 | parked | `bool` | Whether it is parked. |
-| abandoned | `list of text` | The call ids it abandoned. |
+| abandoned | `list of name` | The call ids it abandoned. |
 | base | `uint` | Its Segment's base. |
 | segments | `uint` | How many Segments it has started. |
 | verdict | `bool` | Whether its Decision verdict is sealed. |
-| segment base | `optional list of value` | Its Segment's rollback base, if it has one. |
+| segment base | `ref` | Its Segment's rollback base, if it has one, in the `runs` section's `bases`. |
 | frames | `list of frame` | Its call frames, innermost last. |
 
 #### preemption
@@ -734,8 +761,8 @@ A Script error a call failed with.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| code | `text` | Its error code. |
-| message | `optional text` | Its message. |
+| code | `name` | Its error code. |
+| message | `optional name` | Its message. |
 | data | `optional value` | Its data. |
 
 #### waited
@@ -744,11 +771,11 @@ A Run's or Join Member's last wait.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| id | `text` | Its id. |
+| id | `name` | Its id. |
 | block | `bool` | Whether it was in a timeout block. |
 | call | `ref` | Its call, in `calls`. |
-| grant | `text` | Its call's Grant. |
-| operation | `text` | Its call's Operation. |
+| grant | `name` | Its call's Grant. |
+| operation | `name` | Its call's Operation. |
 | declared | `bool` | Whether the Operation was declared. |
 | after | `sint` | Its wait, in microseconds. |
 
@@ -758,12 +785,12 @@ A suspended wait: a Suspending Capability call, a `wait`, or a `wait for`.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| id | `text` | Its id. |
+| id | `name` | Its id. |
 | deadline | `optional sint` | Its deadline, in microseconds since the Unix epoch, if it has one: a suspending call without a `maxPending` or `MaxWait` deadline, or a `wait for` without a timeout or `after` branch, has none. |
 | order | `uint` | Its place in the deadline order. |
 | call | `ref` | Its call, in `calls`. |
-| grant | `text` | Its call's Grant. |
-| operation | `text` | Its call's Operation. |
+| grant | `name` | Its call's Grant. |
+| operation | `name` | Its call's Operation. |
 | declared | `bool` | Whether the Operation was declared. |
 | after | `sint` | Its wait, in microseconds. |
 | member | `ref` | Its Join Member, in the Run's `join`. |
@@ -824,11 +851,11 @@ A message on its way to a Script.
 | --- | --- | --- |
 | id | `uint` | Its Delivery id. |
 | root | `uint` | The root of its Message Path. |
-| message | `text` | Its message name. |
+| message | `name` | Its message name. |
 | args | `list of value` | Its arguments. |
 | request | `bool` | Whether its sender waits for a reply. |
 | during | `optional value` | The value it was sent during, if any. |
-| from | `optional text` | The Script that sent it, if a Script did. |
+| from | `optional name` | The Script that sent it, if a Script did. |
 | internal error | `bool` | Whether it reports an internal error. |
 | waits | `bool` | Whether its sender is waiting. |
 | target | `ref` | Its target, in `objects`. |
@@ -863,10 +890,10 @@ A Decision recipient's mark.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| script | `text` | The recipient Script. |
-| run | `text` | The recipient Run. |
+| script | `name` | The recipient Script. |
+| run | `name` | The recipient Run. |
 | reason | `optional value` | A veto's reason. |
-| outcome | `text` | Its outcome. |
+| outcome | `byte` | Its outcome: 0 for `vetoed`, 1 for `errored`, 2 for `limit fault`, 3 for `cancelled`, 4 for `dropped` and 5 for `stopped`. Any other byte is `invalid save`. |
 
 #### open broadcast
 
@@ -974,7 +1001,7 @@ A Map pair.
 
 | Field | Type | Is |
 | --- | --- | --- |
-| key | `text` | Its key. |
+| key | `name` | Its key. |
 | value | `value` | Its value. |
 
 <!-- end -->

@@ -50,7 +50,7 @@ export const skipValue = (r: SaveReader): void => {
   const work: boolean[] = [false];
   while (work.length) {
     if (work.pop()) {
-      r.text();
+      r.name();
     }
     switch (r.byte()) {
       case 0:
@@ -67,7 +67,7 @@ export const skipValue = (r: SaveReader): void => {
         r.bool();
         r.wideUint(128);
         r.sint();
-        r.text();
+        r.name();
         break;
       case 4:
         r.byte();
@@ -109,9 +109,10 @@ export const skipValue = (r: SaveReader): void => {
         r.text();
         break;
       case 12:
-        r.uint();
-        r.text();
-        r.text();
+        if (r.uint() === 0) {
+          r.name();
+        }
+        r.name();
         work.push(false);
         break;
       case 13:
@@ -139,7 +140,8 @@ type Open =
 export class ValueReader implements ValueIO<Value> {
   constructor(
     private objects: readonly ObjectState[],
-    private functions: number,
+    /** Each function's home, in `functions`. */
+    private homes: readonly string[],
     private makeFunction: FunctionMaker,
   ) {}
 
@@ -170,7 +172,7 @@ export class ValueReader implements ValueIO<Value> {
           case 'map':
             top.values.push(v);
             if (top.values.length < top.n) {
-              top.keys.push(r.text());
+              top.keys.push(r.name());
               v = undefined;
               continue;
             }
@@ -243,7 +245,7 @@ export class ValueReader implements ValueIO<Value> {
         return this.decimal(r);
       case 3: {
         const n = this.decimal(r);
-        const shown = r.text();
+        const shown = r.name();
         try {
           const v = quantityOf(n.asDecimal()!, parseUnit(shown));
           return v.toString() === `${n.toString()} ${shown}` ? v : invalid();
@@ -281,7 +283,7 @@ export class ValueReader implements ValueIO<Value> {
         if (n === 0) {
           return this.mapOf([], [], marks);
         }
-        stack.push({ k: 'map', n, marks, keys: [r.text()], values: [] });
+        stack.push({ k: 'map', n, marks, keys: [r.name()], values: [] });
         return undefined;
       }
       case 8:
@@ -318,9 +320,10 @@ export class ValueReader implements ValueIO<Value> {
       case 11:
         return patternOf(r.text());
       case 12: {
-        const code = r.ref(this.functions);
-        const display = r.text();
-        const home = r.text();
+        const code = r.ref(this.homes.length);
+        const display = r.name();
+        // A value with code takes its home from it.
+        const home = code === undefined ? r.name() : this.homes[code]!;
         stack.push({ k: 'function', code, display, home });
         return undefined;
       }

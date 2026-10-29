@@ -422,6 +422,60 @@ const inputTags = [
  * Writes records' fields. One per save: shared internal values are written
  * in full once, then by their place.
  */
+const latin1 = new TextDecoder('latin1');
+
+/** An Operation's modes, by their byte. */
+const modes = ['immediate', 'suspending', 'fire-and-forget'];
+/** A Mark's outcomes, by their byte. */
+const outcomes = [
+  'vetoed',
+  'errored',
+  'limit fault',
+  'cancelled',
+  'dropped',
+  'stopped',
+];
+const enumByte = (vocabulary: readonly string[], s: string) => {
+  const b = vocabulary.indexOf(s);
+  if (b < 0) {
+    throw new Error(`Not in the save format's vocabulary: ${s}`);
+  }
+  return b;
+};
+const modeByte = (mode: string) => enumByte(modes, mode);
+const outcomeByte = (outcome: string) => enumByte(outcomes, outcome);
+
+/**
+ * A table of entries, each written once: an entry whose bytes equal an
+ * earlier one's is that one. Returns each item's index and writes the table.
+ */
+const shared = <T>(
+  w: SaveWriter,
+  items: readonly T[],
+  encode: (w: SaveWriter, item: T) => void,
+): number[] => {
+  const seen = new Map<string, number>();
+  const entries: Uint8Array[] = [];
+  const at = items.map(item => {
+    const e = new SaveWriter(w.names);
+    encode(e, item);
+    const bytes = e.finish();
+    const key = latin1.decode(bytes);
+    let i = seen.get(key);
+    if (i === undefined) {
+      i = entries.length;
+      seen.set(key, i);
+      entries.push(bytes);
+    }
+    return i;
+  });
+  w.uint(entries.length);
+  for (const e of entries) {
+    w.raw(e);
+  }
+  return at;
+};
+
 export class RecordWriter<V> {
   private iterators = new Map<object, number>();
   private readers = new Map<object, number>();
@@ -440,6 +494,9 @@ export class RecordWriter<V> {
   }
   optValue(v: V | undefined) {
     this.w.optional(v, (_, x) => this.value(x));
+  }
+  optName(s: string | undefined) {
+    this.w.optional(s, (w, x) => w.name(x));
   }
   optText(s: string | undefined) {
     this.w.optional(s, (w, x) => w.text(x));
@@ -464,7 +521,7 @@ export class RecordWriter<V> {
         w.byte(2).index(u.library);
         break;
       case 'stdlib':
-        w.byte(3).text(u.name);
+        w.byte(3).name(u.name);
         break;
     }
   }
@@ -488,11 +545,11 @@ export class RecordWriter<V> {
 
   delivery(d: DeliveryRecord<V>) {
     const w = this.w;
-    w.uint(d.id).uint(d.root).text(d.message);
+    w.uint(d.id).uint(d.root).name(d.message);
     this.list(d.args);
     w.bool(d.request);
     this.optValue(d.during);
-    this.optText(d.from);
+    this.optName(d.from);
     w.bool(d.internalError).bool(d.waits).ref(d.target).ref(d.at);
     this.optValue(d.function);
     w.bool(d.decision).bool(d.decides).uint(d.broadcast);
@@ -627,8 +684,8 @@ export class RecordWriter<V> {
         w.uint(r.fuel);
         break;
       case 'failed':
-        w.text(r.failure.code);
-        this.optText(r.failure.message);
+        w.name(r.failure.code);
+        this.optName(r.failure.message);
         this.optValue(r.failure.data);
         break;
       case 'broken':
@@ -654,11 +711,11 @@ export class RecordWriter<V> {
 
   waited(x: WaitedRecord) {
     this.w
-      .text(x.id)
+      .name(x.id)
       .bool(x.block)
       .ref(x.call)
-      .text(x.grant)
-      .text(x.operation)
+      .name(x.grant)
+      .name(x.operation)
       .bool(x.declared)
       .wideSint(x.after);
   }
@@ -669,12 +726,12 @@ export class RecordWriter<V> {
     if (!p) {
       return;
     }
-    w.text(p.id);
+    w.name(p.id);
     w.optional(p.deadline, (w, d) => w.wideSint(d));
     w.uint(p.order)
       .ref(p.call)
-      .text(p.grant)
-      .text(p.operation)
+      .name(p.grant)
+      .name(p.operation)
       .bool(p.declared)
       .wideSint(p.after)
       .ref(p.member)
@@ -695,13 +752,13 @@ export class RecordWriter<V> {
     });
   }
 
-  run(r: RunRecord<V>) {
+  run(r: RunRecord<V>, base: number | undefined) {
     const w = this.w;
-    w.text(r.id).uint(r.order);
+    w.name(r.id).uint(r.order);
     this.optUint(r.reportedFuel);
     w.uint(r.fuel).uint(r.alloc);
     this.delivery(r.delivery);
-    w.text(r.handler).uint(r.clause);
+    w.name(r.handler).uint(r.clause);
     this.limits(r.limits);
     w.uint(r.clauseFuel);
     w.optional(r.preemptedIn, (w, p) => {
@@ -721,7 +778,7 @@ export class RecordWriter<V> {
       .bool(r.started);
     this.pending(r.waiting);
     this.resume(r.resumeWith);
-    w.text(r.suspendedAt);
+    w.name(r.suspendedAt);
     this.waited(r.waited);
     w.optional(r.raisedAt, (w, p) => w.uint(p.line).uint(p.column));
     w.optional(r.join, (w, j) => {
@@ -738,16 +795,16 @@ export class RecordWriter<V> {
     w.bool(r.fallback);
     this.optUint(r.selectAt);
     w.bool(r.parked);
-    w.list(r.abandoned, (w, id) => w.text(id));
+    w.list(r.abandoned, (w, id) => w.name(id));
     w.uint(r.base).uint(r.segments).bool(r.verdict);
-    w.optional(r.segmentBase, (_, b) => this.list(b));
+    w.ref(base);
     this.frames(r.frames);
   }
 
   mark(m: Mark<V>) {
-    this.w.text(m.script).text(m.run);
+    this.w.name(m.script).name(m.run);
     this.optValue(m.reason);
-    this.w.text(m.outcome);
+    this.w.byte(outcomeByte(m.outcome));
   }
 
   input(x: Input<V>) {
@@ -755,11 +812,11 @@ export class RecordWriter<V> {
     w.byte(inputTags.indexOf(x.k));
     switch (x.k) {
       case 'settlement':
-        w.text(x.id).byte(x.how);
+        w.name(x.id).byte(x.how);
         this.resume(x.with);
         break;
       case 'deliver':
-        w.text(x.script);
+        w.name(x.script);
         this.delivery(x.delivery);
         break;
       case 'set parent':
@@ -769,24 +826,24 @@ export class RecordWriter<V> {
         w.ref(x.object);
         break;
       case 'settle':
-        w.text(x.id);
+        w.name(x.id);
         this.resume(x.with);
         break;
       case 'broadcast':
-        w.uint(x.id).text(x.message);
+        w.uint(x.id).name(x.message);
         this.list(x.args);
         w.bool(x.decision);
         this.override(x.limits);
         break;
       case 'revoke':
-        w.text(x.script).text(x.grant);
+        w.name(x.script).name(x.grant);
         break;
       case 'cancel run':
       case 'rewind run':
-        w.text(x.run);
+        w.name(x.run);
         break;
       case 'stop':
-        w.text(x.script).text(x.reason);
+        w.name(x.script).name(x.reason);
         break;
       case 'cancel delivery':
         w.uint(x.delivery);
@@ -811,7 +868,7 @@ export class RecordWriter<V> {
       .uint(g.randomState);
     w.list(g.issued, (w, x) =>
       w
-        .text(x.run)
+        .name(x.run)
         .list(x.ranges, (w, r) =>
           w.uint(r.first).uint(r.last).bool(r.eligible),
         ),
@@ -820,32 +877,32 @@ export class RecordWriter<V> {
 
   libraries(ls: readonly LibraryRecord[]) {
     this.w.list(ls, (w, l) =>
-      w.text(l.name).text(l.version).digest(l.identity),
+      w.name(l.name).name(l.version).digest(l.identity),
     );
   }
 
   objects(os: readonly ObjectRecord[]) {
     this.w.list(os, (w, o) => {
-      w.text(o.kind).text(o.id).ref(o.parent).bool(o.disposed);
-      this.optText(o.ownerOf);
+      w.name(o.kind).name(o.id).ref(o.parent).bool(o.disposed);
+      this.optName(o.ownerOf);
     });
   }
 
   functions(fs: readonly FunctionRecord[]) {
     this.w.list(fs, (w, f) => {
-      w.text(f.home).text(f.name).uint(f.required).uint(f.total).digest(f.unit);
+      w.name(f.home).name(f.name).uint(f.required).uint(f.total).digest(f.unit);
       w.optional(f.body, (_, p) => this.position(p));
     });
   }
 
   calls(cs: readonly CallRecord<V>[]) {
     this.w.list(cs, (w, c) => {
-      w.text(c.id).text(c.script).text(c.grant).text(c.run).text(c.segment);
+      w.name(c.id).name(c.script).name(c.grant).name(c.run).name(c.segment);
       this.instant(c.now);
       this.list(c.args);
       w.bool(c.start)
         .uint(c.charged)
-        .text(c.atUnit)
+        .name(c.atUnit)
         .uint(c.atPc)
         .uint(c.atLine)
         .uint(c.atColumn);
@@ -853,26 +910,34 @@ export class RecordWriter<V> {
   }
 
   scripts(ss: readonly ScriptRecord<V>[]) {
-    this.w.list(ss, (w, s) => {
-      w.text(s.name).digest(s.identity);
-      w.list(s.extensions, (w, e) => w.digest(e));
-      this.limits(s.limits);
-      w.list(s.grants, (w, g) => {
-        w.text(g.name).text(g.declarations).text(g.capability);
+    const declarations = shared(
+      this.w,
+      ss.flatMap(s => s.grants),
+      (w, g) => {
+        w.text(g.declarations).name(g.capability);
         w.list(g.operations, (w, op) =>
           w
-            .text(op.name)
-            .text(op.mode)
+            .name(op.name)
+            .byte(modeByte(op.mode))
             .uint(op.required)
             .uint(op.args)
             .bool(op.command)
-            .list(op.labels, (w, l) => w.text(l)),
+            .list(op.labels, (w, l) => w.name(l)),
         );
+      },
+    );
+    let next = 0;
+    this.w.list(ss, (w, s) => {
+      w.name(s.name).digest(s.identity);
+      w.list(s.extensions, (w, e) => w.digest(e));
+      this.limits(s.limits);
+      w.list(s.grants, (w, g) => {
+        w.name(g.name).index(declarations[next++]!);
         w.bool(g.revoked).bool(g.disabled);
       });
       w.ref(s.owner);
-      w.list(s.objects, (w, o) => w.text(o.name).ref(o.object));
-      w.list(s.variableNames, (w, n) => w.text(n));
+      w.list(s.objects, (w, o) => w.name(o.name).ref(o.object));
+      w.list(s.variableNames, (w, n) => w.name(n));
       this.list(s.variables);
       this.list(s.definitions);
       w.uint(s.runs)
@@ -880,15 +945,21 @@ export class RecordWriter<V> {
         .uint(s.allocTotal)
         .uint(s.faults)
         .uint(s.debt);
-      this.optText(s.stopped);
+      this.optName(s.stopped);
     });
   }
 
   runs(perScript: readonly number[], runs: readonly RunRecord<V>[]) {
     this.w.list(perScript, (w, n) => w.uint(n));
+    // Writing a repeated base meets no new Function Value.
+    const withBase = runs.filter(r => r.segmentBase !== undefined);
+    const at = shared(this.w, withBase, (w, r) =>
+      w.list(r.segmentBase!, (w, v) => this.values.write(w, v)),
+    );
+    const bases = new Map(withBase.map((r, i) => [r, at[i]!]));
     this.w.uint(runs.length);
     for (const r of runs) {
-      this.run(r);
+      this.run(r, bases.get(r));
     }
   }
 
@@ -982,6 +1053,9 @@ export class RecordReader<V> {
     readonly tables: Tables,
   ) {}
 
+  /** The `runs` section's segment bases, each read once. */
+  private bases: V[][] = [];
+
   value(): V {
     return this.values.read(this.r);
   }
@@ -990,6 +1064,9 @@ export class RecordReader<V> {
   }
   optValue(): V | undefined {
     return this.r.optional(() => this.value());
+  }
+  optName(): string | undefined {
+    return this.r.optional(r => r.name());
   }
   optText(): string | undefined {
     return this.r.optional(r => r.text());
@@ -1016,7 +1093,7 @@ export class RecordReader<V> {
       case 2:
         return { k: 'library', library: r.index(this.tables.libraries) };
       case 3:
-        return { k: 'stdlib', name: r.text() };
+        return { k: 'stdlib', name: r.name() };
       default:
         return invalid();
     }
@@ -1041,11 +1118,11 @@ export class RecordReader<V> {
     return {
       id: r.uint(),
       root: r.uint(),
-      message: r.text(),
+      message: r.name(),
       args: this.list(),
       request: r.bool(),
       during: this.optValue(),
-      from: this.optText(),
+      from: this.optName(),
       internalError: r.bool(),
       waits: r.bool(),
       target: this.object(),
@@ -1235,8 +1312,8 @@ export class RecordReader<V> {
         return {
           k,
           failure: {
-            code: r.text(),
-            message: this.optText(),
+            code: r.name(),
+            message: this.optName(),
             data: this.optValue(),
           },
         };
@@ -1263,11 +1340,11 @@ export class RecordReader<V> {
   waited(): WaitedRecord {
     const r = this.r;
     return {
-      id: r.text(),
+      id: r.name(),
       block: r.bool(),
       call: r.ref(this.tables.calls),
-      grant: r.text(),
-      operation: r.text(),
+      grant: r.name(),
+      operation: r.name(),
       declared: r.bool(),
       after: r.wideSint(140),
     };
@@ -1279,12 +1356,12 @@ export class RecordReader<V> {
       return undefined;
     }
     return {
-      id: r.text(),
+      id: r.name(),
       deadline: r.optional(r => r.wideSint(140)),
       order: r.uint(),
       call: r.ref(this.tables.calls),
-      grant: r.text(),
-      operation: r.text(),
+      grant: r.name(),
+      operation: r.name(),
       declared: r.bool(),
       after: r.wideSint(140),
       member: r.ref(Number.MAX_SAFE_INTEGER),
@@ -1314,13 +1391,13 @@ export class RecordReader<V> {
 
   run(): RunRecord<V> {
     const r = this.r;
-    const id = r.text();
+    const id = r.name();
     const order = r.uint();
     const reportedFuel = this.optUint();
     const fuel = r.uint();
     const alloc = r.uint();
     const delivery = this.delivery();
-    const handler = r.text();
+    const handler = r.name();
     const clause = r.uint();
     const limits = this.limits();
     const clauseFuel = r.uint();
@@ -1340,7 +1417,7 @@ export class RecordReader<V> {
     const started = r.bool();
     const waiting = this.pending();
     const resumeWith = this.resume();
-    const suspendedAt = r.text();
+    const suspendedAt = r.name();
     const waited = this.waited();
     const raisedAt = r.optional(r => ({ line: r.uint(), column: r.uint() }));
     const join = r.optional(() => ({
@@ -1359,11 +1436,12 @@ export class RecordReader<V> {
     const fallback = r.bool();
     const selectAt = this.optUint();
     const parked = r.bool();
-    const abandoned = r.list(r => r.text());
+    const abandoned = r.list(r => r.name());
     const base = r.uint();
     const segments = r.uint();
     const verdict = r.bool();
-    const segmentBase = r.optional(() => this.list());
+    const at = r.ref(this.bases.length);
+    const segmentBase = at === undefined ? undefined : this.bases[at];
     const frames = this.frames();
     return {
       id,
@@ -1409,10 +1487,10 @@ export class RecordReader<V> {
   mark(): Mark<V> {
     const r = this.r;
     return {
-      script: r.text(),
-      run: r.text(),
+      script: r.name(),
+      run: r.name(),
       reason: this.optValue(),
-      outcome: r.text(),
+      outcome: outcomes[r.enumByte(outcomes.length)]!,
     };
   }
 
@@ -1421,34 +1499,34 @@ export class RecordReader<V> {
     const k = inputTags[r.byte()] ?? invalid();
     switch (k) {
       case 'settlement': {
-        const id = r.text();
+        const id = r.name();
         const how = r.byte();
         return how > 3 ? invalid() : { k, id, how, with: this.resume() };
       }
       case 'deliver':
-        return { k, script: r.text(), delivery: this.delivery() };
+        return { k, script: r.name(), delivery: this.delivery() };
       case 'set parent':
         return { k, object: this.object(), parent: this.object() };
       case 'dispose':
         return { k, object: this.object() };
       case 'settle':
-        return { k, id: r.text(), with: this.resume() };
+        return { k, id: r.name(), with: this.resume() };
       case 'broadcast':
         return {
           k,
           id: r.uint(),
-          message: r.text(),
+          message: r.name(),
           args: this.list(),
           decision: r.bool(),
           limits: this.override(),
         };
       case 'revoke':
-        return { k, script: r.text(), grant: r.text() };
+        return { k, script: r.name(), grant: r.name() };
       case 'cancel run':
       case 'rewind run':
-        return { k, run: r.text() };
+        return { k, run: r.name() };
       case 'stop':
-        return { k, script: r.text(), reason: r.text() };
+        return { k, script: r.name(), reason: r.name() };
       case 'cancel delivery':
         return { k, delivery: r.uint() };
       case 'cancel broadcast':
@@ -1470,7 +1548,7 @@ export class RecordReader<V> {
       chargeCounter: r.uint(),
       randomState: r.bigUint(),
       issued: r.list(r => ({
-        run: r.text(),
+        run: r.name(),
         ranges: r.list(r => ({
           first: r.uint(),
           last: r.uint(),
@@ -1482,8 +1560,8 @@ export class RecordReader<V> {
 
   libraries(): LibraryRecord[] {
     return this.r.list(r => ({
-      name: r.text(),
-      version: r.text(),
+      name: r.name(),
+      version: r.name(),
       identity: r.digest(),
     }));
   }
@@ -1495,11 +1573,11 @@ export class RecordReader<V> {
     const out: ObjectRecord[] = [];
     for (let i = 0; i < n; i++) {
       out.push({
-        kind: r.text(),
-        id: r.text(),
+        kind: r.name(),
+        id: r.name(),
         parent: r.ref(n),
         disposed: r.bool(),
-        ownerOf: this.optText(),
+        ownerOf: this.optName(),
       });
     }
     return out;
@@ -1507,8 +1585,8 @@ export class RecordReader<V> {
 
   functions(): FunctionRecord[] {
     return this.r.list(r => ({
-      home: r.text(),
-      name: r.text(),
+      home: r.name(),
+      name: r.name(),
       required: r.uint(),
       total: r.uint(),
       unit: r.digest(),
@@ -1518,16 +1596,16 @@ export class RecordReader<V> {
 
   calls(): CallRecord<V>[] {
     return this.r.list(r => ({
-      id: r.text(),
-      script: r.text(),
-      grant: r.text(),
-      run: r.text(),
-      segment: r.text(),
+      id: r.name(),
+      script: r.name(),
+      grant: r.name(),
+      run: r.name(),
+      segment: r.name(),
       now: this.instant(),
       args: this.list(),
       start: r.bool(),
       charged: r.uint(),
-      atUnit: r.text(),
+      atUnit: r.name(),
       atPc: r.uint(),
       atLine: r.uint(),
       atColumn: r.uint(),
@@ -1535,29 +1613,32 @@ export class RecordReader<V> {
   }
 
   scripts(): ScriptRecord<V>[] {
+    const declarations = this.r.list(r => ({
+      declarations: r.text(),
+      capability: r.name(),
+      operations: r.list(r => ({
+        name: r.name(),
+        mode: modes[r.enumByte(modes.length)]!,
+        required: r.uint(),
+        args: r.uint(),
+        command: r.bool(),
+        labels: r.list(r => r.name()),
+      })),
+    }));
     return this.r.list(r => ({
-      name: r.text(),
+      name: r.name(),
       identity: r.digest(),
       extensions: r.list(r => r.digest()),
       limits: this.limits(),
       grants: r.list(r => ({
-        name: r.text(),
-        declarations: r.text(),
-        capability: r.text(),
-        operations: r.list(r => ({
-          name: r.text(),
-          mode: r.text(),
-          required: r.uint(),
-          args: r.uint(),
-          command: r.bool(),
-          labels: r.list(r => r.text()),
-        })),
+        name: r.name(),
+        ...declarations[r.index(declarations.length)]!,
         revoked: r.bool(),
         disabled: r.bool(),
       })),
       owner: this.object(),
-      objects: r.list(r => ({ name: r.text(), object: this.object() })),
-      variableNames: r.list(r => r.text()),
+      objects: r.list(r => ({ name: r.name(), object: this.object() })),
+      variableNames: r.list(r => r.name()),
       variables: this.list(),
       definitions: this.list(),
       runs: r.uint(),
@@ -1565,12 +1646,13 @@ export class RecordReader<V> {
       allocTotal: r.uint(),
       faults: r.uint(),
       debt: r.uint(),
-      stopped: this.optText(),
+      stopped: this.optName(),
     }));
   }
 
   runs(): { perScript: number[]; runs: RunRecord<V>[] } {
     const perScript = this.r.list(r => r.uint());
+    this.bases = this.r.list(() => this.list());
     const runs = this.r.list(() => this.run());
     return { perScript, runs };
   }

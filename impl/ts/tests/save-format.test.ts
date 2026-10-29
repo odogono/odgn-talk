@@ -145,7 +145,7 @@ describe('frames', () => {
     const read = readSave(zigSave);
     expect(read.language).toBe('1.0-rc.3');
     expect(read.sections.map(s => s.tag)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
     ]);
     expect(read.body(saveSections.sources)).toBeDefined();
     expect(toHex(writeSave(read, read.sections))).toBe(toHex(zigSave));
