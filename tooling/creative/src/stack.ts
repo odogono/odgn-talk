@@ -23,7 +23,6 @@ import {
   ELEMENT_KINDS,
   hasBorder,
   isTextAlign,
-  type Element,
   type ElementKind,
   type Page,
   type Project,
@@ -37,9 +36,9 @@ import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
+import { createElement } from 'preact';
 import { byId, h, isTyping } from './dom';
-import { renderRichText } from './rich-text-dom';
-import { paintCanvas } from './canvas-view';
+import { ElementView, renderElements } from './element-view';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
@@ -57,115 +56,6 @@ const KIND_ICONS: Record<ElementKind, string> = {
   group: '▱',
 };
 
-const SVG = 'http://www.w3.org/2000/svg';
-
-/** An Element as the reader would see it, positioned in design pixels. */
-export const renderElement = (
-  element: DeepReadonly<Element>,
-  imageUrl?: string,
-  /** False when the caller repaints an existing Canvas itself. */
-  paint = true,
-): HTMLElement => {
-  const node = h('div', {
-    class: `el ${element.kind}${element.visible ? '' : ' hidden'}`,
-    'data-element': element.name,
-  });
-  Object.assign(node.style, {
-    left: `${element.left}px`,
-    top: `${element.top}px`,
-    width: `${element.width}px`,
-    height: `${element.height}px`,
-  });
-  switch (element.kind) {
-    case 'group':
-      node.title = element.name;
-      if (!element.members.length) {
-        node.classList.add('empty-group');
-      }
-      break;
-    case 'text':
-      Object.assign(node.style, {
-        color: element.textColor,
-        fontFamily: element.font,
-        fontSize: `${element.textSize}px`,
-      });
-      renderRichText(node, element.richText);
-      break;
-    case 'image':
-      if (imageUrl) {
-        node.append(
-          h('img', { src: imageUrl, alt: element.image, draggable: 'false' }),
-        );
-        node.addEventListener('contextmenu', event => event.preventDefault());
-      } else {
-        node.append(
-          h(
-            'span',
-            {},
-            element.image ? `Missing image: ${element.image}` : 'Image',
-          ),
-          h(
-            'button',
-            { type: 'button', 'data-replace-image': element.name },
-            'Replace…',
-          ),
-        );
-      }
-      break;
-    case 'button':
-      node.classList.add(`button-${element.style}`);
-      Object.assign(node.style, {
-        background:
-          element.style === 'transparent' ? 'transparent' : element.fill,
-        color: element.textColor,
-        fontFamily: element.font,
-        fontSize: `${element.textSize}px`,
-      });
-      node.append(h('span', { class: 'button-label' }, element.label));
-      break;
-    case 'rectangle':
-    case 'ellipse':
-      Object.assign(node.style, {
-        background: element.fill,
-        borderColor: element.stroke,
-        borderWidth: `${element.thickness}px`,
-      });
-      break;
-    case 'canvas': {
-      node.style.background = element.fill;
-      const canvas = h('canvas', {});
-      node.append(canvas);
-      if (paint) {
-        paintCanvas(canvas, element);
-      }
-      break;
-    }
-    case 'line': {
-      const svg = document.createElementNS(SVG, 'svg');
-      svg.setAttribute('width', '1');
-      svg.setAttribute('height', '1');
-      for (const width of [
-        Math.max(12, element.thickness),
-        element.thickness,
-      ]) {
-        const line = document.createElementNS(SVG, 'line');
-        line.setAttribute('x1', '0');
-        line.setAttribute('y1', '0');
-        line.setAttribute('x2', String(element.width));
-        line.setAttribute('y2', String(element.height));
-        line.setAttribute('stroke', element.stroke);
-        line.setAttribute('stroke-width', String(width));
-        svg.append(line);
-      }
-      // The first, wider line is transparent: it makes a thin line easy to grab.
-      svg.firstElementChild!.setAttribute('class', 'hit');
-      node.append(svg);
-      break;
-    }
-  }
-  return node;
-};
-
 /** A Page at design size, unscaled. */
 const renderPage = (
   page: DeepReadonly<Page>,
@@ -173,19 +63,23 @@ const renderPage = (
   into: HTMLElement,
   assets: DeepReadonly<Asset[]>,
   images: ImageAssets,
+  selected: ReadonlySet<string> = new Set(),
 ) => {
   const visibility = elementVisibility(page.elements);
-  into.replaceChildren(
-    ...allElements(page.elements).map(element => {
-      const node = renderElement(
+  renderElements(
+    into,
+    allElements(page.elements).map(element =>
+      createElement(ElementView, {
+        key: element.id,
         element,
-        element.kind === 'image'
-          ? images.url(assets.find(a => a.name === element.image))
-          : undefined,
-      );
-      node.classList.toggle('hidden', !visibility.get(element.name));
-      return node;
-    }),
+        className: selected.has(element.name) ? 'selected' : '',
+        hidden: !visibility.get(element.name),
+        imageUrl:
+          element.kind === 'image'
+            ? images.url(assets.find(a => a.name === element.image))
+            : undefined,
+      }),
+    ),
   );
   Object.assign(into.style, {
     width: `${designWidth}px`,
@@ -398,14 +292,16 @@ export const mountStack = (
   };
 
   const drawPage = () => {
+    const selected = editor.selected;
     renderPage(
       editor.page,
       editor.project.designWidth,
       pageNode,
       editor.project.assets,
       images,
+      new Set(selected.map(element => element.name)),
     );
-    const selected = editor.selected;
+    pageNode.querySelector(':scope > .handles')?.remove();
     stage.querySelector('.page-handles')?.remove();
     if (!selected.length && !editor.scope.length && !editor.readOnly) {
       stage.append(
@@ -429,11 +325,6 @@ export const mountStack = (
           }),
         ),
       );
-    }
-    for (const element of selected) {
-      pageNode
-        .querySelector(`[data-element="${CSS.escape(element.name)}"]`)
-        ?.classList.add('selected');
     }
     const [single] = selected;
     if (

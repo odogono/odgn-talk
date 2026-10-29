@@ -274,6 +274,15 @@ export const runBrowserTests = async () => {
         pictured.dispatchEvent(
           new PointerEvent('pointerup', { bubbles: true }),
         );
+        // A press on a label and its release must land on the same node, so
+        // a write elsewhere on the Page keeps unchanged labels in place.
+        const label = element('rounded', true).querySelector('.button-label');
+        invisible.click();
+        await until(() => output() === 'click 4');
+        assert(
+          element('rounded', true).querySelector('.button-label') === label,
+          'An unchanged button keeps its label node',
+        );
         const changing = element('rounded', true);
         changing.click();
         await until(() => changing.classList.contains('button-transparent'));

@@ -1,5 +1,7 @@
 # Folio's editor state is an immutable value observed through signals, and its panels are Preact components
 
+Revised by [ADR 0146](0146-folio-elements-render-through-preact.md): Elements, on the desk and in Play, are now a Preact component; only rich text, Canvas pixels, gestures and CodeMirror stay as direct DOM.
+
 Narrowed by the [ADR 0118](0118-folio-projects-own-their-libraries-as-independent-source-copies.md): one Code Browser replaces separate Script windows, retaining source identities and a Preact outline alongside its CodeMirror editor.
 
 Superseded in part by [ADR 0106](0106-folio-edit-and-play-share-a-mutable-project-tree.md): Edit and Play now own persistent mutable trees with readonly live views, explicit change notifications and forward/inverse history. The Preact/direct-DOM split and stable-ID policy below stand. Folio no longer depends on Immer; views use the local `DeepReadonly` type (#1231).

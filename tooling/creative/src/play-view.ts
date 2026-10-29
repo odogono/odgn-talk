@@ -27,8 +27,9 @@ import {
   scriptPage,
 } from './script-manifest';
 import { browserSoundBackend } from './sounds';
-import { paintCanvas } from './canvas-view';
-import { renderElement, type PlayMode, type StackShell } from './stack';
+import { createElement, type HTMLAttributes } from 'preact';
+import { ElementView, renderElements } from './element-view';
+import { type PlayMode, type StackShell } from './stack';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { isPlayKey } from './shortcuts';
 import { InPlaceTextEditor } from './text-editor';
@@ -404,7 +405,6 @@ export const mountPlay = (shell: StackShell): void => {
     }
     heldKeys.clear();
   };
-  const renderedElements = new WeakMap<HTMLElement, Element>();
   const histories = new Map<TextElement, ReaderTextHistory>();
   const closeText = () => {
     const editor = activeText;
@@ -497,150 +497,129 @@ export const mountPlay = (shell: StackShell): void => {
     ) {
       closeText();
     }
-    for (const node of pageNode.querySelectorAll<HTMLElement>(
-      '[data-element]',
-    )) {
-      if (!play.elementsOf().includes(renderedElements.get(node)!)) {
-        node.remove();
-      }
-    }
-    let renderIndex = 0;
-    for (const element of play.elementsOf()) {
-      if (element.kind === 'group') {
-        continue;
-      }
-      if (
-        activeText?.history.element === element &&
-        (play.stopped ||
-          play.navigating ||
-          !play.isVisible(element) ||
-          !element.editable)
-      ) {
-        closeText();
-      }
-      const send = (name: 'pointerEnter' | 'pointerLeave') =>
-        sendTo(element, name);
-      const existing = pageNode.querySelector<HTMLElement>(
-        `[data-element="${CSS.escape(element.name)}"]`,
-      );
-      const fresh = renderElement(
-        element,
-        element.kind === 'image'
-          ? shell.images.url(
-              playing!.assets.find(a => a.name === element.image),
-            )
-          : undefined,
-        !existing,
-      );
-      fresh.hidden = !play.isVisible(element);
-      fresh.querySelector('[data-replace-image]')?.remove();
-      // Keep the reader's focus, selection and IME intact across other writes.
-      if (existing) {
-        existing.className = fresh.className;
-        if (activeText?.node === existing) {
-          existing.classList.add('text-editing');
-        }
-        existing.style.cssText = fresh.style.cssText;
-        existing.hidden = fresh.hidden;
-        const canvas = existing.querySelector('canvas');
-        if (element.kind === 'canvas' && canvas) {
-          // Keep the painted Canvas so a growing Drawing paints only its additions.
-          paintCanvas(canvas, element);
-        } else if (
-          element.kind !== 'text' ||
-          existing.dataset.renderedRichText !== JSON.stringify(element.richText)
-        ) {
-          if (activeText?.node === existing) {
-            activeText.refresh();
-          } else {
-            existing.replaceChildren(...fresh.childNodes);
-          }
-        }
-      } else {
-        renderedElements.set(fresh, element);
-        pageNode.append(fresh);
-        fresh.addEventListener('pointerenter', event => {
-          if (event.pointerType !== 'touch') {
-            send('pointerEnter');
-          }
-        });
-        fresh.addEventListener('pointerleave', event => {
-          if (press?.node === fresh) {
-            endPress();
-          }
-          if (event.pointerType !== 'touch') {
-            send('pointerLeave');
-          }
-        });
-        fresh.addEventListener('pointerdown', event => {
+    renderElements(
+      pageNode,
+      play
+        .elementsOf()
+        .filter(element => element.kind !== 'group')
+        .map(element => {
           if (
-            event.button === 0 &&
-            event.isPrimary &&
-            session?.heldElements.has(element.name)
+            activeText?.history.element === element &&
+            (play.stopped ||
+              play.navigating ||
+              !play.isVisible(element) ||
+              !element.editable)
           ) {
-            startPress(element, fresh, event);
-          }
-        });
-        fresh.addEventListener('pointerup', endPress);
-        fresh.addEventListener('pointercancel', endPress);
-        const click = (event: MouseEvent) => {
-          const touch = 'pointerType' in event && event.pointerType === 'touch';
-          if (touch) {
-            send('pointerEnter');
-          }
-          sendTo(element, 'click', [clickAt(fresh, event)]);
-          if (touch) {
-            send('pointerLeave');
-          }
-        };
-        // Middle and secondary buttons arrive as `auxclick`, not `click`.
-        fresh.addEventListener('auxclick', event => {
-          if (event.button === 1 || event.button === 2) {
-            click(event);
-          }
-        });
-        fresh.addEventListener('click', event => {
-          click(event);
-          // A pointer click leaves the keys with the Page, as games expect.
-          if (event.detail > 0 && element.kind === 'button') {
-            reader.focus();
-          }
-        });
-        fresh.addEventListener('focus', () => {
-          if (element.kind === 'text') {
-            openText(fresh, element);
-          }
-        });
-        fresh.addEventListener('blur', event => {
-          if (!toolbar.contains(event.relatedTarget as Node | null)) {
             closeText();
           }
-        });
-      }
-      const node = existing ?? fresh;
-      // Append existing nodes too: structural changes must update DOM layer order.
-      if (pageNode.children[renderIndex] !== node) {
-        pageNode.insertBefore(node, pageNode.children[renderIndex] ?? null);
-      }
-      renderIndex++;
-      if (element.kind === 'text') {
-        node.contentEditable =
-          element.editable &&
-          play.isVisible(element) &&
-          !play.stopped &&
-          !play.navigating
-            ? 'true'
-            : 'false';
-        if (activeText?.node !== node) {
-          node.dataset.renderedRichText = JSON.stringify(element.richText);
-        }
-      }
-      if (element.kind === 'button') {
-        node.tabIndex = play.isVisible(element) ? 0 : -1;
-        node.setAttribute('role', 'button');
-        node.setAttribute('aria-label', element.label || element.name);
+          return createElement(ElementView, {
+            key: element.id,
+            element,
+            reader: true,
+            editing: activeText?.history.element === element,
+            className:
+              activeText?.history.element === element ? 'text-editing' : '',
+            imageUrl:
+              element.kind === 'image'
+                ? shell.images.url(
+                    playing!.assets.find(a => a.name === element.image),
+                  )
+                : undefined,
+            attributes: readerAttributes(play, element),
+          });
+        }),
+    );
+    // A Script may rewrite the text the reader is editing.
+    if (activeText) {
+      const { node } = activeText;
+      const json = JSON.stringify(activeText.history.element.richText);
+      if (node.dataset.renderedRichText !== json) {
+        activeText.refresh();
+        node.dataset.renderedRichText = json;
       }
     }
+  };
+  /** What a playing Element adds: reader input, focus and editability. */
+  const readerAttributes = (
+    play: PlayMirror,
+    element: Element,
+  ): HTMLAttributes<HTMLDivElement> => {
+    const send = (name: 'pointerEnter' | 'pointerLeave') =>
+      sendTo(element, name);
+    const click = (event: MouseEvent) => {
+      const touch = 'pointerType' in event && event.pointerType === 'touch';
+      if (touch) {
+        send('pointerEnter');
+      }
+      sendTo(element, 'click', [
+        clickAt(event.currentTarget as HTMLElement, event),
+      ]);
+      if (touch) {
+        send('pointerLeave');
+      }
+    };
+    const visible = play.isVisible(element);
+    return {
+      hidden: !visible,
+      ...(element.kind === 'text' && {
+        contentEditable:
+          element.editable && visible && !play.stopped && !play.navigating
+            ? 'true'
+            : 'false',
+      }),
+      ...(element.kind === 'button' && {
+        tabIndex: visible ? 0 : -1,
+        role: 'button',
+        'aria-label': element.label || element.name,
+      }),
+      onPointerEnter: event => {
+        if (event.pointerType !== 'touch') {
+          send('pointerEnter');
+        }
+      },
+      onPointerLeave: event => {
+        if (press?.node === event.currentTarget) {
+          endPress();
+        }
+        if (event.pointerType !== 'touch') {
+          send('pointerLeave');
+        }
+      },
+      onPointerDown: event => {
+        if (
+          event.button === 0 &&
+          event.isPrimary &&
+          session?.heldElements.has(element.name)
+        ) {
+          startPress(element, event.currentTarget, event);
+        }
+      },
+      onPointerUp: endPress,
+      onPointerCancel: endPress,
+      // Middle and secondary buttons arrive as `auxclick`, not `click`.
+      onAuxClick: event => {
+        if (event.button === 1 || event.button === 2) {
+          click(event);
+        }
+      },
+      onClick: event => {
+        click(event);
+        // A pointer click leaves the keys with the Page, as games expect.
+        if (event.detail > 0 && element.kind === 'button') {
+          reader.focus();
+        }
+      },
+      onFocus: event => {
+        if (element.kind === 'text') {
+          openText(event.currentTarget, element);
+        }
+      },
+      onBlur: event => {
+        if (!toolbar.contains(event.relatedTarget as Node | null)) {
+          closeText();
+        }
+      },
+    };
   };
   /** Where `event` fell on `node`, in Page units from its top-left corner. */
   const pageOffset = (node: HTMLElement, event: MouseEvent) => {
