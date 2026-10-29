@@ -1,0 +1,23 @@
+# join-early-failures: of the member failures that arrive before a preempted
+# Join reaches its closing `end`, the earliest-started member's is raised
+# (spec chapter 5, "Joins"; chapter 6, "Joins"; #1753).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 1 }
+maxPending = 10000
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+grants = { stock = { ops = ["check"] } }

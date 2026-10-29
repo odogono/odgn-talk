@@ -1,0 +1,23 @@
+# join-block-deadline-tie: when a Join's Timeout Block and a member, started
+# in a Pump that preempted the Join, run out at the same instant, the block's
+# deadline wins (spec chapter 5, "Timeout Blocks"; #1752).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 1 }
+maxPending = 1000
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+grants = { stock = { ops = ["check"] } }

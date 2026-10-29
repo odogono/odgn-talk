@@ -1,0 +1,15 @@
+-- a.talk: the join-block-deadline-tie case's Script. Its first member's
+-- maxPending runs out with the Timeout Block around the Join.
+
+on go
+  try
+    with timeout of 1 s
+      wait for all
+        ask stock to check "A1" and wait
+        ask stock to check "B2" and wait
+      end wait
+    end timeout
+  catch e
+    return e
+  end try
+end go

@@ -1,0 +1,13 @@
+-- a.talk: part of the join-member-wait-order case. Its Join is preempted
+-- after starting its first member, whose wait is set then.
+
+on go
+  try
+    wait for all
+      ask stock to check "A1" and wait
+      ask stock to check "B2" and wait
+    end wait
+  catch {code: c}
+    return c
+  end try
+end go

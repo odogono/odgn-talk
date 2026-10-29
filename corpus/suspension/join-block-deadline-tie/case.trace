@@ -1,0 +1,23 @@
+# Unblessed: which deadline wins when a Join's Timeout Block ties with a member's (#1752); first blessing awaits human review.
+
+> load a identity=a258f250547766dd959e31b38999f7b5f1f913c5d92b0c49bf0fc29bb8205327
+
+> deliver d1 to=a message=go
+> pump clock=2026-10-06T10:00:00Z fuel-slice=20
+call a/r1.c1 op=stock.check args=["A1"]
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=29 alloc=40
+pumped state=sliced fuel=29
+> pump clock=2026-10-06T10:00:00Z
+call a/r1.c2 op=stock.check args=["B2"]
+seg a/r1 continue fuel=22 alloc=0 state=360 end=join-end until=2026-10-06T10:00:01Z
+pumped state=idle fuel=22 next=2026-10-06T10:00:01Z
+> pump clock=2026-10-06T10:00:01Z
+raise a/r1 code="timeout" at=a:9 pos=10:7
+abandon a/r1.c1
+abandon a/r1.c2
+seg a/r1 resume fuel=8 alloc=0 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value={code: "timeout", after: 1000 ms, deadline: true, at: {unit: "a", handler: "go", line: 10, column: 7}} fuel=59 alloc=40
+pumped state=idle fuel=8
+
+> vars
+vars a

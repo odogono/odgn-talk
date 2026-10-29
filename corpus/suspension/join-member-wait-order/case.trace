@@ -1,0 +1,29 @@
+# Unblessed: when a Join Member's wait takes its place in the wait order (#1752); first blessing awaits human review.
+
+> load a identity=f6610d323d8ac8a06fd873e2e4d4e0dd3212d4752018f1a2fe592f30722d4450
+> load b identity=4d02ec8a0ae0695bd1633b296a95e3149de72f0b553ef2e4956a9b7b175085c3
+
+> deliver d1 to=a message=go
+> deliver d2 to=b message=go
+> pump clock=2026-10-06T10:00:00Z fuel-slice=20
+call a/r1.c1 op=stock.check args=["A1"]
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=26 alloc=0
+seg b/r1 start delivery=d2 handler=go clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-06T10:00:01Z
+pumped state=sliced fuel=41 next=2026-10-06T10:00:01Z
+> pump clock=2026-10-06T10:00:00Z
+call a/r1.c2 op=stock.check args=["B2"]
+seg a/r1 continue fuel=22 alloc=0 state=320 end=join-end
+pumped state=idle fuel=22 next=2026-10-06T10:00:01Z
+> pump clock=2026-10-06T10:00:01Z
+raise a/r1 code="timeout" at=a:7 pos=9:5
+abandon a/r1.c1
+abandon a/r1.c2
+seg a/r1 resume fuel=11 alloc=0 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value="timeout" fuel=59 alloc=0
+seg b/r1 resume fuel=3 alloc=0 state=0 end=return
+run b/r1 outcome=completed delivery=d2 handler=go value="waited" fuel=18 alloc=0
+pumped state=idle fuel=14
+
+> vars
+vars a
+vars b
