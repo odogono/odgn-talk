@@ -391,8 +391,11 @@ suspension/capability-resumption
 suspension/computed-durations
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
+suspension/join-block-deadline-tie
 suspension/join-closing-position
+suspension/join-early-failures
 suspension/join-member-deadline
+suspension/join-member-wait-order
 suspension/join-preemption
 suspension/joins
 suspension/late-failure
