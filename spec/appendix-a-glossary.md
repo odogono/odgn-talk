@@ -422,13 +422,21 @@ _Avoid_: break, suspend, halt
 To advance a paused Play Session by one frame, then pause it again.
 _Avoid_: tick, Pump, Segment
 
+**Breakpoint**:
+A line an author marks in Folio's Code Browser. While browsing, a Run that reaches it Pauses the Play Session partway through that Run. Breakpoints belong to the author's workspace, not the Project, and are ignored in Present.
+_Avoid_: stop point, trap
+
+**Statement Step**:
+To move a Run stopped at a Breakpoint on by one statement: Step In follows a call or `send … and wait` into its callee, Step Over runs it to completion, and Step Out runs until the current frame returns. Always named with its qualifier; a bare Step is the frame Step.
+_Avoid_: Step (alone), single-step, next
+
 **Message Box**:
 A window in Folio where an author types one line of NorthTalk and runs it at once. While browsing it acts on the Play Session; in Edit it changes the Project as one undoable edit.
 _Avoid_: console, REPL, Message (for the window)
 
 **Variables window**:
-A window in Folio that, while browsing, shows the Script Variables of the Project's Script, the showing Page's Script and the Scripts of that Page's Elements with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
-_Avoid_: inspector, debugger, watch window
+A window in Folio that, while browsing, shows the Script Variables of the Project's Script, the showing Page's Script and the Scripts of that Page's Elements with their current values, and, while a Run is stopped at a Breakpoint, that Run's frames and their locals. After the Play Session ends it keeps the last values it showed until the next session starts.
+_Avoid_: inspector, debugger window, watch window
 
 **Watch**:
 An expression an author adds to the Variables window, evaluated in a chosen context each time a paused Play Session changes, with its latest value shown.
