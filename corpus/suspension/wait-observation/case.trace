@@ -20,11 +20,11 @@ pumped state=idle fuel=48 next=2026-10-03T12:00:01Z
 seg s/r4 start delivery=d4 handler=setLimit clause=1 fuel=10 alloc=0 state=813 end=return
 run s/r4 outcome=completed delivery=d4 handler=setLimit fuel=10 alloc=0
 guard-skip s/r3 at=s:167 pos=11:38 code="division by zero"
-seg s/r5 start delivery=d5 handler=ping clause=1 fuel=16 alloc=31 state=960 end=return
+seg s/r5 start delivery=d5 handler=ping clause=1 fuel=16 alloc=31 state=944 end=return
 run s/r5 outcome=completed delivery=d5 handler=ping fuel=16 alloc=31
-seg s/r6 start delivery=d6 handler=ping clause=1 fuel=16 alloc=31 state=1075 end=return
+seg s/r6 start delivery=d6 handler=ping clause=1 fuel=16 alloc=31 state=1051 end=return
 run s/r6 outcome=completed delivery=d6 handler=ping fuel=16 alloc=31
-seg s/r3 resume fuel=30 alloc=32 state=620 end=return
+seg s/r3 resume fuel=30 alloc=32 state=612 end=return
 run s/r3 outcome=completed delivery=d3 handler=choose fuel=94 alloc=96
 seg s/r2 resume fuel=21 alloc=592 state=457 end=return
 run s/r2 outcome=completed delivery=d2 handler=watch fuel=64 alloc=632
@@ -36,7 +36,7 @@ pumped state=idle fuel=168
 seg s/r7 start delivery=d7 handler=choose clause=1 fuel=17 alloc=0 state=860 end=wait-for-any until=2026-10-03T12:00:01Z
 seg s/r8 start delivery=d8 handler=filtered clause=1 fuel=16 alloc=0 state=1036 end=wait-for until=2026-10-03T12:00:00Z
 guard-skip s/r7 at=s:167 pos=11:38 code="division by zero"
-seg s/r9 start delivery=d9 handler=ping clause=1 fuel=16 alloc=31 state=1183 end=return
+seg s/r9 start delivery=d9 handler=ping clause=1 fuel=16 alloc=31 state=1167 end=return
 run s/r9 outcome=completed delivery=d9 handler=ping fuel=16 alloc=31
 seg s/r7 resume fuel=25 alloc=32 state=728 end=return
 run s/r7 outcome=completed delivery=d7 handler=choose fuel=79 alloc=96

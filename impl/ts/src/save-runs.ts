@@ -597,22 +597,6 @@ class RunWriter {
     };
   }
 
-  /** A fired `wait for` has bound its branch's names in its frame already. */
-  private bound(frames: FrameRecord<Value>[], r: RunInternals) {
-    const fired = r.resumption;
-    const s = r.waitedOn;
-    if (fired?.k !== 'event' || s?.k !== 'wait-for') {
-      return frames;
-    }
-    const when = s.whens.find(w => w.branch === fired.branch);
-    const top = frames.at(-1)!;
-    const locals = [...top.locals];
-    when?.binds.forEach((slot, i) => {
-      locals[slot] = fired.binds[i]!;
-    });
-    return [...frames.slice(0, -1), { ...top, locals }];
-  }
-
   private waited(w: WaitFields): WaitedRecord {
     return {
       id: w.id,
@@ -668,7 +652,7 @@ class RunWriter {
           k: 'event',
           message: r.message,
           branch: r.branch,
-          binds: r.binds.length,
+          binds: r.binds,
         };
       case 'event-timeout':
         return { k: 'event', message: undefined, branch: r.branch, binds: 0 };
@@ -756,7 +740,7 @@ class RunWriter {
         0,
         baseLengths.get(r.segmentBase) ?? r.segmentBase.length,
       ),
-      frames: this.bound(this.frames(s.name, r.frames, !waited, true), r),
+      frames: this.frames(s.name, r.frames, !waited, true),
     };
   }
 }
@@ -858,7 +842,6 @@ const resumptionOf = (
   extra: {
     abandon?: string[];
     after?: bigint;
-    binds?: () => Value[];
     block?: boolean;
     members?: Member[];
     resumptions?: Resumption[];
@@ -918,7 +901,7 @@ const resumptionOf = (
             k: 'event',
             branch: r.branch,
             message: r.message,
-            binds: extra.binds?.() ?? [],
+            binds: r.binds,
           };
     case 'join failed': {
       const failure = extra.resumptions?.[r.member];
@@ -1350,21 +1333,6 @@ export const runFromRecord = (
             ]
           : cut,
       resumptions: memberResumptions,
-      binds: () => {
-        const sus = s0 as WaitFor;
-        const fired = rec.resumeWith as Extract<
-          ResumeRecord<Value>,
-          { k: 'event' }
-        >;
-        const when = sus.whens?.find(b => b.branch === fired.branch);
-        // The record holds them in the frame; TS holds them in the
-        // resumption until it resumes, the slots as they were before.
-        return (when?.binds ?? []).map(slot => {
-          const v = top!.locals[slot]!;
-          top!.locals[slot] = nothingValue;
-          return v;
-        });
-      },
     });
   }
   // A Capability call it waits on keeps its record, for its arguments.

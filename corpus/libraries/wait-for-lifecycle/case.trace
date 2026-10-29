@@ -27,7 +27,7 @@ run game/r2 outcome=completed delivery=d2 handler=readWithin fuel=61 alloc=202
 pumped state=idle fuel=61 next=2026-10-19T09:00:07Z
 > deliver d4 to=game message=pressed args=["K"]
 > pump clock=2026-10-19T09:00:03Z
-seg game/r4 start delivery=d4 handler=pressed clause=1 fuel=7 alloc=0 state=694 end=return
+seg game/r4 start delivery=d4 handler=pressed clause=1 fuel=7 alloc=0 state=686 end=return
 run game/r4 outcome=completed delivery=d4 handler=pressed fuel=7 alloc=0
 seg game/r3 resume fuel=28 alloc=198 state=204 end=return
 run game/r3 outcome=completed delivery=d3 handler=readWithin fuel=65 alloc=279

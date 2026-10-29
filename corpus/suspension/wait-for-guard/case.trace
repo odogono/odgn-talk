@@ -15,7 +15,7 @@ pumped state=idle fuel=29 next=2026-09-30T09:00:05Z
 > pump clock=2026-09-30T09:00:01Z
 seg keys/r3 start delivery=d3 handler=key clause=1 fuel=21 alloc=58 state=514 end=return
 run keys/r3 outcome=completed delivery=d3 handler=key fuel=21 alloc=58
-seg keys/r4 start delivery=d4 handler=key clause=1 fuel=21 alloc=58 state=647 end=return
+seg keys/r4 start delivery=d4 handler=key clause=1 fuel=21 alloc=58 state=639 end=return
 run keys/r4 outcome=completed delivery=d4 handler=key fuel=21 alloc=58
 seg keys/r1 resume fuel=19 alloc=370 state=479 end=return
 run keys/r1 outcome=completed delivery=d1 handler=answer fuel=70 alloc=411
@@ -30,7 +30,7 @@ seg keys/r5 start delivery=d5 handler=confirm clause=1 fuel=15 alloc=0 state=495
 pumped state=idle fuel=15 next=2026-09-30T09:00:11Z
 > deliver d6 to=keys message=key args=["Y"]
 > pump clock=2026-09-30T09:00:07Z
-seg keys/r6 start delivery=d6 handler=key clause=1 fuel=21 alloc=58 state=677 end=return
+seg keys/r6 start delivery=d6 handler=key clause=1 fuel=21 alloc=58 state=669 end=return
 run keys/r6 outcome=completed delivery=d6 handler=key fuel=21 alloc=58
 seg keys/r5 resume fuel=13 alloc=140 state=460 end=return
 run keys/r5 outcome=completed delivery=d5 handler=confirm fuel=41 alloc=181

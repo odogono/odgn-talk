@@ -1,0 +1,11 @@
+script variable got = []
+
+on watch
+  repeat 2 times
+    wait for ping n
+    put n after got
+  end repeat
+end watch
+
+on ping n
+end ping

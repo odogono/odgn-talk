@@ -20,7 +20,7 @@ pumped state=idle fuel=7
 preempt s/r3 start delivery=d3 handler=ping clause=1 by=cap fuel=0 alloc=0
 pumped state=sliced fuel=12
 > pump clock=2026-09-30T10:00:04Z
-seg s/r3 continue fuel=7 alloc=0 state=372 end=return
+seg s/r3 continue fuel=7 alloc=0 state=364 end=return
 run s/r3 outcome=completed delivery=d3 handler=ping fuel=7 alloc=0
 fault s/r1 limit=fuel at=s:5 pos=4:3
 seg s/r1 resume fuel=0 alloc=0 state=16 end=fault

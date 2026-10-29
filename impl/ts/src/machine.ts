@@ -873,7 +873,7 @@ export type Resumption =
   | { k: 'reply'; value: Value }
   | { error: Value | null; k: 'send failed'; reason: string }
   | { answers: Resumption[]; k: 'joined' }
-  | { binds: Value[]; branch: number; k: 'event'; message: Value }
+  | { binds: number; branch: number; k: 'event'; message: Value }
   | { branch: number; k: 'event-timeout' }
   | { abandon: string[]; failure: Resumption; index: number; k: 'join-failed' };
 
@@ -3043,12 +3043,6 @@ export class Run {
     }
     if (s.k === 'wait-for') {
       // The message, or Nothing, and for a block its branch's number.
-      if (r.k === 'event') {
-        const when = s.whens.find(w => w.branch === r.branch)!;
-        when.binds.forEach((slot, i) => {
-          frame.locals[slot] = r.binds[i]!;
-        });
-      }
       frame.stack.push(r.k === 'event' ? r.message : nothing);
       if (s.any) {
         frame.stack.push(dec(String((r as { branch: number }).branch)));
@@ -3236,7 +3230,6 @@ export class Run {
       ) {
         continue;
       }
-      let binds: Value[] = [];
       if (when.body === null) {
         if (args.length) {
           continue;
@@ -3265,12 +3258,17 @@ export class Run {
         if (outcome.kind !== 'completed') {
           continue;
         }
-        binds = listItems(outcome.result);
+        // It binds its names now, in place of what the slots held
+        // (chapter 8, Waiting).
+        const frame = this.frames.at(-1)!;
+        listItems(outcome.result).forEach((v, i) => {
+          frame.locals[when.binds[i]!] = v;
+        });
       }
       return {
         k: 'event',
         branch: when.branch,
-        binds,
+        binds: when.binds.length,
         message: map([
           ['name', text(message)],
           ['args', listValues(args)],
@@ -6351,7 +6349,7 @@ const resumptionSize = (r: Resumption): number => {
     case 'reply':
       return sizeOf(r.value);
     case 'event':
-      return sizeOf(r.message) + r.binds.reduce((sum, v) => sum + sizeOf(v), 0);
+      return sizeOf(r.message);
     case 'joined':
       return r.answers.reduce((sum, answer) => sum + resumptionSize(answer), 0);
     case 'join-failed':

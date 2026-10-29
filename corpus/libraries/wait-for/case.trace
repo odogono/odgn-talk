@@ -35,9 +35,9 @@ pumped state=idle fuel=39 next=2026-10-19T09:00:06Z
 > pump clock=2026-10-19T09:00:02Z
 seg shop/r3 start delivery=d4 handler=pressed clause=1 fuel=22 alloc=152 state=943 end=return
 run shop/r3 outcome=completed delivery=d4 handler=pressed fuel=22 alloc=152
-seg shop/r4 start delivery=d5 handler=pressed clause=1 fuel=22 alloc=152 state=1280 end=return
+seg shop/r4 start delivery=d5 handler=pressed clause=1 fuel=22 alloc=152 state=1264 end=return
 run shop/r4 outcome=completed delivery=d5 handler=pressed fuel=22 alloc=152
-seg shop/r1 resume fuel=29 alloc=128 state=798 end=return
+seg shop/r1 resume fuel=29 alloc=128 state=790 end=return
 run shop/r1 outcome=completed delivery=d1 handler=buy fuel=102 alloc=226
 seg shop/r2 resume fuel=29 alloc=132 state=314 end=return
 run shop/r2 outcome=completed delivery=d2 handler=buy fuel=102 alloc=234
@@ -61,7 +61,7 @@ seg shop/r5 resume fuel=13 alloc=8 state=788 end=wait-for-any until=2026-10-19T0
 pumped state=idle fuel=13 next=2026-10-19T09:00:10Z
 > deliver d7 to=shop message=pressed args=["Y"]
 > pump clock=2026-10-19T09:00:09Z
-seg shop/r6 start delivery=d7 handler=pressed clause=1 fuel=22 alloc=152 state=1021 end=return
+seg shop/r6 start delivery=d7 handler=pressed clause=1 fuel=22 alloc=152 state=1013 end=return
 run shop/r6 outcome=completed delivery=d7 handler=pressed fuel=22 alloc=152
 seg shop/r5 resume fuel=35 alloc=158 state=477 end=return
 run shop/r5 outcome=completed delivery=d6 handler=bargain fuel=103 alloc=207
@@ -79,7 +79,7 @@ seg shop/r7 resume fuel=22 alloc=8 state=956 end=wait-for until=2026-10-19T09:00
 pumped state=idle fuel=22 next=2026-10-19T09:00:12Z
 > deliver d9 to=shop message=pressed args=["N"]
 > pump clock=2026-10-19T09:00:11Z
-seg shop/r8 start delivery=d9 handler=pressed clause=1 fuel=22 alloc=152 state=1189 end=return
+seg shop/r8 start delivery=d9 handler=pressed clause=1 fuel=22 alloc=152 state=1181 end=return
 run shop/r8 outcome=completed delivery=d9 handler=pressed fuel=22 alloc=152
 seg shop/r7 resume fuel=27 alloc=388 state=755 end=return
 run shop/r7 outcome=completed delivery=d8 handler=haggle fuel=96 alloc=469
