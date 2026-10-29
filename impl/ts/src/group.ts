@@ -17,6 +17,7 @@ import {
   DebugController,
   machineDebug,
   statementStarts,
+  type DebugEvaluation,
   type DebugPause,
   type DebugSnapshot,
   type RepeatedEffect,
@@ -998,7 +999,138 @@ export class TsGroup implements Group {
         }
         return sources;
       },
+      (body, frame) => this.debugEvaluate(body, frame),
     ));
+  }
+
+  /** Fuel an evaluation may spend before it fails. */
+  private static readonly EVALUATION_FUEL = 1_000_000;
+
+  // The Debug Controller's `evaluate`: a body run as an unapplied extension
+  // of the paused Run's Script, its frame's named locals passed as
+  // parameters, with nothing written to the Trace or the queues.
+  private debugEvaluate(
+    body: string,
+    frameIndex: number | undefined,
+  ): DebugEvaluation {
+    const pause = this.debugController!.current!;
+    const s = this.scripts.find(x => x.name === pause.script)!;
+    const paused = this.runsOf(s).find(r => r.id === pause.run)!.run;
+    const frames = paused.debugFrames();
+    const view = frames[frameIndex ?? frames.length - 1];
+    if (!view) {
+      return { error: `There is no frame ${frameIndex}` };
+    }
+    const valueOf = (name: string) => {
+      const j = view.frame.body.locals.indexOf(name);
+      return j < 0 ? nothing : (view.frame.locals[j] ?? nothing);
+    };
+    // Named locals only: lowering's own slots aren't names a body can write.
+    const locals = view.frame.body.locals.flatMap(name =>
+      /^[A-Z_a-z]\w*$/.test(name) && name !== 'it'
+        ? [[name, valueOf(name)] as const]
+        : [],
+    );
+    let n = 1;
+    while (body.includes(`debugEvaluation${n}`)) {
+      n++;
+    }
+    const handler = `debugEvaluation${n}`;
+    const names = locals.map(([name]) => name);
+    // `it` can't be a parameter, so the body has its own.
+    const source = `on ${[handler, names.join(', ')].filter(Boolean).join(' ')}\n${body}\nend ${handler}`;
+    let loaded: Loaded;
+    try {
+      const prepared = this.extension(s, source);
+      // Its diagnostics are the caller's, never the Trace's.
+      loaded = this.loadPrepared(
+        prepared.name,
+        prepared.p,
+        s.limits,
+        {
+          home: s.loaded,
+          links: prepared.links,
+          identity: prepared.extendedIdentity,
+        },
+        false,
+      );
+    } catch (error) {
+      if (error instanceof LoadError) {
+        const d = error.diagnostics[0];
+        return d
+          ? { error: d.message, line: Math.max(1, d.line - 1) }
+          : { error: error.message };
+      }
+      throw error;
+    }
+    const run = dispatch(
+      loaded,
+      handler,
+      locals.map(([, value]) => value),
+      { fuelPerRun: TsGroup.EVALUATION_FUEL },
+    );
+    run.id = `${pause.run}/evaluation`;
+    run.host = this.evaluationHost(s, run);
+    const given = locals.map(([, value]) => value);
+    while (!run.done) {
+      if (run.suspended) {
+        return { error: "A Run stopped at a Breakpoint can't wait" };
+      }
+      run.step();
+      // The evaluation's own frame holds the locals as it was given them.
+      const own = run.debugFrames()[0]?.frame;
+      const changed =
+        own?.handler === handler
+          ? names.findIndex(
+              (name, j) =>
+                own.locals[own.body.locals.indexOf(name)] !== given[j],
+            )
+          : -1;
+      if (changed >= 0) {
+        return {
+          error: `${names[changed]} is a local of the stopped Run, which can't be changed`,
+        };
+      }
+    }
+    // The extension has its own copy of the Script Variables, as one does
+    // until attached; what the body wrote becomes the Script's.
+    s.loaded.variables = loaded.variables.slice(0, s.loaded.variables.length);
+    const outcome = run.ended!;
+    switch (outcome.kind) {
+      case 'completed':
+        return { value: outcome.result };
+      case 'errored':
+        return { error: outcome.error.toString() };
+      case 'limit fault':
+        return { error: `${outcome.limit} limit reached` };
+      default:
+        return { error: `The evaluation ended: ${outcome.kind}` };
+    }
+  }
+
+  // What an evaluation's Host does instead of what would leave a trace.
+  private static refuse(what: string): never {
+    throw new OpScriptError('not while stopped', [['what', text(what)]]);
+  }
+
+  // A Host for an evaluation: it reads the Script's world, but refuses
+  // anything that would reach the Trace, a queue or the random stream.
+  private evaluationHost(s: ScriptState, run: Run): RunHost {
+    const host = this.hostFor(s, run, null);
+    return {
+      ...host,
+      grants: new Map(),
+      answer: () => TsGroup.refuse('an Operation call'),
+      fail: () => TsGroup.refuse('an Operation call'),
+      callValue: () => TsGroup.refuse('a call to another Script'),
+      send: () => TsGroup.refuse('a send'),
+      sendUp: () => TsGroup.refuse('a send'),
+      drawRandom: () => TsGroup.refuse('a random draw'),
+      disableGrant: () => TsGroup.refuse('an Operation call'),
+      crossing: () => false,
+      expose: () => {},
+      issue: () => {},
+    };
   }
 
   private advanceDebugPump(): PumpResult {
@@ -3451,6 +3583,7 @@ export class TsGroup implements Group {
       identity: string;
       links: ReadonlyMap<string, Code>;
     },
+    traced = true,
   ): Loaded {
     try {
       if (p.diagnostics) {
@@ -3486,7 +3619,9 @@ export class TsGroup implements Group {
       );
       return loaded;
     } catch (error) {
-      this.writeDiagnostics(error);
+      if (traced) {
+        this.writeDiagnostics(error);
+      }
       throw error;
     }
   }

@@ -541,3 +541,58 @@ test('a replay landing inside a hold is deferred until the hold closes', () => {
   expect(debug.current!.pc).toBeGreaterThan(t.inside);
   expect(t.sets).toHaveLength(1);
 });
+
+// A Trace without its Runs' result values.
+const shape = (trace: string[]) =>
+  trace.map(line => line.replace(/ value=\d+/, ''));
+
+test('evaluate runs a body in a paused frame, sees its locals and writes no Trace', () => {
+  const evaluated = (debugging: boolean) => {
+    const trace: string[] = [];
+    const group = newGroup({ name: 'g', trace: l => trace.push(l) });
+    const source =
+      'script variable total = 10\non go k\n put k * 2 into doubled\n put doubled + total into total\n return total\nend go';
+    const s = group.load({ name: 's', source });
+    const unit = compileSource(source, { name: 's' }).unit!;
+    const debug = group.debug();
+    if (debugging) {
+      debug.breakAt([
+        { unit: 's', pc: unit.code.findIndex(i => i.line === 4) },
+      ]);
+    }
+    s.deliver({ name: 'go', args: [num(3)] });
+    group.pump(0n);
+    const results: string[] = [];
+    if (debugging) {
+      expect(debug.isPaused).toBe(true);
+      const show = (body: string) => {
+        const r = debug.evaluate(body);
+        results.push('value' in r ? r.value.toString() : `! ${r.error}`);
+      };
+      show('return k + doubled + total');
+      show('put 100 into total');
+      show('return total');
+      show('put 1 into k');
+      show('send go to me');
+      show('wait 1 ms');
+      show('return 1 +');
+      debug.resume();
+    }
+    return { results, trace };
+  };
+  const plain = evaluated(false);
+  const debugged = evaluated(true);
+  expect(debugged.results).toEqual([
+    '19',
+    'nothing',
+    '100',
+    "! k is a local of the stopped Run, which can't be changed",
+    expect.stringContaining('!'),
+    expect.stringContaining('!'),
+    expect.stringContaining('!'),
+  ]);
+  // The Run returns the total an evaluation set; nothing else of the
+  // evaluations reaches the Trace.
+  expect(debugged.trace.some(l => l.includes('value=106'))).toBe(true);
+  expect(shape(debugged.trace)).toEqual(shape(plain.trace));
+});
