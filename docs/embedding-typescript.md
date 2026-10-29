@@ -473,7 +473,9 @@ input values and execution details. See [Trace support](../impl/ts/README.md#the
   use the originating Core family's format; they cannot transfer a TS Group to
   the Zig Core. Live effects can prevent saving. See
   [save and restore](../spec/10-save-and-restore.md) and the
-  [core-switch example](../impl/ts/examples/core-switch/README.md).
+  [core-switch example](../impl/ts/examples/core-switch/README.md). When two
+  saves' State Fingerprints differ, `northtalk diff-save` shows where
+  ([CLI](../tooling/cli/README.md)).
 - **Databases:** use the optional `sqlite` Standard Capability for SQL, or
   `store` for keyed values. See [Using SQLite](sqlite.md) and the
   [SQLite Store example](../impl/ts/examples/store-sqlite/README.md).
