@@ -6,7 +6,10 @@ import {
   parseSourceRecovering,
   text,
   type CheckOptions,
+  type BindingKind,
   type LibraryExport,
+  type SemanticName,
+  type SemanticNode,
   type SemanticTree,
   type SourceSpan,
   type SyntaxNode,
@@ -110,6 +113,65 @@ const literalText = (node: SyntaxNode): Token | undefined => {
   return content.length === 1 && content[0]!.t === 'str'
     ? content[0]
     : undefined;
+};
+
+const matchSubjectKinds = new Set<BindingKind>([
+  'local',
+  'parameter',
+  'script variable',
+]);
+const semanticNames = (root: SemanticNode) => {
+  const out = new Map<number, SemanticName>();
+  const work: SemanticNode['children'][number][] = [root];
+  while (work.length) {
+    const e = work.pop()!;
+    if (e.kind === 'name') {
+      out.set(e.span.start, e);
+    } else if (e.kind === 'node') {
+      work.push(...e.children);
+    }
+  }
+  return out;
+};
+
+const isLiteral = (token?: Token) => token?.t === 'str' || token?.t === 'num';
+
+// The name an Expression compares with a number or text literal through a
+// plain `=` or `is`, in either order. Only a name is read the same in every
+// branch; `match` would evaluate any other subject once.
+const literalComparison = (expression: SyntaxNode): Token | undefined => {
+  let node = expression;
+  while (node.rule !== 'Comparison') {
+    const inner = nodes(node);
+    if (inner.length !== 1 || tokens(node).length > 0) {
+      return undefined;
+    }
+    node = inner[0]!;
+  }
+  const operator = tokens(node).map(token => token.v);
+  const operands = nodes(node).filter(child => child.rule === 'Concat');
+  const ignoring = nodes(node).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  if (
+    operator.length !== 1 ||
+    (operator[0] !== '=' && operator[0] !== 'is') ||
+    operands.length !== 2 ||
+    ignoring
+  ) {
+    return undefined;
+  }
+  const [left, right] = operands.map(operand => {
+    const all = tokensIn(operand);
+    return all.length === 1 ? all[0]! : undefined;
+  });
+  if (left?.t === 'word' && isLiteral(right)) {
+    return left;
+  }
+  if (right?.t === 'word' && isLiteral(left)) {
+    return right;
+  }
+  return undefined;
 };
 
 // Postorder summaries keep deeply nested syntax off the native call stack.
@@ -253,6 +315,7 @@ export const lintSyntax = (
       });
     }
   };
+  const matchChains: { at: Token; subject: Token }[] = [];
   const work: { context: Context; node: SyntaxNode }[] = [
     {
       node: tree,
@@ -441,6 +504,26 @@ export const lintSyntax = (
         }
       }
     }
+    if (node.rule === 'If') {
+      // Each condition is the Expression after `if` or `else if`. A chain
+      // qualifies only if all of them compare one name with a literal.
+      const subjects = node.children.flatMap((child, i) =>
+        child.kind === 'node' &&
+        child.rule === 'Expression' &&
+        (node.children[i - 1] as Token | undefined)?.v === 'if'
+          ? [literalComparison(child)]
+          : [],
+      );
+      const subject = subjects[0];
+      if (
+        subjects.length >= 3 &&
+        subject !== undefined &&
+        subjects.every(other => other?.v === subject.v)
+      ) {
+        // Whether the name is a variable needs bindings, checked below.
+        matchChains.push({ at: first, subject });
+      }
+    }
     if (node.rule === 'MapKey' && context.map && propertyNames.has(first.v)) {
       emit('key-shadows-property', first, { key: first.v });
     }
@@ -560,8 +643,20 @@ export const lintSyntax = (
       });
     }
   }
+  const bindings = bindingTree(tree, options);
+  if (matchChains.length) {
+    const names = semanticNames(bindings.root);
+    for (const { at, subject } of matchChains) {
+      // A Constant or Built-in reads the same each time, but `match` on one
+      // is unusual; advise only on names whose value the Script holds.
+      const kind = names.get(subject.pos)?.binding?.kind;
+      if (kind && matchSubjectKinds.has(kind)) {
+        emit('suggest-match', at, { name: subject.v });
+      }
+    }
+  }
   lintBindings(
-    bindingTree(tree, options),
+    bindings,
     options.manifest,
     emitAt,
     options.checkOptions?.unit,
@@ -579,4 +674,107 @@ export const lint = (source: string, options: LintOptions = {}) => {
     lints: lintSyntax(parsed.tree, options),
     diagnostics: parsed.diagnostics,
   };
+};
+
+/**
+ * The `suggest-match` rewrite of the `if` chain whose `if` starts at `start`:
+ * `match name`, a `when <literal>` per branch, and every line in between
+ * indented one more step. Absent when the chain isn't laid out one branch
+ * head per line, or holds fenced text whose content indentation would change.
+ */
+export const suggestMatchEdit = (
+  tree: SyntaxNode,
+  source: string,
+  start: number,
+): { end: number; newText: string; start: number } | undefined => {
+  const work = [tree];
+  let chain: SyntaxNode | undefined;
+  while (work.length && !chain) {
+    const node = work.pop()!;
+    const head = node.children[0];
+    if (node.rule === 'If' && head?.kind === 'token' && head.pos === start) {
+      chain = node;
+    }
+    work.push(...nodes(node));
+  }
+  if (!chain) {
+    return undefined;
+  }
+  const all = tokensIn(chain);
+  if (all.some(token => token.raw.includes('\n'))) {
+    return undefined;
+  }
+  const direct = tokens(chain);
+  const heads: { from: Token; literal: Token; then: Token }[] = [];
+  let name: string | undefined;
+  for (let i = 0; i < chain.children.length; i++) {
+    const condition = chain.children[i]!;
+    const before = chain.children[i - 1];
+    if (
+      condition.kind !== 'node' ||
+      condition.rule !== 'Expression' ||
+      before?.kind !== 'token' ||
+      before.v !== 'if'
+    ) {
+      continue;
+    }
+    const subject = literalComparison(condition);
+    const then = chain.children[i + 1];
+    const elseToken = chain.children[i - 2];
+    const from =
+      elseToken?.kind === 'token' && elseToken.v === 'else'
+        ? elseToken
+        : before;
+    if (!subject || then?.kind !== 'token' || then.v !== 'then') {
+      return undefined;
+    }
+    name ??= subject.v;
+    const literal = tokensIn(condition).find(
+      token => token.t === 'str' || token.t === 'num',
+    )!;
+    heads.push({ from, then, literal });
+  }
+  const endIndex = direct.findIndex(token => token.v === 'end');
+  const ending = direct[endIndex];
+  // Each head and `else` must end its line, so bodies sit on their own lines.
+  const lastOnLine = (token: Token) =>
+    !all.some(other => other.line === token.line && other.pos > token.pos);
+  const elseOnly = direct.filter(
+    (token, i) => token.v === 'else' && direct[i + 1]?.v !== 'if',
+  );
+  if (
+    !name ||
+    !ending ||
+    heads.length < 3 ||
+    !heads.every(head => lastOnLine(head.then)) ||
+    !elseOnly.every(lastOnLine)
+  ) {
+    return undefined;
+  }
+  const lineStart = source.lastIndexOf('\n', start - 1) + 1;
+  const indent = source.slice(lineStart, start);
+  const suffix = direct[endIndex + 1];
+  const end = suffix?.v === 'if' ? suffix.end : ending.end;
+  // Replace from the end so earlier offsets stay valid.
+  let text = source.slice(lineStart, end);
+  const replace = (from: number, to: number, value: string) => {
+    text = text.slice(0, from - lineStart) + value + text.slice(to - lineStart);
+  };
+  if (suffix?.v === 'if') {
+    replace(suffix.pos, suffix.end, 'match');
+  }
+  for (const head of [...heads].reverse()) {
+    replace(head.from.pos, head.then.end, `when ${head.literal.raw} then`);
+  }
+  const lines = text.split('\n');
+  const body = lines
+    .slice(1, -1)
+    .map(line => (line.trim() ? `  ${line}` : line));
+  const newText = [
+    `${indent}match ${name}`,
+    `${indent}  ${lines[0]!.slice(indent.length)}`,
+    ...body,
+    lines.at(-1)!,
+  ].join('\n');
+  return { start: lineStart, end, newText };
 };
