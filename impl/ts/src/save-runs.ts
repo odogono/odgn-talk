@@ -1390,8 +1390,9 @@ export const runFromRecord = (
   return { running, record: rec, ...(pendingId ? { pendingId } : {}) };
 };
 
+// A pending call's record leaves its id to its call.
 const waitFieldsOf = (w: WaitedRecord, ctx: RunContext): WaitFields => ({
-  id: w.id,
+  id: w.id || (w.call === undefined ? '' : ctx.call(w.call).id),
   block: w.block,
   ...(w.call === undefined ? {} : { call: ctx.call(w.call) }),
   grant: w.grant,

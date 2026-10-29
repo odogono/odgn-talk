@@ -1590,6 +1590,12 @@ export class Run {
     } finally {
       starting = false;
     }
+    // A later save records the reissued call (chapter 10, Reissue).
+    const saved = callSites.get(context);
+    if (saved) {
+      saved.now = this.host!.now;
+      saved.charged = charged;
+    }
     if (reached) {
       // The saved suspension committed its Segment. Reissue can't roll it back.
       // A preempted Join body keeps its saved segment base (chapter 10).
