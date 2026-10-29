@@ -41,10 +41,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships thirty-four implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(34);
+test('ships thirty-five implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(35);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(34);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(35);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -1310,5 +1310,60 @@ test('kind advice rewrites kindOf comparisons and flags names kindOf never gives
   ]);
   expect(
     rewrite(kinded('kindOf(c) = "string"'), 'impossible-kind'),
+  ).toBeUndefined();
+});
+
+test('return advice needs a boolean condition choosing between true and false', async () => {
+  const args = [num(1), num(5)];
+  for (const [body, value, rewritten] of [
+    ['if c > 2 then return true else return false', '…', 'return c > 2'],
+    [
+      'if c > 2 then\n  return false\nelse\n  return true\nend if',
+      'not …',
+      'return not c > 2',
+    ],
+    [
+      'if c > 2 and c < 9 then return true\nreturn false',
+      '…',
+      'return c > 2 and c < 9',
+    ],
+    [
+      'if c > 2 or c = 1 then return false\nreturn true',
+      'not (…)',
+      'return not (c > 2 or c = 1)',
+    ],
+    ['if not c = 1 then return true\nreturn false', '…', 'return not c = 1'],
+  ] as const) {
+    const source = pickHandler(body);
+    expect(idiomLints(source, 'if-then-return-bool')).toMatchObject([
+      {
+        level: 'hint',
+        span: { line: 2, col: 1 },
+        message: `Consider \`return ${value}\`, since the condition is already true or false.`,
+      },
+    ]);
+    expect(await answersMatch(source, 'if-then-return-bool', args)).toBe(
+      pickHandler(rewritten),
+    );
+  }
+  for (const negative of [
+    // `if c` raises for a non-boolean, which `return c` would not.
+    'if c then return true else return false',
+    'if isBig(c) then return true\nreturn false',
+    'if c > 2 then return true else return true',
+    'if c > 2 then return true\nsay 1\nreturn false',
+    'if c > 2 then return true else if c = 1 then return false',
+    'if c > 2 then return true\nelse\n  say 1\n  return false\nend if',
+    'if c > 2 then return 1 else return 0',
+  ]) {
+    expect(idiomLints(pickHandler(negative), 'if-then-return-bool')).toEqual(
+      [],
+    );
+  }
+  expect(
+    rewrite(
+      pickHandler('if c > 2 then return true -- big\nreturn false'),
+      'if-then-return-bool',
+    ),
   ).toBeUndefined();
 });
