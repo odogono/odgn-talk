@@ -1,0 +1,17 @@
+# Unblessed: a finally block in a Join's body doesn't stop a caught error abandoning the Join (#1742); first blessing awaits human review.
+
+> load board identity=46d3986bfbcaea642dadf599e48439a1fdd8c35730f22f487f5fbfeebf94f8dd
+> request d1 to=board message=go
+> pump clock=2026-09-30T09:00:00Z
+call board/r1.c1 op=feed.fetch args=["x"]
+raise board/r1 code="inner" at=board:9 pos=10:9
+abandon board/r1.c1
+seg board/r1 start delivery=d1 handler=go clause=1 fuel=73 alloc=113 state=16 end=return
+run board/r1 outcome=completed delivery=d1 handler=go value="caught" fuel=73 alloc=113
+pumped state=idle fuel=73
+> answer board/r1.c1 value=1
+> pump clock=2026-09-30T09:00:01Z
+note board/r1.c1 kind=late-answer
+pumped state=idle fuel=0
+> vars
+vars board z=1

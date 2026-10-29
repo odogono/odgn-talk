@@ -1,0 +1,18 @@
+-- board.talk: the join-finally-abandon case's Script.
+
+script variable z = 0
+
+on go
+  try
+    wait for all
+      ask feed to fetch "x" and wait
+      try
+        throw {code: "inner"}
+      finally
+        put 1 into z
+      end try
+    end wait
+  catch e
+    return "caught"
+  end try
+end go

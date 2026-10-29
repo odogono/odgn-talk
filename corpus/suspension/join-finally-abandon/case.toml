@@ -1,0 +1,24 @@
+# join-finally-abandon: an error inside a Join's body that runs a `finally`
+# block in the Join's own frame, then is caught outside the body, still
+# abandons the members still pending (spec chapter 5, Joins; #1742).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+errors = [{ code = "no feed" }]
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { feed = { ops = ["fetch"] } }
