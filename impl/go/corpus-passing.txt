@@ -160,6 +160,7 @@ decisions/undecided-on-cancel-delivery
 decisions/undecided-when-dropped
 decisions/verdict-behind-a-fuel-slice
 decisions/veto-ends-the-decision
+errors/catch-retained-depth
 errors/cleanup-retained-depth
 errors/cleanup-retained-state
 errors/fail-error-map

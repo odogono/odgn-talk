@@ -1,0 +1,18 @@
+# Unblessed: retained failed frames during catch dispatch (#1736); first blessing awaits human review.
+# catch-retained-depth: `deep(5)` raises from six `deep` frames above `go`.
+# Its `before unwind` catch runs in `go` while those six stay held, so with
+# `callDepth` 8 `down(5)` faults: `go`, six held frames and `down(5)` make 8,
+# and `down(5)`'s own call would pass it.
+
+> load board identity=6bed3cda1ed85372330864894feb667b841c719dfbb18415f48af2a2d5c353e4
+
+> request d1 to=board message=go
+> pump clock=2026-09-30T09:00:00Z
+raise board/r1 code="bad" at=board:8 pos=3:5
+fault board/r1 limit=depth at=board:25 pos=12:10
+seg board/r1 start delivery=d1 handler=go clause=1 fuel=180 alloc=207 state=0 end=fault
+run board/r1 outcome=limit-fault delivery=d1 handler=go limit=depth fuel=180 alloc=207
+pumped state=idle fuel=180
+
+> vars
+vars board

@@ -1,0 +1,21 @@
+function deep n
+  if n = 0 then
+    throw {code: "bad"}
+  end if
+  return deep(n - 1)
+end deep
+
+function down n
+  if n = 0 then
+    return 0
+  end if
+  return down(n - 1)
+end down
+
+on go
+  try
+    put deep(5) into x
+  catch {code: "bad"} before unwind
+    put down(5) into y
+  end try
+end go

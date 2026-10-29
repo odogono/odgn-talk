@@ -1,0 +1,13 @@
+# catch-retained-depth: the failed frames a `before unwind` catch runs over
+# count toward call depth (chapter 6, Limits; chapter 8, The Unwind Table).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+limits = { callDepth = 8 }
