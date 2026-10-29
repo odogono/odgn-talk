@@ -605,6 +605,39 @@ test('hover honors detached blocks, lexical shadowing and Built-in catalogue doc
 });
 
 describe('language server', () => {
+  test('offers the suggest-match rewrite as a quick fix', () => {
+    const { request } = setup(
+      'on demo c\nif c = 1 then\nsay 1\nelse if c = 2 then\nsay 2\nelse if c = 3 then\nsay 3\nend if\nend demo',
+    );
+    const fixes = request('textDocument/codeAction', {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 2 },
+      },
+      context: { diagnostics: [] },
+    });
+    expect(fixes).toMatchObject([
+      {
+        title: 'Rewrite as match',
+        kind: 'quickfix',
+        diagnostics: [{ code: 'suggest-match' }],
+        edit: {
+          changes: {
+            [uri]: [
+              {
+                range: {
+                  start: { line: 1, character: 0 },
+                  end: { line: 7, character: 6 },
+                },
+                newText:
+                  'match c\n  when 1 then\n  say 1\n  when 2 then\n  say 2\n  when 3 then\n  say 3\nend match',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+  });
   test('publishes list-splice hints in beginner without an automatic rewrite', () => {
     const { sent, server, request } = setup(
       'on demo\nput [] into acc\nput [1, 2] after acc\nend demo',

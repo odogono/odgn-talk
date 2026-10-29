@@ -3,13 +3,19 @@ import {
   checkSource,
   coreVersions,
   newGroup,
+  num,
+  parseInstant,
   parseSourceRecovering,
+  text,
+  type Value,
 } from '@northtalk/ts';
+import { formatSource } from '../src/format';
 import {
   lint,
   lintSyntax,
   lintCatalogue,
   readManifest,
+  suggestMatchEdit,
   type HostManifest,
 } from '../src/lint';
 import { fixtureManifest, fixtures } from './fixtures';
@@ -1002,4 +1008,113 @@ test('match advice needs three branches comparing one name with literals', () =>
   ]) {
     expect(suggestMatch(negative, 'beginner')).toEqual([]);
   }
+});
+
+const chain = (name: string) =>
+  [
+    `if ${name} = 1 then`,
+    'say 1',
+    `else if ${name} = 2 then`,
+    'say 2',
+    `else if ${name} = 3 then`,
+    'say 3',
+    'end if',
+  ].join('\n');
+
+const handler = (name: string, head = 'on demo') =>
+  `${head}\n${chain(name)}\nend demo`;
+
+test('match advice needs a subject the Script holds a value in', () => {
+  for (const variable of [
+    handler('n', 'on demo n'),
+    `on demo\nput 2 into n\n${chain('n')}\nend demo`,
+    `script variable n = 0\n${handler('n')}`,
+  ]) {
+    expect(suggestMatch(variable, 'beginner')).toHaveLength(1);
+  }
+  for (const constant of [
+    `constant size = 2\n${handler('size')}`,
+    handler('pi'),
+  ]) {
+    expect(suggestMatch(constant, 'beginner')).toEqual([]);
+  }
+});
+
+const rewriteMatch = (source: string) => {
+  const [advice] = suggestMatch(source, 'beginner');
+  const edit =
+    advice &&
+    suggestMatchEdit(
+      parseSourceRecovering(source).tree,
+      source,
+      advice.span.start,
+    );
+  return (
+    edit && source.slice(0, edit.start) + edit.newText + source.slice(edit.end)
+  );
+};
+const answer = async (source: string, arg: Value) => {
+  const group = newGroup({ name: 'g' });
+  const reply = group.load({ name: 's', source }).request({
+    name: 'pick',
+    args: [arg],
+  });
+  group.pump(parseInstant('2026-10-29T09:00:00Z'));
+  return (await reply.result).toString();
+};
+
+test('the match rewrite formats cleanly and answers as the if chain did', async () => {
+  const source = [
+    'on pick c',
+    '  if c = "red" then',
+    '    return "warm" -- a comment stays',
+    '',
+    '  else if "green" is c then',
+    '    if c is "green" then return "cool"',
+    '  else if c = 3 then',
+    '    return "three"',
+    '  else',
+    '    return "other"',
+    '  end if',
+    'end pick',
+  ].join('\n');
+  const rewritten = rewriteMatch(source)!;
+  expect(rewritten).toBe(
+    [
+      'on pick c',
+      '  match c',
+      '    when "red" then',
+      '      return "warm" -- a comment stays',
+      '',
+      '    when "green" then',
+      '      if c is "green" then return "cool"',
+      '    when 3 then',
+      '      return "three"',
+      '    else',
+      '      return "other"',
+      '  end match',
+      'end pick',
+    ].join('\n'),
+  );
+  expect(formatSource(rewritten)).toMatchObject({ source: rewritten });
+  expect(suggestMatch(rewritten, 'beginner')).toEqual([]);
+  const answers = [text('red'), text('green'), num(3), text('blue')].map(
+    async arg => [await answer(source, arg), await answer(rewritten, arg)],
+  );
+  expect(await Promise.all(answers)).toEqual([
+    ['"warm"', '"warm"'],
+    ['"cool"', '"cool"'],
+    ['"three"', '"three"'],
+    ['"other"', '"other"'],
+  ]);
+  // A bare ending stays bare, and only the chain's own lines move.
+  expect(rewriteMatch(source.replace('end if', 'end'))).toEndWith(
+    '  end\nend pick',
+  );
+  // A head that doesn't end its line has no safe layout to rewrite.
+  expect(
+    rewriteMatch(
+      source.replace('else\n    return "other"', 'else return "other"'),
+    ),
+  ).toBeUndefined();
 });

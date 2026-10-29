@@ -14,6 +14,7 @@ import {
 } from '@northtalk/ts';
 import { builtinDocs } from '@northtalk/ts/session';
 import { formatSource } from '../format';
+import { suggestMatchEdit } from '../lint';
 import {
   boundFuel,
   defaultFuelCaps,
@@ -1373,7 +1374,50 @@ export const formatting = (analysis: Analysis): TextEdit[] => {
         },
       ];
 };
-export const codeActions = (analysis: Analysis, requested: Range) =>
+const suggestMatchActions = (analysis: Analysis, requested: Range) =>
+  analysis.lints
+    .filter(
+      l =>
+        l.id === 'suggest-match' &&
+        overlaps(
+          rangeAt(analysis.document.text, l.span.start, l.span.end),
+          requested,
+        ),
+    )
+    .flatMap(l => {
+      const edit = suggestMatchEdit(
+        analysis.syntax,
+        analysis.document.text,
+        l.span.start,
+      );
+      return edit
+        ? [
+            {
+              title: 'Rewrite as match',
+              kind: 'quickfix',
+              isPreferred: true,
+              diagnostics: analysis.diagnostics.filter(
+                d => d.code === l.id && d.range.start.line === l.span.line - 1,
+              ),
+              edit: {
+                changes: {
+                  [analysis.document.uri]: [
+                    {
+                      range: rangeAt(
+                        analysis.document.text,
+                        edit.start,
+                        edit.end,
+                      ),
+                      newText: edit.newText,
+                    },
+                  ],
+                },
+              },
+            },
+          ]
+        : [];
+    });
+const explicitEndActions = (analysis: Analysis, requested: Range) =>
   analysis.lints
     .filter(
       l =>
@@ -1426,6 +1470,11 @@ export const codeActions = (analysis: Analysis, requested: Range) =>
           ]
         : [];
     });
+
+export const codeActions = (analysis: Analysis, requested: Range) => [
+  ...explicitEndActions(analysis, requested),
+  ...suggestMatchActions(analysis, requested),
+];
 
 /**
  * The Grant, and the Operation if any, that the code at `offset` calls: an
