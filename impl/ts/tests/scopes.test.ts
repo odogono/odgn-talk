@@ -894,3 +894,21 @@ describe('scope declarations', () => {
     });
   });
 });
+
+test('an unparked Run continues in a new Segment', () => {
+  const host = recordingHost();
+  const group = newGroup({ name: 'g' });
+  const script = group.load({
+    name: 's',
+    source: 'on go, queued\nask r to note\nwait 1 ms\nend go',
+    grants: { r: host.cap.grant('all', 'shared') },
+  });
+  script.deliver({ name: 'go' });
+  script.deliver({ name: 'go' });
+  group.pump(now);
+  group.pump(parseInstant('2026-09-30T09:00:01Z'));
+  // r2 parked behind r1, ending its first Segment, then was unparked.
+  expect(
+    host.calls.filter(c => c.call.runId === 's/r2').map(c => c.call.segmentId),
+  ).toEqual(['s/r2.s2']);
+});
