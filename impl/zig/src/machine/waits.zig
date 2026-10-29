@@ -201,7 +201,7 @@ pub const Waits = struct {
             try e.table.issued_calls.each(a, struct {
                 out: @TypeOf(out),
                 pub fn run(w: @This(), id: []const u8, ranges: []const issued.Range) !void {
-                    try w.out.str(id);
+                    try w.out.name(id);
                     try w.out.int(ranges.len);
                     for (ranges) |range| {
                         try w.out.int(range.first);
@@ -237,7 +237,7 @@ pub const Waits = struct {
     pub fn importIssued(w: *Waits, a: Allocator, in: anytype) !void {
         const count = try in.count();
         for (0..count) |_| {
-            const run = try a.dupe(u8, try in.str());
+            const run = try a.dupe(u8, try in.name());
             errdefer a.free(run);
             if (run.len == 0 or w.issued_calls.contains(run)) return error.InvalidSave;
             var ranges: std.ArrayList(issued.Range) = .empty;

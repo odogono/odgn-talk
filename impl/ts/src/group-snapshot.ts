@@ -474,7 +474,10 @@ const skipping: ValueIO<undefined> = {
 export const decodeSave = (bytes: Uint8Array): DecodedSave => {
   const save = readSave(bytes);
   const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
-  const reader = (tag: number) => new SaveReader(save.body(tag)!);
+  const texts = new SaveReader(save.body(saveSections.texts)!);
+  const textList = texts.list(r => r.text());
+  texts.end();
+  const reader = (tag: number) => new SaveReader(save.body(tag)!, textList);
   const section = <T>(
     tag: number,
     read: (r: RecordReader<undefined>) => T,

@@ -14,6 +14,7 @@ import {
   SaveWriter,
   readSave,
   saveSections,
+  TextTable,
   writeSave,
 } from './save-format';
 import {
@@ -139,7 +140,7 @@ export class ValueWriter implements ValueIO<Value> {
     while (work.length) {
       const v = work.pop()!;
       if (typeof v === 'string') {
-        w.text(v);
+        w.name(v);
         continue;
       }
       switch (v.kind) {
@@ -157,7 +158,7 @@ export class ValueWriter implements ValueIO<Value> {
           const q = v.asQuantityRef()!;
           w.byte(3);
           decimal(w, q.number);
-          w.text(quantityUnit(v));
+          w.name(quantityUnit(v));
           break;
         }
         case 'text':
@@ -218,7 +219,14 @@ export class ValueWriter implements ValueIO<Value> {
           break;
         case 'function': {
           const fn = v.asFunction()!;
-          w.byte(12).ref(this.meet(fn)).text(v.toString()).text(fn.home);
+          const code = this.meet(fn);
+          w.byte(12).ref(code).name(v.toString());
+          // A value with code takes its home from it.
+          if (code === undefined) {
+            w.name(fn.home);
+          } else if (this.functions[code]!.home !== fn.home) {
+            throw new Error('A Function Value has another home than its code');
+          }
           work.push(captureMap(fn.captures));
           break;
         }
@@ -278,18 +286,25 @@ export const encodeSections = (
 ): Uint8Array => {
   const sections: SaveSection[] = [];
   const written = new Map<number, Uint8Array>();
+  // Every section but `functions` and `texts` adds to the texts table as it
+  // is written; `functions` adds last, and `texts` holds the table.
+  const texts = new TextTable();
   for (const [name, tag] of Object.entries(saveSections)) {
     const body = bodies[name as keyof typeof saveSections];
     if (!body || tag === saveSections.functions) {
       continue;
     }
-    const w = new SaveWriter();
+    const w = new SaveWriter(texts);
     body(new RecordWriter(w, values));
     written.set(tag, w.finish());
   }
-  const fw = new SaveWriter();
+  const fw = new SaveWriter(texts);
   new RecordWriter(fw, values).functions(values.functions);
   written.set(saveSections.functions, fw.finish());
+  written.set(
+    saveSections.texts,
+    new SaveWriter().list(texts.texts, (w, t) => w.text(t)).finish(),
+  );
   for (const [, tag] of Object.entries(saveSections)) {
     const body = written.get(tag);
     if (body) {

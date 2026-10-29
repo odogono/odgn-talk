@@ -1489,7 +1489,7 @@ export class TsGroup implements Group {
     });
     const values = new ValueReader(
       objects,
-      codes.length,
+      save.functions.map(f => f.home),
       (i, display, home, captures) => {
         const { home: displayHome, place } = placeOf(display);
         const c = (

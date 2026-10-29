@@ -4,6 +4,7 @@ import {
   saveSections,
   SaveReader,
   SaveWriter,
+  TextTable,
   readSave,
   writeSave,
 } from '../src/save-format';
@@ -33,9 +34,12 @@ export const rawValue = (bytes: number[]): RawValue => ({
 
 export const recordsOf = (bytes: Uint8Array) => {
   const save = readSave(bytes);
+  const names = new SaveReader(save.body(saveSections.texts)!).list(r =>
+    r.text(),
+  );
   const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
   const rr = (tag: number) =>
-    new RecordReader(new SaveReader(save.body(tag)!), raw, tables);
+    new RecordReader(new SaveReader(save.body(tag)!, names), raw, tables);
   const group = rr(saveSections.group).group();
   const libraries = rr(saveSections.libraries).libraries();
   tables.libraries = libraries.length;
@@ -65,7 +69,7 @@ export const recordsOf = (bytes: Uint8Array) => {
       ? rr(saveSections.sources).sources()
       : undefined,
   };
-  return { save, records };
+  return { save, records, names };
 };
 
 /** A save with its records changed by `edit`, framed and digested again. */
@@ -74,13 +78,15 @@ export const editSave = (
   edit: (records: SaveRecords<RawValue>) => void,
   header: (h: { language: string }) => void = () => {},
 ): Uint8Array => {
-  const { save, records: x } = recordsOf(bytes);
+  const { save, records: x, names } = recordsOf(bytes);
+  // A raw value keeps its texts' positions, so the table keeps its order.
+  const texts = new TextTable(names);
   edit(x);
   const h = { ...save };
   header(h);
   // eslint-disable-next-line unicorn/consistent-function-scoping -- Kept beside the sections it writes.
   const body = (f: (w: RecordWriter<RawValue>) => void) => {
-    const w = new SaveWriter();
+    const w = new SaveWriter(texts);
     f(new RecordWriter(w, raw));
     return w.finish();
   };
@@ -104,6 +110,10 @@ export const editSave = (
       ? [[saveSections.sources, body(w => w.sources(x.sources!))]]
       : []),
   ] as [number, Uint8Array][];
+  sections.unshift([
+    saveSections.texts,
+    new SaveWriter().list(texts.texts, (w, t) => w.text(t)).finish(),
+  ]);
   return writeSave(
     h,
     sections.map(([tag, b]) => ({

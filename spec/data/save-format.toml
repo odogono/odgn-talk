@@ -81,6 +81,10 @@ name = "index"
 encoding = "A `uint` position in a list this save already holds, counting from 0."
 
 [[primitive]]
+name = "name"
+encoding = "A `uint` position in the `texts` section's `texts`."
+
+[[primitive]]
 name = "ref"
 encoding = "A `uint`: 0 for none, or a position in a list this save already holds plus 1."
 
@@ -162,6 +166,17 @@ is = "`length` bytes: the section's fields, in order. Bytes left over after its 
 
 [[section]]
 tag = 1
+name = "texts"
+required = true
+holds = "Every text a `name` field holds, each once."
+
+[[section.field]]
+name = "texts"
+type = "list of text"
+is = "Numbered in the order the writer first meets each text: the other sections in tag order with `functions` last, each one's fields in order, and each value depth-first as written. Two are the same when their bytes are. A shared table entry counts as met where the table holds it. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order."
+
+[[section]]
+tag = 2
 name = "group"
 required = true
 holds = "The Group's counters and its record of issued call ids."
@@ -212,7 +227,7 @@ type = "list of issued"
 is = "Each Run's issued call numbers, by Run id in ascending byte order."
 
 [[section]]
-tag = 2
+tag = 3
 name = "libraries"
 required = true
 holds = "Every Library the Group holds, by identity."
@@ -223,7 +238,7 @@ type = "list of library"
 is = "In the Group's order."
 
 [[section]]
-tag = 3
+tag = 4
 name = "objects"
 required = true
 holds = "Every Host Object the Group has seen, by Object Kind and id."
@@ -234,7 +249,7 @@ type = "list of object"
 is = "In the order the Group first saw them. A Value's or field's object `index` or `ref` points here."
 
 [[section]]
-tag = 4
+tag = 5
 name = "functions"
 required = true
 holds = "The code of every Function Value the save holds, and no other."
@@ -245,7 +260,7 @@ type = "list of function"
 is = "Numbered in the order the writer first meets a Function Value with that code: the other sections in tag order, each one's fields in order, and each value depth-first as written, a Function Value before its captures. A Function Value's `code` points here. The writer can't know this table until it has written the others, so it writes this section's body last and frames it in tag order."
 
 [[section]]
-tag = 5
+tag = 6
 name = "calls"
 required = true
 holds = "The Suspending Capability calls a Run still waits on."
@@ -256,7 +271,7 @@ type = "list of call"
 is = "In the order they were made."
 
 [[section]]
-tag = 6
+tag = 7
 name = "scripts"
 required = true
 holds = "Each Script's identity, limits, Grants, objects, variables and counters."
@@ -272,7 +287,7 @@ type = "list of script"
 is = "In load order."
 
 [[section]]
-tag = 7
+tag = 8
 name = "runs"
 required = true
 holds = "Every live Run, Script by Script, in each Script's live order."
@@ -293,7 +308,7 @@ type = "list of run"
 is = "The first Script's Runs, then the next Script's, in `scripts` order. A Run's `index` counts across this whole list."
 
 [[section]]
-tag = 8
+tag = 9
 name = "work"
 required = true
 holds = "Each Script's queued work."
@@ -304,7 +319,7 @@ type = "list of script work"
 is = "One per Script, in `scripts` order."
 
 [[section]]
-tag = 9
+tag = 10
 name = "waits"
 required = true
 holds = "Every pending wait, with a deadline or not, in the order they were set."
@@ -315,7 +330,7 @@ type = "list of deadline wait"
 is = "Every Run's and Join Member's `pending`, in the order the waits were set."
 
 [[section]]
-tag = 10
+tag = 11
 name = "inputs"
 required = true
 holds = "The Host inputs queued for the next Pump."
@@ -326,7 +341,7 @@ type = "list of input"
 is = "In queue order."
 
 [[section]]
-tag = 11
+tag = 12
 name = "decisions"
 required = true
 holds = "Broadcast Decisions some recipient hasn't sealed, and those a variables-only restore left for the first Pump."
@@ -342,7 +357,7 @@ type = "list of deferred decision"
 is = "In the order they were deferred."
 
 [[section]]
-tag = 12
+tag = 13
 name = "accounting"
 required = true
 holds = "Run accounting: each root's discarded messages, and the roots whose work changed since the last report (chapter 9)."
@@ -358,7 +373,7 @@ type = "list of uint"
 is = "In the order they changed."
 
 [[section]]
-tag = 13
+tag = 14
 name = "sources"
 required = false
 holds = "Each Script's base and extension sources, in an Embedded-source Snapshot."
@@ -409,7 +424,7 @@ holds = "One Run's issued call numbers."
 
 [[record.field]]
 name = "run"
-type = "text"
+type = "name"
 is = "The Run's id."
 
 [[record.field]]
@@ -442,12 +457,12 @@ holds = "A Library, by identity; the Host supplies its code on restore."
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
 name = "version"
-type = "text"
+type = "name"
 is = "Its version."
 
 [[record.field]]
@@ -461,12 +476,12 @@ holds = "A Host Object."
 
 [[record.field]]
 name = "kind"
-type = "text"
+type = "name"
 is = "Its Object Kind."
 
 [[record.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "Its id."
 
 [[record.field]]
@@ -481,7 +496,7 @@ is = "Whether it is disposed."
 
 [[record.field]]
 name = "owner of"
-type = "optional text"
+type = "optional name"
 is = "The Script it owns, if it is a Script's owner."
 
 [[record]]
@@ -490,12 +505,12 @@ holds = "A Function Value's code. A stale one, whose home Script has since been 
 
 [[record.field]]
 name = "home"
-type = "text"
+type = "name"
 is = "Its home Script."
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
@@ -538,27 +553,27 @@ holds = "A Suspending Capability call a Run waits on."
 
 [[record.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "Its call id."
 
 [[record.field]]
 name = "script"
-type = "text"
+type = "name"
 is = "The Script that made it."
 
 [[record.field]]
 name = "grant"
-type = "text"
+type = "name"
 is = "The Grant it went through."
 
 [[record.field]]
 name = "run"
-type = "text"
+type = "name"
 is = "The Run that made it."
 
 [[record.field]]
 name = "segment"
-type = "text"
+type = "name"
 is = "The Segment it was made in."
 
 [[record.field]]
@@ -583,7 +598,7 @@ is = "The Fuel charged for it."
 
 [[record.field]]
 name = "at unit"
-type = "text"
+type = "name"
 is = "The unit of its call site, where a refused reissue faults."
 
 [[record.field]]
@@ -607,7 +622,7 @@ holds = "A Script, without its Runs, work or sources."
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
@@ -642,7 +657,7 @@ is = "Its named Host Objects, in order."
 
 [[record.field]]
 name = "variable names"
-type = "list of text"
+type = "list of name"
 is = "Its Script Variables' names, in declaration order."
 
 [[record.field]]
@@ -682,7 +697,7 @@ is = "Its Fuel debt."
 
 [[record.field]]
 name = "stopped"
-type = "optional text"
+type = "optional name"
 is = "Why it was stopped, if it was."
 
 [[record]]
@@ -691,7 +706,7 @@ holds = "A Script's Grant, with what a restore that can't re-bind it still needs
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
@@ -720,7 +735,7 @@ is = "Its Capability and kept Operations as Host Manifest JSON (chapter 9)."
 
 [[record.field]]
 name = "capability"
-type = "text"
+type = "name"
 is = "Its Capability's name."
 
 [[record.field]]
@@ -743,13 +758,13 @@ holds = "An Operation's shape."
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
 name = "mode"
-type = "text"
-is = "`immediate`, `suspending` or `fire-and-forget`."
+type = "byte"
+is = "0 for `immediate`, 1 for `suspending` and 2 for `fire-and-forget`. Any other byte is `invalid save`."
 
 [[record.field]]
 name = "required"
@@ -768,7 +783,7 @@ is = "Whether it is a command."
 
 [[record.field]]
 name = "labels"
-type = "list of text"
+type = "list of name"
 is = "Its argument labels."
 
 [[record]]
@@ -777,7 +792,7 @@ holds = "A Script's named Host Object."
 
 [[record.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[record.field]]
@@ -805,7 +820,7 @@ holds = "A live Run."
 
 [[record.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "Its id."
 
 [[record.field]]
@@ -835,7 +850,7 @@ is = "The Delivery it handles."
 
 [[record.field]]
 name = "handler"
-type = "text"
+type = "name"
 is = "The Handler it runs."
 
 [[record.field]]
@@ -920,7 +935,7 @@ is = "What it resumes with, if it is ready to resume."
 
 [[record.field]]
 name = "suspended at"
-type = "text"
+type = "name"
 is = "Where it suspended, as its Trace shows."
 
 [[record.field]]
@@ -960,7 +975,7 @@ is = "Whether it is parked."
 
 [[record.field]]
 name = "abandoned"
-type = "list of text"
+type = "list of name"
 is = "The call ids it abandoned."
 
 [[record.field]]
@@ -1133,12 +1148,12 @@ holds = "A Script error a call failed with."
 
 [[record.field]]
 name = "code"
-type = "text"
+type = "name"
 is = "Its error code."
 
 [[record.field]]
 name = "message"
-type = "optional text"
+type = "optional name"
 is = "Its message."
 
 [[record.field]]
@@ -1152,7 +1167,7 @@ holds = "A Run's or Join Member's last wait."
 
 [[record.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "Its id."
 
 [[record.field]]
@@ -1167,12 +1182,12 @@ is = "Its call, in `calls`."
 
 [[record.field]]
 name = "grant"
-type = "text"
+type = "name"
 is = "Its call's Grant."
 
 [[record.field]]
 name = "operation"
-type = "text"
+type = "name"
 is = "Its call's Operation."
 
 [[record.field]]
@@ -1191,7 +1206,7 @@ holds = "A suspended wait: a Suspending Capability call, a `wait`, or a `wait fo
 
 [[record.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "Its id."
 
 [[record.field]]
@@ -1211,12 +1226,12 @@ is = "Its call, in `calls`."
 
 [[record.field]]
 name = "grant"
-type = "text"
+type = "name"
 is = "Its call's Grant."
 
 [[record.field]]
 name = "operation"
-type = "text"
+type = "name"
 is = "Its call's Operation."
 
 [[record.field]]
@@ -1366,7 +1381,7 @@ is = "The root of its Message Path."
 
 [[record.field]]
 name = "message"
-type = "text"
+type = "name"
 is = "Its message name."
 
 [[record.field]]
@@ -1386,7 +1401,7 @@ is = "The value it was sent during, if any."
 
 [[record.field]]
 name = "from"
-type = "optional text"
+type = "optional name"
 is = "The Script that sent it, if a Script did."
 
 [[record.field]]
@@ -1468,12 +1483,12 @@ holds = "A Decision recipient's mark."
 
 [[record.field]]
 name = "script"
-type = "text"
+type = "name"
 is = "The recipient Script."
 
 [[record.field]]
 name = "run"
-type = "text"
+type = "name"
 is = "The recipient Run."
 
 [[record.field]]
@@ -1483,8 +1498,8 @@ is = "A veto's reason."
 
 [[record.field]]
 name = "outcome"
-type = "text"
-is = "Its outcome."
+type = "byte"
+is = "Its outcome: 0 for `vetoed`, 1 for `errored`, 2 for `limit fault`, 3 for `cancelled`, 4 for `dropped` and 5 for `stopped`. Any other byte is `invalid save`."
 
 [[record]]
 name = "open broadcast"
@@ -1719,7 +1734,7 @@ is = "Its magnitude."
 
 [[union.variant.field]]
 name = "unit"
-type = "text"
+type = "name"
 is = "Its unit, as its display form (chapter 3) shows it after the magnitude: plural unless the magnitude is 1 or -1, so `3 inches` and `1 inch`."
 
 [[union.variant]]
@@ -1829,13 +1844,13 @@ is = "Its code, in `functions`; none for a value this Group didn't make."
 
 [[union.variant.field]]
 name = "display"
-type = "text"
+type = "name"
 is = "Its display form."
 
 [[union.variant.field]]
 name = "home"
-type = "text"
-is = "Its home Script."
+type = "name"
+is = "Its home Script, written only when `code` is none: a value with code takes its home from that code's `home`."
 
 [[union.variant.field]]
 name = "captures"
@@ -1858,7 +1873,7 @@ holds = "A Map pair."
 
 [[record.field]]
 name = "key"
-type = "text"
+type = "name"
 is = "Its key."
 
 [[record.field]]
@@ -1902,7 +1917,7 @@ is = "A stdlib Library."
 
 [[union.variant.field]]
 name = "name"
-type = "text"
+type = "name"
 is = "Its name."
 
 [[union]]
@@ -2389,7 +2404,7 @@ is = "A restored call's settlement, queued before the first Pump."
 
 [[union.variant.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "The call id."
 
 [[union.variant.field]]
@@ -2409,7 +2424,7 @@ is = "A Delivery to a Script."
 
 [[union.variant.field]]
 name = "script"
-type = "text"
+type = "name"
 is = "The Script, or empty for its Target."
 
 [[union.variant.field]]
@@ -2449,7 +2464,7 @@ is = "An answer or failure for a suspending call."
 
 [[union.variant.field]]
 name = "id"
-type = "text"
+type = "name"
 is = "The call id."
 
 [[union.variant.field]]
@@ -2469,7 +2484,7 @@ is = "Its Broadcast id."
 
 [[union.variant.field]]
 name = "message"
-type = "text"
+type = "name"
 is = "Its message name."
 
 [[union.variant.field]]
@@ -2494,12 +2509,12 @@ is = "Revoking a Script's Grant."
 
 [[union.variant.field]]
 name = "script"
-type = "text"
+type = "name"
 is = "The Script."
 
 [[union.variant.field]]
 name = "grant"
-type = "text"
+type = "name"
 is = "The Grant."
 
 [[union.variant]]
@@ -2509,7 +2524,7 @@ is = "Cancelling a Run."
 
 [[union.variant.field]]
 name = "run"
-type = "text"
+type = "name"
 is = "The Run id."
 
 [[union.variant]]
@@ -2519,7 +2534,7 @@ is = "Rewinding a Run in its first Segment to its message."
 
 [[union.variant.field]]
 name = "run"
-type = "text"
+type = "name"
 is = "The Run id."
 
 [[union.variant]]
@@ -2529,12 +2544,12 @@ is = "Stopping a Script."
 
 [[union.variant.field]]
 name = "script"
-type = "text"
+type = "name"
 is = "The Script."
 
 [[union.variant.field]]
 name = "reason"
-type = "text"
+type = "name"
 is = "Why."
 
 [[union.variant]]

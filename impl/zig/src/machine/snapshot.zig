@@ -43,7 +43,7 @@ const magic = "NTSV";
 pub const format_version: u32 = 1;
 
 /// The sections, by tag; every one but `sources` is required.
-const Section = enum(u8) { group = 1, libraries, objects, functions, calls, scripts, runs, work, waits, inputs, decisions, accounting, sources };
+const Section = enum(u8) { texts = 1, group, libraries, objects, functions, calls, scripts, runs, work, waits, inputs, decisions, accounting, sources };
 const last_required: u8 = @backingInt(Section.accounting);
 
 pub const Error = error{
@@ -62,6 +62,8 @@ pub const Error = error{
 const Out = struct {
     gpa: Allocator,
     bytes: std.ArrayList(u8) = .empty,
+    /// The save's `texts` table, which `name` adds to.
+    names: ?*Names = null,
 
     fn byte(o: *Out, b: u8) !void {
         try o.bytes.append(o.gpa, b);
@@ -108,9 +110,42 @@ const Out = struct {
         if (s) |x| try o.str(x);
     }
 
+    /// A text as its position in the `texts` table.
+    pub fn name(o: *Out, s: []const u8) !void {
+        try o.int(try o.names.?.add(o.gpa, s));
+    }
+
+    fn optName(o: *Out, s: ?[]const u8) !void {
+        try o.flag(s != null);
+        if (s) |x| try o.name(x);
+    }
+
     /// An optional index, as 0 for none and the index plus 1 otherwise.
     pub fn ref(o: *Out, i: ?usize) !void {
         try o.int(if (i) |x| x + 1 else 0);
+    }
+};
+
+/// The `texts` table being written: each distinct text once, numbered as
+/// first met. It keeps its own copy of each.
+const Names = struct {
+    list: std.ArrayList([]const u8) = .empty,
+    seen: std.StringHashMapUnmanaged(usize) = .empty,
+
+    fn deinit(t: *Names, gpa: Allocator) void {
+        for (t.list.items) |x| gpa.free(x);
+        t.list.deinit(gpa);
+        t.seen.deinit(gpa);
+    }
+
+    fn add(t: *Names, gpa: Allocator, s: []const u8) !usize {
+        if (t.seen.get(s)) |at| return at;
+        const copy = try gpa.dupe(u8, s);
+        errdefer gpa.free(copy);
+        try t.list.ensureUnusedCapacity(gpa, 1);
+        try t.seen.put(gpa, copy, t.list.items.len);
+        t.list.appendAssumeCapacity(copy);
+        return t.list.items.len - 1;
     }
 };
 
@@ -150,6 +185,23 @@ const Shared = struct {
 const In = struct {
     bytes: []const u8,
     pos: usize = 0,
+    /// The `texts` section's table, borrowed from `bytes`.
+    names: []const []const u8 = &.{},
+
+    /// A text, by its position in the `texts` table.
+    pub fn name(i: *In) Error![]const u8 {
+        return i.names[try i.index(i.names.len)];
+    }
+
+    fn optName(i: *In) Error!?[]const u8 {
+        return if (try i.flag()) try i.name() else null;
+    }
+
+    /// A byte enum's value below `n`.
+    fn enumByte(i: *In, n: usize) Error!usize {
+        const b = try i.byte();
+        return if (b < n) b else error.InvalidSave;
+    }
 
     fn byte(i: *In) Error!u8 {
         if (i.pos >= i.bytes.len) return error.InvalidSave;
@@ -365,7 +417,7 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
     while (steps.pop()) |step| {
         const v = switch (step) {
             .key => |k| {
-                try o.str(k);
+                try o.name(k);
                 continue;
             },
             .value => |v| v,
@@ -379,7 +431,7 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
                 try decimal(o, q.number);
                 const u = try unitText(o.gpa, q);
                 defer o.gpa.free(u);
-                try o.str(u);
+                try o.name(u);
             },
             .text => |s| {
                 try o.byte(marks(v));
@@ -416,9 +468,11 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
             .pattern => |s| try o.str(s),
             .function => |f| {
                 // A value this Group didn't make is gone: none of its code.
-                try o.ref(try t.meet(o.gpa, f.identity));
-                try o.str(f.display);
-                try o.str(f.home);
+                const code = try t.meet(o.gpa, f.identity);
+                try o.ref(code);
+                try o.name(f.display);
+                // A value with code takes its home from it.
+                if (code) |c| std.debug.assert(std.mem.eql(u8, f.home, t.met.?.codes.items[c].home)) else try o.name(f.home);
                 try steps.append(o.gpa, .{ .value = f.captures });
             },
             .object => |x| try o.int(t.objectIndex(x.identity) orelse return error.OutOfMemory),
@@ -466,7 +520,7 @@ fn readValue(i: *In, gpa: Allocator, t: Tables) Error!*Value {
                 return error.OutOfMemory;
             };
             if (top.items.items.len < top.len) {
-                if (top.kind == .map) try top.keys.append(gpa, try i.str());
+                if (top.kind == .map) try top.keys.append(gpa, try i.name());
                 break;
             }
             v = try finish(gpa, t, top);
@@ -536,7 +590,7 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
         .number => model.scalar(gpa, .{ .number = try readDecimal(i) }),
         .quantity => blk: {
             const n = try readDecimal(i);
-            const unit = try i.str();
+            const unit = try i.name();
             const v = model.quantity(gpa, n, unit) catch |e| return valueError(e);
             if (v.data != .quantity or !std.meta.eql(v.data.quantity.number, n)) {
                 v.release();
@@ -572,7 +626,7 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
             }
             try stack.append(gpa, .{ .kind = .{ .map = flags }, .len = n });
             const top = &stack.items[stack.items.len - 1];
-            try top.keys.append(gpa, try i.str());
+            try top.keys.append(gpa, try i.name());
             break :blk null;
         },
         .range => blk: {
@@ -588,8 +642,8 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
         .pattern => @import("../pattern.zig").parse(gpa, try i.str()) catch |e| return valueError(e),
         .function => blk: {
             const code = try i.ref(t.functions.len);
-            const shown = try i.str();
-            const home = try i.str();
+            const shown = try i.name();
+            const home = if (code) |c| t.functions[c].home else try i.name();
             try stack.append(gpa, .{ .kind = .{ .function = .{ .code = code, .shown = shown, .home = home } }, .len = 1 });
             break :blk null;
         },
@@ -693,7 +747,7 @@ const Saving = struct {
         }
         if (l.stdlib) {
             try s.o.byte(@backingInt(UnitTag.stdlib));
-            return s.o.str(l.name);
+            return s.o.name(l.name);
         }
         try s.o.byte(@backingInt(UnitTag.library));
         try s.o.int(std.mem.indexOfScalar(*Library, s.g.libraries.items, l).?);
@@ -852,8 +906,8 @@ const Saving = struct {
     }
 
     fn failure(s: *Saving, f: machine.Failure) !void {
-        try s.o.str(f.code);
-        try s.o.optStr(f.message);
+        try s.o.name(f.code);
+        try s.o.optName(f.message);
         try optValue(&s.o, s.tables, f.data);
     }
 
@@ -884,11 +938,11 @@ const Saving = struct {
     }
 
     fn waited(s: *Saving, w: machine.Waited) !void {
-        try s.o.str(w.id);
+        try s.o.name(w.id);
         try s.o.flag(w.block);
         try s.call(w.call);
-        try s.o.str(w.grant);
-        try s.o.str(w.operation);
+        try s.o.name(w.grant);
+        try s.o.name(w.operation);
         try s.o.flag(w.decl != null);
         try s.o.signed(w.after_us);
     }
@@ -896,13 +950,13 @@ const Saving = struct {
     fn pending(s: *Saving, run: *const Run, p: ?*const Pending) !void {
         const x = p orelse return s.o.flag(false);
         try s.o.flag(true);
-        try s.o.str(x.id);
+        try s.o.name(x.id);
         try s.o.flag(x.deadline != machine.wait_table.never);
         if (x.deadline != machine.wait_table.never) try s.o.signed(x.deadline);
         try s.o.int(x.order);
         try s.call(x.call);
-        try s.o.str(x.grant);
-        try s.o.str(x.operation);
+        try s.o.name(x.grant);
+        try s.o.name(x.operation);
         try s.o.flag(x.decl != null);
         try s.o.signed(x.after_us);
         try s.o.ref(x.member);
@@ -940,11 +994,11 @@ const Saving = struct {
     fn delivery(s: *Saving, d: machine.Delivery) !void {
         try s.o.int(d.id);
         try s.o.int(d.root);
-        try s.o.str(d.message);
+        try s.o.name(d.message);
         try s.values(d.args);
         try s.o.flag(d.request);
         try optValue(&s.o, s.tables, d.during);
-        try s.o.optStr(d.from);
+        try s.o.optName(d.from);
         try s.o.flag(d.internal_error);
         try s.o.flag(d.waits);
         try s.object(d.target);
@@ -963,14 +1017,14 @@ const Saving = struct {
     }
 
     fn oneRun(s: *Saving, r: *const Run) !void {
-        try s.o.str(r.id);
+        try s.o.name(r.id);
         try s.o.int(r.order);
         try s.o.flag(r.reported_fuel != null);
         if (r.reported_fuel) |f| try s.o.int(f);
         try s.o.int(r.fuel);
         try s.o.int(r.alloc);
         try s.delivery(r.delivery);
-        try s.o.str(r.handler);
+        try s.o.name(r.handler);
         try s.o.int(r.clause);
         try s.limits(r.limits);
         try s.o.int(r.clause_fuel);
@@ -994,7 +1048,7 @@ const Saving = struct {
         try s.o.flag(r.started);
         try s.pending(r, r.waiting);
         try s.resumeWith(r.resume_with);
-        try s.o.str(r.suspended_at);
+        try s.o.name(r.suspended_at);
         try s.waited(r.waited);
         try s.o.flag(r.raised_at != null);
         if (r.raised_at) |p| {
@@ -1025,7 +1079,7 @@ const Saving = struct {
         if (r.select_at) |x| try s.o.int(x);
         try s.o.flag(r.state == .parked);
         try s.o.int(r.abandoned.items.len);
-        for (r.abandoned.items) |id| try s.o.str(id);
+        for (r.abandoned.items) |id| try s.o.name(id);
         try s.o.int(r.base);
         try s.o.int(r.segments);
         try s.o.flag(r.verdict);
@@ -1034,10 +1088,10 @@ const Saving = struct {
     }
 
     fn mark(s: *Saving, m: machine.Mark) !void {
-        try s.o.str(m.script);
-        try s.o.str(m.run);
+        try s.o.name(m.script);
+        try s.o.name(m.run);
         try optValue(&s.o, s.tables, m.reason);
-        try s.o.str(m.outcome);
+        try s.o.byte(outcomeByte(m.outcome));
     }
 
     fn input(s: *Saving, x: machine.Input) !void {
@@ -1047,7 +1101,7 @@ const Saving = struct {
         switch (x) {
             .charge_request => unreachable,
             .deliver => |d| {
-                try s.o.str(d.script);
+                try s.o.name(d.script);
                 try s.delivery(d.delivery);
             },
             .set_parent => |p| {
@@ -1056,12 +1110,12 @@ const Saving = struct {
             },
             .dispose => |o| try s.object(o),
             .settle => |st| {
-                try s.o.str(st.id);
+                try s.o.name(st.id);
                 try s.resumeWith(st.with);
             },
             .broadcast => |b| {
                 try s.o.int(b.id);
-                try s.o.str(b.message);
+                try s.o.name(b.message);
                 try s.values(b.args);
                 try s.o.flag(b.decision);
                 try s.override(b.limits);
@@ -1069,20 +1123,20 @@ const Saving = struct {
                 // Broadcast has none yet.
             },
             .revoke => |r| {
-                try s.o.str(r.script);
-                try s.o.str(r.grant);
+                try s.o.name(r.script);
+                try s.o.name(r.grant);
             },
-            .cancel_run, .rewind_run => |id| try s.o.str(id),
+            .cancel_run, .rewind_run => |id| try s.o.name(id),
             .stop => |st| {
-                try s.o.str(st.script);
-                try s.o.str(st.reason);
+                try s.o.name(st.script);
+                try s.o.name(st.reason);
             },
             .cancel_delivery, .cancel_broadcast => |id| try s.o.int(id),
             // A settlement is queued only after a restore, before the
             // first Pump; a save then holds the restored calls again, and
             // its settlements with how they settle (#1055).
             .settlement => |st| {
-                try s.o.str(st.id);
+                try s.o.name(st.id);
                 try s.o.byte(@backingInt(st.how));
                 try s.resumeWith(st.with);
             },
@@ -1202,7 +1256,9 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return error.EffectsPending;
     var met: Met = .{};
     defer met.deinit(gpa);
-    var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items, .met = &met }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
+    var names: Names = .{};
+    defer names.deinit(gpa);
+    var s: Saving = .{ .o = .{ .gpa = gpa, .names = &names }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items, .met = &met }, .waits = try g.waits.exportState(gpa, g.liveRuns()) };
     defer s.deinit();
     defer s.o.bytes.deinit(gpa);
     const o = &s.o;
@@ -1219,7 +1275,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             at.* += 1;
         }
     };
-    // 1: the Group's counters and issued call ids.
+    // 2: the Group's counters and issued call ids.
     Sections.begin(&sections, &n, o, .group);
     try o.str(g.name);
     try o.instant(g.clock);
@@ -1231,48 +1287,48 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.random_state);
     try s.waits.writeIssued(gpa, o);
     Sections.end(&sections, &n, o);
-    // 2: Libraries, by identity.
+    // 3: Libraries, by identity.
     Sections.begin(&sections, &n, o, .libraries);
     try o.int(g.libraries.items.len);
     for (g.libraries.items) |l| {
-        try o.str(l.name);
-        try o.str(l.version);
+        try o.name(l.name);
+        try o.name(l.version);
         try o.bytes.appendSlice(gpa, &l.identity);
     }
     Sections.end(&sections, &n, o);
-    // 3: Host Objects, by kind and id; a parent comes by index.
+    // 4: Host Objects, by kind and id; a parent comes by index.
     Sections.begin(&sections, &n, o, .objects);
     try o.int(g.objects.items.len);
     for (g.objects.items) |x| {
-        try o.str(x.kind.name);
-        try o.str(x.id);
+        try o.name(x.kind.name);
+        try o.name(x.id);
         try s.object(x.parent);
         try o.flag(x.disposed);
-        try o.optStr(x.owner_of);
+        try o.optName(x.owner_of);
     }
     Sections.end(&sections, &n, o);
-    // 5: the calls a Run still waits on, with their arguments.
+    // 6: the calls a Run still waits on, with their arguments.
     Sections.begin(&sections, &n, o, .calls);
     try o.int(s.waits.calls.items.len);
     for (s.waits.calls.items) |c| {
-        try o.str(c.id);
-        try o.str(c.script);
-        try o.str(c.grant);
-        try o.str(c.run);
-        try o.str(c.segment);
+        try o.name(c.id);
+        try o.name(c.script);
+        try o.name(c.grant);
+        try o.name(c.run);
+        try o.name(c.segment);
         try o.instant(c.now);
         try s.values(c.args);
         // Every Zig Host call can be adopted, as a TS `start` call can.
         try o.flag(c.adoptable);
         try o.int(c.charged);
         // Its call site, where a refused reissue faults (#1068).
-        try o.str(c.at_unit);
+        try o.name(c.at_unit);
         try o.int(c.at_pc);
         try o.int(c.at_line);
         try o.int(c.at_column);
     }
     Sections.end(&sections, &n, o);
-    // 6: each Script, in load order, by its code identities.
+    // 7: each Script, in load order, by its code identities.
     Sections.begin(&sections, &n, o, .scripts);
     // The Grants' declarations, each written once, in the order the Grants
     // first meet them.
@@ -1281,25 +1337,25 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     var grants: std.ArrayList(usize) = .empty;
     defer grants.deinit(gpa);
     for (g.scripts.items) |x| for (x.grants) |sg| {
-        var d: Out = .{ .gpa = gpa };
+        var d: Out = .{ .gpa = gpa, .names = o.names };
         errdefer d.bytes.deinit(gpa);
         const json = sg.declarations orelse try fingerprint.grantJson(gpa, sg.grant.capability, sg.kept);
         defer if (sg.declarations == null) gpa.free(json);
         try d.str(json);
         // The kept Operations, with what a Grant the restore can't re-bind
         // still needs for checking code against.
-        try d.str(sg.grant.capability.name);
+        try d.name(sg.grant.capability.name);
         var kept: usize = 0;
         for (sg.kept) |k| kept += @intFromBool(k);
         try d.int(kept);
         for (sg.grant.capability.operations, sg.kept) |op, k| if (k) {
-            try d.str(op.name);
-            try d.str(modeName(op.mode));
+            try d.name(op.name);
+            try d.byte(@backingInt(op.mode));
             try d.int(op.required());
             try d.int(op.args.len);
             try d.flag(op.command);
             try d.int(op.labels.len);
-            for (op.labels) |l| try d.str(l);
+            for (op.labels) |l| try d.name(l);
         };
         try grants.append(gpa, try declarations.add(gpa, try d.bytes.toOwnedSlice(gpa)));
     };
@@ -1308,14 +1364,14 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     var at: usize = 0;
     for (g.scripts.items) |x| {
         defer at += x.grants.len;
-        try o.str(x.name);
+        try o.name(x.name);
         try o.bytes.appendSlice(gpa, &machine.codeIdentity(x.name, x.source, .script, x.imports));
         try o.int(x.extensions.items.len);
         for (x.extensions.items) |e| try o.bytes.appendSlice(gpa, &e.identity);
         try s.limits(x.limits);
         try o.int(x.grants.len);
         for (x.grants, at..) |sg, k| {
-            try o.str(sg.name);
+            try o.name(sg.name);
             try o.int(grants.items[k]);
             try o.flag(sg.revoked);
             try o.flag(sg.disabled);
@@ -1323,11 +1379,11 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try s.object(x.owner);
         try o.int(x.objects.len);
         for (x.objects) |nm| {
-            try o.str(nm.name);
+            try o.name(nm.name);
             try s.object(nm.object);
         }
         try o.int(x.variableNames().len);
-        for (x.variableNames()) |nm| try o.str(nm);
+        for (x.variableNames()) |nm| try o.name(nm);
         try s.values(x.variables);
         // The base unit's definitions, then each extension's, as one list.
         var definitions = x.definitions.len;
@@ -1340,10 +1396,10 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.int(x.alloc_total);
         try o.int(x.faults);
         try o.int(x.debt);
-        try o.optStr(x.stopped);
+        try o.optName(x.stopped);
     }
     Sections.end(&sections, &n, o);
-    // 7: how many Runs each Script has, then every Run, Script by Script,
+    // 8: how many Runs each Script has, then every Run, Script by Script,
     // in each one's live order.
     Sections.begin(&sections, &n, o, .runs);
     for (g.scripts.items) |x| try s.runs.appendSlice(gpa, x.live.items);
@@ -1354,7 +1410,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     var bases: Shared = .{};
     defer bases.deinit(gpa);
     for (s.runs.items) |r| if (r.segment_base) |b| {
-        var d: Out = .{ .gpa = gpa };
+        var d: Out = .{ .gpa = gpa, .names = o.names };
         errdefer d.bytes.deinit(gpa);
         try writeValues(&d, s.tables, b);
         try s.bases.put(gpa, r, try bases.add(gpa, try d.bytes.toOwnedSlice(gpa)));
@@ -1363,7 +1419,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(s.runs.items.len);
     for (s.runs.items) |r| try s.oneRun(r);
     Sections.end(&sections, &n, o);
-    // 8: each Script's work, in order.
+    // 9: each Script's work, in order.
     Sections.begin(&sections, &n, o, .work);
     try o.int(g.scripts.items.len);
     for (g.scripts.items) |x| {
@@ -1380,17 +1436,17 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         };
     }
     Sections.end(&sections, &n, o);
-    // 9: every pending wait, in the order it was set, each by its Run and,
+    // 10: every pending wait, in the order it was set, each by its Run and,
     // for a Join Member, its member.
     Sections.begin(&sections, &n, o, .waits);
     try s.waits.writeOrder(o, s.runs.items);
     Sections.end(&sections, &n, o);
-    // 10: the Host inputs queued for the next Pump.
+    // 11: the Host inputs queued for the next Pump.
     Sections.begin(&sections, &n, o, .inputs);
     try o.int(g.inputs.items.len);
     for (g.inputs.items) |x| try s.input(x);
     Sections.end(&sections, &n, o);
-    // 11: Broadcast Decisions some recipient hasn't sealed, by id: a hash
+    // 12: Broadcast Decisions some recipient hasn't sealed, by id: a hash
     // map's order depends on its insertion history, which a restore
     // doesn't keep. Then those a variables-only restore left for the first
     // Pump.
@@ -1429,7 +1485,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         if (x.mark) |m| try s.mark(m);
     }
     Sections.end(&sections, &n, o);
-    // 12: Run accounting: each root's discarded messages, and the roots
+    // 13: Run accounting: each root's discarded messages, and the roots
     // whose work changed since the last report (chapter 9, Run accounting).
     Sections.begin(&sections, &n, o, .accounting);
     const discards = try sortedKeys(u64, gpa, g.root_discards);
@@ -1442,7 +1498,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.changed_roots.count());
     for (g.changed_roots.keys()) |root| try o.int(root);
     Sections.end(&sections, &n, o);
-    // 13: the sources, since this Core writes only Embedded-source
+    // 14: the sources, since this Core writes only Embedded-source
     // Snapshots.
     Sections.begin(&sections, &n, o, .sources);
     try o.int(g.scripts.items.len);
@@ -1453,14 +1509,14 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     Sections.end(&sections, &n, o);
 
-    // 4: Function Value code, only what the save reaches, numbered as the
+    // 5: Function Value code, only what the save reaches, numbered as the
     // other sections first met it; a stale value's keeps only what it still
     // answers. Its bytes follow the others', and the frames go in tag order.
     Sections.begin(&sections, &n, o, .functions);
     try o.int(met.codes.items.len);
     for (met.codes.items) |f| {
-        try o.str(f.home);
-        try o.str(f.name);
+        try o.name(f.home);
+        try o.name(f.name);
         try o.int(f.required);
         try o.int(f.total);
         try o.bytes.appendSlice(gpa, &f.unit);
@@ -1473,7 +1529,17 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         }
     }
     Sections.end(&sections, &n, o);
-    std.mem.rotate(Written, sections[@backingInt(Section.functions) - 1 .. n], n - @backingInt(Section.functions));
+    // 1: every text the others name, numbered as first met, so written
+    // last of all and framed first.
+    Sections.begin(&sections, &n, o, .texts);
+    try o.int(names.list.items.len);
+    for (names.list.items) |x| try o.str(x);
+    Sections.end(&sections, &n, o);
+    std.mem.sort(Written, sections[0..n], {}, struct {
+        fn less(_: void, x: Written, y: Written) bool {
+            return @backingInt(x.tag) < @backingInt(y.tag);
+        }
+    }.less);
 
     // The header, then each section's frame and body.
     var h: Out = .{ .gpa = gpa };
@@ -1509,6 +1575,14 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try h.bytes.appendSlice(gpa, o.bytes.items[w.start..w.end]);
     }
     return h.bytes.toOwnedSlice(gpa);
+}
+
+/// A Mark's outcomes, by their byte.
+const outcomes = [_][]const u8{ "vetoed", "errored", "limit fault", "cancelled", "dropped", "stopped" };
+
+fn outcomeByte(outcome: []const u8) u8 {
+    for (outcomes, 0..) |x, b| if (std.mem.eql(u8, x, outcome)) return @intCast(b);
+    unreachable;
 }
 
 fn modeName(m: capabilities.Mode) []const u8 {
@@ -1667,6 +1741,14 @@ const Restoring = struct {
         return r.gpa().dupe(u8, try r.i.str());
     }
 
+    fn keptName(r: *Restoring) Error![]const u8 {
+        return r.keep().dupe(u8, try r.i.name());
+    }
+
+    fn ownedName(r: *Restoring) Error![]const u8 {
+        return r.gpa().dupe(u8, try r.i.name());
+    }
+
     fn value(r: *Restoring) Error!*Value {
         return readValue(&r.i, r.gpa(), r.tables);
     }
@@ -1696,7 +1778,7 @@ const Restoring = struct {
             switch (tag) {
                 .own => {},
                 .extension, .library => _ = try r.i.int(),
-                .stdlib => _ = try r.i.str(),
+                .stdlib => _ = try r.i.name(),
             }
             return null;
         }
@@ -1704,7 +1786,7 @@ const Restoring = struct {
             .own => null,
             .extension => s.extensions.items[try r.i.index(s.extensions.items.len)],
             .library => r.libraries[try r.i.index(r.libraries.len)] orelse error.InvalidSave,
-            .stdlib => machine.stdlibLibrary(try r.i.str()) orelse error.InvalidSave,
+            .stdlib => machine.stdlibLibrary(try r.i.name()) orelse error.InvalidSave,
         };
     }
 
@@ -1733,12 +1815,12 @@ const Restoring = struct {
         const a = r.gpa();
         const id = try r.i.int();
         const root = try r.i.int();
-        var d: machine.Delivery = .{ .id = id, .root = root, .message = try r.owned(), .args = &.{}, .request = false };
+        var d: machine.Delivery = .{ .id = id, .root = root, .message = try r.ownedName(), .args = &.{}, .request = false };
         errdefer r.g.releaseDelivery(d);
         d.args = try r.values();
         d.request = try r.i.flag();
         d.during = try r.optValue();
-        if (try r.i.optStr()) |x| d.from = try a.dupe(u8, x);
+        if (try r.i.optName()) |x| d.from = try a.dupe(u8, x);
         d.internal_error = try r.i.flag();
         d.waits = try r.i.flag();
         d.target = try r.object();
@@ -1758,9 +1840,9 @@ const Restoring = struct {
 
     fn failure(r: *Restoring) Error!machine.Failure {
         const a = r.gpa();
-        const code = try r.owned();
+        const code = try r.ownedName();
         errdefer a.free(code);
-        const message = if (try r.i.optStr()) |m| try a.dupe(u8, m) else null;
+        const message = if (try r.i.optName()) |m| try a.dupe(u8, m) else null;
         errdefer if (message) |m| a.free(m);
         return .{ .code = code, .message = message, .data = try r.optValue() };
     }
@@ -1809,11 +1891,11 @@ const Restoring = struct {
     }
 
     fn waited(r: *Restoring, s: *const Script) Error!machine.Waited {
-        var w: machine.Waited = .{ .id = try r.kept() };
+        var w: machine.Waited = .{ .id = try r.keptName() };
         w.block = try r.i.flag();
         w.call = try r.call();
-        w.grant = try r.kept();
-        w.operation = try r.kept();
+        w.grant = try r.keptName();
+        w.operation = try r.keptName();
         if (try r.i.flag()) w.decl = try r.decl(s, w.grant, w.operation);
         w.after_us = try duration(&r.i);
         return w;
@@ -1826,13 +1908,13 @@ const Restoring = struct {
         const p = try a.create(Pending);
         p.* = .{ .run = run, .deadline = 0, .order = 0 };
         errdefer r.g.destroyPending(p);
-        p.id = try r.kept();
+        p.id = try r.keptName();
         p.deadline = if (try r.i.flag()) try deadline(&r.i) else machine.wait_table.never;
         p.order = try r.i.int();
         p.call = try r.call();
         if (p.call) |c| c.setDelivery(machine.Group.hostDelivery(run.delivery));
-        p.grant = try r.kept();
-        p.operation = try r.kept();
+        p.grant = try r.keptName();
+        p.operation = try r.keptName();
         if (try r.i.flag()) p.decl = try r.decl(run.script, p.grant, p.operation);
         p.after_us = try duration(&r.i);
         p.member = try r.i.ref(std.math.maxInt(u32));
@@ -2061,7 +2143,7 @@ const Restoring = struct {
     /// it is made.
     fn oneRun(r: *Restoring, s: *Script) Error!void {
         const a = r.gpa();
-        const id = try r.owned();
+        const id = try r.ownedName();
         // Its number must name it as the Script's.
         if (!std.mem.startsWith(u8, id, s.name) or id.len < s.name.len + 3 or !std.mem.eql(u8, id[s.name.len .. s.name.len + 2], "/r")) {
             a.free(id);
@@ -2089,7 +2171,7 @@ const Restoring = struct {
         const d = try r.delivery();
         r.g.releaseDelivery(x.delivery);
         x.delivery = d;
-        const handler = try r.i.str();
+        const handler = try r.i.name();
         x.handler = if (std.mem.eql(u8, handler, d.message)) d.message else try r.keep().dupe(u8, handler);
         x.clause = try r.i.small(u32);
         x.limits = try r.limits();
@@ -2113,7 +2195,7 @@ const Restoring = struct {
         x.started = try r.i.flag();
         try r.g.waits.importWait(x, null, try r.pending(x));
         x.resume_with = try r.resumeWith();
-        x.suspended_at = try r.kept();
+        x.suspended_at = try r.keptName();
         x.waited = try r.waited(s);
         if (try r.i.flag()) x.raised_at = .{ .line = try r.i.small(u32), .column = try r.i.small(u32) };
         if (try r.i.flag()) {
@@ -2147,7 +2229,7 @@ const Restoring = struct {
         if (try r.i.flag()) x.select_at = try r.i.small(u32);
         try machine.run_lifecycle.restore(x, preempted, try r.i.flag());
         const abandoned = try r.i.count();
-        for (0..abandoned) |_| try x.abandoned.append(a, try r.kept());
+        for (0..abandoned) |_| try x.abandoned.append(a, try r.keptName());
         x.base = try r.i.small(usize);
         x.segments = try r.i.small(u32);
         x.verdict = try r.i.flag();
@@ -2374,43 +2456,43 @@ const Restoring = struct {
         return switch (t) {
             .charge_request => error.InvalidSave,
             .deliver => blk: {
-                const script = try r.owned();
+                const script = try r.ownedName();
                 errdefer a.free(script);
                 break :blk .{ .deliver = .{ .script = script, .delivery = try r.delivery() } };
             },
             .set_parent => .{ .set_parent = .{ .object = try r.object() orelse return error.InvalidSave, .parent = try r.object() } },
             .dispose => .{ .dispose = try r.object() orelse return error.InvalidSave },
             .settle => blk: {
-                const id = try r.owned();
+                const id = try r.ownedName();
                 errdefer a.free(id);
                 break :blk .{ .settle = .{ .id = id, .with = try r.resumeWith() orelse return error.InvalidSave } };
             },
             .broadcast => blk: {
                 const id = try r.i.int();
-                const message = try r.owned();
+                const message = try r.ownedName();
                 errdefer a.free(message);
                 const args = try r.values();
                 errdefer machine.releaseValues(args, a);
                 break :blk .{ .broadcast = .{ .id = id, .message = message, .args = args, .decision = try r.i.flag(), .limits = try r.override() } };
             },
             .revoke => blk: {
-                const script = try r.owned();
+                const script = try r.ownedName();
                 errdefer a.free(script);
-                break :blk .{ .revoke = .{ .script = script, .grant = try r.owned() } };
+                break :blk .{ .revoke = .{ .script = script, .grant = try r.ownedName() } };
             },
-            .cancel_run => .{ .cancel_run = try r.owned() },
-            .rewind_run => .{ .rewind_run = try r.owned() },
+            .cancel_run => .{ .cancel_run = try r.ownedName() },
+            .rewind_run => .{ .rewind_run = try r.ownedName() },
             .stop => blk: {
-                const script = try r.owned();
+                const script = try r.ownedName();
                 errdefer a.free(script);
-                break :blk .{ .stop = .{ .script = script, .reason = try r.owned() } };
+                break :blk .{ .stop = .{ .script = script, .reason = try r.ownedName() } };
             },
             .cancel_delivery => .{ .cancel_delivery = try r.i.int() },
             .cancel_broadcast => .{ .cancel_broadcast = try r.i.int() },
             // A save taken before a restored Group's first Pump keeps its
             // queued settlements; restore checks their calls still pend.
             .settlement => blk: {
-                const id = try r.owned();
+                const id = try r.ownedName();
                 errdefer a.free(id);
                 const how = std.enums.fromInt(machine.How, try r.i.byte()) orelse return error.InvalidSave;
                 const with = try r.resumeWith();
@@ -2426,13 +2508,13 @@ const Restoring = struct {
 
     fn mark(r: *Restoring) Error!machine.Mark {
         const a = r.gpa();
-        const script = try r.owned();
+        const script = try r.ownedName();
         errdefer a.free(script);
-        const run_id = try r.owned();
+        const run_id = try r.ownedName();
         errdefer a.free(run_id);
         const reason = try r.optValue();
         errdefer if (reason) |v| v.release();
-        return .{ .script = script, .run = run_id, .reason = reason, .outcome = try r.kept() };
+        return .{ .script = script, .run = run_id, .reason = reason, .outcome = outcomes[try r.i.enumByte(outcomes.len)] };
     }
 };
 
@@ -2518,19 +2600,16 @@ fn readDeclaration(r: *Restoring) Error!SavedDeclaration {
     const k = r.keep();
     const i = &r.i;
     const json = try r.kept();
-    const capability = try r.kept();
+    const capability = try r.keptName();
     const ops = try k.alloc(SavedOperation, try i.count());
     for (ops) |*o| {
-        o.name = try r.kept();
-        const mode = try i.str();
-        o.mode = for (std.enums.values(capabilities.Mode)) |m| {
-            if (std.mem.eql(u8, modeName(m), mode)) break m;
-        } else return error.InvalidSave;
+        o.name = try r.keptName();
+        o.mode = std.enums.values(capabilities.Mode)[try i.enumByte(std.enums.values(capabilities.Mode).len)];
         o.required = try i.small(usize);
         o.total = try i.small(usize);
         o.command = try i.flag();
         const labels = try k.alloc([]const u8, try i.count());
-        for (labels) |*l| l.* = try r.kept();
+        for (labels) |*l| l.* = try r.keptName();
         o.labels = labels;
     }
     return .{ .json = json, .capability = capability, .ops = ops };
@@ -2545,7 +2624,7 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     const i = &r.i;
     out.* = .{ .name = "", .identity = undefined, .base = undefined, .extension_identities = &.{}, .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
     errdefer out.release(a);
-    out.name = try r.kept();
+    out.name = try r.keptName();
     out.base = try i.digest();
     out.identity = out.base;
     const extensions = try k.alloc([32]u8, try i.count());
@@ -2558,7 +2637,7 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     const grants = try k.alloc(machine.ScriptGrant, try i.count());
     for (grants) |*sg| {
         const saved: SavedGrant = blk: {
-            const name = try r.kept();
+            const name = try r.keptName();
             const d = r.declarations[try i.index(r.declarations.len)];
             break :blk .{ .name = name, .json = d.json, .capability = d.capability, .ops = d.ops, .revoked = try i.flag(), .disabled = try i.flag() };
         };
@@ -2592,10 +2671,10 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     out.grants = grants;
     out.owner = try r.object();
     const named = try k.alloc(machine.NamedObject, try i.count());
-    for (named) |*x| x.* = .{ .name = try r.kept(), .object = try r.object() orelse return error.InvalidSave };
+    for (named) |*x| x.* = .{ .name = try r.keptName(), .object = try r.object() orelse return error.InvalidSave };
     out.objects = named;
     const names = try k.alloc([]const u8, try i.count());
-    for (names) |*x| x.* = try r.kept();
+    for (names) |*x| x.* = try r.keptName();
     out.variable_names = names;
     out.variables = try r.values();
     if (out.variables.len != names.len) return error.InvalidSave;
@@ -2605,7 +2684,7 @@ fn readSaved(r: *Restoring, out: *Saved) Error!void {
     out.alloc_total = try i.int();
     out.faults = try i.int();
     out.debt = try i.int();
-    out.stopped = if (try i.optStr()) |x| try k.dupe(u8, x) else null;
+    out.stopped = if (try i.optName()) |x| try k.dupe(u8, x) else null;
 }
 
 /// A new Script of the Group with a saved Script's name, Grants, objects,
@@ -2700,10 +2779,16 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const sectionAt = struct {
         fn at(h: *const Header, in: *In, tag: Section) Error!void {
             if (in.bytes.len > 0 or in.pos > 0) try in.end();
-            in.* = .{ .bytes = h.bodies[@backingInt(tag)].? };
+            in.* = .{ .bytes = h.bodies[@backingInt(tag)].?, .names = in.names };
         }
     }.at;
     r.i = .{ .bytes = &.{} };
+    // The texts the other sections name, first.
+    try sectionAt(&header, i, .texts);
+    const names = try a.alloc([]const u8, try i.count());
+    defer a.free(names);
+    for (names) |*x| x.* = try i.str();
+    i.names = names;
     try sectionAt(&header, i, .group);
     // A restored Group's saves keep its save's name, whatever the Host
     // names it, so its State Fingerprint equals its save's.
@@ -2731,8 +2816,8 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     var named: std.ArrayList(*Library) = .empty;
     defer named.deinit(a);
     for (r.libraries) |*l| {
-        const name = try i.str();
-        _ = try i.str();
+        const name = try i.name();
+        _ = try i.name();
         if (i.bytes.len - i.pos < 32) return error.InvalidSave;
         const identity = i.bytes[i.pos..][0..32];
         i.pos += 32;
@@ -2756,7 +2841,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const parents = try a.alloc(?usize, object_count);
     defer a.free(parents);
     for (parents) |*parent| {
-        const kind_name = try i.str();
+        const kind_name = try i.name();
         const kind: *const objects.Kind = (if (options.kinds) |k| k.call(k.context, kind_name) else null) orelse blk: {
             // A kind the Core no longer defines: its objects can only be
             // disposed.
@@ -2764,7 +2849,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             k.* = .{ .name = try g.keep.allocator().dupe(u8, kind_name), .props = &.{} };
             break :blk k;
         };
-        const id = try i.str();
+        const id = try i.name();
         for (g.objects.items) |x| if (std.mem.eql(u8, x.kind.name, kind.name) and std.mem.eql(u8, x.id, id)) return error.InvalidSave;
         const o = objects.Object.make(a, kind, id, null) catch |e| return valueError(e);
         g.objects.append(a, o) catch |e| {
@@ -2773,7 +2858,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         };
         parent.* = try i.ref(object_count);
         o.disposed = try i.flag();
-        if (try i.optStr()) |x| o.owner_of = try a.dupe(u8, x);
+        if (try i.optName()) |x| o.owner_of = try a.dupe(u8, x);
     }
     for (g.objects.items, parents) |o, p| {
         if (p) |x| o.parent = g.objects.items[x];
@@ -2787,8 +2872,8 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const places = try a.alloc(Place, code_count);
     defer a.free(places);
     for (places) |*place| {
-        const home_text = try i.str();
-        const name_text = try i.str();
+        const home_text = try i.name();
+        const name_text = try i.name();
         const home = try a.dupe(u8, home_text);
         const name = a.dupe(u8, name_text) catch |e| {
             a.free(home);
@@ -2818,7 +2903,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             switch (place.tag) {
                 .own => {},
                 .extension, .library => place.index = try i.small(usize),
-                .stdlib => place.name = try i.str(),
+                .stdlib => place.name = try i.name(),
             }
             place.body = try i.small(u32);
         }
@@ -2829,12 +2914,12 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const calls = try a.alloc(*capabilities.Call, try i.count());
     defer a.free(calls);
     for (calls) |*c| {
-        const x = try g.waits.importCall(a, try i.str(), .{ .clock = g.clock, .group = g, .owner = g });
-        x.script = try r.kept();
-        x.grant = try r.kept();
-        x.run = try r.kept();
+        const x = try g.waits.importCall(a, try i.name(), .{ .clock = g.clock, .group = g, .owner = g });
+        x.script = try r.keptName();
+        x.grant = try r.keptName();
+        x.run = try r.keptName();
         // The Segment which established the wait, within the Call's Run.
-        x.segment = try r.kept();
+        x.segment = try r.keptName();
         if (!std.mem.startsWith(u8, x.segment, x.run) or !std.mem.startsWith(u8, x.segment[x.run.len..], ".s")) return error.InvalidSave;
         x.now = try i.instant();
         model.dates.validateInstant(x.now) catch return error.InvalidSave;
@@ -2842,7 +2927,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         x.args = try r.values();
         x.adoptable = try i.flag();
         x.charged = try i.int();
-        x.at_unit = try r.kept();
+        x.at_unit = try r.keptName();
         x.at_pc = try i.small(u32);
         x.at_line = try i.small(u32);
         x.at_column = try i.small(u32);
@@ -2872,7 +2957,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         if (g.trace) |w| w.print("> restore from=s{d} fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{ g.saves, saved_print }) catch {};
         return .mismatch;
     };
-    r.i = .{ .bytes = sources };
+    r.i = .{ .bytes = sources, .names = names };
     if (try i.count() != saved.len) return error.InvalidSave;
     for (saved) |*x| {
         x.source = try r.kept();
@@ -3918,16 +4003,18 @@ fn deepSaveValue() !void {
         v.release();
         v = next;
     }
-    var o: Out = .{ .gpa = gpa };
+    var names: Names = .{};
+    defer names.deinit(gpa);
+    var o: Out = .{ .gpa = gpa, .names = &names };
     defer o.bytes.deinit(gpa);
     try writeValue(&o, tables, v);
-    var i: In = .{ .bytes = o.bytes.items };
+    var i: In = .{ .bytes = o.bytes.items, .names = names.list.items };
     const copy = try readValue(&i, gpa, tables);
     defer copy.release();
     try std.testing.expectEqual(o.bytes.items.len, i.pos);
     try std.testing.expect(try v.equal(copy));
     // A truncated save is refused, and what was read is freed.
-    var cut: In = .{ .bytes = o.bytes.items[0 .. o.bytes.items.len - 1] };
+    var cut: In = .{ .bytes = o.bytes.items[0 .. o.bytes.items.len - 1], .names = names.list.items };
     try std.testing.expectError(error.InvalidSave, readValue(&cut, gpa, tables));
 }
 
@@ -4228,8 +4315,8 @@ test "Numbers, Quantities, Ranges, dates and Patterns save as structured values 
     defer gpa.free(bytes);
     // `1.50` keeps its exponent: tag 2, not negative, 150, then -2.
     try testing.expect(std.mem.indexOf(u8, bytes, &.{ 2, 0, 0x96, 0x01, 0x7e }) != null);
-    // `3 inches`: its Unit as its display form shows it.
-    try testing.expect(std.mem.indexOf(u8, bytes, &[_]u8{ 3, 0, 3, 0, 6 } ++ "inches") != null);
+    // `3 inches`: its Unit as its display form shows it, in `texts`.
+    try testing.expect(std.mem.indexOf(u8, bytes, &[_]u8{6} ++ "inches") != null);
     var restored: Group = .init(gpa, null);
     defer restored.deinit();
     var result: Result = .{};
@@ -4252,9 +4339,9 @@ test "an External-source Snapshot has the same State Fingerprint, and restores o
     defer gpa.free(bytes);
     // Drop the `sources` section, the last, from the frame.
     const count_at = magic.len + 2 + version.language.len + 1 + 32 + 1 + 32 + 32;
-    try testing.expectEqual(@as(u8, 13), bytes[count_at]);
+    try testing.expectEqual(@as(u8, 14), bytes[count_at]);
     var i: In = .{ .bytes = bytes, .pos = count_at + 1 };
-    for (0..12) |_| {
+    for (0..13) |_| {
         i.pos += 2;
         const len = try i.int();
         i.pos += 32 + len;
@@ -4262,7 +4349,7 @@ test "an External-source Snapshot has the same State Fingerprint, and restores o
     try testing.expectEqual(@backingInt(Section.sources), bytes[i.pos]);
     const external = try gpa.dupe(u8, bytes[0..i.pos]);
     defer gpa.free(external);
-    external[count_at] = 12;
+    external[count_at] = 13;
     reseal(external);
     try testing.expectEqual(try stateFingerprint(bytes), try stateFingerprint(external));
     for ([_]Options{ .{}, .{ .variables_only = true }, .{ .reload_changed = true } }) |options| {
