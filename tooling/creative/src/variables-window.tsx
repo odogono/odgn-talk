@@ -7,8 +7,10 @@ import { signal, type Signal } from '@preact/signals';
 import { useState } from 'preact/hooks';
 import { render } from 'preact';
 import { byId } from './dom';
+import { copySource } from './copy-source';
 import {
   rowValues,
+  sourceOf,
   summary,
   variableRows,
   type VariableRow,
@@ -39,6 +41,27 @@ type Shown = {
   ended: boolean;
   expanded: ReadonlySet<string>;
   scripts: readonly VariableScript[];
+};
+
+/** Copies a row's value as source, saying so in its title for a moment. */
+const CopyButton = ({ label, source }: { label: string; source?: string }) => {
+  const [said, setSaid] = useState<string | undefined>();
+  return (
+    <button
+      aria-label={`Copy ${label} as source`}
+      className="copy"
+      onClick={() => {
+        void copySource(source).then(text => {
+          setSaid(text);
+          setTimeout(() => setSaid(undefined), 2000);
+        });
+      }}
+      title={said ?? 'Copy as source'}
+      type="button"
+    >
+      {said === undefined ? '⧉' : source === undefined ? 'no source form' : '✓'}
+    </button>
+  );
 };
 
 const Row = ({
@@ -91,6 +114,7 @@ const Row = ({
           </button>
         )}
       </span>
+      <CopyButton label={row.label} source={sourceOf(value)} />
     </li>
   );
 };

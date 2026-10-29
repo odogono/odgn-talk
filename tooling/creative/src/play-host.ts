@@ -9,6 +9,7 @@ import {
 } from '@northtalk/tooling/worker-supervisor';
 import type { DrawingMark } from './drawing';
 import { type CanvasElement, type Element, type Project } from './model';
+import { valueReply } from './message';
 import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
 import {
   type DrawingView,
@@ -362,9 +363,7 @@ export class PlayHost {
               kind: 'message',
               ...(inspect
                 ? { value: valueEncoder(session, this.#owners)(value) }
-                : value.kind === 'nothing'
-                  ? {}
-                  : { text: value.asText() ?? String(value) }),
+                : valueReply(value)),
             }),
           (error: unknown) =>
             reply({

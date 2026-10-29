@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
-import { runInEdit, sessionCommand, settle } from '../src/message';
+import {
+  runInEdit,
+  sessionCommand,
+  settle,
+  type MessageReply,
+} from '../src/message';
 import {
   createElement,
   createPage,
@@ -16,7 +21,10 @@ const fixture = () => {
   return project;
 };
 
-const run = async (play: PlaySession, command: string) => {
+const run = async (
+  play: PlaySession,
+  command: string,
+): Promise<MessageReply> => {
   const started = play.runMessage(command);
   return started.ok
     ? settle(play, started.result, () => play.pump(0n))
@@ -31,8 +39,11 @@ test('a command changes Play State and an expression prints its value', async ()
     text: undefined,
   });
   expect(play.page.elements[0]!.visible).toBe(false);
-  expect(await run(play, 'the label of button1')).toEqual({ text: 'Button' });
-  expect(await run(play, '3 + 4')).toEqual({ text: '7' });
+  expect(await run(play, 'the label of button1')).toEqual({
+    text: 'Button',
+    source: '"Button"',
+  });
+  expect(await run(play, '3 + 4')).toEqual({ text: '7', source: '7' });
   expect(project).toEqual(before);
   expect(play.problems).toEqual([]);
 });
@@ -78,7 +89,10 @@ test('Script properties round-trip across Element kinds, Pages and the Project',
         [owner, 'height', '80', '80'],
       );
     }
-    expect(await run(play, `the name of ${owner}`)).toEqual({ text: owner });
+    expect(await run(play, `the name of ${owner}`)).toEqual({
+      text: owner,
+      source: `"${owner}"`,
+    });
   }
   for (const [owner, field, value, result] of writes) {
     expect(await run(play, `set the ${field} of ${owner} to ${value}`)).toEqual(
@@ -86,19 +100,22 @@ test('Script properties round-trip across Element kinds, Pages and the Project',
         text: undefined,
       },
     );
-    expect(await run(play, `the ${field} of ${owner}`)).toEqual({
+    expect(await run(play, `the ${field} of ${owner}`)).toMatchObject({
       text: result,
     });
   }
-  expect(await run(play, 'the name of page1')).toEqual({ text: 'page1' });
-  expect(await run(play, 'the name of project')).toEqual({
+  expect(await run(play, 'the name of page1')).toMatchObject({ text: 'page1' });
+  expect(await run(play, 'the name of project')).toMatchObject({
     text: 'Properties',
   });
   for (const field of ['width', 'height']) {
     expect(
       (await run(play, `set the ${field} of group1 to 10`)).error,
     ).toBeDefined();
-    expect(await run(play, `the ${field} of group1`)).toEqual({ text: '0' });
+    expect(await run(play, `the ${field} of group1`)).toEqual({
+      text: '0',
+      source: '0',
+    });
   }
   expect(project).toEqual(before);
   expect(play.problems).toEqual([]);
@@ -191,7 +208,7 @@ test('expressions and unchanged writes preserve the root and redo history', asyn
   editor.renameElement('button1', 'renamed');
   editor.undo();
   const before = editor.state.value;
-  expect(await runInEdit(editor, '3 + 4')).toEqual({ text: '7' });
+  expect(await runInEdit(editor, '3 + 4')).toEqual({ text: '7', source: '7' });
   expect(await runInEdit(editor, 'show button1')).toEqual({ text: undefined });
   expect(editor.state.value).toBe(before);
   expect(editor.canUndo).toBe(false);
@@ -246,14 +263,21 @@ test('targeted commands share live variables, ownership and functions without pe
     'script variable score = 3\non click\n add 1 to score\nend click';
   const play = new PlaySession(project);
   const target = play.messageTargets[0]!;
-  expect(await targeted(play, target.id, 'score')).toEqual({ text: '3' });
+  expect(await targeted(play, target.id, 'score')).toEqual({
+    text: '3',
+    source: '3',
+  });
   expect(await targeted(play, target.id, 'put 8 into score')).toEqual({
     text: undefined,
   });
   play.send(play.page.elements[0]!, 'click');
-  expect(await targeted(play, target.id, 'score')).toEqual({ text: '9' });
+  expect(await targeted(play, target.id, 'score')).toEqual({
+    text: '9',
+    source: '9',
+  });
   expect(await targeted(play, target.id, 'the name of me')).toEqual({
     text: 'button1',
+    source: '"button1"',
   });
   expect(await targeted(play, target.id, 'put 2 into scor')).toEqual({
     text: undefined,
@@ -292,7 +316,10 @@ test('navigation invalidates the loaded instance but keeps the Project target', 
   expect((await targeted(play, page!.id, 'score')).error).toContain(
     'unavailable',
   );
-  expect(await targeted(play, root!.id, 'total')).toEqual({ text: '4' });
+  expect(await targeted(play, root!.id, 'total')).toEqual({
+    text: '4',
+    source: '4',
+  });
   await run(play, 'tell pages to show page1');
   for (let i = 0; i < 5; i++) {
     play.pump(0n);
@@ -302,7 +329,10 @@ test('navigation invalidates the loaded instance but keeps the Project target', 
   );
   const fresh = play.messageTargets.find(t => t.label === page!.label)!;
   expect(fresh.id).not.toBe(page!.id);
-  expect(await targeted(play, fresh.id, 'score')).toEqual({ text: '3' });
+  expect(await targeted(play, fresh.id, 'score')).toEqual({
+    text: '3',
+    source: '3',
+  });
 });
 
 test('commands cannot escape their wrapper to declare Script names', async () => {
@@ -320,7 +350,10 @@ test('commands cannot escape their wrapper to declare Script names', async () =>
     ).error,
   ).toBeDefined();
   expect((await targeted(play, target.id, 'injected + 0')).error).toBeDefined();
-  expect(await targeted(play, target.id, 'score')).toEqual({ text: '3' });
+  expect(await targeted(play, target.id, 'score')).toEqual({
+    text: '3',
+    source: '3',
+  });
 });
 
 // Reaching the real 1,000-command cap compiles against accumulated units on
@@ -330,15 +363,27 @@ test('repeated commands reuse code, avoid authored names, and respect the distin
   project.script = 'script variable folioMessage1 = 7';
   const play = new PlaySession(project);
   const id = play.messageTargets[0]!.id;
-  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({
+    text: '7',
+    source: '7',
+  });
   const identity = play.group.fingerprint();
-  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({
+    text: '7',
+    source: '7',
+  });
   expect(play.group.fingerprint()).toEqual(identity);
   for (let i = 1; i < 1000; i++) {
-    expect(await targeted(play, id, String(i))).toEqual({ text: String(i) });
+    expect(await targeted(play, id, String(i))).toEqual({
+      text: String(i),
+      source: String(i),
+    });
   }
   expect((await targeted(play, id, '1000')).error).toContain('Restart Play');
-  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({
+    text: '7',
+    source: '7',
+  });
 }, 120_000);
 
 test('overlapping commands retain their own errors and completed effects', async () => {
@@ -356,13 +401,16 @@ test('overlapping commands retain their own errors and completed effects', async
   }
   const slowError = slow.result.catch((error: Error) => error.message);
   play.pump(0n);
-  expect(await targeted(play, id, 'score')).toEqual({ text: '4' });
+  expect(await targeted(play, id, 'score')).toEqual({ text: '4', source: '4' });
   expect(await targeted(play, id, '2 / 0')).toEqual({
     error: 'line 1: Division by zero',
   });
   play.pump(1_000_000n);
   expect(await slowError).toBe('line 3: Division by zero');
-  expect(await targeted(play, id, 'score', 1_000_000n)).toEqual({ text: '4' });
+  expect(await targeted(play, id, 'score', 1_000_000n)).toEqual({
+    text: '4',
+    source: '4',
+  });
   expect(play.problems).toEqual([]);
 });
 
@@ -441,4 +489,14 @@ test(':inspect in Edit gives the value as the Variables window shows it', async 
       .error,
   ).toBeDefined();
   expect(editor.page.elements[0]).toHaveProperty('label', 'Button');
+});
+
+test('a result copies as source unless it holds a Function Value or Host Object', async () => {
+  const play = new PlaySession(fixture());
+  expect(await run(play, '[1, "a", {b: 2}]')).toEqual({
+    text: '[1, "a", {b: 2}]',
+    source: '[1, "a", {b: 2}]',
+  });
+  expect((await run(play, '[button1]')).source).toBeUndefined();
+  expect((await run(play, '[1, button1]')).text).toBeDefined();
 });

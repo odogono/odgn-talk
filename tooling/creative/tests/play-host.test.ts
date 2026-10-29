@@ -24,6 +24,7 @@ import { ReaderTextHistory } from '../src/play-text';
 import {
   ITEM_LIMIT,
   rowKey,
+  sourceOf,
   summary,
   variableRows,
   type VariableScript,
@@ -190,6 +191,7 @@ test('Message Box commands answer once their Run ends', async () => {
   expect(replies.find(r => r.id === 2)!.response).toEqual({
     kind: 'message',
     text: '3',
+    source: '3',
   });
   request({ kind: 'message', session: 1, text: ':inspect [1 + 2]' });
   await until(() => replies.some(r => r.id === 3));
@@ -438,6 +440,7 @@ test('worker targets carry loaded scope, reject stale instances and session ids'
   expect(replies.find(r => r.response.kind === 'message')?.response).toEqual({
     kind: 'message',
     text: '3',
+    source: '3',
   });
   request({
     kind: 'message',
@@ -687,6 +690,9 @@ test('the Variables window reads the showing Page’s Scripts once per Pump', as
     owner: 2,
   });
   expect(page.get('step')).toEqual({ kind: 'function' });
+  expect(sourceOf(page.get('board')!)).toBe('[[1, 2], [3]]');
+  expect(sourceOf(page.get('target')!)).toBeUndefined();
+  expect(sourceOf(page.get('step')!)).toBeUndefined();
   // Nothing has pumped since, so the window keeps what it has.
   expect(ask().scripts).toBeUndefined();
 });
@@ -728,6 +734,41 @@ test('Variables rows open lists by key and cap them with a more row', () => {
       live: false,
     }),
   ).toBe('(deleted)');
+});
+
+test('Variables rows copy as source, a cut-off list only when it carries its source', () => {
+  const items = Array.from({ length: ITEM_LIMIT }, (_, i) => ({
+    kind: 'plain' as const,
+    text: String(i),
+  }));
+  expect(
+    sourceOf({
+      kind: 'map',
+      length: 2,
+      entries: [
+        ['a', { kind: 'plain', text: '"x"' }],
+        ['"two words"', { kind: 'list', length: 0, items: [] }],
+      ],
+    }),
+  ).toBe('{a: "x", "two words": []}');
+  expect(
+    sourceOf({
+      kind: 'list',
+      length: 2,
+      items: [{ kind: 'plain', text: '1' }, { kind: 'function' }],
+    }),
+  ).toBeUndefined();
+  expect(
+    sourceOf({ kind: 'list', length: ITEM_LIMIT + 1, items }),
+  ).toBeUndefined();
+  expect(
+    sourceOf({
+      kind: 'list',
+      length: ITEM_LIMIT + 1,
+      items,
+      source: '[whole]',
+    }),
+  ).toBe('[whole]');
 });
 
 test('the Performance window leaves out paused time', () => {

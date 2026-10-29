@@ -177,7 +177,7 @@ repeat 10 times
 end repeat
 try\n ask canvas to ${call}\ncatch e\n return e's code\nend try`,
       ),
-    ).toEqual({ text: 'invalid canvas argument' });
+    ).toMatchObject({ text: 'invalid canvas argument' });
   }
   expect(drawn(play)).toEqual([]);
 });
@@ -196,7 +196,7 @@ test('bad shape and stroke style arguments are catchable', async () => {
         play,
         `try\n ask canvas to ${call}\ncatch e\n return e's code\nend try`,
       ),
-    ).toEqual({ text: 'invalid canvas argument' });
+    ).toMatchObject({ text: 'invalid canvas argument' });
   }
   expect(drawn(play)).toEqual([]);
 });
@@ -262,7 +262,7 @@ catch {code: "invalid canvas argument"}
   return "caught"
 end try`,
     ),
-  ).toEqual({ text: 'caught' });
+  ).toMatchObject({ text: 'caught' });
   await run(play, 'ask canvas to push board\n'.repeat(64));
   expect(drawn(play)).toHaveLength(64);
   expect((await run(play, 'ask canvas to push board')).error).toContain(
@@ -322,7 +322,7 @@ catch {code: "canvas limit"}
   return "full"
 end try`,
     ),
-  ).toEqual({ text: 'full' });
+  ).toMatchObject({ text: 'full' });
   expect(drawn(play)).toHaveLength(10_000);
   // Clearing makes room again.
   await run(
@@ -354,7 +354,7 @@ catch {code: "invalid canvas argument"}
   return "caught"
 end try`,
     ),
-  ).toEqual({ text: 'caught' });
+  ).toMatchObject({ text: 'caught' });
 });
 
 test('cloning a Canvas copies its Drawing', async () => {
