@@ -2,12 +2,7 @@
 // their bytes. Each reader and writer follows the format's field order; what
 // a record means to the TS Core is save-state.ts's. Values go through the
 // caller's `ValueIO`, which knows the save's objects and functions.
-import { HostError } from './errors';
-import { SaveReader, SaveWriter } from './save-format';
-
-const invalid = (): never => {
-  throw new HostError('invalid save');
-};
+import { invalidSave as invalid, SaveReader, SaveWriter } from './save-format';
 
 /** How a save's values are written and read. */
 export type ValueIO<V> = {

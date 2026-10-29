@@ -22,4 +22,5 @@ Save bytes, the Trace and the embedding interface stay unchanged. The other Core
 ## Consequences
 
 - A save-format change touches `group-snapshot.ts` and, if a new field needs it, the state the Group passes to `encodeGroup`.
+- Since the shared binary format ([ADR 0144](0144-a-save-restores-on-either-core.md)), a change to a section's records touches `save-records.ts`, and a change to the section order or the tables later sections index touches `save-file.ts`. Restore, the test helper and the save tools all read and write saves through `save-file.ts` ([#1804](https://github.com/odogono/odgn-talk/issues/1804)).
 - The module imports only types from `group.ts`, so there's no runtime import cycle.

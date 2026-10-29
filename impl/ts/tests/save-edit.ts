@@ -1,24 +1,13 @@
 // Test helper: a save's records, with each value kept as its bytes, and
 // those records written back as a save, so a test can change one field.
-import {
-  saveSections,
-  SaveReader,
-  SaveWriter,
-  TextTable,
-  readSave,
-  writeSave,
-} from '../src/save-format';
-import {
-  RecordReader,
-  RecordWriter,
-  type SaveRecords,
-  type ValueIO,
-} from '../src/save-records';
+import { TextTable } from '../src/save-format';
+import { readRecords, writeRecords } from '../src/save-file';
+import { type SaveRecords, type ValueIO } from '../src/save-records';
 import { skipValue } from '../src/save-values';
 
 /** A value as its encoded bytes. */
 export type RawValue = { bytes: Uint8Array };
-const raw: ValueIO<RawValue> = {
+export const raw: ValueIO<RawValue> = {
   read: r => {
     const start = r.pos;
     skipValue(r);
@@ -33,43 +22,12 @@ export const rawValue = (bytes: number[]): RawValue => ({
 });
 
 export const recordsOf = (bytes: Uint8Array) => {
-  const save = readSave(bytes);
-  const names = new SaveReader(save.body(saveSections.texts)!).list(r =>
-    r.text(),
-  );
-  const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
-  const rr = (tag: number) =>
-    new RecordReader(new SaveReader(save.body(tag)!, names), raw, tables);
-  const group = rr(saveSections.group).group();
-  const libraries = rr(saveSections.libraries).libraries();
-  tables.libraries = libraries.length;
-  const objects = rr(saveSections.objects).objects();
-  tables.objects = objects.length;
-  const functions = rr(saveSections.functions).functions();
-  const calls = rr(saveSections.calls).calls();
-  tables.calls = calls.length;
-  const scripts = rr(saveSections.scripts).scripts();
-  const { perScript, runs } = rr(saveSections.runs).runs();
-  tables.runs = runs.length;
-  const records: SaveRecords<RawValue> = {
-    group,
-    libraries,
-    objects,
-    functions,
-    calls,
-    scripts,
-    perScript,
-    runs,
-    work: rr(saveSections.work).work(),
-    waits: rr(saveSections.waits).waits(),
-    inputs: rr(saveSections.inputs).inputs(),
-    decisions: rr(saveSections.decisions).decisions(),
-    ...rr(saveSections.accounting).accounting(),
-    sources: save.body(saveSections.sources)
-      ? rr(saveSections.sources).sources()
-      : undefined,
+  const { header, texts, ...records } = readRecords(bytes, raw);
+  return {
+    save: header,
+    records: records as SaveRecords<RawValue>,
+    names: texts,
   };
-  return { save, records, names };
 };
 
 /** A save with its records changed by `edit`, framed and digested again. */
@@ -78,47 +36,10 @@ export const editSave = (
   edit: (records: SaveRecords<RawValue>) => void,
   header: (h: { language: string }) => void = () => {},
 ): Uint8Array => {
-  const { save, records: x, names } = recordsOf(bytes);
-  // A raw value keeps its texts' positions, so the table keeps its order.
-  const texts = new TextTable(names);
-  edit(x);
+  const { save, records, names } = recordsOf(bytes);
+  edit(records);
   const h = { ...save };
   header(h);
-  const body = (f: (w: RecordWriter<RawValue>) => void) => {
-    const w = new SaveWriter(texts);
-    f(new RecordWriter(w, raw));
-    return w.finish();
-  };
-  const sections = [
-    [saveSections.group, body(w => w.group(x.group))],
-    [saveSections.libraries, body(w => w.libraries(x.libraries))],
-    [saveSections.objects, body(w => w.objects(x.objects))],
-    [saveSections.functions, body(w => w.functions(x.functions))],
-    [saveSections.calls, body(w => w.calls(x.calls))],
-    [saveSections.scripts, body(w => w.scripts(x.scripts))],
-    [saveSections.runs, body(w => w.runs(x.perScript, x.runs))],
-    [saveSections.work, body(w => w.work(x.work))],
-    [saveSections.waits, body(w => w.waits(x.waits))],
-    [saveSections.inputs, body(w => w.inputs(x.inputs))],
-    [saveSections.decisions, body(w => w.decisions(x.decisions))],
-    [
-      saveSections.accounting,
-      body(w => w.accounting(x.discards, x.changedRoots)),
-    ],
-    ...(x.sources
-      ? [[saveSections.sources, body(w => w.sources(x.sources!))]]
-      : []),
-  ] as [number, Uint8Array][];
-  sections.unshift([
-    saveSections.texts,
-    new SaveWriter().list(texts.texts, (w, t) => w.text(t)).finish(),
-  ]);
-  return writeSave(
-    h,
-    sections.map(([tag, b]) => ({
-      tag,
-      body: b,
-      optional: tag === saveSections.sources,
-    })),
-  );
+  // A raw value keeps its texts' positions, so the table keeps its order.
+  return writeRecords(h, records, raw, new TextTable(names));
 };

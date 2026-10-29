@@ -1,10 +1,7 @@
 // A save's records with values as plain trees, for comparing two saves.
-import { readSave, saveSections, SaveReader } from '../src/save-format';
-import {
-  RecordReader,
-  type SaveRecords,
-  type ValueIO,
-} from '../src/save-records';
+import { SaveReader } from '../src/save-format';
+import { readRecords as coreReadRecords } from '../src/save-file';
+import { type SaveRecords, type ValueIO } from '../src/save-records';
 
 export type Raw = unknown;
 const rawRest = (r: SaveReader, tag: number): Raw => {
@@ -71,47 +68,6 @@ export const readRecords = <V>(
   bytes: Uint8Array,
   io: ValueIO<V>,
 ): SaveRecords<V> => {
-  const save = readSave(bytes);
-  const names = new SaveReader(save.body(saveSections.texts)!).list(r =>
-    r.text(),
-  );
-  const at = (tag: number) => new SaveReader(save.body(tag)!, names);
-  const tables = { calls: 0, libraries: 0, objects: 0, runs: 0 };
-  const rr = (tag: number) => new RecordReader(at(tag), io, tables);
-  const group = rr(saveSections.group).group();
-  const libraries = rr(saveSections.libraries).libraries();
-  tables.libraries = libraries.length;
-  const objects = rr(saveSections.objects).objects();
-  tables.objects = objects.length;
-  const functions = rr(saveSections.functions).functions();
-  const calls = rr(saveSections.calls).calls();
-  tables.calls = calls.length;
-  const scripts = rr(saveSections.scripts).scripts();
-  const { perScript, runs } = rr(saveSections.runs).runs();
-  tables.runs = runs.length;
-  const work = rr(saveSections.work).work();
-  const waits = rr(saveSections.waits).waits();
-  const inputs = rr(saveSections.inputs).inputs();
-  const decisions = rr(saveSections.decisions).decisions();
-  const { discards, changedRoots } = rr(saveSections.accounting).accounting();
-  const sources = save.body(saveSections.sources)
-    ? rr(saveSections.sources).sources()
-    : undefined;
-  return {
-    group,
-    libraries,
-    objects,
-    functions,
-    calls,
-    scripts,
-    perScript,
-    runs,
-    work,
-    waits,
-    inputs,
-    decisions,
-    discards,
-    changedRoots,
-    sources,
-  };
+  const { header: _, texts: __, ...records } = coreReadRecords(bytes, io);
+  return records;
 };
