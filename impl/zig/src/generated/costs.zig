@@ -115,6 +115,10 @@ pub const costs: CostsTable = .{
             .issue = "#1627",
             .change = "Add list-elements for `the elements of o` and element Whose Clauses, at a 3-Fuel base, then each collection callback's declared cost and result conversion, then items(result) Fuel and size(result) allocation for the list; Cost Model 0 remains provisional.",
         },
+        .{
+            .issue = "#1754",
+            .change = "A fired `wait for` writes its bound values into their slots when it fires, and while its Run is ready its event retains only its message, so Persistent State counts each bound value once, in place of what its slot held, with no extra slot per bind; Cost Model 0 remains provisional",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
