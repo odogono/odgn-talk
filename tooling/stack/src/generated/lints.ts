@@ -185,6 +185,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "suggest-match",
+    "flags": "an `if` chain of three or more branches whose conditions each compare the same name with a literal using `=` or `is`",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Each branch compares {name} with a value. Consider `match {name}` with a `when` for each value.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",

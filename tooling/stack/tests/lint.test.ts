@@ -35,10 +35,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-eight implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(28);
+test('ships twenty-nine implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(29);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(28);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(29);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -956,4 +956,50 @@ test('property Lints read the Owner Kind and well-known objects from the manifes
   expect(
     lint(source, { manifest, checkOptions: { unit: 'library' } }).lints,
   ).toEqual([]);
+});
+
+const suggestMatch = (text: string, profile?: 'beginner') =>
+  lint(text, profile ? { profile } : {}).lints.filter(
+    l => l.id === 'suggest-match',
+  );
+
+test('match advice needs three branches comparing one name with literals', () => {
+  const source = [
+    'on paint c',
+    'if c = "red" then',
+    'say 1',
+    'else if "green" is c then',
+    'say 2',
+    'else if c = 3 then',
+    'say 3',
+    'else',
+    'say 4',
+    'end if',
+    'end paint',
+  ].join('\n');
+  expect(suggestMatch(source)).toEqual([]);
+  expect(suggestMatch(source, 'beginner')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 2, col: 1 },
+      message:
+        'Each branch compares c with a value. Consider `match c` with a `when` for each value.',
+    },
+  ]);
+  for (const negative of [
+    source.replace(
+      'if c = "red"',
+      '-- lint: ignore suggest-match\nif c = "red"',
+    ),
+    source.replace('else if c = 3 then\nsay 3\n', ''),
+    source.replace('c = 3', 'd = 3'),
+    source.replace('c = 3', 'c > 3'),
+    source.replace('c = 3', 'c is not 3'),
+    source.replace('c = 3', 'c = d'),
+    source.replace('c = 3', 'c = 3 ignoring case'),
+    source.replace('c = 3', 'c = 3 or c = 4'),
+    source.replace('c = 3', 'the length of c = 3'),
+  ]) {
+    expect(suggestMatch(negative, 'beginner')).toEqual([]);
+  }
 });

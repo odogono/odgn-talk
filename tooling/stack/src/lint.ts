@@ -112,6 +112,46 @@ const literalText = (node: SyntaxNode): Token | undefined => {
     : undefined;
 };
 
+const isLiteral = (token?: Token) => token?.t === 'str' || token?.t === 'num';
+
+// The name an Expression compares with a number or text literal through a
+// plain `=` or `is`, in either order. Only a name is read the same in every
+// branch; `match` would evaluate any other subject once.
+const literalComparison = (expression: SyntaxNode): string | undefined => {
+  let node = expression;
+  while (node.rule !== 'Comparison') {
+    const inner = nodes(node);
+    if (inner.length !== 1 || tokens(node).length > 0) {
+      return undefined;
+    }
+    node = inner[0]!;
+  }
+  const operator = tokens(node).map(token => token.v);
+  const operands = nodes(node).filter(child => child.rule === 'Concat');
+  const ignoring = nodes(node).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  if (
+    operator.length !== 1 ||
+    (operator[0] !== '=' && operator[0] !== 'is') ||
+    operands.length !== 2 ||
+    ignoring
+  ) {
+    return undefined;
+  }
+  const [left, right] = operands.map(operand => {
+    const all = tokensIn(operand);
+    return all.length === 1 ? all[0]! : undefined;
+  });
+  if (left?.t === 'word' && isLiteral(right)) {
+    return left.v;
+  }
+  if (right?.t === 'word' && isLiteral(left)) {
+    return right.v;
+  }
+  return undefined;
+};
+
 // Postorder summaries keep deeply nested syntax off the native call stack.
 // Malformed expressions are opaque, but their enclosing blocks retain siblings.
 type Summary = { first?: Token; last?: Token; malformed: boolean };
@@ -439,6 +479,25 @@ export const lintSyntax = (
             }
           }
         }
+      }
+    }
+    if (node.rule === 'If') {
+      // Each condition is the Expression after `if` or `else if`. A chain
+      // qualifies only if all of them compare one name with a literal.
+      const subjects = node.children.flatMap((child, i) =>
+        child.kind === 'node' &&
+        child.rule === 'Expression' &&
+        (node.children[i - 1] as Token | undefined)?.v === 'if'
+          ? [literalComparison(child)]
+          : [],
+      );
+      const name = subjects[0];
+      if (
+        subjects.length >= 3 &&
+        name !== undefined &&
+        subjects.every(subject => subject === name)
+      ) {
+        emit('suggest-match', first, { name });
       }
     }
     if (node.rule === 'MapKey' && context.map && propertyNames.has(first.v)) {
