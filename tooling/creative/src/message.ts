@@ -5,7 +5,7 @@ import { type Value } from '@northtalk/ts';
 import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
-import { inspectCommand } from './message-script';
+import { fuelCommand, inspectCommand } from './message-script';
 import { PlaySession } from './play';
 import { scriptOwners } from './script-manifest';
 import { valueEncoder, type VariableValue } from './variables';
@@ -108,6 +108,11 @@ export const runInEdit = async (
   const inspect = inspectCommand(command);
   if (inspect && 'error' in inspect) {
     return inspect;
+  }
+  // Edit runs a command in a session that sends no events, so Fuel there
+  // would not be what the line costs in Play.
+  if (fuelCommand(command)) {
+    return { error: ':fuel works only while browsing.' };
   }
   if (editor.readOnly) {
     return { error: 'This Project is read-only here.' };

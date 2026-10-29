@@ -24,6 +24,20 @@ export const inspectCommand = (
     : { error: 'Usage: :inspect <expression>' };
 };
 
+/**
+ * A `:fuel <command>` line's command (ADR 0141), an error for one without it,
+ * or undefined for an ordinary command.
+ */
+export const fuelCommand = (
+  command: string,
+): { command: string } | { error: string } | undefined => {
+  const match = /^:fuel(?![\w:])\s*(.*)$/su.exec(command.trim());
+  if (!match) {
+    return undefined;
+  }
+  return match[1] ? { command: match[1] } : { error: 'Usage: :fuel <command>' };
+};
+
 export const messageSource = (command: string) => PREFIX + command + SUFFIX;
 
 /** The line of the wrapped Script on which the command starts. */

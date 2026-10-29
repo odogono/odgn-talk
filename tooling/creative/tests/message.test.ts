@@ -500,3 +500,10 @@ test('a result copies as source unless it holds a Function Value or Host Object'
   expect((await run(play, '[button1]')).source).toBeUndefined();
   expect((await run(play, '[1, button1]')).text).toBeDefined();
 });
+
+test(':fuel is refused in Edit', async () => {
+  const editor = new StackEditor(fixture());
+  expect(await runInEdit(editor, ':fuel 1 + 2')).toEqual({
+    error: ':fuel works only while browsing.',
+  });
+});

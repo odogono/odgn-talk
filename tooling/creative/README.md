@@ -1022,6 +1022,14 @@ selects itself when clicked. The same rows appear in the Variables window's
 Inspected section, which keeps the latest result until another Project
 opens. Unlike the Playground's, it reads no Host Object properties.
 
+`:fuel <command>` runs a command only while browsing, and is refused in Edit,
+whose session sends no events. After the command's value it prints the line's
+Fuel Measurement: the Fuel its Run and every Run and message it spawned have
+spent, read from the Group's Run accounting reports in
+[`src/fuel.ts`](src/fuel.ts). The Message Box answers once, when the command
+returns; work still running then prints as pending, with its live Runs and
+queued messages.
+
 Targeted commands use Extend ([ADR 0108](../../docs/adr/0108-folio-message-box-commands-can-extend-a-chosen-script.md));
 they accept statements and expressions, not Script-level declarations. Existing
 Script Variables can change, while new local variables disappear after the
