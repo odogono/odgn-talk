@@ -193,6 +193,30 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "suggest-otherwise",
+    "flags": "an `if` that tests a name for Nothing only to put a default or the name itself into one Container",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `put {name} otherwise … into {target}`, which uses the default only when {name} is Nothing.",
+    "status": "implemented"
+  },
+  {
+    "id": "suggest-arithmetic-command",
+    "flags": "`put name + e into name`, or with `-`, `*` or `/`, where the name is a variable on the left of one operator",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `{command}`, which changes {name} in place.",
+    "status": "implemented"
+  },
+  {
+    "id": "suggest-is-in",
+    "flags": "an `or` of three or more comparisons of the same name with a literal using `=` or `is`",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `{name} is in […]`, listing the values, in place of comparing {name} with each one.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",
