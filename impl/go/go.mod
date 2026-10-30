@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/text v0.43.0
-	northtalk.org/go/sqlite v0.0.0-20261030084351-e664a5316b9d
+	northtalk.org/go/sqlite v0.1.0
 )
 
 require (

@@ -16,3 +16,4 @@ lukechampine.com/adiantum v1.1.1/go.mod h1:LrAYVnTYLnUtE/yMp5bQr0HstAf060YUF8nM0
 northtalk.org/go v0.0.0-20261030084351-e664a5316b9d/go.mod h1:vUUDq7M0kqu+XOgPcCn/lDmVN/p3ZioYA5/A4QjV+dk=
 northtalk.org/go v0.1.0/go.mod h1:+MJo71Vb9pLZ+H/5w85DupFc+BN/gGakFpddls/EiXg=
 northtalk.org/go/sqlite v0.0.0-20261030084351-e664a5316b9d/go.mod h1:GcIxhS7JdPz3Ud96znqplz4mMUL2iJf4j86rRspBAYc=
+northtalk.org/go/sqlite v0.1.0/go.mod h1:XURRxQfIgPxrnWVkUT3x1TjMZgcdzc45xP8vU1MFPY0=

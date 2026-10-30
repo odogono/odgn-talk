@@ -615,7 +615,8 @@ use `gofmt`. Their `--check` modes refuse missing or stale output without writin
 
 The modules publish as `northtalk.org/go` and `northtalk.org/go/sqlite`
 ([ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md)):
-pushing a tag is the release. From the repository root, on an up-to-date `main`:
+pushing a tag is the release. From the repository root, on an up-to-date `main`,
+`tools/go/release.sh X.Y.Z` checks step 1 and runs steps 2 to 4 in order and stops at the first failure:
 
 1. If the Zig Core changed since the last release, tag a `reactor-v*` release
    first, then embed it with `python3 impl/go/build-artifact.py reactor-vX.Y.Z`,
@@ -632,6 +633,12 @@ pushing a tag is the release. From the repository root, on an up-to-date `main`:
    `impl/go/vX.Y.Z` on `main` and push the tag.
 5. In `sqlite/go.mod`, require `northtalk.org/go vX.Y.Z`, merge that, then tag
    `impl/go/sqlite/vX.Y.Z` and push it.
+
+The [Go release workflow](../../.github/workflows/go-release.yml) runs on each
+tag: it waits for `proxy.golang.org` to serve the version, runs
+[northtalk-go-example](https://github.com/odogono/northtalk-go-example)'s tests
+against it, and requests pkg.go.dev indexing. Re-run a tag from its
+`workflow_dispatch`.
 
 A PR that refreshes the embedded reactor adds a `go` changelog fragment
 summarising the Zig changes Go Hosts receive.

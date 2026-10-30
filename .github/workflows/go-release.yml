@@ -1,0 +1,67 @@
+name: Go release
+
+# Verifies a published Go module version. Pushing an `impl/go/v*` or
+# `impl/go/sqlite/v*` tag is the release (ADR 0148); this waits for the Go
+# module proxy to serve it, runs odogono/northtalk-go-example against it, and
+# asks pkg.go.dev to index it. A failure marks the release broken. Re-run an
+# earlier tag with workflow_dispatch.
+on:
+  push:
+    tags: ['impl/go/v*', 'impl/go/sqlite/v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, such as impl/go/v0.1.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - id: module
+        name: Read the module and version from the tag
+        run: |
+          case "$TAG" in
+            impl/go/sqlite/v*) module=northtalk.org/go/sqlite; version=${TAG#impl/go/sqlite/} ;;
+            impl/go/v*) module=northtalk.org/go; version=${TAG#impl/go/} ;;
+            *) echo "::error::$TAG is not a Go release tag"; exit 1 ;;
+          esac
+          echo "module=$module" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - uses: actions/checkout@v4
+        with:
+          repository: odogono/northtalk-go-example
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The proxy fetches a new tag on first request, which can take a while.
+      - name: Wait for the version on the module proxy
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf "https://proxy.golang.org/$MODULE/@v/$VERSION.info" && exit 0
+            sleep 10
+          done
+          echo "::error::$MODULE@$VERSION is not on proxy.golang.org"
+          exit 1
+        env:
+          MODULE: ${{ steps.module.outputs.module }}
+          VERSION: ${{ steps.module.outputs.version }}
+      - name: Test the example against the version
+        run: |
+          go get "$MODULE@$VERSION"
+          go list -m "$MODULE" | grep -Fx "$MODULE $VERSION"
+          go vet ./...
+          go test ./...
+        env:
+          MODULE: ${{ steps.module.outputs.module }}
+          VERSION: ${{ steps.module.outputs.version }}
+      - name: Request pkg.go.dev indexing
+        run: curl -sf -X POST "https://pkg.go.dev/fetch/$MODULE@$VERSION"
+        env:
+          MODULE: ${{ steps.module.outputs.module }}
+          VERSION: ${{ steps.module.outputs.version }}
