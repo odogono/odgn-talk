@@ -7,11 +7,4 @@ use (
 	./impl/go/sqlite
 )
 
-// The Go command still reads a workspace module's go.mod at a required
-// version when it loads outside packages, so each v0.0.0 requirement is
-// pinned to its directory here, not in the go.mod a consumer reads.
-replace northtalk.org/go v0.0.0 => ./impl/go
-
-replace northtalk.org/go/sqlite v0.0.0 => ./impl/go/sqlite
-
 replace github.com/odogono/odgn-talk/bench/peers/go v0.0.0 => ./bench/peers/go

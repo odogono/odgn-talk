@@ -719,7 +719,7 @@ Node's ICU by `node impl/go/internal/cmd/northtalk/gen-locale-data.ts`; it suppo
 and the tags listed there, and any other tag falls back by lookup, so a tag the
 TS Runner resolves through Intl, such as `de-CH`, may resolve to `de` here.
 `und` has en-US names and symbols, as the TS Runner has on an en-US runtime.
-The main module requires `sqlite/` through a `replace`; it stays cgo-free. It exits 0 when no
+The main module requires `sqlite/`; it stays cgo-free. It exits 0 when no
 Run, queued message, timer, Serve Registration or open Exchange is left, 1
 after any uncaught error or a load diagnostic (`file:line:col: message`), and
 on SIGINT or SIGTERM Delivers `stop`, stops accepting, waits up to 5 s for open

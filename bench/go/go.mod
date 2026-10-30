@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/yuin/gopher-lua v1.1.2
 	go.starlark.net v0.0.0-20261005163335-bcb1a1a55bf9
-	northtalk.org/go v0.0.0
+	northtalk.org/go v0.0.0-20261030084351-e664a5316b9d
 )
 
 require (
