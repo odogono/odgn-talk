@@ -18,14 +18,16 @@ end
 defmodule NorthTalk.Restored do
   @moduledoc """
   A restored Group: the `group`, whether the restore was `variables_only`,
-  its `pending` calls for `NorthTalk.settle/3`, as `NorthTalk.PendingCall`s,
-  the `[kind, id]` of each Host Object that `disposed` on restore, and, for a
-  variables-only restore, its `discarded_runs`, `dropped_messages` and
-  `abandoned_calls`.
+  the Scripts a Partial Restore `reloaded`, in load order, its `pending`
+  calls for `NorthTalk.settle/3`, as `NorthTalk.PendingCall`s, the
+  `[kind, id]` of each Host Object that `disposed` on restore, and, for a
+  variables-only or Partial Restore, its `discarded_runs`,
+  `dropped_messages` and `abandoned_calls`.
   """
   defstruct [
     :group,
     :variables_only,
+    reloaded: [],
     pending: [],
     disposed: [],
     discarded_runs: [],
