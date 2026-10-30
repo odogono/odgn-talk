@@ -261,8 +261,9 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 The Go adapter and the Elixir package each run a pinned copy of the WASI reactor, so a Zig change reaches them only through these steps:
 
 1. Try uncommitted Zig in Go with `impl/go/hand-swap.sh` (the [hand swap](../go/README.md#hand-swap)), then gate it with `CGO_ENABLED=0 impl/go/adapter-check.sh`. Restore with `git checkout -- impl/go/internal/zigwasm`.
-2. Commit the Zig change, then run `python3 impl/go/build-artifact.py`. It refreshes the embedded copy in `impl/go/internal/zigwasm` with its digest; commit its output. It refuses uncommitted Core or spec changes. After a rebase, rerun it rather than merging those files by hand.
+2. Commit the Zig change, then run `python3 impl/go/build-artifact.py`. It refreshes the embedded copy in `impl/go/internal/zigwasm` with its digest and its version, which `CoreVersions()` reports: `git describe`'s, such as `0.15.0-3-gabc1234`, until the change is released; commit its output. It refuses uncommitted Core or spec changes. After a rebase, rerun it rather than merging those files by hand.
 3. If `format_version` in [`snapshot.zig`](src/machine/snapshot.zig) changed, set `@save_format` in [`artifact.ex`](../elixir/lib/north_talk/artifact.ex) and the assertion in [`fault_test.exs`](../elixir/test/fault_test.exs), then follow [the pinned reactor release](../elixir/NAVIGATION.md#the-pinned-reactor-release). `bun run check` fails until the two agree.
+4. Once a `reactor-v*` tag holds the change, run `python3 impl/go/build-artifact.py reactor-vX.Y.Z` and commit its output, so the Go module embeds the release and reports `zig/X.Y.Z`. A Go release needs this.
 
 ## Build, targets and CI
 

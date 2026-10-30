@@ -13,6 +13,8 @@ from pathlib import Path
 d = Path(sys.argv[1])
 meta = json.loads((d / "artifact.json").read_text())
 meta["sha256"] = hashlib.sha256((d / "talk.wasm").read_bytes()).hexdigest()
+# The bytes are no longer the recorded build, so say so in CoreVersions.
+meta["reactor"] = meta.get("reactor", "0.0.0").split("+")[0] + "+hand-swap"
 (d / "artifact.json").write_text(json.dumps(meta, indent=2) + "\n")
 EOF
 echo "hand-swap: impl/go/internal/zigwasm now holds the working tree's Zig Core; restore with git checkout -- impl/go/internal/zigwasm" >&2

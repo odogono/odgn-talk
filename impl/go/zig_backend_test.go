@@ -11,11 +11,24 @@ import (
 	"time"
 
 	talk "northtalk.org/go"
+	"northtalk.org/go/internal/zigwasm"
 )
 
 type zigTrace []string
 
 func (s *zigTrace) Record(line string) { *s = append(*s, line) }
+
+// CoreVersions reports the embedded artifact's reactor release, not the
+// guest's own zig/0.0.0.
+func TestCoreVersionsReportsReactorRelease(t *testing.T) {
+	recorded, err := zigwasm.Recorded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := talk.CoreVersions().Core, "zig/"+recorded.Reactor; got != want {
+		t.Fatalf("CoreVersions().Core = %q, want %q", got, want)
+	}
+}
 
 func TestZigBackendRequest(t *testing.T) {
 	if !strings.HasPrefix(talk.CoreVersions().Core, "zig/") {

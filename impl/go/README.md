@@ -289,7 +289,9 @@ conversion uses the existing iterative codec rather than encoding/json's
 nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 impl/go/build-artifact.py` rebuilds the embedded copy from
-committed Core/spec sources and records its provenance.
+committed Core/spec sources and records its provenance, including the version
+`CoreVersions()` reports as `zig/<version>`. Given a `reactor-v*` tag, it
+builds that release instead, whose bytes match the tag's published `talk.wasm`.
 The Go Session Host and REPL use the embedded
 Core's negotiated `analysis-v1` exchanges for Entry classification and
 continuation, positioned syntax diagnostics, implicit Script Variables,
@@ -421,7 +423,8 @@ performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/iss
 [`build-artifact.py`](build-artifact.py) refuses uncommitted Core/spec changes. To try an
 uncommitted Zig change, swap the embedded copy by hand with
 [`hand-swap.sh`](hand-swap.sh). It builds the Zig Core, copies `talk.wasm` and
-writes its digest into `artifact.json`, which must match, or `NewEngine` refuses the artifact:
+writes its digest into `artifact.json`, which must match, or `NewEngine` refuses the artifact.
+It marks the recorded version `+hand-swap`, so `CoreVersions()` shows the swap:
 
 ```sh
 impl/go/hand-swap.sh

@@ -53,6 +53,12 @@ func zigEngine() *zigwasm.Engine {
 		if err == nil && (zigCompiled.versions.Language != generated.Version.Language || zigCompiled.versions.CostModel != fmt.Sprint(generated.Costs.Version) || zigCompiled.versions.Unicode != generated.UnicodeVersion) {
 			err = fmt.Errorf("embedded Zig artifact does not match Go data-model versions")
 		}
+		if err == nil {
+			// The guest reports zig/0.0.0; the artifact knows its release.
+			var recorded zigwasm.Artifact
+			recorded, err = zigwasm.Recorded()
+			zigCompiled.versions.Core = "zig/" + recorded.Reactor
+		}
 		if err != nil {
 			engine.Close(ctx)
 			zigCompiled.err = err

@@ -37,11 +37,29 @@ type Engine struct {
 // again.
 const CacheDirEnv = "NORTHTALK_ZIG_CACHE_DIR"
 
-func NewEngine(ctx context.Context) (*Engine, error) {
-	var recorded struct {
-		SHA256 string `json:"sha256"`
-	}
+// Artifact is what build-artifact.py recorded about the embedded reactor.
+type Artifact struct {
+	// Reactor is the reactor-v* version it was built from, without the
+	// prefix, or git describe's version for an unreleased build.
+	Reactor string `json:"reactor"`
+	SHA256  string `json:"sha256"`
+}
+
+// Recorded reads artifact.json, and fails if it names no reactor version.
+func Recorded() (Artifact, error) {
+	var recorded Artifact
 	if err := json.Unmarshal(manifest, &recorded); err != nil {
+		return Artifact{}, err
+	}
+	if recorded.Reactor == "" {
+		return Artifact{}, fmt.Errorf("embedded Zig artifact records no reactor version; rebuild it with build-artifact.py")
+	}
+	return recorded, nil
+}
+
+func NewEngine(ctx context.Context) (*Engine, error) {
+	recorded, err := Recorded()
+	if err != nil {
 		return nil, err
 	}
 	sum := sha256.Sum256(wasm)
