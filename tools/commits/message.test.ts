@@ -50,7 +50,7 @@ test('rejects malformed subjects, unknown types and scopes, and style', () => {
   });
   expect(parseCommitSubject('feat(core): Add x')).toEqual({
     errors: [
-      'unknown scope "core"; use one of spec, ts, cli, tools, corpus, repo',
+      'unknown scope "core"; use one of spec, ts, go, cli, tools, corpus, repo',
     ],
   });
   expect(parseCommitSubject('feat(): Add x')).toHaveProperty('errors');
