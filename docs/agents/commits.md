@@ -13,8 +13,9 @@ type(scope)!: Sentence-case imperative description (#issue)
   - `fix`: a behavior that was wrong.
   - `perf`: the same behavior, faster or smaller.
   - `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert`: no change a user would notice.
-- **scope**, optional, one of `spec`, `ts`, `cli`, `tools`, `corpus`, `repo`. There is no scope per Core or app:
-  - `repo` covers the Go, Zig and Elixir Cores and embeddings, CI and workspace changes.
+- **scope**, optional, one of `spec`, `ts`, `go`, `cli`, `tools`, `corpus`, `repo`. There is one scope per published package, not per Core or app:
+  - `go` covers the Go embedding, the `northtalk.org/go` and `northtalk.org/go/sqlite` modules in `impl/go/`. A PR refreshing its embedded reactor adds a `go` fragment summarising the Zig changes Go Hosts receive.
+  - `repo` covers the Zig and Elixir Cores and embeddings, CI and workspace changes.
   - `tools` covers `tooling/` (Folio, the LSP, the formatter and Lints) and `tools/`.
   - `ts` covers the TS Core in `impl/ts/`.
 - **!**, before the colon, marks a breaking change. A `BREAKING CHANGE: ...` line in the PR body does too.
@@ -48,7 +49,9 @@ Copy `type` and `scope` from your PR title, and leave `scope` out when the title
 
 To see the unreleased changelog, run `bun run changelog`.
 
-To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking. `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
+To release the Go modules, follow [Releasing in the Go guide](../../impl/go/README.md#releasing); `bun run release-notes:go 0.1.1` writes `impl/go/CHANGELOG.md` the same way, from the latest `impl/go/v*` tag.
+
+To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking and not another package's (`go`). `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
 
 Then bump `core` in `impl/ts/src/versions.ts` to `ts/0.1.1`, merge both, and push the `ts-v0.1.1` tag from `main`. The `TS publish` workflow (`.github/workflows/ts-publish.yml`) checks the tag matches the built version, runs the tarball checks and publishes with npm trusted publishing. It then runs the tests of [`odogono/northtalk-ts-example`](https://github.com/odogono/northtalk-ts-example) against the published version under Node 24.10, the latest Node and Bun; a failed `verify` job means the release is broken.
 

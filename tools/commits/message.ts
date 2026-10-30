@@ -16,7 +16,15 @@ export const TYPES = [
   'chore',
   'revert',
 ] as const;
-export const SCOPES = ['spec', 'ts', 'cli', 'tools', 'corpus', 'repo'] as const;
+export const SCOPES = [
+  'spec',
+  'ts',
+  'go',
+  'cli',
+  'tools',
+  'corpus',
+  'repo',
+] as const;
 
 // The types whose changes a reader of the changelog would want to hear about.
 export const CHANGELOG_TYPES = ['feat', 'fix', 'perf'] as const;

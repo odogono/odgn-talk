@@ -47,7 +47,7 @@ test('rejects fragments without frontmatter, a type, a valid scope or text', () 
   );
   expect(parseFragment('---\ntype: feat\nscope: core\n---\nAdd x.')).toEqual({
     errors: [
-      'unknown scope "core"; use one of spec, ts, cli, tools, corpus, repo',
+      'unknown scope "core"; use one of spec, ts, go, cli, tools, corpus, repo',
     ],
   });
   expect(parseFragment('---\ntype: feat\nsummary: x\n---\nAdd x.')).toEqual({

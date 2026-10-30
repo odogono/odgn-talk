@@ -88,7 +88,7 @@ test('collects the ts, spec and breaking fragments added since the latest ts-v* 
     ),
   });
 
-  const notes = releaseNotes(root, '0.1.1', '2026-10-17');
+  const notes = releaseNotes(root, 'ts', '0.1.1', '2026-10-17');
   expect(notes.tag).toBe('ts-v0.1.0');
   expect(notes.errors).toEqual([]);
   expect(notes.section).toBe(
@@ -129,7 +129,7 @@ test('uses the highest ts-v* tag and ignores other tags', () => {
     'changelog/unreleased/b.md': fragment('type: feat\nscope: ts', 'B.'),
   });
 
-  const notes = releaseNotes(root, '0.10.1', '2026-10-17');
+  const notes = releaseNotes(root, 'ts', '0.10.1', '2026-10-17');
   expect(notes.tag).toBe('ts-v0.10.0');
   expect(notes.section).toBe(
     '## [0.10.1] - 2026-10-17\n\n### Added\n\n- **ts:** B.',
@@ -138,15 +138,70 @@ test('uses the highest ts-v* tag and ignores other tags', () => {
 
 test('fails without a ts-v* tag, or with a bad version or fragment', () => {
   const { commit, root, tag } = repo();
-  expect(() => releaseNotes(root, '0.1.1', '2026-10-17')).toThrow(
+  expect(() => releaseNotes(root, 'ts', '0.1.1', '2026-10-17')).toThrow(
     'no ts-v* tag',
   );
   tag('ts-v0.1.0');
-  expect(() => releaseNotes(root, 'v0.1.1', '2026-10-17')).toThrow(
+  expect(() => releaseNotes(root, 'ts', 'v0.1.1', '2026-10-17')).toThrow(
     `"v0.1.1" isn't a version`,
   );
   commit({ 'changelog/unreleased/bad.md': 'Add x.' });
-  expect(releaseNotes(root, '0.1.1', '2026-10-17').errors).toEqual([
+  expect(releaseNotes(root, 'ts', '0.1.1', '2026-10-17').errors).toEqual([
     'changelog/unreleased/bad.md: it must start with a "---" frontmatter block',
   ]);
+});
+
+test('collects go, spec and unscoped breaking fragments since the latest impl/go/v* tag', () => {
+  const { commit, root, tag } = repo();
+  commit({ 'impl/go/CHANGELOG.md': CHANGELOG });
+  tag('impl/go/v0.1.0');
+  tag('impl/go/sqlite/v0.9.0');
+  tag('ts-v0.9.0');
+  commit({
+    'changelog/unreleased/go.md': fragment('type: feat\nscope: go', 'Go.'),
+    'changelog/unreleased/repo-break.md': fragment(
+      'type: fix\nscope: repo\nbreaking: true',
+      'Break.',
+    ),
+    'changelog/unreleased/spec.md': fragment('type: fix\nscope: spec', 'Spec.'),
+    'changelog/unreleased/ts-break.md': fragment(
+      'type: feat\nscope: ts\nbreaking: true',
+      'TS only.',
+    ),
+    'changelog/unreleased/ts.md': fragment('type: feat\nscope: ts', 'TS.'),
+  });
+
+  const notes = releaseNotes(root, 'go', '0.1.1', '2026-10-30');
+  expect(notes.tag).toBe('impl/go/v0.1.0');
+  expect(notes.section).toBe(
+    [
+      '## [0.1.1] - 2026-10-30',
+      '',
+      '### Breaking',
+      '',
+      '- **repo:** Break.',
+      '',
+      '### Added',
+      '',
+      '- **go:** Go.',
+      '',
+      '### Fixed',
+      '',
+      '- **spec:** Spec.',
+    ].join('\n'),
+  );
+  expect(notes.changelog).toContain(
+    `- Pending.\n\n${notes.section}\n\n## [0.1.0]`,
+  );
+  expect(releaseNotes(root, 'ts', '0.9.1', '2026-10-30').section).not.toContain(
+    'Go.',
+  );
+});
+
+test('fails without an impl/go/v* tag, even with a sqlite tag', () => {
+  const { root, tag } = repo();
+  tag('impl/go/sqlite/v0.1.0');
+  expect(() => releaseNotes(root, 'go', '0.1.0', '2026-10-30')).toThrow(
+    'no impl/go/v* tag',
+  );
 });

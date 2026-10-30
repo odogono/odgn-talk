@@ -12,6 +12,7 @@
     "prepare": "git config core.hooksPath .githooks",
     "changelog": "bun run --cwd tools changelog",
     "release-notes:ts": "bun run --cwd tools release-notes:ts",
+    "release-notes:go": "bun run --cwd tools release-notes:go",
     "check": "bun run --cwd tools check",
     "spec:gen": "bun run --cwd tools spec:gen",
     "spec:check": "bun run --cwd tools spec:check",

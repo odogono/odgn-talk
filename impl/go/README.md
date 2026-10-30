@@ -533,6 +533,31 @@ bun run check
 Emitters read Spec Data Files, normative Standard Library source and pinned UCD sources, import no TS Core code and
 use `gofmt`. Their `--check` modes refuse missing or stale output without writing.
 
+## Releasing
+
+The modules publish as `northtalk.org/go` and `northtalk.org/go/sqlite`
+([ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md)):
+pushing a tag is the release. From the repository root, on an up-to-date `main`:
+
+1. If the Zig Core changed since the last release, tag a `reactor-v*` release
+   first, then embed it with `python3 impl/go/build-artifact.py reactor-vX.Y.Z`,
+   so `CoreVersions()` reports a release.
+2. Run `CGO_ENABLED=0 impl/go/adapter-check.sh` and `impl/go/cross-check.sh`.
+3. Run `gorelease` against the previous release, and pick the version it
+   suggests: `(cd impl/go && go run golang.org/x/exp/cmd/gorelease@latest -base=v0.1.0)`.
+   Until language 1.0 ([#142](https://github.com/odogono/odgn-talk/issues/142)),
+   a breaking change bumps the minor version.
+4. Run `bun run release-notes:go X.Y.Z`. It writes a dated section into
+   [`CHANGELOG.md`](CHANGELOG.md) from the fragments added since the latest
+   `impl/go/v*` tag whose scope is `go` or `spec`, or that are breaking and not
+   another package's; `--dry-run` prints it instead. Merge it, then tag
+   `impl/go/vX.Y.Z` on `main` and push the tag.
+5. In `sqlite/go.mod`, require `northtalk.org/go vX.Y.Z`, merge that, then tag
+   `impl/go/sqlite/vX.Y.Z` and push it.
+
+A PR that refreshes the embedded reactor adds a `go` changelog fragment
+summarising the Zig changes Go Hosts receive.
+
 ## REPL and Session Transcripts
 
 **Implemented commands:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core implements the public Run accounting reports, `RestoreResult.reports`, Declaration Documentation ([#436](https://github.com/odogono/odgn-talk/issues/436)), `:describe` and `:apropos` ([#437](https://github.com/odogono/odgn-talk/issues/437)), and `:trace`, `:untrace` and `:fuel` ([#438](https://github.com/odogono/odgn-talk/issues/438)). It also implements `:inspect` and object-crossing envelopes ([#439](https://github.com/odogono/odgn-talk/issues/439)); coordinated release review remains in #370.
