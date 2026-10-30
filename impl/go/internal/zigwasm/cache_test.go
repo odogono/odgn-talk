@@ -14,7 +14,7 @@ func TestCompilationCacheDirIsReused(t *testing.T) {
 	t.Setenv(CacheDirEnv, dir)
 	ctx := context.Background()
 	for range 2 {
-		e, err := NewEngine(ctx)
+		e, err := NewEngine(ctx, "")
 		if err != nil {
 			t.Fatal(err)
 		}

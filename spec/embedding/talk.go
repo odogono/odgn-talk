@@ -792,6 +792,11 @@ type Versions struct {
 
 func CoreVersions() Versions
 
+// SetCompilationCacheDir keeps the compiled Core in dir between processes.
+// The Core compiles once per process, for the first Core that needs it, so a
+// later call fails. Empty restores the Host's default.
+func SetCompilationCacheDir(dir string) error
+
 type GroupOptions struct {
 	Name string
 	// OnReady is called, from any goroutine, when a queued Host Input makes

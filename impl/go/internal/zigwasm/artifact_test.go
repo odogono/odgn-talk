@@ -26,7 +26,7 @@ func TestArtifactWithoutReactorVersionIsRefused(t *testing.T) {
 	if _, err := Recorded(); err == nil {
 		t.Fatal("Recorded accepted an artifact with no reactor version")
 	}
-	if _, err := NewEngine(context.Background()); err == nil {
+	if _, err := NewEngine(context.Background(), ""); err == nil {
 		t.Fatal("NewEngine accepted an artifact with no reactor version")
 	}
 }
