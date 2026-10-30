@@ -7,6 +7,13 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-30
+
+### Added
+
+- **spec:** Specify a `keepMailbox` restore option: with `'reload changed'`, a Partial Restore keeps each changed Script's mailbox, so queued messages go to the new code and their senders go on waiting (#1821).
+- **ts:** `RestoreOptions.keepMailbox` keeps each changed Script's mailbox in a Partial Restore: its messages go to the new code, a Request's sender goes on waiting for the reply, and the kept messages count toward the Persistent State cap. A live `reload` with `keepMailbox` now counts its kept messages toward the cap too, as the Zig Core does (#1823, #1835).
+
 ## [0.4.0] - 2026-10-29
 
 ### Breaking
