@@ -137,7 +137,7 @@ func TestArchivedMacOSRounds(t *testing.T) {
 		{"1267-final-b", "2.707x"},
 	} {
 		t.Run(tc.run, func(t *testing.T) {
-			dir := filepath.Join("../../../../bench/results/go-zig-adapter", tc.run, "macos-15")
+			dir := filepath.Join("../../../../../bench/results/go-zig-adapter", tc.run, "macos-15")
 			var output bytes.Buffer
 			if err := report(&output, dir, 10); err != nil {
 				t.Fatal(err)

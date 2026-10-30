@@ -1,8 +1,8 @@
 package northtalk
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/docs"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 func init() {

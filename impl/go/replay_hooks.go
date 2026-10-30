@@ -1,7 +1,7 @@
 package northtalk
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/replay"
+	"northtalk.org/go/internal/replay"
 )
 
 func init() {

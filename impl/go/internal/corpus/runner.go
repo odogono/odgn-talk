@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/value"
 )
 
 type Case struct {

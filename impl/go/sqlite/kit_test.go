@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/sqlitekit"
-	"github.com/odogono/odgn-talk/impl/go/sqlite"
+	"northtalk.org/go/internal/sqlitekit"
+	"northtalk.org/go/sqlite"
 )
 
 // The Host keeps no Stores in a database yet, so the kit's co-located Store

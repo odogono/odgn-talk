@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
+	"northtalk.org/go/internal/analysis"
 )
 
 func init() { analysis.Exchange = zigAnalysisExchange }

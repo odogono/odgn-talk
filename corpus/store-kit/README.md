@@ -28,6 +28,6 @@ A Store implementation is one Segment Coordinator for all its Stores, so a Segme
 - **TS:** [`impl/ts/tools/store-kit.ts`](../../impl/ts/tools/store-kit.ts) drives any `StoreImpl` through the kit. [`impl/ts/tests/store-kit.test.ts`](../../impl/ts/tests/store-kit.test.ts) runs it on the memory and Web Storage Stores, and [the SQLite Store's tests](../../impl/ts/examples/store-sqlite/) on a Store kept in a `sqlite` database.
 
 - **Go:** [`impl/go/internal/storekit/`](../../impl/go/internal/storekit/) drives
-  any `StoreImpl` through the kit. `go -C impl/go run ./cmd/storekit` checks the
+  any `StoreImpl` through the kit. `go -C impl/go run ./internal/cmd/storekit` checks the
   in-memory Store, and `go -C impl/go test ./internal/storekit` runs the same
   sequences in the test suite.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Discover the records each public Host produces, then queue inputs from the

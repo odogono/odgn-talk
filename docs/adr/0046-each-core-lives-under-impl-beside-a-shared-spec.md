@@ -20,3 +20,4 @@ The repository holds one language and several implementations of it, so its layo
 - **CI** is split by path. `spec.yml` runs the Spec checks on every change. `ts.yml` runs the TS Core on changes to `impl/ts/`, `tooling/`, `spec/` or `corpus/`. `go.yml` runs the Go Core on changes to `impl/go/`, `spec/` or `corpus/`, and `zig.yml` the Zig Core on changes to `impl/zig/`, `spec/` or `corpus/`. A change to the Spec or the corpus runs every Core.
 - **`spikes/`** stays at the root as finished evidence that the ADRs cite, outside the workspaces and CI.
 - **Unchanged:** `spec/`, `corpus/` and `docs/` keep their paths, so the schema identity URLs and links into them stay valid.
+- Amended by [ADR 0148](0148-the-go-embedding-publishes-as-northtalk-org-go.md): the Go module is `northtalk.org/go`, still in `impl/go/` and still tagged `impl/go/vX.Y.Z`; the Go REPL moved to `impl/go/internal/cmd/northtalk`, and a repository `go.work` covers the Go modules.

@@ -3,7 +3,7 @@ package northtalk
 import (
 	"fmt"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
+	"northtalk.org/go/internal/docs"
 )
 
 func init() {

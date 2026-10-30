@@ -2,7 +2,7 @@
 //! Script Runner; ADR 0126). It loads the file as one Script in one Group,
 //! Delivers `start` with the arguments after the file, and runs until
 //! nothing can happen again, as the TS Runner (tooling/cli/src/run.ts) and
-//! the Go one (impl/go/cmd/northtalk/run.go) do. One thread polls the HTTP
+//! the Go one (impl/go/internal/cmd/northtalk/run.go) do. One thread polls the HTTP
 //! sockets, standard input and a signal pipe, and pumps at each Host Input,
 //! timer and deadline. It grants `console`, `clock`, `timer`, an in-memory
 //! `store` (the Session Store's), `http` and, at a terminal, `user`; it has

@@ -21,4 +21,4 @@ A `request` checks, when present: `status`; `response`, the body as UTF-8 text; 
 ## Running
 
 - **TS:** [`impl/ts/tools/http-kit.ts`](../../impl/ts/tools/http-kit.ts) drives `@northtalk/ts/http`. [`impl/ts/tests/http-kit.test.ts`](../../impl/ts/tests/http-kit.test.ts) runs it under Bun, and [`impl/ts/tests/http-runtimes.test.ts`](../../impl/ts/tests/http-runtimes.test.ts) under Node.
-- **Go:** [`impl/go/httphost/kit_test.go`](../../impl/go/httphost/kit_test.go) drives `httphost` on the driver Pool: `go -C impl/go test ./httphost`.
+- **Go:** [`impl/go/internal/httphost/kit_test.go`](../../impl/go/internal/httphost/kit_test.go) drives `httphost` on the driver Pool: `go -C impl/go test ./httphost`.

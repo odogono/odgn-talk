@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	"northtalk.org/go/internal/shape"
 )
 
 // Declarations are mirrored into each guest, independently of their public

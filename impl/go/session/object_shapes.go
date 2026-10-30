@@ -2,8 +2,8 @@ package session
 
 import (
 	"encoding/json"
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/sessionio"
 )
 
 func decodeEnvelopeCost(raw []byte) talk.Cost {

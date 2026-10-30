@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	talk "northtalk.org/go"
+	"northtalk.org/go/session"
 )
 
 var yes = regexp.MustCompile(`(?i)^y(es)?$`)

@@ -3,7 +3,7 @@
 // tooling/stack/src/builtins.ts reads them, so both Runners agree. Run with
 // Node, whose ICU and CLDR versions the file records:
 //
-//   node impl/go/cmd/northtalk/gen-locale-data.ts
+//   node impl/go/internal/cmd/northtalk/gen-locale-data.ts
 //
 // Collation and case mapping come from golang.org/x/text instead. A tag added
 // here must be one x/text's collate supports.

@@ -25,8 +25,8 @@ import (
 	"syscall"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
 )
 
 // DefaultMaxBodyBytes is the largest request body the router reads unless

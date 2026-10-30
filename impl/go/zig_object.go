@@ -7,8 +7,8 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // Object Kinds are mirrored into each guest by name the first time one of

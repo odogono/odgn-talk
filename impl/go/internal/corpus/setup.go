@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/toml"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/toml"
 )
 
 // Setup holds a case's tables in the shared Corpus TOML subset.

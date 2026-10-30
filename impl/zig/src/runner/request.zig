@@ -2,7 +2,7 @@
 //! chapter 7 gives an HTTP Exchange's Delivery: method, path, segments,
 //! query, headers and body, with query keys and header names in code-point
 //! order, as the TS and Go routers give it (impl/ts/src/http/router.ts,
-//! impl/go/httphost/host.go).
+//! impl/go/internal/httphost/host.go).
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;

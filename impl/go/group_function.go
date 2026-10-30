@@ -3,7 +3,7 @@ package northtalk
 import (
 	"context"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // Call admits a Function Value into its Home Script's mailbox. Staleness is

@@ -19,7 +19,7 @@ import (
 
 	"github.com/ncruces/go-sqlite3"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // segment is a Segment, by its Group, since Segment ids are unique only

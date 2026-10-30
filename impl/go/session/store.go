@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/store"
 )
 
 func (h *Host) store(rest string) []string {

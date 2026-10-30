@@ -12,7 +12,7 @@ import (
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 //go:generate node gen-locale-data.ts

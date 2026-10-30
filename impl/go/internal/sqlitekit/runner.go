@@ -12,10 +12,10 @@ import (
 	"slices"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/corpus"
-	"github.com/odogono/odgn-talk/impl/go/internal/hostkit"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/corpus"
+	"northtalk.org/go/internal/hostkit"
+	"northtalk.org/go/internal/value"
 )
 
 // Subject is one fresh, empty database, opened for one sequence.

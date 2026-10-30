@@ -1,5 +1,5 @@
 // The NorthTalk Go embedding interface: declarations only, never compiled.
-// The module is github.com/odogono/odgn-talk/impl/go; this is its root package.
+// The module is northtalk.org/go; this is its root package.
 //
 // This file and talk.ts are the handoff interface (#72). They differ only in
 // idiom (ADR 0015): errors as values here and exceptions there, Start/Answer
@@ -1404,7 +1404,7 @@ type MessageDecl struct {
 func ExportManifest(m ManifestSpec) ([]byte, error)
 
 // ---------------------------------------------------------------------------
-// Notification helper: github.com/odogono/odgn-talk/impl/go/notify
+// Notification helper: northtalk.org/go/notify
 // ---------------------------------------------------------------------------
 
 // The following companion declarations are in package notify. They are kept
@@ -1413,7 +1413,7 @@ func ExportManifest(m ManifestSpec) ([]byte, error)
 /*
 package notify
 
-import talk "github.com/odogono/odgn-talk/impl/go"
+import talk "northtalk.org/go"
 
 type WatchLimits struct {
 	Watches, WatchSize, Pending, PendingSize int64

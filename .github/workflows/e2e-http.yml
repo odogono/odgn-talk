@@ -39,7 +39,7 @@ jobs:
       - run: bun run unicode:check
       - run: bun run build
         working-directory: tooling/cli
-      - run: go -C impl/go build -o dist/northtalk ./cmd/northtalk
+      - run: go -C impl/go build -o dist/northtalk ./internal/cmd/northtalk
       - run: zig build
         working-directory: impl/zig
       - run: bun run e2e:http

@@ -1,6 +1,6 @@
 package session
 
-import "github.com/odogono/odgn-talk/impl/go/internal/analysis"
+import "northtalk.org/go/internal/analysis"
 
 func (h *Host) analyze(source string) (*analysis.Entry, error) {
 	n := h.names()

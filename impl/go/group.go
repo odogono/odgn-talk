@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/syntax"
+	coretrace "northtalk.org/go/internal/trace"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 var ErrMailboxFull error = errors.New("mailbox full")

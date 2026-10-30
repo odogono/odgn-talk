@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // The router on real Groups. `store` here offers only `watch`, so a watch is

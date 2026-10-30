@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Host Objects use the shared native-Go comparison harness. Property

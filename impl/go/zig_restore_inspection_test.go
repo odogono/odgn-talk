@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
+	"northtalk.org/go/internal/docs"
 )
 
 func TestRestoredObjectInspectionKeepsDisposedState(t *testing.T) {

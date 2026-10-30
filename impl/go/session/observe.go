@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/analysis"
+	coretrace "northtalk.org/go/internal/trace"
 )
 
 // measurement is one `:fuel` Entry's Fuel Measurement: its root Delivery and

@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
+	"northtalk.org/go/internal/syntax"
+	corevalue "northtalk.org/go/internal/value"
+	"northtalk.org/go/internal/valueops"
 )
 
 // Add applies the Script + rules outside a Run, without charging Fuel or Alloc.

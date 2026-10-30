@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/value"
 )
 
 func txt(s string) value.Value { v, _ := value.NewText(s); return v }

@@ -1,7 +1,7 @@
 //! Drives the native router through the http test kit, corpus/http-kit/: a
 //! Script served through real sockets on 127.0.0.1, with the answers
 //! chapter 7 and chapter 9's HTTP router require, as
-//! impl/go/httphost/kit_test.go and impl/ts/tools/http-kit.ts do. The
+//! impl/go/internal/httphost/kit_test.go and impl/ts/tools/http-kit.ts do. The
 //! router polls on this thread; each request is made from another.
 //! `zig build http-kit` runs it; so does `zig build test`.
 const std = @import("std");

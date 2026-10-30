@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // zbPacket is a binary reply: an admission, or a Pump's completion.

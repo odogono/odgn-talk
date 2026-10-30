@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Host Commands (ADR 0094) use the shared native-Go comparison harness: an

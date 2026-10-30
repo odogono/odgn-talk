@@ -3,8 +3,8 @@ package session
 import (
 	"fmt"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
 	"maps"
+	talk "northtalk.org/go"
 	"slices"
 	"strings"
 )

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
-	v "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/sessionio"
+	v "northtalk.org/go/internal/value"
 )
 
 func init() {

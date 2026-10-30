@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/corpus"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/corpus"
+	"northtalk.org/go/internal/value"
+	"northtalk.org/go/store"
 )
 
 // Run checks every sequence, stopping with the first divergent step.

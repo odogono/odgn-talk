@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
+	"northtalk.org/go/internal/analysis"
 )
 
 // docsFixture is impl/testdata/declaration-docs.json, which the TS Core's

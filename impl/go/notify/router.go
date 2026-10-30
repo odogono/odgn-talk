@@ -25,9 +25,9 @@ import (
 	"strings"
 	"sync"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
+	talk "northtalk.org/go"
+	corevalue "northtalk.org/go/internal/value"
+	"northtalk.org/go/internal/valueops"
 )
 
 // WatchLimits are a Store's four limits on its watches (Store Notifications,

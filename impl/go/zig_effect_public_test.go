@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Both independently compiled public Hosts observe lifecycle ownership,

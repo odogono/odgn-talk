@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 func runSaveBridgeCases(t *testing.T) []bridgeObservation {

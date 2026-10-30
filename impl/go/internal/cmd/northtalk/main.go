@@ -13,8 +13,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/driver"
+	"northtalk.org/go/session"
 )
 
 const usage = "usage: northtalk [-port n] file.talk [args...]\n       northtalk [-transcript file] [-trace file] [-replay file]"

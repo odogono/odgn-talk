@@ -11,10 +11,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
-	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/analysis"
+	"northtalk.org/go/internal/sessionio"
+	"northtalk.org/go/store"
 )
 
 // Item is one Transcript record. Kind is input, read, clock, answer, comment or

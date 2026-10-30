@@ -1,7 +1,7 @@
 package northtalk
 
 import (
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 type operationCall struct {

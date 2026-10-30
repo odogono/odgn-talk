@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 func TestTraceErrorMessageProvenance(t *testing.T) {

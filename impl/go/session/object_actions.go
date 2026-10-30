@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/sessionio"
 	"time"
 )
 

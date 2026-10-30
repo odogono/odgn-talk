@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/unicode"
 )
 
 // Position counts lines and Unicode scalars from one, including tabs and the

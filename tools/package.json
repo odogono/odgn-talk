@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check && bun run lints:check && bun run stdlib-fuel:check && bun run envelope:check && bun run docs:check && bun run save-format:check",
+    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check && bun run lints:check && bun run stdlib-fuel:check && bun run envelope:check && bun run docs:check && bun run save-format:check && bun run go-license:check",
     "spec:gen": "bun spec/generate.ts",
     "spec:check": "bun spec/generate.ts --check",
     "grammar:check": "bun grammar/check.ts",
@@ -23,6 +23,7 @@
     "zig:check": "bun zig/generate.ts --check",
     "commits:check": "bun commits/check.ts",
     "save-format:check": "sh ../impl/elixir/scripts/check-save-format.sh",
+    "go-license:check": "sh ../impl/go/check-license.sh",
     "changelog": "bun commits/changelog.ts",
     "release-notes:ts": "bun commits/release-notes.ts",
     "lints:generate": "bun lints/generate.ts",

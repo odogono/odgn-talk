@@ -3,8 +3,8 @@ package northtalk
 import (
 	"time"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
+	corevalue "northtalk.org/go/internal/value"
+	"northtalk.org/go/internal/valueops"
 )
 
 // userMaxPending is how long confirm, choose and enter wait, as console's read.

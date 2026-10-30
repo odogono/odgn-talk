@@ -13,8 +13,8 @@ import (
 	"unicode/utf8"
 	"weak"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/zigwasm"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/zigwasm"
 )
 
 var zigCompiled struct {

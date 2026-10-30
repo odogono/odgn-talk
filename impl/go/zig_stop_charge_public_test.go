@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Exercise real public callbacks on both separately compiled Cores (#1065).

@@ -1,7 +1,7 @@
 package northtalk
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	"northtalk.org/go/internal/shape"
 )
 
 func shapeData(s shape.Shape) any {

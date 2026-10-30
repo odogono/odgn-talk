@@ -1,7 +1,7 @@
 package unicode
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/generated"
 	"unicode/utf8"
 )
 

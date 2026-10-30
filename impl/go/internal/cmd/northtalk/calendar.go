@@ -8,7 +8,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 const microsPerDay = 24 * 60 * 60 * 1_000_000

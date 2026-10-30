@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Compare queued cancellation through both public controls, including cleanup

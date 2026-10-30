@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/sqlite"
+	talk "northtalk.org/go"
+	"northtalk.org/go/sqlite"
 )
 
 // maxRows is the rows one `sqlite` call may give.

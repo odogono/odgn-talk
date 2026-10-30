@@ -8,7 +8,7 @@ The checked interface files carry the [Metered Operation declarations](embedding
 
 ## Package names
 
-The Go embedding's module path is `github.com/odogono/odgn-talk/impl/go`, with the public package named `northtalk` at the module root ([ADR 0046](../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). The TS Core's package is `@northtalk/ts` ([ADR 0102](../docs/adr/0102-npm-packages-publish-under-the-northtalk-scope.md)).
+The Go embedding's module path is `northtalk.org/go`, with the public package named `northtalk` at the module root ([ADR 0046](../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). The TS Core's package is `@northtalk/ts` ([ADR 0102](../docs/adr/0102-npm-packages-publish-under-the-northtalk-scope.md)).
 
 ## The shape
 
@@ -217,7 +217,7 @@ In TS, `defineCapability` takes an optional fourth `ReleaseHook` argument, indep
 
 ### The notification router
 
-Each Core supplies a router as a helper built only on this interface, at `@northtalk/ts/notify` in TS and `github.com/odogono/odgn-talk/impl/go/notify` in Go. As with the drivers, its idiom is outside parity, but the [Store registration, routing and lifetime rules](07-libraries-and-the-standard-library.md#store-watch-operations), [watch limits](07-libraries-and-the-standard-library.md#store-watch-limits) and [checkpoint rules](10-save-and-restore.md#store-notification-checkpoints) apply to it. A Host with its own storage builds a `StoreImpl` around it:
+Each Core supplies a router as a helper built only on this interface, at `@northtalk/ts/notify` in TS and `northtalk.org/go/notify` in Go. As with the drivers, its idiom is outside parity, but the [Store registration, routing and lifetime rules](07-libraries-and-the-standard-library.md#store-watch-operations), [watch limits](07-libraries-and-the-standard-library.md#store-watch-limits) and [checkpoint rules](10-save-and-restore.md#store-notification-checkpoints) apply to it. A Host with its own storage builds a `StoreImpl` around it:
 
 The helper's TS and Go declarations are in [`talk.ts`](embedding/talk.ts) and [`talk.go`](embedding/talk.go). `RouterOptions` supplies the Store's limits and current revision, and an optional admission callback. `RoutingResult` lists restored, dropped and resynced watches as `<script>.<grant>.<watch>`, in the order of watches. `pumped(group)` is called after each Pump returns and gives `true` while the Group still has pending work.
 
@@ -562,7 +562,7 @@ Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tag
 
 - **Idiom:** how each Core expresses the interface: errors or exceptions, `Start`/`Answer` or a Promise, and the builders for maps.
 - **Wording:** a `HostError`'s detail, and a diagnostic's message. Their codes are normative.
-- **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/impl/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `newDrivenGroup(core, options)` and `autoDrive(group)` from `@northtalk/ts/driver` in TS), the plain JS Helpers from `@northtalk/ts` and `@northtalk/ts/wasm` (`createGroup`, a driven Group with explicit close and async disposal; `script.handlers` and `handlersOf`, which call Handlers with plain JS values; and `inlineGrants`, which grants plain JS functions as Operations), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
+- **Helpers** built only on this interface, versioned with each Core: the drivers (`northtalk.org/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `newDrivenGroup(core, options)` and `autoDrive(group)` from `@northtalk/ts/driver` in TS), the plain JS Helpers from `@northtalk/ts` and `@northtalk/ts/wasm` (`createGroup`, a driven Group with explicit close and async disposal; `script.handlers` and `handlersOf`, which call Handlers with plain JS values; and `inlineGrants`, which grants plain JS functions as Operations), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
 - **The TS Core's debug-pause hook** ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [Appendix C](appendix-c-handed-off-open.md)).
 - **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative; a frame may not be refused solely for its nesting depth.
 - **The Host Manifest** is for tooling, and the Core never reads it.

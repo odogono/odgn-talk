@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/store"
+	"northtalk.org/go/store"
 )
 
 func TestContentsRefuseNoncanonicalValues(t *testing.T) {

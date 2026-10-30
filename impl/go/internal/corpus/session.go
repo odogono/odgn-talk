@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
+	"northtalk.org/go/session"
 )
 
 type sessionBackend struct{}

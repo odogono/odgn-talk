@@ -176,7 +176,7 @@ func TestHTTPExample(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	cmd := exec.Command(binary, "-port", "0", "../../../../examples/http/hello.talk")
+	cmd := exec.Command(binary, "-port", "0", "../../../../../examples/http/hello.talk")
 	cmd.Env = append(os.Environ(), "PORT=3000")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

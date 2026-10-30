@@ -12,6 +12,8 @@ All commands below run from the repository root. See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
+The module is `northtalk.org/go` ([ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md)). Its supported packages are the root, `driver`, `session`, `store` and `notify`; put anything else under `internal/`. The root `go.work` joins the Go modules, so check tidiness with `tools/go/tidy-check.sh impl/go`, not `go mod tidy`.
+
 ## Language, lowering and execution
 
 The Go module runs the embedded Zig Core, with no Go parser, checker, compiler or interpreter (#1055). Lexing, checking, lowering, execution, costs, Built-ins and recovery are the [Zig task map](../zig/NAVIGATION.md)'s. Host-side value helpers: Core error maps, logical size and `Add` in [valueops](internal/valueops/), and Selector and label validation in [syntax](internal/syntax/), a lexer only. Text Pattern sizes come from [the value reader's tree](internal/value/pattern.go).
@@ -72,7 +74,7 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Implementation: [binary exchange](zig_binary.go), [combined calls through the adapter](zig_combined.go), [combined Request and Pump](group_combined.go)
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
 - Tests and cases: [adapter tests](zig_combined_test.go), [public tests](group_combined_test.go), [benchmarks](group_combined_bench_test.go); `TALK_ZIG_REQUEST_PUMP=fields` runs the adapter suites on the binary exchange, as the [Go workflow](../../.github/workflows/go.yml) does; Host callbacks ([`zig_callback.go`](zig_callback.go)) are binary unless `TALK_ZIG_CALLBACKS=` is set empty
-- Measurement reports: [paired ratios](cmd/request-pump-report/main.go), [tests](cmd/request-pump-report/main_test.go); first check: `go -C impl/go test ./cmd/request-pump-report`. For sample settings and acceptance claims, read the [measurement protocol](../../docs/research/request-pump-binary.md#measurement-protocol-1278).
+- Measurement reports: [paired ratios](internal/cmd/request-pump-report/main.go), [tests](internal/cmd/request-pump-report/main_test.go); first check: `go -C impl/go test ./internal/cmd/request-pump-report`. For sample settings and acceptance claims, read the [measurement protocol](../../docs/research/request-pump-binary.md#measurement-protocol-1278).
 - First check: `CGO_ENABLED=0 TALK_ZIG_REQUEST_PUMP=fields impl/go/adapter-check.sh`; envelope gates: `impl/go/request-pump-bench.sh`, also run by the [bench workflow](../../.github/workflows/go-zig-bench.yml)
 
 ## Public embedding API
@@ -119,24 +121,24 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Sessions, REPL and Transcripts
 
-- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](cmd/northtalk/)
+- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](internal/cmd/northtalk/)
 - Rules: [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
 - First check: `go -C impl/go test ./session ./driver`
 
 ## Script Runner
 
-- Implementation: [`northtalk app.talk`](cmd/northtalk/run.go), dispatched in [main](cmd/northtalk/main.go), with [`calendar`](cmd/northtalk/calendar.go), [`locale`](cmd/northtalk/locale.go) over [pinned data](cmd/northtalk/gen-locale-data.ts) and [`sqlite`](cmd/northtalk/sqlite.go)
+- Implementation: [`northtalk app.talk`](internal/cmd/northtalk/run.go), dispatched in [main](internal/cmd/northtalk/main.go), with [`calendar`](internal/cmd/northtalk/calendar.go), [`locale`](internal/cmd/northtalk/locale.go) over [pinned data](internal/cmd/northtalk/gen-locale-data.ts) and [`sqlite`](internal/cmd/northtalk/sqlite.go)
 - Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [ADR 0126](../../docs/adr/README.md); mirrors [the TS Runner](../../tooling/cli/src/run.ts)
-- Tests and cases: [Runner tests](cmd/northtalk/run_test.go), including [the HTTP example](../../examples/http/hello.talk) under SIGINT
-- First check: `go -C impl/go test ./cmd/northtalk`
+- Tests and cases: [Runner tests](internal/cmd/northtalk/run_test.go), including [the HTTP example](../../examples/http/hello.talk) under SIGINT
+- First check: `go -C impl/go test ./internal/cmd/northtalk`
 
 ## HTTP router
 
-- Implementation: [`httphost`](httphost/host.go), on `net/http`
+- Implementation: [`httphost`](internal/httphost/host.go), on `net/http`
 - Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges)
-- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](httphost/kit_test.go)
-- First check: `go -C impl/go test -race ./httphost`
+- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](internal/httphost/kit_test.go)
+- First check: `go -C impl/go test -race ./internal/httphost`
 
 ## Notification router
 
@@ -147,10 +149,10 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Driver Pool and the multi-tenant Example Host
 
-- Implementation: [Pool](driver/pool.go), [Example Host](examples/tenants/)
+- Implementation: [Pool](driver/pool.go), [Example Host](internal/examples/tenants/)
 - Rules: [Threads and the input queue](../../spec/09-embedding.md#threads-and-the-input-queue), [Example Hosts](../../spec/appendix-b-implementation-order.md#milestone-2-the-example-hosts)
-- Tests and cases: [Pool tests](driver/pool_test.go), [Host tests](examples/tenants/tenants_test.go), [`tenants-*` cases](../../corpus/examples/)
-- First check: `go -C impl/go test -race ./driver ./examples/tenants`
+- Tests and cases: [Pool tests](driver/pool_test.go), [Host tests](internal/examples/tenants/tenants_test.go), [`tenants-*` cases](../../corpus/examples/)
+- First check: `go -C impl/go test -race ./driver ./internal/examples/tenants`
 
 ## Corpus selection and parity
 
@@ -177,7 +179,7 @@ These checks start the feedback loop; use the implementation guide and CI workfl
 
 Store Host semantics live in [store/](store/), with the fixed Core factory in
 [store_capability.go](store_capability.go). The language-neutral runner lives in
-[internal/storekit/](internal/storekit/); run `go -C impl/go run ./cmd/storekit`
+[internal/storekit/](internal/storekit/); run `go -C impl/go run ./internal/cmd/storekit`
 or `go -C impl/go test ./store ./internal/storekit ./session` for Store changes.
 
 The optional `sqlite` factory lives in [sqlite_capability.go](sqlite_capability.go),

@@ -3,7 +3,7 @@ package session
 import (
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Prompt is a user prompt as the person sees it (chapter 12, Prompts). Kind is

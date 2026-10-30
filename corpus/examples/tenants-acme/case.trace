@@ -1,5 +1,5 @@
 # tenants-acme: the acme tenant of the multi-tenant Go Example Host
-# (impl/go/examples/tenants), recorded by `go run ./examples/tenants record`.
+# (impl/go/internal/examples/tenants), recorded by `go run ./internal/examples/tenants record`.
 # The Host recorded the `stub` lines from what its Host functions did.
 # Its Fuel, allocation and state figures are Cost Model 0's.
 

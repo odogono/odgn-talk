@@ -4,7 +4,7 @@ import (
 	"slices"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	"northtalk.org/go/internal/shape"
 )
 
 const DuplicateObjectID HostErrorCode = "duplicate object id"

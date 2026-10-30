@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/hostkit"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/hostkit"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 func init() {

@@ -3,8 +3,8 @@ package northtalk
 import (
 	"slices"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/internal/valueops"
+	corevalue "northtalk.org/go/internal/value"
+	"northtalk.org/go/internal/valueops"
 )
 
 // LocaleImpl supplies Collation, case mappings, Locale data and tag fallback.

@@ -3,7 +3,7 @@ package corpus
 import (
 	"fmt"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // ReplayHost applies concrete Host Inputs to one Group, one at a time, for a

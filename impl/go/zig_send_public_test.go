@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Chapter 8 charges the entire Send before its delivery or reply wait (#1062).

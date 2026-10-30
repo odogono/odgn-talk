@@ -3,8 +3,8 @@ package corpus
 import (
 	"fmt"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // collectionReplay answers Object Collection callbacks (#1143). A callback

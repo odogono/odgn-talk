@@ -375,7 +375,7 @@ a new Entry, then evaluated `(original) = (echo)`:
   fails with `! unexpected token`.
 - In `match`, `when "a" & quote` is a syntax error, and `` when `a"` `` matches.
 
-The Go REPL (`go run ./cmd/northtalk`, with Entries on standard input) gave the
+The Go REPL (`go run ./internal/cmd/northtalk`, with Entries on standard input) gave the
 same echoes for the quote text, the backtick key, `{offer: 1}`, the Instant, the
 `1990` subtraction, `0.5 1/s` and the spliced Text Pattern. It differed only in
 the Lambda display described above.

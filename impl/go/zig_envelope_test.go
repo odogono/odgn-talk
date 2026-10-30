@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 type envelopeVector struct {

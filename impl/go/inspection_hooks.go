@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	"github.com/odogono/odgn-talk/impl/go/internal/unicode"
-	v "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/docs"
+	"northtalk.org/go/internal/shape"
+	"northtalk.org/go/internal/unicode"
+	v "northtalk.org/go/internal/value"
 )
 
 func inspectionMap(pairs ...Pair) Value {

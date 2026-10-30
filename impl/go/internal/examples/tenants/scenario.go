@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
 )
 
 //go:embed scripts/*.talk
@@ -177,11 +177,11 @@ func runScenario(h *Host, clock *driver.ManualClock) (map[string]*Tenant, error)
 // and case.trace.
 func caseFiles(t *Tenant) map[string]string {
 	header := fmt.Sprintf("# tenants-%s: the %s tenant of the multi-tenant Go Example Host\n", t.Name, t.Name)
-	header += "# (impl/go/examples/tenants), recorded by `go run ./examples/tenants record`.\n"
+	header += "# (impl/go/internal/examples/tenants), recorded by `go run ./internal/examples/tenants record`.\n"
 	header += "# The Host recorded the `stub` lines from what its Host functions did.\n"
 	header += "# Its Fuel, allocation and state figures are Cost Model 0's.\n\n"
 	toml := fmt.Sprintf(`# tenants-%[1]s: the %[1]s tenant of the multi-tenant Go Example Host
-# (impl/go/examples/tenants, spec Appendix B milestone 2). Its Group is one
+# (impl/go/internal/examples/tenants, spec Appendix B milestone 2). Its Group is one
 # of several the Host pumps in parallel through the driver Pool. Grant
 # bindings (the tenant's price list and sender address) never appear here.
 

@@ -2,8 +2,8 @@
 // milestone 2): an HTTP server that gives each tenant its own Group, pumped
 // in parallel by the driver Pool. It is an embedding example, not a product.
 //
-//	go run ./examples/tenants serve [-addr :8080]
-//	go run ./examples/tenants record [dir]
+//	go run ./internal/examples/tenants serve [-addr :8080]
+//	go run ./internal/examples/tenants record [dir]
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"os"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 func main() {

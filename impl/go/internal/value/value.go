@@ -8,8 +8,8 @@ import (
 	"slices"
 	"sync/atomic"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	"northtalk.org/go/internal/decimal"
+	coreunicode "northtalk.org/go/internal/unicode"
 )
 
 type Kind uint8

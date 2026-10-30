@@ -3,7 +3,7 @@ package syntax
 import (
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/generated"
 )
 
 func isName(t Token) bool {
