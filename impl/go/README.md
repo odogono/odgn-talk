@@ -19,38 +19,83 @@ The archived [comparison probe](../../spikes/go-zig-binding/README.md) and the
 measured before the switch. Language behaviour is the
 [Zig guide](../zig/README.md)'s and the Spec's.
 
-## Moving from the native Go Core
+## Install
 
-The native Go Core was removed in
-[#1055](https://github.com/odogono/odgn-talk/issues/1055)
-([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)).
-The public API is unchanged, and Hosts move by upgrading the module:
+```sh
+go get northtalk.org/go
+```
 
-- **Builds:** there is no build tag; `talk_native_go` and
-  `talk_zig_experimental` no longer exist. Builds need only Go, with
-  `CGO_ENABLED=0` if you like; the reactor is embedded. Linux amd64/arm64 and
-  macOS arm64 are the supported platforms.
-- **Saves are disposable across the switch.** A native Go save (`SaveFormat`
-  `go/…`) isn't in the shared save format
-  ([ADR 0144](../../docs/adr/0144-a-save-restores-on-either-core.md)), so `Restore`
-  refuses it with `invalid save`. There is
-  no converter. Before upgrading, either let saved Groups finish on the old
-  version, or plan to start them fresh from source and the Host's own data.
-  The last commit with the native Core is
-  [`8df027ac`](https://github.com/odogono/odgn-talk/tree/8df027ac174cc42a47d4ad14725bcaea768ddee7).
-- **Versions:** `CoreVersions` reports the Zig Core, `zig/…`, and its save
-  format, so a Host that stores the save format beside each save can tell old
-  saves from new ones.
-- **Behaviour:** the Corpus passes unchanged. A Library may call its importer's
-  Handlers, and a transitive name cycle is accepted, as in TS and Zig
-  ([#1037](https://github.com/odogono/odgn-talk/issues/1037)). Error message
-  wording may differ; error codes don't.
-- **Performance:** the API is slower than native Go was, with more memory per
-  Group; the accepted scorecard is on
-  [#1103](https://github.com/odogono/odgn-talk/issues/1103).
-- **Tools:** run Go Corpus cases with
-  `NORTHTALK_CORPUS=<case> go -C impl/go test ./internal/corpus -run TestSelectedCases`;
-  `cmd/corpus`, `cmd/fuzzworker` and the fuzzer's `--go-runner` are gone.
+The module needs Go 1.26 or later, and nothing else: the Zig Core is embedded as
+a WASI reactor and runs on [wazero](https://wazero.io), so builds need no cgo,
+Zig or downloads. The SQLite Capability is a separate module,
+`go get northtalk.org/go/sqlite`, so only a Host that offers it pulls in its
+driver. Both are versioned v0 until NorthTalk declares language 1.0
+([#142](https://github.com/odogono/odgn-talk/issues/142)), so a minor version
+may change the API; see [CHANGELOG.md](CHANGELOG.md).
+
+## Quick start
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	talk "northtalk.org/go"
+)
+
+func main() {
+	group := talk.New().NewGroup(talk.GroupOptions{Name: "example"})
+	script, err := group.Load(talk.LoadOptions{Name: "math", Source: `
+on sum a, b
+  return a + b
+end sum
+`})
+	if err != nil {
+		panic(err)
+	}
+	_, pending, err := script.Request(context.Background(), talk.Message{
+		Name: "sum",
+		Args: []talk.Value{talk.Int(2), talk.Int(3)},
+	})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := group.Pump(time.Now(), talk.PumpOptions{}); err != nil {
+		panic(err)
+	}
+	result, failure := pending.Result()
+	fmt.Println(result, failure) // 5 <nil>
+}
+```
+
+A Group is pumped by hand here. To pump many Groups on a worker pool with a
+timer per Group, use [`driver.Pool`](driver/pool.go). The
+[examples on pkg.go.dev](https://pkg.go.dev/northtalk.org/go#pkg-examples)
+also grant a Capability whose Operation is a Go function.
+
+## Supported packages and platforms
+
+| Package | Purpose |
+| --- | --- |
+| `northtalk.org/go` | The Core, Groups, Scripts, Values, Capabilities and Grants, save and restore |
+| `northtalk.org/go/driver` | `Pool`, which pumps Groups on workers with a Clock and deadline timers, and Transcript replay |
+| `northtalk.org/go/session` | The Session Host: Entries, Session Commands and the REPL |
+| `northtalk.org/go/store` | An in-memory `StoreImpl` for the Store Capability |
+| `northtalk.org/go/notify` | The Store notification router |
+| `northtalk.org/go/sqlite` | The SQLite Capability, a separate module |
+
+Everything under `internal/`, including the `northtalk` REPL command, is
+unsupported; the published command is [`@northtalk/cli`](../../tooling/cli/).
+Linux amd64 and arm64 and macOS arm64 are supported and tested. Windows amd64
+and macOS amd64 are compile-checked only.
+
+**Compilation cache:** each process compiles the embedded reactor before its
+first Group, which takes a moment. Set `NORTHTALK_ZIG_CACHE_DIR` to a directory
+to keep the compiled code there for later processes; it is keyed by wazero's
+version and the artifact, so an upgrade compiles again.
 
 ## Zig backend
 
@@ -436,6 +481,39 @@ committed, run `python3 impl/go/build-artifact.py` and commit its output. If a t
 mid-suite, compile once and run tests singly:
 `go -C impl/go test -c -o /tmp/adapter.test .`, then
 `(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
+
+## Moving from the native Go Core
+
+The native Go Core was removed in
+[#1055](https://github.com/odogono/odgn-talk/issues/1055)
+([ADR 0117](../../docs/adr/0117-go-hosts-run-the-zig-core-and-the-go-core-is-retired.md)).
+The public API is unchanged, and Hosts move by upgrading the module:
+
+- **Builds:** there is no build tag; `talk_native_go` and
+  `talk_zig_experimental` no longer exist. Builds need only Go, with
+  `CGO_ENABLED=0` if you like; the reactor is embedded. Linux amd64/arm64 and
+  macOS arm64 are the supported platforms.
+- **Saves are disposable across the switch.** A native Go save (`SaveFormat`
+  `go/…`) isn't in the shared save format
+  ([ADR 0144](../../docs/adr/0144-a-save-restores-on-either-core.md)), so `Restore`
+  refuses it with `invalid save`. There is
+  no converter. Before upgrading, either let saved Groups finish on the old
+  version, or plan to start them fresh from source and the Host's own data.
+  The last commit with the native Core is
+  [`8df027ac`](https://github.com/odogono/odgn-talk/tree/8df027ac174cc42a47d4ad14725bcaea768ddee7).
+- **Versions:** `CoreVersions` reports the Zig Core, `zig/…`, and its save
+  format, so a Host that stores the save format beside each save can tell old
+  saves from new ones.
+- **Behaviour:** the Corpus passes unchanged. A Library may call its importer's
+  Handlers, and a transitive name cycle is accepted, as in TS and Zig
+  ([#1037](https://github.com/odogono/odgn-talk/issues/1037)). Error message
+  wording may differ; error codes don't.
+- **Performance:** the API is slower than native Go was, with more memory per
+  Group; the accepted scorecard is on
+  [#1103](https://github.com/odogono/odgn-talk/issues/1103).
+- **Tools:** run Go Corpus cases with
+  `NORTHTALK_CORPUS=<case> go -C impl/go test ./internal/corpus -run TestSelectedCases`;
+  `cmd/corpus`, `cmd/fuzzworker` and the fuzzer's `--go-runner` are gone.
 
 ## Task navigation
 
