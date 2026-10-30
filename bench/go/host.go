@@ -1,6 +1,6 @@
 package bench
 
-import northtalk "github.com/odogono/odgn-talk/impl/go"
+import northtalk "northtalk.org/go"
 
 // bindHost installs only the bindings a Host boundary workload needs, and
 // the partner Script or Host Objects a messaging workload sends to. The TS

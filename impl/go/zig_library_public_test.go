@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Libraries use the shared native-Go comparison harness. Compilation is a

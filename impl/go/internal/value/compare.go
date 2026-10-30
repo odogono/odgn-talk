@@ -6,7 +6,7 @@ import (
 	"math"
 	"strings"
 
-	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	coreunicode "northtalk.org/go/internal/unicode"
 )
 
 // A Comparer carries one comparison's shared work (#890): equality walks

@@ -1,10 +1,10 @@
 package valueops
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/value"
 	"slices"
 	"time"
 )

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 )
 
 type EncodingError struct {

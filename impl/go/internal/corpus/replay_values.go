@@ -3,8 +3,8 @@ package corpus
 import (
 	"fmt"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/value"
 )
 
 // replayValues binds display forms to actual public API handles. Trace text

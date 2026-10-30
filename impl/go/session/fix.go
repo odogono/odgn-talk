@@ -3,8 +3,8 @@ package session
 import (
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/analysis"
 )
 
 // fix is `:fix <run> <path>`, or as a Transcript records it, the

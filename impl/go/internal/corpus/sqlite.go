@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // replaySqlite keeps no database: each Stub stands for the implementation's

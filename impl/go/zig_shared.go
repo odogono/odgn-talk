@@ -17,7 +17,7 @@ import (
 	"sync"
 	"weak"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/zigwasm"
+	"northtalk.org/go/internal/zigwasm"
 )
 
 // zigRegistry is what a guest's Session has been told, shared by every Group

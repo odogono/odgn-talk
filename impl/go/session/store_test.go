@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/driver"
+	"northtalk.org/go/session"
 )
 
 func storeSession(files map[string]string) (*session.Host, *[]session.Item, map[string]string) {

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // The benchmarks in this file measure the Zig Core behind the public API

@@ -3,8 +3,8 @@ package session
 import (
 	"encoding/json"
 	"fmt"
-	v "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
+	v "northtalk.org/go/internal/value"
 	"slices"
 	"strings"
 	"unicode/utf8"

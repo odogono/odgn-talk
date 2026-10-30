@@ -1,8 +1,8 @@
 package northtalk
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/shape"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 type Shape struct{ inner shape.Shape }

@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // New guests negotiate the accepted fields envelope. An explicit empty

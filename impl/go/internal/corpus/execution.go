@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/replay"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/replay"
+	"northtalk.org/go/session"
 )
 
 type traceLines []string

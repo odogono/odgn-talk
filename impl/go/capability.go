@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/shape"
+	"northtalk.org/go/internal/syntax"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 type Mode int

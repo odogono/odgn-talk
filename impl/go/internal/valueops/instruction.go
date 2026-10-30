@@ -3,8 +3,8 @@ package valueops
 import (
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/value"
 )
 
 func text(s string) value.Value { v, _ := value.NewText(s); return v }

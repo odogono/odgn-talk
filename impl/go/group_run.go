@@ -1,8 +1,8 @@
 package northtalk
 
 import (
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	coretrace "northtalk.org/go/internal/trace"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 func (r *Unhandled) isReport() {}

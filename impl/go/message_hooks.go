@@ -1,6 +1,6 @@
 package northtalk
 
-import "github.com/odogono/odgn-talk/impl/go/internal/messagehooks"
+import "northtalk.org/go/internal/messagehooks"
 
 func init() {
 	messagehooks.FuelLeft = func(call any) (int64, bool) {

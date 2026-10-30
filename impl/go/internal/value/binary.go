@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 )
 
 // BinaryOptions supplies transport-owned Function identity without coupling

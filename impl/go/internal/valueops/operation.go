@@ -1,6 +1,6 @@
 package valueops
 
-import "github.com/odogono/odgn-talk/impl/go/internal/value"
+import "northtalk.org/go/internal/value"
 
 // OperationFunc belongs to one execution turn. The Host adapter validates
 // arguments, pays the declaration through pay and invokes the Host. Immediate

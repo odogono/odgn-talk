@@ -251,7 +251,7 @@ reproduce paired medians of 2.684× and 2.707×, versus ratios of medians of 3.4
 and 2.74×. Recompute any archived run without rerunning benchmarks:
 
 ```sh
-go -C impl/go run ./cmd/request-pump-report ../../bench/results/go-zig-adapter/1267-final-a/macos-15
+go -C impl/go run ./internal/cmd/request-pump-report ../../bench/results/go-zig-adapter/1267-final-a/macos-15
 ```
 
 For an acceptance claim near a limit, require two consecutive full workflow

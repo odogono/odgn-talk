@@ -1,6 +1,6 @@
 # Go embedding
 
-The Go embedding is module `github.com/odogono/odgn-talk/impl/go`, with public
+The Go embedding is module `northtalk.org/go`, with public
 root package `northtalk`. It runs the [embedded Zig Core](#zig-backend) through
 wazero and provides immutable values, decimal arithmetic, pinned Unicode text
 and the Group embedding interface, which loads Scripts, accepts Deliveries and
@@ -298,7 +298,7 @@ Library catalogues, the inspection reader and computed message names. A single
 serialized analysis guest shares the adapter's compiled engine and works before
 a Group starts; analysis exchanges load nothing and produce no Trace. Value
 formatting and pinned Unicode name matching stay with the Host. `session`,
-`driver` and `cmd/northtalk` import no Go parser, checker, compiler or
+`driver` and `internal/cmd/northtalk` import no Go parser, checker, compiler or
 generated catalogue packages. Cancelling an unfinished
 inspection expression prevents its property reader from starting.
 
@@ -476,9 +476,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   foreground/background Runs and Session Commands. It consumes Trace records
   to present output; inspection occurs only for explicit inspection commands.
 - `driver/` owns Transcript parsing, recording/replay and terminal interaction;
-  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C, and runs Script files. Its
+  `internal/cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C, and runs Script files. Its
   [Pool](#driver-pool) pumps many Groups on a set of workers.
-- `examples/tenants/` is the [multi-tenant Example Host](examples/tenants/README.md),
+- `internal/examples/tenants/` is the [multi-tenant Example Host](internal/examples/tenants/README.md),
   an HTTP server with a Group per tenant, and the recorder of its Trace Cases.
 - `internal/corpus/` reads setups and runs encoding, Trace and Session
   Transcript cases through the public API, with first-divergence output and
@@ -489,11 +489,13 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
 
-The module has no third-party requirements and no `go.work`. `sqlite/` is a
-separate module, `github.com/odogono/odgn-talk/impl/go/sqlite`, so that only
+The repository's `go.work` joins this module, `sqlite/` and the benchmark
+modules, and `tools/go/tidy-check.sh` checks them tidy. `sqlite/` is a
+separate module, `northtalk.org/go/sqlite`, so that only
 Hosts that offer `sqlite` depend on its driver. Its Core,
-`session/`, `driver/` and `cmd/northtalk/` boundaries follow
-[ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md).
+`session/`, `driver/` and `internal/cmd/northtalk/` boundaries follow
+[ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md), and the module path, tags and
+supported packages follow [ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md).
 
 ## Build and test
 
@@ -547,9 +549,9 @@ Independent Go Trace replay preserves the exact source scalars in `reload`, `ext
 From `impl/go/`, run the Go REPL or record/replay a Transcript:
 
 ```sh
-go run ./cmd/northtalk
-go run ./cmd/northtalk -transcript session.transcript -trace case.trace
-go run ./cmd/northtalk -replay ../../corpus/sessions/save-restore/session.transcript
+go run ./internal/cmd/northtalk
+go run ./internal/cmd/northtalk -transcript session.transcript -trace case.trace
+go run ./internal/cmd/northtalk -replay ../../corpus/sessions/save-restore/session.transcript
 NORTHTALK_CORPUS=sessions/save-restore go test ./internal/corpus -run TestSelectedCases
 ```
 
@@ -606,8 +608,8 @@ terminal, `user` with the REPL's prompts, plus `calendar` bound to `UTC`,
 directory, opened at first use and removed at exit, giving at most 10,000 rows a
 call. `calendar` reads Go's time zone database, embedded with `time/tzdata`.
 `locale` takes Collation and case mapping from `golang.org/x/text` and names
-and number symbols from [a table](cmd/northtalk/locale_data.go) pinned from
-Node's ICU by `node impl/go/cmd/northtalk/gen-locale-data.ts`; it supports `und`
+and number symbols from [a table](internal/cmd/northtalk/locale_data.go) pinned from
+Node's ICU by `node impl/go/internal/cmd/northtalk/gen-locale-data.ts`; it supports `und`
 and the tags listed there, and any other tag falls back by lookup, so a tag the
 TS Runner resolves through Intl, such as `de-CH`, may resolve to `de` here.
 `und` has en-US names and symbols, as the TS Runner has on an en-US runtime.
@@ -1123,7 +1125,7 @@ outlive reload and remain outside saves and restores.
 Run every language-neutral Store kit sequence with:
 
 ```sh
-go -C impl/go run ./cmd/storekit
+go -C impl/go run ./internal/cmd/storekit
 ```
 
 The same kit runs in `go -C impl/go test ./internal/storekit`, alongside native

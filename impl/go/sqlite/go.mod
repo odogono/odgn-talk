@@ -1,10 +1,10 @@
-module github.com/odogono/odgn-talk/impl/go/sqlite
+module northtalk.org/go/sqlite
 
-go 1.27
+go 1.26.0
 
 require (
 	github.com/ncruces/go-sqlite3 v0.35.6
-	github.com/odogono/odgn-talk/impl/go v0.0.0
+	northtalk.org/go v0.0.0
 )
 
 require (
@@ -13,5 +13,3 @@ require (
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
-
-replace github.com/odogono/odgn-talk/impl/go => ../

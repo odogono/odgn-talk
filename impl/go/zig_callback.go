@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/shape"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // Host callbacks (op, prop, effect and release needs) cross in the binary

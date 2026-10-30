@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 )
 
 var civilSyntax = regexp.MustCompile(`^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,6}))?)?$`)

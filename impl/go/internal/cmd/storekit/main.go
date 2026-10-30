@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/storekit"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/storekit"
+	"northtalk.org/go/store"
 )
 
 func main() {

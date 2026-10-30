@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/decimal"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // Value is an immutable Script value. Its zero value is Nothing.

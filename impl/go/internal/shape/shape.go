@@ -5,9 +5,9 @@ package shape
 import (
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/value"
 )
 
 type Shape struct {

@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/internal/value"
+	"northtalk.org/go/session"
 )
 
 func ParseTranscript(source string) ([]session.Item, error) {

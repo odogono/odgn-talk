@@ -1,9 +1,9 @@
 package session
 
 import (
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/analysis"
+	"northtalk.org/go/internal/docs"
 )
 
 // Doc is one declaration's Declaration Documentation, as a name lookup finds

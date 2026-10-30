@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 type ScriptError struct {

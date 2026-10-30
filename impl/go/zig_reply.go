@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"time"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // zigValueResolver supplies the identities that belong to the Host, rather

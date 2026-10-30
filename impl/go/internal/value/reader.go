@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 )
 
 // Reader reads display-form values, not source expressions. Resolve binds

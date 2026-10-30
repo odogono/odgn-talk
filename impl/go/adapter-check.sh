@@ -28,7 +28,7 @@ go test -run '^TestLibraryReplayAfterReplacement$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
 go test -count=1 "$@" ./session
 # The CLI has no tests of its own; build it so the REPL links against the adapter.
-go build -o /dev/null ./cmd/northtalk
+go build -o /dev/null ./internal/cmd/northtalk
 go test -run '^(TestSessionTranscriptParity|TestSessionDecomposedSourceTraceReplaysIndependently)$' -count=1 "$@" ./internal/corpus
 # Large inspection Trace, reply and Save/Restore input cross chunk boundaries
 # without raising the per-chunk transport limit (#1286).
@@ -36,6 +36,6 @@ go test -run '^TestLimitsStepFourAcceptance$/^limits/persistent-state-minimum$' 
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
 go test -count=1 "$@" ./driver
-go test -count=1 "$@" ./store ./internal/storekit ./examples/tenants
+go test -count=1 "$@" ./store ./internal/storekit ./internal/examples/tenants
 (cd sqlite && go test -count=1 "$@" ./...)
 exec go test -run "$selection" -count=1 "$@" . ./internal/zigwasm

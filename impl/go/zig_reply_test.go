@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // The request path decodes several Reports per Pump, including their embedded

@@ -6,9 +6,9 @@ package shape
 import (
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/generated"
+	"northtalk.org/go/internal/value"
 )
 
 // A DefinitionError is the first reason data isn't a Shape.

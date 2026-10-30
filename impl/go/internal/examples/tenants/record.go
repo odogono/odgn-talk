@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // recorder is a tenant's Trace sink. A live Host has no Stubs, so it also

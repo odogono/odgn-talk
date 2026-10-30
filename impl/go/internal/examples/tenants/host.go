@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
 )
 
 // A Plan sets the limits each of its tenants' Scripts loads with.

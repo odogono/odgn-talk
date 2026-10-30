@@ -16,7 +16,7 @@ recorded them.
 
 ## Evidence and boundaries
 
-The [multi-tenant Go Example Host](../../../impl/go/examples/tenants/README.md)
+The [multi-tenant Go Example Host](../../../impl/go/internal/examples/tenants/README.md)
 recorded each Trace from its live Groups, writing its Host functions' answers
 and Charges as `stub` lines. `bun run corpus:bless` then wrote byte-identical
 expectations, with the TS and Go runners agreeing in ordinary and save/restore

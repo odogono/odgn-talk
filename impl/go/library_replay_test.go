@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/replay"
+	"northtalk.org/go/internal/replay"
 )
 
 // The Corpus obtains replacement Libraries through this hook before Restore.

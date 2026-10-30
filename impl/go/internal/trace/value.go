@@ -1,7 +1,7 @@
 package trace
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/value"
 	"slices"
 )
 

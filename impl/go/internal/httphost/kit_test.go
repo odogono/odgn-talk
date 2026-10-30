@@ -19,12 +19,12 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/internal/toml"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
+	"northtalk.org/go/internal/toml"
 )
 
-const kitRoot = "../../../corpus/http-kit"
+const kitRoot = "../../../../corpus/http-kit"
 
 type kitCase struct {
 	file, name, script string

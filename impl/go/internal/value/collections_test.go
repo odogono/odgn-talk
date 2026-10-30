@@ -2,7 +2,7 @@ package value
 
 import (
 	"fmt"
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 	"runtime"
 	"slices"
 	"testing"

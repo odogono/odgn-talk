@@ -9,8 +9,8 @@ import (
 
 	"github.com/ncruces/go-sqlite3"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/sqlite"
+	talk "northtalk.org/go"
+	"northtalk.org/go/sqlite"
 )
 
 // The kit holds the implementation to each rule; these run it under Groups,

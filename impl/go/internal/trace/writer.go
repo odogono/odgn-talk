@@ -2,7 +2,7 @@
 package trace
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/generated"
 	"strings"
 )
 

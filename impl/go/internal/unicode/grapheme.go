@@ -3,7 +3,7 @@ package unicode
 import (
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/generated"
 )
 
 func control(value string) bool { return value == "CR" || value == "LF" || value == "Control" }

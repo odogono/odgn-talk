@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"northtalk.org/go/internal/generated"
+	coreunicode "northtalk.org/go/internal/unicode"
+	"northtalk.org/go/internal/value"
 )
 
 type Measures struct {

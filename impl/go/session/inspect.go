@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/analysis"
+	"northtalk.org/go/internal/docs"
 	"regexp"
 	"strings"
 )

@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 )
 
 func TestBinaryCanonicalVectors(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // The same public Host runs in the separately compiled native reference and

@@ -6,7 +6,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	"northtalk.org/go/internal/unicode"
 )
 
 type TextPart struct {

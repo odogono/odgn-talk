@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"northtalk.org/go/internal/syntax"
 )
 
 func hostileSource(kind string, size int) string {

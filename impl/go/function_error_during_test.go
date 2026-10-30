@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Captures distinguish the original Function Value from a display-only stand-in.

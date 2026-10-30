@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	northtalk "github.com/odogono/odgn-talk/impl/go"
+	northtalk "northtalk.org/go"
 )
 
 // ScriptsDir holds the shared Benchmark Scripts and their manifest.

@@ -1,7 +1,7 @@
 package value
 
 import (
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"northtalk.org/go/internal/decimal"
 	"strings"
 	"testing"
 )

@@ -20,11 +20,11 @@ import (
 	"syscall"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/driver"
-	"github.com/odogono/odgn-talk/impl/go/httphost"
-	"github.com/odogono/odgn-talk/impl/go/session"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/driver"
+	"northtalk.org/go/internal/httphost"
+	"northtalk.org/go/session"
+	"northtalk.org/go/store"
 )
 
 // drainTimeout is how long the first signal waits for open HTTP Exchanges.

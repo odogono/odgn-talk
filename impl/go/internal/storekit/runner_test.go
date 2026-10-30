@@ -1,8 +1,8 @@
 package storekit
 
 import (
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/store"
+	talk "northtalk.org/go"
+	"northtalk.org/go/store"
 	"testing"
 )
 

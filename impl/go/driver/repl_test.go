@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/session"
 )
 
 func TestREPLMultilineReadAndForegroundDeadline(t *testing.T) {

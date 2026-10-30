@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/decimal"
+	"northtalk.org/go/internal/generated"
 )
 
 type Slot struct {

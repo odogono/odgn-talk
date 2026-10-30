@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	corevalue "northtalk.org/go/internal/value"
 )
 
 // Exercise errors returned by Do/Start and queued through Fail on a later Pump.

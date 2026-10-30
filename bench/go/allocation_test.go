@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	northtalk "github.com/odogono/odgn-talk/impl/go"
+	northtalk "northtalk.org/go"
 )
 
 // The core ceilings are about 1.5 times the bytes per full-size Run after

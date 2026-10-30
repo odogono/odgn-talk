@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // Decisions use the shared native-Go comparison harness. Each future's

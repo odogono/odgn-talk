@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // The native Go Core's observations, recorded from its last build before it

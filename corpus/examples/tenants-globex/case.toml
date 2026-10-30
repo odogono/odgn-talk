@@ -1,5 +1,5 @@
 # tenants-globex: the globex tenant of the multi-tenant Go Example Host
-# (impl/go/examples/tenants, spec Appendix B milestone 2). Its Group is one
+# (impl/go/internal/examples/tenants, spec Appendix B milestone 2). Its Group is one
 # of several the Host pumps in parallel through the driver Pool. Grant
 # bindings (the tenant's price list and sender address) never appear here.
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	coreunicode "northtalk.org/go/internal/unicode"
 )
 
 const MinExponent = -6176

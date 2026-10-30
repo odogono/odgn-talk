@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/docs"
+	"northtalk.org/go/internal/sessionio"
+	"northtalk.org/go/internal/value"
 )
 
 func callRun(id string) string {

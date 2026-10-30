@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"northtalk.org/go/internal/generated"
 )
 
 // Tests consume the pinned UCD, never another Core's implementation or output.

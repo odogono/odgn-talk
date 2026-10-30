@@ -59,7 +59,7 @@ while [ "$i" -lt "$count" ]; do
 done
 
 cd "$out"
-go -C "$here" run ./cmd/request-pump-report -rounds "$count" "$out" > "$out/paired.txt"
+go -C "$here" run ./internal/cmd/request-pump-report -rounds "$count" "$out" > "$out/paired.txt"
 go -C "$here" run "$benchstat" -table '' "$out/base.txt" "$out/native.txt" > "$out/regression.txt" 2>&1 || true
 go -C "$here" run "$benchstat" native="$out/native.txt" json="$out/zig-json.txt" fields="$out/zig-fields.txt" > "$out/comparison.txt"
 echo "$out"

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 // bellSession's `bell` getter queues a `rang` Delivery each time it is read.

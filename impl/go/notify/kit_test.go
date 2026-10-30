@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/toml"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/toml"
+	"northtalk.org/go/internal/value"
 )
 
 const kitRoot = "../../../corpus/notify-kit"

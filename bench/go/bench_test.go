@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	northtalk "github.com/odogono/odgn-talk/impl/go"
+	northtalk "northtalk.org/go"
 )
 
 // smoke runs each Benchmark at its smoke size, as the CI smoke pass does.

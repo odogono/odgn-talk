@@ -4,7 +4,7 @@
 //! sockets the Runner's poll loop drives, turns each request into a
 //! Delivery, and answers the HTTP Exchange from `respond` or, failing that,
 //! from the Pump's reports. Its semantics are the TS and Go routers'
-//! (impl/ts/src/http/router.ts, impl/go/httphost/host.go): one listener per
+//! (impl/ts/src/http/router.ts, impl/go/internal/httphost/host.go): one listener per
 //! address shared by its registrations, the longest prefix, a 1 MiB body
 //! limit answered 413, and 404, 500 and 503 for what the Script didn't
 //! answer.

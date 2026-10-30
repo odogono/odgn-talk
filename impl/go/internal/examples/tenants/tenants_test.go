@@ -12,7 +12,7 @@ import (
 )
 
 // The committed Trace Cases are what the Host records: rerecord with
-// `go -C impl/go run ./examples/tenants record` after changing the Host.
+// `go -C impl/go run ./internal/examples/tenants record` after changing the Host.
 func TestRecordedCasesMatchCorpus(t *testing.T) {
 	dir := t.TempDir()
 	if err := record(dir); err != nil {
@@ -25,7 +25,7 @@ func TestRecordedCasesMatchCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "corpus", "examples", name, file))
+			want, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "corpus", "examples", name, file))
 			if err != nil {
 				t.Fatal(err)
 			}

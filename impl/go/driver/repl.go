@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/session"
 )
 
 // REPLOptions controls terminal-only presentation and I/O, outside parity.

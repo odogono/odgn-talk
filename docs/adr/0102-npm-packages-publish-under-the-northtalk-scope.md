@@ -17,3 +17,4 @@ The package is named after its directory, `impl/ts`, as the Go module is named a
 - **The VS Code extension** keeps the Marketplace name `northtalk`, because it isn't an npm package.
 - **Earlier ADRs, changelog fragments and `impl/ts/CHANGELOG.md` entries** keep the old name as history.
 - **The npm organisations** `@northtalk` and `@odgn` are both held by the publisher, so `@odgn` stays available but unused.
+- Amended by [ADR 0148](0148-the-go-embedding-publishes-as-northtalk-org-go.md): the Go module path is `northtalk.org/go`.

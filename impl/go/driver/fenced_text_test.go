@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/session"
+	"northtalk.org/go/session"
 )
 
 func TestREPLFencedText(t *testing.T) {

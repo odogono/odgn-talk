@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 var poolStart = time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)

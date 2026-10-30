@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	talk "github.com/odogono/odgn-talk/impl/go"
+	talk "northtalk.org/go"
 )
 
 func setupLibraries(core *talk.Core, setup Setup, declarations talk.GrantDecls, readSource func(Setup) (string, error)) (map[string]*talk.Library, error) {
