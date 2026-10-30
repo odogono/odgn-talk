@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/ncruces/go-sqlite3 v0.35.6
-	northtalk.org/go v0.0.0-20261030084351-e664a5316b9d
+	northtalk.org/go v0.1.0
 )
 
 require (
