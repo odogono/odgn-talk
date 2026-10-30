@@ -143,7 +143,8 @@ The replay bridge retains current Library handles after registration and
 successful replacement, including recompiled dependants. A restore offered
 replacement identities therefore rejects a mismatch or carries only Script
 Variables, according to the Host's policy; refused replacements retain the old
-handles.
+handles. Under `ReloadChanged`, `RestoreOptions.KeepMailbox` keeps each changed
+Script's mailbox for its new code, as Reload's `keepMailbox` does.
 
 `restore-bindings-v1` lets resolution register new Grants before its answer,
 and returns the Script, Object and Call metadata the adapter needs. Private

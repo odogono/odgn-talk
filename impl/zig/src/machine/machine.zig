@@ -2566,7 +2566,15 @@ pub const Group = struct {
         _ = g;
         var total: u64 = 0;
         for (fresh.variables) |v| total += costs.size(v);
-        if (keep_mailbox) for (s.work.items) |w| switch (w) {
+        if (keep_mailbox) total += mailboxState(s);
+        return total;
+    }
+
+    /// The Persistent State a Script's mailbox holds: each queued message
+    /// at its logical size.
+    pub fn mailboxState(s: *const Script) u64 {
+        var total: u64 = 0;
+        for (s.work.items) |w| switch (w) {
             .message => |d| {
                 var contents: u64 = 0;
                 for (d.args) |v| contents += costs.size(v);
@@ -6854,15 +6862,7 @@ pub const Group = struct {
     fn persistentState(g: *Group, s: *Script) u64 {
         var total: u64 = 0;
         for (s.variables) |v| total += costs.size(v);
-        for (s.work.items) |w| switch (w) {
-            .message => |d| {
-                var contents: u64 = 0;
-                for (d.args) |v| contents += costs.size(v);
-                if (d.function) |f| contents += costs.size(f);
-                total += 32 + contents;
-            },
-            .run => {},
-        };
+        total += mailboxState(s);
         for (s.live.items) |r| total += g.runSize(r);
         return total;
     }

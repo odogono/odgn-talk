@@ -63,7 +63,7 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 	if !ok {
 		return nil, result, g.refuse(InvalidValue, "invalid mismatch policy")
 	}
-	_, err = b.exchangeDecoded("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply zigResponse) error {
+	_, err = b.exchangeDecoded("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy, "keepMailbox": o.KeepMailbox}, func(reply zigResponse) error {
 		if reply.failure != nil {
 			return nil
 		}

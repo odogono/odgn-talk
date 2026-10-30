@@ -1635,6 +1635,9 @@ pub const Options = struct {
     /// The `ReloadChanged` mismatch policy: a Partial Restore when only
     /// Script code changed, and a variables-only restore otherwise.
     reload_changed: bool = false,
+    /// Under a Partial Restore, each changed Script keeps its saved
+    /// mailbox, as a Reload with `keepMailbox` does; ignored otherwise.
+    keep_mailbox: bool = false,
 };
 
 pub const Outcome = enum { full, partial, variables_only, mismatch };
@@ -2976,6 +2979,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     if (r.mismatch and !options.variables_only and !options.reload_changed) {
         if (g.trace) |w| {
             w.print("> restore from=s{d}", .{g.saves}) catch {};
+            if (options.keep_mailbox) w.writeAll(" mailbox=keep") catch {};
             writeIds(w, "unbound", r.unbound.items);
             writeIds(w, "withheld", withheld.items);
             w.print(" fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{saved_print}) catch {};
@@ -3141,7 +3145,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     var reloaded: std.ArrayList([]const u8) = .empty;
     defer reloaded.deinit(a);
     if (variables_only) try discard(&r, saved, &discarded) else {
-        if (partial) try reload(&r, saved, reloading, &discarded, &reloaded);
+        if (partial) try reload(&r, saved, reloading, options.keep_mailbox, &discarded, &reloaded);
         baseline(g);
     }
     // The calls that still pend.
@@ -3182,6 +3186,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     if (g.trace) |w| {
         w.print("> restore from=s{d}", .{g.saves}) catch {};
         if (options.reload_changed) w.writeAll(" mismatch=reload-changed") catch {} else if (options.variables_only) w.writeAll(" mismatch=variables-only") catch {};
+        if (options.keep_mailbox) w.writeAll(" mailbox=keep") catch {};
         writeIds(w, "unbound", r.unbound.items);
         writeIds(w, "withheld", withheld.items);
         w.print(" fingerprint={x} mode={s}", .{ saved_print, if (variables_only) "variables-only" else if (partial) "partial" else "full" }) catch {};
@@ -3258,7 +3263,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
     for (g.scripts.items, saved) |s, *x| {
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(a);
-        try carry(r, s, x, &runs);
+        try carry(r, s, x, false, &runs);
         for (runs.items) |run| {
             g.discardRun(run, "variables-only restore");
             try out.runs.append(a, try k.dupe(u8, run.id));
@@ -3306,8 +3311,8 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
 /// Each Script Variable a rebuilt Script declares takes its saved value, as
 /// a preempted Run's rollback would leave it; `runs` gets the Script's
 /// restored Runs in the order they started. Over its Persistent State cap,
-/// the restore fails.
-fn carry(r: *Restoring, s: *Script, x: *const Saved, runs: *std.ArrayList(*Run)) Error!void {
+/// counting its mailbox if it keeps it, the restore fails.
+fn carry(r: *Restoring, s: *Script, x: *const Saved, keep_mailbox: bool, runs: *std.ArrayList(*Run)) Error!void {
     const a = r.gpa();
     try runs.appendSlice(a, s.live.items);
     sorting.stable(*Run, runs.items, {}, struct {
@@ -3331,6 +3336,7 @@ fn carry(r: *Restoring, s: *Script, x: *const Saved, runs: *std.ArrayList(*Run))
     }
     var state: u64 = 0;
     for (s.variables) |v| state += machine.costs.size(v);
+    if (keep_mailbox) state += Group.mailboxState(s);
     if (state > s.limits.persistent_state) return error.StateTooLarge;
 }
 
@@ -3339,8 +3345,9 @@ fn carry(r: *Restoring, s: *Script, x: *const Saved, runs: *std.ArrayList(*Run))
 /// `CarryVariables` would, and its saved Runs and mailbox end as that
 /// Reload's Stop would end them, with no Host hook. Those waiting on them
 /// get `send failed`, reason `stopped`, and each open Decision settles
-/// undecided at the first Pump.
-fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, out: *Discarded, reloaded: *std.ArrayList([]const u8)) Error!void {
+/// undecided at the first Pump; with `keep_mailbox`, only those whose Run
+/// had begun.
+fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, keep_mailbox: bool, out: *Discarded, reloaded: *std.ArrayList([]const u8)) Error!void {
     const g = r.g;
     const a = r.gpa();
     const k = r.keep();
@@ -3364,7 +3371,7 @@ fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, out: *Disc
         }.less);
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(a);
-        try carry(r, s, x, &runs);
+        try carry(r, s, x, keep_mailbox, &runs);
         // Its ready Runs end below, with the rest.
         var at: usize = 0;
         while (at < s.work.items.len) {
@@ -3377,11 +3384,12 @@ fn reload(r: *Restoring, saved: []const Saved, changed: []const bool, out: *Disc
             g.endRun(run, .{ .stopped = .{ .decisions = &decisions, .discard = "reload", .run_id = id } }) catch |e| return valueError(e);
         }
         const messages = dropped.items.len;
-        while (s.work.items.len > 0) {
+        // A kept mailbox stays for the new code, its senders still waiting.
+        if (!keep_mailbox) while (s.work.items.len > 0) {
             const d = s.work.orderedRemove(0).message;
             if (d.from == null and d.id > 0) try dropped.append(a, d.id);
             g.dropRestored(s, d, &decisions) catch |e| return valueError(e);
-        }
+        };
         try g.reportStop(s.name, "reload", out.runs.items[ended..], dropped.items[messages..], out.abandoned.items[calls..]);
     }
     // A queued settlement of a call the changed Scripts abandoned settles
@@ -4183,6 +4191,99 @@ test "the State Fingerprint refuses bytes it can't read and other save formats" 
     bytes[magic.len] = format_version + 1;
     reseal(bytes);
     try testing.expectError(error.Mismatch, stateFingerprint(bytes));
+}
+
+test "a Partial Restore keeps a changed Script's mailbox when asked (#1709)" {
+    const gpa = testing.allocator;
+    const first = try machine.compileLibrary(gpa, "fmt", "1", "function label x\n  return \"v1 \" & x\nend label\n", &.{}, null);
+    defer first.library.destroy();
+    const second = try machine.compileLibrary(gpa, "fmt", "1", "function label x\n  return \"v2 \" & x\nend label\n", &.{}, null);
+    defer second.library.destroy();
+    const a =
+        \\use label from fmt
+        \\script variable last = ""
+        \\on go
+        \\  repeat 10 times
+        \\    put label("go") into last
+        \\  end repeat
+        \\end go
+        \\on note x
+        \\  return label(x)
+        \\end note
+        \\
+    ;
+    const b =
+        \\script variable got = ""
+        \\on start
+        \\  try
+        \\    send note with "x" to a and wait
+        \\    put it into got
+        \\  catch e
+        \\    put the code of e into got
+        \\  end try
+        \\end start
+        \\
+    ;
+    // b's Request waits in a's mailbox while the Fuel Slice preempts a's Run.
+    const saved = blk: {
+        var g: Group = .init(gpa, null);
+        defer g.deinit();
+        try g.addLibrary(first.library);
+        try testing.expect(try g.load("a", a, .{}) == .loaded);
+        try testing.expect(try g.load("b", b, .{}) == .loaded);
+        _ = try g.deliver("a", "go", &.{}, false);
+        _ = try g.deliver("b", "start", &.{}, false);
+        try g.pumpWith(.{ .seconds = 1790000000, .micros = 0 }, 50, 0);
+        try testing.expectEqual(@as(usize, 1), Group.mailboxState(g.script("a").?) / 32);
+        break :blk try save(&g, gpa, try g.groupFingerprint());
+    };
+    defer gpa.free(saved);
+    for ([_]bool{ false, true }) |keep| {
+        var restored: Group = .init(gpa, null);
+        defer restored.deinit();
+        var result: Result = .{};
+        defer result.deinit(gpa);
+        try testing.expectEqual(Outcome.partial, try restore(&restored, saved, .{ .libraries = &.{second.library}, .reload_changed = true, .keep_mailbox = keep }, &result));
+        try testing.expectEqual(@as(usize, 1), result.discarded.len);
+        // A Request's sender isn't listed as dropped either way, but only a
+        // kept mailbox leaves it waiting.
+        try testing.expectEqual(@as(usize, 0), result.dropped.len);
+        const ra = restored.script("a").?;
+        try testing.expectEqual(@as(usize, if (keep) 1 else 0), ra.work.items.len);
+        for (restored.reports.list.items) |x| if (x == .stop) try testing.expectEqual(@as(usize, 0), x.stop.dropped_messages.len);
+        try restored.pump(.{ .seconds = 1790000001, .micros = 0 });
+        const got = restored.script("b").?.variables[0];
+        try testing.expectEqualStrings(if (keep) "v2 x" else "send failed", got.data.text);
+    }
+    // Kept messages count toward the Persistent State cap; dropped ones don't.
+    var limit: u64 = 512;
+    var refused = false;
+    while (!refused and limit > 0) : (limit -= 8) {
+        var g: Group = .init(gpa, null);
+        defer g.deinit();
+        try g.addLibrary(first.library);
+        try testing.expect(try g.load("a", a, .{ .limits = .{ .persistent_state = limit } }) == .loaded);
+        _ = try g.deliver("a", "go", &.{}, false);
+        _ = try g.deliver("a", "note", &.{}, false);
+        try g.pumpWith(.{ .seconds = 1790000000, .micros = 0 }, 50, 0);
+        try testing.expectEqual(@as(u64, 32), Group.mailboxState(g.script("a").?));
+        const bytes = try save(&g, gpa, try g.groupFingerprint());
+        defer gpa.free(bytes);
+        for ([_]bool{ false, true }) |keep| {
+            var restored: Group = .init(gpa, null);
+            defer restored.deinit();
+            var result: Result = .{};
+            defer result.deinit(gpa);
+            const outcome = restore(&restored, bytes, .{ .libraries = &.{second.library}, .reload_changed = true, .keep_mailbox = keep }, &result) catch |e| {
+                try testing.expectEqual(error.StateTooLarge, e);
+                try testing.expect(keep);
+                refused = true;
+                continue;
+            };
+            try testing.expectEqual(Outcome.partial, outcome);
+        }
+    }
+    try testing.expect(refused);
 }
 
 test "a Partial Restore rebuilds only the Scripts whose code changed (ADR 0143)" {

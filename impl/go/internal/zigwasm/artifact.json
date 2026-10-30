@@ -3,5 +3,5 @@
   "zig": "0.17.0",
   "target": "wasm32-wasi",
   "optimize": "safe",
-  "sha256": "438862c75b6a3ef9e4767a8d21e92f0ce5d5a6ca649a6eb11957cba40f53ad6d"
+  "sha256": "baa6b871ee205dfeee85181c60f03d8c3d918bd1e51240beb39080ea6a8094bc"
 }

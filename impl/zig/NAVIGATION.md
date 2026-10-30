@@ -203,7 +203,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 - Implementation: [snapshot](src/machine/snapshot.zig), [Fingerprint](src/machine/fingerprint.zig), [machine](src/machine/machine.zig), [exports](src/talk.zig)
 - Rules: [save and restore](../../spec/10-save-and-restore.md), [the Group Fingerprint](../../spec/09-embedding.md#the-pump-and-the-group-fingerprint)
-- Partial Restore ([ADR 0143](../../docs/adr/0143-a-restore-may-reload-only-the-scripts-whose-code-changed.md)): `restore` in [snapshot.zig](src/machine/snapshot.zig) reads `Options.reload_changed`, marks the `reloading` Scripts and calls `reload`, which discards their Runs and fills the reloaded list; the C option is `TALK_RELOAD_CHANGED` in [talk.h](include/talk.h).
+- Partial Restore ([ADR 0143](../../docs/adr/0143-a-restore-may-reload-only-the-scripts-whose-code-changed.md)): `restore` in [snapshot.zig](src/machine/snapshot.zig) reads `Options.reload_changed`, marks the `reloading` Scripts and calls `reload`, which discards their Runs and fills the reloaded list; the C option is `TALK_RELOAD_CHANGED` in [talk.h](include/talk.h). `Options.keep_mailbox` (C `keep_mailbox`, request `keepMailbox`, Trace `mailbox=keep`) skips `reload`'s mailbox drop, and `carry` then counts the mailbox toward the cap through `Group.mailboxState`, which a live Reload's `carriedState` shares.
 - Tests and cases: tests in the modules, [talk.h replay](src/corpus/talk_replay.zig), [C Host tests](tests/talk_h_test.c), [Partial Restore cases](../../corpus/save-restore/) (`partial-restore-*`)
 - First check: `cd impl/zig && zig build corpus -- save-restore`
 
