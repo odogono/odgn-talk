@@ -396,13 +396,16 @@ defmodule NorthTalk.Owner do
     {:reply, ok(reply, &Base.decode64!(&1["save"]["$bytes"])), state}
   end
 
+  @mismatch %{reject: "reject", variables_only: "variables only", reload_changed: "reload changed"}
+
   def handle_call({:restore, name, save, opts}, _from, state) do
     fields = %{
       "group" => name,
       "name" => name,
       "save" => %{"$bytes" => Base.encode64(save)},
       "libraries" => Enum.map(Keyword.get(opts, :libraries, []), &identity/1),
-      "mismatch" => if(opts[:mismatch] == :variables_only, do: "variables only", else: "reject"),
+      "mismatch" => Map.get(@mismatch, Keyword.get(opts, :mismatch, :reject), "reject"),
+      "keepMailbox" => Keyword.get(opts, :keep_mailbox, false),
       "trace" => Keyword.get(opts, :trace, false)
     }
 
@@ -420,6 +423,7 @@ defmodule NorthTalk.Owner do
         restored = %Restored{
           group: %Group{owner: self(), name: name},
           variables_only: ok["variablesOnly"],
+          reloaded: plain(ok["reloaded"] || []),
           pending: pending,
           disposed: plain(ok["disposed"]),
           discarded_runs: plain(ok["discardedRuns"]),
@@ -920,7 +924,12 @@ defmodule NorthTalk.Owner do
 
           need = reply["need"] ->
             {answer, state} = answer(state, g, plain(need), need["args"])
-            answer = if binary?, do: {:binary, Binary.encode_answer(answer, ref, g)}, else: Map.merge(answer, %{"ref" => ref, "group" => g})
+
+            answer =
+              if binary?,
+                do: {:binary, Binary.encode_answer(answer, ref, g)},
+                else: Map.merge(answer, %{"ref" => ref, "group" => g})
+
             exchange_frame(state, answer, g, ref, true)
 
           # A final reply in the binary envelope, which the caller reads.

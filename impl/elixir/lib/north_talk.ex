@@ -303,7 +303,13 @@ defmodule NorthTalk do
     * `:libraries` - the compiled `NorthTalk.Library` values the save uses.
     * `:mismatch` - `:reject` (the default) refuses a save whose versions,
       Libraries or Grants don't match with `save mismatch`;
-      `:variables_only` keeps only its Script Variables.
+      `:variables_only` keeps only its Script Variables; `:reload_changed`
+      continues the Scripts whose code matches and reloads the others, a
+      Partial Restore, when only Script code differs, and is variables-only
+      otherwise.
+    * `:keep_mailbox` - with `:reload_changed`, keeps each reloaded Script's
+      mailbox for its new code, so a Request's sender goes on waiting
+      instead of failing. Ignored by other restores.
     * `:trace` - records the new Group's Trace.
 
   Host Objects don't resolve yet, so each restores disposed.

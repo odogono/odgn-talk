@@ -149,4 +149,66 @@ defmodule NorthTalk.RestoreTest do
     assert {:error, %HostError{code: "invalid save"}} = NorthTalk.restore(owner, "copy", "not a save")
     assert {:ok, %Restored{}} = NorthTalk.restore(owner, "empty", NorthTalk.save!(NorthTalk.new_group!(owner, "e", [])))
   end
+
+  # A save, from a manual owner, of a Script importing `fmt` 1 whose sliced
+  # `go` Run holds a `note` in its mailbox, and `fmt` 2 to restore it against.
+  defp saved_with_queued_note do
+    {owner, _grant} = owner(drive: :manual)
+    old = NorthTalk.compile_library!(owner, "fmt", "1", "function label x\n  return \"v1 \" & x\nend label\n", [])
+    new = NorthTalk.compile_library!(owner, "fmt", "2", "function label x\n  return \"v2 \" & x\nend label\n", [])
+    group = NorthTalk.new_group!(owner, "g", [])
+    :ok = NorthTalk.add_library!(group, old)
+
+    source = """
+    use label from fmt
+    script variable got = ""
+    on go
+      repeat forever
+      end repeat
+    end go
+    on note x
+      put label(x) into got
+    end note
+    on peek
+      return got
+    end peek
+    """
+
+    NorthTalk.load!(group, "s", source, [])
+    {:ok, _} = NorthTalk.deliver(group, "s", "go")
+    {:ok, note} = NorthTalk.deliver(group, "s", "note", ["x"])
+    {:ok, %{state: "sliced"}} = NorthTalk.pump(group, fuel_slice: 40)
+    {owner, new, note, NorthTalk.save!(group)}
+  end
+
+  # What `peek` returns after Pumping `group`.
+  defp peek(group) do
+    {:ok, peek} = NorthTalk.deliver(group, "s", "peek")
+    {:ok, %{reports: reports}} = NorthTalk.pump(group)
+    Enum.find_value(reports, &(&1["kind"] == "run end" and &1["delivery"] == peek and &1["result"]))
+  end
+
+  test "reload changed rebuilds a changed Script and drops its mailbox" do
+    {owner, new, note, save} = saved_with_queued_note()
+
+    assert {:ok, %Restored{group: copy, variables_only: false, reloaded: ["s"], dropped_messages: [^note]}} =
+             NorthTalk.restore(owner, "copy", save, libraries: [new], mismatch: :reload_changed)
+
+    assert peek(copy) == ""
+  end
+
+  test "reload changed with keep_mailbox sends the queued message to the new code" do
+    {owner, new, _note, save} = saved_with_queued_note()
+    opts = [libraries: [new], mismatch: :reload_changed, keep_mailbox: true]
+
+    assert {:ok, %Restored{group: copy, variables_only: false, reloaded: ["s"], dropped_messages: []}} =
+             NorthTalk.restore(owner, "copy", save, opts)
+
+    assert peek(copy) == "v2 x"
+  end
+
+  test "a changed Library is a save mismatch without reload changed" do
+    {owner, new, _note, save} = saved_with_queued_note()
+    assert {:error, %HostError{code: "save mismatch"}} = NorthTalk.restore(owner, "copy", save, libraries: [new])
+  end
 end
