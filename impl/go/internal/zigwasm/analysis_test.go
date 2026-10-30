@@ -10,7 +10,7 @@ import (
 // adapter, so an old artifact cannot silently drop the analysis interface.
 func TestEmbeddedReactorAnalysis(t *testing.T) {
 	ctx := t.Context()
-	engine, err := NewEngine(ctx)
+	engine, err := NewEngine(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -93,9 +93,11 @@ Linux amd64 and arm64 and macOS arm64 are supported and tested. Windows amd64
 and macOS amd64 are compile-checked only.
 
 **Compilation cache:** each process compiles the embedded reactor before its
-first Group, which takes a moment. Set `NORTHTALK_ZIG_CACHE_DIR` to a directory
-to keep the compiled code there for later processes; it is keyed by wazero's
-version and the artifact, so an upgrade compiles again.
+first Group, which takes a moment. Call `northtalk.SetCompilationCacheDir(dir)`
+before the first Core compiles, or set `NORTHTALK_ZIG_CACHE_DIR`, to keep the
+compiled code in a directory for later processes; the call wins over the
+variable. The cache is keyed by wazero's version and the artifact, so an
+upgrade compiles again.
 
 ## Zig backend
 
@@ -323,8 +325,8 @@ name, Trace flag and seed in one binary frame; another first Group operation
 creates guest state with `new-group`. An unused Group needs no `drop-group`.
 Guests without the feature retain JSON Load. With `queue-fields-v1`, Deliver, Broadcast and
 Decide cross in binary frames too; guests without it receive JSON. Each process
-compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
-names a directory, where wazero keeps compiled code for later processes,
+compiles the artifact before its first Group, unless `SetCompilationCacheDir`
+or `NORTHTALK_ZIG_CACHE_DIR` names a directory, where wazero keeps compiled code for later processes,
 keyed by its version and the artifact. `BenchmarkBackendColdStart` measures
 both, as `cache=none` and `cache=warm`. Go's garbage collector cleans up
 after a Group, without per-Value Release: it sends `drop-group` for a shared

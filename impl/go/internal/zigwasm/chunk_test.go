@@ -8,7 +8,7 @@ import (
 
 func TestChunkedInput(t *testing.T) {
 	ctx := context.Background()
-	engine, err := NewEngine(ctx)
+	engine, err := NewEngine(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestChunkedInput(t *testing.T) {
 
 func TestChunkedInlineAdmission(t *testing.T) {
 	ctx := context.Background()
-	engine, err := NewEngine(ctx)
+	engine, err := NewEngine(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}

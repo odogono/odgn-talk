@@ -19,15 +19,37 @@ import (
 
 var zigCompiled struct {
 	once     sync.Once
+	mu       sync.Mutex // guards cacheDir and started
+	cacheDir string
+	started  bool
 	engine   *zigwasm.Engine
 	versions Versions
 	err      error
 }
 
+// SetCompilationCacheDir keeps the compiled Zig reactor in dir, so later
+// processes load it instead of compiling it again. The reactor compiles once
+// per process, for the first Core that needs it, so call this before then;
+// afterwards it fails. An empty dir restores the default, the
+// NORTHTALK_ZIG_CACHE_DIR environment variable's directory, or none.
+func SetCompilationCacheDir(dir string) error {
+	zigCompiled.mu.Lock()
+	defer zigCompiled.mu.Unlock()
+	if zigCompiled.started {
+		return fmt.Errorf("the Zig reactor is already compiled")
+	}
+	zigCompiled.cacheDir = dir
+	return nil
+}
+
 func zigEngine() *zigwasm.Engine {
 	zigCompiled.once.Do(func() {
+		zigCompiled.mu.Lock()
+		zigCompiled.started = true
+		dir := zigCompiled.cacheDir
+		zigCompiled.mu.Unlock()
 		ctx := context.Background()
-		engine, err := zigwasm.NewEngine(ctx)
+		engine, err := zigwasm.NewEngine(ctx, dir)
 		if err != nil {
 			zigCompiled.err = err
 			return

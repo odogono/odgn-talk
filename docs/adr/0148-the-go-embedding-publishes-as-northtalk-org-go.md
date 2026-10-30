@@ -23,4 +23,4 @@ The subdirectory field needs Go 1.25 or later, and it was proved before this dec
 - **Every import** changes, including `bench/go`, and the Spec's embedding chapter and `spec/embedding/talk.go` name the new path.
 - **The Worker** must keep answering both paths, or every `go get` of them fails.
 - **Earlier ADRs, changelog fragments and benchmark results** keep the old path as history.
-- **The compilation cache** stays an environment variable, `NORTHTALK_ZIG_CACHE_DIR`, because a public option needs `spec/embedding/talk.go` and `talk.h` changes. That option is a follow-up.
+- **The compilation cache** stays an environment variable, `NORTHTALK_ZIG_CACHE_DIR`, because a public option needs `spec/embedding/talk.go` and `talk.h` changes. That option is a follow-up; #1841 added `SetCompilationCacheDir`, process-wide because the reactor compiles once per process, and the C API needed no field.

@@ -32,9 +32,9 @@ type Engine struct {
 }
 
 // CacheDirEnv names a directory where compiled guest code is kept between
-// processes. Unset, every process compiles the artifact itself. wazero keys
-// the cache by its version and the artifact, so a changed artifact compiles
-// again.
+// processes, when the Host sets none. Unset, every process compiles the
+// artifact itself. wazero keys the cache by its version and the artifact, so a
+// changed artifact compiles again.
 const CacheDirEnv = "NORTHTALK_ZIG_CACHE_DIR"
 
 // Artifact is what build-artifact.py recorded about the embedded reactor.
@@ -57,7 +57,9 @@ func Recorded() (Artifact, error) {
 	return recorded, nil
 }
 
-func NewEngine(ctx context.Context) (*Engine, error) {
+// NewEngine compiles the artifact, keeping the compiled code in cacheDir, or
+// in CacheDirEnv's directory when cacheDir is empty.
+func NewEngine(ctx context.Context, cacheDir string) (*Engine, error) {
 	recorded, err := Recorded()
 	if err != nil {
 		return nil, err
@@ -68,9 +70,12 @@ func NewEngine(ctx context.Context) (*Engine, error) {
 	}
 	config := wazero.NewRuntimeConfig()
 	var cache wazero.CompilationCache
-	if dir := os.Getenv(CacheDirEnv); dir != "" {
+	if cacheDir == "" {
+		cacheDir = os.Getenv(CacheDirEnv)
+	}
+	if cacheDir != "" {
 		var err error
-		if cache, err = wazero.NewCompilationCacheWithDir(dir); err != nil {
+		if cache, err = wazero.NewCompilationCacheWithDir(cacheDir); err != nil {
 			return nil, err
 		}
 		config = config.WithCompilationCache(cache)
