@@ -28,6 +28,11 @@ const specChapters = (): Source[] =>
 export const sources = (): Source[] => [
   { path: 'docs/tour.md', slug: 'learn/tour', title: 'Learn NorthTalk' },
   {
+    path: 'docs/concepts.md',
+    slug: 'learn/concepts',
+    title: 'How NorthTalk runs',
+  },
+  {
     path: 'docs/embedding-typescript.md',
     slug: 'embed/typescript-app',
     title: 'Embed in a TypeScript app',

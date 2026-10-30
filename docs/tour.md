@@ -1,6 +1,6 @@
 # Learn NorthTalk in Y minutes
 
-> This tour is an informative introduction to NorthTalk. The TS and Zig Cores run Scripts today, and Go and Elixir Hosts embed the Zig Core; see the [TS](../impl/ts/README.md), [Zig](../impl/zig/README.md), [Go](../impl/go/README.md) and [Elixir](../impl/elixir/README.md) guides for current support and limitations. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Section headings name the [ADRs](adr/) behind them. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
+> This tour is an informative introduction to NorthTalk. The TS and Zig Cores run Scripts today, and Go and Elixir Hosts embed the Zig Core; see the [TS](../impl/ts/README.md), [Zig](../impl/zig/README.md), [Go](../impl/go/README.md) and [Elixir](../impl/elixir/README.md) guides for current support and limitations. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Section headings name the [ADRs](adr/) behind them. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). [How NorthTalk runs](concepts.md) explains how they fit together. Anything still undecided is left out.
 
 NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go, Bun, Node and Elixir servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
@@ -793,6 +793,7 @@ end recoveryTour
 
 ## Further reading
 
+- [How NorthTalk runs](concepts.md): Hosts, Script Groups, Pumps, Fuel, Traces and saves.
 - [The REPL](../README.md#the-repl) and [Folio](https://northtalk.org/folio/): run and explore Scripts.
 - Example Projects in Folio: [The Lighthouse Mystery](https://northtalk.org/folio/lighthouse), [Tetris](https://northtalk.org/folio/tetris), [Canvas Tetris](https://northtalk.org/folio/canvas-tetris) and [Sonar](https://northtalk.org/folio/sonar), each opened as your own editable copy.
 - [Testing Scripts](../tooling/cli/README.md#testing-scripts): black-box Test Scripts and Transcripts.
