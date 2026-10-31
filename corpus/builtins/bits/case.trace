@@ -1,4 +1,4 @@
-# Unblessed: the bit Built-ins (#1854); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-31 for #1852.
 # bits: §Bits examples, range edges, the PCG32 output step, then each
 # `out of domain`, `wrong kind` and `overflow` path.
 
