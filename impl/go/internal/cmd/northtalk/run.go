@@ -154,7 +154,13 @@ func runScript(o runOptions, rio runIO) int {
 	grant("locale", def, err, "und")
 	def, err = core.StoreCapability(stores, talk.Costs{"watch": {}, "unwatch": {}, "get": {}, "keys": {}, "set": {}, "delete": {}, "increment": {}, "swap": {}})
 	grant("store", def, err, "default")
-	def, err = core.HTTPCapability(h, talk.Costs{"serve": {}, "unserve": {}, "respond": {}})
+	// A trusted local program fetches from anywhere (chapter 12).
+	fetcher, err := httphost.NewFetcher(httphost.FetchOptions{Origins: func(any) httphost.Origins { return httphost.Origins{Any: true} }, Log: stderr.line})
+	if err != nil {
+		stderr.line(err.Error())
+		return 1
+	}
+	def, err = core.HTTPCapabilityWith(h, fetcher, talk.Costs{"serve": {}, "unserve": {}, "respond": {}, "fetch": {}})
 	grant("http", def, err, nil)
 	databases := newLazySqlite()
 	def, err = core.SqliteCapability(databases, talk.Costs{"query": {}, "change": {}, "begin": {}, "commit": {}, "rollback": {}}, 0)

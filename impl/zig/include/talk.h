@@ -627,17 +627,24 @@ typedef struct talk_user_impl {
     talk_operation_fn confirm, choose, enter, notify;
 } talk_user_impl;
 
-/* http: serve receives the name, the prefix, the effective message,
+/* http: the server Operations serve, unserve and respond, fetch, or all
+ * four; a NULL function leaves its Operation undeclared, and the server
+ * Operations come together. serve receives the name, the prefix, the effective message,
  * httpRequest when omitted or Nothing, and the options map, empty when
  * omitted or Nothing; it is suspending, answered with {host, port} once the
  * Host listens, which the Core checks. unserve receives the name. respond
  * receives the httpExchange Host Object and the response map as given,
  * except that json is its compact JSON text. Fail serve with address in use
  * or bad address, and respond with already responded, exchange closed or not
- * owner when the call's delivery isn't the exchange's. */
+ * owner when the call's delivery isn't the exchange's. fetch is suspending:
+ * it receives the normalized URL, with query added, and the request map
+ * without query: method always, headers and body as given, and json as its
+ * compact JSON text. Answer {status, headers, body}, which the Core checks,
+ * or fail with bad address, network error or response too large {field,
+ * limit}; abort the request when the Core abandons the call. */
 typedef struct talk_http_impl {
     void *context;
-    talk_operation_fn serve, unserve, respond;
+    talk_operation_fn serve, unserve, respond, fetch;
 } talk_http_impl;
 
 /* console: write receives the value to show. read is suspending, and
@@ -680,9 +687,10 @@ talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl
 /* user is optional (chapter 7), and has no binding. The Core refuses an
  * empty items with out of domain before calling choose. */
 talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *impl, const talk_costs *costs, talk_capability_def **out);
-/* http is optional (chapter 7, ADR 0124). The binding is the Host's; the
- * Core never reads it. The Core raises invalid serve and invalid response
- * before calling serve, unserve or respond. */
+/* http is optional (chapter 7, ADR 0124, ADR 0151). The binding is the
+ * Host's; the Core never reads it. The Core raises invalid serve, invalid
+ * response, invalid request and fetch's out of domain before calling the
+ * Host function. */
 talk_host_error_code talk_http_capability(talk_core *c, const talk_http_impl *impl, const talk_costs *costs, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */

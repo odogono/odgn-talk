@@ -4,13 +4,16 @@
 //! nothing can happen again, as the TS Runner (tooling/cli/src/run.ts) and
 //! the Go one (impl/go/internal/cmd/northtalk/run.go) do. One thread polls the HTTP
 //! sockets, standard input and a signal pipe, and pumps at each Host Input,
-//! timer and deadline. It grants `console`, `clock`, `timer`, an in-memory
-//! `store` (the Session Store's), `http` and, at a terminal, `user`; it has
+//! timer and deadline; `http.fetch`'s requests run as concurrent tasks that
+//! wake it through a pipe (fetch.zig). It grants `console`, `clock`, `timer`,
+//! an in-memory `store` (the Session Store's), `http`, fetching from any
+//! origin, and, at a terminal, `user`; it has
 //! no time-zone or Locale data, so no `calendar` or `locale`.
 const std = @import("std");
 const c = @import("talk-c");
 const session = @import("session");
 const router_mod = @import("router.zig");
+const Fetcher = @import("fetch.zig").Fetcher;
 
 const sys = std.c;
 const posix = std.posix;
@@ -111,6 +114,8 @@ pub const Runner = struct {
     group: ?*c.talk_group = null,
     script: ?*c.talk_script = null,
     http: *Router,
+    /// `http.fetch`'s requests, from any origin (chapter 12).
+    fetcher: Fetcher = undefined,
     notify: *c.talk_router,
     stores: Stores,
     /// Whether a Host Input waits for a Pump.
@@ -735,6 +740,7 @@ pub const Runner = struct {
             r.next_deadline = if (result.has_next_deadline) .{ .seconds = result.next_deadline_seconds, .micros = result.next_deadline_micros } else null;
             r.cancelWaiting();
             r.answerStarted();
+            if (r.fetcher.settle()) r.dirty = true;
             if (!(r.dirty or r.http.queued or r.admitted or result.state == c.TALK_SLICED)) return;
         }
     }
@@ -808,6 +814,9 @@ pub const Runner = struct {
             const stdin_slot = fds.items.len;
             const reading = r.waiting.items.len > 0 and !r.stdin_ended;
             if (reading) fds.append(r.gpa, .{ .fd = 0, .events = posix.POLL.IN, .revents = 0 }) catch return 1;
+            const fetch_slot = fds.items.len;
+            const fetching = r.fetcher.pollFd();
+            if (fetching) |fd| fds.append(r.gpa, fd) catch return 1;
             const http_slot = fds.items.len;
             r.http.collect(&fds) catch return 1;
             _ = posix.poll(fds.items, r.timeout()) catch return 1;
@@ -818,6 +827,8 @@ pub const Runner = struct {
                 if (n > 0) for (buf[0..@intCast(n)]) |sig| r.signal(sig);
             }
             if (reading and fds.items[stdin_slot].revents != 0) r.readStdin();
+            if (fetching != null and fds.items[fetch_slot].revents != 0) r.fetcher.drainWake();
+            if (r.fetcher.settle()) r.dirty = true;
             r.http.ready(fds.items[http_slot..]);
             if (r.http.queued) r.dirty = true;
             r.fireTimers();
@@ -828,6 +839,8 @@ pub const Runner = struct {
     }
 
     fn deinit(r: *Runner) void {
+        // Its calls belong to the Group, so it goes first.
+        r.fetcher.deinit();
         r.http.flush(1000);
         for (r.timers.items) |t| r.freeTimer(t);
         r.timers.deinit(r.gpa);
@@ -893,6 +906,8 @@ pub fn run(gpa: Allocator, io: std.Io, options: Options) u8 {
     r.notify = c.talk_router_new(&notify_options) orelse return 1;
     r.stores = .init(gpa, r.notify);
     r.http = Router.init(gpa, r.core, .{ .port_override = options.port, .log = Runner.logHttp, .log_context = &r }) catch return 1;
+    r.fetcher = Fetcher.init(gpa, io) catch return 1;
+    r.http.fetcher = &r.fetcher;
     defer r.deinit();
 
     var seed: [8]u8 = undefined;

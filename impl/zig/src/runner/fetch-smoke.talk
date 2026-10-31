@@ -1,0 +1,40 @@
+-- The native Runner's fetch smoke (smoke.zig): it serves on a port the
+-- system picks, fetches from itself, says each result, then unserves so
+-- the Runner ends.
+use decodeText from bytes
+
+on start args
+  ask http to serve "site", "/", "httpRequest", {port: 0} and wait
+  put the port of it into port
+  put "http://127.0.0.1:" & port into base
+  ask http to fetch base & "/echo", {method: "POST", headers: {"X-A": ["1", "2"]}, query: {q: "a b"}, json: {n: 1}} and wait
+  say the status of it
+  say the "x-b" of the headers of it
+  say the "set-cookie" of the headers of it
+  say decodeText(the body of it)
+  ask http to fetch base & "/moved" and wait
+  say [the status of it, the location of the headers of it]
+  try
+    ask http to fetch "http://127.0.0.1:1/" and wait
+  catch {code: code}
+    say code
+  end try
+  -- The plain listener never answers a TLS handshake, so the timeout
+  -- abandons the call and the Runner cancels its request.
+  try
+    with timeout of 300 ms
+      ask http to fetch "https://127.0.0.1:" & port & "/" and wait
+    end timeout
+  catch {code: code}
+    say code
+  end try
+  ask http to unserve "site"
+end start
+
+on httpRequest {method: "POST", segments: ["echo"], path: p, query: q, headers: h, body: b, exchange: x}
+  ask http to respond x, {status: 201, headers: {"X-B": "2", "Set-Cookie": ["a=1", "b=2"]}, json: {method: "POST", path: p, query: the q of q, xa: the "x-a" of h, type: the "content-type" of h, encoding: the "accept-encoding" of h, body: decodeText(b)}}
+end httpRequest
+
+on httpRequest {segments: ["moved"], exchange: x}
+  ask http to respond x, {status: 302, headers: {location: "/elsewhere"}}
+end httpRequest

@@ -130,7 +130,7 @@ Files, grammar, or lowering.
 
 - Implementation: [`http` factory, `invalid serve` and `invalid response` checks](src/http-capability.ts), [`fetch`'s request checks, URL normalization and answer checks](src/http-fetch.ts), [corpus runner Stubs](src/replay.ts)
 - Rules: [`http`](../../spec/07-libraries-and-the-standard-library.md#http), [the factory](../../spec/09-embedding.md#the-http-factory)
-- Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/), including `standard-http-fetch*`, which the Zig reactor can't run until #1869 (`known` in [the WASM Corpus runner](tools/wasm-corpus.ts))
+- Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/), including `standard-http-fetch*`
 - First check: `bun test impl/ts/tests/http-capability.test.ts && bun run corpus:run capabilities/standard-http`
 
 ## HTTP router

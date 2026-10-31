@@ -128,6 +128,9 @@ capabilities/standard-store-validation
 capabilities/standard-timer
 capabilities/standard-http
 capabilities/standard-http-errors
+capabilities/standard-http-fetch
+capabilities/standard-http-fetch-validation
+capabilities/standard-http-fetch-wait
 capabilities/standard-http-validation
 capabilities/standard-user
 capabilities/standard-user-answers
