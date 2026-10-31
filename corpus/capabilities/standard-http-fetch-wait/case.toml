@@ -1,0 +1,18 @@
+# standard-http-fetch-wait: `fetch` declares no `maxPending`, so it waits
+# for the Script's MaxWait, and a shorter Timeout Block wins. Either
+# abandons the call, as a Stop abandons a pending one; a late answer is
+# noted and ignored. An accepted URL is normalized for the Host, but the
+# Trace keeps it as written (chapter 7, Bounds, trust and waiting; ADR 0151).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { fetch = { fuel = 4 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { maxWaitMs = 5000 }
+grants = { http = { ops = "all" } }

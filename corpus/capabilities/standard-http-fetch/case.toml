@@ -1,0 +1,19 @@
+# standard-http-fetch: `fetch` waits for the Host's answer, recorded in the
+# Trace, so no request is made. A 200 and a 404 are both answers. The Host
+# refuses an origin with `bad address` and fails with `network error` or
+# `response too large`, with `field` and `limit`, and the Script catches
+# each. An answer that breaks chapter 7's response rules, or an undeclared
+# failure, ends the call as `host error`. The Trace keeps the arguments as
+# the Script wrote them (chapter 7, Fetching; ADR 0151).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { fetch = { fuel = 4 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { http = { ops = "all" } }

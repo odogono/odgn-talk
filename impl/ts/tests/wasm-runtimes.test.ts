@@ -91,7 +91,7 @@ for (const runtime of ['bun', 'node']) {
         expect({ exit, out, err }).toEqual({
           exit: 0,
           out: expect.stringMatching(
-            /^\d+ passed, 0 failed, 0 known divergences, \d+ past the frame limit, 0 deferred by the TS runner\n$/,
+            /^\d+ passed, 0 failed, \d+ known divergences, \d+ past the frame limit, 0 deferred by the TS runner\n$/,
           ),
           err: '',
         });

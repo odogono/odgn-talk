@@ -1,0 +1,19 @@
+# standard-http-fetch-validation: before charging or calling the Host, the
+# Core raises `out of domain` for a method outside the fixed list, then
+# `invalid request` with `field` for a URL outside the strict profile, bad
+# or Host-controlled header names, names repeated in different cases, a
+# `query` with a URL that has one, a body on GET or HEAD, and `body` with
+# `json`. An unknown request key is `wrong kind`. A Host offering only
+# `fetch` declares no server Operation (chapter 7, Fetching; ADR 0151).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "http"
+costs = { fetch = { fuel = 4 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { http = { ops = "all" } }
