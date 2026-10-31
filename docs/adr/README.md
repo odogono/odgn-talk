@@ -145,3 +145,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0147: Folio stops Runs at Breakpoints as a Pause](0147-folio-stops-runs-at-breakpoints-as-a-pause.md)
 - [0148: The Go embedding publishes as northtalk.org/go](0148-the-go-embedding-publishes-as-northtalk-org-go.md)
 - [0150: The TS package has a lean entry without the stdlib Libraries](0150-the-ts-package-has-a-lean-entry-without-the-stdlib-libraries.md)
+- [0151: `http.fetch` makes one buffered request to an origin the Grant allows](0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
