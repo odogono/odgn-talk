@@ -161,8 +161,93 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
     if (dateField(name)) |field| return dateValue(gpa, name, field, args[0], raised);
     if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "toInstant")) return civilOrInstant(a, gpa, name, args, raised);
     if (std.mem.startsWith(u8, name, "fromFloat") or std.mem.startsWith(u8, name, "toFloat")) return float(gpa, name, args, raised);
+    if (std.mem.startsWith(u8, name, "bit")) return bits(gpa, name, args, raised);
     if (std.mem.eql(u8, name, "conforms") or std.mem.eql(u8, name, "check") or std.mem.eql(u8, name, "explain")) return shapeCall(a, gpa, name, args, raised, m);
     return raise(raised, gpa, "not implemented", &.{});
+}
+
+// ------------------------------------------------------------------- bits
+
+/// A bit Built-in's whole-number argument from `low` to `high`: `wrong
+/// kind` for a non-number, `out of domain` for anything else outside it.
+fn bitOperand(gpa: Allocator, name: []const u8, v: *Value, low: u128, high: u128, raised: *Raised) Error!u128 {
+    if (v.data != .number) return wrongKind(raised, gpa, "number", v);
+    const d = v.data.number;
+    const n = d.integer(i128) catch return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, v);
+    if (n < low or n > high) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, v);
+    return @intCast(n);
+}
+
+const word: u128 = std.math.maxInt(u64);
+const unbounded: u128 = std.math.maxInt(i128);
+
+fn bitWord(gpa: Allocator, name: []const u8, v: *Value, raised: *Raised) Error!u128 {
+    return bitOperand(gpa, name, v, 0, word, raised);
+}
+
+fn bitWidth(gpa: Allocator, name: []const u8, v: *Value, raised: *Raised) Error!u7 {
+    return @intCast(try bitOperand(gpa, name, v, 1, 64, raised));
+}
+
+fn mask(width: u7) u128 {
+    return (@as(u128, 1) << width) - 1;
+}
+
+/// `x` within a required `width`: below 2^width.
+fn bitWithin(gpa: Allocator, name: []const u8, v: *Value, width: u7, raised: *Raised) Error!u128 {
+    const x = try bitWord(gpa, name, v, raised);
+    if (x >> width != 0) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, v);
+    return x;
+}
+
+/// A bit result, below 2^64.
+fn wordNumber(x: u128) model.Decimal {
+    return model.Decimal.fromInt(@as(u64, @intCast(x)));
+}
+
+/// The bit Built-ins (chapter 7, Bits), on whole numbers below 2^64.
+/// Arguments are checked left to right.
+fn bits(gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised) Error!*Value {
+    const eq = std.mem.eql;
+    const r: model.Data = if (eq(u8, name, "bitAnd") or eq(u8, name, "bitOr") or eq(u8, name, "bitXor")) blk: {
+        const a = try bitWord(gpa, name, args[0], raised);
+        const b = try bitWord(gpa, name, args[1], raised);
+        break :blk .{ .number = wordNumber(if (eq(u8, name, "bitAnd")) a & b else if (eq(u8, name, "bitOr")) a | b else a ^ b) };
+    } else if (eq(u8, name, "bitNot")) blk: {
+        _ = try bitWord(gpa, name, args[0], raised);
+        const width = try bitWidth(gpa, name, args[1], raised);
+        break :blk .{ .number = wordNumber(mask(width) ^ try bitWithin(gpa, name, args[0], width, raised)) };
+    } else if (eq(u8, name, "bitShiftLeft")) blk: {
+        const a = try bitWord(gpa, name, args[0], raised);
+        const n: u7 = @intCast(try bitOperand(gpa, name, args[1], 0, 64, raised));
+        const shifted = a << n;
+        if (args.len < 3 or args[2].data == .nothing) {
+            if (shifted > word) return raise(raised, gpa, "overflow", &.{.{ "operator", name }});
+            break :blk .{ .number = wordNumber(shifted) };
+        }
+        const width = try bitWidth(gpa, name, args[2], raised);
+        break :blk .{ .number = wordNumber(shifted & mask(width)) };
+    } else if (eq(u8, name, "bitShiftRight")) blk: {
+        const a = try bitWord(gpa, name, args[0], raised);
+        const n: u7 = @intCast(try bitOperand(gpa, name, args[1], 0, 64, raised));
+        break :blk .{ .number = wordNumber(a >> n) };
+    } else if (eq(u8, name, "bitRotateLeft") or eq(u8, name, "bitRotateRight")) blk: {
+        _ = try bitWord(gpa, name, args[0], raised);
+        const turns = try bitOperand(gpa, name, args[1], 0, unbounded, raised);
+        const width = try bitWidth(gpa, name, args[2], raised);
+        const a = try bitWithin(gpa, name, args[0], width, raised);
+        const k: u7 = @intCast(turns % width);
+        const left: u7 = if (eq(u8, name, "bitRotateLeft")) k else (width - k) % width;
+        break :blk .{ .number = wordNumber(((a << left) | (a >> (width - left))) & mask(width)) };
+    } else if (eq(u8, name, "bitCount")) blk: {
+        const a = try bitWord(gpa, name, args[0], raised);
+        break :blk .{ .number = model.Decimal.fromInt(@as(u8, @popCount(a))) };
+    } else if (eq(u8, name, "bitTest")) blk: {
+        const a = try bitWord(gpa, name, args[0], raised);
+        const i: u7 = @intCast(try bitOperand(gpa, name, args[1], 0, 63, raised));
+        break :blk .{ .bool = (a >> i) & 1 == 1 };
+    } else return raise(raised, gpa, "not implemented", &.{});
+    return model.scalar(gpa, r) catch error.OutOfMemory;
 }
 
 // ------------------------------------------------------------ Shape checks
