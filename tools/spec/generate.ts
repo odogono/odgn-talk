@@ -12,7 +12,14 @@
 
 import Ajv2020 from 'ajv/dist/2020';
 import { envelopeViews, type Catalogue } from '../envelope/catalogue';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { checkCommands } from './commands';
@@ -1526,6 +1533,179 @@ const stdlibViews = (d: Data) => {
 };
 
 // ---------------------------------------------------------------------------
+// Standard Library reference pages (#1860)
+// ---------------------------------------------------------------------------
+
+// docs/stdlib/ holds a page for the Built-ins, each stdlib Library and each
+// Standard Capability, written whole from stdlib.toml for Script authors.
+// northtalk.org publishes them beside the hand-written docs/standard-library.md.
+const PAGES = join(ROOT, 'docs/stdlib');
+const CHAPTER_7 = 'spec/07-libraries-and-the-standard-library.md';
+const CATALOGUE = 'spec/06-errors-and-limits.md#the-error-code-catalogue';
+const GROUP_TITLES: Record<(typeof BUILTIN_GROUPS)[number], string> = {
+  values: 'Values',
+  numbers: 'Numbers',
+  bits: 'Bits',
+  floats: 'Floats',
+  dates: 'Dates',
+  constants: 'Constants',
+};
+
+const stdlibPages = (d: Data): Map<string, string> => {
+  const s = d.stdlib;
+  const pages = new Map<string, string>();
+  const page = (rel: string, lines: string[]) => {
+    const file = join(PAGES, rel);
+    const up = relative(dirname(file), ROOT);
+    const fix = (line: string) => line.replaceAll('](@/', `](${up}/`);
+    pages.set(
+      file,
+      [
+        lines[0],
+        '',
+        '<!-- Generated from spec/data/stdlib.toml by tools/spec/generate.ts. Edit those, then run `bun run spec:gen`. -->',
+        ...lines.slice(1),
+      ]
+        .map(fix)
+        .join('\n')
+        .replaceAll(/\n{3,}/g, '\n\n')
+        .trimEnd() + '\n',
+    );
+  };
+  const spec = (anchor: string) => `[chapter 7](@/${CHAPTER_7}#${anchor})`;
+  const raises = (errors: string[] = [], label = 'Also raises') =>
+    errors.length
+      ? [
+          '',
+          `${label}: ${errors.map(e => `[${code(e)}](@/${CATALOGUE})`).join(', ')}.`,
+        ]
+      : [];
+  const kinds = `An argument of the wrong kind raises \`wrong kind\` before any work is done, so the entries below list only the other errors each raises ([every stdlib function](@/${CHAPTER_7}#rules-for-every-stdlib-function)).`;
+  const entry = (e: any, extra: string[] = []): string[] => {
+    const constant = !isFunction(e);
+    return [
+      `### ${e.name}`,
+      '',
+      constant ? `${code(e.name)} = ${code(e.call)}` : code(e.call),
+      '',
+      `${e.gives}.`,
+      ...extra,
+      ...raises(e.errors),
+      '',
+    ];
+  };
+  const builtins = s.builtin ?? [];
+  page('built-ins.md', [
+    '# Built-ins',
+    '',
+    `A Built-in is always available, with no \`use\`, and is the only kind of function a Guard may call. A Script's own name may shadow one. The rules are in ${spec('built-ins')}.`,
+    '',
+    kinds,
+    '',
+    ...BUILTIN_GROUPS.flatMap(g => [
+      `## ${GROUP_TITLES[g]}`,
+      '',
+      `The full rules: ${spec(g)}.`,
+      '',
+      ...builtins
+        .filter((b: any) => b.group === g)
+        .flatMap((b: any) => entry(b)),
+    ]),
+    '## Properties',
+    '',
+    `A Built-in property is read with \`the <name> of x\`, or \`x's <name>\`. What each gives, and of which kinds, is in [chapter 4](@/spec/04-expressions-and-statements.md#keys-and-properties).`,
+    '',
+    ...(d.grammar.properties ?? []).map(
+      (p: string) => `- ${code(`the ${p} of x`)}`,
+    ),
+  ]);
+  for (const lib of s.libraries ?? []) {
+    const exports = (s.export ?? []).filter((e: any) => e.library === lib);
+    const first = exports.find(isFunction)?.name ?? exports[0]?.name;
+    page(`libraries/${lib}.md`, [
+      `# ${lib}`,
+      '',
+      `The \`${lib}\` Library is part of the Standard Library, so every Group holds it. A Script imports the names it uses, as in \`use ${first} from ${lib}\`. Its normative source is [\`spec/stdlib/${lib}.talk\`](@/spec/stdlib/${lib}.talk), and the full rules are in ${spec(lib)}.`,
+      '',
+      kinds,
+      '',
+      ...exports.flatMap((e: any) => entry(e)),
+      ...(lib === 'bytes'
+        ? [
+            '## Text encodings',
+            '',
+            `The encodings \`decodeText\` and \`encodeText\` name. The full rules: ${spec('text-encodings')}.`,
+            '',
+            ...(s.encoding ?? []).map(
+              (e: any) => `- ${code(`"${e.name}"`)}: ${e.bytes}.`,
+            ),
+          ]
+        : []),
+    ]);
+  }
+  const optional = new Set<string>(s.optional ?? []);
+  for (const c of s.capabilities ?? []) {
+    const ops = (s.operation ?? []).filter((o: any) => o.capability === c);
+    page(`capabilities/${c}.md`, [
+      `# ${c}`,
+      '',
+      `\`${c}\` is a Standard Capability: a Script calls its Operations through a Grant the Host gives it, with \`ask\` for an answer or \`tell\` for none, and a suspending one with \`and wait\`. A call the Grants don't allow fails to load. The full rules: ${spec(c)}. Arguments are checked against the Operation's Shapes, and a mismatch raises \`wrong kind\`; the entries below list the other errors.`,
+      ...(optional.has(c)
+        ? ['', `> **Optional:** a Host may choose not to offer \`${c}\`.`]
+        : []),
+      '',
+      ...ops.flatMap((o: any) => [
+        `### ${o.name}`,
+        '',
+        `${code(o.call)}, ${o.mode}`,
+        '',
+        `${o.gives}.`,
+        ...raises(o.errors, 'Errors'),
+        '',
+      ]),
+    ]);
+  }
+  return pages;
+};
+
+/** Writes or, with `--check`, compares the reference pages. */
+const writePages = async (d: Data, out: Map<string, string>) => {
+  const pages = stdlibPages(d);
+  const existing = existsSync(PAGES)
+    ? (readdirSync(PAGES, { recursive: true }) as string[])
+        .filter(f => f.endsWith('.md'))
+        .map(f => join(PAGES, f))
+    : [];
+  for (const file of existing) {
+    if (pages.has(file)) {
+      continue;
+    }
+    if (check) {
+      problems.push(
+        `${relative(ROOT, file)} has no stdlib.toml entry: run \`bun run spec:gen\``,
+      );
+    } else {
+      rmSync(file);
+    }
+  }
+  for (const [file, text] of pages) {
+    out.set(file, text);
+    const before = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+    if (before === text) {
+      continue;
+    }
+    if (check) {
+      problems.push(
+        `${relative(ROOT, file)} is out of date: run \`bun run spec:gen\``,
+      );
+    } else {
+      mkdirSync(dirname(file), { recursive: true });
+      await Bun.write(file, text);
+    }
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Regions
 // ---------------------------------------------------------------------------
 
@@ -1707,6 +1887,7 @@ ebnfCheck(data, ebnf);
 traceEbnfCheck(traceEbnf, ebnf);
 corpusCheck(data);
 const regenerated = await fillRegions(data);
+await writePages(data, regenerated);
 await checkDocumentation(regenerated);
 
 if (problems.length) {

@@ -39,6 +39,23 @@ export default defineConfig({
       sidebar: [
         { label: 'Learn', items: ['learn/tour', 'learn/concepts'] },
         {
+          label: 'Standard Library',
+          items: [
+            'stdlib',
+            'stdlib/built-ins',
+            {
+              label: 'Libraries',
+              items: [{ autogenerate: { directory: 'generated/stdlib/libraries' } }],
+            },
+            {
+              label: 'Capabilities',
+              items: [
+                { autogenerate: { directory: 'generated/stdlib/capabilities' } },
+              ],
+            },
+          ],
+        },
+        {
           label: 'Embed',
           items: [
             'embed/typescript-app',

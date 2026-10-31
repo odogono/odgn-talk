@@ -19,7 +19,7 @@ for (const source of list) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(
     file,
-    `---\ntitle: ${JSON.stringify(page.title)}\nslug: ${source.slug}\neditUrl: ${githubBlob.replace('/blob/', '/edit/')}${source.path}\n---\n\n${page.body}`,
+    `---\ntitle: ${JSON.stringify(page.title)}\nslug: ${source.slug}\neditUrl: ${githubBlob.replace('/blob/', '/edit/')}${source.path}\n${source.order === undefined ? '' : `sidebar:\n  order: ${source.order}\n`}---\n\n${page.body}`,
   );
 }
 
