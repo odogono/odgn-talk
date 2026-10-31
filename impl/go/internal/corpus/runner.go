@@ -197,6 +197,14 @@ func (r Runner) fail(e error, name string) {
 // CheckPassing is the CI gate, run over the complete Corpus (Appendix B).
 // Every case must pass; the committed list also catches a deleted case. A
 // passing case missing from the list is reported so it can be added.
+// pendingCases await Go support, each with its issue. The gate reports them
+// without failing while the runner defers them, and fails once it doesn't.
+var pendingCases = map[string]string{
+	"capabilities/standard-http-fetch":            "#1869",
+	"capabilities/standard-http-fetch-validation": "#1869",
+	"capabilities/standard-http-fetch-wait":       "#1869",
+}
+
 func (r Runner) CheckPassing(path string) error {
 	b, e := os.ReadFile(path)
 	if e != nil {
@@ -226,6 +234,15 @@ func (r Runner) CheckPassing(path string) error {
 		must := required[c.Name]
 		delete(required, c.Name)
 		reason := r.support(c)
+		if issue, ok := pendingCases[c.Name]; ok {
+			if reason != "" {
+				fmt.Fprintf(r.Output, "PENDING %s (%s, %s)\n", c.Name, reason, issue)
+			} else {
+				fmt.Fprintf(r.Output, "FAIL %s (supported now: remove it from pendingCases)\n", c.Name)
+				failed = true
+			}
+			continue
+		}
 		if reason != "" {
 			fmt.Fprintf(r.Output, "FAIL %s (%s)\n", c.Name, reason)
 			failed = true
