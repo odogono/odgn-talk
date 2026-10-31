@@ -32,6 +32,8 @@ A Host can create a Group ready to pump from the event loop with `newDrivenGroup
 | Import                        | Holds                                                                                                        |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `@northtalk/ts`               | Values, Groups, Scripts, Libraries, Capabilities, Object Kinds, save and restore, and the parser and checker |
+| `@northtalk/ts/lean`          | The same API with no stdlib Library registered; see below                                                    |
+| `@northtalk/ts/stdlib/<name>` | One stdlib Library, such as `json`, for `registerStdlib`                                                     |
 | `@northtalk/ts/session`       | The Session Host, for a REPL, and Session Transcripts                                                        |
 | `@northtalk/ts/driver`        | `newDrivenGroup` and `autoDrive`, which pump a Group from the event loop                                     |
 | `@northtalk/ts/store`         | The Store Standard Capability                                                                                |
@@ -44,6 +46,15 @@ A Host can create a Group ready to pump from the event loop with `newDrivenGroup
 | `@northtalk/ts/debug`         | Debugger hooks. Tooling surface                                                                              |
 
 The tooling surfaces serve editors, debuggers and REPLs. They aren't part of the Spec's embedding API, and may change in any minor release while the package is `0.x`.
+
+A browser Host whose Scripts `use` only some of the stdlib Libraries can import `@northtalk/ts/lean` instead of `@northtalk/ts` and register just those, so a bundler drops the rest ([ADR 0150](https://github.com/odogono/odgn-talk/blob/main/docs/adr/0150-the-ts-package-has-a-lean-entry-without-the-stdlib-libraries.md)). Registering a Library also registers the ones it uses, so `json` brings `text`. A Script that `use`s a Library that isn't registered fails to load with `unknown import`.
+
+```ts
+import { createCore, registerStdlib } from '@northtalk/ts/lean';
+import { json } from '@northtalk/ts/stdlib/json';
+
+registerStdlib(json);
+```
 
 `@northtalk/ts/wasm` doesn't include `talk.wasm`. Build it with `zig build -Dtarget=wasm32-wasi` in the repository's `impl/zig`, or take a `reactor-v*` release, and pass it as `createCore({ wasm })` or serve it beside `wasm.js`.
 

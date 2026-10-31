@@ -17,7 +17,7 @@ import {
 import type { SemanticNode, SemanticTree } from './semantic';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
-import { libraryExports, diagnosticCodes } from './generated/syntax';
+import { diagnosticCodes } from './generated/syntax';
 import { compareText } from './text';
 import {
   exportsOf,
@@ -26,7 +26,7 @@ import {
   lowerStdlibIntrinsics,
 } from './lowering';
 import { loadLibrary, UnitLoadError, type Code } from './machine';
-import { stdlibSources } from './generated/stdlib';
+import { registeredStdlib, stdlibNames, stdlibSource } from './stdlib-registry';
 import type { LibraryExport } from './semantic';
 import { sha256 } from './sha256';
 import { viewSource } from './view';
@@ -44,10 +44,7 @@ export type Library = {
   readonly version: string;
 };
 
-/** The seven stdlib Library names, which a Host may not register. */
-export const stdlibNames: ReadonlySet<string> = new Set(
-  libraryExports.map(entry => entry.library),
-);
+export { stdlibNames };
 
 // Reloads and reanalysis hash the same sources again, so recent identities are
 // kept, keyed by the hashed text itself. The oldest goes first.
@@ -220,6 +217,7 @@ export const prepare = (
     libraries: Object.fromEntries(
       [...available.values()].map(l => [l.name, compiled.get(l)!.exports]),
     ),
+    stdlib: registeredStdlib,
   });
   const diagnostics = diagnosticsOf(checked, name) ?? [];
   if (unit === 'script' && grants && checked.tree) {
@@ -229,7 +227,8 @@ export const prepare = (
   }
   const names = checked.tree ? importsOf(checked.tree) : [];
   const imports = names.flatMap(
-    n => available.get(n) ?? (stdlibNames.has(n) ? [stdlibLibrary(n)] : []),
+    n =>
+      available.get(n) ?? (registeredStdlib.has(n) ? [stdlibLibrary(n)] : []),
   );
   return {
     checked,
@@ -293,11 +292,11 @@ const stdlib = new Map<string, Library>();
 export const stdlibLibrary = (name: string): Library => {
   let l = stdlib.get(name);
   if (!l) {
-    l = build(
-      { name, version: languageVersion, source: stdlibSources[name]! },
-      [],
-      true,
-    );
+    const source = stdlibSource(name);
+    if (source === undefined) {
+      throw new TypeError(`The stdlib Library ${name} isn't registered`);
+    }
+    l = build({ name, version: languageVersion, source }, [], true);
     stdlib.set(name, l);
   }
   return l;

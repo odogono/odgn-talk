@@ -7,7 +7,7 @@ import { checkSource } from '../checker';
 import { declarationDocs } from '../documentation';
 import { builtinDocs } from '../generated/builtin-docs';
 import { builtins } from '../generated/syntax';
-import { stdlibSources } from '../generated/stdlib';
+import { registeredStdlib, stdlibSource } from '../stdlib-registry';
 import { parseSource } from '../parser';
 import { readDisplay } from '../readers';
 import type { SyntaxElement, SyntaxNode } from '../syntax';
@@ -144,7 +144,7 @@ const declaredIn = (
 };
 
 const librarySource = (names: Names, library: string): string | undefined =>
-  names.libraries.get(library) ?? stdlibSources[library];
+  names.libraries.get(library) ?? stdlibSource(library);
 
 /** A public Library export, from the Library's source, imported or not. */
 export const libraryDeclared = (
@@ -342,7 +342,7 @@ export const apropos = (names: Names, rest: string): string[] => {
     });
   }
   const libraries = [
-    ...Object.keys(stdlibSources).sort(byCodePoint),
+    ...[...registeredStdlib].sort(byCodePoint),
     ...names.libraries.keys(),
   ];
   for (const library of libraries) {

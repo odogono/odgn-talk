@@ -54,6 +54,8 @@ export type CheckOptions = {
   objects?: readonly string[];
   /** Setter availability for an Owning Script's me. */
   ownerProperties?: Readonly<Record<string, boolean>>;
+  /** The stdlib Libraries a `use` may name; absent means all seven. */
+  stdlib?: ReadonlySet<string>;
   /** Whether the source is a Script (the default) or a Library. */
   unit?: 'script' | 'library';
 };
@@ -553,7 +555,10 @@ const checkParsed = (
       return typeof entry === 'string' ? { kind: entry } : entry;
     }
     return libraryExports.find(
-      entry => entry.library === library && entry.name === name,
+      entry =>
+        entry.library === library &&
+        entry.name === name &&
+        (options.stdlib?.has(library) ?? true),
     );
   };
 
@@ -654,7 +659,8 @@ const checkParsed = (
             const knownLibrary =
               (options.libraries &&
                 Object.hasOwn(options.libraries, library.v)) ||
-              libraryExports.some(entry => entry.library === library.v);
+              (libraryExports.some(entry => entry.library === library.v) &&
+                (options.stdlib?.has(library.v) ?? true));
             report('unknown import', knownLibrary ? name : library);
           }
         }

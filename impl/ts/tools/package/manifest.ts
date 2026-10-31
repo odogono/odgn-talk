@@ -24,7 +24,8 @@ export const manifest = (source: Source, subpaths: readonly Subpath[]) => ({
   bugs: 'https://github.com/odogono/odgn-talk/issues',
   keywords: ['northtalk', 'scripting', 'language', 'interpreter', 'embedding'],
   engines: { node: '>=24.10' },
-  sideEffects: false,
+  // Only the main entry has an effect: it registers every stdlib Library.
+  sideEffects: ['./index.js'],
   exports: Object.fromEntries([
     ...subpaths.map(subpath => {
       const file = `./${outputName(subpath)}`;
