@@ -5,7 +5,11 @@
 import { resolve } from 'node:path';
 import { codeOf, stdlibLibrary } from '../../impl/ts/src/library';
 import { libraryExports } from '../../impl/ts/src/generated/syntax';
+import { allStdlib } from '../../impl/ts/src/generated/stdlib';
+import { registerStdlib } from '../../impl/ts/src/stdlib-registry';
 import { estimateFuel, fuelText } from '../../tooling/stack/src/fuel';
+
+registerStdlib(...allStdlib);
 
 const path = resolve(import.meta.dir, 'stdlib-fuel.txt');
 

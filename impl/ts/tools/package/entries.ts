@@ -4,6 +4,14 @@
 // are server-only: node:sqlite and node:http.
 export const entries = {
   '.': 'src/index.ts',
+  './lean': 'src/lean.ts',
+  './stdlib/bytes': 'src/generated/stdlib/bytes.ts',
+  './stdlib/date': 'src/generated/stdlib/date.ts',
+  './stdlib/json': 'src/generated/stdlib/json.ts',
+  './stdlib/list': 'src/generated/stdlib/list.ts',
+  './stdlib/map': 'src/generated/stdlib/map.ts',
+  './stdlib/text': 'src/generated/stdlib/text.ts',
+  './stdlib/units': 'src/generated/stdlib/units.ts',
   './message-layer': 'src/message-layer.ts',
   './session': 'src/session/index.ts',
   './store': 'src/store/index.ts',

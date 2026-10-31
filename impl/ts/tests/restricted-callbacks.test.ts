@@ -7,10 +7,13 @@ import { codeOf, compileLibrary, stdlibLibrary } from '../src/library';
 import { type Script } from '../src/machine';
 import { functionValue } from '../src/values';
 import { disassemble } from '../src/code-unit';
-import { stdlibSources } from '../src/generated/stdlib';
+import { allStdlib, stdlibSources } from '../src/generated/stdlib';
+import { registerStdlib } from '../src/stdlib-registry';
 import { defineObjectKind } from '../src/objects';
 import { defineCapability, shape } from '../src/capabilities';
 import { LoadError } from '../src/errors';
+
+registerStdlib(...allStdlib);
 
 const forbiddenHost = (): never => {
   throw new Error('restricted callback reached the Host');
