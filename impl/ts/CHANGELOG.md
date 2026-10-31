@@ -7,6 +7,20 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-31
+
+### Added
+
+- **spec:** Scripts can make HTTP requests with `http`'s new `fetch` Operation, which gives the whole response as `{status, headers, body}` from an origin the Grant allows (ADR 0151). The Cores and Hosts implement it in later releases.
+- **spec:** Add bit Built-ins, `bitAnd`, `bitOr`, `bitXor`, `bitNot`, `bitShiftLeft`, `bitShiftRight`, `bitRotateLeft`, `bitRotateRight`, `bitCount` and `bitTest`, on whole numbers from 0 to 2^64 − 1 (#1852, ADR 0149).
+- **ts:** The TS Core implements the ten bit Built-ins, `bitAnd` to `bitTest`, on whole numbers from 0 to 2^64 − 1, with a shared Corpus case for their examples, errors and the PCG32 output step (#1854).
+- **ts:** Add `@northtalk/ts/lean`, which registers no stdlib Library. A Host registers the ones its Scripts use from `@northtalk/ts/stdlib/<name>` with `registerStdlib`, and a bundler drops the rest. This cuts a minimal browser Host from 206,643 to 188,172 bytes gzipped (#1856).
+- **ts:** Let Scripts make HTTP requests with `http`'s `fetch` on the TS Core. The Core checks the request and normalizes its URL, and checks the Host's answer. `@northtalk/ts/http` gains `createHttpFetch`, also offered by `createHttpHost({ fetch })`, a `node:http`/`node:https` client that allows no origin unless its binding names exact origins or allows any. It doesn't follow redirects or decompress, bounds the response, verifies TLS and aborts abandoned calls. `httpCapability` now takes the server Operations, `fetch`, or both, and `respond` refuses header names repeated in different cases. The Script Runner fetches from any origin (#1868).
+
+### Performance
+
+- **ts:** Skip rendering Host delivery Trace lines when the Group has no `trace` sink, and remember Values already found to reach no Function, so delivering a large unchanged argument each tick costs far less (#1857).
+
 ## [0.5.0] - 2026-10-30
 
 ### Added
