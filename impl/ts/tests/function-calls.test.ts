@@ -1,6 +1,6 @@
 import { operationalReports, operationalResult } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
-import { functionValue } from '../src/values';
+import { functionValue, list } from '../src/values';
 import {
   newGroup,
   restore,
@@ -125,6 +125,16 @@ describe('Function Value calls', () => {
     const a = setup(named);
     const b = setup(named);
     expect(() => b.group.call(a.fn, [])).toThrow(
+      expect.objectContaining({ code: 'wrong group' }),
+    );
+  });
+
+  test('a Value cleared once still refuses a foreign Function around it', () => {
+    const a = setup(named);
+    const b = setup(named);
+    const cleared = list(num(1), list(num(2)));
+    b.group.call(b.fn, [cleared]);
+    expect(() => b.group.call(b.fn, [list(cleared, a.fn)])).toThrow(
       expect.objectContaining({ code: 'wrong group' }),
     );
   });

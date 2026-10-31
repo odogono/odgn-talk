@@ -1029,20 +1029,38 @@ const displayKey = (key: string): string => {
   return display.startsWith('"') ? display : `"" & ${display}`;
 };
 
+// Values a walk found to reach no Function. Values are immutable, so an
+// unchanged Value delivered again is not walked again.
+const functionFree = new WeakSet<Value>();
+
 /** Every Function reachable through a Host value must belong to its receiving Group. */
 export const functionsBelongTo = (
   values: readonly Value[],
   group: object | undefined,
 ): boolean => {
-  const work = [...values];
+  for (const value of values) {
+    if (!functionFree.has(value) && !belongsTo(value, group)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const belongsTo = (root: Value, group: object | undefined): boolean => {
+  const work = [root];
   const seen = new Set<Value>();
+  let free = true;
   while (work.length) {
     const value = work.pop()!;
     if (seen.has(value)) {
       continue;
     }
+    if (functionFree.has(value)) {
+      continue;
+    }
     seen.add(value);
     if (value.kind === 'function') {
+      free = false;
       const fn = value.asFunction()!;
       if (fn.group !== group) {
         return false;
@@ -1058,6 +1076,12 @@ export const functionsBelongTo = (
       for (const [, entry] of value.entries()) {
         work.push(entry);
       }
+    }
+  }
+  if (free) {
+    // A walk that met no Function cleared every Value it visited.
+    for (const value of seen) {
+      functionFree.add(value);
     }
   }
   return true;
