@@ -2459,22 +2459,21 @@ export class TsGroup implements Group {
             : x.delivery.request
               ? 'request'
               : 'deliver';
-        const toText =
-          typeof to === 'string' ? to : traceValue(to.handle.value);
         return {
-          line: this.deliveryLine(
-            record,
-            delivery.id,
-            toText,
-            {
-              name: delivery.message,
-              args: delivery.args,
-              ...(Object.keys(delivery.limits).length
-                ? { limits: delivery.limits }
-                : {}),
-            },
-            delivery.fn,
-          ),
+          line: () =>
+            this.deliveryLine(
+              record,
+              delivery.id,
+              typeof to === 'string' ? to : traceValue(to.handle.value),
+              {
+                name: delivery.message,
+                args: delivery.args,
+                ...(Object.keys(delivery.limits).length
+                  ? { limits: delivery.limits }
+                  : {}),
+              },
+              delivery.fn,
+            ),
           action: { k: 'delivery', to, state: s, delivery },
         };
       }
@@ -3473,8 +3472,11 @@ export class TsGroup implements Group {
       const urgent = this.inputs.filter(i => i.urgent);
       this.inputs = this.inputs.filter(i => !i.urgent);
       for (const input of urgent) {
-        const line = typeof input.line === 'string' ? input.line : input.line();
-        this.trace?.(line);
+        if (this.trace) {
+          this.trace(
+            typeof input.line === 'string' ? input.line : input.line(),
+          );
+        }
         this.applyInput(input.action);
       }
     }
@@ -4725,7 +4727,7 @@ export class TsGroup implements Group {
       fn ? undefined : m.name,
     );
     const named = typeof to === 'string';
-    const toText = named ? to : traceValue(to.handle.value);
+    const toText = () => (named ? to : traceValue(to.handle.value));
     // The Script it routes to at the call, whose mailbox depth it counts
     // against: a Script, or an object's nearest Owning Script.
     const state = named
@@ -4736,7 +4738,10 @@ export class TsGroup implements Group {
     }
     // A Host Input refused at the call is written, with no ids, then `refused`.
     const refuse = (code: string, error: Error): never => {
-      this.recordRefusal(this.deliveryLine(record, null, toText, m, fn), code);
+      this.recordRefusal(
+        this.deliveryLine(record, null, toText(), m, fn),
+        code,
+      );
       throw error;
     };
     if (!fn && !validMessageSelector(m.name, m.args?.length ?? 0)) {
@@ -4795,7 +4800,7 @@ export class TsGroup implements Group {
     this.ancestry(delivery);
     this.queueInput(
       {
-        line: this.deliveryLine(record, delivery.id, toText, m, fn),
+        line: () => this.deliveryLine(record, delivery.id, toText(), m, fn),
         action: { k: 'delivery', to, state: state ?? null, delivery },
       },
       notify,
@@ -5416,10 +5421,13 @@ export class TsGroup implements Group {
     this.drainingTrace = outputLines;
     try {
       for (const input of drained) {
-        // A deferred line also selects Broadcast recipients at drain time.
-        inputLines.push(
-          typeof input.line === 'string' ? input.line : input.line(),
-        );
+        // A deferred line also selects Broadcast recipients at drain time, so
+        // it runs with no Trace sink; other deferred lines are only text.
+        if (typeof input.line === 'string') {
+          inputLines.push(input.line);
+        } else if (this.trace || input.action.k === 'broadcast') {
+          inputLines.push(input.line());
+        }
         // A held charge refusal's `refused` stays with its input line.
         if (input.action.k === 'refusal') {
           inputLines.push(
