@@ -496,6 +496,46 @@ export const builtins = [
     "kind": "function"
   },
   {
+    "name": "bitAnd",
+    "kind": "function"
+  },
+  {
+    "name": "bitOr",
+    "kind": "function"
+  },
+  {
+    "name": "bitXor",
+    "kind": "function"
+  },
+  {
+    "name": "bitNot",
+    "kind": "function"
+  },
+  {
+    "name": "bitShiftLeft",
+    "kind": "function"
+  },
+  {
+    "name": "bitShiftRight",
+    "kind": "function"
+  },
+  {
+    "name": "bitRotateLeft",
+    "kind": "function"
+  },
+  {
+    "name": "bitRotateRight",
+    "kind": "function"
+  },
+  {
+    "name": "bitCount",
+    "kind": "function"
+  },
+  {
+    "name": "bitTest",
+    "kind": "function"
+  },
+  {
     "name": "fromFloat64",
     "kind": "function"
   },

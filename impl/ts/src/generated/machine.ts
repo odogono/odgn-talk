@@ -2336,6 +2336,96 @@ export const costModel = {
       ]
     },
     {
+      "key": "builtin.bitAnd",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitOr",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitXor",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitNot",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitShiftLeft",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitShiftRight",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitRotateLeft",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitRotateRight",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitCount",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.bitTest",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
       "key": "builtin.fromFloat64",
       "fuel": [
         [0, 0, 8, 1]

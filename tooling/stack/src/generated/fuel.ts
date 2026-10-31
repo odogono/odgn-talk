@@ -495,6 +495,56 @@ export const fuelRates = [
     "open": []
   },
   {
+    "key": "builtin.bitAnd",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitOr",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitXor",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitNot",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitShiftLeft",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitShiftRight",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitRotateLeft",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitRotateRight",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitCount",
+    "fixed": 4,
+    "open": []
+  },
+  {
+    "key": "builtin.bitTest",
+    "fixed": 4,
+    "open": []
+  },
+  {
     "key": "builtin.fromFloat64",
     "fixed": 8,
     "open": []

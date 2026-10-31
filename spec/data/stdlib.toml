@@ -286,6 +286,76 @@ gives = "A whole number from 1 to `n`, the next from the Script Group's generato
 errors = ["out of domain"]
 
 [[builtin]]
+name = "bitAnd"
+group = "bits"
+call = "bitAnd(a, b)"
+gives = "The bits set in both `a` and `b`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitOr"
+group = "bits"
+call = "bitOr(a, b)"
+gives = "The bits set in `a`, `b` or both"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitXor"
+group = "bits"
+call = "bitXor(a, b)"
+gives = "The bits set in exactly one of `a` and `b`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitNot"
+group = "bits"
+call = "bitNot(x, width)"
+gives = "`x` with its low `width` bits inverted"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitShiftLeft"
+group = "bits"
+call = "bitShiftLeft(x, n, width = nothing)"
+gives = "`x` shifted left `n` bits, kept to its low `width` bits when `width` is given"
+errors = ["out of domain", "overflow"]
+
+[[builtin]]
+name = "bitShiftRight"
+group = "bits"
+call = "bitShiftRight(x, n)"
+gives = "`x` shifted right `n` bits, filling with zeros"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitRotateLeft"
+group = "bits"
+call = "bitRotateLeft(x, n, width)"
+gives = "The low `width` bits of `x` rotated left `n` places"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitRotateRight"
+group = "bits"
+call = "bitRotateRight(x, n, width)"
+gives = "The low `width` bits of `x` rotated right `n` places"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitCount"
+group = "bits"
+call = "bitCount(x)"
+gives = "How many bits of `x` are set"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "bitTest"
+group = "bits"
+call = "bitTest(x, i)"
+gives = "Whether bit `i` of `x` is set, bit 0 being the lowest"
+errors = ["out of domain"]
+
+[[builtin]]
 name = "fromFloat64"
 group = "floats"
 call = "fromFloat64(b, order = \"big\")"

@@ -654,6 +654,56 @@ pub const costs: CostsTable = .{
             .alloc = "size(result)",
         },
         .{
+            .key = "builtin.bitAnd",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitOr",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitXor",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitNot",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitShiftLeft",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitShiftRight",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitRotateLeft",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitRotateRight",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitCount",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
+            .key = "builtin.bitTest",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
             .key = "builtin.fromFloat64",
             .fuel = "8",
             .alloc = "size(result)",
