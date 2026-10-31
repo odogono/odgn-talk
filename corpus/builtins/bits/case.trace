@@ -1,0 +1,60 @@
+# Unblessed: the bit Built-ins (#1854); first blessing awaits human review.
+# bits: §Bits examples, range edges, the PCG32 output step, then each
+# `out of domain`, `wrong kind` and `overflow` path.
+
+> load b identity=dad46663f4dac6fa333e2b69b5d3c873d3e57611bc737cd1a1cfb9b172eef735
+> deliver d1 to=b message=examples
+> pump clock=2026-10-31T09:00:01Z
+seg b/r1 start delivery=d1 handler=examples clause=1 fuel=119 alloc=776 state=336 end=return
+run b/r1 outcome=completed delivery=d1 handler=examples fuel=119 alloc=776
+pumped state=idle fuel=119
+> deliver d2 to=b message=edges
+> pump clock=2026-10-31T09:00:02Z
+seg b/r2 start delivery=d2 handler=edges clause=1 fuel=170 alloc=1160 state=808 end=return
+run b/r2 outcome=completed delivery=d2 handler=edges fuel=170 alloc=1160
+pumped state=idle fuel=170
+> deliver d3 to=b message=pcg
+> pump clock=2026-10-31T09:00:03Z
+seg b/r3 start delivery=d3 handler=pcg clause=1 fuel=92 alloc=264 state=880 end=return
+run b/r3 outcome=completed delivery=d3 handler=pcg fuel=92 alloc=264
+pumped state=idle fuel=92
+> deliver d4 to=b message=domain
+> pump clock=2026-10-31T09:00:04Z
+raise b/r4 code="out of domain" at=b:176 pos=27:9
+raise b/r4 code="out of domain" at=b:199 pos=32:9
+raise b/r4 code="out of domain" at=b:221 pos=37:9
+raise b/r4 code="out of domain" at=b:243 pos=42:9
+raise b/r4 code="out of domain" at=b:265 pos=47:9
+raise b/r4 code="out of domain" at=b:287 pos=52:9
+raise b/r4 code="out of domain" at=b:310 pos=57:9
+raise b/r4 code="out of domain" at=b:332 pos=62:9
+raise b/r4 code="out of domain" at=b:355 pos=67:9
+raise b/r4 code="out of domain" at=b:379 pos=72:9
+raise b/r4 code="out of domain" at=b:400 pos=77:9
+raise b/r4 code="out of domain" at=b:422 pos=82:9
+seg b/r4 start delivery=d4 handler=domain clause=1 fuel=265 alloc=6039 state=6887 end=return
+run b/r4 outcome=completed delivery=d4 handler=domain fuel=265 alloc=6039
+pumped state=idle fuel=265
+> deliver d5 to=b message=kinds
+> pump clock=2026-10-31T09:00:05Z
+raise b/r5 code="wrong kind" at=b:447 pos=90:9
+raise b/r5 code="wrong kind" at=b:469 pos=95:9
+raise b/r5 code="wrong kind" at=b:492 pos=100:9
+raise b/r5 code="wrong kind" at=b:514 pos=105:9
+seg b/r5 start delivery=d5 handler=kinds clause=1 fuel=92 alloc=2172 state=9059 end=return
+run b/r5 outcome=completed delivery=d5 handler=kinds fuel=92 alloc=2172
+pumped state=idle fuel=92
+> deliver d6 to=b message=overflow
+> pump clock=2026-10-31T09:00:06Z
+raise b/r6 code="overflow" at=b:539 pos=112:7
+seg b/r6 start delivery=d6 handler=overflow clause=1 fuel=14 alloc=0 state=9059 end=error
+run b/r6 outcome=errored delivery=d6 handler=overflow error={code: "overflow", operator: "bitShiftLeft", at: {unit: "b", handler: "overflow", line: 112, column: 7}} fuel=14 alloc=0
+pumped state=idle fuel=14
+> deliver d7 to=b message=overflowHigh
+> pump clock=2026-10-31T09:00:07Z
+raise b/r7 code="overflow" at=b:550 pos=116:7
+seg b/r7 start delivery=d7 handler=overflowHigh clause=1 fuel=14 alloc=0 state=9059 end=error
+run b/r7 outcome=errored delivery=d7 handler=overflowHigh error={code: "overflow", operator: "bitShiftLeft", at: {unit: "b", handler: "overflowHigh", line: 116, column: 7}} fuel=14 alloc=0
+pumped state=idle fuel=14
+> vars
+vars b seen=[[8, 14, 6, 255], [240, 0, 2, 4], [8, true, false], [18446744073709551615, 0, 64, true], [9223372036854775808, 0, 0, 9223372036854775808], [20, 15, 0], [1, 2, 1, 1, 9223372036854775808], [1092424311, 3894649422], {code: "out of domain", function: "bitAnd", value: 18446744073709551616, at: {unit: "b", handler: "domain", line: 27, column: 9}}, {code: "out of domain", function: "bitOr", value: -1, at: {unit: "b", handler: "domain", line: 32, column: 9}}, {code: "out of domain", function: "bitXor", value: 1.5, at: {unit: "b", handler: "domain", line: 37, column: 9}}, {code: "out of domain", function: "bitNot", value: 256, at: {unit: "b", handler: "domain", line: 42, column: 9}}, {code: "out of domain", function: "bitNot", value: 65, at: {unit: "b", handler: "domain", line: 47, column: 9}}, {code: "out of domain", function: "bitShiftLeft", value: 65, at: {unit: "b", handler: "domain", line: 52, column: 9}}, {code: "out of domain", function: "bitShiftLeft", value: 0, at: {unit: "b", handler: "domain", line: 57, column: 9}}, {code: "out of domain", function: "bitShiftRight", value: 65, at: {unit: "b", handler: "domain", line: 62, column: 9}}, {code: "out of domain", function: "bitRotateLeft", value: 8, at: {unit: "b", handler: "domain", line: 67, column: 9}}, {code: "out of domain", function: "bitRotateRight", value: -1, at: {unit: "b", handler: "domain", line: 72, column: 9}}, {code: "out of domain", function: "bitCount", value: 0.5, at: {unit: "b", handler: "domain", line: 77, column: 9}}, {code: "out of domain", function: "bitTest", value: 64, at: {unit: "b", handler: "domain", line: 82, column: 9}}, {code: "wrong kind", expected: "number", got: "text", value: "1", at: {unit: "b", handler: "kinds", line: 90, column: 9}}, {code: "wrong kind", expected: "number", got: "quantity", value: 8 m, at: {unit: "b", handler: "kinds", line: 95, column: 9}}, {code: "wrong kind", expected: "number", got: "text", value: "8", at: {unit: "b", handler: "kinds", line: 100, column: 9}}, {code: "wrong kind", expected: "number", got: "nothing", value: nothing, at: {unit: "b", handler: "kinds", line: 105, column: 9}}]
