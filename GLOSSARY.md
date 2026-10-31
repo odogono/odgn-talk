@@ -33,7 +33,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Standard Capability**:
-A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite` and `user`. `sqlite` and `user` are optional: a Host may choose not to offer one, but a Host that offers it follows every rule the spec gives for it.
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user` and `http`. `sqlite`, `user` and `http` are optional: a Host may choose not to offer one, but a Host that offers it follows every rule the spec gives for it.
 _Avoid_: built-in capability, system capability, core capability
 
 **Store**:
@@ -49,7 +49,7 @@ A Locale's ordering of text, as opposed to the code-point order the language use
 _Avoid_: alphabetical order, sort order (unqualified)
 
 **Operation**:
-One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
+One named action a Capability offers, e.g. `write` on `console`, called as `tell console to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command (unqualified), endpoint
 
 **Capability Scope**:
