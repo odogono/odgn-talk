@@ -2188,6 +2188,105 @@ const toFloat = (name: string, n: Value, order: Value): Value => {
   return bytesOf(writeFloat(d, format, littleOrder(name, order)));
 };
 
+const WORD = (1n << 64n) - 1n;
+/**
+ * A bit Built-in's whole-number argument from `low` to `high`, or `wrong kind`
+ * or `out of domain` (chapter 7, Bits). `high` undefined means no upper bound.
+ */
+const bitOperand = (
+  fn: string,
+  v: Value,
+  low: bigint,
+  high: bigint | undefined,
+): bigint => {
+  if (v.kind !== 'number') {
+    throw wrongKind('number', v);
+  }
+  const d = decOfValue(v);
+  if (!isInteger(d)) {
+    throw outOfDomain(fn, v);
+  }
+  const n = integerOf(d);
+  if (n < low || (high !== undefined && n > high)) {
+    throw outOfDomain(fn, v);
+  }
+  return n;
+};
+const bitWord = (fn: string, v: Value) => bitOperand(fn, v, 0n, WORD);
+const bitWidth = (fn: string, v: Value) => bitOperand(fn, v, 1n, 64n);
+/** `x` within a required `width`: below 2^width. */
+const bitWithin = (fn: string, v: Value, width: bigint): bigint => {
+  const x = bitWord(fn, v);
+  if (x >> width !== 0n) {
+    throw outOfDomain(fn, v);
+  }
+  return x;
+};
+const popCount = (x: bigint): number => {
+  let n = 0;
+  for (; x !== 0n; x &= x - 1n) {
+    n++;
+  }
+  return n;
+};
+/** The bit Built-ins (chapter 7, Bits); undefined for any other name. */
+const bitBuiltin = (
+  name: string,
+  args: readonly Value[],
+): Value | undefined => {
+  const [x, y, z] = args;
+  switch (name) {
+    case 'bitAnd':
+    case 'bitOr':
+    case 'bitXor': {
+      const a = bitWord(name, x!);
+      const b = bitWord(name, y!);
+      return integerValue(
+        name === 'bitAnd' ? a & b : name === 'bitOr' ? a | b : a ^ b,
+      );
+    }
+    case 'bitNot': {
+      bitWord(name, x!);
+      const width = bitWidth(name, y!);
+      return integerValue(((1n << width) - 1n) ^ bitWithin(name, x!, width));
+    }
+    case 'bitShiftLeft': {
+      const a = bitWord(name, x!);
+      const n = bitOperand(name, y!, 0n, 64n);
+      if (z === undefined || z.kind === 'nothing') {
+        const r = a << n;
+        if (r > WORD) {
+          throw new ScriptError('overflow', [['operator', text(name)]]);
+        }
+        return integerValue(r);
+      }
+      const width = bitWidth(name, z);
+      return integerValue((a << n) & ((1n << width) - 1n));
+    }
+    case 'bitShiftRight': {
+      const a = bitWord(name, x!);
+      return integerValue(a >> bitOperand(name, y!, 0n, 64n));
+    }
+    case 'bitRotateLeft':
+    case 'bitRotateRight': {
+      bitWord(name, x!);
+      const turns = bitOperand(name, y!, 0n, undefined);
+      const width = bitWidth(name, z!);
+      const a = bitWithin(name, x!, width);
+      const mask = (1n << width) - 1n;
+      const k = turns % width;
+      const left = name === 'bitRotateLeft' ? k : (width - k) % width;
+      return integerValue(((a << left) | (a >> (width - left))) & mask);
+    }
+    case 'bitCount':
+      return integerValue(BigInt(popCount(bitWord(name, x!))));
+    case 'bitTest': {
+      const a = bitWord(name, x!);
+      return bool(((a >> bitOperand(name, y!, 0n, 63n)) & 1n) === 1n);
+    }
+  }
+  return undefined;
+};
 export type BuiltinResult = { result: Value; scanned?: number; steps?: number };
 /** A Built-in call, with its defaults filled in. `measure` holds what it has
  * scanned so far, so a call that raises is still charged for it. */
@@ -2196,6 +2295,10 @@ export const builtin = (
   args: readonly Value[],
   measure: { scanned?: number } = {},
 ): BuiltinResult => {
+  const bits = bitBuiltin(name, args);
+  if (bits) {
+    return { result: bits };
+  }
   const [x, y, z] = args;
   switch (name) {
     case 'min':
@@ -2431,6 +2534,7 @@ export const builtin = (
 /** A Built-in's defaults, from stdlib.toml's call notation. */
 export const builtinDefaults: Record<string, Value[]> = {
   round: [num(0), text('half up')],
+  bitShiftLeft: [nothing],
   fromFloat64: [text('big')],
   fromFloat32: [text('big')],
   toFloat64: [text('big')],

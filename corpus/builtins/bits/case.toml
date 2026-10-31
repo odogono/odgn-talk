@@ -1,0 +1,14 @@
+# bits: the bit Built-ins on whole numbers from 0 to 2^64 − 1 (spec chapter 7,
+# Bits; ADR 0149; #1854). Every example in §Bits, width masking, the ends of
+# each range, the PCG32 output step of §Random numbers as a vector, and each
+# `out of domain`, `wrong kind` and `overflow` path with its fields.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "b"
+source = "b.talk"
