@@ -1,0 +1,113 @@
+> load s identity=ed452da1f28564c028a964e9f348628dd2eb9bc5b3071ac32db4b80b3d17c7b4
+> deliver d1 to=s message=get args=["https://example.com/", {method: "get"}]
+> deliver d2 to=s message=get args=["https://example.com/", {method: "CONNECT"}]
+> deliver d3 to=s message=get args=["ftp://example.com/", nothing]
+> deliver d4 to=s message=get args=["https://user@example.com/", nothing]
+> deliver d5 to=s message=get args=["https://example.com/a b", nothing]
+> deliver d6 to=s message=get args=["https://exämple.com/", nothing]
+> deliver d7 to=s message=get args=["https://127.1/", nothing]
+> deliver d8 to=s message=get args=["https://0x7f.0.0.1/", nothing]
+> deliver d9 to=s message=get args=["https://01.2.3.4/", nothing]
+> deliver d10 to=s message=get args=["https://example.com:0/", nothing]
+> deliver d11 to=s message=get args=["https://example.com:65536/", nothing]
+> deliver d12 to=s message=get args=["https://example.com/%zz", nothing]
+> deliver d13 to=s message=get args=["https://example.com/a\b", nothing]
+> deliver d14 to=s message=get args=["https://[::1/", nothing]
+> deliver d15 to=s message=get args=["https://[1:2:3:4:5:6:7:8:9]/", nothing]
+> deliver d16 to=s message=get args=["example.com/", nothing]
+> deliver d17 to=s message=get args=["https://example.com/", {headers: {Accept: "a", accept: "b"}}]
+> deliver d18 to=s message=get args=["https://example.com/", {headers: {Host: "other"}}]
+> deliver d19 to=s message=get args=["https://example.com/", {headers: {"bad name": "x"}}]
+> deliver d20 to=s message=get args=["https://example.com/", {headers: {"x-a": " padded"}}]
+> deliver d21 to=s message=get args=["https://example.com/", {headers: {"x-a": [1]}}]
+> deliver d22 to=s message=get args=["https://example.com/?a=1", {query: {b: "2"}}]
+> deliver d23 to=s message=get args=["https://example.com/", {query: {b: 2}}]
+> deliver d24 to=s message=get args=["https://example.com/", {body: "x"}]
+> deliver d25 to=s message=get args=["https://example.com/", {method: "HEAD", json: {}}]
+> deliver d26 to=s message=get args=["https://example.com/", {method: "POST", body: "x", json: {}}]
+> deliver d27 to=s message=get args=["https://example.com/", {cookies: "x"}]
+> pump clock=2026-10-31T12:00:00Z
+raise s/r1 code="out of domain" at=s:6 pos=4:5
+seg s/r1 start delivery=d1 handler=get clause=1 fuel=24 alloc=494 state=3686 end=return
+run s/r1 outcome=completed delivery=d1 handler=get fuel=24 alloc=494
+raise s/r2 code="out of domain" at=s:6 pos=4:5
+seg s/r2 start delivery=d2 handler=get clause=1 fuel=24 alloc=502 state=4051 end=return
+run s/r2 outcome=completed delivery=d2 handler=get fuel=24 alloc=502
+raise s/r3 code="invalid request" at=s:6 pos=4:5
+seg s/r3 start delivery=d3 handler=get clause=1 fuel=24 alloc=436 state=4413 end=return
+run s/r3 outcome=completed delivery=d3 handler=get fuel=24 alloc=436
+raise s/r4 code="invalid request" at=s:6 pos=4:5
+seg s/r4 start delivery=d4 handler=get clause=1 fuel=24 alloc=436 state=4768 end=return
+run s/r4 outcome=completed delivery=d4 handler=get fuel=24 alloc=436
+raise s/r5 code="invalid request" at=s:6 pos=4:5
+seg s/r5 start delivery=d5 handler=get clause=1 fuel=24 alloc=436 state=5125 end=return
+run s/r5 outcome=completed delivery=d5 handler=get fuel=24 alloc=436
+raise s/r6 code="invalid request" at=s:6 pos=4:5
+seg s/r6 start delivery=d6 handler=get clause=1 fuel=24 alloc=436 state=5484 end=return
+run s/r6 outcome=completed delivery=d6 handler=get fuel=24 alloc=436
+raise s/r7 code="invalid request" at=s:6 pos=4:5
+seg s/r7 start delivery=d7 handler=get clause=1 fuel=24 alloc=436 state=5850 end=return
+run s/r7 outcome=completed delivery=d7 handler=get fuel=24 alloc=436
+raise s/r8 code="invalid request" at=s:6 pos=4:5
+seg s/r8 start delivery=d8 handler=get clause=1 fuel=24 alloc=436 state=6211 end=return
+run s/r8 outcome=completed delivery=d8 handler=get fuel=24 alloc=436
+raise s/r9 code="invalid request" at=s:6 pos=4:5
+seg s/r9 start delivery=d9 handler=get clause=1 fuel=24 alloc=436 state=6574 end=return
+run s/r9 outcome=completed delivery=d9 handler=get fuel=24 alloc=436
+raise s/r10 code="invalid request" at=s:6 pos=4:5
+seg s/r10 start delivery=d10 handler=get clause=1 fuel=24 alloc=436 state=6932 end=return
+run s/r10 outcome=completed delivery=d10 handler=get fuel=24 alloc=436
+raise s/r11 code="invalid request" at=s:6 pos=4:5
+seg s/r11 start delivery=d11 handler=get clause=1 fuel=24 alloc=436 state=7286 end=return
+run s/r11 outcome=completed delivery=d11 handler=get fuel=24 alloc=436
+raise s/r12 code="invalid request" at=s:6 pos=4:5
+seg s/r12 start delivery=d12 handler=get clause=1 fuel=24 alloc=436 state=7643 end=return
+run s/r12 outcome=completed delivery=d12 handler=get fuel=24 alloc=436
+raise s/r13 code="invalid request" at=s:6 pos=4:5
+seg s/r13 start delivery=d13 handler=get clause=1 fuel=24 alloc=436 state=8000 end=return
+run s/r13 outcome=completed delivery=d13 handler=get fuel=24 alloc=436
+raise s/r14 code="invalid request" at=s:6 pos=4:5
+seg s/r14 start delivery=d14 handler=get clause=1 fuel=24 alloc=436 state=8367 end=return
+run s/r14 outcome=completed delivery=d14 handler=get fuel=24 alloc=436
+raise s/r15 code="invalid request" at=s:6 pos=4:5
+seg s/r15 start delivery=d15 handler=get clause=1 fuel=24 alloc=436 state=8719 end=return
+run s/r15 outcome=completed delivery=d15 handler=get fuel=24 alloc=436
+raise s/r16 code="invalid request" at=s:6 pos=4:5
+seg s/r16 start delivery=d16 handler=get clause=1 fuel=24 alloc=436 state=9087 end=return
+run s/r16 outcome=completed delivery=d16 handler=get fuel=24 alloc=436
+raise s/r17 code="invalid request" at=s:6 pos=4:5
+seg s/r17 start delivery=d17 handler=get clause=1 fuel=24 alloc=444 state=9306 end=return
+run s/r17 outcome=completed delivery=d17 handler=get fuel=24 alloc=444
+raise s/r18 code="invalid request" at=s:6 pos=4:5
+seg s/r18 start delivery=d18 handler=get clause=1 fuel=24 alloc=444 state=9570 end=return
+run s/r18 outcome=completed delivery=d18 handler=get fuel=24 alloc=444
+raise s/r19 code="invalid request" at=s:6 pos=4:5
+seg s/r19 start delivery=d19 handler=get clause=1 fuel=24 alloc=444 state=9834 end=return
+run s/r19 outcome=completed delivery=d19 handler=get fuel=24 alloc=444
+raise s/r20 code="invalid request" at=s:6 pos=4:5
+seg s/r20 start delivery=d20 handler=get clause=1 fuel=24 alloc=444 state=10097 end=return
+run s/r20 outcome=completed delivery=d20 handler=get fuel=24 alloc=444
+raise s/r21 code="invalid request" at=s:6 pos=4:5
+seg s/r21 start delivery=d21 handler=get clause=1 fuel=24 alloc=444 state=10343 end=return
+run s/r21 outcome=completed delivery=d21 handler=get fuel=24 alloc=444
+raise s/r22 code="invalid request" at=s:6 pos=4:5
+seg s/r22 start delivery=d22 handler=get clause=1 fuel=24 alloc=440 state=10608 end=return
+run s/r22 outcome=completed delivery=d22 handler=get fuel=24 alloc=440
+raise s/r23 code="invalid request" at=s:6 pos=4:5
+seg s/r23 start delivery=d23 handler=get clause=1 fuel=24 alloc=440 state=10878 end=return
+run s/r23 outcome=completed delivery=d23 handler=get fuel=24 alloc=440
+raise s/r24 code="invalid request" at=s:6 pos=4:5
+seg s/r24 start delivery=d24 handler=get clause=1 fuel=24 alloc=438 state=11187 end=return
+run s/r24 outcome=completed delivery=d24 handler=get fuel=24 alloc=438
+raise s/r25 code="invalid request" at=s:6 pos=4:5
+seg s/r25 start delivery=d25 handler=get clause=1 fuel=24 alloc=438 state=11447 end=return
+run s/r25 outcome=completed delivery=d25 handler=get fuel=24 alloc=438
+raise s/r26 code="invalid request" at=s:6 pos=4:5
+seg s/r26 start delivery=d26 handler=get clause=1 fuel=24 alloc=438 state=11662 end=return
+run s/r26 outcome=completed delivery=d26 handler=get fuel=24 alloc=438
+raise s/r27 code="wrong kind" at=s:6 pos=4:5
+seg s/r27 start delivery=d27 handler=get clause=1 fuel=24 alloc=770 state=12300 end=return
+run s/r27 outcome=completed delivery=d27 handler=get fuel=24 alloc=770
+pumped state=idle fuel=648
+> vars
+vars s errors=[{code: "out of domain", function: "fetch", value: "get", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "out of domain", function: "fetch", value: "CONNECT", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "url", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "headers", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "headers", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "headers", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "headers", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "headers", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "query", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "query", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "body", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "json", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "invalid request", field: "json", at: {unit: "s", handler: "get", line: 4, column: 5}}, {code: "wrong kind", expected: "nothing", got: "text", value: "x", capability: "http", operation: "fetch", argument: 2, path: ["cookies"], at: {unit: "s", handler: "get", line: 4, column: 5}}]

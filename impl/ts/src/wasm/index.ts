@@ -161,7 +161,11 @@ export type {
   SqliteImpl,
 } from '../sqlite-capability';
 export type { UserImpl } from '../user-capability';
-export type { HttpImpl } from '../http-capability';
+export type {
+  HttpClientImpl,
+  HttpImpl,
+  HttpServerImpl,
+} from '../http-capability';
 
 import { limitDefaults } from '../generated/machine';
 /** Chapter 9's default Limits, which the reactor shares. */

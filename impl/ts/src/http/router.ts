@@ -15,7 +15,8 @@ import { shape, type Call } from '../capabilities';
 import type { Group } from '../embedding';
 import { HostError, ScriptError } from '../errors';
 import type { PumpResult, Report } from '../group';
-import type { HttpImpl } from '../http-capability';
+import type { HttpImpl, HttpServerImpl } from '../http-capability';
+import { createHttpFetch, type HttpFetchOptions } from './fetch';
 import {
   defineObjectKind as defineTsObjectKind,
   type HostObject,
@@ -39,6 +40,12 @@ export type HttpHostOptions = {
   defaultPort?: number;
   /** Defines the `httpExchange` Object Kind; the TS Core's by default. Pass the Core's own for the Zig Host Adapter. */
   defineObjectKind?: <N>(k: ObjectKindDef<N>) => ObjectKind<N>;
+  /**
+   * Offers `fetch` beside the server Operations, with these origins and
+   * bounds. Without it the Host only serves; `createHttpFetch` alone only
+   * fetches.
+   */
+  fetch?: HttpFetchOptions;
   /** Told of each 500's cause and each refused Delivery. Never sent to the client. */
   log?: (message: string) => void;
   /** A larger request body is answered 413 without a Delivery. */
@@ -476,7 +483,13 @@ export const createHttpHost = (o: HttpHostOptions = {}): HttpHost => {
     });
   };
 
-  const serve: HttpImpl['serve'] = (call, name, prefix, message, options) => {
+  const serve: HttpServerImpl['serve'] = (
+    call,
+    name,
+    prefix,
+    message,
+    options,
+  ) => {
     const host = options.get('host').asText() ?? o.defaultHost ?? '127.0.0.1';
     const portValue = options.get('port');
     const asked =
@@ -573,7 +586,7 @@ export const createHttpHost = (o: HttpHostOptions = {}): HttpHost => {
     }
   };
 
-  const unserve: HttpImpl['unserve'] = (call, name) => {
+  const unserve: HttpServerImpl['unserve'] = (call, name) => {
     const ownerKey = ownerKeyOf(call.group, call.scriptName, call.grantName);
     const r = registrations.get(JSON.stringify([ownerKey, name]));
     if (r) {
@@ -581,7 +594,7 @@ export const createHttpHost = (o: HttpHostOptions = {}): HttpHost => {
     }
   };
 
-  const respond: HttpImpl['respond'] = (call, exchange, response) => {
+  const respond: HttpServerImpl['respond'] = (call, exchange, response) => {
     const x = (exchange as HostObject<Exchange>).native;
     if (
       exchange.kind.name !== 'httpExchange' ||
@@ -784,7 +797,9 @@ export const createHttpHost = (o: HttpHostOptions = {}): HttpHost => {
   };
 
   return {
-    impl: { serve, unserve, respond },
+    impl: o.fetch
+      ? { serve, unserve, respond, ...createHttpFetch(o.fetch) }
+      : { serve, unserve, respond },
     addresses: () =>
       [...listeners].flatMap(l => (l.address ? [{ ...l.address }] : [])),
     close,

@@ -128,17 +128,17 @@ Files, grammar, or lowering.
 
 ## `http`
 
-- Implementation: [`http` factory, `invalid serve` and `invalid response` checks](src/http-capability.ts), [corpus runner Stubs](src/replay.ts)
+- Implementation: [`http` factory, `invalid serve` and `invalid response` checks](src/http-capability.ts), [`fetch`'s request checks, URL normalization and answer checks](src/http-fetch.ts), [corpus runner Stubs](src/replay.ts)
 - Rules: [`http`](../../spec/07-libraries-and-the-standard-library.md#http), [the factory](../../spec/09-embedding.md#the-http-factory)
-- Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/)
-- First check: `bun test impl/ts/tests/http-capability.test.ts`
+- Tests and cases: [factory tests](tests/http-capability.test.ts), [`standard-http*` cases](../../corpus/capabilities/), including `standard-http-fetch*`, which the Zig reactor can't run until #1869 (`known` in [the WASM Corpus runner](tools/wasm-corpus.ts))
+- First check: `bun test impl/ts/tests/http-capability.test.ts && bun run corpus:run capabilities/standard-http`
 
 ## HTTP router
 
-- Implementation: [`@northtalk/ts/http`](src/http/router.ts), on `node:http`
-- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges)
-- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](tools/http-kit.ts), [kit tests](tests/http-kit.test.ts), [Node runs](tests/http-runtimes.test.ts), [lifecycle tests](tests/http-host.test.ts)
-- First check: `bun test impl/ts/tests/http-kit.test.ts impl/ts/tests/http-host.test.ts`
+- Implementation: [`@northtalk/ts/http`](src/http/router.ts), on `node:http`; [the `fetch` client](src/http/fetch.ts), on `node:http` and `node:https`
+- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges), [Fetching](../../spec/07-libraries-and-the-standard-library.md#fetching)
+- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](tools/http-kit.ts), [kit tests](tests/http-kit.test.ts), [Node runs](tests/http-runtimes.test.ts) of the kit and of [the fetch checks](tools/http-fetch-runtime.ts), [lifecycle tests](tests/http-host.test.ts), [fetch tests](tests/http-fetch-host.test.ts) against local HTTP and [TLS fixtures](tests/fixtures/http-tls/)
+- First check: `bun test impl/ts/tests/http-kit.test.ts impl/ts/tests/http-host.test.ts impl/ts/tests/http-fetch-host.test.ts`
 
 ## Notification router
 

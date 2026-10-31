@@ -1,0 +1,88 @@
+> load s identity=c34d2bda88e78b9101ed628709245c7948e7d92093170a3de5281f48d0125c88
+> deliver d1 to=s message=get args=["HTTPS://API.Example.com:443/users#top", {query: {email: "ann@example.com", tag: ["a b", "ü"]}}]
+> deliver d2 to=s message=get args=["https://api.example.com/missing", nothing]
+> pump clock=2026-10-31T12:00:00Z
+call s/r1.c1 op=http.fetch args=["HTTPS://API.Example.com:443/users#top", {query: {email: "ann@example.com", tag: ["a b", "ü"]}}]
+seg s/r1 start delivery=d1 handler=get clause=1 fuel=20 alloc=0 state=741 end=ask-wait
+call s/r2.c1 op=http.fetch args=["https://api.example.com/missing", nothing]
+seg s/r2 start delivery=d2 handler=get clause=1 fuel=20 alloc=0 state=1077 end=ask-wait
+pumped state=idle fuel=40 next=2026-10-31T12:00:30Z
+> answer s/r1.c1 value={status: 200, headers: {"content-type": "text/plain", "set-cookie": ["a=1", "b=2"]}, body: <<0x6F, 0x6B>>}
+> answer s/r2.c1 value={status: 404, headers: {}, body: <<>>}
+> pump clock=2026-10-31T12:00:01Z
+seg s/r1 resume fuel=42 alloc=841 state=808 end=return
+run s/r1 outcome=completed delivery=d1 handler=get fuel=62 alloc=841
+seg s/r2 resume fuel=36 alloc=337 state=376 end=return
+run s/r2 outcome=completed delivery=d2 handler=get fuel=56 alloc=337
+pumped state=idle fuel=78
+> stub http.fetch error={code: "bad address"}
+> stub http.fetch error={code: "network error"}
+> stub http.fetch error={code: "response too large", field: "body", limit: 8388608}
+> stub http.fetch error={code: "user busy"}
+> deliver d3 to=s message=get args=["http://10.0.0.1:8080/", nothing]
+> deliver d4 to=s message=get args=["https://example.com", nothing]
+> deliver d5 to=s message=get args=["https://example.com/big", nothing]
+> deliver d6 to=s message=get args=["https://example.com/", nothing]
+> pump clock=2026-10-31T12:00:02Z
+call s/r3.c1 op=http.fetch args=["http://10.0.0.1:8080/", nothing] error={code: "bad address"}
+raise s/r3 code="bad address" at=s:6 pos=4:5
+seg s/r3 start delivery=d3 handler=get clause=1 fuel=49 alloc=51 state=641 end=return
+run s/r3 outcome=completed delivery=d3 handler=get fuel=49 alloc=51
+call s/r4.c1 op=http.fetch args=["https://example.com", nothing] error={code: "network error"}
+raise s/r4 code="network error" at=s:6 pos=4:5
+seg s/r4 start delivery=d4 handler=get clause=1 fuel=49 alloc=53 state=603 end=return
+run s/r4 outcome=completed delivery=d4 handler=get fuel=49 alloc=53
+call s/r5.c1 op=http.fetch args=["https://example.com/big", nothing] error={code: "response too large", field: "body", limit: 8388608}
+raise s/r5 code="response too large" at=s:6 pos=4:5
+seg s/r5 start delivery=d5 handler=get clause=1 fuel=61 alloc=338 state=642 end=return
+run s/r5 outcome=completed delivery=d5 handler=get fuel=61 alloc=338
+call s/r6.c1 op=http.fetch args=["https://example.com/", nothing] error={code: "user busy"}
+call-failed s/r6.c1 op=http.fetch
+raise s/r6 code="host error" at=s:6 pos=4:5
+seg s/r6 start delivery=d6 handler=get clause=1 fuel=48 alloc=34 state=600 end=return
+run s/r6 outcome=completed delivery=d6 handler=get fuel=48 alloc=34
+pumped state=idle fuel=207
+> deliver d7 to=s message=get args=["https://example.com/", nothing]
+> deliver d8 to=s message=get args=["https://example.com/", nothing]
+> deliver d9 to=s message=get args=["https://example.com/", nothing]
+> deliver d10 to=s message=get args=["https://example.com/", nothing]
+> deliver d11 to=s message=get args=["https://example.com/", nothing]
+> pump clock=2026-10-31T12:00:03Z
+call s/r7.c1 op=http.fetch args=["https://example.com/", nothing]
+seg s/r7 start delivery=d7 handler=get clause=1 fuel=20 alloc=0 state=1316 end=ask-wait
+call s/r8.c1 op=http.fetch args=["https://example.com/", nothing]
+seg s/r8 start delivery=d8 handler=get clause=1 fuel=20 alloc=0 state=1652 end=ask-wait
+call s/r9.c1 op=http.fetch args=["https://example.com/", nothing]
+seg s/r9 start delivery=d9 handler=get clause=1 fuel=20 alloc=0 state=1988 end=ask-wait
+call s/r10.c1 op=http.fetch args=["https://example.com/", nothing]
+seg s/r10 start delivery=d10 handler=get clause=1 fuel=20 alloc=0 state=2324 end=ask-wait
+call s/r11.c1 op=http.fetch args=["https://example.com/", nothing]
+seg s/r11 start delivery=d11 handler=get clause=1 fuel=20 alloc=0 state=2660 end=ask-wait
+pumped state=idle fuel=100 next=2026-10-31T12:00:33Z
+> answer s/r7.c1 value={status: 302, headers: {location: "https://example.com/next"}, body: <<>>}
+> answer s/r8.c1 value={status: 101, headers: {}, body: <<>>}
+> answer s/r9.c1 value={status: 200, headers: {b: "1", a: "2"}, body: <<>>}
+> answer s/r10.c1 value={status: 200, headers: {}, body: ""}
+> answer s/r11.c1 value={headers: {}, status: 200, body: <<>>}
+> pump clock=2026-10-31T12:00:04Z
+seg s/r7 resume fuel=39 alloc=553 state=2920 end=return
+run s/r7 outcome=completed delivery=d7 handler=get fuel=59 alloc=553
+call-failed s/r8.c1 op=http.fetch
+raise s/r8 code="host error" at=s:6 pos=4:5
+seg s/r8 resume fuel=28 alloc=34 state=2437 end=return
+run s/r8 outcome=completed delivery=d8 handler=get fuel=48 alloc=34
+call-failed s/r9.c1 op=http.fetch
+raise s/r9 code="host error" at=s:6 pos=4:5
+seg s/r9 resume fuel=28 alloc=34 state=1870 end=return
+run s/r9 outcome=completed delivery=d9 handler=get fuel=48 alloc=34
+call-failed s/r10.c1 op=http.fetch
+raise s/r10 code="host error" at=s:6 pos=4:5
+seg s/r10 resume fuel=28 alloc=34 state=1387 end=return
+run s/r10 outcome=completed delivery=d10 handler=get fuel=48 alloc=34
+call-failed s/r11.c1 op=http.fetch
+raise s/r11 code="host error" at=s:6 pos=4:5
+seg s/r11 resume fuel=28 alloc=34 state=904 end=return
+run s/r11 outcome=completed delivery=d11 handler=get fuel=48 alloc=34
+pumped state=idle fuel=151
+> vars
+vars s got=[[200, {"content-type": "text/plain", "set-cookie": ["a=1", "b=2"]}, <<0x6F, 0x6B>>], [404, {}, <<>>], "bad address", "network error", ["response too large", "body", 8388608], "host error", [302, {location: "https://example.com/next"}, <<>>], "host error", "host error", "host error", "host error"]

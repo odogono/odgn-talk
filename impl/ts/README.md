@@ -303,8 +303,8 @@ exchange. The `store` factory forwards its implementation's release hook; see th
 
 `@northtalk/ts/http` supplies `createHttpHost(options)`, the
 [HTTP router](../../spec/09-embedding.md#the-http-router) for the optional
-`http` Standard Capability (ADR 0124). It is server-only, on `node:http`, and
-runs under Bun and Node. Give its `impl` to `httpCapability`, and call
+`http` Standard Capability (ADR 0124). It serves on `node:http` and runs
+under Bun and Node. Give its `impl` to `httpCapability`, and call
 `pumped(group, result)` after each Pump, as `onPump(group)` does for a
 driver. It keys Serve Registrations by owner (Group, Script, named Grant) and
 name, shares a listener per host and port, matches the longest prefix, delivers
@@ -316,6 +316,21 @@ moves every `serve`. A body over `maxBodyBytes`, 1 MiB by default, is answered
 exchanges 503; `stopAccepting()`, `drain(ms)` and `close()` shut down
 gracefully. The [http test kit](../../corpus/http-kit/) holds it to the Spec
 through [`tools/http-kit.ts`](tools/http-kit.ts).
+
+The client Operation, `fetch` (ADR 0151), comes from `createHttpFetch(options)`
+alone, for a Host that only fetches, or from `createHttpHost({ fetch: options
+})` beside serving. Its `origins` are `'any'`, a list of exact origins such as
+`['https://api.example.com']`, or a function of the Grant's binding giving
+one; the default, an empty list and an undefined result allow none, and a
+refused origin is `bad address`. A list that isn't exact origins throws
+`invalid value` when the factory is built. It requests with `node:http` and
+`node:https`, one connection per call: it sends `accept-encoding: identity`
+unless the Script set one, never decompresses or follows a redirect, sends no
+ambient cookies, verifies TLS against the runtime's authorities or `ca`,
+bounds the body to `maxBodyBytes` (8 MiB) and the headers, trailers included,
+to `maxHeaderBytes` (64 KiB) with `response too large`, aborts when the call
+is abandoned, and fails anything else with `network error`. It doesn't check
+the addresses a name resolves to. The Script Runner allows any origin.
 
 ## The notification router
 

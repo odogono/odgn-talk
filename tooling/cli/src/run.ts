@@ -79,6 +79,8 @@ export const runScript = async (o: RunOptions): Promise<number> => {
   const httpHost = createHttpHost({
     ...(o.port === undefined ? {} : { portOverride: o.port }),
     log: message => process.stderr.write(`${message}\n`),
+    // A trusted local program fetches from anywhere (chapter 12).
+    fetch: { origins: 'any' },
   });
   // node:sqlite is loaded only by a runtime that has it.
   const sqlite = lazySqlite(

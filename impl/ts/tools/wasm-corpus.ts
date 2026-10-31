@@ -14,7 +14,13 @@ import { DeferredCaseError, reader } from './trace-case';
 import { zigCaseCore } from './zig-case-core';
 
 /** Divergences in the reactor, each with its issue; they're reported, not failed. */
-const known = new Map<string, string>();
+const known = new Map<string, string>(
+  [
+    'capabilities/standard-http-fetch',
+    'capabilities/standard-http-fetch-validation',
+    'capabilities/standard-http-fetch-wait',
+  ].map(name => [name, 'the reactor has no http.fetch yet (#1869)']),
+);
 
 const root = resolve(
   process.env.NORTHTALK_ROOT ?? resolve(import.meta.dirname, '../../..'),
@@ -110,6 +116,13 @@ for (const dir of selected) {
       beyond.push(name);
       if (!quiet) {
         console.log(`FRAME LIMIT ${name}: ${error.message}`);
+      }
+      continue;
+    }
+    if (known.has(name)) {
+      expected.push(name);
+      if (!quiet) {
+        console.log(`KNOWN ${name}: ${known.get(name)}`);
       }
       continue;
     }

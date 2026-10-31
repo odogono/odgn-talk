@@ -1,0 +1,36 @@
+> load s identity=a8d32a448191ac882d0963fd6c33a8db226d2bf8172c06ef899f49e9ec8a51dc
+> deliver d1 to=s message=slow
+> deliver d2 to=s message=bounded
+> pump clock=2026-10-31T12:00:00Z
+call s/r1.c1 op=http.fetch args=["https://example.com/slow"]
+seg s/r1 start delivery=d1 handler=slow clause=1 fuel=19 alloc=0 state=336 end=ask-wait
+call s/r2.c1 op=http.fetch args=["https://example.com/bounded", {method: "POST", json: {n: 1}}]
+seg s/r2 start delivery=d2 handler=bounded clause=1 fuel=34 alloc=248 state=632 end=ask-wait until=2026-10-31T12:00:02Z
+pumped state=idle fuel=53 next=2026-10-31T12:00:02Z
+> pump clock=2026-10-31T12:00:02Z
+raise s/r2 code="timeout" at=s:41 pos=13:7
+abandon s/r2.c1
+seg s/r2 resume fuel=21 alloc=31 state=335 end=return
+run s/r2 outcome=completed delivery=d2 handler=bounded fuel=55 alloc=279
+pumped state=idle fuel=21 next=2026-10-31T12:00:05Z
+> answer s/r2.c1 value={status: 201, headers: {}, body: <<>>}
+> pump clock=2026-10-31T12:00:03Z
+note s/r2.c1 kind=late-answer
+pumped state=idle fuel=0 next=2026-10-31T12:00:05Z
+> pump clock=2026-10-31T12:00:05Z
+raise s/r1 code="timeout" at=s:5 pos=4:5
+abandon s/r1.c1
+seg s/r1 resume fuel=21 alloc=31 state=78 end=return
+run s/r1 outcome=completed delivery=d1 handler=slow fuel=40 alloc=31
+pumped state=idle fuel=21
+> deliver d3 to=s message=forgotten
+> pump clock=2026-10-31T12:00:06Z
+call s/r3.c1 op=http.fetch args=["https://[::FFFF:127.0.0.1]:8443"]
+seg s/r3 start delivery=d3 handler=forgotten clause=1 fuel=19 alloc=0 state=318 end=ask-wait
+pumped state=idle fuel=19 next=2026-10-31T12:00:11Z
+> stop s reason="done"
+> pump clock=2026-10-31T12:00:07Z
+stopped s reason="done" discarded=[s/r3] abandoned=[s/r3.c1]
+pumped state=stopped fuel=0
+> vars
+vars s got=["timeout", "timeout"]

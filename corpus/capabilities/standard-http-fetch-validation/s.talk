@@ -1,0 +1,8 @@
+script variable errors = []
+on get url, request
+  try
+    ask http to fetch url, request and wait
+  catch e
+    put e after errors
+  end try
+end get

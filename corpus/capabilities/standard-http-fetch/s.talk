@@ -1,0 +1,11 @@
+script variable got = []
+on get url, request
+  try
+    ask http to fetch url, request and wait
+    put [the status of it, the headers of it, the body of it] after got
+  catch {code: code, field: f, limit: n}
+    put [code, f, n] after got
+  catch {code: code}
+    put code after got
+  end try
+end get

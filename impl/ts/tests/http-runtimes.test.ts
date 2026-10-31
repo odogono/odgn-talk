@@ -54,3 +54,37 @@ for (const [name, command] of Object.entries(runtimes)) {
     60_000,
   );
 }
+
+for (const [name, command] of Object.entries(runtimes)) {
+  test.skipIf(!required.has(name) && !Bun.which(name))(
+    `the fetch client meets its transport rules under ${name}`,
+    async () => {
+      const built = await Bun.build({
+        entrypoints: [join(import.meta.dir, '../tools/http-fetch-runtime.ts')],
+        outdir: directory,
+        target: 'node',
+        format: 'esm',
+        naming: 'fetch.mjs',
+      });
+      expect(built.success).toBe(true);
+      const run = Bun.spawn(
+        command(
+          join(directory, 'fetch.mjs'),
+          join(import.meta.dir, 'fixtures/http-tls'),
+        ),
+        { stdout: 'pipe', stderr: 'pipe' },
+      );
+      const [out, err, exit] = await Promise.all([
+        new Response(run.stdout).text(),
+        new Response(run.stderr).text(),
+        run.exited,
+      ]);
+      expect({ exit, out, err }).toEqual({
+        exit: 0,
+        out: expect.stringMatching(/^(\d+) of \1 checks passed\n$/),
+        err: '',
+      });
+    },
+    60_000,
+  );
+}

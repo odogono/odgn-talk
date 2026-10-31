@@ -241,7 +241,12 @@ export {
   type SqliteImpl,
 } from './sqlite-capability';
 export { userCapability, type UserImpl } from './user-capability';
-export { httpCapability, type HttpImpl } from './http-capability';
+export {
+  httpCapability,
+  type HttpClientImpl,
+  type HttpImpl,
+  type HttpServerImpl,
+} from './http-capability';
 
 /** Spec data for browser-safe tooling; these tables add no execution behavior. */
 export { builtins, grammar, units } from './generated/syntax';

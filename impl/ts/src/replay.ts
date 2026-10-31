@@ -16,6 +16,7 @@ import { Stubs, hostFailure, type Stub } from './session/stubs';
 import type { DebugPause } from './debug';
 import type { PumpResult } from './group';
 import corpus from '../../../spec/data/corpus.toml';
+import type { HttpImpl } from './http-capability';
 import { defineValueCapability, type ValueOperation } from './capabilities';
 import {
   clockCapability,
@@ -646,7 +647,9 @@ const capabilitiesOf = (
       );
     } else if (capability === 'http') {
       // The runner keeps no listener: `serve` waits for an answer, and
-      // `unserve` and `respond` take a Stub that gives Nothing.
+      // `unserve` and `respond` take a Stub that gives Nothing. `fetch`
+      // makes no request: it waits for an answer. The case's costs say
+      // which Operations its Host offers.
       const nothingStub = (operation: string, call: Call<unknown>) => {
         try {
           const given = stubs.take(
@@ -662,22 +665,45 @@ const capabilitiesOf = (
           crossing(call.id);
         }
       };
+      const server = ['serve', 'unserve', 'respond'].some(op =>
+        Object.hasOwn(costs, op),
+      );
+      const client = Object.hasOwn(costs, 'fetch');
       out.set(
         capability,
         httpCapability(
           {
-            serve: call =>
-              startStub(
-                stubs,
-                'http.serve',
-                call,
-                calls,
-                crossing,
-                recordedCall(call),
-              ),
-            unserve: call => nothingStub('unserve', call),
-            respond: call => nothingStub('respond', call),
-          },
+            ...(client
+              ? {
+                  fetch: (call: Call<unknown>) =>
+                    startStub(
+                      stubs,
+                      'http.fetch',
+                      call,
+                      calls,
+                      crossing,
+                      recordedCall(call),
+                    ),
+                }
+              : {}),
+            ...(server || !client
+              ? {
+                  serve: (call: Call<unknown>) =>
+                    startStub(
+                      stubs,
+                      'http.serve',
+                      call,
+                      calls,
+                      crossing,
+                      recordedCall(call),
+                    ),
+                  unserve: (call: Call<unknown>) =>
+                    nothingStub('unserve', call),
+                  respond: (call: Call<unknown>) =>
+                    nothingStub('respond', call),
+                }
+              : {}),
+          } as HttpImpl,
           costs,
         ),
       );

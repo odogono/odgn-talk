@@ -1,0 +1,23 @@
+script variable got = []
+on slow
+  try
+    ask http to fetch "https://example.com/slow" and wait
+    put the status of it after got
+  catch {code: code}
+    put code after got
+  end try
+end slow
+on bounded
+  try
+    with timeout of 2 s
+      ask http to fetch "https://example.com/bounded", {method: "POST", json: {n: 1}} and wait
+    end timeout
+    put the status of it after got
+  catch {code: code}
+    put code after got
+  end try
+end bounded
+on forgotten
+  ask http to fetch "https://[::FFFF:127.0.0.1]:8443" and wait
+  put the status of it after got
+end forgotten
