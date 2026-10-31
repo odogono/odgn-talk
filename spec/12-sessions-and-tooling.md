@@ -314,7 +314,7 @@ The LSP, the formatter, the debugger and the Lint engine are one TypeScript tool
 
 - **Loading:** the file is one Script in one Group, with the stdlib Libraries. It is granted, under `GrantsAsUsed`, each Standard Capability the Runner offers, under its own name: `console`, `clock`, `timer`, `calendar`, `locale`, an in-memory `store`, `sqlite` where the runtime has it, `http`, and `user` when standard input is a terminal. The native Zig Runner offers no `calendar` or `locale`. A load error is printed and the command exits 1.
 - **Starting:** the Runner Delivers `start` with one argument, the list of the arguments after the file, as texts. A Script without a `start` Handler simply ends that Run as `unhandled`.
-- **`http`:** the binding allows any address. `--port` before the file, or the `PORT` environment variable, overrides every `serve`'s port.
+- **`http`:** the binding allows any address to listen on and any origin to fetch from, localhost and private networks included, since the Runner runs a trusted local program. Its header and body bounds are chapter 7's defaults. `--port` before the file, or the `PORT` environment variable, overrides every `serve`'s port.
 - **Exit:** the command exits when the Group has no live Runs, no pending timers, no Serve Registrations and no open HTTP Exchanges. It exits 0, or 1 if any Run ended with an uncaught error, which it writes to standard error.
 - **Signals:** the first SIGINT or SIGTERM stops accepting connections and Delivers `stop`, with no arguments, if the Script has a Handler for it. The Runner waits up to 5 seconds for open HTTP Exchanges, answers any still open with 503, Stops the Group, and exits 130 or 143. A second signal exits at once.
 

@@ -753,20 +753,22 @@ var Errors = ErrorsTable{
 		ErrorsTableErrorEntry{
 			Code:       "bad address",
 			Fields:     []string{},
-			RaisedWhen: "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it",
+			RaisedWhen: "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow; the Host raises it",
 			Sources: []string{
 				"ADR 0124",
+				"ADR 0151",
 			},
-			Message: "That address can't be served",
+			Message: "That address isn't allowed",
 		},
 		ErrorsTableErrorEntry{
 			Code: "invalid response",
 			Fields: []string{
 				"field",
 			},
-			RaisedWhen: "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs",
+			RaisedWhen: "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, two header names that differ only in case, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs",
 			Sources: []string{
 				"ADR 0124",
+				"ADR 0151",
 			},
 			Message: "The response's {field} isn't valid",
 		},
@@ -797,6 +799,38 @@ var Errors = ErrorsTable{
 				"ADR 0125",
 			},
 			Message: "Only the Run that received this HTTP request can answer it",
+		},
+		ErrorsTableErrorEntry{
+			Code: "invalid request",
+			Fields: []string{
+				"field",
+			},
+			RaisedWhen: "An `http` `fetch` is given a URL outside chapter 7's profile, a header the profile refuses, a body on `GET` or `HEAD`, both `body` and `json`, a `json` value the `json` Library can't write, or both a query in the URL and `query`; `field` is `url`, `headers`, `query`, `body` or `json`, and the Core raises it before the Host function runs",
+			Sources: []string{
+				"ADR 0151",
+			},
+			Message: "The request's {field} isn't valid",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "network error",
+			Fields:     []string{},
+			RaisedWhen: "An `http` `fetch` doesn't get a complete final response, including DNS, connection, TLS and protocol failures and a protocol upgrade; the Host raises it",
+			Sources: []string{
+				"ADR 0151",
+			},
+			Message: "The request didn't get a response",
+		},
+		ErrorsTableErrorEntry{
+			Code: "response too large",
+			Fields: []string{
+				"field",
+				"limit",
+			},
+			RaisedWhen: "An `http` `fetch` receives more header or body bytes than its Grant binding allows; `field` is `headers` or `body` and `limit` the bound in bytes, and the Host raises it without giving a partial response",
+			Sources: []string{
+				"ADR 0151",
+			},
+			Message: "The response's {field} is larger than {limit} bytes",
 		},
 	},
 }

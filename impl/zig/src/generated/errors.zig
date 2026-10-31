@@ -752,20 +752,22 @@ pub const errors: ErrorsTable = .{
         .{
             .code = "bad address",
             .fields = &.{},
-            .raised_when = "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it",
+            .raised_when = "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow; the Host raises it",
             .sources = &.{
                 "ADR 0124",
+                "ADR 0151",
             },
-            .message = "That address can't be served",
+            .message = "That address isn't allowed",
         },
         .{
             .code = "invalid response",
             .fields = &.{
                 "field",
             },
-            .raised_when = "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs",
+            .raised_when = "An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, two header names that differ only in case, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs",
             .sources = &.{
                 "ADR 0124",
+                "ADR 0151",
             },
             .message = "The response's {field} isn't valid",
         },
@@ -796,6 +798,38 @@ pub const errors: ErrorsTable = .{
                 "ADR 0125",
             },
             .message = "Only the Run that received this HTTP request can answer it",
+        },
+        .{
+            .code = "invalid request",
+            .fields = &.{
+                "field",
+            },
+            .raised_when = "An `http` `fetch` is given a URL outside chapter 7's profile, a header the profile refuses, a body on `GET` or `HEAD`, both `body` and `json`, a `json` value the `json` Library can't write, or both a query in the URL and `query`; `field` is `url`, `headers`, `query`, `body` or `json`, and the Core raises it before the Host function runs",
+            .sources = &.{
+                "ADR 0151",
+            },
+            .message = "The request's {field} isn't valid",
+        },
+        .{
+            .code = "network error",
+            .fields = &.{},
+            .raised_when = "An `http` `fetch` doesn't get a complete final response, including DNS, connection, TLS and protocol failures and a protocol upgrade; the Host raises it",
+            .sources = &.{
+                "ADR 0151",
+            },
+            .message = "The request didn't get a response",
+        },
+        .{
+            .code = "response too large",
+            .fields = &.{
+                "field",
+                "limit",
+            },
+            .raised_when = "An `http` `fetch` receives more header or body bytes than its Grant binding allows; `field` is `headers` or `body` and `limit` the bound in bytes, and the Host raises it without giving a partial response",
+            .sources = &.{
+                "ADR 0151",
+            },
+            .message = "The response's {field} is larger than {limit} bytes",
         },
     },
 };

@@ -942,9 +942,9 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read`, `user`'s `confirm`, `choose` and `enter`, and `http`'s `serve` are suspending, and `http`'s `unserve` and `respond` are immediate.
+- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read`, `user`'s `confirm`, `choose` and `enter`, and `http`'s `serve` and `fetch` are suspending, and `http`'s `unserve` and `respond` are immediate.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. The `http` Operations declare `address in use`, `bad address`, `already responded`, `exchange closed` and `not owner`, which the Host fails with, and the Core raises `invalid serve` and `invalid response`. Chapter 6 says how both kinds are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. The `http` Operations declare `address in use`, `bad address`, `already responded`, `exchange closed`, `not owner`, `network error` and `response too large`, which the Host fails with, and the Core raises `invalid serve`, `invalid response`, `invalid request` and `out of domain`. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -1391,13 +1391,15 @@ All five Operations are immediate: a Segment-bound Operation must be, and SQLite
 | `serve name, prefix [, message [, options]]` | suspending | `{host, port}` once the Host listens; from then on, each HTTP request whose path the text `prefix` begins delivers `message` to the Script, replacing its Serve Registration called `name` | `invalid serve`, `address in use`, `bad address` |
 | `unserve name` | immediate | Nothing; removes the Script's Serve Registration called `name` through this Grant, if there is one | `invalid serve` |
 | `respond exchange, response` | immediate | Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json` | `invalid response`, `already responded`, `exchange closed`, `not owner` |
+| `fetch url [, request]` | suspending | `{status, headers, body}`: the final response to one HTTP request for the absolute URL `url`, made with the map `request`'s `method`, `headers`, `query` and `body` or `json`, with `body` always Bytes | `invalid request`, `bad address`, `network error`, `response too large`, `out of domain` |
 
 <!-- end -->
 
-`http` lets a Script serve HTTP: it claims a path prefix, receives each matching HTTP request as an ordinary Delivery, and answers it ([ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md)). It is optional. A Host that offers it follows every rule here. Client Operations may join it later.
+`http` lets a Script serve HTTP and make HTTP requests. To serve, it claims a path prefix, receives each matching HTTP request as an ordinary Delivery, and answers it ([ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md)). To make a request, it calls `fetch` and waits for the whole response ([ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)). It is optional. A Host that offers it follows every rule here.
 
-- **The binding:** the addresses the Grant may listen on. A Host may allow any, fix one, or allow a set, and refuses others with `bad address`. The Script Runner allows any ([chapter 12](12-sessions-and-tooling.md#the-script-runner)).
-- **Shapes:** `name` and `prefix` are text. `message` is an Optional text. `options` is an Optional closed map `{host, port}`, with `host` text and `port` a whole number from 0 to 65535. `exchange` is a Host Object of kind `httpExchange`. `response` is a closed map `{status, headers, body, json}`, every key optional: `status` a whole number, `headers` a map whose values are texts or lists of texts, `body` text or Bytes, and `json` any value the `json` Library can write. Any other key raises `wrong kind`.
+- **Two sets of Operations:** `serve`, `unserve` and `respond` are the server Operations, and `fetch` the client Operation. A Host may offer either set or both ([chapter 9](09-embedding.md#the-http-factory)). A Script that calls an Operation its Host doesn't offer fails to load, as for any ungranted call.
+- **The binding:** the addresses the Grant may listen on, and the origins it may fetch from. For listening, a Host may allow any, fix one, or allow a set. For fetching, it allows no origin, a list of origins, or any origin. It refuses others with `bad address`. The Script Runner allows any of both ([chapter 12](12-sessions-and-tooling.md#the-script-runner)).
+- **Shapes:** `name` and `prefix` are text. `message` is an Optional text. `options` is an Optional closed map `{host, port}`, with `host` text and `port` a whole number from 0 to 65535. `exchange` is a Host Object of kind `httpExchange`. `response` is a closed map `{status, headers, body, json}`, every key optional: `status` a whole number, `headers` a map whose values are texts or lists of texts, `body` text or Bytes, and `json` any value the `json` Library can write. `url` is text. `request` is an Optional closed map `{method, headers, query, body, json}`, every key optional: `method` text, `headers` as for `response`, `query` a map whose values are texts or lists of texts, `body` text or Bytes, and `json` any value. Any other key raises `wrong kind`.
 
 #### Serve Registrations
 
@@ -1425,7 +1427,7 @@ An HTTP request that a registration matches is an **HTTP Exchange**. The Host De
 | `exchange` | a Host Object of kind `httpExchange` with one read-only property, `closed`, a boolean |
 
 - **Ownership:** only the Run that Delivery started may `respond`. Any other Run's `respond` fails with `not owner` ([ADR 0125](../docs/adr/0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)). There is no handoff. A Run that wants to wait for something before answering uses `wait for`, `wait` or a suspending call.
-- **`respond exchange, response`** answers it once. `status` defaults to 200 and must be from 100 to 599. A text `body` is sent as UTF-8, and the Host adds `content-type: text/plain; charset=utf-8` unless `headers` has one. A Bytes `body` is sent as it is. `json` is written by the `json` Library's rules, with `content-type: application/json` unless `headers` has one. Giving both `body` and `json`, a `status` out of range, or a header value that isn't text or a list of texts raises `invalid response`, with `field` naming the key, before the Host function runs.
+- **`respond exchange, response`** answers it once. `status` defaults to 200 and must be from 100 to 599. A text `body` is sent as UTF-8, and the Host adds `content-type: text/plain; charset=utf-8` unless `headers` has one. A Bytes `body` is sent as it is. `json` is written by the `json` Library's rules, with `content-type: application/json` unless `headers` has one. Giving both `body` and `json`, a `status` out of range, a header value that isn't text or a list of texts, or two header names that differ only in case raises `invalid response`, with `field` naming the key, before the Host function runs.
 - **Once:** a second `respond` fails with `already responded`. After the client has gone, `respond` fails with `exchange closed`, and `closed` is `true`. A client going away never cancels the Run.
 
 #### What the Host answers itself
@@ -1440,7 +1442,7 @@ An HTTP request that a registration matches is an **HTTP Exchange**. The Host De
 The Host logs the error of a 500 and never sends it to the client. It settles these from the Pump's reports ([chapter 9](09-embedding.md#the-http-router)).
 
 - **Saving:** a Host doesn't save a Group with an open HTTP Exchange. After a restore, an exchange's Host Object is gone.
-- **Not offered:** streaming bodies, upgrades such as WebSockets, server-sent events and TLS.
+- **Not offered when serving:** streaming bodies, upgrades such as WebSockets, server-sent events and TLS, which is a proxy's job.
 
 > **Example.**
 >
@@ -1464,6 +1466,78 @@ The Host logs the error of a 500 and never sends it to the client. It settles th
 > ```
 >
 > A `GET /users/7` runs the second clause. A `DELETE /` matches no clause, so its Run ends `unhandled` and the Host answers 404.
+
+#### Fetching
+
+`fetch url [, request]` makes one HTTP request and gives the final response once the Host has received all of it, as the map `{status, headers, body}`. It decides nothing for the Script: the body is Bytes, every status is a result, and the Host follows no redirect, retries nothing, decompresses nothing and caches nothing.
+
+- **Defaults:** an omitted or Nothing `request` is an empty map, and an omitted `method` is `GET`.
+- **Methods:** `method` is one of `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS`, in uppercase, as an HTTP Exchange's `method` is. Any other text raises `out of domain`, with `function: "fetch"` and `value` the method.
+- **Checks:** after the Shape checks, the Core checks the method, the URL, `headers`, `query`, then `body` and `json`, before charging the call or running the Host function. Each failure but the method's raises `invalid request`, with `field` naming the argument or key.
+
+##### The URL
+
+`url` is an absolute HTTP or HTTPS URL in a strict ASCII profile, so that every Core and Host reads the same destination ([RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html)). Anything outside it raises `invalid request`, with `field: "url"`.
+
+- **Characters:** only printable ASCII, with no space and no `\`. Non-ASCII path or query text must be percent-encoded, and a non-ASCII host name written in punycode. Every `%` begins two hexadecimal digits.
+- **Scheme:** `http` or `https`, in any case, then `://`.
+- **Host:** a name of letters, digits, `-` and `.`, whose last label isn't all digits; an IPv4 address of four decimal parts from 0 to 255, without leading zeros; or an IPv6 address in brackets. Shortened, hexadecimal and octal IPv4 spellings such as `127.1` and `0x7f.0.0.1` are refused. There is no user or password before `@`: a Script authenticates with `headers`.
+- **Port:** omitted, or a decimal number from 1 to 65535.
+- **Path and query:** the path is empty or begins with `/`, and the query follows `?`. Both use RFC 3986's unreserved characters, its sub-delimiters, `:`, `@`, `/`, `?` in the query, and percent escapes.
+- **Normalizing:** the Core lowercases the scheme and host, drops a port equal to the scheme's default (80 or 443), writes an empty path as `/`, and drops a fragment from `#`. It changes nothing else: the path's and query's escapes and dot segments stay as written, so normalizing a normalized URL gives it back unchanged.
+- **The origin** is the normalized URL's scheme, host and port, the scheme's default when the port is omitted. The Host refuses an origin the binding doesn't allow with `bad address`. An origin names a host; it doesn't promise where the name resolves. A Host that keeps Scripts off private networks also checks the addresses it connects to, and refuses them with `bad address` too.
+
+##### The request
+
+- **`query`** is percent-encoded and added to the URL, so a Script never encodes a URL component by hand. Each key and each value is written as UTF-8, and every byte other than `A`–`Z`, `a`–`z`, `0`–`9`, `-`, `.`, `_` and `~` becomes `%` and two uppercase hexadecimal digits. Each key gives `key=value`, or one pair per item of a list, in map and list order, joined with `&` after `?`. A nonempty `query` with a URL that already has a query raises `invalid request`, with `field: "query"`. An empty `query` adds nothing.
+- **`headers`:** each name is an HTTP token ([RFC 9110 §5.6.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)), and each value text with no control character but tab, and no space or tab at either end. A list sends one field line per item, in order. Two names that differ only in case, or a name the Host controls, raise `invalid request`, with `field: "headers"`. The Host controls `host`, `content-length`, `transfer-encoding`, `connection`, `keep-alive`, `proxy-connection`, `te`, `trailer` and `upgrade`, in any case.
+- **The body:** a text `body` is sent as UTF-8, with `content-type: text/plain; charset=utf-8` unless `headers` has one. A Bytes `body` is sent as it is. `json` is written by the `json` Library's rules, with `content-type: application/json` unless `headers` has one. These are `respond`'s rules. Giving both `body` and `json`, or a `json` value the `json` Library can't write, raises `invalid request`, with `field: "json"`. A `GET` or `HEAD` with either raises it with `field` the key given.
+- **Encoding:** the Host sends `accept-encoding: identity` unless `headers` has an `accept-encoding`.
+- **The Trace** keeps the arguments as the Script wrote them, and so do saved calls. The Host receives the normalized URL, with `query` added, and the request ([chapter 9](09-embedding.md#the-http-factory)).
+
+##### The response
+
+| Key | Value |
+| --- | --- |
+| `status` | the final response's status, a whole number from 200 to 599 |
+| `headers` | the response's headers: lowercase names in code point order, repeated values joined with `, ` in the order received, and `set-cookie` a list of texts |
+| `body` | the content as Bytes, empty when there is none |
+
+- **Statuses are results:** a 404 or a 500 is an ordinary answer, and the Script decides which statuses it accepts. A 3xx is returned as it is, with its `location`. A Script that follows it fetches again, and the binding checks the new origin.
+- **Only the final response:** the Host skips informational (1xx) responses. A 101 switching protocols fails the call with `network error`, since `fetch` can't upgrade.
+- **Content as sent:** the Host removes transfer framing, such as chunked encoding, but never decompresses. A server may still send coded content, and `body` then holds it with `content-encoding` saying so.
+- **Trailers** are read and counted toward the header bound, but the result doesn't include them.
+- **Complete or nothing:** the call is answered only once the whole response has arrived. Any failure to get it, including DNS, connection, TLS and protocol failures, fails the call with `network error`. A Host may explain the cause in its diagnostics, but the Script sees one code.
+- **Answers the Core checks:** an answer that isn't a map with exactly these keys in this order, a `status` outside 200 to 599, `headers` breaking the rules above, or a `body` that isn't Bytes ends the call as `host error`.
+
+##### Bounds, trust and waiting
+
+- **Bounds:** the Host receives at most 8,388,608 bytes of body and 65,536 bytes of headers unless the binding sets other bounds, and a Script can't raise them. Body bytes are counted as returned, after transfer framing is removed. Header bytes are, for every field line received, trailers and repeated names included, the bytes of its name and value plus 4. Exceeding either fails the call with `response too large`, with `field` set to `headers` or `body` and `limit` the bound, and no partial response is given. The bounds limit what the Host buffers, which Script allocation limits don't cover.
+- **TLS:** an HTTPS request verifies the server's certificate and host name, and a Script can't turn this off. The Host chooses which certificate authorities it trusts.
+- **Nothing ambient:** `fetch` sends no cookies, credentials or login state the Script didn't put in `headers`, and keeps no cookies or responses between calls. A Script that wants a conditional request sends its own `if-none-match` or `if-modified-since` and handles the 304. A proxy is the Host's choice.
+- **Waiting:** `fetch` has no `maxPending` of its own, so it waits for the Script's `MaxWait` ([chapter 6](06-errors-and-limits.md)), 30,000 ms by default, and a shorter [Timeout Block](05-handlers-messages-and-scheduling.md#timeout-blocks) wins.
+- **Abandoned calls:** a call abandoned by a timeout, a cancellation, a Stop or a Rewind makes the Host abort the request as far as it can. A server may already have acted on it, and nothing undoes that. The Host never retries a call; a Script that wants a retry fetches again.
+- **Saving:** a pending `fetch` is saved as any pending call is. On restore the Host [settles it](10-save-and-restore.md#settling-pending-calls) as it chooses, and a Reissue sends the request again, accepting that the server may act on it twice. A replay answers from the Trace and makes no request.
+- **Cost:** `fetch` charges its declared cost and the conversion of its answer. Network work and Host buffering charge no Fuel.
+- **Not offered when fetching:** streaming bodies, cookies kept between calls, control of connections, decompression, redirects followed by the Host, retries, caching, and the `CONNECT` and `TRACE` methods.
+
+> **Example.**
+>
+> ```talk
+> on findUser email
+>   ask http to fetch "https://api.example.com/users", {query: {email: email}} and wait
+>   if the status of it is not 200 then throw {code: "lookup failed", status: the status of it}
+>   put decodeJson(decodeText(the body of it)) into user
+>   say "found " & the name of user
+> end findUser
+>
+> on createUser token, name
+>   ask http to fetch "https://api.example.com/users", {method: "POST", headers: {authorization: "Bearer " & token}, json: {name: name}} and wait
+>   if the status of it is not 201 then throw {code: "create failed", status: the status of it}
+> end createUser
+> ```
+>
+> A `findUser "ann@example.com"` fetches `https://api.example.com/users?email=ann%40example.com`. A 404 is an answer, not an error, so `findUser` throws its own.
 
 ## Outside parity
 

@@ -49,7 +49,7 @@ A Locale's ordering of text, as opposed to the code-point order the language use
 _Avoid_: alphabetical order, sort order (unqualified)
 
 **Operation**:
-One named action a Capability offers, e.g. `write` on `console`, called as `tell console to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
+One named action a Capability offers, e.g. `fetch` on `http`, called as `ask http to fetch url and wait`, or `write` on `console`, called as `tell console to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command (unqualified), endpoint
 
 **Capability Scope**:

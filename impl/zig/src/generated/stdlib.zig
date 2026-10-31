@@ -1752,5 +1752,19 @@ pub const stdlib: StdlibTable = .{
                 "not owner",
             },
         },
+        .{
+            .capability = "http",
+            .name = "fetch",
+            .mode = "suspending",
+            .call = "fetch url [, request]",
+            .gives = "`{status, headers, body}`: the final response to one HTTP request for the absolute URL `url`, made with the map `request`'s `method`, `headers`, `query` and `body` or `json`, with `body` always Bytes",
+            .errors = &.{
+                "invalid request",
+                "bad address",
+                "network error",
+                "response too large",
+                "out of domain",
+            },
+        },
     },
 };
