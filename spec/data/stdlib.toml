@@ -1312,3 +1312,11 @@ mode = "immediate"
 call = "respond exchange, response"
 gives = "Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json`"
 errors = ["invalid response", "already responded", "exchange closed", "not owner"]
+
+[[operation]]
+capability = "http"
+name = "fetch"
+mode = "suspending"
+call = "fetch url [, request]"
+gives = "`{status, headers, body}`: the final response to one HTTP request for the absolute URL `url`, made with the map `request`'s `method`, `headers`, `query` and `body` or `json`, with `body` always Bytes"
+errors = ["invalid request", "bad address", "network error", "response too large", "out of domain"]

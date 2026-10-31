@@ -29,3 +29,11 @@ Errors: [`invalid serve`](../../../spec/06-errors-and-limits.md#the-error-code-c
 Nothing; answers the HTTP Exchange `exchange` with the map `response`'s `status`, `headers` and `body` or `json`.
 
 Errors: [`invalid response`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`already responded`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`exchange closed`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`not owner`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
+
+### fetch
+
+`fetch url [, request]`, suspending
+
+`{status, headers, body}`: the final response to one HTTP request for the absolute URL `url`, made with the map `request`'s `method`, `headers`, `query` and `body` or `json`, with `body` always Bytes.
+
+Errors: [`invalid request`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`bad address`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`network error`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`response too large`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).

@@ -53,9 +53,9 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 >
 > ```talk
 > try
->   ask http to get url and wait
-> catch {code: "http", status: s} where s >= 500
->   tell log to write "server error " & s
+>   ask payments to charge order and wait
+> catch {code: "declined", reason: r} where r is not "expired"
+>   tell log to write "declined: " & r
 > catch "timeout"
 >   tell log to write "no answer"
 > end try
@@ -203,11 +203,14 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 | `user busy` | none | A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything | [ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md), [#527](https://github.com/odogono/odgn-talk/issues/527) |
 | `invalid serve` | `field` | An `http` `serve` or `unserve` is given empty text as its name, or `serve` a prefix that doesn't begin with `/` or an effective message that isn't a plain Name; `field` is `name`, `prefix` or `message`, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `address in use` | none | An `http` `serve` asks for a host and port another listener already holds; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
-| `bad address` | none | An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
-| `invalid response` | `field` | An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
+| `bad address` | none | An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
+| `invalid response` | `field` | An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, two header names that differ only in case, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
 | `already responded` | none | An `http` `respond` names an HTTP Exchange that has already been answered; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `exchange closed` | none | An `http` `respond` names an HTTP Exchange whose client has gone; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `not owner` | none | An `http` `respond` comes from a Run other than the one the HTTP Exchange's Delivery started; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0125](../docs/adr/0125-a-host-functions-call-names-the-delivery-that-started-its-run.md) |
+| `invalid request` | `field` | An `http` `fetch` is given a URL outside chapter 7's profile, a header the profile refuses, a body on `GET` or `HEAD`, both `body` and `json`, a `json` value the `json` Library can't write, or both a query in the URL and `query`; `field` is `url`, `headers`, `query`, `body` or `json`, and the Core raises it before the Host function runs | [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
+| `network error` | none | An `http` `fetch` doesn't get a complete final response, including DNS, connection, TLS and protocol failures and a protocol upgrade; the Host raises it | [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
+| `response too large` | `field`, `limit` | An `http` `fetch` receives more header or body bytes than its Grant binding allows; `field` is `headers` or `body` and `limit` the bound in bytes, and the Host raises it without giving a partial response | [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
 
 <!-- end -->
 
@@ -273,11 +276,14 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `user busy` | Another prompt is waiting for an answer |
 | `invalid serve` | A Serve Registration's {field} isn't valid |
 | `address in use` | That address is already in use |
-| `bad address` | That address can't be served |
+| `bad address` | That address isn't allowed |
 | `invalid response` | The response's {field} isn't valid |
 | `already responded` | That HTTP request has already been answered |
 | `exchange closed` | The client has gone |
 | `not owner` | Only the Run that received this HTTP request can answer it |
+| `invalid request` | The request's {field} isn't valid |
+| `network error` | The request didn't get a response |
+| `response too large` | The response's {field} is larger than {limit} bytes |
 
 <!-- end -->
 

@@ -1495,11 +1495,14 @@ export const errorMessages = {
   "user busy": "Another prompt is waiting for an answer",
   "invalid serve": "A Serve Registration's {field} isn't valid",
   "address in use": "That address is already in use",
-  "bad address": "That address can't be served",
+  "bad address": "That address isn't allowed",
   "invalid response": "The response's {field} isn't valid",
   "already responded": "That HTTP request has already been answered",
   "exchange closed": "The client has gone",
-  "not owner": "Only the Run that received this HTTP request can answer it"
+  "not owner": "Only the Run that received this HTTP request can answer it",
+  "invalid request": "The request's {field} isn't valid",
+  "network error": "The request didn't get a response",
+  "response too large": "The response's {field} is larger than {limit} bytes"
 };
 export const reservedErrorKeys = ["code","message","at","capability","operation","index","during","deadline"] as const;
 export const limitDefaults = {
