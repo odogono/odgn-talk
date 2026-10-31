@@ -327,8 +327,6 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{.{ "column", .text }}
         else if (std.mem.eql(u8, code, "out of domain"))
             &.{ .{ "function", .text }, .{ "value", .value } }
-        else if (std.mem.eql(u8, code, "response too large"))
-            &.{ .{ "field", .text }, .{ "limit", .number } }
         else
             &.{};
         const out = try gpa.alloc(caps.Field, fields.len);
