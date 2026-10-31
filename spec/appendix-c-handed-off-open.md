@@ -23,6 +23,7 @@ None of these blocks an implementation. Each would be a language change.
 
 - **Normative error messages:** the wording of a Core-raised `message` is outside parity, so text a Script builds from one is outside parity too, and no case may depend on it ([chapter 11](11-the-trace-and-conformance.md#what-is-recorded-and-when)). Making [chapter 6](06-errors-and-limits.md#messages)'s templates normative would close that gap.
 - **More from `locale`:** formatting currency Quantities in a Locale, formatting a whole date in a Locale's own pattern, and title case ([ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
+- **Bit operations on Bytes:** whether `bitAnd`, `bitOr`, `bitXor` and `bitNot` should also act byte by byte on two Bytes of the same length. The [bit Built-ins](07-libraries-and-the-standard-library.md#bits) take numbers only ([ADR 0149](../docs/adr/0149-bit-operations-are-built-ins-on-whole-numbers-below-2-64.md)).
 - **A Library's Operations:** whether a Library may declare the Operations it needs, so a Host can check them before any Import ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 
 ## Deferred until both Cores conform

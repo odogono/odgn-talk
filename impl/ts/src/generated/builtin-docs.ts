@@ -148,6 +148,46 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
     "call": "random(n)",
     "gives": "A whole number from 1 to `n`, the next from the Script Group's generator"
   },
+  "bitAnd": {
+    "call": "bitAnd(a, b)",
+    "gives": "The bits set in both `a` and `b`"
+  },
+  "bitOr": {
+    "call": "bitOr(a, b)",
+    "gives": "The bits set in `a`, `b` or both"
+  },
+  "bitXor": {
+    "call": "bitXor(a, b)",
+    "gives": "The bits set in exactly one of `a` and `b`"
+  },
+  "bitNot": {
+    "call": "bitNot(x, width)",
+    "gives": "`x` with its low `width` bits inverted"
+  },
+  "bitShiftLeft": {
+    "call": "bitShiftLeft(x, n, width = nothing)",
+    "gives": "`x` shifted left `n` bits, kept to its low `width` bits when `width` is given"
+  },
+  "bitShiftRight": {
+    "call": "bitShiftRight(x, n)",
+    "gives": "`x` shifted right `n` bits, filling with zeros"
+  },
+  "bitRotateLeft": {
+    "call": "bitRotateLeft(x, n, width)",
+    "gives": "The low `width` bits of `x` rotated left `n` places"
+  },
+  "bitRotateRight": {
+    "call": "bitRotateRight(x, n, width)",
+    "gives": "The low `width` bits of `x` rotated right `n` places"
+  },
+  "bitCount": {
+    "call": "bitCount(x)",
+    "gives": "How many bits of `x` are set"
+  },
+  "bitTest": {
+    "call": "bitTest(x, i)",
+    "gives": "Whether bit `i` of `x` is set, bit 0 being the lowest"
+  },
   "fromFloat64": {
     "call": "fromFloat64(b, order = \"big\")",
     "gives": "The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal"

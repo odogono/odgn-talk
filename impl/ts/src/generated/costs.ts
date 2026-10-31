@@ -167,6 +167,26 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured, into?: 
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 60; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.random
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitAnd
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitOr
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitXor
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitNot
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitShiftLeft
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitShiftRight
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitRotateLeft
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitRotateRight
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitCount
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  // builtin.bitTest
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 4; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.fromFloat64
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 8; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.fromFloat32

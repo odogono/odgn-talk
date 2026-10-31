@@ -588,6 +588,7 @@ const crossCheck = (d: Data) => {
 const BUILTIN_GROUPS = [
   'values',
   'numbers',
+  'bits',
   'floats',
   'dates',
   'constants',

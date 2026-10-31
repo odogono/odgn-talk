@@ -345,15 +345,44 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 - **`n`** is a whole number from 1 to 2^32 (4294967296). A number that isn't whole, or is outside that range, raises `out of domain` with `function` `"random"` and `value` `n`; anything but a number, a Quantity included, raises `wrong kind`.
 - **One generator per Group:** every Script of a Group draws from the same generator, in the order the Runs make their calls. A Library's code draws from its caller's Group.
 - **The seed:** the Host gives the Group a seed when it makes it, a whole number from 0 to 2^64 − 1, and 0 if it gives none ([chapter 9](09-embedding.md#the-shape)). A Host that wants different draws each time seeds from somewhere that changes, such as its clock; the Core never reads one itself, so `random` is a Built-in, not a Capability.
-- **The generator** is PCG32 (XSH RR), whose state is a 64-bit unsigned integer and whose arithmetic wraps modulo 2^64:
-  - a step is `state := state × 6364136223846793005 + 1442695040888963407`
-  - an output is taken from the state before a step: `x := ((state >> 18) xor state) >> 27`, kept to its low 32 bits, then rotated right by `state >> 59` bits within 32 bits
+- **The generator** is PCG32 (XSH RR), whose state is a 64-bit unsigned integer and whose arithmetic wraps modulo 2^64. Written with the [bit Built-ins](#bits):
+  - a step is `state := (state × 6364136223846793005 + 1442695040888963407) mod 2^64`
+  - an output is taken from the state before a step: `x := bitAnd(bitShiftRight(bitXor(bitShiftRight(state, 18), state), 27), 2^32 - 1)`, then `bitRotateRight(x, bitShiftRight(state, 59), 32)`
   - a seed `s` gives the state `step(step(0) + s)`
 - **A draw** for `n` takes outputs, stepping after each, until one, `r`, is at least `(2^32 − n) mod n`, and gives `(r mod n) + 1`. So no result is more likely than another.
 - **Examples:** seeded 0, ten calls of `random(6)` give 1, 6, 1, 3, 2, 6, 6, 6, 3, 5. Seeded 42 they give 3, 6, 4, 4, 4, 5, 1, 6, 3, 4. Seeded 0, `random(1)`, `random(2)`, `random(7)`, `random(100)` and `random(4294967296)` give 1, 2, 4, 89 and 3443325254.
 - **Saved and replayed:** the generator's state is part of the Group's state, so a save carries it ([chapter 10](10-save-and-restore.md#what-a-save-holds)), and a replay with the same seed and Host Inputs gives the same draws.
 - **Not rolled back:** a draw is final once its call is charged, like an id the Core assigns. A Limit Fault's rollback, a Rewind and a discarded Run leave the generator where it is, and a call that faults on its own charge draws nothing.
 - **Effects:** a call changes the Group's state, so `random` may not appear in a Constant's or Script Variable's initialiser or a parameter's default (`not constant`), and a restricted callback that calls it raises `restricted operation` ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)). A Guard or `whose` clause may call it, and each test it makes draws.
+
+### Bits
+
+The bit Built-ins treat a number as the 64 binary digits of a whole number from 0 to 2^64 − 1 (18446744073709551615), bit 0 being the lowest ([ADR 0149](../docs/adr/0149-bit-operations-are-built-ins-on-whole-numbers-below-2-64.md)). Every such number is exact in a decimal number's 34 digits, so every Core agrees without a fixed-width integer kind.
+
+<!-- generated: stdlib.builtins.bits -->
+
+| Built-in | Gives | Also raises |
+| --- | --- | --- |
+| `bitAnd(a, b)` | The bits set in both `a` and `b` | `out of domain` |
+| `bitOr(a, b)` | The bits set in `a`, `b` or both | `out of domain` |
+| `bitXor(a, b)` | The bits set in exactly one of `a` and `b` | `out of domain` |
+| `bitNot(x, width)` | `x` with its low `width` bits inverted | `out of domain` |
+| `bitShiftLeft(x, n, width = nothing)` | `x` shifted left `n` bits, kept to its low `width` bits when `width` is given | `out of domain`, `overflow` |
+| `bitShiftRight(x, n)` | `x` shifted right `n` bits, filling with zeros | `out of domain` |
+| `bitRotateLeft(x, n, width)` | The low `width` bits of `x` rotated left `n` places | `out of domain` |
+| `bitRotateRight(x, n, width)` | The low `width` bits of `x` rotated right `n` places | `out of domain` |
+| `bitCount(x)` | How many bits of `x` are set | `out of domain` |
+| `bitTest(x, i)` | Whether bit `i` of `x` is set, bit 0 being the lowest | `out of domain` |
+
+<!-- end -->
+
+- **Arguments:** `a`, `b` and `x` are whole numbers from 0 to 2^64 − 1. A `width` is a whole number from 1 to 64, and `x` must be below 2^`width` wherever a `width` is required. A shift `n` is from 0 to 64, a rotation `n` is any whole number 0 or more, taken modulo `width`, and a bit index `i` is from 0 to 63. A number outside its range, or one that isn't whole, raises `out of domain` with `function` the Built-in's name and `value` the argument; anything but a number, a Quantity included, raises `wrong kind`.
+- **No sign:** there are no negative bit patterns. `bitNot` takes a `width` because a complement is only defined within one, so `bitNot(0, 8)` is `255`.
+- **Shifting left:** without `width`, a result of 2^64 or more raises `overflow` with `operator` `"bitShiftLeft"`, just as arithmetic does. With `width`, the result keeps its low `width` bits, so `bitShiftLeft(255, 4, 8)` is `240`. Wrapping is never silent.
+- **Shifting right** fills with zeros, and `bitShiftRight(x, 64)` is `0`.
+- **Examples:** `bitAnd(12, 10)` is `8`, `bitOr(12, 10)` is `14`, `bitXor(12, 10)` is `6`, `bitRotateLeft(1, 1, 3)` is `2`, `bitRotateRight(1, 1, 3)` is `4`, `bitCount(255)` is `8` and `bitTest(4, 2)` is `true`.
+- **Not operators:** `<<` and `>>` stay the Binary Pattern brackets ([ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md)), and the Built-ins act on numbers, not Bytes.
+- **Cost:** each has a flat rate, whatever its arguments, since none exceeds 64 bits ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#rates)).
 
 ### Floats
 

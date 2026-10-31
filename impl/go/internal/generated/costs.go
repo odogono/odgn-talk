@@ -655,6 +655,56 @@ var Costs = CostsTable{
 			Alloc: "size(result)",
 		},
 		CostsTableRateEntry{
+			Key:   "builtin.bitAnd",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitOr",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitXor",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitNot",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitShiftLeft",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitShiftRight",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitRotateLeft",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitRotateRight",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitCount",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.bitTest",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
 			Key:   "builtin.fromFloat64",
 			Fuel:  "8",
 			Alloc: "size(result)",

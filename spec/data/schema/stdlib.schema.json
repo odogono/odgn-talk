@@ -39,7 +39,7 @@
         "type": "object",
         "properties": {
           "name": { "$ref": "#/$defs/name" },
-          "group": { "enum": ["values", "numbers", "floats", "dates", "constants"] },
+          "group": { "enum": ["values", "numbers", "bits", "floats", "dates", "constants"] },
           "call": { "$ref": "#/$defs/sentence" },
           "gives": { "$ref": "#/$defs/sentence" },
           "errors": { "$ref": "#/$defs/errors" }

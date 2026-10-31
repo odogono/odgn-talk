@@ -1183,6 +1183,16 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `degrees` | `60` | `size(result)` |  |
 | `radians` | `60` | `size(result)` |  |
 | `random` | `4` | `size(result)` |  |
+| `bitAnd` | `4` | `size(result)` |  |
+| `bitOr` | `4` | `size(result)` |  |
+| `bitXor` | `4` | `size(result)` |  |
+| `bitNot` | `4` | `size(result)` |  |
+| `bitShiftLeft` | `4` | `size(result)` |  |
+| `bitShiftRight` | `4` | `size(result)` |  |
+| `bitRotateLeft` | `4` | `size(result)` |  |
+| `bitRotateRight` | `4` | `size(result)` |  |
+| `bitCount` | `4` | `size(result)` |  |
+| `bitTest` | `4` | `size(result)` |  |
 | `fromFloat64` | `8` | `size(result)` |  |
 | `fromFloat32` | `8` | `size(result)` |  |
 | `toFloat64` | `8` | `size(result)` |  |

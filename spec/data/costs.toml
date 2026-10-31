@@ -582,6 +582,56 @@ fuel = "4"
 alloc = "size(result)"
 
 [[rate]]
+key = "builtin.bitAnd"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitOr"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitXor"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitNot"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitShiftLeft"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitShiftRight"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitRotateLeft"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitRotateRight"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitCount"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.bitTest"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
 key = "builtin.fromFloat64"
 fuel = "8"
 alloc = "size(result)"

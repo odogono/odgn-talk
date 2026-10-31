@@ -1036,6 +1036,96 @@ export const builtins = [
     }
   },
   {
+    "name": "bitAnd",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitOr",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitXor",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitNot",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitShiftLeft",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitShiftRight",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitRotateLeft",
+    "kind": "function",
+    "contract": {
+      "required": 3,
+      "total": 3,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitRotateRight",
+    "kind": "function",
+    "contract": {
+      "required": 3,
+      "total": 3,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitCount",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1,
+      "variadic": false
+    }
+  },
+  {
+    "name": "bitTest",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2,
+      "variadic": false
+    }
+  },
+  {
     "name": "fromFloat64",
     "kind": "function",
     "contract": {
