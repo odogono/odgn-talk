@@ -1,4 +1,3 @@
-# Unblessed: http.fetch answers and Host failures (ADR 0151); first blessing awaits human review.
 > load s identity=c34d2bda88e78b9101ed628709245c7948e7d92093170a3de5281f48d0125c88
 > deliver d1 to=s message=get args=["HTTPS://API.Example.com:443/users#top", {query: {email: "ann@example.com", tag: ["a b", "ü"]}}]
 > deliver d2 to=s message=get args=["https://api.example.com/missing", nothing]

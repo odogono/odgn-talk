@@ -1,4 +1,3 @@
-# Unblessed: http.fetch argument checks (ADR 0151); first blessing awaits human review.
 > load s identity=ed452da1f28564c028a964e9f348628dd2eb9bc5b3071ac32db4b80b3d17c7b4
 > deliver d1 to=s message=get args=["https://example.com/", {method: "get"}]
 > deliver d2 to=s message=get args=["https://example.com/", {method: "CONNECT"}]
