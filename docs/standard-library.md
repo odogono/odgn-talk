@@ -69,8 +69,8 @@ end note
 ```
 
 A call the Script's Grants don't allow fails to load, so a missing Capability
-is found before anything runs. `sqlite`, `user` and `http` are optional: a Host
-may not offer them.
+is found before anything runs. `sqlite`, `user`, `http` and `peer` are optional: a
+Host may not offer them.
 
 Reference: [`clock`](stdlib/capabilities/clock.md),
 [`calendar`](stdlib/capabilities/calendar.md),
@@ -79,8 +79,9 @@ Reference: [`clock`](stdlib/capabilities/clock.md),
 [`console`](stdlib/capabilities/console.md),
 [`store`](stdlib/capabilities/store.md),
 [`sqlite`](stdlib/capabilities/sqlite.md),
-[`user`](stdlib/capabilities/user.md) and
-[`http`](stdlib/capabilities/http.md).
+[`user`](stdlib/capabilities/user.md),
+[`http`](stdlib/capabilities/http.md) and
+[`peer`](stdlib/capabilities/peer.md).
 
 ## Errors
 

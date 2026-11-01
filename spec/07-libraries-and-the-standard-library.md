@@ -934,7 +934,7 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 <!-- generated: stdlib.capabilities -->
 
-The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user` and `http`. `sqlite`, `user` and `http` are optional: a Host may choose not to offer them, but a Host that offers one follows every rule this chapter gives for it.
+The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user`, `http` and `peer`. `sqlite`, `user`, `http` and `peer` are optional: a Host may choose not to offer them, but a Host that offers one follows every rule this chapter gives for it.
 
 <!-- end -->
 
@@ -942,9 +942,9 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read`, `user`'s `confirm`, `choose` and `enter`, and `http`'s `serve` and `fetch` are suspending, and `http`'s `unserve` and `respond` are immediate.
+- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read`, `user`'s `confirm`, `choose` and `enter`, `http`'s `serve` and `fetch`, and `peer`'s `expose`, `reach` and `call`, are suspending, `http`'s `unserve` and `respond` and `peer`'s `unexpose` are immediate, and `peer`'s `post` is fire-and-forget.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. The `http` Operations declare `address in use`, `bad address`, `already responded`, `exchange closed`, `not owner`, `network error` and `response too large`, which the Host fails with, and the Core raises `invalid serve`, `invalid response`, `invalid request` and `out of domain`. Chapter 6 says how both kinds are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. The `http` Operations declare `address in use`, `bad address`, `already responded`, `exchange closed`, `not owner`, `network error` and `response too large`, which the Host fails with, and the Core raises `invalid serve`, `invalid response`, `invalid request` and `out of domain`. The `peer` Operations declare `bad address`, `name in use`, `not exposed` and `send failed`, which the Host fails with, and the Core raises `out of domain`, `wrong kind`, `bad message name` and `not encodable`. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -1539,10 +1539,70 @@ The Host logs the error of a 500 and never sends it to the client. It settles th
 >
 > A `findUser "ann@example.com"` fetches `https://api.example.com/users?email=ann%40example.com`. A 404 is an answer, not an error, so `findUser` throws its own.
 
+### `peer`
+
+<!-- generated: stdlib.capability.peer -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `expose name` | suspending | Nothing, once the Script is an Exposed Script reachable from other Groups by the text `name` through this Grant | `bad address`, `name in use`, `out of domain` |
+| `unexpose name` | immediate | Nothing; withdraws the Script's exposure called `name` through this Grant, if there is one | `out of domain` |
+| `reach address` | suspending | A Peer: a Host Object of kind `peer` standing for the Exposed Script the text `address` names | `bad address`, `not exposed`, `out of domain` |
+| `post peer, message, args` | fire-and-forget | Sends the message `message` with the list `args` to the Peer `peer`'s Exposed Script, at most once; a plain `send` to a Peer is this | `out of domain`, `wrong kind`, `bad message name`, `not encodable` |
+| `call peer, message, args` | suspending | The reply of the Peer `peer`'s Exposed Script to the message `message` with the list `args`, sent at most once; `send … and wait` to a Peer is this | `send failed`, `out of domain`, `wrong kind`, `bad message name`, `not encodable` |
+
+<!-- end -->
+
+`peer` lets Scripts in different Groups, on one Host or several, message each other with `send` ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)). A Script makes itself an **Exposed Script** under a logical name with `expose`, and another gets a Peer for that name with `reach` and sends to it ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). It is optional. A Host that offers it follows every rule here.
+
+- **The binding** resolves each logical name to a real destination, and decides which names the Grant may `reach` and which it may `expose`. It refuses others with `bad address`. A Script never sees a host, port or node id.
+- **One per Script:** `Load` refuses a Script given two Grants of `peer`, as the Host error `invalid value`. Every Remote Send goes through the sending Script's `peer` Grant, whichever Script's `reach` made the Peer.
+- **Always together:** a Grant of `peer` that includes `reach` includes `post` and `call`, since a `send` is known to be remote only when it runs.
+- **Shapes:** `name` and `address` are text. `peer` is a Host Object of kind `peer`. `message` is text, and `args` a list of `any`.
+- **Transport** is the Host's own. This chapter fixes what Scripts see, not how a Remote Send travels.
+
+#### Exposed Scripts
+
+- **Identity:** an exposure belongs to its **owner**, the Group, Script and named Grant, and to its **name**, as a Serve Registration does.
+- **`expose name`:** makes the calling Script reachable as `name` and gives Nothing once it is. Exposing a name the owner already holds does nothing. A name another owner holds fails with `name in use`. An empty name raises `out of domain`, with `function` `"expose"`, before the call is charged.
+- **`unexpose name`:** withdraws the name. Unexposing a name the owner doesn't hold does nothing. A Remote Send already delivered is unaffected.
+- **Arrival:** the receiving Host gives a `post` to the Exposed Script with `Script.Deliver` and a `call` with `Script.Request`, under the Selector it was sent with and its arguments. Handler Clauses and a Fallback Handler dispatch it as any Delivery, and the Run's result is the reply. The receiver learns nothing about the sender.
+
+#### Reaching and sending
+
+- **`reach address`:** gives a Peer for the Exposed Script `address` names. It fails with `bad address` when the binding refuses the name, and with `not exposed` when no Script is exposed under it. An empty address raises `out of domain`, with `function` `"reach"`.
+- **`post peer, message, args`** and **`call peer, message, args`** are what a Remote Send is ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). A Script may also call them directly. `message` is checked as a `send`'s computed name is, raising `wrong kind` or `bad message name`, and `args` as a Remote Send's arguments are, before the call is charged. The Host checks the Peer's destination against the sending Grant's binding: `call` fails with `bad address` when the binding doesn't allow it, and `post` is dropped.
+- **`call`'s failures:** the Host fails `call` with `send failed`, with the `reason` and `error` of the receiving `Request`, or with `reason` `mailbox full` or `unreachable`. `post` never fails in the Script.
+- **Saving:** a Group may be saved with a `call` pending. After the restore, the Host settles it with Fail, `send failed` with `reason` `unreachable`, never with Reissue or Adopt ([chapter 10](10-save-and-restore.md#settling-pending-calls)). A Run that owes a remote reply is saved as one that owes a `Request` its reply, and the reply of a restored one is dropped. A Peer is resolved like any Host Object, and one the Host doesn't resolve comes back disposed. The Host makes its exposures again on Restore, as it routes Subscriptions ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)).
+
+> **Example.**
+>
+> ```talk
+> -- in the billing Group
+> on start
+>   ask peer to expose "billing" and wait
+> end start
+>
+> on charge order
+>   return {receipt: the id of order}
+> end charge
+> ```
+>
+> ```talk
+> -- in a shop Group
+> on checkout order
+>   ask peer to reach "billing" into billing and wait
+>   send charge with order to billing into receipt and wait
+> end checkout
+> ```
+>
+> The `send` is a `call` through the shop Script's `peer` Grant. If the billing Group's Host can't deliver it, `send` raises `send failed` with `reason` `unreachable`.
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.
 - **Per-call costs** of Standard Capability Operations are set by each Host.
 - **Store contents** are each Host's own, like its zone and Locale data. The Trace records what each `store` call gave.
 - **`sqlite` results** are each Host's own SQLite's, which a newer version can change, as can the `reason` of an `sql` error. The Trace records what each `sqlite` call gave.
+- **Remote Sends** travel by each Host's own transport. The Trace records what each `peer` call gave.
 - **`user` answers** are the person's, and how a Host shows a prompt or a notification is its own. The Trace records what each `user` call gave.

@@ -66,7 +66,7 @@ var Errors = ErrorsTable{
 			Fields: []string{
 				"reason",
 			},
-			RaisedWhen: "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored`",
+			RaisedWhen: "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable` or `mailbox full`, and `error` is present only for `errored`",
 			Sources: []string{
 				"ADR 0015",
 				"ADR 0017",
@@ -74,6 +74,7 @@ var Errors = ErrorsTable{
 				"ADR 0026",
 				"ADR 0031",
 				"ADR 0033",
+				"ADR 0153",
 			},
 			Message: "No answer came: the receiver's Run ended {reason}",
 			Optional: []string{
@@ -291,12 +292,13 @@ var Errors = ErrorsTable{
 				"kind",
 				"path",
 			},
-			RaisedWhen: "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded or checked",
+			RaisedWhen: "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
 			Sources: []string{
 				"ADR 0017",
 				"ADR 0021",
 				"ADR 0025",
 				"ADR 0033",
+				"ADR 0153",
 			},
 			Message: "A {kind} can't be encoded as plain data",
 		},
@@ -306,13 +308,14 @@ var Errors = ErrorsTable{
 				"function",
 				"value",
 			},
-			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, `element`, `number of elements` or `elements`",
+			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, an empty `peer` name or address, a Peer given to `wait for … from` or sent to by a Script with no `peer` Grant, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, `element`, `number of elements` or `elements`",
 			Sources: []string{
 				"ADR 0002",
 				"ADR 0021",
 				"ADR 0025",
 				"ADR 0033",
 				"ADR 0077",
+				"ADR 0153",
 			},
 			Message: "{value} is outside the domain of {function}",
 		},
@@ -753,12 +756,31 @@ var Errors = ErrorsTable{
 		ErrorsTableErrorEntry{
 			Code:       "bad address",
 			Fields:     []string{},
-			RaisedWhen: "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow; the Host raises it",
+			RaisedWhen: "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow, or a `peer` `expose` or `reach` names a name its Grant binding doesn't allow; the Host raises it",
 			Sources: []string{
 				"ADR 0124",
 				"ADR 0151",
+				"ADR 0153",
 			},
 			Message: "That address isn't allowed",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "name in use",
+			Fields:     []string{},
+			RaisedWhen: "A `peer` `expose` names a name another owner already exposes; the Host raises it",
+			Sources: []string{
+				"ADR 0153",
+			},
+			Message: "That name is already exposed",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "not exposed",
+			Fields:     []string{},
+			RaisedWhen: "A `peer` `reach` names a name no Script is exposed under; the Host raises it",
+			Sources: []string{
+				"ADR 0153",
+			},
+			Message: "No Script is exposed under that name",
 		},
 		ErrorsTableErrorEntry{
 			Code: "invalid response",

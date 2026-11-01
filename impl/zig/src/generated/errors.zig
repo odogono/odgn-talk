@@ -65,7 +65,7 @@ pub const errors: ErrorsTable = .{
             .fields = &.{
                 "reason",
             },
-            .raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored`",
+            .raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable` or `mailbox full`, and `error` is present only for `errored`",
             .sources = &.{
                 "ADR 0015",
                 "ADR 0017",
@@ -73,6 +73,7 @@ pub const errors: ErrorsTable = .{
                 "ADR 0026",
                 "ADR 0031",
                 "ADR 0033",
+                "ADR 0153",
             },
             .message = "No answer came: the receiver's Run ended {reason}",
             .optional = &.{
@@ -290,12 +291,13 @@ pub const errors: ErrorsTable = .{
                 "kind",
                 "path",
             },
-            .raised_when = "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded or checked",
+            .raised_when = "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
             .sources = &.{
                 "ADR 0017",
                 "ADR 0021",
                 "ADR 0025",
                 "ADR 0033",
+                "ADR 0153",
             },
             .message = "A {kind} can't be encoded as plain data",
         },
@@ -305,13 +307,14 @@ pub const errors: ErrorsTable = .{
                 "function",
                 "value",
             },
-            .raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, `element`, `number of elements` or `elements`",
+            .raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, an empty `peer` name or address, a Peer given to `wait for … from` or sent to by a Script with no `peer` Grant, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, `element`, `number of elements` or `elements`",
             .sources = &.{
                 "ADR 0002",
                 "ADR 0021",
                 "ADR 0025",
                 "ADR 0033",
                 "ADR 0077",
+                "ADR 0153",
             },
             .message = "{value} is outside the domain of {function}",
         },
@@ -752,12 +755,31 @@ pub const errors: ErrorsTable = .{
         .{
             .code = "bad address",
             .fields = &.{},
-            .raised_when = "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow; the Host raises it",
+            .raised_when = "An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow, or a `peer` `expose` or `reach` names a name its Grant binding doesn't allow; the Host raises it",
             .sources = &.{
                 "ADR 0124",
                 "ADR 0151",
+                "ADR 0153",
             },
             .message = "That address isn't allowed",
+        },
+        .{
+            .code = "name in use",
+            .fields = &.{},
+            .raised_when = "A `peer` `expose` names a name another owner already exposes; the Host raises it",
+            .sources = &.{
+                "ADR 0153",
+            },
+            .message = "That name is already exposed",
+        },
+        .{
+            .code = "not exposed",
+            .fields = &.{},
+            .raised_when = "A `peer` `reach` names a name no Script is exposed under; the Host raises it",
+            .sources = &.{
+                "ADR 0153",
+            },
+            .message = "No Script is exposed under that name",
         },
         .{
             .code = "invalid response",
