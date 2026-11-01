@@ -623,6 +623,24 @@ var Corpus = CorpusTable{
 			},
 		},
 		CorpusTableRecordEntry{
+			Name:  "object",
+			Input: false,
+			Ids:   []string{},
+			Is:    "a Host Object made with a parent, at the call that made it (ADR 0152)",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "object",
+					Type: "value",
+					Is:   "the object",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "parent",
+					Type: "value",
+					Is:   "its parent",
+				},
+			},
+		},
+		CorpusTableRecordEntry{
 			Name:  "dispose",
 			Input: true,
 			Ids:   []string{},
@@ -2076,6 +2094,22 @@ var Corpus = CorpusTable{
 			Kinds: []string{
 				"trace",
 				"encoding",
+			},
+		},
+		CorpusTableSetupEntry{
+			Table: "objects",
+			Key:   "madeBy",
+			Is:    "the Operation, `<capability>.<operation>`, whose first call makes it, before the call's function returns; without it, the object is made before the first Host Input",
+			Kinds: []string{
+				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
+			Table: "objects",
+			Key:   "parent",
+			Is:    "the object it is made with as its parent, in the display form, as text; only with `madeBy`",
+			Kinds: []string{
+				"trace",
 			},
 		},
 		CorpusTableSetupEntry{

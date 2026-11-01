@@ -622,6 +622,24 @@ pub const corpus: CorpusTable = .{
             },
         },
         .{
+            .name = "object",
+            .input = false,
+            .ids = &.{},
+            .is = "a Host Object made with a parent, at the call that made it (ADR 0152)",
+            .key = &.{
+                .{
+                    .key = "object",
+                    .type = "value",
+                    .is = "the object",
+                },
+                .{
+                    .key = "parent",
+                    .type = "value",
+                    .is = "its parent",
+                },
+            },
+        },
+        .{
             .name = "dispose",
             .input = true,
             .ids = &.{},
@@ -2075,6 +2093,22 @@ pub const corpus: CorpusTable = .{
             .kinds = &.{
                 "trace",
                 "encoding",
+            },
+        },
+        .{
+            .table = "objects",
+            .key = "madeBy",
+            .is = "the Operation, `<capability>.<operation>`, whose first call makes it, before the call's function returns; without it, the object is made before the first Host Input",
+            .kinds = &.{
+                "trace",
+            },
+        },
+        .{
+            .table = "objects",
+            .key = "parent",
+            .is = "the object it is made with as its parent, in the display form, as text; only with `madeBy`",
+            .kinds = &.{
+                "trace",
             },
         },
         .{

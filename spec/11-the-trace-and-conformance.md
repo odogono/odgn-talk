@@ -329,6 +329,7 @@ A record is written when what it records happens, so a Trace is in the order the
 
 | Record | Ids | Keys | Says |
 | --- | --- | --- | --- |
+| `object` |  | `object`, `parent` | a Host Object made with a parent, at the call that made it (ADR 0152) |
 | `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
 | `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
 | `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `charge-refused`?, `automatic`? | a Capability call |
@@ -363,6 +364,8 @@ A record is written when what it records happens, so a Trace is in the order the
 
 | Record | Key | Type | Is |
 | --- | --- | --- | --- |
+| `object` | `object` | `value` | the object |
+| `object` | `parent` | `value` | its parent |
 | `seg` | `delivery` | `id` | for a start, its Delivery |
 | `seg` | `broadcast` | `id` | for a start, its Broadcast |
 | `seg` | `from` | `id` | for a start, the call or Run that sent its message |
@@ -626,6 +629,8 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[objectKinds]` | `elements` | its optional Object Collection, `{shape, countCost, atCost, findCost}` | trace |
 | `[objects]` | `kind` | a Host Object's kind | trace, encoding |
 | `[objects]` | `id` | its stable id | trace, encoding |
+| `[objects]` | `madeBy` | the Operation, `<capability>.<operation>`, whose first call makes it, before the call's function returns; without it, the object is made before the first Host Input | trace |
+| `[objects]` | `parent` | the object it is made with as its parent, in the display form, as text; only with `madeBy` | trace |
 | `[objects]` | `props` | the values its properties start with, a table from property name to a value in the display form, as text | trace |
 | `[objects]` | `elements` | the members of its Object Kind's collection, in order, each `{name, object}` with the object in the display form, as text | trace |
 | `[libraries]` | `name` | a user Library's name | trace, disassembly |
@@ -648,7 +653,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 <!-- end -->
 
 - **Order:** Operation Declarations are ordered by name within their Capability, and Scripts and Libraries load in the order of the Trace's `load` and `add-library` lines, not of `case.toml`.
-- **Host Objects** are made before the first Host Input, in the order listed. Their parents are set by `set-parent` lines, which the Trace records like any Host Input.
+- **Host Objects** are made before the first Host Input, in the order listed, except one with `madeBy`, which the runner makes with its `parent` when that Operation is first called, before its function returns. Later parents are set by `set-parent` lines, which the Trace records like any Host Input.
 - **Properties** start with the values `case.toml` gives. The runner's `Get` returns the current value and its `Set` stores one, and both are recorded as `prop`.
 - **Collections** hold the members `case.toml` gives, resolved after every Host Object is made; a duplicate name, an unknown member or one outside the collection's Shape fails the case, and a kind with no collection may list none. A receiver whose kind has a collection and lists no members has an empty one. The runner's `Count`, `At` and `Find` answer from that list, `At` counting a negative position from the end, and each is recorded as `prop` with `name=elements`.
 
