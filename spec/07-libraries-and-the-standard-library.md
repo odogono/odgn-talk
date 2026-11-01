@@ -1545,35 +1545,40 @@ The Host logs the error of a 500 and never sends it to the client. It settles th
 
 | Operation | Mode | Gives | Errors |
 | --- | --- | --- | --- |
-| `expose name` | suspending | Nothing, once the Script is an Exposed Script reachable from other Groups by the text `name` through this Grant | `bad address`, `name in use`, `out of domain` |
-| `unexpose name` | immediate | Nothing; withdraws the Script's exposure called `name` through this Grant, if there is one | `out of domain` |
+| `expose [name]` | suspending | A Peer to the calling Script, once it is an Exposed Script: reachable from other Groups by the text `name` through this Grant, or without `name` through a new unnamed exposure only that Peer reaches | `bad address`, `name in use`, `out of domain` |
+| `unexpose exposure` | immediate | Nothing; withdraws the Script's exposure through this Grant that `exposure` names, as the text name of a named one or the Peer `expose` gave, if there is one | `out of domain` |
 | `reach address` | suspending | A Peer: a Host Object of kind `peer` standing for the Exposed Script the text `address` names | `bad address`, `not exposed`, `out of domain` |
 | `post peer, message, args` | fire-and-forget | Sends the message `message` with the list `args` to the Peer `peer`'s Exposed Script, at most once; a plain `send` to a Peer is this | `out of domain`, `wrong kind`, `bad message name`, `not encodable` |
 | `call peer, message, args` | suspending | The reply of the Peer `peer`'s Exposed Script to the message `message` with the list `args`, sent at most once; `send … and wait` to a Peer is this | `send failed`, `out of domain`, `wrong kind`, `bad message name`, `not encodable` |
+| `caller` | immediate | The Caller Identity of the Remote Send that started the calling Run: the data the receiving Host vouches for about who made it, or Nothing |  |
 
 <!-- end -->
 
-`peer` lets Scripts in different Groups, on one Host or several, message each other with `send` ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)). A Script makes itself an **Exposed Script** under a logical name with `expose`, and another gets a Peer for that name with `reach` and sends to it ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). It is optional. A Host that offers it follows every rule here.
+`peer` lets Scripts in different Groups, on one Host or several, message each other with `send` ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)). A Script makes itself an **Exposed Script** with `expose`, and another gets a Peer for it with `reach`, or is handed one inside a Remote Send, and sends to it ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). Holding a Peer is permission to send to it ([ADR 0155](../docs/adr/0155-a-peer-may-travel-inside-a-remote-send-and-holding-it-is-authority.md)), and the receiver may ask who sent ([ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)). It is optional. A Host that offers it follows every rule here.
 
-- **The binding** resolves each logical name to a real destination, and decides which names the Grant may `reach` and which it may `expose`. It refuses others with `bad address`. A Script never sees a host, port or node id.
+- **The binding** resolves each logical name to a real destination, and decides which names the Grant may `reach` and which it may `expose`. It refuses others with `bad address`. It is never checked at `post` or `call`: a Peer a Script holds, however it got it, is one it may send to. A Script never sees a host, port, node id, key or certificate.
 - **One per Script:** `Load` refuses a Script given two Grants of `peer`, as the Host error `invalid value`. Every Remote Send goes through the sending Script's `peer` Grant, whichever Script's `reach` made the Peer.
-- **Always together:** a Grant of `peer` that includes `reach` includes `post` and `call`, since a `send` is known to be remote only when it runs.
-- **Shapes:** `name` and `address` are text. `peer` is a Host Object of kind `peer`. `message` is text, and `args` a list of `any`.
-- **Transport** is the Host's own. This chapter fixes what Scripts see, not how a Remote Send travels.
+- **Always together:** a Grant of `peer` that includes `reach` or `expose` includes `post` and `call`, since a `send` is known to be remote only when it runs, and one that includes `expose` includes `caller`.
+- **Shapes:** `name` is an Optional text, and `address` is text. `exposure` is text or a Host Object of kind `peer`. `peer` is a Host Object of kind `peer`. `message` is text, and `args` a list of `any`.
+- **Transport** is the Host's own. This chapter fixes what Scripts see, not how a Remote Send travels, beyond what makes holding a Peer authority ([chapter 9](09-embedding.md#the-peer-router)).
 
 #### Exposed Scripts
 
-- **Identity:** an exposure belongs to its **owner**, the Group, Script and named Grant, and to its **name**, as a Serve Registration does.
-- **`expose name`:** makes the calling Script reachable as `name` and gives Nothing once it is. Exposing a name the owner already holds does nothing. A name another owner holds fails with `name in use`. An empty name raises `out of domain`, with `function` `"expose"`, before the call is charged.
-- **`unexpose name`:** withdraws the name. Unexposing a name the owner doesn't hold does nothing. A Remote Send already delivered is unaffected.
-- **Arrival:** the receiving Host gives a `post` to the Exposed Script with `Script.Deliver` and a `call` with `Script.Request`, under the Selector it was sent with and its arguments. Handler Clauses and a Fallback Handler dispatch it as any Delivery, and the Run's result is the reply. The receiver learns nothing about the sender.
+- **Identity:** an exposure belongs to its **owner**, the Group, Script and named Grant. A **named** one also has its **name**, as a Serve Registration does. An **unnamed** one has none, so nobody can `reach` it.
+- **`expose name`:** makes the calling Script reachable as `name` and gives the Peer for that exposure once it is. Exposing a name the owner already holds gives the same Peer again. A name another owner holds fails with `name in use`. An empty name raises `out of domain`, with `function` `"expose"`, before the call is charged.
+- **`expose` with no name:** makes a new unnamed exposure each time and gives its Peer, the only way to it. A Script hands it to another Group inside a Remote Send, as a reply-to or push channel.
+- **`unexpose exposure`:** withdraws the exposure that the text `exposure` names, or that the Peer `exposure` stands for, when the calling Script owns it. Unexposing one the owner doesn't hold does nothing. A Remote Send already delivered is unaffected. Afterwards a `call` to it fails with `send failed`, `reason` `not exposed`, and a `post` to it is dropped.
+- **Lifetime:** an exposure lasts until it is withdrawn, the Script is stopped or its owner is disposed, as a Subscription does. Nothing counts the Peers held for it elsewhere, so a Peer handed on never keeps it alive. A Host may cap a Grant's exposures through its binding, failing `expose` with `bad address`.
+- **Arrival:** the receiving Host gives a `post` to the Exposed Script with `Script.Deliver` and a `call` with `Script.Request`, under the Selector it was sent with and its arguments. Handler Clauses and a Fallback Handler dispatch it as any Delivery, and the Run's result is the reply.
+- **`caller`:** gives the **Caller Identity**: the data the receiving Host vouches for about who made the Remote Send that started the calling Run, such as `{principal: "alice"}`, or Nothing when the Host authenticated nobody. Only that Run has one. A Run started by a `send` in the Group, a Function Value call, a Join or any other Delivery gets Nothing, and a Script that hands the work on passes the identity as data. The Host decides what it vouches for, and this chapter fixes no keys. The identity is the sender's own Host or connection, never the Script that handed it a Peer.
 
 #### Reaching and sending
 
-- **`reach address`:** gives a Peer for the Exposed Script `address` names. It fails with `bad address` when the binding refuses the name, and with `not exposed` when no Script is exposed under it. An empty address raises `out of domain`, with `function` `"reach"`.
-- **`post peer, message, args`** and **`call peer, message, args`** are what a Remote Send is ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). A Script may also call them directly. `message` is checked as a `send`'s computed name is, raising `wrong kind` or `bad message name`, and `args` as a Remote Send's arguments are, before the call is charged. The Host checks the Peer's destination against the sending Grant's binding: `call` fails with `bad address` when the binding doesn't allow it, and `post` is dropped.
-- **`call`'s failures:** the Host fails `call` with `send failed`, with the `reason` and `error` of the receiving `Request`, or with `reason` `mailbox full` or `unreachable`. `post` never fails in the Script.
-- **Saving:** a Group may be saved with a `call` pending. After the restore, the Host settles it with Fail, `send failed` with `reason` `unreachable`, never with Reissue or Adopt ([chapter 10](10-save-and-restore.md#settling-pending-calls)). A Run that owes a remote reply is saved as one that owes a `Request` its reply, and the reply of a restored one is dropped. A Peer is resolved like any Host Object, and one the Host doesn't resolve comes back disposed. The Host makes its exposures again on Restore, as it routes Subscriptions ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)).
+- **`reach address`:** gives the Peer for the named exposure `address` names. It fails with `bad address` when the binding refuses the name, and with `not exposed` when no Script is exposed under it. An empty address raises `out of domain`, with `function` `"reach"`.
+- **`post peer, message, args`** and **`call peer, message, args`** are what a Remote Send is ([chapter 5](05-handlers-messages-and-scheduling.md#remote-sends)). A Script may also call them directly. `message` is checked as a `send`'s computed name is, raising `wrong kind` or `bad message name`, and `args` as a Remote Send's arguments are, before the call is charged. A Peer may sit at any depth in `args`, and in a `call`'s reply.
+- **`call`'s failures:** the Host fails `call` with `send failed`, with the `reason` and `error` of the receiving `Request`, or with `reason` `mailbox full`, `not exposed` or `unreachable`. `post` never fails in the Script.
+- **Peers handed over:** a Peer that arrives in a Remote Send's arguments or reply is a Peer of the receiving Group for the same exposure. Within a Group there is one Peer per exposure, however it came, so `is` tells whether two Peers reach the same Script. A Peer for a Script of the receiving Group is still a Peer, and a `send` to it is still a Remote Send.
+- **Saving:** a Group may be saved with a `call` pending. After the restore, the Host settles it with Fail, `send failed` with `reason` `unreachable`, never with Reissue or Adopt ([chapter 10](10-save-and-restore.md#settling-pending-calls)). A Run that owes a remote reply is saved as one that owes a `Request` its reply, and the reply of a restored one is dropped. A Peer is resolved like any Host Object, and one the Host doesn't resolve comes back disposed. The Host makes its exposures again on Restore, as it routes Subscriptions ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)), unnamed ones with the same identity, so Peers held for them in other Groups keep working.
 
 > **Example.**
 >
@@ -1598,11 +1603,38 @@ The Host logs the error of a 500 and never sends it to the client. It settles th
 >
 > The `send` is a `call` through the shop Script's `peer` Grant. If the billing Group's Host can't deliver it, `send` raises `send failed` with `reason` `unreachable`.
 
+> **Example.**
+>
+> ```talk
+> -- a browser Script
+> on start
+>   ask peer to reach "chat" into server and wait
+>   ask peer to expose into inbox and wait
+>   send join with "#talk", inbox to server and wait
+> end start
+>
+> on said channel, nick, text
+>   say nick & ": " & text
+> end said
+> ```
+>
+> ```talk
+> -- the chat server's Script, exposed as "chat"
+> on join channel, inbox
+>   ask peer to caller
+>   if it is nothing then throw {code: "forbidden"}
+>   send said with channel, "server", the principal of it & " joined" to inbox
+>   return true
+> end join
+> ```
+>
+> `inbox` is an unnamed exposure, so only a Script handed that Peer can send `said` to the browser Script. The server takes the nick from `caller`, which its Host vouches for, not from the arguments, and its `send … to inbox` is a `post`.
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.
 - **Per-call costs** of Standard Capability Operations are set by each Host.
 - **Store contents** are each Host's own, like its zone and Locale data. The Trace records what each `store` call gave.
 - **`sqlite` results** are each Host's own SQLite's, which a newer version can change, as can the `reason` of an `sql` error. The Trace records what each `sqlite` call gave.
-- **Remote Sends** travel by each Host's own transport. The Trace records what each `peer` call gave.
+- **Remote Sends** travel by each Host's own transport, and each Host decides what a Caller Identity holds. The Trace records what each `peer` call gave.
 - **`user` answers** are the person's, and how a Host shows a prompt or a notification is its own. The Trace records what each `user` call gave.

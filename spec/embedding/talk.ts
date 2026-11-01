@@ -553,11 +553,15 @@ export interface HttpImpl {
  * at most once.
  */
 export interface PeerImpl {
-  expose(call: Call<unknown>, name: string): void;
-  unexpose(call: Call<unknown>, name: string): void;
+  /** No name makes a new unnamed exposure. Answers with the exposure's Peer. */
+  expose(call: Call<unknown>, name?: string): void;
+  /** A name withdraws a named exposure; a Peer, the exposure it stands for. */
+  unexpose(call: Call<unknown>, exposure: string | HostObject): void;
   reach(call: Call<unknown>, address: string): void;
   post(call: Call<unknown>, peer: HostObject, message: string, args: Value[]): void;
   call(call: Call<unknown>, peer: HostObject, message: string, args: Value[]): void;
+  /** The Caller Identity recorded for call.delivery, or Nothing (ADR 0154). */
+  caller(call: Call<unknown>): Value;
 }
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {

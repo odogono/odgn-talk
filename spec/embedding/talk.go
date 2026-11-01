@@ -691,11 +691,17 @@ func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs C
 // address` or `send failed` and {reason, error}. A Remote Send is delivered
 // at most once.
 type PeerImpl interface {
+	// Expose with name "" makes a new unnamed exposure. It answers with the
+	// exposure's Peer.
 	Expose(c *Call, name string) error
-	Unexpose(c *Call, name string) error
+	// Unexpose hears either a name or, for peer non-nil, the Peer.
+	Unexpose(c *Call, name string, peer *Object) error
 	Reach(c *Call, address string) error
 	Post(c *Call, peer *Object, message string, args []Value) error
 	Call(c *Call, peer *Object, message string, args []Value) error
+	// Caller gives the Caller Identity recorded for c.Delivery, or Nothing
+	// (ADR 0154).
+	Caller(c *Call) (Value, error)
 }
 
 // PeerCapability is optional for Hosts.

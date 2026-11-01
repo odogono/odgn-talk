@@ -66,7 +66,7 @@ var Errors = ErrorsTable{
 			Fields: []string{
 				"reason",
 			},
-			RaisedWhen: "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable` or `mailbox full`, and `error` is present only for `errored`",
+			RaisedWhen: "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable`, `mailbox full` or `not exposed`, and `error` is present only for `errored`",
 			Sources: []string{
 				"ADR 0015",
 				"ADR 0017",
@@ -75,6 +75,7 @@ var Errors = ErrorsTable{
 				"ADR 0031",
 				"ADR 0033",
 				"ADR 0153",
+				"ADR 0155",
 			},
 			Message: "No answer came: the receiver's Run ended {reason}",
 			Optional: []string{
@@ -292,13 +293,14 @@ var Errors = ErrorsTable{
 				"kind",
 				"path",
 			},
-			RaisedWhen: "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
+			RaisedWhen: "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object that isn't a Peer, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
 			Sources: []string{
 				"ADR 0017",
 				"ADR 0021",
 				"ADR 0025",
 				"ADR 0033",
 				"ADR 0153",
+				"ADR 0155",
 			},
 			Message: "A {kind} can't be encoded as plain data",
 		},

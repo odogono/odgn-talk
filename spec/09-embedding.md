@@ -285,23 +285,26 @@ The Host component that holds Serve Registrations, listens and turns HTTP reques
 
 ### The `peer` factory
 
-A Host that offers the optional [`peer`](07-libraries-and-the-standard-library.md#peer) calls `PeerCapability` in Go or `peerCapability` in TS, with an implementation and the cost map ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)). The Core checks the arguments, raising `out of domain`, `wrong kind`, `bad message name` and `not encodable`, and that `reach` answers with a Host Object of kind `peer`, or the call ends as `host error`. The implementation resolves names, carries Remote Sends and their replies, and delivers what arrives.
+A Host that offers the optional [`peer`](07-libraries-and-the-standard-library.md#peer) calls `PeerCapability` in Go or `peerCapability` in TS, with an implementation and the cost map ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md), [ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md), [ADR 0155](../docs/adr/0155-a-peer-may-travel-inside-a-remote-send-and-holding-it-is-authority.md)). The Core checks the arguments, raising `out of domain`, `wrong kind`, `bad message name` and `not encodable`, that `reach` and `expose` answer with a Host Object of kind `peer`, and that `caller` answers with data, or the call ends as `host error`. The implementation resolves names, carries Remote Sends and their replies, and delivers what arrives.
 
-- **The binding** is the Host's own description of the names the Grant may `reach` and `expose`, and how each resolves. The Core never reads it.
+- **The binding** is the Host's own description of the names the Grant may `reach` and `expose`, how each resolves, and how each destination is authenticated. The Core never reads it.
 - **One Grant:** `Load` refuses a Script given two Grants whose Capability is `peer`, as `invalid value`.
-- **The kind `peer`** is defined by the Core, with no properties. The implementation makes each Peer with `group.Object("peer", id, native)` in the calling Script's Group, and an id it can map back to a destination, including after a Restore.
-- **Answering:** `expose` and `reach` start suspending calls. `reach` is answered with the Peer, or failed with `bad address` or `not exposed`; `expose` with Nothing, or failed with `bad address` or `name in use`. `unexpose` is immediate and `post` fire-and-forget.
-- **`post` and `call`** hear the Peer, the Selector as text and the arguments as a list, each from the sending Script's Grant. The implementation checks the Peer's destination against that Grant's binding. It answers `call` with the receiver's reply, or fails it with `bad address` or with `send failed` and `{reason, error}`. When a `call` is abandoned the implementation drops its reply when it comes; it never asks the receiver to stop.
+- **The kind `peer`** is defined by the Core, with no properties. The implementation makes each Peer with `group.Object("peer", id, native)` in the Group that will hold it, and an id it can map back to an exposure, including after a Restore. It makes at most one Peer per exposure in a Group, and gives the existing one again.
+- **Answering:** `expose` and `reach` start suspending calls. `reach` is answered with the Peer, or failed with `bad address` or `not exposed`; `expose` with the Peer for the exposure, or failed with `bad address` or `name in use`. `expose` hears its name, or none for an unnamed exposure. `unexpose` hears a name or a Peer. `unexpose` and `caller` are immediate, and `post` fire-and-forget.
+- **`post` and `call`** hear the Peer, the Selector as text and the arguments as a list, which may hold Peers, each from the sending Script's Grant. The implementation never checks the Peer against that Grant's binding, since holding it is authority. It answers `call` with the receiver's reply, or fails it with `send failed` and `{reason, error}`.
+- **`caller`** gives the Caller Identity the implementation recorded for `call.delivery` when it gave a Remote Send to the Exposed Script, or Nothing when the call has no `delivery` or the Delivery wasn't a Remote Send ([ADR 0125](../docs/adr/0125-a-host-functions-call-names-the-delivery-that-started-its-run.md)). When a `call` is abandoned the implementation drops its reply when it comes; it never asks the receiver to stop.
 
 ### The peer router
 
 The Host component that holds exposures and carries Remote Sends. Its obligations are normative for every Host that offers `peer`:
 
-- **Delivery:** a `post` that arrives is one `Script.Deliver` to the Exposed Script, and a `call` one `Script.Request`, each under the Selector and arguments sent, with no limit override. A Remote Send that comes after its name is unexposed is `unreachable`.
+- **Delivery:** a `post` that arrives is one `Script.Deliver` to the Exposed Script, and a `call` one `Script.Request`, each under the Selector and arguments sent, with no limit override. A Remote Send that comes after its exposure is withdrawn is `not exposed`.
+- **Caller Identity:** the router records, against the delivery id of each Remote Send it gives an Exposed Script, what the receiving Host vouches for about the sender: the Host or connection it authenticated, never a claim in the arguments. It keeps the record while the Run lives, across a Save and Restore included. It never names the Script that handed the sender a Peer.
 - **At most once:** the router never delivers a Remote Send twice, retrying a transport included. When it can't tell whether a `call` arrived, it fails it with `unreachable`.
 - **Replies:** a `Request` that settles answers the `call` with its result. One that rejects with `send failed` fails the `call` with the same `reason` and `error`. A `Script.Request` refused as `MailboxFull` fails it with `reason` `mailbox full`, and any other refusal, or a reply that can't be carried back, with `unreachable`.
-- **Values:** arguments and replies cross as the Value Encoding, read against the receiving Group. They hold no Host Objects or Function Values, since the Core refuses them at the `send` and a Run's result that holds one fails the `call` with `unreachable` and a `call failed` report on the receiving side.
-- **Saving:** a Group may be saved with `call`s pending and with Runs that owe a remote reply. The router settles each restored pending `call` with Fail, `send failed` and `reason` `unreachable`, and drops the reply of each restored Run that owed one. A Group the Host discards has its exposures removed.
+- **Values:** arguments and replies cross as the Value Encoding, read against the receiving Group. Each Peer in them crosses as its exposure, and the router gives the receiving Group that exposure's Peer. They hold no other Host Objects or Function Values, since the Core refuses them at the `send` and a Run's result that holds one fails the `call` with `unreachable` and a `call failed` report on the receiving side.
+- **Unforgeable Peers:** a Peer that crosses between Hosts names its exposure with a secret of at least 128 random bits, and identifies the key of the Host that holds it, so that no one can guess one into existence or redirect one. The router checks that key on every Remote Send to it.
+- **Saving:** a Group may be saved with `call`s pending and with Runs that owe a remote reply. The router settles each restored pending `call` with Fail, `send failed` and `reason` `unreachable`, and drops the reply of each restored Run that owed one. A Group the Host discards has its exposures removed. Restored exposures, named and unnamed, keep their identity.
 
 ### The `user` factory
 
@@ -580,6 +583,8 @@ A call reads `ask <capability> to <operation> <arguments>`, so the Operation's n
 ## Host conventions
 
 Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)): HTTP header names are lowercase. A repeated header's values are joined with `, `, except `set-cookie`, which is a list of text. For `http`'s HTTP Exchanges and `fetch` results these conventions are normative ([chapter 7](07-libraries-and-the-standard-library.md#http)).
+
+Non-normative: a `peer` transport between Hosts authenticates both ends with mutual TLS, and its binding pins each destination's key. A browser Host, where client certificates are awkward, authenticates to its server with a session token, and the server's Host derives the Caller Identity from it. Groups on one Host need neither ([ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)).
 
 ## Outside parity
 

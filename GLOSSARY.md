@@ -165,16 +165,20 @@ One HTTP request and its response, delivered to the Script whose Serve Registrat
 _Avoid_: request (alone), connection, context
 
 **Peer**:
-A Host Object, reached through a `peer` Grant, that stands for one Exposed Script in another Script Group, on this Host or another. Only data values cross to it, so a Peer never leaves its own Group.
+A Host Object that stands for one Exposed Script in another Script Group, on this Host or another, got from a `peer` Grant or handed over in a Remote Send. Holding one is permission to send to it, and it travels only inside Remote Sends.
 _Avoid_: node, remote, pid, proxy, Peer Language (that is a benchmark's comparison language)
 
 **Exposed Script**:
-A Script that has claimed, through its own `peer` Grant, a logical name by which Scripts in other Groups may reach it. A Script that isn't exposed can't receive a Remote Send.
+A Script that has opted in, through its own `peer` Grant, to receiving Remote Sends: under a logical name by which Scripts in other Groups may reach it, or unnamed, through a Peer it hands out. A Script that isn't exposed can't receive a Remote Send.
 _Avoid_: exported Script, published Script, served Script, Exposure (that is a Value Exposure)
 
 **Remote Send**:
 A `send` whose receiver is a Peer. It is delivered at most once, arrives at the Exposed Script as an ordinary Delivery, and with `and wait` gets the Run's return value as its reply.
 _Avoid_: RPC, remote call, cross-node message
+
+**Caller Identity**:
+The data the receiving Host vouches for about who made a Remote Send, readable only by the Run that Remote Send started.
+_Avoid_: sender, principal, user, caller (alone)
 
 **Reconciliation Marker**:
 A Notification that calls for refreshing a Subscription's whole watched subset from the source's current state when individual change details are unavailable, such as after notification overload or an offline restore.
