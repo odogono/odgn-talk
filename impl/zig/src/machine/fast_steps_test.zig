@@ -110,6 +110,46 @@ const calls =
     \\
 ;
 
+/// Map reads and writes under literal keys, present and missing, new and
+/// existing, with a shared original that must stay unchanged; `next` over a
+/// Range, a List and an empty List; and Handler calls whose argument count
+/// picks the clause.
+const maps =
+    \\on tick actor
+    \\  add actor's vx to actor's x
+    \\  put actor's x into actor's last
+    \\  return actor
+    \\end tick
+    \\
+    \\on pick a
+    \\  return a
+    \\end pick
+    \\
+    \\on pick a, b
+    \\  return a + b
+    \\end pick
+    \\
+    \\on run n
+    \\  put {x: 0, vx: 2} into state
+    \\  put state into original
+    \\  put 0 into total
+    \\  repeat for each i in 1..n
+    \\    put tick(state) into state
+    \\    add pick(i) to total
+    \\    add pick(i, 1) to total
+    \\  end repeat
+    \\  repeat for each v in [3, 4, 5]
+    \\    add v to total
+    \\  end repeat
+    \\  repeat for each v in []
+    \\    add 100 to total
+    \\  end repeat
+    \\  put state's missing into gone
+    \\  return [total, state, original, gone]
+    \\end run
+    \\
+;
+
 const Options = struct {
     fast: bool,
     limits: machine.Limits = .{},
@@ -196,6 +236,7 @@ test "the fast path's Runs match the general loop's to completion" {
     try expectSame(mixed, 8, .{ .fast = true });
     try expectSame(quantities, 4, .{ .fast = true });
     try expectSame(calls, 6, .{ .fast = true });
+    try expectSame(maps, 6, .{ .fast = true });
     // Shared locals keep their own values.
     const got = try trace(testing.allocator, mixed, 8, .{ .fast = true });
     defer testing.allocator.free(got);
@@ -203,6 +244,9 @@ test "the fast path's Runs match the general loop's to completion" {
     const called = try trace(testing.allocator, calls, 6, .{ .fast = true });
     defer testing.allocator.free(called);
     try testing.expect(std.mem.indexOf(u8, called, "value=[209, 6]") != null);
+    const mapped = try trace(testing.allocator, maps, 6, .{ .fast = true });
+    defer testing.allocator.free(mapped);
+    try testing.expect(std.mem.indexOf(u8, mapped, "value=[60, {x: 12, vx: 2, last: 12}, {x: 0, vx: 2}, nothing]") != null);
 }
 
 test "the fast path faults where the general loop does on every Fuel and allocation limit" {
@@ -213,12 +257,14 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
+        try expectSame(maps, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
     }
     for (1..200) |alloc| {
         try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+        try expectSame(maps, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
     }
     // Quantity results occupy 24 logical bytes. Reach the later arithmetic
     // and its stores too, checking immediately below and at each 8-byte
@@ -254,13 +300,17 @@ test "the fast path is preempted where the general loop is at every Fuel Slice" 
         try expectSame(loop, 20, .{ .fast = true, .slice = slice });
         try expectSame(mixed, 4, .{ .fast = true, .slice = slice });
         try expectSame(calls, 4, .{ .fast = true, .slice = slice });
+        try expectSame(maps, 4, .{ .fast = true, .slice = slice });
     }
 }
 
 test "fast calls fault on the call depth where the general loop does" {
     // `depth(8)` needs nine frames above `run`'s; each limit below that
     // faults at a different call.
-    for (1..12) |limit| try expectSame(calls, 8, .{ .fast = true, .limits = .{ .call_depth = limit } });
+    for (1..12) |limit| {
+        try expectSame(calls, 8, .{ .fast = true, .limits = .{ .call_depth = limit } });
+        try expectSame(maps, 2, .{ .fast = true, .limits = .{ .call_depth = limit } });
+    }
 }
 
 test "the fast path recovers from a refused result node" {
