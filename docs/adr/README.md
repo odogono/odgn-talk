@@ -150,3 +150,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0153: A `send` to a Peer is a Remote Send, answered like an Operation](0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)
 - [0154: A Remote Send's Caller Identity is vouched for by the receiving Host](0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)
 - [0155: A Peer may travel inside a Remote Send, and holding it is authority](0155-a-peer-may-travel-inside-a-remote-send-and-holding-it-is-authority.md)
+- [0156: Folio's Play clock follows the audio clock](0156-folios-play-clock-follows-the-audio-clock.md)
