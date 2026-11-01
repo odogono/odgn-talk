@@ -20,10 +20,21 @@ export type RackSetup = {
   readonly samples: readonly (readonly [string, SampleBuffer])[];
 };
 
+/** A note as it started, at its time on the audio clock; for tests. */
+export type NoteOnset = {
+  readonly instrument: string;
+  readonly note: number;
+  readonly time: number;
+};
+
 export class InstrumentRack {
   readonly #hosts = new Map<string, ChipHost<InstrumentCommand>>();
 
-  constructor(setup: RackSetup, sampleRate: number) {
+  constructor(
+    setup: RackSetup,
+    sampleRate: number,
+    onNote?: (onset: NoteOnset) => void,
+  ) {
     const samples = new Map(setup.samples);
     for (const instrument of setup.instruments) {
       const kind = INSTRUMENT_ENGINES.get(instrument.kind);
@@ -38,15 +49,29 @@ export class InstrumentRack {
       });
       this.#hosts.set(
         instrument.name,
-        new ChipHost(chip, sampleRate, instrument.name),
+        new ChipHost(
+          chip,
+          sampleRate,
+          instrument.name,
+          onNote &&
+            ((command, time) => {
+              if (command.kind === 'note') {
+                onNote({
+                  instrument: instrument.name,
+                  note: command.note,
+                  time,
+                });
+              }
+            }),
+        ),
       );
     }
   }
 
-  /** Commands play at the next sample rendered. */
+  /** Commands play at `at` on the audio clock, or at the next sample. */
   receive(message: InstrumentMessage): void {
     this.#hosts.get(message.instrument)?.receive({
-      at: 0,
+      at: message.at ?? 0,
       commands: message.commands,
     });
   }

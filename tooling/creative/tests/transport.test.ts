@@ -200,8 +200,14 @@ test('every Manifest declares beat and the transport Grant', () => {
   ]);
 });
 
-test('Pause freezes the Transport: beats resume on the same grid', async () => {
-  let wall = 0;
+const until = async (check: () => boolean) => {
+  for (let i = 0; i < 200 && !check(); i++) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+};
+
+const hostWithAudio = (project: Project, audio: boolean) => {
+  const clock = { wall: 0 };
   const messages: InstrumentMessage[] = [];
   const host = new PlayHost(
     (reply: Reply<PlayResponse>) => {
@@ -209,8 +215,10 @@ test('Pause freezes the Transport: beats resume on the same grid', async () => {
         messages.push(reply.response);
       }
     },
-    () => BigInt(Math.round(wall * 1000)),
-    () => wall,
+    () => BigInt(Math.round(clock.wall * 1000)),
+    () => clock.wall,
+    undefined,
+    () => clock.wall,
   );
   let id = 1;
   const request = (body: PlayRequest) =>
@@ -218,26 +226,48 @@ test('Pause freezes the Transport: beats resume on the same grid', async () => {
   request({
     kind: 'open',
     session: 1,
-    project: band(
-      'on beat bar, beat, count\n  tell bass to play 60\nend beat\n',
-    ),
+    project,
     pageIndex: 0,
     seed: 0n,
+    ...(audio ? { audioClock: { audio: 0, epoch: 0 } } : {}),
   });
-  const until = async (check: () => boolean) => {
-    for (let i = 0; i < 200 && !check(); i++) {
-      await new Promise(resolve => setTimeout(resolve, 5));
-    }
-  };
+  return { clock, messages, request };
+};
+
+const beating = () =>
+  band('on beat bar, beat, count\n  tell bass to play 60\nend beat\n');
+
+test('sounds are timed on the audio clock, a margin and a lead ahead', async () => {
+  const { messages, request } = hostWithAudio(beating(), true);
+  await until(() => messages.length === 1);
+  // The Play clock starts 15 ms ahead of the audio; the beat is a lead later.
+  expect(messages[0]!.at).toBeCloseTo(0.115, 6);
+  request({ kind: 'stop', session: 1 });
+});
+
+test('without the audio clock a sound plays on arrival', async () => {
+  const { messages, request } = hostWithAudio(beating(), false);
+  await until(() => messages.length === 1);
+  expect(messages[0]!.at).toBeUndefined();
+  request({ kind: 'stop', session: 1 });
+});
+
+test('Pause freezes the Transport: beats resume on the same grid', async () => {
+  const { clock, messages, request } = hostWithAudio(beating(), true);
   await until(() => messages.length === 1);
   request({ kind: 'pause', session: 1 });
-  wall = 5000;
+  clock.wall = 5000;
   await new Promise(resolve => setTimeout(resolve, 30));
   expect(messages.length).toBe(1);
   request({ kind: 'resume', session: 1 });
-  // 5 s paused: Play time is 520 ms, past beat 2's delivery for 600 ms.
-  wall = 5520;
+  // The audio was suspended too: it resumes where it stopped.
+  request({
+    kind: 'audioClock',
+    session: 1,
+    reading: { audio: 0, epoch: 5000 },
+  });
+  clock.wall = 5520;
   await until(() => messages.length === 2);
-  expect(messages.map(m => m.at)).toEqual([0.1, 0.6]);
+  expect(messages.map(m => m.at)).toEqual([0.115, 0.615]);
   request({ kind: 'stop', session: 1 });
 });

@@ -1,19 +1,37 @@
 // The page's side of a Play Session's Instruments (#1894): an AudioContext
 // running the Instrument worklet, built from the session's Project. The
-// Play worker has no audio, so it sends each InstrumentMessage here.
+// Play worker has no audio, so it sends each InstrumentMessage here, timed
+// on this context's clock, and its Play clock follows the readings this
+// sends it (ADR 0156).
+import type { AudioReading } from '../audio-clock';
 import type { Asset, Project } from '../model';
 import type { DeepReadonly } from '../readonly';
 import { isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
-import { INSTRUMENT_PROCESSOR, type RackSetup } from './rack';
+import { INSTRUMENT_PROCESSOR, type NoteOnset, type RackSetup } from './rack';
 import type { InstrumentMessage } from './session';
 
 const WORKLET_URL = './instruments.worklet.js';
 
+/** How often the Play worker hears the audio clock while it runs. */
+const READING_MS = 250;
+
 export type InstrumentAudio = {
   /** Stops the audio for good. */
   close(): void;
+  /** The audio clock now, paired with the absolute time. */
+  reading(): AudioReading;
   send(message: InstrumentMessage): void;
+  /** Suspends or resumes the audio, as the Play Session pauses. */
+  setPaused(paused: boolean): void;
+};
+
+export type InstrumentAudioOptions = {
+  onError(message: string): void;
+  /** Each note as it starts, for tests. */
+  onNote?(onset: NoteOnset): void;
+  /** A fresh audio-clock reading for the Play worker. */
+  onReading(reading: AudioReading): void;
 };
 
 /**
@@ -24,12 +42,29 @@ export type InstrumentAudio = {
 export const startInstrumentAudio = (
   project: DeepReadonly<Project>,
   soundBytes: (asset: DeepReadonly<Asset>) => Promise<ArrayBuffer>,
-  onError: (message: string) => void,
+  { onError, onNote, onReading }: InstrumentAudioOptions,
 ): InstrumentAudio => {
   const context = new AudioContext({ latencyHint: 'interactive' });
   const waiting: InstrumentMessage[] = [];
   let port: MessagePort | undefined;
   let closed = false;
+  let paused = false;
+  const reading = (): AudioReading => ({
+    audio: context.currentTime,
+    epoch: performance.timeOrigin + performance.now(),
+    running: context.state === 'running',
+  });
+  const timer = setInterval(() => {
+    if (!paused && context.state === 'running') {
+      onReading(reading());
+    }
+  }, READING_MS);
+  // The clock starts with the audio; the worker hears it at once.
+  context.addEventListener('statechange', () => {
+    if (!closed && context.state === 'running') {
+      onReading(reading());
+    }
+  });
 
   const decode = async (
     asset: DeepReadonly<Asset>,
@@ -79,14 +114,22 @@ export const startInstrumentAudio = (
       const node = new AudioWorkletNode(context, INSTRUMENT_PROCESSOR, {
         numberOfInputs: 0,
         outputChannelCount: [2],
-        processorOptions: { setup },
+        processorOptions: { setup, report: onNote !== undefined },
       });
+      if (onNote) {
+        node.port.addEventListener('message', event =>
+          onNote(event.data as NoteOnset),
+        );
+        node.port.start();
+      }
       node.connect(context.destination);
       port = node.port;
       for (const message of waiting.splice(0)) {
         port.postMessage(message);
       }
-      await context.resume();
+      if (!paused) {
+        await context.resume();
+      }
     } catch (error) {
       onError(
         `The Instruments could not start: ${error instanceof Error ? error.message : String(error)}`,
@@ -97,8 +140,17 @@ export const startInstrumentAudio = (
   return {
     close() {
       closed = true;
+      clearInterval(timer);
       waiting.length = 0;
       void context.close();
+    },
+    reading,
+    setPaused(next) {
+      if (closed || next === paused) {
+        return;
+      }
+      paused = next;
+      void (paused ? context.suspend() : context.resume());
     },
     send(message) {
       if (closed) {

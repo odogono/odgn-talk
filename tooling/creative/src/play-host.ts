@@ -45,7 +45,8 @@ import { type SoundBackend } from './sounds';
 import { text } from '@northtalk/ts';
 import { pointerValue } from './pointer';
 import { pausableClock } from '@northtalk/tooling/pausable-clock';
-import { PlayClock } from './play-clock';
+import { AudioClock } from './audio-clock';
+import { PlayClock, STEP } from './play-clock';
 
 const wallClock = pausableClock(
   () => BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n,
@@ -179,8 +180,10 @@ export class PlayHost {
   // Breakpoints (ADR 0147), and the loaded Scripts they were last placed in.
   #breakpoints: BreakpointView[] = [];
   #placedIn: string | undefined;
-  // The Play clock: Host time less paused time, never going back (ADR 0128).
+  // The Play clock: the page's audio clock once it sends a reading (ADR 0156),
+  // else Host time less paused time (ADR 0128). Neither goes back.
   readonly #clock: () => bigint;
+  #audio: AudioClock;
   #id = 0;
   #performanceTimer: ReturnType<typeof setInterval> | undefined;
   #timer: unknown;
@@ -210,9 +213,13 @@ export class PlayHost {
     private readonly now: () => bigint = wallClock,
     private readonly performanceNow: () => number = () => performance.now(),
     private readonly scheduler: Scheduler = timers,
+    private readonly epochNow: () => number = () =>
+      performance.timeOrigin + performance.now(),
   ) {
     this.#play = new PlayClock(performanceNow);
-    this.#clock = pausableClock(this.now, () => this.#play.pausedTime());
+    this.#audio = new AudioClock(epochNow);
+    const host = pausableClock(this.now, () => this.#play.pausedTime());
+    this.#clock = () => (this.#audio.active ? this.#audio.now() : host());
   }
 
   receive({ id, request }: Envelope<PlayRequest>): void {
@@ -361,7 +368,12 @@ export class PlayHost {
         break;
       }
       case 'pause': {
+        this.#audio.pause();
         this.#play.pause();
+        break;
+      }
+      case 'audioClock': {
+        this.#audio.read(request.reading);
         break;
       }
       case 'watches': {
@@ -383,10 +395,12 @@ export class PlayHost {
           this.#play.continueWith(() => session.debug.resume());
         }
         this.#play.resume();
+        this.#audio.resume();
         break;
       }
       case 'step': {
         if (this.#play.frameStep(session.debugPaused)) {
+          this.#audio.step(BigInt(Math.round(STEP * 1000)));
           session.frame(this.#clock());
         }
         break;
@@ -456,18 +470,27 @@ export class PlayHost {
     this.#breakpoints = [];
     this.#placedIn = undefined;
     this.#play.newSession();
+    this.#audio = new AudioClock(this.epochNow);
+    if (request.audioClock) {
+      this.#audio.read(request.audioClock);
+    }
     this.#session = new PlaySession(request.project, request.pageIndex, {
       // A different game each time (ADR 0096).
       seed: request.seed,
       // The Performance window leaves out paused time too.
       performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
-      instrumentBackend: message =>
+      // A sound's Play-clock time goes to the worklet as audio time; without
+      // the audio clock there is no such time, so it plays on arrival.
+      instrumentBackend: ({ at, ...message }) =>
         this.post({
           response: {
             kind: 'instrument',
             session: request.session,
             ...message,
+            ...(at !== undefined && this.#audio.active
+              ? { at: this.#audio.toAudio(at) }
+              : {}),
           },
         }),
     });
@@ -643,6 +666,7 @@ export class PlayHost {
       const clock = this.#clock();
       const result = session.pump(clock, next.outOfBand, next.advance);
       if (session.debugPaused) {
+        this.#audio.pause();
         this.#play.stoppedAt(session.debug.current!.run);
         this.#publish();
         this.#evaluateWatches(session);

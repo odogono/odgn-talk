@@ -14,6 +14,7 @@ import {
   type Project,
   type RichText,
 } from './model';
+import { type AudioReading } from './audio-clock';
 import { type InstrumentMessage } from './instruments/session';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
 import {
@@ -39,6 +40,8 @@ export type PromptAnswer = boolean | string | readonly string[] | undefined;
 
 export type PlayRequest =
   | {
+      /** The page's audio clock, when the session has Instruments (ADR 0156). */
+      audioClock?: AudioReading;
       kind: 'open';
       pageIndex: number;
       performanceEpoch?: number;
@@ -74,6 +77,8 @@ export type PlayRequest =
     }
   | { kind: 'message'; session: number; target?: number; text: string }
   | { error?: string; kind: 'soundEnded'; voice: number }
+  /** A fresh reading of the page's audio clock (ADR 0156). */
+  | { kind: 'audioClock'; reading: AudioReading; session: number }
   | { kind: 'inspect'; session: number }
   | { kind: 'variables'; session: number }
   /** Replaces the Watches, which are evaluated only while paused (ADR 0129). */
@@ -202,7 +207,10 @@ export type PlayResponse =
   | ({ kind: 'view' } & PlayView)
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }
-  /** Commands for one of the session's Instruments (#1894). */
+  /**
+   * Commands for one of the session's Instruments (#1894), `at` seconds on
+   * the audio clock, or at once when absent.
+   */
   | (InstrumentMessage & { kind: 'instrument'; session: number })
   | { kind: 'done' }
   | {
