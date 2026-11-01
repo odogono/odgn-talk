@@ -148,3 +148,5 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0151: `http.fetch` makes one buffered request to an origin the Grant allows](0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
 - [0152: A Host Object may be given its parent when it is made](0152-a-host-object-may-be-given-its-parent-when-it-is-made.md)
 - [0153: A `send` to a Peer is a Remote Send, answered like an Operation](0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)
+- [0154: A Remote Send's Caller Identity is vouched for by the receiving Host](0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)
+- [0155: A Peer may travel inside a Remote Send, and holding it is authority](0155-a-peer-may-travel-inside-a-remote-send-and-holding-it-is-authority.md)

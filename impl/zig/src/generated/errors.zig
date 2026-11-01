@@ -65,7 +65,7 @@ pub const errors: ErrorsTable = .{
             .fields = &.{
                 "reason",
             },
-            .raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable` or `mailbox full`, and `error` is present only for `errored`",
+            .raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, or for a Remote Send, which the Host fails, also `unreachable`, `mailbox full` or `not exposed`, and `error` is present only for `errored`",
             .sources = &.{
                 "ADR 0015",
                 "ADR 0017",
@@ -74,6 +74,7 @@ pub const errors: ErrorsTable = .{
                 "ADR 0031",
                 "ADR 0033",
                 "ADR 0153",
+                "ADR 0155",
             },
             .message = "No answer came: the receiver's Run ended {reason}",
             .optional = &.{
@@ -291,13 +292,14 @@ pub const errors: ErrorsTable = .{
                 "kind",
                 "path",
             },
-            .raised_when = "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
+            .raised_when = "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes, or a Remote Send's arguments hold a Host Object that isn't a Peer, with `kind` `\"object\"`; `path` locates it inside the value being encoded or checked",
             .sources = &.{
                 "ADR 0017",
                 "ADR 0021",
                 "ADR 0025",
                 "ADR 0033",
                 "ADR 0153",
+                "ADR 0155",
             },
             .message = "A {kind} can't be encoded as plain data",
         },

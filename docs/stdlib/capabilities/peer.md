@@ -8,17 +8,17 @@
 
 ### expose
 
-`expose name`, suspending
+`expose [name]`, suspending
 
-Nothing, once the Script is an Exposed Script reachable from other Groups by the text `name` through this Grant.
+A Peer to the calling Script, once it is an Exposed Script: reachable from other Groups by the text `name` through this Grant, or without `name` through a new unnamed exposure only that Peer reaches.
 
 Errors: [`bad address`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`name in use`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
 
 ### unexpose
 
-`unexpose name`, immediate
+`unexpose exposure`, immediate
 
-Nothing; withdraws the Script's exposure called `name` through this Grant, if there is one.
+Nothing; withdraws the Script's exposure through this Grant that `exposure` names, as the text name of a named one or the Peer `expose` gave, if there is one.
 
 Errors: [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
 
@@ -45,3 +45,9 @@ Errors: [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-c
 The reply of the Peer `peer`'s Exposed Script to the message `message` with the list `args`, sent at most once; `send … and wait` to a Peer is this.
 
 Errors: [`send failed`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`wrong kind`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`bad message name`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`not encodable`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
+
+### caller
+
+`caller`, immediate
+
+The Caller Identity of the Remote Send that started the calling Run: the data the receiving Host vouches for about who made it, or Nothing.

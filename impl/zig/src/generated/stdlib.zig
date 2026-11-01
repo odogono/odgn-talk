@@ -1772,8 +1772,8 @@ pub const stdlib: StdlibTable = .{
             .capability = "peer",
             .name = "expose",
             .mode = "suspending",
-            .call = "expose name",
-            .gives = "Nothing, once the Script is an Exposed Script reachable from other Groups by the text `name` through this Grant",
+            .call = "expose [name]",
+            .gives = "A Peer to the calling Script, once it is an Exposed Script: reachable from other Groups by the text `name` through this Grant, or without `name` through a new unnamed exposure only that Peer reaches",
             .errors = &.{
                 "bad address",
                 "name in use",
@@ -1784,8 +1784,8 @@ pub const stdlib: StdlibTable = .{
             .capability = "peer",
             .name = "unexpose",
             .mode = "immediate",
-            .call = "unexpose name",
-            .gives = "Nothing; withdraws the Script's exposure called `name` through this Grant, if there is one",
+            .call = "unexpose exposure",
+            .gives = "Nothing; withdraws the Script's exposure through this Grant that `exposure` names, as the text name of a named one or the Peer `expose` gave, if there is one",
             .errors = &.{
                 "out of domain",
             },
@@ -1828,6 +1828,13 @@ pub const stdlib: StdlibTable = .{
                 "bad message name",
                 "not encodable",
             },
+        },
+        .{
+            .capability = "peer",
+            .name = "caller",
+            .mode = "immediate",
+            .call = "caller",
+            .gives = "The Caller Identity of the Remote Send that started the calling Run: the data the receiving Host vouches for about who made it, or Nothing",
         },
     },
 };
