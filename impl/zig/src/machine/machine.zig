@@ -55,6 +55,9 @@ pub const DeadlineTicks = wait_table.Ticks;
 
 pub const Slot = union(enum) {
     value: *Value,
+    /// A Number kept inline by the fast path (#1930): never seen outside it,
+    /// which boxes every one before it returns to the general loop.
+    number: Small,
     iterator: *Iterator,
     reader: *binary.Reader,
     replacement: *Replacement,
@@ -64,6 +67,7 @@ pub const Slot = union(enum) {
     pub fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
             .value => |v| v.release(),
+            .number => {},
             .iterator => |it| {
                 it.references -= 1;
                 if (it.references > 0) return;
@@ -90,6 +94,23 @@ pub const Slot = union(enum) {
                 if (d.references == 0) gpa.destroy(d);
             },
         }
+    }
+};
+
+/// A Number whose coefficient is below 2^62, with its sign: what
+/// `decimal.calculate` computes inline in machine integers.
+pub const Small = struct {
+    coefficient: i64,
+    exponent: i32,
+
+    fn of(d: model.Decimal) ?Small {
+        if (d.coefficient >= 1 << 62) return null;
+        const c: i64 = @intCast(d.coefficient);
+        return .{ .coefficient = if (d.negative) -c else c, .exponent = d.exponent };
+    }
+
+    fn decimal(n: Small) model.Decimal {
+        return .{ .coefficient = @abs(n.coefficient), .exponent = n.exponent, .negative = n.coefficient < 0 };
     }
 };
 
@@ -1272,6 +1293,8 @@ fn stackSize(stack: []const Slot) u64 {
     var total: u64 = 0;
     for (stack) |slot| total += switch (slot) {
         .value => |v| if (v.script_name) 0 else costs.size(v),
+        // A Number's logical size, inline or boxed.
+        .number => 16,
         .iterator => |it| 24 + if (it.subject) |v| costs.size(v) else 0,
         .reader => |r| 24 + costs.size(r.subject),
         .replacement => |r| 32 + costs.size(r.text) + costs.contents(r.matches),
@@ -1675,6 +1698,8 @@ pub const Group = struct {
     /// Whether `execute` runs simple instructions through `fastSteps`.
     /// Tests turn it off to compare with the general loop.
     fast_steps: bool = true,
+    /// Whether the fast path left inline Numbers to box (#1930).
+    fast_inline: bool = false,
     inline_admitting: bool = false,
     pump_finishing: bool = false,
     trace_pause: bool = false,
@@ -7435,7 +7460,21 @@ pub const Group = struct {
     /// charges it. It stops before any instruction it can't finish the same
     /// way, including one that would raise or fault, leaving it unchanged
     /// for the general loop.
-    inline fn fastSteps(g: *Group, run: *Run, charged: bool) void {
+    /// Runs `fastLoop`, then boxes every inline Number it left in the Run's
+    /// frames, so that nothing else sees one (#1930 prototype).
+    inline fn fastSteps(g: *Group, run: *Run, charged: bool) !void {
+        g.fastLoop(run, charged);
+        if (!g.fast_inline) return;
+        g.fast_inline = false;
+        // Make each node before its slot's tag changes: a refused one leaves
+        // the slot inline, which only releasing reads.
+        for (run.frames.items) |*f| for (f.stack.items) |*slot| if (slot.* == .number) {
+            const v = try model.scalar(g.gpa, .{ .number = slot.number.decimal() });
+            slot.* = .{ .value = v };
+        };
+    }
+
+    inline fn fastLoop(g: *Group, run: *Run, charged: bool) void {
         if (!g.fast_steps or g.release_pause or g.answering_crossing or run.select_at != null) return;
         if (g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) return;
         if (run.returned_op == null and run.returned_prop == null and run.landed != null) return;
@@ -7472,17 +7511,25 @@ pub const Group = struct {
                             else => return,
                         };
                         if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                        stack.appendAssumeCapacity(.{ .value = v.retain() });
+                        stack.appendAssumeCapacity(g.inlined(v));
                     },
                     .load => {
                         if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                        stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
+                        stack.appendAssumeCapacity(g.inlined(frame.locals[@intCast(ops[0].int)]));
                     },
                     .store => {
-                        if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (len == 0) return;
                         const s: usize = @intCast(ops[0].int);
-                        frame.locals[s].release();
-                        frame.locals[s] = pop(frame);
+                        switch (stack.items[len - 1]) {
+                            .value => |v| {
+                                if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                                frame.locals[s].release();
+                                frame.locals[s] = v;
+                            },
+                            .number => |n| if (!g.storeNumber(run, &bounds, frame, s, n.decimal())) return,
+                            else => return,
+                        }
+                        stack.items.len -= 1;
                     },
                     .move => {
                         if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
@@ -7511,8 +7558,10 @@ pub const Group = struct {
                         }
                     },
                     .less, .greater, .less_or_equal, .greater_or_equal => {
-                        const pair = numberOperands(stack.items) orelse return;
-                        const order = model.Decimal.order(pair[0].data.number, pair[1].data.number);
+                        if (len < 2) return;
+                        const x = numberOf(stack.items[len - 2]) orelse return;
+                        const y = numberOf(stack.items[len - 1]) orelse return;
+                        const order = model.Decimal.order(x, y);
                         const b = switch (ins.op) {
                             .less => order == .lt,
                             .greater => order == .gt,
@@ -7546,9 +7595,7 @@ pub const Group = struct {
                         continue;
                     },
                     .add, .subtract, .multiply, .divide, .div, .mod => {
-                        const pair = valueOperands(stack.items) orelse return;
-                        if ((pair[0].data != .number and pair[0].data != .quantity) or
-                            (pair[1].data != .number and pair[1].data != .quantity)) return;
+                        if (len < 2) return;
                         const op: model.decimal.Operator = switch (ins.op) {
                             .add => .add,
                             .subtract => .subtract,
@@ -7557,17 +7604,21 @@ pub const Group = struct {
                             .div => .div,
                             else => .mod,
                         };
-                        const numbers = pair[0].data == .number and pair[1].data == .number;
-                        const completed = if (numbers)
-                            g.fastArithmetic(run, bounds, frame, code, ins, op, pair, false)
-                        else
-                            g.fastArithmetic(run, bounds, frame, code, ins, op, pair, true);
-                        if (!completed) return;
+                        if (numberOf(stack.items[len - 2])) |x| if (numberOf(stack.items[len - 1])) |y| {
+                            if (!g.fastNumbers(run, &bounds, frame, code, ins, op, x, y)) return;
+                            continue;
+                        };
+                        // Quantities stay boxed.
+                        if (!g.boxTop(stack, 2)) return;
+                        const pair = valueOperands(stack.items) orelse return;
+                        if ((pair[0].data != .number and pair[0].data != .quantity) or
+                            (pair[1].data != .number and pair[1].data != .quantity)) return;
+                        if (!g.fastArithmetic(run, bounds, frame, code, ins, op, pair, true)) return;
                         continue;
                     },
                     .call, .call_handler => {
                         const n: usize = @intCast(ops[1].int);
-                        if (len < n) return;
+                        if (len < n or !g.boxTop(stack, n)) return;
                         for (stack.items[len - n ..]) |slot| if (slot != .value) return;
                         const handler = ins.op == .call_handler;
                         const body = if (handler) ownClause(unit, ops[0].text, n) orelse return else @as(u32, @intCast(ops[0].int));
@@ -7576,7 +7627,7 @@ pub const Group = struct {
                         continue :frames;
                     },
                     .get_key => if (!fastGetKey(run, &bounds, frame, ops[0].text)) return,
-                    .set_key => if (!g.fastSetKey(run, &bounds, frame, ops[0].text)) return,
+                    .set_key => if (!g.boxTop(stack, 1) or !g.fastSetKey(run, &bounds, frame, ops[0].text)) return,
                     .next => {
                         const target = g.fastNext(run, &bounds, frame, @intCast(ops[0].int)) orelse return;
                         g.fastTick();
@@ -7586,12 +7637,12 @@ pub const Group = struct {
                         }
                     },
                     .@"return" => {
-                        if (len == 0 or stack.items[len - 1] != .value or !g.fastReturn(run, &bounds)) return;
+                        if (len == 0 or (stack.items[len - 1] != .value and stack.items[len - 1] != .number) or !g.fastReturn(run, &bounds)) return;
                         g.fastTick();
                         continue :frames;
                     },
                     .convert => {
-                        if (len == 0 or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
+                        if (len == 0 or !g.boxTop(stack, 1) or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
                         const v = stack.items[len - 1].value;
                         const target = ops[0].unit_target;
                         const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
@@ -7771,6 +7822,12 @@ pub const Group = struct {
                 const to = r.to.data.number.integer(i64) catch unreachable;
                 const p = from + @as(i64, @intCast(it.position));
                 if (p > to) return @as(?u32, exit);
+                if (Small.of(model.Decimal.fromInt(p))) |n| {
+                    it.position += 1;
+                    g.fast_inline = true;
+                    frame.stack.appendAssumeCapacity(.{ .number = n });
+                    return @as(?u32, null);
+                }
                 break :blk chunks.numberValue(g.gpa, p) catch {
                     before.restore(g, run);
                     return null;
@@ -7797,9 +7854,103 @@ pub const Group = struct {
         if (caller.library != callee.library) return false;
         caller.stack.ensureUnusedCapacity(g.gpa, 1) catch return false;
         if (!bounds.charge(run, costs.chargeUnmeasured(.@"return"))) return false;
-        const v = pop(callee);
+        const v = callee.stack.pop().?;
         g.popFrame(run);
-        run.frames.items[run.frames.items.len - 1].stack.appendAssumeCapacity(.{ .value = v });
+        run.frames.items[run.frames.items.len - 1].stack.appendAssumeCapacity(v);
+        return true;
+    }
+
+    /// A Number's slot: inline when it fits, otherwise the node retained.
+    inline fn inlined(g: *Group, v: *Value) Slot {
+        if (v.data == .number) if (Small.of(v.data.number)) |n| {
+            g.fast_inline = true;
+            return .{ .number = n };
+        };
+        return .{ .value = v.retain() };
+    }
+
+    /// A slot's Number, inline or boxed, or null.
+    inline fn numberOf(slot: Slot) ?model.Decimal {
+        return switch (slot) {
+            .number => |n| n.decimal(),
+            .value => |v| if (v.data == .number) v.data.number else null,
+            else => null,
+        };
+    }
+
+    /// Boxes inline Numbers among the top `n` slots, or false if refused;
+    /// a boxed slot is the same Number.
+    fn boxTop(g: *Group, stack: *std.ArrayList(Slot), n: usize) bool {
+        const items = stack.items;
+        if (items.len < n) return false;
+        for (items[items.len - n ..]) |*slot| if (slot.* == .number) {
+            const v = model.scalar(g.gpa, .{ .number = slot.number.decimal() }) catch return false;
+            slot.* = .{ .value = v };
+        };
+        return true;
+    }
+
+    /// `store` of a Number into local `s`, charged: in place when nothing
+    /// else holds the local's Number node, otherwise into a new node.
+    inline fn storeNumber(g: *Group, run: *Run, bounds: *const FastBounds, frame: *Frame, s: usize, d: model.Decimal) bool {
+        const old = frame.locals[s];
+        if (old.data == .number and old.references == 1) {
+            if (!bounds.charge(run, costs.chargeUnmeasured(.store))) return false;
+            old.data.number = d;
+            return true;
+        }
+        const before: ChargeState = .of(g, run);
+        if (!bounds.charge(run, costs.chargeUnmeasured(.store))) return false;
+        const v = model.scalar(g.gpa, .{ .number = d }) catch {
+            before.restore(g, run);
+            return false;
+        };
+        old.release();
+        frame.locals[s] = v;
+        return true;
+    }
+
+    /// Number arithmetic on the top two slots, inline or boxed, with a
+    /// following `store` taken with it: the result is inline when it fits.
+    inline fn fastNumbers(g: *Group, run: *Run, bounds: *const FastBounds, frame: *Frame, code: []const lower.Instruction, ins: lower.Instruction, op: model.decimal.Operator, x: model.Decimal, y: model.Decimal) bool {
+        const result = model.decimal.calculate(g.gpa, op, x, y) catch return false;
+        var probe: Value = .{ .allocator = g.gpa, .data = .{ .number = result } };
+        const before: ChargeState = .of(g, run);
+        const cost = switch (ins.op) {
+            inline .add, .subtract, .multiply, .divide, .div, .mod => |o| costs.chargeStatic(o, &.{ .result = &probe }),
+            else => unreachable,
+        };
+        if (!bounds.charge(run, cost)) return false;
+        g.fastTick();
+        const stack = &frame.stack;
+        const store = code[frame.pc + 1];
+        if (store.op == .store and !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and !bounds.preempted(run)) {
+            const s: usize = @intCast(store.operands[0].int);
+            const old = frame.locals[s];
+            const len = stack.items.len;
+            const held = @as(usize, @intFromBool(stack.items[len - 2] == .value and stack.items[len - 2].value == old)) +
+                @intFromBool(stack.items[len - 1] == .value and stack.items[len - 1].value == old);
+            if (old.data == .number and old.references == held + 1 and bounds.charge(run, costs.chargeUnmeasured(.store))) {
+                replaceOperands(stack, null);
+                old.data.number = result;
+                g.fastTick();
+                frame.pc += 2;
+                return true;
+            }
+        }
+        const slot: Slot = if (Small.of(result)) |n| blk: {
+            g.fast_inline = true;
+            break :blk .{ .number = n };
+        } else .{ .value = model.scalar(g.gpa, .{ .number = result }) catch {
+            before.restore(g, run);
+            return false;
+        } };
+        const len = stack.items.len;
+        if (stack.items[len - 1] == .value) stack.items[len - 1].value.release();
+        if (stack.items[len - 2] == .value) stack.items[len - 2].value.release();
+        stack.items[len - 2] = slot;
+        stack.items.len = len - 1;
+        frame.pc += 1;
         return true;
     }
 
@@ -7831,8 +7982,8 @@ pub const Group = struct {
     /// drops them.
     fn replaceOperands(stack: *std.ArrayList(Slot), r: ?*Value) void {
         const len = stack.items.len;
-        stack.items[len - 1].value.release();
-        stack.items[len - 2].value.release();
+        if (stack.items[len - 1] == .value) stack.items[len - 1].value.release();
+        if (stack.items[len - 2] == .value) stack.items[len - 2].value.release();
         if (r) |v| {
             stack.items[len - 2] = .{ .value = v };
             stack.items.len = len - 1;
@@ -7867,7 +8018,7 @@ pub const Group = struct {
         // defer releases its owners and clears its metadata on every path.
         var held: Operands = .{};
         while (true) {
-            g.fastSteps(run, charged);
+            try g.fastSteps(run, charged);
             if (g.host_poll) |poll| {
                 g.host_poll_ticks +%= 1;
                 if (g.host_poll_ticks == 0) poll(g.host_poll_context);
@@ -11553,6 +11704,7 @@ fn needed(imports: []const *Library, grant: []const u8, operation: []const u8) b
 fn retainSlot(slot: Slot) Slot {
     return switch (slot) {
         .value => |v| .{ .value = v.retain() },
+        .number => slot,
         .iterator => |it| blk: {
             it.references += 1;
             break :blk .{ .iterator = it };

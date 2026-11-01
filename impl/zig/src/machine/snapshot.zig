@@ -768,6 +768,8 @@ const Saving = struct {
                 try s.o.byte(0);
                 try s.value(v);
             },
+            // The fast path boxes every inline Number before a save can run.
+            .number => unreachable,
             .iterator => |it| {
                 try s.o.byte(1);
                 if (std.mem.indexOfScalar(*machine.Iterator, s.iterators.items, it)) |i| {
@@ -2298,7 +2300,7 @@ const Restoring = struct {
     fn kinds(stack: []const Slot, want: []const verify.Kind, prefix: bool) bool {
         if (stack.len > want.len or (!prefix and stack.len != want.len)) return false;
         for (stack, want[0..stack.len]) |slot, k| if (@as(verify.Kind, switch (slot) {
-            .value => .value,
+            .value, .number => .value,
             .iterator => .iterator,
             .reader => .reader,
             .replacement => .replacement,
