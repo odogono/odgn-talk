@@ -9,6 +9,8 @@ import { map, nothing, type Value } from '../values';
 export type Stub = {
   charge: number;
   error?: Value;
+  /** A value read when the call takes it, as it names an object the call makes (ADR 0152). */
+  later?: () => Value;
   malformed?: boolean;
   /** After `charge`, a further `Charge` is refused (Metered Operations). */
   refused?: boolean;
@@ -110,7 +112,7 @@ export class Stubs {
       }
       throw hostFailure(stub.error);
     }
-    return stub.value ?? nothing;
+    return stub.value ?? stub.later?.() ?? nothing;
   }
 
   /** A suspending call takes a Stub for its charge, and for an error that fails it at once. */

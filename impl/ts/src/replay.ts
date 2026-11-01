@@ -238,6 +238,7 @@ const capabilitiesOf = (
     phase: 'begin' | 'commit' | 'rollback',
   ) => EffectResult,
   coordinator: () => SegmentCoordinator,
+  called: (key: string) => void,
 ): Map<string, ReturnType<typeof defineValueCapability>> => {
   // A Capability one of whose Grants names a coordinator maps every binding
   // to one; the others keep a plain lifecycle (ADR 0069).
@@ -300,6 +301,7 @@ const capabilitiesOf = (
                 : { maxPendingMs: op.maxPending }),
               // Only a Stub's charge; `answer` and `fail` lines settle it.
               start: (call, ...args) => {
+                called(key);
                 args.forEach(receive);
                 startStub(
                   stubs,
@@ -316,6 +318,7 @@ const capabilitiesOf = (
                 ...base,
                 mode: 'immediate',
                 do: (call, ...args) => {
+                  called(key);
                   args.forEach(receive);
                   try {
                     return stubs.take(key, call, true, recordedCall(call));
@@ -328,6 +331,7 @@ const capabilitiesOf = (
                 ...base,
                 mode: 'fire-and-forget',
                 fire: (call, ...args) => {
+                  called(key);
                   args.forEach(receive);
                   fireStub(stubs, key, call, crossing, recordedCall(call));
                 },
@@ -935,6 +939,31 @@ const driveReplay = function* (
   const made = new Map<string, HostObject>();
   const props = new Map<string, Map<string, Value>>();
   const resolveObject = (kind: string, id: string) => made.get(`${kind} ${id}`);
+  // A Stub's value that names an object its Operation makes is read when
+  // the call takes it, after the object is made (ADR 0152).
+  const stubValue = (
+    text: string,
+  ): { value: Value } | { later: () => Value } => {
+    try {
+      return { value: value(text) };
+    } catch (error) {
+      if (!setup.objects?.some(o => o.madeBy)) {
+        throw error;
+      }
+      return { later: () => value(text) };
+    }
+  };
+  const madeProps = (o: NonNullable<Setup['objects']>[number]) => {
+    props.set(
+      `${o.kind} ${o.id}`,
+      new Map(
+        Object.entries(o.props ?? {}).map(([name, text]) => [
+          name,
+          value(text),
+        ]),
+      ),
+    );
+  };
   const value = (text: string) =>
     read(text, resolveObject, display => functions.get(display));
   if (sessionObjects) {
@@ -1165,6 +1194,25 @@ const driveReplay = function* (
     recordedCall,
     lifecycle,
     coordinator,
+    key => {
+      // An object case.toml says an Operation makes, made with its parent
+      // the first time that Operation is called (ADR 0152).
+      for (const o of setup.objects ?? []) {
+        if (o.madeBy !== key || made.has(`${o.kind} ${o.id}`)) {
+          continue;
+        }
+        const ref = o.parent ? value(o.parent).asObjectRef() : undefined;
+        const parent = ref ? made.get(`${ref.kind} ${ref.id}`) : undefined;
+        if (o.parent && !parent) {
+          throw new Error(`Unknown parent ${o.parent}`);
+        }
+        const handle = group.object(kinds.get(o.kind)!, o.id, null, {
+          parent,
+        });
+        made.set(`${o.kind} ${o.id}`, handle);
+        madeProps(o);
+      }
+    },
   );
   const port = sessionObjects?.port();
   const built = buildSetupGroup(setup, capabilities, {
@@ -1193,6 +1241,12 @@ const driveReplay = function* (
     const kind = kinds.get(o.kind);
     if (!kind) {
       throw new Error(`case.toml has no Object Kind ${o.kind}`);
+    }
+    if (o.parent && !o.madeBy) {
+      throw new Error(`${o.kind} ${o.id} has a parent but no madeBy`);
+    }
+    if (o.madeBy) {
+      continue;
     }
     const handle = group.object(kind, o.id, null);
     made.set(`${o.kind} ${o.id}`, handle);
@@ -1227,16 +1281,9 @@ const driveReplay = function* (
     );
   }
   for (const o of setup.objects ?? []) {
-    const handle = made.get(`${o.kind} ${o.id}`)!;
-    props.set(
-      `${handle.kind.name} ${handle.id}`,
-      new Map(
-        Object.entries(o.props ?? {}).map(([name, text]) => [
-          name,
-          value(text),
-        ]),
-      ),
-    );
+    if (!o.madeBy) {
+      madeProps(o);
+    }
   }
   for (const o of sessionObjects?.traceObjects() ?? []) {
     made.set(`${o.kind.name} ${o.id}`, o);
@@ -1834,9 +1881,7 @@ const driveReplay = function* (
           stubs.add(op, {
             charge: Number(r.fields.get('charge') ?? 0),
             ...(refused ? { refused } : {}),
-            ...(r.fields.has('value')
-              ? { value: value(r.fields.get('value')!) }
-              : {}),
+            ...(r.fields.has('value') ? stubValue(r.fields.get('value')!) : {}),
             ...(r.fields.has('error')
               ? { error: value(r.fields.get('error')!) }
               : {}),

@@ -1122,7 +1122,19 @@ export class WasmGroup implements Group {
     return reports;
   }
 
-  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N> {
+  object<N>(
+    kind: ObjectKind<N>,
+    id: string,
+    native: N,
+    o?: { parent?: HostObject },
+  ): HostObject<N> {
+    if (o?.parent) {
+      // The reactor's `object` message takes no parent yet (#1876).
+      throw new HostError(
+        'invalid value',
+        'the Zig reactor cannot make an object with a parent yet',
+      );
+    }
     if (this.#objects.has(key(kind.name, id))) {
       throw new HostError('duplicate object id', `${kind.name} ${id}`);
     }

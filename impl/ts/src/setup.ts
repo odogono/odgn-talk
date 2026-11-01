@@ -95,6 +95,10 @@ export type Setup = {
     elements?: { name: string; object: string }[];
     id: string;
     kind: string;
+    /** The Operation, `<capability>.<operation>`, whose first call makes it. */
+    madeBy?: string;
+    /** The object it is made with as its parent, in the display form; only with madeBy. */
+    parent?: string;
     props?: Record<string, string>;
   }[];
   operations?: OperationSpec[];

@@ -592,3 +592,62 @@ end go`,
   }
   expect(calls).toBe(0);
 });
+
+describe('a parent given when an object is made (ADR 0152)', () => {
+  test('takes effect inside the Pump that made it, so the same Run reaches its owner', () => {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    const zone = group.object(room, 'zone', null);
+    const door = defineObjectKind<null>({
+      name: 'door',
+      props: {
+        to: {
+          get: () => group.object(room, 'hall', null, { parent: zone }).value,
+        },
+      },
+    });
+    group.load({
+      name: 'zone',
+      owner: zone,
+      source:
+        'script variable seen = []\non look\nput the id of the target after seen\nend look',
+    });
+    const walker = group.load({
+      name: 'walker',
+      objects: { portal: group.object(door, 'p', null) },
+      source: 'on go\nsend look to the to of portal\nend go',
+    });
+    walker.deliver({ name: 'go' });
+    expect(group.pump(now).reports).not.toContainEqual(
+      expect.objectContaining({ kind: 'unhandled' }),
+    );
+    const zoneScript = group.inspect().scripts.find(s => s.name === 'zone')!;
+    expect(new Map(zoneScript.vars).get('seen')?.toString()).toBe('["hall"]');
+    expect(lines).toContain(
+      'object object=<object room "hall"> parent=<object room "zone">',
+    );
+  });
+
+  test('a parentless object writes no record', () => {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    group.object(room, 'a', null);
+    expect(lines).toEqual([]);
+  });
+
+  test('a disposed or foreign parent is refused, and the id stays free', () => {
+    const group = newGroup({ name: 'g' });
+    const gone = group.object(room, 'gone', null);
+    group.dispose(gone);
+    group.pump(now);
+    expect(() => group.object(room, 'a', null, { parent: gone })).toThrow(
+      expect.objectContaining({ code: 'invalid value' }),
+    );
+    const foreign = newGroup({ name: 'h' }).object(room, 'x', null);
+    expect(() => group.object(room, 'a', null, { parent: foreign })).toThrow(
+      expect.objectContaining({ code: 'wrong group' }),
+    );
+    expect(group.objectById('room', 'a')).toBeUndefined();
+    group.object(room, 'a', null);
+  });
+});
