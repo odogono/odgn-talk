@@ -3249,8 +3249,11 @@ fn objectReply(s: *Session, msg: Json, ref: i64) []u8 {
     const kind_name = asText(field(msg, "kind")) orelse return hostError(s.gpa, ref, .invalid_value);
     const id = asText(field(msg, "id")) orelse return hostError(s.gpa, ref, .invalid_value);
     const kind = kindNamed(s, kind_name) orelse return hostError(s.gpa, ref, .invalid_value);
+    // An optional parent, set at once (ADR 0152); another Group's or an
+    // unknown one is `wrong group`.
+    const parent = if (field(msg, "parent")) |j| (if (j == .null) null else objectOf(entry, j) orelse return hostError(s.gpa, ref, .wrong_group)) else null;
     var object: ?*objects.Object = null;
-    const code = Direct.groupObject(entry.group, kind, id.ptr, id.len, null, &object);
+    const code = Direct.groupObjectWithParent(entry.group, kind, id.ptr, id.len, null, parent, &object);
     if (code != .ok) return hostError(s.gpa, ref, code);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -6867,6 +6870,32 @@ test "Host Objects route Deliveries to their owner, take parents, and stop it wh
         if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stopped = true;
     }
     try std.testing.expect(stopped);
+}
+
+test "an object made with a parent routes to the parent's owner at once, and a disposed or unknown parent is refused" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"hall\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"hall\"]}},\"source\":\"on ping\\n  return the id of the target\\nend ping\\n\"}}", .{4}));
+    // No set-parent and no Pump in between: the parent is already there.
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"lamp\",\"parent\":{{\"$object\":[\"room\",\"hall\"]}}}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"object\":{{\"$object\":[\"room\",\"lamp\"]}}}},\"message\":{{\"name\":\"ping\"}}}}", .{6}));
+    const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{7}));
+    try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
+    try std.testing.expectEqualStrings("lamp", end.object.get("result").?.string);
+    const unknown = try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"a\",\"parent\":{{\"$object\":[\"room\",\"nowhere\"]}}}}", .{8});
+    try std.testing.expectEqualStrings("wrong group", unknown.object.get("err").?.object.get("code").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"dispose\",\"ref\":{d},\"group\":\"g\",\"object\":{{\"$object\":[\"room\",\"lamp\"]}}}}", .{9}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{10}));
+    const gone = try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"a\",\"parent\":{{\"$object\":[\"room\",\"lamp\"]}}}}", .{11});
+    try std.testing.expectEqualStrings("invalid value", gone.object.get("err").?.object.get("code").?.string);
+    // A refused call makes no object, so the id stays free.
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"a\"}}", .{12}));
 }
 
 test "a Broadcast, Decisions to a Script, an object and every Script, and a Pump's next deadline" {

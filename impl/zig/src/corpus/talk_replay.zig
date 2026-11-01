@@ -175,6 +175,12 @@ const ObjectStore = struct {
     /// in place of the members when the Trace has one (#1143).
     recorded: std.StringHashMapUnmanaged(std.ArrayList(ElementRecord)) = .empty,
 
+    /// The objects an Operation makes when first called (ADR 0152), and
+    /// what making them needs.
+    made_by: std.ArrayList(case_setup.Table) = .empty,
+    kinds: std.StringHashMapUnmanaged(?*c.talk_object_kind) = .empty,
+    group: ?*c.talk_group = null,
+
     const Member = struct { name: []const u8, object: []const u8 };
     const ElementRecord = struct { selector: ?[]const u8, value: ?[]const u8, err: ?[]const u8 };
 
@@ -435,18 +441,16 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
         try check(c.talk_define_object_kind(core, &def, &kind));
         try kinds.put(a, name, kind);
     }
+    store.kinds = kinds;
+    store.group = group;
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[objects]]")) continue;
-        const kind = case_setup.field(t, "kind").?.string;
-        const id = case_setup.field(t, "id").?.string;
-        var o: ?*c.talk_object = null;
-        try check(c.talk_group_object(group, kinds.get(kind) orelse return error.MalformedCase, id.ptr, id.len, null, &o));
-        try store.handles.put(a, try std.fmt.allocPrint(a, "{s}/{s}", .{ kind, id }), o.?);
-        var props: std.StringHashMapUnmanaged(?*c.talk_value) = .empty;
-        if (case_setup.field(t, "props")) |given| for (given.table) |e| {
-            try props.put(a, e.key, parsed(e.value.string) orelse return error.MalformedCase);
-        };
-        try store.values.put(a, @intFromPtr(o.?), props);
+        if (case_setup.field(t, "madeBy") != null) {
+            try store.made_by.append(a, t);
+            continue;
+        }
+        if (case_setup.field(t, "parent") != null) return error.MalformedCase;
+        try makeObject(store, t, null);
     }
     // Collection members, once every handle is made: unique names, each a
     // handle the case makes, only on a kind with a collection.
@@ -467,6 +471,45 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
             slot.* = .{ .name = member_name, .object = object };
         }
         try store.members.put(a, try std.fmt.allocPrint(a, "{s}/{s}", .{ kind, case_setup.field(t, "id").?.string }), members);
+    }
+}
+
+/// Makes one `[[objects]]` object, with its parent, and keeps its
+/// properties' starting values.
+fn makeObject(store: *ObjectStore, t: case_setup.Table, parent: ?*c.talk_object) !void {
+    const a = store.a;
+    const kind = case_setup.field(t, "kind").?.string;
+    const id = case_setup.field(t, "id").?.string;
+    var o: ?*c.talk_object = null;
+    try check(c.talk_group_object_with_parent(store.group, store.kinds.get(kind) orelse return error.MalformedCase, id.ptr, id.len, null, parent, &o));
+    try store.handles.put(a, try std.fmt.allocPrint(a, "{s}/{s}", .{ kind, id }), o.?);
+    var props: std.StringHashMapUnmanaged(?*c.talk_value) = .empty;
+    if (case_setup.field(t, "props")) |given| for (given.table) |e| {
+        try props.put(a, e.key, parsed(e.value.string) orelse return error.MalformedCase);
+    };
+    try store.values.put(a, @intFromPtr(o.?), props);
+}
+
+/// The store whose `madeBy` objects an Operation's first call makes.
+var made_by_store: ?*ObjectStore = null;
+
+/// Makes the objects `madeBy` names for `operation`, the first time it is
+/// called (chapter 11, Host Objects).
+fn makeFor(operation: []const u8) !void {
+    const store = made_by_store orelse return;
+    var i: usize = 0;
+    while (i < store.made_by.items.len) {
+        const t = store.made_by.items[i];
+        if (!std.mem.eql(u8, case_setup.field(t, "madeBy").?.string, operation)) {
+            i += 1;
+            continue;
+        }
+        _ = store.made_by.orderedRemove(i);
+        const parent = if (case_setup.field(t, "parent")) |p|
+            store.handles.get(ObjectStore.shownKey(store.a, p.string) orelse return error.MalformedCase) orelse return error.MalformedCase
+        else
+            null;
+        try makeObject(store, t, parent);
     }
 }
 
@@ -730,10 +773,23 @@ fn parsed(shown: []const u8) ?*c.talk_value {
     return v;
 }
 
+/// A Stub's value, with `<object kind "id">` read as the case's handle,
+/// such as one its Operation has just made (ADR 0152).
+fn parsedWithObjects(a: std.mem.Allocator, shown: []const u8) ?*c.talk_value {
+    const store = made_by_store orelse return parsed(shown);
+    if (std.mem.indexOf(u8, shown, "<object ") == null) return parsed(shown);
+    var objects: DisplayObjects = .{ .a = a, .store = store };
+    defer objects.deinit();
+    var v: ?*c.talk_value = null;
+    if (c.talk_parse_display_objects(shown.ptr, shown.len, DisplayObjects.object, &objects, &v) != c.TALK_OK) return null;
+    return v;
+}
+
 fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
     cross();
     if (received) |r| for (args[0..len]) |v| r.keep(v);
     const h: *OperationHost = @ptrCast(@alignCast(context.?));
+    makeFor(h.name) catch return c.TALK_CALL_BROKEN;
     const stub: Stub = if (h.next < h.stubs.items.len) blk: {
         h.next += 1;
         break :blk h.stubs.items[h.next - 1];
@@ -756,7 +812,7 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
     }
     if (stub.err) |shown| return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
     if (stub.value) |shown| {
-        result.* = parsed(shown) orelse return c.TALK_CALL_BROKEN;
+        result.* = parsedWithObjects(h.a, shown) orelse return c.TALK_CALL_BROKEN;
         return c.TALK_CALL_ANSWERED;
     }
     // A Stub with no value or error answers Nothing, as a fire-and-forget
@@ -1607,11 +1663,13 @@ pub const Host = struct {
         try defineCapabilities(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineStandard(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineObjects(a, h.core, h.group, all, &h.store);
+        made_by_store = &h.store;
         try compileLibraries(a, sources, h.core, all, &h.defs, &h.libraries, &h.library_sources, &h.declarations);
         return h;
     }
 
     pub fn destroy(h: *Host) void {
+        if (made_by_store == &h.store) made_by_store = null;
         // Function Values are released before the Groups that made them.
         received = null;
         h.held.deinit();

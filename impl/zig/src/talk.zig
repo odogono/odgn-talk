@@ -2200,6 +2200,7 @@ pub const direct = struct {
     pub const grantAll = talk_capability_def_grant_all;
     pub const defineObjectKind = talk_define_object_kind;
     pub const groupObject = talk_group_object;
+    pub const groupObjectWithParent = talk_group_object_with_parent;
     pub const setParent = talk_set_parent;
     pub const dispose = talk_dispose;
     pub const objectById = talk_object_by_id;
@@ -3631,6 +3632,20 @@ export fn talk_group_object(g: *Group, kind: *const objects.Kind, id: ?[*]const 
     const text = bytes(id, id_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(text)) return .invalid_value;
     out.* = g.group.object(kind, text, native) catch |err| return status(err);
+    return .ok;
+}
+
+/// Makes the handle with its parent set at once, even inside a Pump
+/// (ADR 0152). A parent from another Group is TALK_WRONG_GROUP, a disposed
+/// one TALK_INVALID_VALUE, and a refused call makes no object.
+export fn talk_group_object_with_parent(g: *Group, kind: *const objects.Kind, id: ?[*]const u8, id_len: usize, native: ?*anyopaque, parent: ?*objects.Object, out: *?*objects.Object) HostErrorCode {
+    out.* = null;
+    if (g.memory.refused) return .out_of_memory;
+    const text = bytes(id, id_len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(text)) return .invalid_value;
+    if (parent) |p| if (!g.owns(p)) return .wrong_group;
+    defer g.flush();
+    out.* = g.group.objectWithParent(kind, text, native, parent) catch |err| return status(err);
     return .ok;
 }
 

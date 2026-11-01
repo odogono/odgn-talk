@@ -2992,10 +2992,26 @@ pub const Group = struct {
     /// Makes a handle for a Host-owned thing; a duplicate id within its
     /// kind is refused.
     pub fn object(g: *Group, kind: *const objects.Kind, id: []const u8, native: ?*anyopaque) !*objects.Object {
+        return g.objectWithParent(kind, id, native, null);
+    }
+
+    /// Makes a handle with its parent set at once, even inside a Pump: a new
+    /// object has nothing queued for it to overtake (ADR 0152). A disposed
+    /// parent is refused, and a parented one writes an `object` record.
+    pub fn objectWithParent(g: *Group, kind: *const objects.Kind, id: []const u8, native: ?*anyopaque, parent: ?*objects.Object) !*objects.Object {
         if (g.objectById(kind.name, id) != null) return error.DuplicateObjectId;
+        if (parent) |p| if (p.disposed) return error.InvalidValue;
         const o = try objects.Object.make(g.gpa, kind, id, native);
         errdefer o.destroy(g.gpa);
         try g.objects.append(g.gpa, o);
+        o.parent = parent;
+        if (parent) |p| if (g.trace) |out| {
+            out.writeAll("object object=") catch {};
+            display.writeTrace(out, o.value) catch {};
+            out.writeAll(" parent=") catch {};
+            display.writeTrace(out, p.value) catch {};
+            out.writeAll("\n") catch {};
+        };
         return o;
     }
 
