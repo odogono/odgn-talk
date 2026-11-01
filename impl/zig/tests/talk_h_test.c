@@ -2483,7 +2483,7 @@ static int http_test(void) {
     bad |= talk_group_object(group, kind, "e1", 2, NULL, &exchange) != TALK_OK;
     talk_named_cost costs[] = {{"serve", 5, {1, 0}}, {"unserve", 7, {1, 0}}, {"respond", 7, {1, 0}}};
     talk_costs all = {costs, 3};
-    talk_http_impl impl = {NULL, http_serve, unused, http_respond};
+    talk_http_impl impl = {NULL, http_serve, unused, http_respond, NULL};
     talk_capability_def *http = NULL;
     bad |= talk_http_capability(core, &impl, &all, &http) != TALK_OK;
     talk_grant *grant = NULL;
@@ -2513,6 +2513,76 @@ static int http_test(void) {
     bad |= strstr(trace, "op=http.respond args=[<object httpExchange \"e1\">, {json: {id: 7}}] result=nothing\n") == NULL;
     bad |= strstr(trace, "call-failed s/r1.c2 op=http.serve\n") == NULL;
     bad |= strstr(trace, "vars s got=[[\"invalid serve\", \"name\"], \"host error\"]\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* http's fetch: the normalized URL, with query added, and the request
+ * without query, json as its JSON text. */
+static bool fetch_heard;
+static talk_call_end http_fetch(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)error;
+    const char *url = NULL;
+    size_t url_len = 0;
+    talk_value *method = NULL, *json = NULL, *query = NULL;
+    const char *m = NULL, *j = NULL;
+    talk_pair pair;
+    size_t m_len = 0, j_len = 0;
+    if (len != 2 || !talk_value_as_text(args[0], &url, &url_len)) return TALK_CALL_BROKEN;
+    const char *want = "https://api.example.com/users?email=ann%40example.com&tag=a%20b&tag=%C3%BC";
+    bool ok = url_len == strlen(want) && memcmp(url, want, url_len) == 0;
+    ok = ok && talk_value_get(args[1], "method", 6, &method) == TALK_OK && talk_value_as_text(method, &m, &m_len) && m_len == 4 && memcmp(m, "POST", 4) == 0;
+    ok = ok && talk_value_get(args[1], "json", 4, &json) == TALK_OK && talk_value_as_text(json, &j, &j_len) && j_len == 7 && memcmp(j, "{\"n\":1}", 7) == 0;
+    ok = ok && talk_value_get(args[1], "query", 5, &query) == TALK_OK && talk_value_kind(query) == TALK_KIND_NOTHING;
+    /* method and json, and no third key. */
+    if (talk_value_entries(args[1], 2, &pair)) {
+        talk_value_release(pair.value);
+        ok = false;
+    }
+    if (method) talk_value_release(method);
+    if (json) talk_value_release(json);
+    if (query) talk_value_release(query);
+    fetch_heard = ok;
+    started = call;
+    (void)result;
+    return TALK_CALL_STARTED;
+}
+
+/* A Host may offer fetch alone, declaring no server Operation, but not
+ * part of the server Operations. */
+static int http_fetch_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_named_cost costs[] = {{"fetch", 5, {1, 0}}};
+    talk_costs all = {costs, 1};
+    talk_capability_def *http = NULL;
+    talk_http_impl partial = {NULL, http_serve, NULL, NULL, http_fetch};
+    int bad = talk_http_capability(core, &partial, &all, &http) != TALK_INVALID_VALUE;
+    talk_http_impl neither = {NULL, NULL, NULL, NULL, NULL};
+    bad |= talk_http_capability(core, &neither, &all, &http) != TALK_INVALID_VALUE;
+    talk_http_impl impl = {NULL, NULL, NULL, NULL, http_fetch};
+    bad |= talk_http_capability(core, &impl, &all, &http) != TALK_OK;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    bad |= talk_new_group(core, &options, &group) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(http, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"http", 4, grant}};
+    const char *source = "on go\n  ask http to fetch \"HTTPS://API.Example.com:443/users#top\", {method: \"POST\", query: {email: \"ann@example.com\", tag: [\"a b\", \"\xc3\xbc\"]}, json: {n: 1}} and wait\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    started = NULL;
+    fetch_heard = false;
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= !fetch_heard;
+    bad |= strstr(trace, "op=http.fetch args=[\"HTTPS://API.Example.com:443/users#top\", {method: \"POST\"") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -3395,6 +3465,7 @@ int main(void) {
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(http_test() == 0, "http's serve hears its defaults, a bad answer is host error, and respond hears json as text");
+    expect(http_fetch_test() == 0, "http's fetch alone hears the normalized URL and request");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");

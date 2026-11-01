@@ -164,11 +164,6 @@ func (executionBackend) Support(c Case) string {
 				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" && name != "sqlite" && name != "user" && name != "http" {
 					return name + " Standard Capability factory remains deferred"
 				}
-				if costs, ok := raw.(Setup)["costs"].(Setup); ok && name == "http" {
-					if _, fetch := costs["fetch"]; fetch {
-						return "http.fetch awaits the Go embedding (#1869)"
-					}
-				}
 			}
 		}
 		if r.Input && r.Name == "stub" && len(r.IDs) > 0 && r.IDs[0] == "clock.now" {

@@ -13,6 +13,7 @@ const caps = @import("capabilities.zig");
 const grammar = @import("../generated/grammar.zig").grammar;
 const sqlite = @import("sqlite.zig");
 const encoding = @import("../encoding.zig");
+const http_fetch = @import("http_fetch.zig");
 const Value = model.Value;
 const Shape = caps.Shape;
 
@@ -30,7 +31,7 @@ pub fn operations(which: Which) []const []const u8 {
         .store => &.{ "delete", "get", "increment", "keys", "set", "swap", "unwatch", "watch" },
         .sqlite => &.{ "begin", "change", "commit", "query", "rollback" },
         .user => &.{ "choose", "confirm", "enter", "notify" },
-        .http => &.{ "respond", "serve", "unserve" },
+        .http => &.{ "fetch", "respond", "serve", "unserve" },
     };
 }
 
@@ -229,7 +230,28 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
                 max_pending = 2_147_483_647;
             }
         },
-        .http => if (eq(name, "serve")) {
+        .http => if (eq(name, "fetch")) {
+            // No `maxPending`: a fetch waits for the Script's MaxWait.
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            const header_map = try Shape.map(gpa, try gpa.alloc(caps.Field, 0), true);
+            const fields = try gpa.alloc(caps.Field, 5);
+            const body = try gpa.alloc(*Shape, 2);
+            body[0] = try Kinds.kind(gpa, .text);
+            body[1] = try Kinds.kind(gpa, .bytes);
+            fields[0] = .{ .key = try gpa.dupe(u8, "method"), .shape = try Kinds.kind(gpa, .text), .optional = true };
+            fields[1] = .{ .key = try gpa.dupe(u8, "headers"), .shape = header_map, .optional = true };
+            fields[2] = .{ .key = try gpa.dupe(u8, "query"), .shape = try Shape.map(gpa, try gpa.alloc(caps.Field, 0), true), .optional = true };
+            fields[3] = .{ .key = try gpa.dupe(u8, "body"), .shape = try Shape.oneOf(gpa, body), .optional = true };
+            fields[4] = .{ .key = try gpa.dupe(u8, "json"), .shape = try Kinds.kind(gpa, .any), .optional = true };
+            try args.append(gpa, try Shape.optional(gpa, try Shape.map(gpa, fields, false)));
+            const gives = try gpa.alloc(caps.Field, 3);
+            gives[0] = .{ .key = try gpa.dupe(u8, "status"), .shape = try Kinds.kind(gpa, .number) };
+            gives[1] = .{ .key = try gpa.dupe(u8, "headers"), .shape = try Shape.map(gpa, try gpa.alloc(caps.Field, 0), true) };
+            gives[2] = .{ .key = try gpa.dupe(u8, "body"), .shape = try Kinds.kind(gpa, .bytes) };
+            result = try Shape.map(gpa, gives, false);
+            errors = &.{ "invalid request", "bad address", "network error", "response too large", "out of domain" };
+            mode = .suspending;
+        } else if (eq(name, "serve")) {
             try args.append(gpa, try Kinds.kind(gpa, .text));
             try args.append(gpa, try Kinds.kind(gpa, .text));
             try args.append(gpa, try Kinds.optionalText(gpa));
@@ -287,7 +309,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{.{ "limit", .text }}
         else if (std.mem.eql(u8, code, "store busy"))
             &.{.{ "key", .text }}
-        else if (std.mem.eql(u8, code, "invalid watch") or std.mem.eql(u8, code, "invalid serve") or std.mem.eql(u8, code, "invalid response"))
+        else if (std.mem.eql(u8, code, "invalid watch") or std.mem.eql(u8, code, "invalid serve") or std.mem.eql(u8, code, "invalid response") or std.mem.eql(u8, code, "invalid request"))
             &.{.{ "field", .text }}
         else if (std.mem.eql(u8, code, "wrong kind"))
             &.{ .{ "expected", .text }, .{ "got", .text }, .{ "value", .value } }
@@ -318,7 +340,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .{ .field = "kind", .words = &.{ "unique", "primary key", "not null", "check", "foreign key", "datatype", "trigger", "other" } }
         else
             null;
-        const core = for ([_][]const u8{ "invalid key", "invalid watch", "invalid serve", "invalid response", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
+        const core = for ([_][]const u8{ "invalid key", "invalid watch", "invalid serve", "invalid response", "invalid request", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
             if (std.mem.eql(u8, x, code)) break true;
         } else false;
         d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
@@ -355,22 +377,30 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .calendar => afterCalendar,
             .locale => afterLocale,
             .user => if (eq(name, "choose")) afterChoose else null,
-            .http => if (eq(name, "serve")) afterServe else null,
+            .http => if (eq(name, "serve")) afterServe else if (eq(name, "fetch")) afterFetch else null,
             else => null,
         },
     };
 }
 
 /// Makes a Standard Capability. `impl` holds a Host function for each of
-/// its Operations, in `operations` order, and `costs` a cost for each; the
+/// its Operations, in `operations` order, and `costs` a cost for each;
+/// `http` declares only the Operations given one; the
 /// contexts the Operations need are appended to `contexts`, which the
 /// caller frees with the definition.
 /// A Capability with Segment-bound Operations, `store`, also takes how its
 /// Grants map to Segment Coordinators.
 pub fn define(gpa: Allocator, which: Which, impl: []const ?caps.HostFn, costs: []const caps.Cost, contexts: *std.ArrayList(*Context), coordinator_of: ?caps.CoordinatorOf) !*caps.Capability {
     const ops = operations(which);
-    const out = try gpa.alloc(caps.Operation, ops.len);
-    for (ops, out, 0..) |name, *op, i| {
+    // `http` leaves out each Operation without a Host function.
+    var count: usize = 0;
+    for (ops, 0..) |_, i| count += @intFromBool(which != .http or impl[i] != null);
+    const out = try gpa.alloc(caps.Operation, count);
+    var at: usize = 0;
+    for (ops, 0..) |name, i| {
+        if (which == .http and impl[i] == null) continue;
+        const op = &out[at];
+        at += 1;
         op.* = try declare(gpa, which, name);
         op.cost = costs[i];
         const context = try gpa.create(Context);
@@ -501,6 +531,7 @@ fn beforeHttp(a: Allocator, op: *const caps.Operation, args: []const *Value, bin
             return .{ .invalid_field = .{ .code = "invalid response", .field = field } };
         }
     }.f;
+    if (std.mem.eql(u8, op.name, "fetch")) return http_fetch.check(a, args);
     if (!std.mem.eql(u8, op.name, "respond")) {
         if (args[0].data.text.len == 0) return serve("name");
         if (std.mem.eql(u8, op.name, "unserve")) return null;
@@ -514,6 +545,7 @@ fn beforeHttp(a: Allocator, op: *const caps.Operation, args: []const *Value, bin
         if (n < 100 or n > 599) return response("status");
     }
     if (r.get("headers")) |headers| {
+        if (http_fetch.duplicateHeaderNames(headers)) return response("headers");
         for (0..headers.data.map.len) |i| {
             const v = headers.data.map.at(i).value;
             const ok = switch (v.data) {
@@ -532,6 +564,13 @@ fn beforeHttp(a: Allocator, op: *const caps.Operation, args: []const *Value, bin
         a.free(written);
     }
     return null;
+}
+
+/// A `fetch` answer: chapter 7's response rules.
+fn afterFetch(op: *const caps.Operation, args: []const *Value, result: *const Value) bool {
+    _ = op;
+    _ = args;
+    return http_fetch.answerOk(result);
 }
 
 /// A `serve` answer: a map with text `host` and whole-number `port`.
@@ -724,7 +763,14 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
                     try fresh(gpa, made, try model.text(gpa, "")));
             }
         },
-        .http => if (std.mem.eql(u8, ctx.name, "serve")) {
+        .http => if (std.mem.eql(u8, ctx.name, "fetch")) {
+            // The normalized URL, with `query` added, and the request
+            // without `query`.
+            const written = http_fetch.urlText(gpa, args) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+            defer gpa.free(written);
+            try out.append(gpa, try fresh(gpa, made, try model.text(gpa, written)));
+            try out.append(gpa, try fresh(gpa, made, try http_fetch.requestValue(gpa, args)));
+        } else if (std.mem.eql(u8, ctx.name, "serve")) {
             // The name, the prefix, the effective message and the options,
             // an empty map when omitted or Nothing.
             try out.appendSlice(gpa, args[0..2]);

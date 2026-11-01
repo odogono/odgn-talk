@@ -199,11 +199,7 @@ func (r Runner) fail(e error, name string) {
 // passing case missing from the list is reported so it can be added.
 // pendingCases await Go support, each with its issue. The gate reports them
 // without failing while the runner defers them, and fails once it doesn't.
-var pendingCases = map[string]string{
-	"capabilities/standard-http-fetch":            "#1869",
-	"capabilities/standard-http-fetch-validation": "#1869",
-	"capabilities/standard-http-fetch-wait":       "#1869",
-}
+var pendingCases = map[string]string{}
 
 func (r Runner) CheckPassing(path string) error {
 	b, e := os.ReadFile(path)

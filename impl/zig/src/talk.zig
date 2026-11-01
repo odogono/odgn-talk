@@ -3103,7 +3103,7 @@ pub const LocaleImpl = extern struct { context: ?*anyopaque, compare: OperationF
 pub const TimerImpl = extern struct { context: ?*anyopaque, schedule: OperationFn, cancel: OperationFn };
 pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
 pub const UserImpl = extern struct { context: ?*anyopaque, confirm: OperationFn, choose: OperationFn, enter: OperationFn, notify: OperationFn };
-pub const HttpImpl = extern struct { context: ?*anyopaque, serve: OperationFn, unserve: OperationFn, respond: OperationFn };
+pub const HttpImpl = extern struct { context: ?*anyopaque, serve: OperationFn, unserve: OperationFn, respond: OperationFn, fetch: OperationFn };
 
 /// The largest cost component: 2^53 - 1.
 const max_cost = 9_007_199_254_740_991;
@@ -3122,8 +3122,18 @@ fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn,
     const names = standard.operations(which);
     for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, @tagName(which))) return .name_reused;
     const given: []const NamedCost = if (costs) |cs| (if (cs.len == 0) &.{} else (cs.entries orelse return .invalid_value)[0..cs.len]) else &.{};
-    var per: [8]caps.Cost = undefined;
+    // `http` offers the server Operations, `fetch`, or both: an Operation
+    // without a Host function isn't declared.
+    var offered: [8]bool = @splat(true);
+    if (which == .http) {
+        for (names, 0..) |_, i| offered[i] = (i < own.len and own[i] != null) or (i < fns.len and fns[i] != null);
+        const server = @as(u8, @intFromBool(offered[1])) + @intFromBool(offered[2]) + @intFromBool(offered[3]);
+        if (server != 0 and server != 3) return .invalid_value;
+        if (server == 0 and !offered[0]) return .invalid_value;
+    }
+    var per: [8]caps.Cost = @splat(.{ .fuel = 0, .alloc = 0 });
     for (names, 0..) |name, i| {
+        if (!offered[i]) continue;
         const entry = for (given) |e| {
             if (std.mem.eql(u8, bytes(e.name, e.name_len) catch return .invalid_value, name)) break e;
         } else return .invalid_value;
@@ -3132,6 +3142,7 @@ fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn,
     }
     var impl: [8]?caps.HostFn = @splat(null);
     for (fns, 0..) |f, i| {
+        if (!offered[i]) continue;
         if (i < own.len) if (own[i]) |h| {
             impl[i] = h;
             continue;
@@ -3196,8 +3207,9 @@ export fn talk_user_capability(c: *Core, impl: *const UserImpl, costs: ?*const C
 }
 
 export fn talk_http_capability(c: *Core, impl: *const HttpImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
-    // In name order: respond, serve, unserve.
-    return defineStandard(c, .http, &.{ impl.respond, impl.serve, impl.unserve }, impl.context, costs, out);
+    // In name order: fetch, respond, serve, unserve. A null function leaves
+    // its Operation out.
+    return defineStandard(c, .http, &.{ impl.fetch, impl.respond, impl.serve, impl.unserve }, impl.context, costs, out);
 }
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {

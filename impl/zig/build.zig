@@ -133,7 +133,7 @@ pub fn build(b: *std.Build) void {
     b.step("repl", "Run northtalk: the REPL, or a Script file given after --").dependOn(&run_repl.step);
 
     // Runs northtalk on examples/http/hello.talk over real sockets, and
-    // stops it with SIGINT.
+    // stops it with SIGINT; then on a Script that fetches from itself.
     const smoke = b.addExecutable(.{ .name = "runner-smoke", .root_module = b.createModule(.{
         .root_source_file = b.path("src/runner/smoke.zig"),
         .target = target,
@@ -143,8 +143,9 @@ pub fn build(b: *std.Build) void {
     const run_smoke = b.addRunArtifact(smoke);
     run_smoke.addArtifactArg(repl);
     run_smoke.addFileArg(b.path("../../examples/http/hello.talk"));
+    run_smoke.addFileArg(b.path("src/runner/fetch-smoke.talk"));
     run_smoke.has_side_effects = true;
-    b.step("runner-test", "Run northtalk on examples/http/hello.talk and check its answers").dependOn(&run_smoke.step);
+    b.step("runner-test", "Run northtalk on examples/http/hello.talk and a fetching Script, and check their answers").dependOn(&run_smoke.step);
 
     // The http test kit (corpus/http-kit/) through the native router.
     const kit_module = b.createModule(.{

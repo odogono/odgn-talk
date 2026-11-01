@@ -835,7 +835,7 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
         else if (std.mem.eql(u8, which, "user"))
             &.{ .{ "confirm", c.TALK_SUSPENDING }, .{ "choose", c.TALK_SUSPENDING }, .{ "enter", c.TALK_SUSPENDING }, .{ "notify", c.TALK_FIRE_AND_FORGET } }
         else if (std.mem.eql(u8, which, "http"))
-            &.{ .{ "serve", c.TALK_SUSPENDING }, .{ "unserve", c.TALK_IMMEDIATE }, .{ "respond", c.TALK_IMMEDIATE } }
+            &.{ .{ "serve", c.TALK_SUSPENDING }, .{ "unserve", c.TALK_IMMEDIATE }, .{ "respond", c.TALK_IMMEDIATE }, .{ "fetch", c.TALK_SUSPENDING } }
         else if (std.mem.eql(u8, which, "sqlite"))
             &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
@@ -862,7 +862,15 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             const impl: c.talk_user_impl = .{ .context = hosts, .confirm = standardHost("user.confirm"), .choose = standardHost("user.choose"), .enter = standardHost("user.enter"), .notify = standardHost("user.notify") };
             try check(c.talk_user_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "http")) {
-            const impl: c.talk_http_impl = .{ .context = hosts, .serve = standardHost("http.serve"), .unserve = standardHost("http.unserve"), .respond = standardHost("http.respond") };
+            // The case's costs say which Operations its Host offers.
+            var client = false;
+            var server = false;
+            for (costs.items) |e| {
+                const n = e.name[0..e.name_len];
+                if (std.mem.eql(u8, n, "fetch")) client = true else server = true;
+            }
+            const serving = server or !client;
+            const impl: c.talk_http_impl = .{ .context = hosts, .serve = if (serving) standardHost("http.serve") else null, .unserve = if (serving) standardHost("http.unserve") else null, .respond = if (serving) standardHost("http.respond") else null, .fetch = if (client) standardHost("http.fetch") else null };
             try check(c.talk_http_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };

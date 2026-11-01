@@ -11,6 +11,7 @@
 const std = @import("std");
 const c = @import("talk-c");
 const request = @import("request.zig");
+const Fetcher = @import("fetch.zig").Fetcher;
 
 const sys = std.c;
 const posix = std.posix;
@@ -106,6 +107,8 @@ pub const Router = struct {
     next_exchange: u64 = 0,
     /// Whether the router queued a Host Input since the Runner last pumped.
     queued: bool = false,
+    /// Makes `fetch`'s requests, when the Host offers it.
+    fetcher: ?*Fetcher = null,
 
     /// Makes a router, defining the httpExchange Object Kind on `core`.
     pub fn init(gpa: Allocator, core: *c.talk_core, options: Options) !*Router {
@@ -140,14 +143,16 @@ pub const Router = struct {
         r.gpa.destroy(r);
     }
 
-    /// The `http` Capability, with every Operation free.
+    /// The `http` Capability, with every Operation free: `fetch` too when
+    /// the router has a fetcher.
     pub fn capability(r: *Router, core: *c.talk_core) !*c.talk_capability_def {
         const costs = [_]c.talk_named_cost{
+            .{ .name = "fetch", .name_len = 5, .cost = .{ .fuel = 0, .alloc = 0 } },
             .{ .name = "serve", .name_len = 5, .cost = .{ .fuel = 0, .alloc = 0 } },
             .{ .name = "unserve", .name_len = 7, .cost = .{ .fuel = 0, .alloc = 0 } },
             .{ .name = "respond", .name_len = 7, .cost = .{ .fuel = 0, .alloc = 0 } },
         };
-        const impl: c.talk_http_impl = .{ .context = r, .serve = serve, .unserve = unserve, .respond = respond };
+        const impl: c.talk_http_impl = .{ .context = r, .serve = serve, .unserve = unserve, .respond = respond, .fetch = if (r.fetcher != null) fetch else null };
         var def: ?*c.talk_capability_def = null;
         if (c.talk_http_capability(core, &impl, &.{ .entries = &costs, .len = costs.len }, &def) != c.TALK_OK) return error.HostError;
         return def.?;
@@ -306,6 +311,13 @@ pub const Router = struct {
         if (r.find(callText(c.talk_call_script_name, call), callText(c.talk_call_grant_name, call), name)) |reg| r.remove(reg);
         _ = c.talk_nothing(result);
         return c.TALK_CALL_ANSWERED;
+    }
+
+    fn fetch(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        _ = result;
+        _ = err;
+        const r: *Router = @ptrCast(@alignCast(context.?));
+        return r.fetcher.?.start(call, args[0..len]);
     }
 
     fn respond(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {

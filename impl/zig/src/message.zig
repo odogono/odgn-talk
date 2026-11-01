@@ -2590,7 +2590,20 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
             .calendar, .locale, .store, .sqlite, .user, .http => {},
             else => return hostError(s.gpa, ref, .invalid_value),
         }
-        if (ops_j.array.items.len != standard.operations(w).len) return hostError(s.gpa, ref, .invalid_value);
+        if (w == .http) {
+            // The server Operations, `fetch`, or all four, each once.
+            var seen: [4]bool = @splat(false);
+            for (ops_j.array.items) |item| {
+                const op = asText(field(item, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+                const i = for (standard.operations(w), 0..) |n, i| {
+                    if (std.mem.eql(u8, n, op)) break i;
+                } else return hostError(s.gpa, ref, .invalid_value);
+                if (seen[i]) return hostError(s.gpa, ref, .invalid_value);
+                seen[i] = true;
+            }
+            const server = @as(u8, @intFromBool(seen[1])) + @intFromBool(seen[2]) + @intFromBool(seen[3]);
+            if ((server != 0 and server != 3) or (server == 0 and !seen[0])) return hostError(s.gpa, ref, .invalid_value);
+        } else if (ops_j.array.items.len != standard.operations(w).len) return hostError(s.gpa, ref, .invalid_value);
     }
     const a = s.core.gpa;
     const declaration_name = a.dupe(u8, name) catch return hostError(s.gpa, ref, .out_of_memory);
@@ -4225,9 +4238,13 @@ fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const hosted = if (which == .clock) 0 else names.len;
     var own: [8]?caps.HostFn = @splat(null);
     var made: [8]*OpContext = undefined;
+    // `http` offers the Operations its costs name.
+    var contexts: usize = 0;
     for (names[0..hosted], 0..) |op, i| {
-        made[i] = newOpContext(s, name, op) catch return hostError(s.gpa, ref, .out_of_memory);
-        own[i] = .{ .call = opCall, .context = made[i] };
+        if (which == .http and given.object.get(op) == null) continue;
+        made[contexts] = newOpContext(s, name, op) catch return hostError(s.gpa, ref, .out_of_memory);
+        own[i] = .{ .call = opCall, .context = made[contexts] };
+        contexts += 1;
     }
     // `store`'s lifecycle hooks are one Coordinator's, whatever the
     // binding, and reach the Host as `effect` needs; its release hook as
@@ -4248,7 +4265,7 @@ fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const code = talk.defineStandardZigWith(s.core, which, own[0..hosted], &costs, coordinator_of, release, &def);
     if (code != .ok) return hostError(s.gpa, ref, code);
     // Each context takes its Operation's declared mode.
-    for (made[0..hosted]) |oc| for (def.?.operations) |op| if (std.mem.eql(u8, op.name, oc.operation)) {
+    for (made[0..contexts]) |oc| for (def.?.operations) |op| if (std.mem.eql(u8, op.name, oc.operation)) {
         oc.mode = op.mode;
     };
     var o = Out.init(s.gpa);

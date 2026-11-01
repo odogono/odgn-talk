@@ -658,8 +658,26 @@ type HTTPImpl interface {
 	Respond(c *Call, exchange *Object, response Value) error
 }
 
-// HTTPCapability is optional for Hosts.
+// HTTPFetchImpl makes fetch's requests (chapter 7, Fetching; ADR 0151). The
+// Core has checked the Shapes and raised `out of domain` and `invalid
+// request`. Fetch hears the normalized URL, with `query` added, and the
+// request without `query`: `method` always, `headers` and `body` as given,
+// and `json` as its compact JSON text. It starts a suspending call with no
+// maxPending, answered with {status, headers, body}, which the Core checks,
+// or failed with `bad address`, `network error` or `response too large`; it
+// stops the request when the Call's Context is done.
+type HTTPFetchImpl interface {
+	Fetch(c *Call, url string, request Value) error
+}
+
+// HTTPCapability is optional for Hosts. It offers the server Operations.
 func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error)
+
+// HTTPCapabilityWith offers the server Operations, fetch, or both: a nil
+// server or client leaves its Operations out, and costs needs an entry for
+// each Operation offered. The binding also describes the origins a Grant may
+// fetch from, none unless it says so.
+func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs Costs) (*CapabilityDef, error)
 
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)

@@ -133,11 +133,11 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Tests and cases: [Runner tests](internal/cmd/northtalk/run_test.go), including [the HTTP example](../../examples/http/hello.talk) under SIGINT
 - First check: `go -C impl/go test ./internal/cmd/northtalk`
 
-## HTTP router
+## HTTP router and fetch client
 
-- Implementation: [`httphost`](internal/httphost/host.go), on `net/http`
-- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges)
-- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](internal/httphost/kit_test.go)
+- Implementation: [`httphost`](internal/httphost/host.go), on `net/http`; [`fetch`'s client](internal/httphost/fetch.go), `NewFetcher`, with its origins, bounds and TLS
+- Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges), [Fetching](../../spec/07-libraries-and-the-standard-library.md#fetching), [ADR 0151](../../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
+- Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](internal/httphost/kit_test.go), [fetch tests](internal/httphost/fetch_test.go) against local HTTP servers and the shared [TLS fixtures](../ts/tests/fixtures/http-tls/)
 - First check: `go -C impl/go test -race ./internal/httphost`
 
 ## Notification router
@@ -196,8 +196,10 @@ with its corpus runner Stubs in [internal/corpus/operations.go](internal/corpus/
 check it with `go -C impl/go test . -run User` and the `standard-user*`
 Capability cases.
 
-The optional `http` factory lives in [http_capability.go](http_capability.go),
-with its corpus runner Stubs in [internal/corpus/operations.go](internal/corpus/operations.go);
+The optional `http` factory lives in [http_capability.go](http_capability.go):
+`HTTPCapability` for the server Operations, `HTTPCapabilityWith` for them, `fetch`
+or both, and [http_fetch.go](http_fetch.go) for the normalized URL and request
+`Fetch` hears. Its corpus runner Stubs are in [internal/corpus/operations.go](internal/corpus/operations.go);
 the embedded Zig Core makes its checks. Check it with `go -C impl/go test . -run HTTP`
 and the `standard-http*` Capability cases.
 

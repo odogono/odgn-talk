@@ -1,5 +1,6 @@
 //! Runs `northtalk --port 0 examples/http/hello.talk` and checks its
-//! answers over real sockets, then that SIGINT ends it with 130.
+//! answers over real sockets, then that SIGINT ends it with 130. Then runs
+//! `fetch-smoke.talk`, which fetches from itself, and checks what it says.
 //! `zig build runner-test` runs it; so does `zig build test`.
 const std = @import("std");
 
@@ -44,8 +45,8 @@ pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
-    if (args.len != 3) {
-        std.debug.print("usage: runner-smoke <northtalk> <hello.talk>\n", .{});
+    if (args.len != 4) {
+        std.debug.print("usage: runner-smoke <northtalk> <hello.talk> <fetch-smoke.talk>\n", .{});
         return 2;
     }
     var child = try std.process.spawn(io, .{ .argv = &.{ args[1], "--port", "0", args[2] }, .stdin = .ignore, .stdout = .pipe, .stderr = .inherit });
@@ -81,5 +82,22 @@ pub fn main(init: std.process.Init) !u8 {
     const term = try child.wait(io);
     try expect(term == .exited and term.exited == 130, "SIGINT ended it with {f}", .{term});
     std.debug.print("runner-test: 7 checks passed on port {d}\n", .{port});
+
+    // http.fetch: the request, the response, an unfollowed redirect, a
+    // refused connection and an abandoned call.
+    const fetched = try std.process.run(a, io, .{ .argv = &.{ args[1], args[3] } });
+    const want =
+        \\201
+        \\2
+        \\["a=1", "b=2"]
+        \\{"method":"POST","path":"/echo","query":"a b","xa":"1, 2","type":"application/json","encoding":"identity","body":"{\"n\":1}"}
+        \\[302, "/elsewhere"]
+        \\network error
+        \\timeout
+        \\
+    ;
+    try expect(fetched.term == .exited and fetched.term.exited == 0, "fetch-smoke ended {f}: {s}", .{ fetched.term, fetched.stderr });
+    try expect(std.mem.eql(u8, fetched.stdout, want), "fetch-smoke said:\n{s}", .{fetched.stdout});
+    std.debug.print("runner-test: fetch checks passed\n", .{});
     return 0;
 }

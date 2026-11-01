@@ -131,7 +131,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 ## Running code: Groups, Pumps, the run loop, errors and unwinding, Capability calls, suspension, sends, Joins and `wait for`, the Fallback Handler, Queueing Policies and cancellation, Host Objects and the Message Path, Libraries and the stdlib, Lambdas and Function Values, Built-ins and date arithmetic, and charging
 
-- Implementation: [machine](src/machine/machine.zig), [chunks and properties](src/machine/chunks.zig), [Bytes builds and Binary Patterns](src/machine/binary.zig), [conversions](src/machine/convert.zig), [Text Patterns and the matcher](src/machine/matcher.zig), [Capabilities, Shapes and Grants](src/machine/capabilities.zig), [Standard Capabilities](src/machine/standard.zig), [Host Objects](src/machine/objects.zig), [Group allocator](src/machine/group_allocator.zig), [process allocator and wasm heap](src/process_allocator.zig), [stdlib sources](src/generated/stdlib_sources.zig), [Cost Model](src/machine/costs.zig), [Built-ins](src/machine/builtins.zig), [correctly rounded functions](src/decimal/transcendental.zig), [exports](src/talk.zig)
+- Implementation: [machine](src/machine/machine.zig), [chunks and properties](src/machine/chunks.zig), [Bytes builds and Binary Patterns](src/machine/binary.zig), [conversions](src/machine/convert.zig), [Text Patterns and the matcher](src/machine/matcher.zig), [Capabilities, Shapes and Grants](src/machine/capabilities.zig), [Standard Capabilities](src/machine/standard.zig), [`http.fetch`'s checks and URL normalization](src/machine/http_fetch.zig), [Host Objects](src/machine/objects.zig), [Group allocator](src/machine/group_allocator.zig), [process allocator and wasm heap](src/process_allocator.zig), [stdlib sources](src/generated/stdlib_sources.zig), [Cost Model](src/machine/costs.zig), [Built-ins](src/machine/builtins.zig), [correctly rounded functions](src/decimal/transcendental.zig), [exports](src/talk.zig)
 - Rules: [the machine](../../spec/08-the-abstract-machine-and-the-cost-model.md#the-machines-state), [the Cost Model](../../spec/08-the-abstract-machine-and-the-cost-model.md#the-cost-model), [chunks](../../spec/04-expressions-and-statements.md#chunk-expressions), [the Trace](../../spec/11-the-trace-and-conformance.md#the-trace), [Libraries](../../spec/07-libraries-and-the-standard-library.md#libraries)
 - Tests and cases: [replay](src/corpus/replay.zig), [talk.h replay](src/corpus/talk_replay.zig), [C Host tests](tests/talk_h_test.c), [fast path against the general loop](src/machine/fast_steps_test.zig)
 - First check: `cd impl/zig && zig build corpus -- text-model`
@@ -180,9 +180,9 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 ## The Script Runner and the HTTP router
 
-- Implementation: [Runner](src/runner/runner.zig), [HTTP router](src/runner/router.zig), [requests](src/runner/request.zig), [`northtalk`](src/repl/main.zig)
+- Implementation: [Runner](src/runner/runner.zig), [HTTP router](src/runner/router.zig), [requests](src/runner/request.zig), [`fetch`'s HTTPS client](src/runner/fetch.zig), [`northtalk`](src/repl/main.zig)
 - Rules: [The Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner), [The HTTP router](../../spec/09-embedding.md#the-http-router), [`http`](../../spec/07-libraries-and-the-standard-library.md#http)
-- Tests and cases: tests in the modules, [`smoke.zig`](src/runner/smoke.zig) on `examples/http/hello.talk`, [`http_kit.zig`](src/runner/http_kit.zig) on `corpus/http-kit/`
+- Tests and cases: tests in the modules, [`smoke.zig`](src/runner/smoke.zig) on `examples/http/hello.talk` and [`fetch-smoke.talk`](src/runner/fetch-smoke.talk), [`http_kit.zig`](src/runner/http_kit.zig) on `corpus/http-kit/`
 - First check: `cd impl/zig && zig build runner-test http-kit`
 
 ## Store Notification routing and checkpoints

@@ -68,6 +68,7 @@ test {
     _ = @import("ids.zig");
     _ = @import("machine/chunks.zig");
     _ = @import("machine/binary.zig");
+    _ = @import("machine/http_fetch.zig");
     _ = @import("machine/convert.zig");
     _ = @import("machine/matcher.zig");
     _ = @import("machine/capabilities.zig");

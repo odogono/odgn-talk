@@ -101,3 +101,59 @@ func TestHTTPFactoryResolvesArgumentsAndChecks(t *testing.T) {
 		t.Fatalf("heard %#v", host.heard)
 	}
 }
+
+type fetchHost struct{ heard []string }
+
+func (h *fetchHost) Fetch(c *Call, url string, request Value) error {
+	h.heard = append(h.heard, url, request.String())
+	c.Fail(&ScriptError{Code: "network error", Message: "offline"})
+	return nil
+}
+
+// A Host may offer fetch alone, the server Operations alone, or both; fetch
+// hears the normalized URL with query added and the request without it, and
+// the Core refuses an invalid request before the Host runs.
+func TestHTTPFactoryOffersFetch(t *testing.T) {
+	core := New()
+	host := &fetchHost{}
+	if _, err := core.HTTPCapabilityWith(nil, nil, Costs{}); err == nil {
+		t.Fatal("no Operations accepted")
+	}
+	if _, err := core.HTTPCapabilityWith(nil, host, Costs{}); err == nil {
+		t.Fatal("missing fetch cost accepted")
+	}
+	def, err := core.HTTPCapabilityWith(nil, host, Costs{"fetch": {Fuel: 4}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := core.NewGroup(GroupOptions{})
+	source := "script variable got = []\non go\n" +
+		" try\n  ask http to fetch \"HTTPS://API.Example.com:443/users#top\", {method: \"POST\", query: {email: \"ann@example.com\", tag: [\"a b\", \"ü\"]}, json: {n: 1}} and wait\n catch {code: code}\n  put code after got\n end try\n" +
+		" try\n  ask http to fetch \"https://127.1/\" and wait\n catch {code: code, field: f}\n  put [code, f] after got\n end try\n" +
+		" return got\nend go\n"
+	s, err := g.Load(LoadOptions{Name: "s", Source: source, Grants: map[string]*Grant{"http": def.GrantAll(nil)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Load(LoadOptions{Name: "t", Source: "on go\n ask http to unserve \"x\"\nend go\n", Grants: map[string]*Grant{"http": def.GrantAll(nil)}}); err == nil {
+		t.Fatal("a fetch-only http declared unserve")
+	}
+	_, p, err := s.Request(context.Background(), Message{Name: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	for i := range 3 {
+		if _, err := g.Pump(now.Add(time.Duration(i)*time.Millisecond), PumpOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	value, failure := p.Result()
+	if failure != nil || value.String() != `["network error", ["invalid request", "url"]]` {
+		t.Fatalf("result %v %v", value, failure)
+	}
+	want := []string{"https://api.example.com/users?email=ann%40example.com&tag=a%20b&tag=%C3%BC", `{method: "POST", json: "{" & quote & "n" & quote & ":1}"}`}
+	if !reflect.DeepEqual(host.heard, want) {
+		t.Fatalf("heard %#v", host.heard)
+	}
+}

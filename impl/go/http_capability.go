@@ -26,16 +26,47 @@ type HTTPImpl interface {
 	Respond(c *Call, exchange *Object, response Value) error
 }
 
-// HTTPCapability defines the optional http Operations. The binding is the
-// Host's own description of the addresses a Grant may listen on; the Core
-// never reads it. The embedded Zig Core makes chapter 7's argument and answer
-// checks, as for every Standard factory.
+// HTTPFetchImpl makes fetch's requests (chapter 7, Fetching; ADR 0151). The
+// Core has checked the request and raised `out of domain` and `invalid
+// request`. Fetch hears the normalized URL, with `query` added, and the
+// request without `query`: `method` always, `headers` and `body` as given,
+// and `json` as its compact JSON text. It answers through the Call with
+// {status, headers, body}, which the Core checks, or fails with `bad
+// address`, `network error` or `response too large`, and stops the request
+// when the Call's Context is done.
+type HTTPFetchImpl interface {
+	Fetch(c *Call, url string, request Value) error
+}
+
+// HTTPCapability defines the optional http server Operations. The binding is
+// the Host's own description of the addresses a Grant may listen on; the
+// Core never reads it. The embedded Zig Core makes chapter 7's argument and
+// answer checks, as for every Standard factory.
 func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error) {
 	if standardImplementationMissing(impl) {
 		return nil, &HostError{InvalidValue, "missing http implementation"}
 	}
+	return c.HTTPCapabilityWith(impl, nil, costs)
+}
+
+// HTTPCapabilityWith defines http with the server Operations, fetch, or
+// both: a nil server or client leaves its Operations out, and costs needs an
+// entry for each Operation offered. The binding also describes the origins a
+// Grant may fetch from.
+func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs Costs) (*CapabilityDef, error) {
+	serving, fetching := !standardImplementationMissing(server), !standardImplementationMissing(client)
+	if !serving && !fetching {
+		return nil, &HostError{InvalidValue, "missing http implementation"}
+	}
+	names := []string{}
+	if fetching {
+		names = append(names, "fetch")
+	}
+	if serving {
+		names = append(names, "serve", "unserve", "respond")
+	}
 	cost := map[string]Cost{}
-	for _, name := range []string{"serve", "unserve", "respond"} {
+	for _, name := range names {
 		opCost, err := standardCost(costs, name)
 		if err != nil {
 			return nil, err
@@ -61,7 +92,35 @@ func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error
 		Field{Key: "port", Shape: NumberShape, Optional: true},
 	))
 	address := MapShape(Field{Key: "host", Shape: TextShape}, Field{Key: "port", Shape: NumberShape})
-	ops := []Operation{
+	request := Optional(MapShape(
+		Field{Key: "method", Shape: TextShape, Optional: true},
+		Field{Key: "headers", Shape: OpenMap(), Optional: true},
+		Field{Key: "query", Shape: OpenMap(), Optional: true},
+		Field{Key: "body", Shape: OneOf(TextShape, BytesShape), Optional: true},
+		Field{Key: "json", Shape: AnyShape, Optional: true},
+	))
+	fetched := MapShape(Field{Key: "status", Shape: NumberShape}, Field{Key: "headers", Shape: OpenMap()}, Field{Key: "body", Shape: BytesShape})
+	// No MaxPending: a fetch waits for the Script's MaxWait.
+	fetch := Operation{Name: "fetch", Mode: Suspending, Args: []Shape{TextShape, request}, Result: fetched, Cost: cost["fetch"], Errors: errors("bad address", "network error", "response too large"),
+		Start: func(call *Call, args []Value) error {
+			raw, _ := args[0].AsText()
+			given := Nothing
+			if len(args) > 1 {
+				given = args[1]
+			}
+			url, err := fetchURL(raw, given)
+			if err != nil {
+				return err
+			}
+			resolved, err := fetchRequest(given)
+			if err != nil {
+				return err
+			}
+			return client.Fetch(call, url, resolved)
+		},
+	}
+	impl := server
+	all := []Operation{
 		{Name: "serve", Mode: Suspending, Args: []Shape{TextShape, TextShape, Optional(TextShape), options}, Result: address, Cost: cost["serve"], Errors: errors("address in use", "bad address"), MaxPending: httpMaxPending,
 			Start: func(call *Call, args []Value) error {
 				name, _ := args[0].AsText()
@@ -95,6 +154,13 @@ func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error
 				return Nothing, impl.Respond(call, o, resolved)
 			},
 		},
+	}
+	ops := []Operation{}
+	if fetching {
+		ops = append(ops, fetch)
+	}
+	if serving {
+		ops = append(ops, all...)
 	}
 	def, err := c.defineCapability("http", nil, nil, ops...)
 	if err != nil {

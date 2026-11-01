@@ -714,8 +714,18 @@ and 404, 500 and 503 settled from the Pump's reports. A suspending call the
 Host can answer at once, such as `serve`, is answered once the Pump returns,
 since a Host function's own answer to one isn't taken.
 
+`http.fetch` ([`fetch.zig`](src/runner/fetch.zig)) allows any origin, as
+chapter 12 says. Each call runs as a concurrent task on the Runner's
+`std.Io`, with `std.http.Client`: one HTTP/1.1 request on its own connection,
+`accept-encoding: identity` unless the Script sets one, no redirects, no
+decompression and no cookies, an 8 MiB body and 64 KiB header bound, and
+HTTPS verified against the system's certificate authorities and the host
+name. The task wakes the loop through a pipe, and the loop answers the call;
+a call the Core abandons cancels its task. A failure the Script sees as
+`network error` is written to standard error with its cause.
+
 ```sh
-zig build runner-test   # northtalk on examples/http/hello.talk, over sockets
+zig build runner-test   # northtalk on examples/http/hello.talk and fetch-smoke.talk, over sockets
 zig build http-kit      # corpus/http-kit/ through the native router
 ```
 

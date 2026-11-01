@@ -155,7 +155,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		case "user":
 			names = []string{"confirm", "choose", "enter", "notify"}
 		case "http":
-			names = []string{"serve", "unserve", "respond"}
+			names = []string{"serve", "unserve", "respond", "fetch"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -218,12 +218,22 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"notify": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape, options(talk.Field{Key: "title", Shape: optionalText, Optional: true})}},
 			}
 		case "http":
-			def, err = core.HTTPCapability(replayHTTP{out}, costs)
-			out.declarations[name] = map[string]talk.OperationCheck{
-				"serve":   {Mode: talk.Suspending},
-				"unserve": {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}},
-				"respond": {Mode: talk.Immediate},
+			// The case's costs say which Operations its Host offers.
+			_, client := costs["fetch"]
+			var server talk.HTTPImpl
+			out.declarations[name] = map[string]talk.OperationCheck{}
+			if len(costs) > 1 || !client {
+				server = replayHTTP{out}
+				out.declarations[name]["serve"] = talk.OperationCheck{Mode: talk.Suspending}
+				out.declarations[name]["unserve"] = talk.OperationCheck{Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}}
+				out.declarations[name]["respond"] = talk.OperationCheck{Mode: talk.Immediate}
 			}
+			var fetcher talk.HTTPFetchImpl
+			if client {
+				fetcher = replayHTTP{out}
+				out.declarations[name]["fetch"] = talk.OperationCheck{Mode: talk.Suspending}
+			}
+			def, err = core.HTTPCapabilityWith(server, fetcher, costs)
 		case "sqlite":
 			if _, old := row["perRow"]; old {
 				return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "sqlite perRow is replaced by perStep"}
@@ -678,6 +688,11 @@ type replayHTTP struct{ replay *operationReplay }
 // line settles later.
 func (h replayHTTP) Serve(c *talk.Call, _, _, _ string, _ talk.Value) error {
 	return replayUser(h).prompt("http.serve", c)
+}
+
+// Fetch makes no request: it waits for an answer, as Serve does.
+func (h replayHTTP) Fetch(c *talk.Call, _ string, _ talk.Value) error {
+	return replayUser(h).prompt("http.fetch", c)
 }
 func (h replayHTTP) Unserve(c *talk.Call, _ string) error {
 	return h.nothing("http.unserve", c)
