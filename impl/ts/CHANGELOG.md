@@ -7,6 +7,18 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-01
+
+### Added
+
+- **spec:** Let a Host give a Host Object its parent when it makes it, so a Script that gets a freshly made object from a Host function and sends to it in the same Run reaches the parent's Owning Script (ADR 0152).
+- **ts:** Let `group.object(kind, id, native, { parent })` give a Host Object its parent when it is made, so a Host that makes Handles lazily inside a Pump can route a Script's send to the new object in the same Run (ADR 0152).
+- **ts:** `@northtalk/ts/wasm` Groups take `group.object(kind, id, native, { parent })` too, now that the Zig reactor supports it (ADR 0152).
+
+### Fixed
+
+- **ts:** Report `unhandled`, with no Delivery id, when a Script sends to an object with no Owning Script on its Message Path or its message climbs past the last one, as the Zig Core does (#1875).
+
 ## [0.5.1] - 2026-10-31
 
 ### Added
