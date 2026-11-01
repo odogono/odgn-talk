@@ -1,0 +1,1649 @@
+{
+  "headless": false,
+  "results": {
+    "baseline delivery": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 50.667,
+          "p50": 57.333,
+          "p99": 64,
+          "max": 64
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.9,
+          "p50": 6.567,
+          "p99": 11.033,
+          "max": 11.033
+        }
+      },
+      "ticks": {
+        "count": 19,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 18,
+          "min": 2.5,
+          "p50": 7.125,
+          "p99": 12.625,
+          "max": 12.625
+        },
+        "pumpLateMs": {
+          "n": 19,
+          "min": 2.5,
+          "p50": 6.433,
+          "p99": 12.633,
+          "max": 12.633
+        }
+      },
+      "press": {
+        "count": 30,
+        "late": 0,
+        "eventToRenderMs": {
+          "n": 30,
+          "min": 10.779,
+          "p50": 15.613,
+          "p99": 50.267,
+          "max": 50.267
+        },
+        "headroomMs": {
+          "n": 30,
+          "min": 9.966,
+          "p50": 14.567,
+          "p99": 19.033,
+          "max": 19.033
+        }
+      },
+      "worker": {
+        "pumps": 73,
+        "wakeLateMs": {
+          "n": 73,
+          "min": -409.1,
+          "p50": 2.5,
+          "p99": 12.633,
+          "max": 12.633
+        },
+        "pumpMs": {
+          "n": 73,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 2.2,
+          "max": 2.2
+        }
+      }
+    },
+    "baseline now": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 19,
+        "late": 0,
+        "sampleErrorMax": 655,
+        "sampleErrors": {
+          "n": 19,
+          "min": 10,
+          "p50": 348,
+          "p99": 655,
+          "max": 655
+        },
+        "headroomMs": {
+          "n": 19,
+          "min": 59.233,
+          "p50": 63.733,
+          "p99": 67.1,
+          "max": 67.1
+        },
+        "pumpLateMs": {
+          "n": 19,
+          "min": 0.2,
+          "p50": 7.233,
+          "p99": 13.633,
+          "max": 13.633
+        }
+      },
+      "ticks": {
+        "count": 19,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 18,
+          "min": 0.333,
+          "p50": 4.229,
+          "p99": 9.938,
+          "max": 9.938
+        },
+        "pumpLateMs": {
+          "n": 19,
+          "min": 0.334,
+          "p50": 4,
+          "p99": 9.933,
+          "max": 9.933
+        }
+      },
+      "press": {
+        "count": 30,
+        "late": 0,
+        "eventToRenderMs": {
+          "n": 30,
+          "min": 10.579,
+          "p50": 15.95,
+          "p99": 47.567,
+          "max": 47.567
+        },
+        "headroomMs": {
+          "n": 30,
+          "min": 10.4,
+          "p50": 15.433,
+          "p99": 19.233,
+          "max": 19.233
+        }
+      },
+      "worker": {
+        "pumps": 78,
+        "wakeLateMs": {
+          "n": 78,
+          "min": -404.667,
+          "p50": -0.099,
+          "p99": 13.633,
+          "max": 13.633
+        },
+        "pumpMs": {
+          "n": 78,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 3.9,
+          "max": 3.9
+        }
+      }
+    },
+    "pumpCost 0ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": 52,
+          "p50": 56,
+          "p99": 64,
+          "max": 64
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.133,
+          "p50": 8.067,
+          "p99": 11.967,
+          "max": 11.967
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 0.125,
+          "p50": 6.021,
+          "p99": 13.437,
+          "max": 13.437
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.133,
+          "p50": 6.334,
+          "p99": 13.434,
+          "max": 13.434
+        }
+      },
+      "worker": {
+        "pumps": 38,
+        "wakeLateMs": {
+          "n": 38,
+          "min": -406.267,
+          "p50": 6.334,
+          "p99": 13.434,
+          "max": 13.434
+        },
+        "pumpMs": {
+          "n": 38,
+          "min": 0.1,
+          "p50": 0.5,
+          "p99": 2.8,
+          "max": 2.8
+        }
+      }
+    },
+    "pumpCost 10ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": 41.333,
+          "p50": 48,
+          "p99": 56,
+          "max": 56
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.867,
+          "p50": 7.433,
+          "p99": 10.967,
+          "max": 10.967
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 0.729,
+          "p50": 5.667,
+          "p99": 14.042,
+          "max": 14.042
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.734,
+          "p50": 5.667,
+          "p99": 14.033,
+          "max": 14.033
+        }
+      },
+      "worker": {
+        "pumps": 36,
+        "wakeLateMs": {
+          "n": 36,
+          "min": -403.967,
+          "p50": 5.733,
+          "p99": 14.033,
+          "max": 14.033
+        },
+        "pumpMs": {
+          "n": 36,
+          "min": 10,
+          "p50": 10.3,
+          "p99": 12,
+          "max": 12
+        }
+      }
+    },
+    "pumpCost 20ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": 17.333,
+          "p50": 40,
+          "p99": 44,
+          "max": 44
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0,
+          "p50": 5.933,
+          "p99": 25.767,
+          "max": 25.767
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 3.625,
+          "p50": 10.75,
+          "p99": 24.917,
+          "max": 24.917
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 3.633,
+          "p50": 11.033,
+          "p99": 24.933,
+          "max": 24.933
+        }
+      },
+      "worker": {
+        "pumps": 37,
+        "wakeLateMs": {
+          "n": 37,
+          "min": -408.166,
+          "p50": 6.2,
+          "p99": 25.767,
+          "max": 25.767
+        },
+        "pumpMs": {
+          "n": 37,
+          "min": 20,
+          "p50": 20.2,
+          "p99": 21.9,
+          "max": 21.9
+        }
+      }
+    },
+    "pumpCost 30ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 1,
+        "sampleErrorMax": 64,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 64,
+          "max": 64
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": -1.333,
+          "p50": 25.333,
+          "p99": 33.333,
+          "max": 33.333
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.267,
+          "p50": 9.667,
+          "p99": 36.667,
+          "max": 36.667
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.437,
+          "p50": 9.792,
+          "p99": 11.729,
+          "max": 11.729
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.434,
+          "p50": 9.8,
+          "p99": 11.733,
+          "max": 11.733
+        }
+      },
+      "worker": {
+        "pumps": 37,
+        "wakeLateMs": {
+          "n": 37,
+          "min": -409.267,
+          "p50": 8.033,
+          "p99": 36.667,
+          "max": 36.667
+        },
+        "pumpMs": {
+          "n": 37,
+          "min": 30,
+          "p50": 30.1,
+          "p99": 31.6,
+          "max": 31.6
+        }
+      }
+    },
+    "pumpCost 40ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 1,
+        "sampleErrorMax": 1024,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1024,
+          "max": 1024
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": -21.333,
+          "p50": 17.333,
+          "p99": 21.333,
+          "max": 21.333
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.2,
+          "p50": 9,
+          "p99": 42.967,
+          "max": 42.967
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 0.833,
+          "p50": 4.146,
+          "p99": 10.729,
+          "max": 10.729
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.833,
+          "p50": 4.734,
+          "p99": 10.733,
+          "max": 10.733
+        }
+      },
+      "worker": {
+        "pumps": 36,
+        "wakeLateMs": {
+          "n": 36,
+          "min": -406.167,
+          "p50": 5.833,
+          "p99": 42.967,
+          "max": 42.967
+        },
+        "pumpMs": {
+          "n": 36,
+          "min": 40,
+          "p50": 40.2,
+          "p99": 41.4,
+          "max": 41.4
+        }
+      }
+    },
+    "pumpCost 50ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 1,
+        "sampleErrorMax": 64,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 64,
+          "max": 64
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": -1.333,
+          "p50": 9.333,
+          "p99": 13.333,
+          "max": 13.333
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.367,
+          "p50": 4.7,
+          "p99": 15.233,
+          "max": 15.233
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.521,
+          "p50": 5.729,
+          "p99": 10.333,
+          "max": 10.333
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.533,
+          "p50": 6,
+          "p99": 10.334,
+          "max": 10.334
+        }
+      },
+      "worker": {
+        "pumps": 35,
+        "wakeLateMs": {
+          "n": 35,
+          "min": -409.167,
+          "p50": 4.8,
+          "p99": 15.233,
+          "max": 15.233
+        },
+        "pumpMs": {
+          "n": 35,
+          "min": 50,
+          "p50": 50.2,
+          "p99": 51.3,
+          "max": 51.3
+        }
+      }
+    },
+    "pumpCost 60ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 15,
+        "sampleErrorMax": 3072,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 256,
+          "p99": 3072,
+          "max": 3072
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": -64,
+          "p50": -4,
+          "p99": 0,
+          "max": 0
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 2.5,
+          "p50": 9.966,
+          "p99": 67.567,
+          "max": 67.567
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.521,
+          "p50": 6.417,
+          "p99": 66.042,
+          "max": 66.042
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.533,
+          "p50": 6.433,
+          "p99": 66.033,
+          "max": 66.033
+        }
+      },
+      "worker": {
+        "pumps": 40,
+        "wakeLateMs": {
+          "n": 40,
+          "min": -403.467,
+          "p50": 7.6,
+          "p99": 67.567,
+          "max": 67.567
+        },
+        "pumpMs": {
+          "n": 40,
+          "min": 60,
+          "p50": 60.1,
+          "p99": 61.3,
+          "max": 61.3
+        }
+      }
+    },
+    "pumpCost 80ms lead 50": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 16,
+        "sampleErrorMax": 4736,
+        "sampleErrors": {
+          "n": 16,
+          "min": 896,
+          "p50": 1216,
+          "p99": 4736,
+          "max": 4736
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": -98.667,
+          "p50": -24,
+          "p99": -18.667,
+          "max": -18.667
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 2.466,
+          "p50": 9.467,
+          "p99": 82.3,
+          "max": 82.3
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 16,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.333,
+          "p50": 6.667,
+          "p99": 44,
+          "max": 44
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.399,
+          "p50": 8.933,
+          "p99": 42.3,
+          "max": 42.3
+        }
+      },
+      "worker": {
+        "pumps": 36,
+        "wakeLateMs": {
+          "n": 36,
+          "min": -406.367,
+          "p50": 8.734,
+          "p99": 82.3,
+          "max": 82.3
+        },
+        "pumpMs": {
+          "n": 36,
+          "min": 80,
+          "p50": 80.1,
+          "p99": 81.5,
+          "max": 81.5
+        }
+      }
+    },
+    "pumpCost 30ms lead 100": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": 46.667,
+          "p50": 77.333,
+          "p99": 84,
+          "max": 84
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 0.367,
+          "p50": 5.333,
+          "p99": 35.3,
+          "max": 35.3
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.125,
+          "p50": 7.042,
+          "p99": 12.042,
+          "max": 12.042
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.134,
+          "p50": 7.2,
+          "p99": 12.033,
+          "max": 12.033
+        }
+      },
+      "worker": {
+        "pumps": 37,
+        "wakeLateMs": {
+          "n": 37,
+          "min": -359.267,
+          "p50": 5.6,
+          "p99": 35.3,
+          "max": 35.3
+        },
+        "pumpMs": {
+          "n": 37,
+          "min": 30,
+          "p50": 30.2,
+          "p99": 31.3,
+          "max": 31.3
+        }
+      }
+    },
+    "pumpCost 20ms lead 100": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 16,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 16,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 16,
+          "min": 70.667,
+          "p50": 89.333,
+          "p99": 93.333,
+          "max": 93.333
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.067,
+          "p50": 5.1,
+          "p99": 25.466,
+          "max": 25.466
+        }
+      },
+      "ticks": {
+        "count": 16,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 15,
+          "min": 1.229,
+          "p50": 5.833,
+          "p99": 25.396,
+          "max": 25.396
+        },
+        "pumpLateMs": {
+          "n": 16,
+          "min": 1.233,
+          "p50": 5.833,
+          "p99": 25.4,
+          "max": 25.4
+        }
+      },
+      "worker": {
+        "pumps": 37,
+        "wakeLateMs": {
+          "n": 37,
+          "min": -354.967,
+          "p50": 5.067,
+          "p99": 25.466,
+          "max": 25.466
+        },
+        "pumpMs": {
+          "n": 37,
+          "min": 20,
+          "p50": 20.2,
+          "p99": 22.1,
+          "max": 22.1
+        }
+      }
+    },
+    "press margin 0ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 24,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 24,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 24,
+          "min": 38.667,
+          "p50": 44,
+          "p99": 50.667,
+          "max": 50.667
+        },
+        "pumpLateMs": {
+          "n": 24,
+          "min": 0.233,
+          "p50": 5.133,
+          "p99": 10.067,
+          "max": 10.067
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 23,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 0.1,
+          "p50": 0.675,
+          "p99": 36,
+          "max": 36
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": -4.3,
+          "p50": -0.167,
+          "p99": 4.667,
+          "max": 4.667
+        }
+      },
+      "worker": {
+        "pumps": 66,
+        "wakeLateMs": {
+          "n": 66,
+          "min": -482.033,
+          "p50": -125.733,
+          "p99": 10.067,
+          "max": 10.067
+        },
+        "pumpMs": {
+          "n": 66,
+          "min": 0.1,
+          "p50": 0.4,
+          "p99": 4.6,
+          "max": 4.6
+        }
+      }
+    },
+    "press margin 2ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 24,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 24,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 24,
+          "min": 41.333,
+          "p50": 48,
+          "p99": 50.667,
+          "max": 50.667
+        },
+        "pumpLateMs": {
+          "n": 24,
+          "min": 0.367,
+          "p50": 4.967,
+          "p99": 10.567,
+          "max": 10.567
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 15,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 0,
+          "p50": 2.908,
+          "p99": 36.946,
+          "max": 36.946
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": -3.2,
+          "p50": 1.3,
+          "p99": 5.633,
+          "max": 5.633
+        }
+      },
+      "worker": {
+        "pumps": 70,
+        "wakeLateMs": {
+          "n": 70,
+          "min": -465.933,
+          "p50": -61.933,
+          "p99": 10.567,
+          "max": 10.567
+        },
+        "pumpMs": {
+          "n": 70,
+          "min": 0,
+          "p50": 0.3,
+          "p99": 4.8,
+          "max": 4.8
+        }
+      }
+    },
+    "press margin 5ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 24,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 24,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 24,
+          "min": 36,
+          "p50": 48,
+          "p99": 56,
+          "max": 56
+        },
+        "pumpLateMs": {
+          "n": 24,
+          "min": 0.233,
+          "p50": 7,
+          "p99": 10.1,
+          "max": 10.1
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 1,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 0.988,
+          "p50": 4.867,
+          "p99": 40.2,
+          "max": 40.2
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": -0.333,
+          "p50": 4.267,
+          "p99": 8,
+          "max": 8
+        }
+      },
+      "worker": {
+        "pumps": 65,
+        "wakeLateMs": {
+          "n": 65,
+          "min": -486.867,
+          "p50": -135.033,
+          "p99": 10.1,
+          "max": 10.1
+        },
+        "pumpMs": {
+          "n": 65,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 5.6,
+          "max": 5.6
+        }
+      }
+    },
+    "press margin 10ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 24,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 24,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 24,
+          "min": 41.333,
+          "p50": 52,
+          "p99": 58.667,
+          "max": 58.667
+        },
+        "pumpLateMs": {
+          "n": 24,
+          "min": 1.6,
+          "p50": 8.566,
+          "p99": 12.666,
+          "max": 12.666
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 0,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 6.842,
+          "p50": 10.942,
+          "p99": 42.242,
+          "max": 42.242
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": 6.533,
+          "p50": 10.233,
+          "p99": 14.6,
+          "max": 14.6
+        }
+      },
+      "worker": {
+        "pumps": 71,
+        "wakeLateMs": {
+          "n": 71,
+          "min": -455.967,
+          "p50": -63.967,
+          "p99": 12.666,
+          "max": 12.666
+        },
+        "pumpMs": {
+          "n": 71,
+          "min": 0,
+          "p50": 0.3,
+          "p99": 5.7,
+          "max": 5.7
+        }
+      }
+    },
+    "press margin 15ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 25,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 25,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 25,
+          "min": 50.667,
+          "p50": 58.667,
+          "p99": 68,
+          "max": 68
+        },
+        "pumpLateMs": {
+          "n": 25,
+          "min": 0.233,
+          "p50": 7.033,
+          "p99": 10,
+          "max": 10
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 0,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 10.988,
+          "p50": 16.383,
+          "p99": 45.721,
+          "max": 45.721
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": 9.6,
+          "p50": 15.167,
+          "p99": 19.567,
+          "max": 19.567
+        }
+      },
+      "worker": {
+        "pumps": 73,
+        "wakeLateMs": {
+          "n": 73,
+          "min": -490.267,
+          "p50": -92.3,
+          "p99": 10,
+          "max": 10
+        },
+        "pumpMs": {
+          "n": 73,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 3.2,
+          "max": 3.2
+        }
+      }
+    },
+    "press margin 20ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 24,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 24,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 24,
+          "min": 54.667,
+          "p50": 62.667,
+          "p99": 72,
+          "max": 72
+        },
+        "pumpLateMs": {
+          "n": 24,
+          "min": 0.233,
+          "p50": 8.1,
+          "p99": 10.767,
+          "max": 10.767
+        }
+      },
+      "press": {
+        "count": 40,
+        "late": 0,
+        "eventToRenderMs": {
+          "n": 40,
+          "min": 15.512,
+          "p50": 20.146,
+          "p99": 31.388,
+          "max": 31.388
+        },
+        "headroomMs": {
+          "n": 40,
+          "min": 15.3,
+          "p50": 19.767,
+          "p99": 24.1,
+          "max": 24.1
+        }
+      },
+      "worker": {
+        "pumps": 65,
+        "wakeLateMs": {
+          "n": 65,
+          "min": -471.6,
+          "p50": -89.9,
+          "p99": 10.767,
+          "max": 10.767
+        },
+        "pumpMs": {
+          "n": 65,
+          "min": 0,
+          "p50": 0.1,
+          "p99": 1.4,
+          "max": 1.4
+        }
+      }
+    },
+    "lead 5ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 6.667,
+          "p50": 13.333,
+          "p99": 17.333,
+          "max": 17.333
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 2.366,
+          "p50": 6.666,
+          "p99": 12.033,
+          "max": 12.033
+        }
+      },
+      "ticks": {
+        "count": 20,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 19,
+          "min": 0.229,
+          "p50": 5.208,
+          "p99": 10.021,
+          "max": 10.021
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.234,
+          "p50": 5.2,
+          "p99": 10.033,
+          "max": 10.033
+        }
+      },
+      "worker": {
+        "pumps": 47,
+        "wakeLateMs": {
+          "n": 47,
+          "min": -448.267,
+          "p50": 5.267,
+          "p99": 12.033,
+          "max": 12.033
+        },
+        "pumpMs": {
+          "n": 47,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 1.1,
+          "max": 1.1
+        }
+      }
+    },
+    "lead 10ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 13.333,
+          "p50": 21.333,
+          "p99": 24,
+          "max": 24
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0,
+          "p50": 3.3,
+          "p99": 8.333,
+          "max": 8.333
+        }
+      },
+      "ticks": {
+        "count": 20,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 19,
+          "min": 0.333,
+          "p50": 3.687,
+          "p99": 9.646,
+          "max": 9.646
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.333,
+          "p50": 3.7,
+          "p99": 9.633,
+          "max": 9.633
+        }
+      },
+      "worker": {
+        "pumps": 46,
+        "wakeLateMs": {
+          "n": 46,
+          "min": -448.367,
+          "p50": 2.733,
+          "p99": 9.633,
+          "max": 9.633
+        },
+        "pumpMs": {
+          "n": 46,
+          "min": 0.1,
+          "p50": 0.4,
+          "p99": 3.5,
+          "max": 3.5
+        }
+      }
+    },
+    "lead 20ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 26.667,
+          "p50": 30.667,
+          "p99": 36,
+          "max": 36
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.034,
+          "p50": 3.133,
+          "p99": 6.867,
+          "max": 6.867
+        }
+      },
+      "ticks": {
+        "count": 20,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 19,
+          "min": 0.125,
+          "p50": 5.833,
+          "p99": 9.542,
+          "max": 9.542
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.133,
+          "p50": 6.034,
+          "p99": 9.534,
+          "max": 9.534
+        }
+      },
+      "worker": {
+        "pumps": 52,
+        "wakeLateMs": {
+          "n": 52,
+          "min": -433.367,
+          "p50": 2.434,
+          "p99": 9.534,
+          "max": 9.534
+        },
+        "pumpMs": {
+          "n": 52,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 4.3,
+          "max": 4.3
+        }
+      }
+    },
+    "lead 30ms": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 36,
+          "p50": 41.333,
+          "p99": 45.333,
+          "max": 45.333
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.2,
+          "p50": 4.7,
+          "p99": 9.3,
+          "max": 9.3
+        }
+      },
+      "ticks": {
+        "count": 20,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 19,
+          "min": 1.729,
+          "p50": 6.333,
+          "p99": 11.333,
+          "max": 11.333
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 1.733,
+          "p50": 6.8,
+          "p99": 12.667,
+          "max": 12.667
+        }
+      },
+      "worker": {
+        "pumps": 50,
+        "wakeLateMs": {
+          "n": 50,
+          "min": -428.367,
+          "p50": 5.4,
+          "p99": 12.667,
+          "max": 12.667
+        },
+        "pumpMs": {
+          "n": 50,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 3.5,
+          "max": 3.5
+        }
+      }
+    },
+    "pause 3s then resume": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": [],
+      "beats": {
+        "count": 20,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 20,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 20,
+          "min": 56,
+          "p50": 60,
+          "p99": 65.333,
+          "max": 65.333
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 1.1,
+          "p50": 4.2,
+          "p99": 10.433,
+          "max": 10.433
+        }
+      },
+      "ticks": {
+        "count": 20,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 19,
+          "min": 0.229,
+          "p50": 4.229,
+          "p99": 11.625,
+          "max": 11.625
+        },
+        "pumpLateMs": {
+          "n": 20,
+          "min": 0.233,
+          "p50": 6.333,
+          "p99": 14.867,
+          "max": 14.867
+        }
+      },
+      "worker": {
+        "pumps": 49,
+        "wakeLateMs": {
+          "n": 49,
+          "min": -405.967,
+          "p50": 4.1,
+          "p99": 14.867,
+          "max": 14.867
+        },
+        "pumpMs": {
+          "n": 49,
+          "min": 0,
+          "p50": 0.2,
+          "p99": 3.3,
+          "max": 3.3
+        }
+      }
+    },
+    "hidden tab 10-30s": {
+      "sampleRate": 48000,
+      "baseLatencyMs": 5.333333333333333,
+      "outputLatencyMs": 24,
+      "visibility": ["hidden@0.79", "visible@29.55"],
+      "beats": {
+        "count": 79,
+        "late": 0,
+        "sampleErrorMax": 1,
+        "sampleErrors": {
+          "n": 79,
+          "min": 0,
+          "p50": 0,
+          "p99": 1,
+          "max": 1
+        },
+        "headroomMs": {
+          "n": 79,
+          "min": 52,
+          "p50": 58.667,
+          "p99": 66.667,
+          "max": 66.667
+        },
+        "pumpLateMs": {
+          "n": 79,
+          "min": 0.067,
+          "p50": 5.933,
+          "p99": 12.9,
+          "max": 12.9
+        }
+      },
+      "ticks": {
+        "count": 78,
+        "late": 0,
+        "driftPerTickMs": {
+          "n": 77,
+          "min": 0.229,
+          "p50": 5.146,
+          "p99": 12.729,
+          "max": 12.729
+        },
+        "pumpLateMs": {
+          "n": 78,
+          "min": 0.234,
+          "p50": 5.133,
+          "p99": 12.733,
+          "max": 12.733
+        }
+      },
+      "worker": {
+        "pumps": 166,
+        "wakeLateMs": {
+          "n": 166,
+          "min": -409.4,
+          "p50": 5.1,
+          "p99": 12.733,
+          "max": 12.9
+        },
+        "pumpMs": {
+          "n": 166,
+          "min": 0,
+          "p50": 0.4,
+          "p99": 2.7,
+          "max": 3.9
+        }
+      }
+    }
+  }
+}
