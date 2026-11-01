@@ -1094,20 +1094,55 @@ fn fuelLeft(run: *const Run) u64 {
     return run.limits.fuel_per_run -| run.fuel;
 }
 
-/// Charges a fast-path instruction its `cost` as `execute` charges one,
-/// with any dispatch `clause` rate pending. False, charging nothing, when
-/// the Run can't cover it: the general loop then runs it and faults.
-inline fn fastCharge(run: *Run, charged: bool, cost: costs.Charge) bool {
-    run.clause_fuel += run.called_clause;
-    run.called_clause = 0;
-    if (!charged) return true;
-    const fuel = cost.fuel + run.clause_fuel;
-    if (run.base == 0 and (fuel > fuelLeft(run) or run.alloc + cost.alloc > run.limits.alloc_per_run)) return false;
-    run.clause_fuel = 0;
-    run.fuel += fuel;
-    run.alloc += cost.alloc;
-    return true;
-}
+/// The limits the fast path checks each instruction against, read once as
+/// it starts. Nothing it runs changes a Run's limits, its Cleanup start,
+/// its Segment's start, its Script's slice or the Pump's Fuel, so each
+/// check is one comparison with the Run's own Fuel or allocation.
+const FastBounds = struct {
+    charged: bool,
+    /// The Run's Fuel at which `preemption` would stop it, or never.
+    preempt_at: u64,
+    /// The Fuel `fuelLeft` counts down to, so that it is `fuel_ceiling -|
+    /// run.fuel`. A Cleanup Budget past 2^64 saturates, as no Run spends.
+    fuel_ceiling: u64,
+    alloc_ceiling: u64,
+
+    fn of(g: *const Group, run: *const Run, charged: bool) FastBounds {
+        const unbounded = std.math.maxInt(u64);
+        if (run.base != 0) return .{ .charged = charged, .preempt_at = unbounded, .fuel_ceiling = unbounded, .alloc_ceiling = unbounded };
+        // `preemption` stops a Run once its Stretch, `fuel - segment_fuel`,
+        // reaches what the slice or cap leaves.
+        var preempt_at: u64 = unbounded;
+        if (g.slice > 0) preempt_at = @min(preempt_at, run.segment_fuel +| (run.script.allowance -| run.script.spent));
+        if (g.cap > 0) preempt_at = @min(preempt_at, run.segment_fuel +| (g.cap -| g.pump_fuel));
+        return .{
+            .charged = charged,
+            .preempt_at = preempt_at,
+            .fuel_ceiling = if (run.cleanup_from) |from| from +| run.limits.cleanup_budget else run.limits.fuel_per_run,
+            .alloc_ceiling = run.limits.alloc_per_run,
+        };
+    }
+
+    /// Whether `preemption` would stop the Run before its next instruction.
+    inline fn preempted(b: FastBounds, run: *const Run) bool {
+        return run.fuel >= b.preempt_at;
+    }
+
+    /// Charges a fast-path instruction its `cost` as `execute` charges one,
+    /// with any dispatch `clause` rate pending. False, charging nothing, when
+    /// the Run can't cover it: the general loop then runs it and faults.
+    inline fn charge(b: FastBounds, run: *Run, cost: costs.Charge) bool {
+        run.clause_fuel += run.called_clause;
+        run.called_clause = 0;
+        if (!b.charged) return true;
+        const fuel = cost.fuel + run.clause_fuel;
+        if (fuel > b.fuel_ceiling -| run.fuel or run.alloc + cost.alloc > b.alloc_ceiling) return false;
+        run.clause_fuel = 0;
+        run.fuel += fuel;
+        run.alloc += cost.alloc;
+        return true;
+    }
+};
 
 /// The operands an instruction is about to pop, retained until it ends,
 /// so that an Error-mode cleanup can count them on the failed
@@ -7414,11 +7449,12 @@ pub const Group = struct {
         // What the general loop does first, once.
         scratch_arena.reset(&g.scratch);
         g.flushHeld();
+        const bounds: FastBounds = .of(g, run, charged);
         const code = unit.code;
         const stack = &frame.stack;
         while (true) {
             if (g.host_poll != null and g.host_poll_ticks +% 1 == 0) return;
-            if (run.base == 0) if (g.preemption(run) != null) return;
+            if (bounds.preempted(run)) return;
             const ins = code[frame.pc];
             const ops = ins.operands;
             const len = stack.items.len;
@@ -7428,28 +7464,28 @@ pub const Group = struct {
                         .value => |v| v,
                         else => return,
                     };
-                    if (len == stack.capacity or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     stack.appendAssumeCapacity(.{ .value = v.retain() });
                 },
                 .load => {
-                    if (len == stack.capacity or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
                 },
                 .store => {
-                    if (len == 0 or stack.items[len - 1] != .value or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     const s: usize = @intCast(ops[0].int);
                     frame.locals[s].release();
                     frame.locals[s] = pop(frame);
                 },
                 .move => {
-                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     const from: usize = @intCast(ops[0].int);
                     const to: usize = @intCast(ops[1].int);
                     frame.locals[to].release();
                     frame.locals[to] = frame.locals[from].retain();
                 },
                 .jump => {
-                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     frame.pc = @intCast(ops[0].int);
                     g.fastTick();
                     continue;
@@ -7457,7 +7493,7 @@ pub const Group = struct {
                 .branch_false, .branch_true => {
                     if (len == 0 or stack.items[len - 1] != .value) return;
                     const v = stack.items[len - 1].value;
-                    if (v.data != .bool or !fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (v.data != .bool or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     _ = stack.pop();
                     const taken = v.data.bool == (ins.op == .branch_true);
                     v.release();
@@ -7478,15 +7514,15 @@ pub const Group = struct {
                     };
                     // Two Numbers compare no pairs: `scanned` is 0.
                     const before: ChargeState = .of(g, run);
-                    if (!fastCharge(run, charged, costs.chargeUnmeasured(ins.op))) return;
+                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                     g.fastTick();
                     // A branch on the result, if nothing comes between them,
                     // takes it without building the boolean.
                     const branch = code[frame.pc + 1];
                     if ((branch.op == .branch_false or branch.op == .branch_true) and
                         !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
-                        !(run.base == 0 and g.preemption(run) != null) and
-                        fastCharge(run, charged, costs.chargeUnmeasured(branch.op)))
+                        !bounds.preempted(run) and
+                        bounds.charge(run, costs.chargeUnmeasured(branch.op)))
                     {
                         replaceOperands(stack, null);
                         g.fastTick();
@@ -7516,9 +7552,9 @@ pub const Group = struct {
                     };
                     const numbers = pair[0].data == .number and pair[1].data == .number;
                     const completed = if (numbers)
-                        g.fastArithmetic(run, charged, frame, code, ins, op, pair, false)
+                        g.fastArithmetic(run, bounds, frame, code, ins, op, pair, false)
                     else
-                        g.fastArithmetic(run, charged, frame, code, ins, op, pair, true);
+                        g.fastArithmetic(run, bounds, frame, code, ins, op, pair, true);
                     if (!completed) return;
                     continue;
                 },
@@ -7529,7 +7565,7 @@ pub const Group = struct {
                     const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
                     var probe: Value = .{ .allocator = g.gpa, .data = .{ .quantity = q } };
                     const before: ChargeState = .of(g, run);
-                    if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .input = v, .result = &probe }))) return;
+                    if (!bounds.charge(run, costs.chargeStatic(.convert, &.{ .input = v, .result = &probe }))) return;
                     if (v.references == 1) {
                         v.data = .{ .quantity = q };
                     } else {
@@ -7551,14 +7587,18 @@ pub const Group = struct {
     /// Keep the Number-only specialization narrow: carrying a runtime Data
     /// union through every scalar step adds copies and tag checks to the hot
     /// counting/addition path. Both specializations charge the same formulas.
-    inline fn fastArithmetic(g: *Group, run: *Run, charged: bool, frame: *Frame, code: []const lower.Instruction, ins: lower.Instruction, op: model.decimal.Operator, pair: [2]*Value, comptime quantity: bool) bool {
+    inline fn fastArithmetic(g: *Group, run: *Run, bounds: FastBounds, frame: *Frame, code: []const lower.Instruction, ins: lower.Instruction, op: model.decimal.Operator, pair: [2]*Value, comptime quantity: bool) bool {
         const result = if (quantity)
             model.arithmeticResult(g.gpa, op, pair[0], pair[1]) catch return false
         else
             model.decimal.calculate(g.gpa, op, pair[0].data.number, pair[1].data.number) catch return false;
         var probe: Value = .{ .allocator = g.gpa, .data = if (quantity) result else .{ .number = result } };
         const before: ChargeState = .of(g, run);
-        if (!fastCharge(run, charged, costs.chargeInstruction(ins.op, &.{ .result = &probe }))) return false;
+        const cost = switch (ins.op) {
+            inline .add, .subtract, .multiply, .divide, .div, .mod => |o| costs.chargeStatic(o, &.{ .result = &probe }),
+            else => unreachable,
+        };
+        if (!bounds.charge(run, cost)) return false;
         g.fastTick();
         const stack = &frame.stack;
         // Reuse a numeric local only after both instructions can complete,
@@ -7570,8 +7610,8 @@ pub const Group = struct {
             const reusable = old.data == .number or (quantity and old.data == .quantity);
             if (reusable and old.references == held + 1 and
                 !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
-                !(run.base == 0 and g.preemption(run) != null) and
-                fastCharge(run, charged, costs.chargeUnmeasured(.store)))
+                !bounds.preempted(run) and
+                bounds.charge(run, costs.chargeUnmeasured(.store)))
             {
                 replaceOperands(stack, null);
                 if (quantity) old.data = result else old.data.number = result;

@@ -86,6 +86,18 @@ pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
     return chargeRate(rate, m);
 }
 
+/// `chargeInstruction(op, m)` for an `op` known at compile time, with its
+/// rate's generated formula evaluated inline, so a measured charge on the
+/// run loop's fast path reads only the measures its formula uses. Not for
+/// Built-ins or restricted refusals, whose rates are chosen at run time.
+pub inline fn chargeStatic(comptime op: Opcode, m: *const Measures) Charge {
+    std.debug.assert(m.builtin.len == 0 and !m.restricted_refusal);
+    const rate = comptime instruction_rates[@backingInt(op)] orelse return .{ .fuel = 0, .alloc = 0 };
+    const formula = comptime rate.formula orelse return chargeRateGeneric(rate, m);
+    const base = @call(.always_inline, rates.evaluateSpecialized, .{ formula, m, measure });
+    return .{ .fuel = base.fuel + m.fuel_extra, .alloc = base.alloc + m.alloc_extra };
+}
+
 // Each instruction's charge when its formulas measure nothing: no subject,
 // and zero scanned, count, steps and declared Fuel.
 const unmeasured_charges = blk: {
@@ -172,17 +184,31 @@ fn scalars(text: []const u8) u64 {
 }
 
 fn digits(c: u128) u64 {
-    var n: u64 = 1;
-    // Most coefficients fit 64 bits, whose division is much cheaper.
+    // Most coefficients fit 64 bits: estimate the count from the bit length,
+    // then correct it by one comparison, with no division.
     if (c <= std.math.maxInt(u64)) {
-        var y: u64 = @intCast(c);
-        while (y >= 10) : (y /= 10) n += 1;
-        return n;
+        const y: u64 = @intCast(c);
+        const bits: usize = 64 - @clz(y | 1);
+        const estimate: usize = (bits * 1233) >> 12; // floor(bits * log10(2))
+        // `| 1` counts 0 as one digit, and changes no comparison: 10^k is even.
+        return estimate + @intFromBool((y | 1) >= powers_of_ten[estimate]);
     }
+    var n: u64 = 1;
     var x = c;
     while (x >= 10) : (x /= 10) n += 1;
     return n;
 }
+
+/// 10^k for every k up to 19, the largest power of ten in 64 bits.
+const powers_of_ten = blk: {
+    var out: [20]u64 = undefined;
+    var p: u64 = 1;
+    for (&out) |*o| {
+        o.* = p;
+        p *%= 10;
+    }
+    break :blk out;
+};
 
 fn items(v: *const Value) u64 {
     return switch (v.data) {
@@ -367,4 +393,30 @@ test "generated rounding, factors, large measures and Host extras preserve check
     try expectRateAgreement(&m);
     m.result = null;
     try expectRateAgreement(&m);
+}
+
+test "digits counts every power-of-ten boundary in 64 bits and beyond" {
+    try std.testing.expectEqual(@as(u64, 1), digits(0));
+    var p: u128 = 1;
+    for (1..39) |k| {
+        try std.testing.expectEqual(@as(u64, k), digits(p));
+        if (p > 1) try std.testing.expectEqual(@as(u64, k - 1), digits(p - 1));
+        try std.testing.expectEqual(@as(u64, k), digits(p * 10 - 1));
+        p *= 10;
+    }
+    try std.testing.expectEqual(@as(u64, 20), digits(std.math.maxInt(u64)));
+    try std.testing.expectEqual(@as(u64, 39), digits(std.math.maxInt(u128)));
+}
+
+test "chargeStatic agrees with chargeInstruction for arithmetic and conversion" {
+    const gpa = std.testing.allocator;
+    const sources = [_][]const u8{ "0", "7", "-12", "1234567.5", "99999999", "100000000", "18446744073709551615", "1000000000000000000000000000000", "123456789012345678901234567890123" };
+    inline for (.{ .add, .subtract, .multiply, .divide, .div, .mod, .convert }) |op| {
+        for (sources) |source| {
+            const n = try model.scalar(gpa, .{ .number = try model.Decimal.parse(source) });
+            defer n.release();
+            const m: Measures = .{ .input = n, .result = n, .fuel_extra = 3, .alloc_extra = 5 };
+            try std.testing.expectEqual(chargeInstruction(op, &m), chargeStatic(op, &m));
+        }
+    }
 }
