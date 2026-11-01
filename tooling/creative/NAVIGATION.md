@@ -179,6 +179,21 @@ path and commit it came from. No original game's sound assets are included.
   checkouts of the originals, and fails if a copy renders differently.
 - First check: `bun test tooling/creative/tests/audio`.
 
+## Transport and beat
+
+- [transport.ts](src/transport.ts): the Transport's tempo, time signature and
+  beat grid on the Play clock, the lead, and which beats are due.
+- [play.ts](src/play.ts): `PlaySession.pump` delivers due beats to Scripts
+  that handle `beat`, remembers each Delivery's musical time for
+  `beatTimeOf`, and folds the next delivery into `nextDeadline`, so the Play
+  worker and the harness need no beat scheduling of their own.
+- [grants/transport.ts](src/grants/transport.ts): the `transport` Grant.
+  [instruments/session.ts](src/instruments/session.ts) times sounds from the
+  call's beat Delivery and `at`.
+- Tests: [transport.test.ts](tests/transport.test.ts) covers the grid, tempo
+  changes, `beat` delivery, sound times, `beats` with `wait` and Pause.
+- First check: `bun test tooling/creative/tests/transport.test.ts`.
+
 ## Instruments
 
 Instrument kinds, editing in Info and Play wiring (ADR 0158, #1894).
@@ -377,7 +392,7 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
 ## Grants
 
 - [grants/](src/grants/): one module per Grant (`pages`, `elements`, `sound`,
-  `user`, `folio`, `canvas`), each declaring its Operations once and building
+  `user`, `folio`, `canvas`, `transport`), each declaring its Operations once and building
   its Capability over the narrow state [play.ts](src/play.ts) passes in.
   [grants/grant.ts](src/grants/grant.ts) derives the Manifest entry and the
   Library declarations; [grants/index.ts](src/grants/index.ts) lists them.

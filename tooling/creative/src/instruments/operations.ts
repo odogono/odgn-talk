@@ -3,22 +3,32 @@ import { shape } from '@northtalk/ts';
 import type { OperationDeclaration } from '../grants/grant';
 
 const note = shape.oneOf(shape.number, shape.text);
+/** When a sound plays, after the `beat` that started the Run, or else now. */
+export const AT = shape.optional(shape.quantityKind('exact duration'));
+const AT_PROSE =
+  ' An optional exact duration delays it: from the beat a `beat` Handler runs for, or else from now.';
 
 export const NOTE_OPERATIONS = {
   play: {
     mode: 'fire-and-forget',
-    args: [note, shape.optional(shape.number)],
+    args: [note, shape.optional(shape.number), AT],
     cost: { fuel: 1 },
-    description:
-      'Starts a note, a MIDI number or a name such as "c3" or "f#4", at an optional velocity from 0 to 1.',
-    examples: ['tell bass to play "c3"', 'tell bass to play 60, 0.5'],
+    description: `Starts a note, a MIDI number or a name such as "c3" or "f#4", at an optional velocity from 0 to 1.${AT_PROSE}`,
+    examples: [
+      'tell bass to play "c3"',
+      'tell bass to play 60, 0.5',
+      'tell bass to play "e3", 1, 250 ms',
+    ],
   },
   release: {
     mode: 'fire-and-forget',
-    args: [note],
+    args: [note, AT],
     cost: { fuel: 1 },
-    description: 'Releases a note the Instrument is playing.',
-    examples: ['tell bass to release "c3"'],
+    description: `Releases a note the Instrument is playing.${AT_PROSE}`,
+    examples: [
+      'tell bass to release "c3"',
+      'tell bass to release "c3", 400 ms',
+    ],
   },
   stop: {
     mode: 'fire-and-forget',

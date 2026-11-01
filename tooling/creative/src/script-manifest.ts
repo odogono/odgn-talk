@@ -147,6 +147,7 @@ const messages = [
   'closePage',
   'startPlay',
   'textChanged',
+  'beat',
 ].map(name => ({
   name,
   args:
@@ -154,7 +155,9 @@ const messages = [
       ? ['text']
       : name === 'click' || name === 'pointerHeld'
         ? ['value']
-        : [],
+        : name === 'beat'
+          ? ['value', 'value', 'value']
+          : [],
 }));
 
 // Folio also delivers messages authored Scripts send to each other. Declare

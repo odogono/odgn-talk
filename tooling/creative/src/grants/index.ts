@@ -5,6 +5,7 @@ import { folioGrant, type FolioState } from './folio';
 import { manifestGrant, libraryDeclarations } from './grant';
 import { pagesGrant, type PagesState } from './pages';
 import { soundGrant, type SoundState } from './sound';
+import { transportGrant, type TransportState } from './transport';
 import { userGrant, type UserState } from './user';
 
 export const FOLIO_GRANTS = [
@@ -14,6 +15,7 @@ export const FOLIO_GRANTS = [
   userGrant,
   folioGrant,
   canvasGrant,
+  transportGrant,
 ] as const;
 
 /** The session state every Grant reads, as one Play Session supplies it. */
@@ -23,6 +25,7 @@ export type GrantStates = {
   folio: FolioState;
   pages: PagesState;
   sound: SoundState;
+  transport: TransportState;
   user: UserState;
 };
 
@@ -34,6 +37,7 @@ export const grantsFor = (states: GrantStates) => ({
   user: userGrant.grant(states.user),
   folio: folioGrant.grant(states.folio),
   canvas: canvasGrant.grant(states.canvas),
+  transport: transportGrant.grant(states.transport),
 });
 
 export const manifestGrants = () => FOLIO_GRANTS.map(manifestGrant);
