@@ -1,0 +1,29 @@
+# unowned-sends: a Script `send` to an object with no Owning Script on its
+# Message Path is `unhandled` with no Delivery id and the object as its
+# target. A Command Call with no Handler, in a Script whose owner has no
+# Owning Script above it, is `unhandled` with that owner as its target. A
+# message a Script sent that climbs past the last Owning Script is
+# `unhandled` too (spec chapter 5, The Message Path; #1875).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "thing"
+
+[[objects]]
+kind = "thing"
+id = "home"
+
+[[objects]]
+kind = "thing"
+id = "orphan"
+
+[[scripts]]
+name = "keeper"
+source = "keeper.talk"
+owner = { kind = "thing", id = "home" }
+objects = { orphan = { kind = "thing", id = "orphan" }, home = { kind = "thing", id = "home" } }

@@ -1,0 +1,18 @@
+# unowned-sends: the orphan has no Owning Script, the home object has no
+# parent, and keeper has no Handler for `missing`.
+
+> load keeper identity=36ee2b6ef4d81383245fc88172899e7a9bff4d21d8e9b919532bfe9c1685a577
+> deliver d1 to=keeper message=go
+> pump clock=2026-11-01T09:00:00Z
+unhandled message=arrive args=[1] target=<object thing "orphan">
+unhandled message=ring args=["up"] target=<object thing "home">
+send keeper/r1 to=<object thing "home"> message=missing args=[2]
+seg keeper/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=146 state=48 end=return
+run keeper/r1 outcome=completed delivery=d1 handler=go fuel=78 alloc=146
+seg keeper/r2 start from=keeper/r1 fuel=0 alloc=0 state=0 end=unhandled
+run keeper/r2 outcome=unhandled fuel=0 alloc=0
+unhandled message=missing args=[2] target=<object thing "home">
+pumped state=idle fuel=78
+
+> vars
+vars keeper

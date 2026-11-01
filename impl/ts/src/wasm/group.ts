@@ -800,6 +800,9 @@ export class WasmGroup implements Group {
         break;
       }
       case 'unhandled': {
+        if (!r.delivery) {
+          delete r.delivery;
+        }
         const message = field(j, 'message');
         r.message = {
           name: textOf(field(message, 'name')),
@@ -854,7 +857,9 @@ export class WasmGroup implements Group {
       this.#settle(id, undefined, sendFailed('function gone'));
     }
     const unhandled = new Set(
-      rows.flatMap(r => (r.kind === 'unhandled' ? [r.delivery] : [])),
+      rows.flatMap(r =>
+        r.kind === 'unhandled' && r.delivery ? [r.delivery] : [],
+      ),
     );
     for (const r of rows) {
       switch (r.kind) {
@@ -894,7 +899,9 @@ export class WasmGroup implements Group {
           this.#runs.delete(r.run);
           break;
         case 'unhandled':
-          this.#settle(r.delivery, undefined, sendFailed('unhandled'));
+          if (r.delivery) {
+            this.#settle(r.delivery, undefined, sendFailed('unhandled'));
+          }
           break;
         case 'stop':
           for (const id of r.droppedMessages) {

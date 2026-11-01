@@ -397,6 +397,56 @@ describe('run end reports', () => {
 });
 
 describe('unhandled reports', () => {
+  test('a Script send with no Owning Script on its path has no delivery', () => {
+    const thing = defineObjectKind<null>({ name: 'thing', props: {} });
+    const g = newGroup({ name: 'g' });
+    const home = g.object(thing, 'home', null);
+    const orphan = g.object(thing, 'orphan', null);
+    g.load({
+      name: 's',
+      owner: home,
+      source: 'on go x\n  send arrive with 1 to x\n  ring 2\nend go',
+    });
+    g.deliver(home, { name: 'go', args: [orphan.value] });
+    const reports = operationalReports(g.pump(now).reports).filter(
+      r => r.kind === 'unhandled',
+    );
+    expect(reports).toEqual([
+      {
+        kind: 'unhandled',
+        message: { name: 'arrive', args: [dec('1')] },
+        target: orphan,
+      },
+      {
+        kind: 'unhandled',
+        message: { name: 'ring', args: [dec('2')] },
+        target: home,
+      },
+    ]);
+  });
+
+  test('a Script-sent message that climbs past the last Owning Script', () => {
+    const thing = defineObjectKind<null>({ name: 'thing', props: {} });
+    const g = newGroup({ name: 'g' });
+    const home = g.object(thing, 'home', null);
+    g.load({
+      name: 's',
+      owner: home,
+      source: 'on go x\n  send missing with 3 to x\nend go',
+    });
+    g.deliver(home, { name: 'go', args: [home.value] });
+    const reports = operationalReports(g.pump(now).reports).filter(
+      r => r.kind === 'unhandled',
+    );
+    expect(reports).toEqual([
+      {
+        kind: 'unhandled',
+        message: { name: 'missing', args: [dec('3')] },
+        target: home,
+      },
+    ]);
+  });
+
   test('a Delivery to an object gives the object it was delivered to', () => {
     const room = defineObjectKind<null>({ name: 'room', props: {} });
     const g = newGroup({ name: 'g' });
