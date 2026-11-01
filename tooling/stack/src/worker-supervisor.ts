@@ -9,7 +9,7 @@
 /** What the supervisor needs of a `Worker`. */
 export type SupervisedWorker = {
   onmessage: ((event: MessageEvent) => void) | null;
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   terminate(): void;
 };
 
@@ -47,10 +47,16 @@ export class WorkerSupervisor<Request, Response> {
     this.worker = this.start();
   }
 
-  /** Posts a request, and resolves with the worker's reply to it. */
-  call(request: Request): Promise<Response> {
+  /**
+   * Posts a request, and resolves with the worker's reply to it. `transfer`
+   * moves objects such as a `MessagePort` to the worker with the request.
+   */
+  call(request: Request, transfer: Transferable[] = []): Promise<Response> {
     const id = this.nextId++;
-    this.worker.postMessage({ id, request } satisfies Envelope<Request>);
+    this.worker.postMessage(
+      { id, request } satisfies Envelope<Request>,
+      transfer,
+    );
     return new Promise(resolve => this.pending.set(id, resolve));
   }
 

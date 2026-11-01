@@ -1,8 +1,9 @@
 // The AudioWorklet module that plays a Play Session's Instruments (#1894).
 // The page builds it with the session's Instruments and decoded sounds, then
-// posts each InstrumentMessage the Play worker sends.
+// hands it a port on which the Play worker posts each InstrumentMessage.
 import {
   INSTRUMENT_PROCESSOR,
+  type InstrumentChannel,
   InstrumentRack,
   type NoteOnset,
   type RackSetup,
@@ -19,7 +20,7 @@ declare function registerProcessor(
 ): void;
 declare class AudioWorkletProcessor {
   readonly port: {
-    onmessage: ((event: { data: InstrumentMessage }) => void) | null;
+    onmessage: ((event: { data: InstrumentChannel }) => void) | null;
     postMessage(message: NoteOnset): void;
   };
 }
@@ -38,7 +39,11 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       sampleRate,
       report ? onset => this.port.postMessage(onset) : undefined,
     );
-    this.port.onmessage = event => this.#rack.receive(event.data);
+    // The page hands over the channel the Play worker sends commands on.
+    this.port.onmessage = ({ data }) => {
+      data.port.onmessage = (event: MessageEvent<InstrumentMessage>) =>
+        this.#rack.receive(event.data);
+    };
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {

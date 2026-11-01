@@ -13,9 +13,11 @@ type Response = { t: string };
 class FakeWorker implements SupervisedWorker {
   onmessage: ((event: MessageEvent) => void) | null = null;
   readonly received: Envelope<Request>[] = [];
+  readonly transferred: Transferable[][] = [];
   terminated = false;
-  postMessage(message: unknown): void {
+  postMessage(message: unknown, transfer: Transferable[] = []): void {
     this.received.push(message as Envelope<Request>);
+    this.transferred.push(transfer);
   }
   terminate(): void {
     this.terminated = true;
@@ -65,6 +67,15 @@ test('a call resolves with the reply that carries its id', async () => {
   expect(await first).toEqual({ t: 'A' });
   expect(await second).toEqual({ t: 'B' });
   expect(messages.map(([, id]) => id)).toEqual([2, 1]);
+});
+
+test('a call moves its transferables to the worker', () => {
+  const { supervisor, workers } = supervised();
+  const { port1, port2 } = new MessageChannel();
+  void supervisor.call({ t: 'a' });
+  void supervisor.call({ t: 'b' }, [port2]);
+  expect(workers[0]!.transferred).toEqual([[], [port2]]);
+  port1.close();
 });
 
 test('a message with no id goes to onMessage only', () => {

@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
-import type { Envelope, Reply } from '@northtalk/tooling/worker-supervisor';
+import type { Envelope } from '@northtalk/tooling/worker-supervisor';
 import { settle } from '../src/message';
 import { createElement, createProject, type Project } from '../src/model';
 import { PlaySession } from '../src/play';
 import { PlayHost } from '../src/play-host';
-import type { PlayRequest, PlayResponse } from '../src/play-protocol';
+import type { PlayRequest } from '../src/play-protocol';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
 import { scriptManifest } from '../src/script-manifest';
@@ -209,12 +209,12 @@ const until = async (check: () => boolean) => {
 const hostWithAudio = (project: Project, audio: boolean) => {
   const clock = { wall: 0 };
   const messages: InstrumentMessage[] = [];
+  // Commands arrive over the session's channel, as the worklet hears them.
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = ({ data }: MessageEvent<InstrumentMessage>) =>
+    messages.push(data);
   const host = new PlayHost(
-    (reply: Reply<PlayResponse>) => {
-      if (reply.response.kind === 'instrument') {
-        messages.push(reply.response);
-      }
-    },
+    () => {},
     () => BigInt(Math.round(clock.wall * 1000)),
     () => clock.wall,
     undefined,
@@ -229,6 +229,7 @@ const hostWithAudio = (project: Project, audio: boolean) => {
     project,
     pageIndex: 0,
     seed: 0n,
+    instrumentPort: port2,
     ...(audio ? { audioClock: { audio: 0, epoch: 0 } } : {}),
   });
   return { clock, messages, request };
@@ -250,6 +251,18 @@ test('without the audio clock a sound plays on arrival', async () => {
   await until(() => messages.length === 1);
   expect(messages[0]!.at).toBeUndefined();
   request({ kind: 'stop', session: 1 });
+});
+
+test('an ended session sends nothing more on its port', async () => {
+  const { clock, messages, request } = hostWithAudio(beating(), true);
+  await until(() => messages.length === 1);
+  request({ kind: 'stop', session: 1 });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const sent = messages.length;
+  clock.wall = 5000;
+  request({ kind: 'frame', session: 1 });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  expect(messages.length).toBe(sent);
 });
 
 test('Pause freezes the Transport: beats resume on the same grid', async () => {
