@@ -191,6 +191,34 @@ error. A Page or Element can't share an Instrument's name. A Script that stops
 releases the notes it started, and stopping Play stops every Instrument. The
 Instruments play through one AudioWorklet, which starts with Play.
 
+Each Play Session has one Transport, which starts at 120 bpm in 4/4 when Play
+starts (ADR 0158). A Script that handles `beat` gets every beat's bar and beat,
+counted from 1, and a running count from 0:
+
+```talk
+on beat bar, beat, count
+  tell drums to play "kick"
+  if beat = 3 then
+    tell drums to play "snare", "c4", 1, 250 ms
+  end if
+end beat
+```
+
+`beat` goes straight to each Script that handles it, as `frame` does, one lead
+(100 ms) before its musical time (ADR 0156). A sound played in a `beat` Run is
+timed from that beat, never from when the Run happened to run. An optional
+last argument, an exact duration, delays it from the beat. Outside a `beat`
+Run, a sound plays at once, or that long from now. A Pump more than a lead late
+skips the beats it missed, except the latest. The `transport` Grant sets the
+tempo (`tell transport to setTempo 96`, from 20 to 400) and time signature
+(`tell transport to setTimeSignature 3, 4`), and stops and starts the
+Transport, which begins again from bar 1. A tempo change leaves the beat
+already due in place and spaces later ones at the new tempo. `ask transport to
+beats 2` gives an exact duration for `wait`, at the current tempo. Pause
+freezes the Transport with the Play clock, and the beats resume on the same
+grid. Until the Play clock follows the audio clock, sounds play as their
+commands reach the page rather than at their time.
+
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.
 Tetris's window frame and Game Over alert use Group Elements.

@@ -13,6 +13,7 @@ import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
+import { Transport } from './transport';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import {
   InstrumentSession,
@@ -411,6 +412,7 @@ export class PlaySession {
   #instrumentObjects: Record<string, HostObject> = {};
   #grantStates(): GrantStates {
     return {
+      transport: { transport: this.transport },
       pages: {
         pageIndex: page =>
           this.project.pages.findIndex(
@@ -463,6 +465,7 @@ export class PlaySession {
             if (name) {
               this.sounds.stopOwner(name);
               this.#frames.delete(name);
+              this.#beats.delete(name);
               this.group.script(name)?.stop('Element deleted');
               this.#scripts.delete(member);
               this.#targets.delete(name);
@@ -623,6 +626,7 @@ export class PlaySession {
     this.instruments = new InstrumentSession(
       project.instruments,
       options.instrumentBackend,
+      delivery => this.beatTimeOf(delivery),
     );
     this.#grants = {
       ...grantsFor(this.#grantStates()),
@@ -1010,6 +1014,7 @@ export class PlaySession {
       const objects = owner === this.project ? pages : pageObjects;
       try {
         this.#frames.delete(name);
+        this.#beats.delete(name);
         this.#targets.delete(name);
         for (const unit of this.#commandUnits) {
           if (unit.startsWith(`${name}+`)) {
@@ -1041,6 +1046,11 @@ export class PlaySession {
         if (definesHandler(owner.script, 'frame')) {
           this.#frames.set(name, { busy: false, last: undefined });
           this.performance.frameScript(name);
+        }
+        if (definesHandler(owner.script, 'beat')) {
+          this.#beats.add(name);
+        } else {
+          this.#beats.delete(name);
         }
       } catch (error) {
         if (!(error instanceof LoadError)) {
@@ -1075,6 +1085,7 @@ export class PlaySession {
       if (scriptPage(this.project, owner) === this.page) {
         this.sounds.stopOwner(name);
         this.#frames.delete(name);
+        this.#beats.delete(name);
         this.group.script(name)?.stop('Left Page');
         this.#targets.delete(name);
       }
@@ -1223,6 +1234,68 @@ export class PlaySession {
    * it finishes, and is accounted, when a later `advance` completes it.
    */
   pump(now: bigint, outOfBand = false, advance?: () => PumpResult) {
+    if (!advance && !outOfBand) {
+      this.#deliverBeats(now);
+    }
+    const result = this.#pump(now, outOfBand, advance);
+    const beat = this.#nextBeatDelivery();
+    return beat !== undefined &&
+      !this.debugPaused &&
+      (result.nextDeadline === undefined || beat < result.nextDeadline)
+      ? { ...result, nextDeadline: beat }
+      : result;
+  }
+
+  /** The session's one Transport (ADR 0158). */
+  readonly transport = new Transport();
+  /** Whether the Transport has started on its own, at the first Pump. */
+  #transportBegun = false;
+  /** Scripts that handle `beat`, by name. */
+  #beats = new Set<string>();
+  /** Each `beat` Delivery's musical time, while its Run may still call out. */
+  #beatTimes = new Map<string, bigint>();
+
+  /** When the next `beat` must be delivered, if any Script handles it. */
+  #nextBeatDelivery(): bigint | undefined {
+    return this.ended || !this.#beats.size
+      ? undefined
+      : this.transport.nextDelivery();
+  }
+
+  /**
+   * Delivers each `beat` due by `now`, one lead ahead of its musical time,
+   * straight to every Script that handles it, as `frame` goes (ADR 0156).
+   * The Transport starts at the first Pump unless a Script stopped it.
+   */
+  #deliverBeats(now: bigint): void {
+    if (!this.#transportBegun) {
+      this.#transportBegun = true;
+      this.transport.start(now);
+    }
+    if (this.ended || this.navigating) {
+      return;
+    }
+    for (const { position, time } of this.transport.due(now)) {
+      for (const name of this.#beats) {
+        const request = this.group.script(name)!.request({
+          name: 'beat',
+          args: [num(position.bar), num(position.beat), num(position.count)],
+        });
+        this.#beatTimes.set(request.id, time);
+        void request.result.then(
+          () => this.#beatTimes.delete(request.id),
+          () => this.#beatTimes.delete(request.id),
+        );
+      }
+    }
+  }
+
+  /** The musical time of the `beat` that started a call's Run, if one did. */
+  beatTimeOf(delivery: string | undefined): bigint | undefined {
+    return delivery === undefined ? undefined : this.#beatTimes.get(delivery);
+  }
+
+  #pump(now: bigint, outOfBand: boolean, advance?: () => PumpResult) {
     this.pumps++;
     if (
       this.#closing &&
