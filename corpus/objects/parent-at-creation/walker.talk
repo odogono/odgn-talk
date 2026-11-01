@@ -1,0 +1,4 @@
+on go
+  ask world to resolve
+  send look to it
+end go

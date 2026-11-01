@@ -124,9 +124,16 @@ func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 
 // Object registers a stable kind/id pair in this Group. Registration and
 // Dispose may be called from any goroutine, including a Host callback.
-func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error) {
+func (g *Group) Object(kind *ObjectKind, id string, native any, opts ...ObjectOption) (*Object, error) {
 	if kind == nil || kind.name == "" || !utf8.ValidString(id) {
 		return nil, &HostError{InvalidValue, "invalid Object kind or id"}
+	}
+	var options objectOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if options.parent != nil && options.parent.group != g {
+		return nil, &HostError{WrongGroup, "the parent isn't this Group's"}
 	}
 	key := objectKey{kind.name, id}
 	// The guest registers it outside the Group lock; it refuses a
@@ -137,7 +144,7 @@ func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
 	if duplicate {
 		return nil, &HostError{DuplicateObjectID, "Object kind/id already registered"}
 	}
-	if err := g.backend.object(kind, id); err != nil {
+	if err := g.backend.object(kind, id, options.parent); err != nil {
 		return nil, err
 	}
 	g.mu.Lock()
@@ -151,6 +158,17 @@ func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
 	o := &Object{kind: kind, id: id, native: native, group: g}
 	g.objects[key] = o
 	return o, nil
+}
+
+// ObjectOption configures Object.
+type ObjectOption func(*objectOptions)
+
+type objectOptions struct{ parent *Object }
+
+// WithParent makes the object with this parent, set at once, even inside a
+// Pump (ADR 0152). A disposed parent is "invalid value".
+func WithParent(parent *Object) ObjectOption {
+	return func(o *objectOptions) { o.parent = parent }
 }
 
 // ObjectByID returns the handle with this Object Kind name and id in this

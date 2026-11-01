@@ -103,11 +103,15 @@ func (b *zigGroup) syncKinds() error {
 	return nil
 }
 
-func (b *zigGroup) object(kind *ObjectKind, id string) error {
+func (b *zigGroup) object(kind *ObjectKind, id string, parent *Object) error {
 	if err := b.defineKind(kind); err != nil {
 		return err
 	}
-	_, err := b.send("object", map[string]any{"kind": kind.name, "id": id})
+	fields := map[string]any{"kind": kind.name, "id": id}
+	if parent != nil {
+		fields["parent"] = zigObject(parent)
+	}
+	_, err := b.send("object", fields)
 	return err
 }
 

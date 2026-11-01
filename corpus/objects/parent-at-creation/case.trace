@@ -1,0 +1,17 @@
+# Unblessed: an Operation makes a parented Host Object and the same Run sends to it (#1876); first blessing awaits human review.
+> load zone identity=6446bb27379770bcf0c40edb3cf9f4348f890599a9314cf1e2b03d066721cefa
+> load walker identity=65bd895640573425581decde506b8f19e801e81d096734f7c4d2e446c8b444a9
+> stub world.resolve value=<object room "hall">
+> request d1 to=walker message=go
+> pump clock=2026-11-01T00:00:00Z
+call walker/r1.c1 op=world.resolve args=[] result=<object room "hall">
+object object=<object room "hall"> parent=<object room "zone">
+send walker/r1 to=<object room "hall"> message=look
+seg walker/r1 start delivery=d1 handler=go clause=1 fuel=41 alloc=48 state=0 end=return
+run walker/r1 outcome=completed delivery=d1 handler=go fuel=41 alloc=48
+seg zone/r1 start from=walker/r1 handler=look clause=1 fuel=19 alloc=28 state=44 end=return
+run zone/r1 outcome=completed handler=look fuel=19 alloc=28
+pumped state=idle fuel=60
+> vars
+vars zone seen=["hall"]
+vars walker

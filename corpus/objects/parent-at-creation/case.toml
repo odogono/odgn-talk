@@ -1,0 +1,29 @@
+# parent-at-creation: an Operation makes a Host Object with a parent, and a
+# send to it in the same Run reaches the parent's Owning Script (ADR 0152).
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[operations]]
+capability = "world"
+name = "resolve"
+mode = "immediate"
+result = "any"
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "zone"
+[[objects]]
+kind = "room"
+id = "hall"
+madeBy = "world.resolve"
+parent = '<object room "zone">'
+[[scripts]]
+name = "zone"
+source = "zone.talk"
+owner = { kind = "room", id = "zone" }
+[[scripts]]
+name = "walker"
+source = "walker.talk"
+grants = { world = { ops = "all" } }

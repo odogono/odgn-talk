@@ -13,7 +13,7 @@ type groupBackend interface {
 	// A call-value input names its Function Value as fn.
 	queue(s *Script, to *Object, fn *Value, m Message, ctx context.Context, how string, decision *Deciding) (DeliveryID, *Pending, error)
 	cancelDelivery(DeliveryID)
-	object(*ObjectKind, string) error
+	object(*ObjectKind, string, *Object) error
 	setParent(o, parent *Object) error
 	dispose(*Object) error
 	addLibrary(*Library) error

@@ -435,6 +435,11 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 	if o.crossing != nil {
 		o.crossing(string(c.ID()))
 	}
+	if o.values != nil && o.values.madeBy != nil {
+		if err := o.values.madeBy(key); err != nil {
+			return talk.Nothing, err
+		}
+	}
 	queue := o.stubs[key]
 	if len(queue) == 0 {
 		if mode == talk.FireAndForget {

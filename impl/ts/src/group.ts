@@ -556,6 +556,7 @@ export type ScriptState = {
 };
 export type InputAction =
   | { code: string; k: 'refusal' }
+  | { k: 'record' }
   | { id: string; k: 'cancel-delivery' }
   | { id: string; k: 'cancel-run'; name: string }
   | { id: string; k: 'rewind-run'; name: string }
@@ -3024,6 +3025,9 @@ export class TsGroup implements Group {
 
   private applyInput(action: InputAction) {
     switch (action.k) {
+      case 'record':
+        // Only its line, written after the crossing that made it.
+        break;
       case 'refusal':
         this.trace?.(
           recordLine('refused', [], [['code', JSON.stringify(action.code)]]),
@@ -5206,17 +5210,22 @@ export class TsGroup implements Group {
     const state = makeObject(kind, id, native);
     state.parent = up;
     this.objects.set(key, state);
-    if (up) {
-      this.trace?.(
-        recordLine(
-          'object',
-          [],
-          [
-            ['object', traceValue(state.handle.value)],
-            ['parent', traceValue(up.handle.value)],
-          ],
-        ),
+    if (up && this.trace) {
+      const line = recordLine(
+        'object',
+        [],
+        [
+          ['object', traceValue(state.handle.value)],
+          ['parent', traceValue(up.handle.value)],
+        ],
       );
+      // Inside a Pump it follows the crossing's record, as an input made
+      // there does.
+      if (this.pumping) {
+        this.inputs.push({ line, urgent: true, action: { k: 'record' } });
+      } else {
+        this.trace(line);
+      }
     }
     return state.handle as HostObject<N>;
   }
