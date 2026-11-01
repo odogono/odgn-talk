@@ -48,7 +48,12 @@ import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
-import { KIND_NAMES, mountInfoPanel, type NameRefusal } from './info-panel';
+import {
+  INSTRUMENT_KIND_NAMES,
+  KIND_NAMES,
+  mountInfoPanel,
+  type NameRefusal,
+} from './info-panel';
 
 const KIND_ICONS: Record<ElementKind, string> = {
   text: 'T',
@@ -538,6 +543,53 @@ export const mountStack = (
     draw();
   };
 
+  // An Instrument field changed (#1894): one undoable edit per committed
+  // change, refused with a notice when the Instrument wouldn't be valid.
+  const writeInstrument = (target: HTMLInputElement): boolean => {
+    const id = Number(
+      target.closest<HTMLElement>('[data-instrument]')?.dataset.instrument,
+    );
+    const field = target.dataset.instrumentField;
+    const parameter = target.dataset.parameter;
+    if (!id || (!field && !parameter)) {
+      return false;
+    }
+    const value =
+      target.type === 'checkbox'
+        ? target.checked
+        : target.type === 'number'
+          ? Number(target.value)
+          : target.value.trim();
+    edit(() =>
+      editor.edit(({ tree }) =>
+        tree.changeInstrument(
+          id,
+          parameter
+            ? { parameter, value }
+            : field === 'name'
+              ? { name: String(value) }
+              : { voices: Number(value) },
+        ),
+      ),
+    );
+    // A refused value goes back to what the Project holds; Preact leaves a
+    // control alone when its rendered value hasn't changed.
+    const instrument = editor.project.instruments.find(i => i.id === id);
+    const saved = parameter
+      ? instrument?.parameters[parameter]
+      : field === 'name'
+        ? instrument?.name
+        : instrument?.voices;
+    if (saved !== undefined) {
+      if (target.type === 'checkbox') {
+        target.checked = Boolean(saved);
+      } else {
+        target.value = String(saved);
+      }
+    }
+    return true;
+  };
+
   info.addEventListener('focusout', finishFieldEdit);
   info.addEventListener('submit', event => event.preventDefault());
   info.addEventListener('input', event => {
@@ -548,6 +600,9 @@ export const mountStack = (
   });
   info.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
+    if (writeInstrument(target)) {
+      return;
+    }
     if (target.dataset.field === 'name') {
       rename(target.value.trim());
     } else {
@@ -582,6 +637,18 @@ export const mountStack = (
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {
       rename(button.dataset.rename);
+    } else if (button?.hasAttribute('data-add-instrument')) {
+      const kind = info.querySelector<HTMLSelectElement>(
+        '[data-new-instrument]',
+      )!.value;
+      edit(() =>
+        editor.edit(({ tree }) =>
+          tree.addInstrument(kind, INSTRUMENT_KIND_NAMES[kind]?.name ?? kind),
+        ),
+      );
+    } else if (button?.dataset.removeInstrument) {
+      const id = Number(button.dataset.removeInstrument);
+      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
     } else if (button?.dataset.movePage) {
       const from = editor.pageIndex;
       edit(() => editor.movePage(from, from + Number(button.dataset.movePage)));

@@ -181,8 +181,7 @@ path and commit it came from. No original game's sound assets are included.
 
 ## Instruments
 
-Instrument kinds and their Play wiring (ADR 0158, #1894). Info can't edit
-Instruments yet.
+Instrument kinds, editing in Info and Play wiring (ADR 0158, #1894).
 
 - [instruments/kind.ts](src/instruments/kind.ts): an `InstrumentEngine`
   (parameters, voice cap and Chip factory), the `InstrumentKind` that adds
@@ -211,14 +210,21 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   It decodes the Project's sounds for samplers and runs
   [instruments.worklet.ts](src/instruments/instruments.worklet.ts), whose
   [rack.ts](src/instruments/rack.ts) mixes every Instrument's Chip.
+- Editing: [tree/project-tree.ts](src/tree/project-tree.ts)'s
+  `addInstrument`, `changeInstrument` and `removeInstrument` check every
+  change; [info-panel.tsx](src/info-panel.tsx)'s Instruments section, under
+  Project, shows each one, and [stack.ts](src/stack.ts) commits its fields.
 - `Project.instruments` is in [model.ts](src/model.ts);
   [project-file.ts](src/project-file.ts) checks them and migrates format 5
   Projects to format 6.
 - Tests: [instruments.test.ts](tests/instruments/instruments.test.ts) renders
   each kind offline and round-trips Instruments through a Project file;
   [play.test.ts](tests/instruments/play.test.ts) covers Scripts, the
-  Manifest, names and the rack.
+  Manifest, names and the rack; [editing.test.ts](tests/instruments/editing.test.ts)
+  covers the tree's changes and history.
 - First check: `bun test tooling/creative/tests/instruments`.
+- Browser: `instruments` suite on `/instruments-test.html` covers Info and the
+  built worklet; also run `info-panel` and `sounds`.
 
 ## The folio Grant and hide/show
 

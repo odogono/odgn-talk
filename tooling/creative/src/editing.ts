@@ -319,7 +319,11 @@ export class StackEditor {
     this.#observeTree();
   }
   #reserveIds(project: DeepReadonly<Project>): void {
-    for (const owner of [...project.libraries, ...project.testScripts]) {
+    for (const owner of [
+      ...project.instruments,
+      ...project.libraries,
+      ...project.testScripts,
+    ]) {
       this.#nextId = Math.max(this.#nextId, owner.id ?? 0);
     }
     for (const page of project.pages) {
