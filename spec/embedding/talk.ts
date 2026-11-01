@@ -761,17 +761,8 @@ export interface Group {
   addLibrary(l: Library): void;
   /** Worker, one atomic Host Input. Recompiles dependents and stop-and-reloads importers. */
   replaceLibrary(l: Library, carry: CarryOver): Report[];
-  /**
-   * Any time, inside a Pump too. Throws HostError "duplicate object id". A
-   * parent takes effect at once; it is "wrong group" if not this Group's and
-   * "invalid value" if disposed (ADR 0152).
-   */
-  object<N>(
-    kind: ObjectKind<N>,
-    id: string,
-    native: N,
-    o?: { parent?: HostObject },
-  ): HostObject<N>;
+  /** Any time, inside a Pump too. Throws HostError "duplicate object id". */
+  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N>;
   /** Any time, inside a Pump too. The handle with this Object Kind name and id, disposed or not, such as one Restore made. */
   objectById(kind: string, id: string): HostObject | undefined;
   /** Queued. Refuses cycles and disposed children at the call when known; otherwise Pump reports a host error. */
