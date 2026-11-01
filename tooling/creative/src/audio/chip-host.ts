@@ -1,10 +1,10 @@
 // Adapted from odogono/mercenary web/src/sound/workletHost.ts at
 // a04a7a9f2b7b4097d223c0f1c11cd963019f7e32 (#1889). Changed: Mercenary's
-// `Chip` and `ChipProgram` are one `Engine`, which may render stereo;
-// `SoundBatch` moved here from presenter.ts; the AudioWorklet registration is
+// `Chip` and `ChipProgram` are one `Chip`, which takes timed commands and
+// may render stereo; `SoundBatch` moved here from presenter.ts; the AudioWorklet registration is
 // left out, so this file needs no DOM or Web Audio types.
 
-/// Commands for one engine, all to be applied on the sample that `at` (in
+/// Commands for one chip, all to be applied on the sample that `at` (in
 /// seconds on the host's clock) falls on.
 export type SoundBatch<Command> = {
   readonly at: number;
@@ -15,18 +15,18 @@ export type SoundBatch<Command> = {
 
 type Reset<Command> = Extract<Command, { readonly kind: 'reset' }>;
 
-/// A headless sound engine: samples rendered on demand, and commands applied
+/// A headless sound chip: samples rendered on demand, and commands applied
 /// at the sample their batch lands on.
-export type Engine<Command extends { readonly kind: string }> = {
+export type Chip<Command extends { readonly kind: string }> = {
   /// Plays one command at the sample its batch lands on.
   readonly apply: (command: Command) => void;
   /// 1 for mono, 2 for stereo with the channels interleaved.
   readonly channels: 1 | 2;
   /// The next `count` frames: `count × channels` samples in [-1, 1].
   readonly render: (count: number) => Float32Array;
-  /// Silences the engine, applied as the command arrives rather than at its time.
+  /// Silences the chip, applied as the command arrives rather than at its time.
   readonly reset: (command: Reset<Command>) => void;
-  /// A driver the engine runs on its own clock, as the ST's VBL runs a programme.
+  /// A driver the chip runs on its own clock, as the ST's VBL runs a programme.
   readonly tick?: { readonly hertz: number; readonly run: () => void };
 };
 
@@ -36,7 +36,7 @@ const isReset = <Command extends { readonly kind: string }>(
   command: Command,
 ): command is Reset<Command> => command.kind === 'reset';
 
-/// Plays an engine's timed commands into render quanta.
+/// Plays an chip's timed commands into render quanta.
 ///
 /// Batches wait in a queue ordered by time; each render quantum is split at every batch and
 /// driver tick that falls inside it, so a command lands on its own sample. A batch that asks to
@@ -49,12 +49,12 @@ export class ChipHost<Command extends { readonly kind: string }> {
   private untilTick: number;
 
   constructor(
-    private readonly engine: Engine<Command>,
+    private readonly chip: Chip<Command>,
     private readonly sampleRate: number,
     private readonly label: string,
   ) {
     this.samplesPerTick =
-      engine.tick === undefined ? Infinity : sampleRate / engine.tick.hertz;
+      chip.tick === undefined ? Infinity : sampleRate / chip.tick.hertz;
     this.untilTick = this.samplesPerTick;
   }
 
@@ -64,7 +64,7 @@ export class ChipHost<Command extends { readonly kind: string }> {
       this.queue = [];
     }
     for (const reset of resets) {
-      this.engine.reset(reset);
+      this.chip.reset(reset);
     }
     const commands = batch.commands.filter(command => !isReset(command));
     if (commands.length === 0) {
@@ -80,7 +80,7 @@ export class ChipHost<Command extends { readonly kind: string }> {
   /// Fills one render quantum starting at `currentTime`. `output` holds
   /// `frames × channels` samples, interleaved.
   process(output: Float32Array, currentTime: number): void {
-    const { channels, render, tick } = this.engine;
+    const { channels, render, tick } = this.chip;
     const frames = Math.floor(output.length / channels);
     let position = 0;
     while (position < frames) {
@@ -100,7 +100,7 @@ export class ChipHost<Command extends { readonly kind: string }> {
       if (next === batchAt) {
         this.queue.shift();
         for (const command of batch!.commands) {
-          this.engine.apply(command);
+          this.chip.apply(command);
         }
       } else if (next === tickAt) {
         tick!.run();
@@ -110,24 +110,24 @@ export class ChipHost<Command extends { readonly kind: string }> {
   }
 }
 
-/// Renders `seconds` of an engine offline, from time 0, with the batches given.
+/// Renders `seconds` of an chip offline, from time 0, with the batches given.
 export const renderOffline = <Command extends { readonly kind: string }>(
-  engine: Engine<Command>,
+  chip: Chip<Command>,
   sampleRate: number,
   seconds: number,
   batches: readonly SoundBatch<Command>[] = [],
   quantum = 128,
 ): Float32Array => {
-  const host = new ChipHost(engine, sampleRate, 'offline');
+  const host = new ChipHost(chip, sampleRate, 'offline');
   for (const batch of batches) {
     host.receive(batch);
   }
   const frames = Math.round(seconds * sampleRate);
-  const output = new Float32Array(frames * engine.channels);
+  const output = new Float32Array(frames * chip.channels);
   for (let frame = 0; frame < frames; frame += quantum) {
     const end = Math.min(frames, frame + quantum);
     host.process(
-      output.subarray(frame * engine.channels, end * engine.channels),
+      output.subarray(frame * chip.channels, end * chip.channels),
       frame / sampleRate,
     );
   }

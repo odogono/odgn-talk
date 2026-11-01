@@ -1,8 +1,9 @@
 // Copied from odogono/mercenary web/src/sound/ym2149.ts at
 // a04a7a9f2b7b4097d223c0f1c11cd963019f7e32 (#1889). Changed: it no longer
-// implements Mercenary's `Chip`; `ym2149Engine` below drives it from a ChipHost.
+// implements Mercenary's register-level `Chip`; `ym2149Chip` below wraps it as
+// this repo's `Chip` for a ChipHost.
 
-import type { Engine } from './engine';
+import type { Chip } from './chip-host';
 
 /// The Atari ST's YM2149 at the register level, for Damocles (#508).
 ///
@@ -249,11 +250,11 @@ export type Ym2149Command =
       readonly value: number;
     };
 
-/// A YM2149 as an Engine, mono, driven by register writes.
-export const ym2149Engine = (
+/// A YM2149 as a Chip, mono, driven by register writes.
+export const ym2149Chip = (
   sampleRate: number,
   chip = new Ym2149(sampleRate),
-): Engine<Ym2149Command> => ({
+): Chip<Ym2149Command> => ({
   apply: command => {
     if (command.kind === 'write') {
       chip.write(command.register, command.value);

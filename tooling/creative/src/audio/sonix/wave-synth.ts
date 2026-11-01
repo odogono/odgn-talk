@@ -1,10 +1,10 @@
-// The Sonix waveform synth as an Engine (#1889): the 128-sample wavetable,
+// The Sonix waveform synth as a Chip (#1889): the 128-sample wavetable,
 // its 64-band filter bank and per-octave decimation from synth.ts, played on
 // the four-voice mixer from mixer.ts. New for Folio; it follows the Sonix
 // driver's synthesised-note path (wime's engine.ts synthRenderTick and
 // synthPitchTick) without envelopes, slides, blends or the score engine.
 
-import type { Engine } from '../engine';
+import type { Chip } from '../chip-host';
 import { createMixer } from './mixer';
 import {
   buildFilterBank,
@@ -39,9 +39,7 @@ export type WaveSynthCommand =
 const VOICES = 4;
 
 /// Four synth voices, stereo as the Amiga's: voices 0 and 3 left, 1 and 2 right.
-export const waveSynthEngine = (
-  sampleRate: number,
-): Engine<WaveSynthCommand> => {
+export const waveSynthChip = (sampleRate: number): Chip<WaveSynthCommand> => {
   const mixer = createMixer(sampleRate);
   const banks: (Int8Array | undefined)[] = Array.from({ length: VOICES });
   const silence = () => {

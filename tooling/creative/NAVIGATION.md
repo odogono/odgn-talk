@@ -162,16 +162,16 @@ Headless engines for Folio's Instruments (#1887), copied from Mercenary and
 WIME. Nothing in Folio uses them yet. Each file's header names the repository,
 path and commit it came from. No original game's sound assets are included.
 
-- [audio/engine.ts](src/audio/engine.ts): the `Engine` interface
+- [audio/chip-host.ts](src/audio/chip-host.ts): the `Chip` interface
   (`render(count)` plus timed commands), `ChipHost`, which applies each
   `SoundBatch` on its own sample, and `renderOffline`.
 - [audio/ym2149.ts](src/audio/ym2149.ts): the Atari ST's YM2149 and
-  `ym2149Engine`, which takes register writes.
+  `ym2149Chip`, which takes register writes.
 - [audio/sonix/](src/audio/sonix/): the Sonix waveform synth
   ([synth.ts](src/audio/sonix/synth.ts)), its four-voice
   [mixer.ts](src/audio/sonix/mixer.ts) and
   [tables.ts](src/audio/sonix/tables.ts), under nuade's MIT notice, plus
-  [wave-synth.ts](src/audio/sonix/wave-synth.ts), the new `Engine` built on them.
+  [wave-synth.ts](src/audio/sonix/wave-synth.ts), the new `Chip` built on them.
 - Tests: [engines.test.ts](tests/audio/engines.test.ts) checks the golden
   hashes in [goldens.json](tests/audio/goldens.json) for the scenarios in
   [scenarios.ts](tests/audio/scenarios.ts).

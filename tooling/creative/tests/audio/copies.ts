@@ -1,5 +1,5 @@
 // The copied engines, as scenarios.ts takes them.
-import { ChipHost } from '../../src/audio/engine';
+import { ChipHost } from '../../src/audio/chip-host';
 import { createMixer } from '../../src/audio/sonix/mixer';
 import { buildFilterBank, renderWave } from '../../src/audio/sonix/synth';
 import { Ym2149 } from '../../src/audio/ym2149';

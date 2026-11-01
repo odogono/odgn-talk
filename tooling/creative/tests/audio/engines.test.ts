@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { renderOffline } from '../../src/audio/engine';
-import { waveSynthEngine } from '../../src/audio/sonix/wave-synth';
-import { ym2149Engine } from '../../src/audio/ym2149';
+import { renderOffline } from '../../src/audio/chip-host';
+import { waveSynthChip } from '../../src/audio/sonix/wave-synth';
+import { ym2149Chip } from '../../src/audio/ym2149';
 import { copies } from './copies';
 import goldens from './goldens.json';
 import { scenarios, sha256 } from './scenarios';
@@ -35,7 +35,7 @@ describe('golden renders match the original engines', () => {
 
 describe('the YM2149 engine', () => {
   test('a timed write sounds from its own sample', () => {
-    const output = renderOffline(ym2149Engine(RATE), RATE, 0.5, [
+    const output = renderOffline(ym2149Chip(RATE), RATE, 0.5, [
       {
         at: 0.25,
         commands: [
@@ -60,7 +60,7 @@ describe('the wave synth engine', () => {
   );
 
   test('a note plays at its pitch on its side', () => {
-    const output = renderOffline(waveSynthEngine(RATE), RATE, 0.5, [
+    const output = renderOffline(waveSynthChip(RATE), RATE, 0.5, [
       {
         at: 0,
         commands: [
@@ -78,7 +78,7 @@ describe('the wave synth engine', () => {
   });
 
   test('stop and reset silence it', () => {
-    const output = renderOffline(waveSynthEngine(RATE), RATE, 0.5, [
+    const output = renderOffline(waveSynthChip(RATE), RATE, 0.5, [
       {
         at: 0,
         commands: [
@@ -93,7 +93,7 @@ describe('the wave synth engine', () => {
   });
 
   test('a note before any wave stays silent', () => {
-    const output = renderOffline(waveSynthEngine(RATE), RATE, 0.1, [
+    const output = renderOffline(waveSynthChip(RATE), RATE, 0.1, [
       { at: 0, commands: [{ kind: 'note', note: 60, voice: 2 }] },
     ]);
     expect(peak(output)).toBe(0);
