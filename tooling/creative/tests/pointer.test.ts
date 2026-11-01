@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { clickAdvice } from '../src/click-advice';
 import { migrateClickSource, migrateClicks } from '../src/click-migration';
 import { createElement, createProject } from '../src/model';
-import { migrateProjectJson } from '../src/project-file';
+import { MIGRATIONS, migrateProjectJson } from '../src/project-file';
 import { runProjectTests } from '../src/test-runner';
 
 test('the migration keeps old click Handlers and sends to the primary button', () => {
@@ -34,18 +34,22 @@ test('the migration leaves clauses with parameters, other names, computed sends 
 });
 
 test('format 4 Projects reach format 5 with every Script migrated', () => {
-  const migrated = migrateProjectJson({
-    format: 4,
-    script: 'on click\nend click\n',
-    pages: [
-      {
-        script: 'on click\nend click\n',
-        elements: [{ script: 'on click\nend click\n' }],
-      },
-    ],
-    libraries: [{ name: 'l', source: 'function f()\nend f\n' }],
-    testScripts: [],
-  });
+  const migrated = migrateProjectJson(
+    {
+      format: 4,
+      script: 'on click\nend click\n',
+      pages: [
+        {
+          script: 'on click\nend click\n',
+          elements: [{ script: 'on click\nend click\n' }],
+        },
+      ],
+      libraries: [{ name: 'l', source: 'function f()\nend f\n' }],
+      testScripts: [],
+    },
+    MIGRATIONS,
+    5,
+  );
   expect(migrated.format).toBe(5);
   expect(
     JSON.stringify(migrated).match(/on click \{button: 0\}/gu),

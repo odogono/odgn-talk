@@ -18,6 +18,7 @@ import {
   serializeProject,
   validateProjectJson,
   writeProjectFile,
+  CURRENT_FORMAT,
 } from '../src/project-file';
 import { ownerById, scriptManifest } from '../src/script-manifest';
 import { scriptNameProblems } from '../src/script-names';
@@ -163,7 +164,7 @@ test('format 5 persists nested membership and empty anchors, strips all ids and 
     tree.insert(project.pages[0]!, groupElement('empty', []));
   });
   const json = serializeProject(editor.project);
-  expect(json.format).toBe(5);
+  expect(json.format).toBe(CURRENT_FORMAT);
   const saved = JSON.stringify(json);
   expect(saved).not.toContain('"id":');
   expect(saved).toContain('emptyPosition');

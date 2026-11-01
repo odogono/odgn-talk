@@ -17,6 +17,7 @@ import {
   sha256Hex,
   validateProjectJson,
   writeProjectFile,
+  CURRENT_FORMAT,
 } from '../src/project-file';
 import { readZip, writeZip } from '../src/zip';
 
@@ -113,7 +114,7 @@ test('writing a Project and reading it back gives an equal Project', async () =>
   const json = JSON.parse(
     new TextDecoder().decode(entries.get('project.json')!),
   );
-  expect(json.format).toBe(5);
+  expect(json.format).toBe(CURRENT_FORMAT);
   expect(json.pages[0].elements.map((e: { kind: string }) => e.kind)).toEqual([
     'text',
     'image',
@@ -255,7 +256,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 5)',
+    'newer version of the app (format 99; this app reads up to 6)',
   );
 });
 

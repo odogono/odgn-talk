@@ -196,10 +196,29 @@ export type ProjectTestScript = {
   source: string;
 };
 
+/** A parameter's value: a number, a choice or a switch. */
+export type InstrumentParameterValue = number | string | boolean;
+
+/**
+ * An Instrument (ADR 0158): a named sound source Scripts play notes on,
+ * whose kind (`sampler`, `ym2149`, `synth`) is in the Instrument kind
+ * registry. Parameters a kind gains later take their defaults when absent.
+ */
+export type Instrument = {
+  /** Session-local editor identity; omitted from files and storage. */
+  id?: number;
+  kind: string;
+  name: string;
+  parameters: Record<string, InstrumentParameterValue>;
+  /** How many notes it can play at once. */
+  voices: number;
+};
+
 export type Project = {
   assets: Asset[];
   /** The Project-wide width every Page is laid out against, in pixels. */
   designWidth: number;
+  instruments: Instrument[];
   libraries: ProjectLibrary[];
   name: string;
   pages: Page[];
@@ -382,6 +401,7 @@ export const createProject = (name: string): Project => ({
   script: '',
   pages: [createPage('page1')],
   assets: [],
+  instruments: [],
   libraries: [],
   testScripts: [],
 });
@@ -406,7 +426,11 @@ const withoutIds = <T extends Page | Element>(owner: DeepReadonly<T>): T => {
 /** An independent copy of a Project without the editor's session ids. */
 export const projectWithoutIds = (project: DeepReadonly<Project>): Project => {
   const copy = thaw<Project>(project);
-  for (const owner of [...copy.libraries, ...copy.testScripts]) {
+  for (const owner of [
+    ...copy.instruments,
+    ...copy.libraries,
+    ...copy.testScripts,
+  ]) {
     delete owner.id;
   }
   for (const page of copy.pages) {
