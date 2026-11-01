@@ -72,7 +72,7 @@ pub const Map = struct {
     fn release(self: Map, gpa: std.mem.Allocator, pending: *?*Value) void {
         if (self.len <= flat_limit) {
             for (self.storage.flat[0..self.len]) |p| {
-                gpa.free(p.key);
+                releaseKey(gpa, p.key);
                 queueRelease(p.value, pending);
             }
             gpa.free(self.storage.flat[0..self.len]);
@@ -81,7 +81,7 @@ pub const Map = struct {
                 b.references -= 1;
                 if (b.references == 0) {
                     for (b.pairs) |p| {
-                        gpa.free(p.key);
+                        releaseKey(gpa, p.key);
                         queueRelease(p.value, pending);
                     }
                     gpa.free(b.pairs);
@@ -1139,26 +1139,65 @@ pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
     var initialized: usize = 0;
     errdefer for (0..initialized) |i| {
         const p = out.at(i);
-        gpa.free(p.key);
+        releaseKey(gpa, p.key);
         p.value.release();
     };
     for (pairs) |p| {
-        if (!unicode.utf8.validate(p.key)) return error.InvalidValue;
-        const key = try unicode.nfc(gpa, p.key);
-        errdefer gpa.free(key);
-        for (0..initialized) |i| if (std.mem.eql(u8, out.at(i).key, key)) return error.InvalidValue;
-        out.slot(initialized).* = .{ .key = key, .value = p.value.retain() };
+        // ASCII is valid UTF-8 and already NFC.
+        const ascii = isAscii(p.key);
+        if (!ascii and !unicode.utf8.validate(p.key)) return error.InvalidValue;
+        const normalized = if (ascii) p.key else try unicode.nfc(gpa, p.key);
+        defer if (!ascii) gpa.free(normalized);
+        for (0..initialized) |i| if (std.mem.eql(u8, out.at(i).key, normalized)) return error.InvalidValue;
+        out.slot(initialized).* = .{ .key = try newKey(gpa, normalized), .value = p.value.retain() };
         initialized += 1;
     }
     return mapOwned(gpa, out);
 }
 fn freePairs(gpa: std.mem.Allocator, initialized: []const Pair, storage: []Pair) void {
     for (initialized) |p| {
-        gpa.free(p.key);
+        releaseKey(gpa, p.key);
         p.value.release();
     }
     gpa.free(storage);
 }
+fn isAscii(s: []const u8) bool {
+    for (s) |c| if (c >= 0x80) return false;
+    return true;
+}
+
+/// A Map's keys never change, so a Map's versions share them: each key
+/// counts its owners in a header just before its bytes, and copying a Map
+/// retains its keys instead of copying them. Only this file makes or frees
+/// a Map's keys; everywhere else they are plain borrowed text.
+const key_header = @sizeOf(usize);
+
+fn newKey(gpa: std.mem.Allocator, chars: []const u8) Error![]const u8 {
+    const block = try gpa.alignedAlloc(u8, .of(usize), key_header + chars.len);
+    @as(*usize, @ptrCast(block.ptr)).* = 1;
+    @memcpy(block[key_header..], chars);
+    return block[key_header..];
+}
+
+fn keyOwners(key: []const u8) *usize {
+    return @ptrFromInt(@intFromPtr(key.ptr) - key_header);
+}
+
+fn retainKey(key: []const u8) []const u8 {
+    keyOwners(key).* += 1;
+    return key;
+}
+
+fn releaseKey(gpa: std.mem.Allocator, key: []const u8) void {
+    const owners = keyOwners(key);
+    if (owners.* > 1) {
+        owners.* -= 1;
+        return;
+    }
+    const block: [*]align(@alignOf(usize)) u8 = @ptrCast(owners);
+    gpa.free(block[0 .. key_header + key.len]);
+}
+
 /// Takes fully initialized storage only on success.
 fn mapOwned(gpa: std.mem.Allocator, pairs: Map) Error!*Value {
     const rank = try ownershipRank(.{ .map = pairs });
@@ -1263,9 +1302,7 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
     if (old.data != .map) return error.InvalidValue;
     const gpa = old.allocator;
     // ASCII is valid UTF-8 and already NFC.
-    const ascii = for (key) |c| {
-        if (c >= 0x80) break false;
-    } else true;
+    const ascii = isAscii(key);
     if (!ascii and !unicode.utf8.validate(key)) return error.InvalidValue;
     const normalized = if (ascii) key else try unicode.nfc(gpa, key);
     defer if (!ascii) gpa.free(normalized);
@@ -1294,8 +1331,8 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
         errdefer freePairs(gpa, pairs[0..initialized], pairs);
         for (pairs, 0..) |*p, j| {
             const i = changed * Map.block_size + j;
-            const source_key = if (i < prior.len) prior.at(i).key else normalized;
-            p.* = .{ .key = try gpa.dupe(u8, source_key), .value = (if (i == index) item else prior.at(i).value).retain() };
+            const owned = if (i < prior.len) retainKey(prior.at(i).key) else try newKey(gpa, normalized);
+            p.* = .{ .key = owned, .value = (if (i == index) item else prior.at(i).value).retain() };
             initialized += 1;
         }
         block.* = .{ .pairs = pairs };
@@ -1312,12 +1349,12 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
         var initialized: usize = 0;
         errdefer for (0..initialized) |i| {
             const p = out.at(i);
-            gpa.free(p.key);
+            releaseKey(gpa, p.key);
             p.value.release();
         };
         for (0..len) |i| {
-            const source_key = if (i < prior.len) prior.at(i).key else normalized;
-            out.slot(i).* = .{ .key = try gpa.dupe(u8, source_key), .value = (if (i == index) item else prior.at(i).value).retain() };
+            const owned = if (i < prior.len) retainKey(prior.at(i).key) else try newKey(gpa, normalized);
+            out.slot(i).* = .{ .key = owned, .value = (if (i == index) item else prior.at(i).value).retain() };
             initialized += 1;
         }
     }
@@ -1342,13 +1379,13 @@ pub fn mapDelete(gpa: std.mem.Allocator, old: *const Value, key: []const u8) Err
     var initialized: usize = 0;
     errdefer for (0..initialized) |i| {
         const p = out.at(i);
-        gpa.free(p.key);
+        releaseKey(gpa, p.key);
         p.value.release();
     };
     for (0..prior.len) |i| {
         if (i == removed) continue;
         const p = prior.at(i);
-        out.slot(initialized).* = .{ .key = try gpa.dupe(u8, p.key), .value = p.value.retain() };
+        out.slot(initialized).* = .{ .key = retainKey(p.key), .value = p.value.retain() };
         initialized += 1;
     }
     return mapOwned(gpa, out);
@@ -1788,4 +1825,43 @@ fn sharedMapAllocations(gpa: std.mem.Allocator) !void {
 test "shared Map versions preserve ordered entries across promotion deletion and every refusal" {
     try sharedMapAllocations(std.testing.allocator);
     try std.testing.checkAllAllocationFailures(std.testing.allocator, sharedMapAllocations, .{});
+}
+
+test "a Map's versions share their keys and free them with the last owner" {
+    const gpa = std.testing.allocator;
+    const n = try scalar(gpa, .{ .number = decimal.Decimal.fromInt(1) });
+    defer n.release();
+    const two = try scalar(gpa, .{ .number = decimal.Decimal.fromInt(2) });
+    defer two.release();
+    // A decomposed key is stored composed.
+    const original = try map(gpa, &.{ .{ .key = "a", .value = n }, .{ .key = "e\u{0301}", .value = n } });
+    try std.testing.expectEqualStrings("é", original.data.map.at(1).key);
+    for ([_]bool{ false, true }) |newest_first| {
+        // `mapSet` consumes the root it replaces; keep the original alive.
+        var updated = original.retain();
+        try mapSet(&updated, "a", two);
+        var grown = updated.retain();
+        try mapSet(&grown, "new", two);
+        const shrunk = try mapDelete(gpa, grown, "a");
+        // Every version's existing keys are the original's bytes.
+        for ([_]*Value{ updated, grown }) |v| {
+            try std.testing.expectEqual(original.data.map.at(0).key.ptr, v.data.map.at(0).key.ptr);
+            try std.testing.expectEqual(original.data.map.at(1).key.ptr, v.data.map.at(1).key.ptr);
+        }
+        try std.testing.expectEqual(original.data.map.at(1).key.ptr, shrunk.data.map.at(0).key.ptr);
+        try std.testing.expectEqual(grown.data.map.at(2).key.ptr, shrunk.data.map.at(1).key.ptr);
+        try std.testing.expect(updated.get("a").? == two);
+        try std.testing.expect(original.get("a").? == n);
+        // The testing allocator fails on a key freed twice or never.
+        if (newest_first) {
+            shrunk.release();
+            grown.release();
+            updated.release();
+        } else {
+            updated.release();
+            grown.release();
+            shrunk.release();
+        }
+    }
+    original.release();
 }
