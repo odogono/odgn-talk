@@ -179,6 +179,29 @@ path and commit it came from. No original game's sound assets are included.
   checkouts of the originals, and fails if a copy renders differently.
 - First check: `bun test tooling/creative/tests/audio`.
 
+## Instruments
+
+Instrument kinds (ADR 0158, #1894). Projects save them, but Play, Scripts
+and Info don't use them yet.
+
+- [instruments/kind.ts](src/instruments/kind.ts): the `InstrumentKind` a
+  kind defines (parameters, Operations, voice cap and Chip factory), the
+  `InstrumentCommand`s its Chip takes, and parameter checks.
+- [instruments/registry.ts](src/instruments/registry.ts): every kind,
+  `createInstrument`, `instrumentProblems` (names, voices, parameters and the
+  `SESSION_VOICES` cap) and the names an Instrument can't take.
+- One module per kind, each importing only `kind.ts`, the notes and its engine:
+  [sampler.ts](src/instruments/sampler.ts),
+  [ym2149.ts](src/instruments/ym2149.ts) and
+  [synth.ts](src/instruments/synth.ts).
+  [notes.ts](src/instruments/notes.ts) reads note names and numbers.
+- `Project.instruments` is in [model.ts](src/model.ts);
+  [project-file.ts](src/project-file.ts) checks them and migrates format 5
+  Projects to format 6.
+- Tests: [instruments.test.ts](tests/instruments/instruments.test.ts) renders
+  each kind offline and round-trips Instruments through a Project file.
+- First check: `bun test tooling/creative/tests/instruments`.
+
 ## The folio Grant and hide/show
 
 - [grants/folio.ts](src/grants/folio.ts): the `hide` and `show` Operations,

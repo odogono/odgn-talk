@@ -157,13 +157,20 @@ size-dependent Fuel before effects, including copied content. Invalid or
 unaffordable moves, clones and deletes leave the operation unapplied. Collection
 callbacks use maintained indexes, each costing 1 Fuel and 0 allocation.
 
-Projects save as `.folio` format 4, with ordered nested members, Page-relative
-leaf coordinates, retained empty-group positions, Project Library source and
-Test Scripts. Bounds, lookup indexes and session ids are derived rather than
-saved. Existing format-1 and format-2 Projects migrate with an empty Library
-collection, and format-3 Projects with no Test Scripts. Browser storage and
-earlier versions use the same representation. Older Folio readers refuse
-format 4 instead of silently dropping Test Scripts.
+Projects save as `.folio` format 6, with ordered nested members, Page-relative
+leaf coordinates, retained empty-group positions, Project Library source, Test
+Scripts and Instruments. Bounds, lookup indexes and session ids are derived
+rather than saved. Existing format-1 and format-2 Projects migrate with an
+empty Library collection, format-3 Projects with no Test Scripts, format-4
+Projects with their clicks rewritten (below), and format-5 Projects with no
+Instruments. Browser storage and earlier versions use the same
+representation. Older Folio readers refuse a newer format instead of silently
+dropping what they can't read.
+
+An Instrument has a name, a kind (`sampler`, `ym2149` or `synth`), a number
+of voices and its kind's parameters. Up to 64 voices are shared among a
+Project's Instruments. A parameter added to a kind after a Project was saved
+takes its default. Play, Scripts and Info don't use Instruments yet (#1894).
 
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.

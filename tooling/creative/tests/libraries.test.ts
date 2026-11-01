@@ -15,6 +15,7 @@ import {
   serializeProject,
   validateProjectJson,
   writeProjectFile,
+  CURRENT_FORMAT,
 } from '../src/project-file';
 import { scriptManifest } from '../src/script-manifest';
 import { libraryNameProblem } from '../src/script-names';
@@ -152,7 +153,7 @@ test('Library identities and source survive edits, history, files and browser ve
   });
   const serialized = serializeProject(editor.project);
   expect(JSON.stringify(serialized)).not.toContain('"id"');
-  expect(serialized.format).toBe(5);
+  expect(serialized.format).toBe(CURRENT_FORMAT);
   const saved = await readProjectFile(
     await writeProjectFile(editor.project, new Map()),
   );

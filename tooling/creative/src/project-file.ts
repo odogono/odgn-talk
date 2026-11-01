@@ -20,6 +20,7 @@ import {
   type CanvasElement,
   type Element,
   type ElementKind,
+  type Instrument,
   type Page,
   type Paragraph,
   type Project,
@@ -27,12 +28,14 @@ import {
   type TextRun,
 } from './model';
 import { migrateClicks } from './click-migration';
+import { defaultParameters } from './instruments/kind';
+import { INSTRUMENT_KINDS, instrumentProblems } from './instruments/registry';
 import { drawingProblem } from './drawing';
 import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 5;
+export const CURRENT_FORMAT = 6;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -444,6 +447,33 @@ const checkAsset = (c: Checker, value: unknown, path: string): Asset => {
 };
 
 /**
+ * An Instrument's fields. A parameter its kind has gained since the file was
+ * saved takes its default; the registry checks the rest.
+ */
+const checkInstrument = (
+  c: Checker,
+  raw: unknown,
+  path: string,
+): Instrument => {
+  const instrument = c.obj(raw, path) ?? {};
+  const kind = c.str(instrument.kind, `${path}.kind`) ?? '';
+  const saved = isObj(instrument.parameters) ? instrument.parameters : {};
+  if (!isObj(instrument.parameters)) {
+    c.fail(`${path}.parameters`, 'expected an object');
+  }
+  const definition = INSTRUMENT_KINDS.get(kind);
+  return {
+    name: c.str(instrument.name, `${path}.name`) ?? '',
+    kind,
+    voices: c.num(instrument.voices, `${path}.voices`, 'positive') ?? 1,
+    parameters: {
+      ...(definition ? defaultParameters(definition) : {}),
+      ...(saved as Instrument['parameters']),
+    },
+  };
+};
+
+/**
  * Checks parsed `project.json` data (already migrated to the current
  * format). Returns the Project, or every problem found, each with the
  * path of the value at fault such as `pages[2].elements[5].left`.
@@ -481,12 +511,19 @@ export const validateProjectJson = (
     },
   );
   c.unique(testScripts, i => `testScripts[${i}]`, 'Test Script');
+  const instruments = (c.arr(root.instruments, 'instruments') ?? []).map(
+    (raw, i) => checkInstrument(c, raw, `instruments[${i}]`),
+  );
+  for (const issue of instrumentProblems(instruments)) {
+    c.fail(issue.path, issue.message);
+  }
   const project: Project = {
     name: c.str(root.name, 'name') ?? '',
     designWidth: c.num(root.designWidth, 'designWidth', 'positive') ?? 1,
     script: c.str(root.script, 'script') ?? '',
     pages,
     assets,
+    instruments,
     libraries,
     testScripts,
   };
@@ -558,6 +595,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   2: data => ({ ...data, libraries: [] }),
   3: data => ({ ...data, testScripts: [] }),
   4: migrateClicks,
+  5: data => ({ ...data, instruments: [] }),
 };
 
 /**
