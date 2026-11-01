@@ -1262,9 +1262,13 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
     const old = root.*;
     if (old.data != .map) return error.InvalidValue;
     const gpa = old.allocator;
-    if (!unicode.utf8.validate(key)) return error.InvalidValue;
-    const normalized = try unicode.nfc(gpa, key);
-    defer gpa.free(normalized);
+    // ASCII is valid UTF-8 and already NFC.
+    const ascii = for (key) |c| {
+        if (c >= 0x80) break false;
+    } else true;
+    if (!ascii and !unicode.utf8.validate(key)) return error.InvalidValue;
+    const normalized = if (ascii) key else try unicode.nfc(gpa, key);
+    defer if (!ascii) gpa.free(normalized);
     const prior = old.data.map;
     var index = prior.len;
     for (0..prior.len) |i| if (std.mem.eql(u8, prior.at(i).key, normalized)) {

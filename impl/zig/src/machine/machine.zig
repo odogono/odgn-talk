@@ -11512,8 +11512,32 @@ fn chunkKind(name: []const u8) chunks.Kind {
 
 /// A key operand, from its display form.
 fn keyOperand(a: Allocator, shown: []const u8) ![]const u8 {
+    if (literalKey(shown)) |key| return key;
     const v = display.parse(a, shown, .{}) catch return error.OutOfMemory;
     return v.data.text;
+}
+
+/// A key operand's text when its display form is one quoted piece of
+/// printable ASCII: verbatim between its quotes, which hold no escapes, and
+/// already NFC. Null for any other form, which `display.parse` reads.
+fn literalKey(shown: []const u8) ?[]const u8 {
+    if (shown.len < 2 or shown[0] != '"' or shown[shown.len - 1] != '"') return null;
+    const key = shown[1 .. shown.len - 1];
+    for (key) |c| if (c < 0x20 or c > 0x7e or c == '"') return null;
+    return key;
+}
+
+test "literal key operands read as display.parse reads them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    for ([_][]const u8{ "\"vx\"", "\"\"", "\"a b\\c~{}\"", "\"id\"" }) |shown| {
+        try std.testing.expectEqualStrings(try keyOperand(a, shown), literalKey(shown).?);
+        try std.testing.expectEqualStrings((try display.parse(a, shown, .{})).data.text, literalKey(shown).?);
+    }
+    // Other forms are parsed.
+    for ([_][]const u8{ "\"caf\u{e9}\"", "\"a\" & quote & \"b\"", "tab", "\"", "x" }) |shown| try std.testing.expect(literalKey(shown) == null);
+    try std.testing.expectEqualStrings("a\"b", try keyOperand(a, "\"a\" & quote & \"b\""));
 }
 
 pub fn kindName(v: *const Value) []const u8 {
