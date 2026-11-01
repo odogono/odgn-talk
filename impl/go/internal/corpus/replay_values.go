@@ -14,6 +14,9 @@ import (
 type replayValues struct {
 	functions map[string]talk.Value
 	objects   objectReplay
+	// madeBy makes the objects case.toml says an Operation makes, the first
+	// time it is called (ADR 0152).
+	madeBy func(operation string) error
 }
 
 func newReplayValues() *replayValues {

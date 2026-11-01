@@ -438,6 +438,40 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
   });
 
   both(
+    'an object made with a parent inside a Pump routes the same Run to its owner (ADR 0152)',
+    (core, nt) => {
+      const room = core.defineObjectKind<null>({ name: 'room', props: {} });
+      const g = core.newGroup({ name: 'g' });
+      const zone = g.object(room, 'zone', null);
+      const door = core.defineObjectKind<null>({
+        name: 'door',
+        props: {
+          to: {
+            get: () => g.object(room, 'hall', null, { parent: zone }).value,
+          },
+        },
+      });
+      g.load({
+        name: 'zone',
+        owner: zone,
+        source: 'on look\n  return the id of the target\nend look',
+      });
+      const walker = g.load({
+        name: 'walker',
+        objects: { portal: g.object(door, 'p', null) },
+        source:
+          'on go\n  send look to the to of portal and wait\n  return it\nend go',
+      });
+      walker.deliver({ name: 'go' });
+      const reports = g.pump(second).reports;
+      void nt;
+      expect(kinds(reports)).not.toContain('unhandled');
+      expect(ends(reports)).toContain('completed "hall"');
+      return ends(reports);
+    },
+  );
+
+  both(
     'Host Objects: properties, Message Paths and wrong group',
     (core, nt) => {
       const door = core.defineObjectKind<{ open: boolean }>({

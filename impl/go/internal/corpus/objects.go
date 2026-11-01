@@ -79,26 +79,74 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *repla
 	objects := objectReplay{}
 	values.objects = objects
 	rows, _ = setup["objects"].([]any)
-	for _, raw := range rows {
-		row := raw.(Setup)
+	var pending []Setup
+	makeObject := func(row Setup, opts ...talk.ObjectOption) error {
 		native := map[string]talk.Value{}
 		props, _ := row["props"].(Setup)
 		for name, display := range props {
 			v, err := corevalue.ParseDisplay(display.(string), nil)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			native[name], err = construct(v)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		ref := objectRef{row["kind"].(string), row["id"].(string)}
-		o, err := group.Object(kinds[ref.kind], ref.id, native)
+		o, err := group.Object(kinds[ref.kind], ref.id, native, opts...)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		objects[ref] = o
+		return nil
+	}
+	values.madeBy = func(operation string) error {
+		rest := pending[:0]
+		var due []Setup
+		for _, row := range pending {
+			if row["madeBy"] == operation {
+				due = append(due, row)
+			} else {
+				rest = append(rest, row)
+			}
+		}
+		pending = rest
+		for _, row := range due {
+			var opts []talk.ObjectOption
+			if shown, ok := row["parent"].(string); ok {
+				v, err := corevalue.ParseDisplay(shown, nil)
+				if err != nil {
+					return err
+				}
+				parent, err := values.construct(v)
+				if err != nil {
+					return err
+				}
+				o, ok := parent.AsObject()
+				if !ok {
+					return fmt.Errorf("parent %s is not an object", shown)
+				}
+				opts = append(opts, talk.WithParent(o))
+			}
+			if err := makeObject(row, opts...); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, raw := range rows {
+		row := raw.(Setup)
+		if _, ok := row["madeBy"]; ok {
+			pending = append(pending, row)
+			continue
+		}
+		if _, ok := row["parent"]; ok {
+			return nil, fmt.Errorf("%v has a parent but no madeBy", row["id"])
+		}
+		if err := makeObject(row); err != nil {
+			return nil, err
+		}
 	}
 	if err := collections.members(setup, kinds, objects); err != nil {
 		return nil, err

@@ -1409,6 +1409,7 @@ Kind metadata at Load and Reload.
 
 ### Object Message Paths
 
+`Object(kind, id, native, WithParent(p))` sets a new object's parent at once, even inside a Pump, so a Script that gets it from a Host function and sends to it in the same Run reaches the parent's owner; a disposed parent is `invalid value` and another Group's is `wrong group` ([ADR 0152](../../docs/adr/0152-a-host-object-may-be-given-its-parent-when-it-is-made.md)).
 `SetParent` queues parent changes and rejects known cycles and disposed children.
 Changes that become invalid while queued, including children unresolved by Restore, leave the parent unchanged, write `refused`, and report a `*HostError` in the next Pump. Later inputs still drain; the report code is covered by parity and its detail is Host-only.
 `ParentKinds` remains manifest metadata. Disposal preserves Object identity,

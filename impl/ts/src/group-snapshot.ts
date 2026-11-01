@@ -350,6 +350,8 @@ const inputRecord = (
         : { k: 'cancel delivery', delivery: deliveryNumber(action.id) };
     case 'refusal':
       throw new Error('A save never holds a queued refusal');
+    case 'record':
+      throw new Error('A save never holds a queued record');
   }
 };
 

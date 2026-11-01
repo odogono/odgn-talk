@@ -1436,6 +1436,11 @@ talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t micros, c
  * crosses into the Group. A reused id within the kind is
  * TALK_DUPLICATE_OBJECT_ID. The handle lives as long as the Group. */
 talk_host_error_code talk_group_object(talk_group *g, const talk_object_kind *kind, const char *id, size_t id_len, void *native, talk_object **out);
+/* talk_group_object, with the new object's parent set at once, even inside
+ * a Pump (ADR 0152). parent may be NULL. A parent from another Group is
+ * TALK_WRONG_GROUP, a disposed one TALK_INVALID_VALUE; a refused call makes
+ * no object. A parent writes an `object` Trace record. */
+talk_host_error_code talk_group_object_with_parent(talk_group *g, const talk_object_kind *kind, const char *id, size_t id_len, void *native, talk_object *parent, talk_object **out);
 /* The handle with this Object Kind name and id, disposed or not; false if
  * the Group never made one. */
 bool talk_object_by_id(talk_group *g, const char *kind, size_t kind_len, const char *id, size_t id_len, talk_object **out);

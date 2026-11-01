@@ -1128,18 +1128,17 @@ export class WasmGroup implements Group {
     native: N,
     o?: { parent?: HostObject },
   ): HostObject<N> {
-    if (o?.parent) {
-      // The reactor's `object` message takes no parent yet (#1876).
-      throw new HostError(
-        'invalid value',
-        'the Zig reactor cannot make an object with a parent yet',
-      );
-    }
     if (this.#objects.has(key(kind.name, id))) {
       throw new HostError('duplicate object id', `${kind.name} ${id}`);
     }
+    // The reactor sets a parent at once and refuses a disposed one (ADR 0152).
+    const parent = o?.parent ? this.#held(o.parent) : undefined;
     this.#session.syncKinds();
-    this.send('object', { kind: kind.name, id });
+    this.send('object', {
+      kind: kind.name,
+      id,
+      ...(parent ? { parent } : {}),
+    });
     const state = makeObject(kind, id, native);
     this.#objects.set(key(kind.name, id), state);
     return state.handle as HostObject<N>;
