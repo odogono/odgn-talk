@@ -10,6 +10,7 @@ import {
 } from '@northtalk/editor/breakpoints';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
 import { clickAdvice } from './click-advice';
+import { patternDiagnostics, projectPatternNames } from './pattern-checks';
 import { readDictionary } from '@northtalk/tooling/dictionary';
 import { libraryUri, operationAt, readManifest } from '@northtalk/tooling/lsp';
 import {
@@ -353,7 +354,12 @@ export class CodeBrowser {
       if (uri !== this.#uri()) {
         return;
       }
-      const diagnostics = [...found, ...clickAdvice(view.state.doc.toString())];
+      const text = view.state.doc.toString();
+      const diagnostics = [
+        ...found,
+        ...clickAdvice(text),
+        ...patternDiagnostics(text, projectPatternNames(this.editor.project)),
+      ];
       view.dispatch(diagnosticsSpec(view.state, diagnostics));
       problems.classList.toggle(
         'bad',

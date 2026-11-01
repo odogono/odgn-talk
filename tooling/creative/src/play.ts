@@ -67,6 +67,7 @@ import {
   type LoadedMessageTarget,
 } from './message-script';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
+import { patternProblems, projectPatternNames } from './pattern-checks';
 
 type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
@@ -997,6 +998,7 @@ export class PlaySession {
       thisPage: this.#objects.get(this.page)!,
       project: this.#objects.get(this.project)!,
     };
+    const patternNames = projectPatternNames(this.project);
     for (const owner of owners) {
       if (!owner.script?.trim()) {
         continue;
@@ -1012,6 +1014,14 @@ export class PlaySession {
       this.#owners.set(name, owner);
       this.#scripts.set(owner, name);
       const objects = owner === this.project ? pages : pageObjects;
+      // A bad pattern is reported but never stops the Script loading.
+      for (const problem of patternProblems(owner.script, patternNames)) {
+        this.problems.push({
+          owner: this.#authored.get(owner)!,
+          line: problem.line,
+          message: problem.message,
+        });
+      }
       try {
         this.#frames.delete(name);
         this.#beats.delete(name);

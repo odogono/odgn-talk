@@ -660,8 +660,12 @@ for (const bad of ['missing', 'picture']) {
     play.send(play.page.elements[0]!, 'click');
     drain(play);
     expect(play.sounds.playing()).toEqual([]);
-    expect(play.problems).toHaveLength(1);
-    expect(play.problems[0]?.owner).toBe(project.pages[0]!.elements[0]);
+    // Loading reports the unknown name; playing it reports again.
+    expect(play.problems.map(p => p.message)[0]).toBe(
+      `No sound or sample is named “${bad}”.`,
+    );
+    expect(play.problems).toHaveLength(2);
+    expect(play.problems[1]?.owner).toBe(project.pages[0]!.elements[0]);
   });
 }
 

@@ -250,6 +250,24 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
 - Browser: `instruments` suite on `/instruments-test.html` covers Info and the
   built worklet; also run `info-panel` and `sounds`.
 
+## Mini-Notation
+
+Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
+
+- [mini-notation.ts](src/mini-notation.ts): `parseMiniNotation` reads
+  sequences, `-` rests, `[ ]`, `< >`, `*n`, `/n`, `,`, `name:n` and note
+  names into a `Pattern`, whose `cycle(n)` and `query` give events with exact
+  `Time`s and each step's character range; errors carry a range too.
+- [pattern-checks.ts](src/pattern-checks.ts): finds literal texts given to
+  `play` or `loop` as Host Commands or told to `sound`, and reports syntax
+  errors and unknown sound names. [play.ts](src/play.ts) adds them to
+  `problems` when a Script loads, without stopping it; [scripts.ts](src/scripts.ts)
+  underlines them in the Code Browser. A text that names a whole Project
+  sound passes.
+- Tests: [mini-notation.test.ts](tests/mini-notation.test.ts) and
+  [pattern-checks.test.ts](tests/pattern-checks.test.ts).
+- First check: `bun test tooling/creative/tests/mini-notation.test.ts tooling/creative/tests/pattern-checks.test.ts`.
+
 ## The folio Grant and hide/show
 
 - [grants/folio.ts](src/grants/folio.ts): the `hide` and `show` Operations,
