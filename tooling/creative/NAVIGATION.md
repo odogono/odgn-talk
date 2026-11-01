@@ -156,6 +156,29 @@ List files with `rg --files tooling/creative` before opening one by name.
   [sounds.browser.ts](tests/sounds.browser.ts).
 - First check: `bun test tooling/creative/tests/images.test.ts tooling/creative/tests/sounds.test.ts`.
 
+## Audio engines
+
+Headless engines for Folio's Instruments (#1887), copied from Mercenary and
+WIME. Nothing in Folio uses them yet. Each file's header names the repository,
+path and commit it came from. No original game's sound assets are included.
+
+- [audio/chip-host.ts](src/audio/chip-host.ts): the `Chip` interface
+  (`render(count)` plus timed commands), `ChipHost`, which applies each
+  `SoundBatch` on its own sample, and `renderOffline`.
+- [audio/ym2149.ts](src/audio/ym2149.ts): the Atari ST's YM2149 and
+  `ym2149Chip`, which takes register writes.
+- [audio/sonix/](src/audio/sonix/): the Sonix waveform synth
+  ([synth.ts](src/audio/sonix/synth.ts)), its four-voice
+  [mixer.ts](src/audio/sonix/mixer.ts) and
+  [tables.ts](src/audio/sonix/tables.ts), under nuade's MIT notice, plus
+  [wave-synth.ts](src/audio/sonix/wave-synth.ts), the new `Chip` built on them.
+- Tests: [engines.test.ts](tests/audio/engines.test.ts) checks the golden
+  hashes in [goldens.json](tests/audio/goldens.json) for the scenarios in
+  [scenarios.ts](tests/audio/scenarios.ts).
+  [audio-goldens.ts](tools/audio-goldens.ts) regenerates those hashes from
+  checkouts of the originals, and fails if a copy renders differently.
+- First check: `bun test tooling/creative/tests/audio`.
+
 ## The folio Grant and hide/show
 
 - [grants/folio.ts](src/grants/folio.ts): the `hide` and `show` Operations,
