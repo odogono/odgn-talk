@@ -26,3 +26,4 @@ This amends [ADR 0095](0095-folio-delivers-a-frame-message-to-scripts-that-handl
 
 - Elapsed time in a Play Session can be reproduced while stepping, and on Resume it continues as if the pause had not happened.
 - The Variables window refreshes after each Step or Message Box Pump, because it reads after every Pump.
+- Amended by [ADR 0156](0156-folios-play-clock-follows-the-audio-clock.md): the Play clock is the audio clock plus a safety margin, so Pause suspends the audio; a Step still moves it one frame interval.
