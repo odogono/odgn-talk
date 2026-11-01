@@ -5,11 +5,10 @@ import { Ym2149, YM_CLOCK_HERTZ } from '../audio/ym2149';
 import {
   parameterStore,
   type InstrumentCommand,
-  type InstrumentKind,
+  type InstrumentEngine,
   type InstrumentSetup,
 } from './kind';
 import { noteFrequency, panGains } from './notes';
-import { NOTE_OPERATIONS } from './operations';
 import { allocate, type Voice } from './voices';
 
 const parameters = {
@@ -90,7 +89,7 @@ type Channel = Voice & { index: number };
 
 const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   const ym = new Ym2149(setup.sampleRate);
-  const values = parameterStore(ym2149Kind, setup.parameters);
+  const values = parameterStore(ym2149Engine, setup.parameters);
   const channels: Channel[] = Array.from(
     { length: setup.voices },
     (_, index) => ({
@@ -198,13 +197,12 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   };
 };
 
-export const ym2149Kind: InstrumentKind = {
+export const ym2149Engine: InstrumentEngine = {
   name: 'ym2149',
   description:
     "The Atari ST's YM2149 sound chip: three square-wave voices, noise and a shared envelope.",
   maxVoices: 3,
   voices: 3,
   parameters,
-  operations: NOTE_OPERATIONS,
   chip,
 };

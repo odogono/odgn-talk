@@ -31,6 +31,10 @@ import {
   scriptPage,
 } from './script-manifest';
 import { browserSoundBackend } from './sounds';
+import {
+  startInstrumentAudio,
+  type InstrumentAudio,
+} from './instruments/audio';
 import { createElement, type HTMLAttributes } from 'preact';
 import { ElementView, renderElements } from './element-view';
 import { type PlayMode, type StackShell } from './stack';
@@ -365,11 +369,15 @@ export const mountPlay = (shell: StackShell): void => {
   let pressRequest: number | undefined;
   // Sounds play here for the worker, each voice under the worker's number.
   const voices = new Map<number, { stop(): void }>();
+  // A session's Instruments play here too, through one AudioWorklet.
+  let instrumentAudio: InstrumentAudio | undefined;
   const silence = () => {
     for (const voice of voices.values()) {
       voice.stop();
     }
     voices.clear();
+    instrumentAudio?.close();
+    instrumentAudio = undefined;
   };
   const supervisor = new WorkerSupervisor<PlayRequest, PlayResponse>({
     ended: { kind: 'ended' },
@@ -449,6 +457,12 @@ export const mountPlay = (shell: StackShell): void => {
       } catch (error) {
         voices.set(response.voice, { stop() {} });
         done(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+    if (response.kind === 'instrument') {
+      if (response.session === sessionId) {
+        instrumentAudio?.send(response);
       }
       return;
     }
@@ -901,6 +915,20 @@ export const mountPlay = (shell: StackShell): void => {
     shell.setPlaying(mode);
     generation = shell.editor.generation;
     playing = shell.editor.project as Project;
+    if (playing.instruments.length) {
+      const project = playing;
+      instrumentAudio = startInstrumentAudio(
+        project,
+        async asset => {
+          const url = shell.images.url(asset);
+          if (url === undefined) {
+            throw new Error('its bytes are missing');
+          }
+          return (await fetch(url)).arrayBuffer();
+        },
+        message => errors.add([{ owner: project, message }]),
+      );
+    }
     owners = scriptOwners(shell.editor.project);
     libraries = [...shell.editor.project.libraries];
     loadedScripts = owners.map(owner => owner.script ?? '');

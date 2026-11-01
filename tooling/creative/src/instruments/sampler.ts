@@ -1,17 +1,15 @@
 // The sampler Instrument kind (#1894): plays the Project's sounds and the
 // built-in kits at a pitch or speed, gain and pan. A Script names the sound;
 // a note other than middle C plays it higher or lower.
-import { shape } from '@northtalk/ts';
 import type { Chip } from '../audio/chip-host';
 import {
   parameterStore,
   type InstrumentCommand,
-  type InstrumentKind,
+  type InstrumentEngine,
   type InstrumentSetup,
   type SampleBuffer,
 } from './kind';
 import { panGains } from './notes';
-import { NOTE_OPERATIONS } from './operations';
 import { allocate, type Voice } from './voices';
 
 /** The note that plays a sound at its recorded pitch. */
@@ -55,7 +53,7 @@ type SamplerVoice = Voice & {
 
 const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   const { sampleRate, samples } = setup;
-  const values = parameterStore(samplerKind, setup.parameters);
+  const values = parameterStore(samplerEngine, setup.parameters);
   const fadeStep = 1 / (RELEASE_SECONDS * sampleRate);
   let started = 0;
   const voices: SamplerVoice[] = Array.from({ length: setup.voices }, () => ({
@@ -163,31 +161,12 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   };
 };
 
-export const samplerKind: InstrumentKind = {
+export const samplerEngine: InstrumentEngine = {
   name: 'sampler',
   description:
     "A sampler: plays the Project's sounds and the built-in kits, at a pitch or speed.",
   maxVoices: 32,
   voices: 16,
   parameters,
-  operations: {
-    play: {
-      mode: 'fire-and-forget',
-      args: [
-        shape.text,
-        shape.optional(shape.oneOf(shape.number, shape.text)),
-        shape.optional(shape.number),
-      ],
-      cost: { fuel: 1 },
-      description:
-        'Plays a sound by name, at an optional note (middle C, "c4", plays it as recorded) and velocity from 0 to 1.',
-      examples: [
-        'tell drums to play "kick"',
-        'tell drums to play "bell", "g4", 0.6',
-      ],
-    },
-    release: NOTE_OPERATIONS.release,
-    stop: NOTE_OPERATIONS.stop,
-  },
   chip,
 };
