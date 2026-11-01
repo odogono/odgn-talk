@@ -14,6 +14,7 @@ import {
   type Project,
   type RichText,
 } from './model';
+import { type InstrumentMessage } from './instruments/session';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
 import {
   type VariableScript,
@@ -201,6 +202,8 @@ export type PlayResponse =
   | ({ kind: 'view' } & PlayView)
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }
+  /** Commands for one of the session's Instruments (#1894). */
+  | (InstrumentMessage & { kind: 'instrument'; session: number })
   | { kind: 'done' }
   | {
       error?: string;

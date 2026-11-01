@@ -43,6 +43,7 @@ export const elementNamesTaken = (
 ): Set<string> =>
   new Set([
     ...reservedScriptNames,
+    ...project.instruments.map(i => i.name),
     ...project.pages.map(p => p.name),
     ...allElements(page.elements)
       .filter(e => e.name !== current)
@@ -54,6 +55,7 @@ export const pageNamesTaken = (
 ): Set<string> =>
   new Set([
     ...reservedScriptNames,
+    ...project.instruments.map(i => i.name),
     ...project.pages.filter(p => p.name !== current).map(p => p.name),
     ...project.pages.flatMap(p => allElements(p.elements).map(e => e.name)),
   ]);
@@ -68,7 +70,7 @@ export const scriptNameProblems = (
       !isIdentifierName(owner.name) || reservedScriptNames.has(owner.name)
         ? 'is not an available Script identifier'
         : collision
-          ? 'conflicts with another Page or Element name'
+          ? 'conflicts with another Page, Element or Instrument name'
           : undefined;
     if (reason) {
       problems.push({
@@ -77,11 +79,15 @@ export const scriptNameProblems = (
       });
     }
   };
+  const instruments = new Set(project.instruments.map(i => i.name));
   for (const page of project.pages) {
     check(
       page,
       'Page',
-      project.pages.some(other => other !== page && other.name === page.name) ||
+      instruments.has(page.name) ||
+        project.pages.some(
+          other => other !== page && other.name === page.name,
+        ) ||
         project.pages.some(p =>
           allElements(p.elements).some(e => e.name === page.name),
         ),
@@ -90,7 +96,8 @@ export const scriptNameProblems = (
       check(
         element,
         `Element on ${page.name}`,
-        project.pages.some(p => p.name === element.name) ||
+        instruments.has(element.name) ||
+          project.pages.some(p => p.name === element.name) ||
           allElements(page.elements).some(
             other => other !== element && other.name === element.name,
           ),

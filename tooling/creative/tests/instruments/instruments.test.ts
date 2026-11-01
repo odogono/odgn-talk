@@ -3,7 +3,7 @@ import { renderOffline, type SoundBatch } from '../../src/audio/chip-host';
 import {
   defaultParameters,
   type InstrumentCommand,
-  type InstrumentKind,
+  type InstrumentEngine,
   type SampleBuffer,
 } from '../../src/instruments/kind';
 import { noteFrequency, noteNumber } from '../../src/instruments/notes';
@@ -13,9 +13,9 @@ import {
   instrumentProblems,
   SESSION_VOICES,
 } from '../../src/instruments/registry';
-import { samplerKind } from '../../src/instruments/sampler';
-import { synthKind } from '../../src/instruments/synth';
-import { tonePeriod, ym2149Kind } from '../../src/instruments/ym2149';
+import { samplerEngine } from '../../src/instruments/sampler';
+import { synthEngine } from '../../src/instruments/synth';
+import { tonePeriod, ym2149Engine } from '../../src/instruments/ym2149';
 import { createProject } from '../../src/model';
 import {
   migrateProjectJson,
@@ -28,7 +28,7 @@ import {
 const RATE = 44_100;
 
 const render = (
-  kind: InstrumentKind,
+  kind: InstrumentEngine,
   seconds: number,
   batches: SoundBatch<InstrumentCommand>[],
   options: {
@@ -105,7 +105,7 @@ const sine = (hertz: number, seconds: number): SampleBuffer => ({
 const energy = (cutoff: number) =>
   peak(
     channel(
-      render(synthKind, 0.3, [note(0, 84)], { parameters: { cutoff } }),
+      render(synthEngine, 0.3, [note(0, 84)], { parameters: { cutoff } }),
       0,
       0.1,
       0.3,
@@ -133,7 +133,7 @@ describe('notes', () => {
 describe('the synth', () => {
   for (const waveform of ['sine', 'triangle', 'saw', 'square']) {
     test(`a ${waveform} note sounds at its pitch`, () => {
-      const output = render(synthKind, 0.5, [note(0, 57)], {
+      const output = render(synthEngine, 0.5, [note(0, 57)], {
         parameters: { waveform, cutoff: 20_000 },
       });
       const left = channel(output, 0, 0.1, 0.5);
@@ -144,7 +144,7 @@ describe('the synth', () => {
   }
 
   test('a released note fades out over the release time', () => {
-    const output = render(synthKind, 1, [
+    const output = render(synthEngine, 1, [
       note(0, 60),
       command(0.3, { kind: 'release', note: 60 }),
     ]);
@@ -157,7 +157,7 @@ describe('the synth', () => {
   });
 
   test('pan and gain follow set commands', () => {
-    const output = render(synthKind, 0.6, [
+    const output = render(synthEngine, 0.6, [
       note(0, 60),
       command(0.2, { kind: 'set', parameter: 'pan', value: 1 }),
       command(0.4, { kind: 'set', parameter: 'gain', value: 0 }),
@@ -169,7 +169,7 @@ describe('the synth', () => {
 
   test('a note beyond the voice cap steals the oldest voice', () => {
     const output = render(
-      synthKind,
+      synthEngine,
       0.6,
       [note(0, 48), note(0.1, 72), command(0.3, { kind: 'release', note: 72 })],
       { voices: 1, parameters: { release: 0.01 } },
@@ -183,18 +183,28 @@ describe('the sampler', () => {
   const samples = new Map([['tone', sine(220, 1)]]);
 
   test('a sound plays at its recorded pitch on middle C, then ends', () => {
-    const output = render(samplerKind, 1.5, [note(0, 60, { sound: 'tone' })], {
-      samples,
-    });
+    const output = render(
+      samplerEngine,
+      1.5,
+      [note(0, 60, { sound: 'tone' })],
+      {
+        samples,
+      },
+    );
     expect(Math.abs(pitch(channel(output, 0, 0, 0.9)) - 220)).toBeLessThan(3);
     expect(peak(channel(output, 0, 1.01, 1.5))).toBe(0);
   });
 
   test('a note an octave up and double speed both double the pitch', () => {
-    const octave = render(samplerKind, 0.4, [note(0, 72, { sound: 'tone' })], {
-      samples,
-    });
-    const fast = render(samplerKind, 0.4, [note(0, 60, { sound: 'tone' })], {
+    const octave = render(
+      samplerEngine,
+      0.4,
+      [note(0, 72, { sound: 'tone' })],
+      {
+        samples,
+      },
+    );
+    const fast = render(samplerEngine, 0.4, [note(0, 60, { sound: 'tone' })], {
       samples,
       parameters: { speed: 2 },
     });
@@ -205,7 +215,7 @@ describe('the sampler', () => {
 
   test('an unknown sound or no sound stays silent', () => {
     const output = render(
-      samplerKind,
+      samplerEngine,
       0.2,
       [note(0, 60, { sound: 'missing' }), note(0, 60)],
       { samples },
@@ -215,7 +225,7 @@ describe('the sampler', () => {
 
   test('stop fades every voice out', () => {
     const output = render(
-      samplerKind,
+      samplerEngine,
       0.5,
       [note(0, 60, { sound: 'tone' }), command(0.2, { kind: 'stop' })],
       { samples },
@@ -228,14 +238,14 @@ describe('the sampler', () => {
 describe('the YM2149', () => {
   test('a note writes its tone period and sounds at its pitch', () => {
     expect(tonePeriod(69)).toBe(284);
-    const output = render(ym2149Kind, 0.5, [note(0, 69)]);
+    const output = render(ym2149Engine, 0.5, [note(0, 69)]);
     const left = channel(output, 0, 0.1, 0.5);
     expect(peak(left)).toBeGreaterThan(0.05);
     expect(Math.abs(pitch(left) - 440)).toBeLessThan(10);
   });
 
   test('three notes take the three channels; release silences one', () => {
-    const output = render(ym2149Kind, 0.6, [
+    const output = render(ym2149Engine, 0.6, [
       note(0, 60),
       note(0, 64),
       note(0, 67),
@@ -251,7 +261,7 @@ describe('the YM2149', () => {
   });
 
   test('the envelope decays a note without a release', () => {
-    const output = render(ym2149Kind, 0.8, [note(0, 60)], {
+    const output = render(ym2149Engine, 0.8, [note(0, 60)], {
       parameters: { envelope: true, envelopeShape: 9, envelopePeriod: 1500 },
     });
     expect(peak(channel(output, 0, 0, 0.1))).toBeGreaterThan(0.05);
@@ -259,7 +269,7 @@ describe('the YM2149', () => {
   });
 
   test('noise without tone is not a pitched note', () => {
-    const output = render(ym2149Kind, 0.3, [note(0, 69)], {
+    const output = render(ym2149Engine, 0.3, [note(0, 69)], {
       parameters: { tone: false, noise: true, noisePeriod: 1 },
     });
     const left = channel(output, 0, 0.05, 0.3);
@@ -389,7 +399,7 @@ describe('Instruments in the .folio file', () => {
       name: 'bass',
       kind: 'synth',
       voices: 2,
-      parameters: { ...defaultParameters(synthKind), cutoff: 900 },
+      parameters: { ...defaultParameters(synthEngine), cutoff: 900 },
     });
   });
 

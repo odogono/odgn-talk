@@ -1,7 +1,7 @@
-// An Instrument kind (ADR 0158, #1894): one definition giving its
-// parameters, its Operations as the Host Manifest documents them, its voice
-// cap and the Chip that plays it. Each kind's module imports only this file,
-// the notes and its own engine, so it can later load as an Add-on (#1901).
+// An Instrument kind (ADR 0158, #1894): its engine (parameters, voice cap
+// and the Chip that plays it) and its Operations as the Host Manifest
+// documents them. Each engine's module imports only this file, the notes
+// and its own chip, so it can later load as an Add-on (#1901).
 import type { Chip } from '../audio/chip-host';
 import type { OperationDeclaration } from '../grants/grant';
 
@@ -63,17 +63,25 @@ export type InstrumentSetup = {
   readonly voices: number;
 };
 
-export type InstrumentKind = {
+/**
+ * What plays an Instrument kind: its parameters, voice cap and Chip. The
+ * audio thread needs only this, so engines never import the Core.
+ */
+export type InstrumentEngine = {
   /** A stereo Chip playing the Instrument. */
   chip(setup: InstrumentSetup): Chip<InstrumentCommand>;
   readonly description: string;
   /** The most voices one Instrument of this kind may have. */
   readonly maxVoices: number;
   readonly name: string;
-  readonly operations: Readonly<Record<string, OperationDeclaration>>;
   readonly parameters: Readonly<Record<string, ParameterDefinition>>;
   /** Voices a new Instrument of this kind gets. */
   readonly voices: number;
+};
+
+/** An engine and the Operations Scripts call on it. */
+export type InstrumentKind = InstrumentEngine & {
+  readonly operations: Readonly<Record<string, OperationDeclaration>>;
 };
 
 /** The parameter's problem with `value`, else undefined. */
@@ -103,7 +111,7 @@ export const parameterProblem = (
 
 /** Every parameter's default. */
 export const defaultParameters = (
-  kind: InstrumentKind,
+  kind: Pick<InstrumentEngine, 'parameters'>,
 ): Record<string, ParameterValue> =>
   Object.fromEntries(
     Object.entries(kind.parameters).map(([name, p]) => [name, p.default]),

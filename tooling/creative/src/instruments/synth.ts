@@ -4,11 +4,10 @@ import type { Chip } from '../audio/chip-host';
 import {
   parameterStore,
   type InstrumentCommand,
-  type InstrumentKind,
+  type InstrumentEngine,
   type InstrumentSetup,
 } from './kind';
 import { noteFrequency, panGains } from './notes';
-import { NOTE_OPERATIONS } from './operations';
 import { allocate, type Voice } from './voices';
 
 const WAVEFORMS = ['sine', 'triangle', 'saw', 'square'] as const;
@@ -126,7 +125,7 @@ const oscillator = (waveform: Waveform, voice: SynthVoice): number => {
 
 const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   const { sampleRate } = setup;
-  const values = parameterStore(synthKind, setup.parameters);
+  const values = parameterStore(synthEngine, setup.parameters);
   let started = 0;
   const voices: SynthVoice[] = Array.from({ length: setup.voices }, () => ({
     active: false,
@@ -257,13 +256,12 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   };
 };
 
-export const synthKind: InstrumentKind = {
+export const synthEngine: InstrumentEngine = {
   name: 'synth',
   description:
     'A basic synth: an oscillator, an amplitude envelope and a low-pass filter for each voice.',
   maxVoices: 16,
   voices: 8,
   parameters,
-  operations: NOTE_OPERATIONS,
   chip,
 };

@@ -16,6 +16,8 @@ import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
+import { INSTRUMENT_KINDS } from './instruments/registry';
+import type { InstrumentKind } from './instruments/kind';
 
 export type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
@@ -95,6 +97,43 @@ const objectKinds = [
       : {}),
   })),
 ];
+// Each Instrument kind's parameters, as its objects' properties (ADR 0158).
+const instrumentObjectKinds = [...INSTRUMENT_KINDS.values()].map(kind => ({
+  name: kind.name,
+  props: Object.entries(kind.parameters).map(([name, parameter]) => ({
+    name,
+    shape: parameter.shape,
+    readOnly: false,
+    setCost: { fuel: 1 },
+  })),
+}));
+
+/** An Instrument's Grant entry: its name, over its kind's Capability. */
+const instrumentGrant = (name: string, kind: InstrumentKind) => ({
+  ...manifestGrant({
+    name,
+    operations: kind.operations,
+    grant: () => {
+      throw new Error('Manifest only');
+    },
+  }),
+  capability: kind.name,
+});
+
+/** The Project's Instruments, as each Script's Manifest lists them. */
+const instrumentEntries = (project: DeepReadonly<Project>) =>
+  project.instruments.flatMap(instrument => {
+    const kind = INSTRUMENT_KINDS.get(instrument.kind);
+    return kind
+      ? [
+          {
+            object: { name: instrument.name, kind: kind.name },
+            grant: instrumentGrant(instrument.name, kind),
+          },
+        ]
+      : [];
+  });
+
 // Each Grant's entry, derived from its definition (#1453).
 const grants = manifestGrants();
 const messages = [
@@ -165,6 +204,7 @@ export const scriptManifest = (
   if (owner !== project && !page) {
     throw new Error('The Script owner is not in this Project');
   }
+  const instruments = instrumentEntries(project);
   return {
     kind: 'kind' in owner ? owner.kind : owner === project ? 'project' : 'page',
     version: '1',
@@ -172,6 +212,7 @@ export const scriptManifest = (
     libraries: project.libraries.map(({ name, source }) => ({ name, source })),
     objects: [
       ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
+      ...instruments.map(entry => entry.object),
       ...(page
         ? [
             ...allElements(page.elements).map(element => ({
@@ -183,8 +224,8 @@ export const scriptManifest = (
           ]
         : []),
     ],
-    objectKinds,
-    grants,
+    objectKinds: [...objectKinds, ...instrumentObjectKinds],
+    grants: [...grants, ...instruments.map(entry => entry.grant)],
     messages: scriptMessages(owner.script ?? ''),
   };
 };

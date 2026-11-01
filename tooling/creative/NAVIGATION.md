@@ -181,25 +181,43 @@ path and commit it came from. No original game's sound assets are included.
 
 ## Instruments
 
-Instrument kinds (ADR 0158, #1894). Projects save them, but Play, Scripts
-and Info don't use them yet.
+Instrument kinds and their Play wiring (ADR 0158, #1894). Info can't edit
+Instruments yet.
 
-- [instruments/kind.ts](src/instruments/kind.ts): the `InstrumentKind` a
-  kind defines (parameters, Operations, voice cap and Chip factory), the
-  `InstrumentCommand`s its Chip takes, and parameter checks.
-- [instruments/registry.ts](src/instruments/registry.ts): every kind,
+- [instruments/kind.ts](src/instruments/kind.ts): an `InstrumentEngine`
+  (parameters, voice cap and Chip factory), the `InstrumentKind` that adds
+  its Operations, the `InstrumentCommand`s a Chip takes, and parameter checks.
+- One engine module per kind, each importing only `kind.ts`, the notes and its
+  chip, never the Core: [sampler.ts](src/instruments/sampler.ts),
+  [ym2149.ts](src/instruments/ym2149.ts) and
+  [synth.ts](src/instruments/synth.ts), listed in
+  [engines.ts](src/instruments/engines.ts).
+  [notes.ts](src/instruments/notes.ts) reads note names and numbers.
+- [instruments/registry.ts](src/instruments/registry.ts): every kind with its
+  Operations from [operations.ts](src/instruments/operations.ts),
   `createInstrument`, `instrumentProblems` (names, voices, parameters and the
   `SESSION_VOICES` cap) and the names an Instrument can't take.
-- One module per kind, each importing only `kind.ts`, the notes and its engine:
-  [sampler.ts](src/instruments/sampler.ts),
-  [ym2149.ts](src/instruments/ym2149.ts) and
-  [synth.ts](src/instruments/synth.ts).
-  [notes.ts](src/instruments/notes.ts) reads note names and numbers.
+- [instruments/session.ts](src/instruments/session.ts): a Play Session's
+  Instruments. Each one is a Grant over its kind's Capability (`tell bass to
+play "c3"`) and an object whose properties are its parameters (`set the
+cutoff of bass to 800`). Both send `InstrumentMessage`s, which
+  [play-host.ts](src/play-host.ts) posts to the page as `instrument`
+  responses. [play.ts](src/play.ts) binds them for every Script;
+  [script-manifest.ts](src/script-manifest.ts) lists them, and
+  [script-names.ts](src/script-names.ts) refuses Pages and Elements that
+  share their names.
+- [instruments/audio.ts](src/instruments/audio.ts): the page's AudioContext,
+  started by [play-view.ts](src/play-view.ts) when a session has Instruments.
+  It decodes the Project's sounds for samplers and runs
+  [instruments.worklet.ts](src/instruments/instruments.worklet.ts), whose
+  [rack.ts](src/instruments/rack.ts) mixes every Instrument's Chip.
 - `Project.instruments` is in [model.ts](src/model.ts);
   [project-file.ts](src/project-file.ts) checks them and migrates format 5
   Projects to format 6.
 - Tests: [instruments.test.ts](tests/instruments/instruments.test.ts) renders
-  each kind offline and round-trips Instruments through a Project file.
+  each kind offline and round-trips Instruments through a Project file;
+  [play.test.ts](tests/instruments/play.test.ts) covers Scripts, the
+  Manifest, names and the rack.
 - First check: `bun test tooling/creative/tests/instruments`.
 
 ## The folio Grant and hide/show

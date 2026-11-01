@@ -233,7 +233,10 @@ test('Play and the authoring Manifest declare the same Page collection', () => {
         }),
       ) as { objectKinds: { elements?: unknown }[] }
     ).objectKinds[0]!.elements;
-  const authored = scriptManifest(project, project.pages[0]!).objectKinds;
+  const authored = scriptManifest(project, project.pages[0]!).objectKinds as {
+    elements?: unknown;
+    name: string;
+  }[];
   expect(exported('page')).toEqual(
     authored.find(kind => kind.name === 'page')!.elements,
   );

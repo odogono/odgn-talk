@@ -462,6 +462,14 @@ export class PlayHost {
       // The Performance window leaves out paused time too.
       performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
+      instrumentBackend: message =>
+        this.post({
+          response: {
+            kind: 'instrument',
+            session: request.session,
+            ...message,
+          },
+        }),
     });
     if (request.performanceEpoch !== undefined) {
       this.#startPerformance(request.performanceEpoch);

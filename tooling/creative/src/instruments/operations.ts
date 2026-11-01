@@ -27,3 +27,23 @@ export const NOTE_OPERATIONS = {
     examples: ['tell bass to stop'],
   },
 } as const satisfies Record<string, OperationDeclaration>;
+
+export const SAMPLER_OPERATIONS = {
+  play: {
+    mode: 'fire-and-forget',
+    args: [
+      shape.text,
+      shape.optional(shape.oneOf(shape.number, shape.text)),
+      shape.optional(shape.number),
+    ],
+    cost: { fuel: 1 },
+    description:
+      'Plays a sound by name, at an optional note (middle C, "c4", plays it as recorded) and velocity from 0 to 1.',
+    examples: [
+      'tell drums to play "kick"',
+      'tell drums to play "bell", "g4", 0.6',
+    ],
+  },
+  release: NOTE_OPERATIONS.release,
+  stop: NOTE_OPERATIONS.stop,
+} as const satisfies Record<string, OperationDeclaration>;

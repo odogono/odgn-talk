@@ -170,7 +170,18 @@ dropping what they can't read.
 An Instrument has a name, a kind (`sampler`, `ym2149` or `synth`), a number
 of voices and its kind's parameters. Up to 64 voices are shared among a
 Project's Instruments. A parameter added to a kind after a Project was saved
-takes its default. Play, Scripts and Info don't use Instruments yet (#1894).
+takes its default. Info can't edit Instruments yet (#1894).
+
+During Play, every Script reaches each Instrument by name. `tell bass to play
+"c3"` starts a note, a MIDI number or a name such as `f#4` with `c4` as
+middle C, at an optional velocity from 0 to 1. `release` ends a note and
+`stop` ends them all. A sampler plays a Project sound by name: `tell drums to
+play "kick"`, optionally at a note and velocity. Parameters are properties:
+`set the cutoff of bass to 800`. A change lasts for the Play Session and
+leaves the Project as authored. A bad note, velocity or value is a Script
+error. A Page or Element can't share an Instrument's name. A Script that stops
+releases the notes it started, and stopping Play stops every Instrument. The
+Instruments play through one AudioWorklet, which starts with Play.
 
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.

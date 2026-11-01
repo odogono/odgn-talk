@@ -13,6 +13,11 @@ import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
+import { INSTRUMENT_KINDS } from './instruments/registry';
+import {
+  InstrumentSession,
+  type InstrumentBackend,
+} from './instruments/session';
 import {
   bool,
   defineObjectKind,
@@ -27,6 +32,7 @@ import {
   shape,
   text,
   type Call,
+  type Grant,
   type HostObject,
   type ObjectElements,
   type ObjectKind,
@@ -398,7 +404,11 @@ export class PlaySession {
 
   // The state each Grant reads (#1453); the Grants are built once a session's
   // SoundBoard exists and are shared by every Script it loads.
-  #grants!: ReturnType<typeof grantsFor>;
+  #grants!: ReturnType<typeof grantsFor> & Record<string, Grant<unknown>>;
+  /** The session's Instruments, reached by name as Grants and objects. */
+  readonly instruments: InstrumentSession;
+  /** Each Instrument's object, by name. */
+  #instrumentObjects: Record<string, HostObject> = {};
   #grantStates(): GrantStates {
     return {
       pages: {
@@ -583,6 +593,8 @@ export class PlaySession {
     public pageIndex = 0,
     options: {
       events?: boolean;
+      /** Where Instrument commands go; nowhere when absent. */
+      instrumentBackend?: InstrumentBackend;
       performanceNow?: () => number;
       /**
        * Seeds the generator `random` draws from, so a test can repeat a
@@ -608,7 +620,14 @@ export class PlaySession {
         });
       }
     });
-    this.#grants = grantsFor(this.#grantStates());
+    this.instruments = new InstrumentSession(
+      project.instruments,
+      options.instrumentBackend,
+    );
+    this.#grants = {
+      ...grantsFor(this.#grantStates()),
+      ...this.instruments.grants(),
+    };
     const names = scriptNameProblems(project);
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
@@ -620,56 +639,61 @@ export class PlaySession {
     const originals = scriptOwners(project);
     const copies = scriptOwners(this.project);
     this.#kinds = new Map(
-      scriptManifest(project, project).objectKinds.map(def => {
-        const props: Record<string, PropDef<ScriptOwner>> = {};
-        const descriptors = propertiesForKind(def.name);
-        for (const prop of def.props) {
-          const key = prop.name;
-          const descriptor = descriptors.get(key)!;
-          props[key] = {
-            ...(prop.setCost ? { setCost: prop.setCost } : {}),
-            shape:
-              prop.shape === 'number'
-                ? shape.number
-                : prop.shape === 'boolean'
-                  ? shape.bool
-                  : shape.text,
-            get: ({ native }) => {
-              const value = descriptor.get(native);
-              return typeof value === 'number'
-                ? num(value)
-                : typeof value === 'boolean'
-                  ? bool(value)
-                  : text(String(value));
-            },
-            ...(!prop.readOnly
-              ? {
-                  set: ({ native }: HostObject<ScriptOwner>, value: Value) => {
-                    const next =
-                      value.kind === 'number'
-                        ? value.asDecimal()!.toNumberLossy()
-                        : value.kind === 'boolean'
-                          ? value.asBool()!
-                          : value.asText()!;
-                    this.#treeOperation(() =>
-                      this.#tree.setProperty(native, key, next),
-                    );
-                  },
-                }
-              : {}),
-          };
-        }
-        return [
-          def.name,
-          defineObjectKind<ScriptOwner>({
-            name: def.name,
-            props,
-            ...(['page', 'group'].includes(def.name)
-              ? { elements: this.#pageElements }
-              : {}),
-          }),
-        ];
-      }),
+      scriptManifest(project, project)
+        .objectKinds.filter(def => !INSTRUMENT_KINDS.has(def.name))
+        .map(def => {
+          const props: Record<string, PropDef<ScriptOwner>> = {};
+          const descriptors = propertiesForKind(def.name);
+          for (const prop of def.props) {
+            const key = prop.name;
+            const descriptor = descriptors.get(key)!;
+            props[key] = {
+              ...(prop.setCost ? { setCost: prop.setCost } : {}),
+              shape:
+                prop.shape === 'number'
+                  ? shape.number
+                  : prop.shape === 'boolean'
+                    ? shape.bool
+                    : shape.text,
+              get: ({ native }) => {
+                const value = descriptor.get(native);
+                return typeof value === 'number'
+                  ? num(value)
+                  : typeof value === 'boolean'
+                    ? bool(value)
+                    : text(String(value));
+              },
+              ...(!prop.readOnly
+                ? {
+                    set: (
+                      { native }: HostObject<ScriptOwner>,
+                      value: Value,
+                    ) => {
+                      const next =
+                        value.kind === 'number'
+                          ? value.asDecimal()!.toNumberLossy()
+                          : value.kind === 'boolean'
+                            ? value.asBool()!
+                            : value.asText()!;
+                      this.#treeOperation(() =>
+                        this.#tree.setProperty(native, key, next),
+                      );
+                    },
+                  }
+                : {}),
+            };
+          }
+          return [
+            def.name,
+            defineObjectKind<ScriptOwner>({
+              name: def.name,
+              props,
+              ...(['page', 'group'].includes(def.name)
+                ? { elements: this.#pageElements }
+                : {}),
+            }),
+          ];
+        }),
     );
     for (const [i, owner] of copies.entries()) {
       this.#authored.set(owner, originals[i]!);
@@ -698,6 +722,13 @@ export class PlaySession {
           this.#objects.get(this.#tree.parentOf(element)!)!,
         );
       }
+    }
+    for (const [name, kind] of this.instruments.objectKinds()) {
+      this.#instrumentObjects[name] = this.group.object(
+        kind,
+        `instrument:${name}`,
+        name,
+      );
     }
     const compiled = compileProjectLibraries(
       project.libraries,
@@ -797,6 +828,7 @@ export class PlaySession {
       ...Object.fromEntries(
         this.project.pages.map(p => [p.name, this.#objects.get(p)!]),
       ),
+      ...this.#instrumentObjects,
       ...Object.fromEntries(
         allElements(this.page.elements).map(e => [
           e.name,
@@ -944,9 +976,12 @@ export class PlaySession {
   #messageErrors = new Map<string, string>();
 
   #load(owners: ScriptOwner[]): void {
-    const pages = Object.fromEntries(
-      this.project.pages.map(p => [p.name, this.#objects.get(p)!]),
-    );
+    const pages = {
+      ...Object.fromEntries(
+        this.project.pages.map(p => [p.name, this.#objects.get(p)!]),
+      ),
+      ...this.#instrumentObjects,
+    };
     const pageObjects = {
       ...pages,
       ...Object.fromEntries(
@@ -1341,6 +1376,7 @@ export class PlaySession {
       // Run is abandoned with the session rather than asked to stop.
       this.ended = true;
       this.sounds.stopAll();
+      this.instruments.stopAll();
       this.notices.length = 0;
       return;
     }
@@ -1348,6 +1384,7 @@ export class PlaySession {
     // Stop silences every sound at once, before Scripts are asked to stop
     // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();
+    this.instruments.stopAll();
     this.notices.length = 0;
     this.#closing?.cancel.abort();
     this.#closing = undefined;

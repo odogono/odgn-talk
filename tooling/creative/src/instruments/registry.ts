@@ -9,12 +9,17 @@ import {
   parameterProblem,
   type InstrumentKind,
 } from './kind';
-import { samplerKind } from './sampler';
-import { synthKind } from './synth';
-import { ym2149Kind } from './ym2149';
+import { NOTE_OPERATIONS, SAMPLER_OPERATIONS } from './operations';
+import { samplerEngine } from './sampler';
+import { synthEngine } from './synth';
+import { ym2149Engine } from './ym2149';
 
 export const INSTRUMENT_KINDS: ReadonlyMap<string, InstrumentKind> = new Map(
-  [samplerKind, ym2149Kind, synthKind].map(kind => [kind.name, kind]),
+  [
+    { ...samplerEngine, operations: SAMPLER_OPERATIONS },
+    { ...ym2149Engine, operations: NOTE_OPERATIONS },
+    { ...synthEngine, operations: NOTE_OPERATIONS },
+  ].map(kind => [kind.name, kind]),
 );
 
 /** The most voices a Play Session's Instruments may have between them. */
