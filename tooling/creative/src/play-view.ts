@@ -481,6 +481,8 @@ export const mountPlay = (shell: StackShell): void => {
     const wasPaused = session.paused;
     const wasStopped = JSON.stringify(session.stoppedRun);
     session.apply(response);
+    // The audio stops whenever the session is paused, at a Breakpoint too.
+    instrumentAudio?.setPaused(session.paused);
     if (mode === 'browse') {
       variables.context(sessionId, session.messageTargets, session.paused);
       variables.stoppedRun(session.stoppedRun);
@@ -926,7 +928,11 @@ export const mountPlay = (shell: StackShell): void => {
           }
           return (await fetch(url)).arrayBuffer();
         },
-        message => errors.add([{ owner: project, message }]),
+        {
+          onError: message => errors.add([{ owner: project, message }]),
+          onReading: reading =>
+            post({ kind: 'audioClock', session: sessionId, reading }),
+        },
       );
     }
     owners = scriptOwners(shell.editor.project);
@@ -950,6 +956,7 @@ export const mountPlay = (shell: StackShell): void => {
     post({
       kind: 'open',
       ...(captureEpoch === undefined ? {} : { performanceEpoch: captureEpoch }),
+      ...(instrumentAudio ? { audioClock: instrumentAudio.reading() } : {}),
       session: sessionId,
       project: playing,
       pageIndex,

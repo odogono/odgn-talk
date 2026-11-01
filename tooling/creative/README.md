@@ -216,8 +216,15 @@ Transport, which begins again from bar 1. A tempo change leaves the beat
 already due in place and spaces later ones at the new tempo. `ask transport to
 beats 2` gives an exact duration for `wait`, at the current tempo. Pause
 freezes the Transport with the Play clock, and the beats resume on the same
-grid. Until the Play clock follows the audio clock, sounds play as their
-commands reach the page rather than at their time.
+grid. In a session with Instruments, the Play clock is the page's audio clock plus a
+15 ms margin (ADR 0156). The page sends the Play worker a reading of the audio
+clock every 250 ms and whenever the audio starts, and the worker extrapolates
+between them. It never goes backwards, and it holds still until the audio is
+running. Each sound reaches the AudioWorklet with its time on the audio clock
+and plays on that sample, or at once if it arrives late. Pause, and a stop at
+a Breakpoint, suspend the audio; a Step moves the Play clock one frame without
+it. Commands still pass through the page on their way to the worklet. A session
+without Instruments keeps the Host clock, and its sounds play on arrival.
 
 The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.

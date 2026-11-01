@@ -52,6 +52,8 @@ export class ChipHost<Command extends { readonly kind: string }> {
     private readonly chip: Chip<Command>,
     private readonly sampleRate: number,
     private readonly label: string,
+    /** Told each command as it is applied, with its time on the host's clock. */
+    private readonly observe?: (command: Command, time: number) => void,
   ) {
     this.samplesPerTick =
       chip.tick === undefined ? Infinity : sampleRate / chip.tick.hertz;
@@ -101,6 +103,7 @@ export class ChipHost<Command extends { readonly kind: string }> {
         this.queue.shift();
         for (const command of batch!.commands) {
           this.chip.apply(command);
+          this.observe?.(command, currentTime + next / this.sampleRate);
         }
       } else if (next === tickAt) {
         tick!.run();

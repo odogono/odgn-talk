@@ -190,9 +190,18 @@ path and commit it came from. No original game's sound assets are included.
 - [grants/transport.ts](src/grants/transport.ts): the `transport` Grant.
   [instruments/session.ts](src/instruments/session.ts) times sounds from the
   call's beat Delivery and `at`.
+- [audio-clock.ts](src/audio-clock.ts): the Play clock of a session with
+  Instruments, the page's audio clock plus the margin (ADR 0156).
+  [play-host.ts](src/play-host.ts) reads it from `audioClock` requests, freezes
+  it on Pause and Breakpoints, and turns sound times into audio times;
+  [instruments/audio.ts](src/instruments/audio.ts) sends the readings and
+  suspends the AudioContext while paused.
 - Tests: [transport.test.ts](tests/transport.test.ts) covers the grid, tempo
-  changes, `beat` delivery, sound times, `beats` with `wait` and Pause.
-- First check: `bun test tooling/creative/tests/transport.test.ts`.
+  changes, `beat` delivery, sound times, `beats` with `wait` and Pause;
+  [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
+- First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/audio-clock.test.ts`.
+- Browser: `beats` suite on `/beats-test.html` plays beats through the real
+  worklet and checks each note's sample.
 
 ## Instruments
 
