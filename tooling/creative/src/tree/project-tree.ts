@@ -12,6 +12,8 @@ import {
   type Element,
   type ElementKind,
   type GroupElement,
+  type Instrument,
+  type InstrumentParameterValue,
   type Page,
   type Project,
   type ProjectLibrary,
@@ -24,6 +26,17 @@ import {
   reservedScriptNames,
   testScriptNameProblem,
 } from '../script-names';
+import {
+  createInstrument,
+  instrumentProblems,
+  RESERVED_INSTRUMENT_NAMES,
+} from '../instruments/registry';
+
+/** A change to one Instrument: a new name, voice count or parameter value. */
+export type InstrumentChange =
+  | { name: string }
+  | { voices: number }
+  | { parameter: string; value: InstrumentParameterValue };
 
 type SourceList = 'libraries' | 'testScripts';
 const SOURCE_LABELS = { libraries: 'Library', testScripts: 'Test Script' };
@@ -194,6 +207,7 @@ export class ProjectTree {
     this.#project = detached(project) as Project;
     this.#allocateId = allocateId;
     for (const source of [
+      ...this.#project.instruments,
       ...this.#project.libraries,
       ...this.#project.testScripts,
     ]) {
@@ -912,6 +926,81 @@ export class ProjectTree {
         ),
       );
     });
+  }
+  /** Adds an Instrument of `kind`, named after it, with its defaults. */
+  addInstrument(kind: string, base: string): DeepReadonly<Instrument> {
+    return this.transaction(() => {
+      const instrument = domain(() =>
+        createInstrument(kind, freshName(base, this.#namesTaken())),
+      );
+      instrument.id =
+        this.#allocateId?.() ??
+        Math.max(0, ...this.#project.instruments.map(i => i.id ?? 0)) + 1;
+      this.#setInstruments([...this.#project.instruments, instrument]);
+      return this.#project.instruments.at(-1)!;
+    });
+  }
+  /** Changes one Instrument; refuses a change `instrumentProblems` rejects. */
+  changeInstrument(id: number, change: InstrumentChange): void {
+    this.transaction(() => {
+      const current = this.#project.instruments.find(i => i.id === id);
+      if (!current) {
+        throw new TreeError('Unknown Instrument');
+      }
+      const next: Instrument =
+        'parameter' in change
+          ? {
+              ...current,
+              parameters: {
+                ...current.parameters,
+                [change.parameter]: change.value,
+              },
+            }
+          : { ...current, ...change };
+      // Reserved names, other Instruments and bad identifiers are
+      // `instrumentProblems`'s to refuse; Pages and Elements are the tree's.
+      if (
+        'name' in change &&
+        this.#project.pages.some(
+          page =>
+            page.name === change.name ||
+            allElements(page.elements).some(e => e.name === change.name),
+        )
+      ) {
+        throw new TreeError(
+          `“${change.name}” is already the name of a Page or Element.`,
+        );
+      }
+      this.#setInstruments(
+        this.#project.instruments.map(i => (i.id === id ? next : i)),
+      );
+    });
+  }
+  removeInstrument(id: number): void {
+    this.transaction(() =>
+      this.#setInstruments(this.#project.instruments.filter(i => i.id !== id)),
+    );
+  }
+  /** Every name Scripts bind: reserved words, Pages, Elements and Instruments. */
+  #namesTaken(): Set<string> {
+    return new Set([
+      ...reservedScriptNames,
+      ...RESERVED_INSTRUMENT_NAMES,
+      ...this.#project.instruments.map(i => i.name),
+      ...this.#project.pages.flatMap(page => [
+        page.name,
+        ...allElements(page.elements).map(e => e.name),
+      ]),
+    ]);
+  }
+  #setInstruments(next: Instrument[]): void {
+    const [problem] = instrumentProblems(next);
+    if (problem) {
+      throw new TreeError(
+        `${problem.message[0]!.toUpperCase()}${problem.message.slice(1)}.`,
+      );
+    }
+    this.#field(this.#project, 'instruments', next);
   }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));

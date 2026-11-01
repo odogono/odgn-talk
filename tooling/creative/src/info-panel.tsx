@@ -22,6 +22,174 @@ import {
   type TextAlign,
 } from './model';
 import { isSoundAsset } from './sounds';
+import type { ParameterDefinition } from './instruments/kind';
+import { INSTRUMENT_KINDS } from './instruments/registry';
+
+/** Each Instrument kind's name in Info, and the name a new one is given. */
+export const INSTRUMENT_KIND_NAMES: Record<
+  string,
+  { label: string; name: string }
+> = {
+  sampler: { label: 'Sampler', name: 'drums' },
+  ym2149: { label: 'YM2149 sound chip', name: 'chip' },
+  synth: { label: 'Synth', name: 'synth' },
+};
+
+/** `envelopePeriod` as `Envelope period`. */
+const parameterLabel = (name: string): string => {
+  const words = name.replaceAll(/([A-Z])/gu, ' $1').toLowerCase();
+  return words[0]!.toUpperCase() + words.slice(1);
+};
+
+const parameterControl = (
+  name: string,
+  definition: ParameterDefinition,
+  value: number | string | boolean | undefined,
+  disabled: boolean,
+) => {
+  const common = {
+    'data-parameter': name,
+    disabled,
+    title: definition.description,
+  };
+  switch (definition.shape) {
+    case 'number':
+      return field(
+        parameterLabel(name),
+        <input
+          {...common}
+          max={definition.max}
+          min={definition.min}
+          step={definition.whole ? 1 : 'any'}
+          type="number"
+          value={Number(value ?? definition.default)}
+        />,
+      );
+    case 'text':
+      return field(
+        parameterLabel(name),
+        <select {...common} value={String(value ?? definition.default)}>
+          {definition.choices.map(choice => (
+            <option key={choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>,
+      );
+    case 'boolean':
+      return (
+        <label className="check" title={definition.description}>
+          <input
+            {...common}
+            checked={Boolean(value ?? definition.default)}
+            type="checkbox"
+          />
+          {parameterLabel(name)}
+        </label>
+      );
+  }
+};
+
+/** The Project's Instruments, each editable, and a way to add one (ADR 0158). */
+const InstrumentsSection = ({
+  editor,
+  disabled,
+}: {
+  disabled: boolean;
+  editor: StackEditor;
+}) => {
+  const { project } = editor.state.value;
+  return (
+    <>
+      <h2>Instruments</h2>
+      {project.instruments.length ? (
+        project.instruments.map(instrument => {
+          const kind = INSTRUMENT_KINDS.get(instrument.kind);
+          return (
+            <fieldset
+              className="instrument"
+              data-instrument={instrument.id}
+              key={instrument.id}
+            >
+              <legend>
+                {INSTRUMENT_KIND_NAMES[instrument.kind]?.label ??
+                  instrument.kind}{' '}
+                “{instrument.name}”
+              </legend>
+              {field(
+                'Name',
+                <input
+                  autoComplete="off"
+                  data-instrument-field="name"
+                  disabled={disabled}
+                  spellcheck={false}
+                  type="text"
+                  value={instrument.name}
+                />,
+              )}
+              {kind && (
+                <>
+                  {field(
+                    'Voices',
+                    <input
+                      data-instrument-field="voices"
+                      disabled={disabled}
+                      max={kind.maxVoices}
+                      min={1}
+                      step={1}
+                      type="number"
+                      value={instrument.voices}
+                    />,
+                  )}
+                  {Object.entries(kind.parameters).map(([name, definition]) => (
+                    <Fragment key={name}>
+                      {parameterControl(
+                        name,
+                        definition,
+                        instrument.parameters[name],
+                        disabled,
+                      )}
+                    </Fragment>
+                  ))}
+                </>
+              )}
+              <button
+                data-remove-instrument={instrument.id}
+                disabled={disabled}
+                type="button"
+              >
+                Remove {instrument.name}
+              </button>
+            </fieldset>
+          );
+        })
+      ) : (
+        <p className="muted">No Instruments yet.</p>
+      )}
+      <div className="row">
+        <select
+          aria-label="Instrument kind"
+          data-new-instrument=""
+          disabled={disabled}
+        >
+          {[...INSTRUMENT_KINDS.keys()].map(kind => (
+            <option key={kind} value={kind}>
+              {INSTRUMENT_KIND_NAMES[kind]?.label ?? kind}
+            </option>
+          ))}
+        </select>
+        <button data-add-instrument="" disabled={disabled} type="button">
+          Add Instrument
+        </button>
+      </div>
+      <p className="muted">
+        Scripts play an Instrument by its name, like tell drums to play
+        &quot;kick&quot;, and set its parameters, like set the cutoff of synth
+        to 800.
+      </p>
+    </>
+  );
+};
 
 export const KIND_NAMES: Record<ElementKind, string> = {
   text: 'Text',
@@ -499,6 +667,7 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
         Scripts play a sound by its name, like tell sound to play
         &quot;waves&quot;. Add action… can write that for you.
       </p>
+      <InstrumentsSection disabled={disabled} editor={editor} />
       <p className="muted">
         Click an Element to select it; Shift-click selects several.
       </p>

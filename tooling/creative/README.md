@@ -170,7 +170,15 @@ dropping what they can't read.
 An Instrument has a name, a kind (`sampler`, `ym2149` or `synth`), a number
 of voices and its kind's parameters. Up to 64 voices are shared among a
 Project's Instruments. A parameter added to a kind after a Project was saved
-takes its default. Info can't edit Instruments yet (#1894).
+takes its default.
+
+With nothing selected, Info's Instruments section lists the Project's
+Instruments. Add Instrument creates one of the chosen kind, named after it
+(`drums`, `chip` or `synth`, then `synth2` and so on). Each Instrument shows
+its name, voices and every parameter, each committed as one undoable edit when
+it changes. Info refuses a name another Instrument, Page or Element has, a name
+Scripts already use, a value out of range and too many voices, and says why.
+Remove takes an Instrument out.
 
 During Play, every Script reaches each Instrument by name. `tell bass to play
 "c3"` starts a note, a MIDI number or a name such as `f#4` with `c4` as
