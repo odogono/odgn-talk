@@ -7435,7 +7435,7 @@ pub const Group = struct {
     /// charges it. It stops before any instruction it can't finish the same
     /// way, including one that would raise or fault, leaving it unchanged
     /// for the general loop.
-    fn fastSteps(g: *Group, run: *Run, charged: bool) void {
+    inline fn fastSteps(g: *Group, run: *Run, charged: bool) void {
         if (!g.fast_steps or g.release_pause or g.answering_crossing or run.select_at != null) return;
         if (g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) return;
         if (run.returned_op == null and run.returned_prop == null and run.landed != null) return;
@@ -7445,7 +7445,7 @@ pub const Group = struct {
         // are the same in every frame the fast path reaches.
         const unit = unitOf(run, top);
         switch (unit.code[top.pc].op) {
-            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return" => {},
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return", .call_handler, .get_key, .set_key, .next => {},
             else => return,
         }
         for (unit.unwind) |e| if (e.kind == .finally) return;
@@ -7565,16 +7565,28 @@ pub const Group = struct {
                         if (!completed) return;
                         continue;
                     },
-                    .call => {
+                    .call, .call_handler => {
                         const n: usize = @intCast(ops[1].int);
                         if (len < n) return;
                         for (stack.items[len - n ..]) |slot| if (slot != .value) return;
-                        if (!g.fastCall(run, bounds, @intCast(ops[0].int), n)) return;
+                        const handler = ins.op == .call_handler;
+                        const body = if (handler) ownClause(unit, ops[0].text, n) orelse return else @as(u32, @intCast(ops[0].int));
+                        if (!g.fastCall(run, &bounds, body, n, handler)) return;
                         g.fastTick();
                         continue :frames;
                     },
+                    .get_key => if (!fastGetKey(run, &bounds, frame, ops[0].text)) return,
+                    .set_key => if (!g.fastSetKey(run, &bounds, frame, ops[0].text)) return,
+                    .next => {
+                        const target = g.fastNext(run, &bounds, frame, @intCast(ops[0].int)) orelse return;
+                        g.fastTick();
+                        if (target) |t| {
+                            frame.pc = t;
+                            continue;
+                        }
+                    },
                     .@"return" => {
-                        if (len == 0 or stack.items[len - 1] != .value or !g.fastReturn(run, bounds)) return;
+                        if (len == 0 or stack.items[len - 1] != .value or !g.fastReturn(run, &bounds)) return;
                         g.fastTick();
                         continue :frames;
                     },
@@ -7655,7 +7667,7 @@ pub const Group = struct {
     /// nothing, for a call the general loop makes: one that leaves off
     /// parameters with defaults, binds `during`, passes the call depth or
     /// can't be allocated or charged.
-    fn fastCall(g: *Group, run: *Run, bounds: FastBounds, body: u32, n: usize) bool {
+    fn fastCall(g: *Group, run: *Run, bounds: *const FastBounds, body: u32, n: usize, handler: bool) bool {
         const b = &unitOf(run, &run.frames.items[run.frames.items.len - 1]).bodies[body];
         if (n != b.params.len or b.during != null) return false;
         if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return false;
@@ -7671,7 +7683,7 @@ pub const Group = struct {
         };
         // Slot 0 and any slot past the arguments share one Nothing.
         const empty: ?*Value = if (b.locals > 0) nothing(g.gpa) catch null else null;
-        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(.call))) {
+        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(if (handler) .call_handler else .call))) {
             if (empty) |v| v.release();
             group_allocator.freeFrameBuffer(g.gpa, Slot, stack.allocatedSlice());
             group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
@@ -7683,14 +7695,101 @@ pub const Group = struct {
         if (empty) |v| v.release();
         caller.stack.items.len -= n;
         caller.pc += 1;
-        run.frames.appendAssumeCapacity(.{ .library = caller.library, .body = body, .pc = b.first, .locals = locals, .stack = stack, .restricted = caller.restricted });
+        // A Handler's clause is a Command Call's, as `nextClause` pushes
+        // it: its `clause-fail` tries the next, and its rate is paid with
+        // its first instruction.
+        run.frames.appendAssumeCapacity(.{ .library = caller.library, .body = body, .pc = b.first, .locals = locals, .stack = stack, .restricted = caller.restricted, .called = handler });
+        if (handler) run.called_clause += 4;
         return true;
+    }
+
+    /// The first clause of the unit's own Handler `name` that takes `n`
+    /// arguments, which `call-handler` pushes, or null for any call the
+    /// general loop makes: to another unit's Handler, or with no such clause.
+    fn ownClause(unit: *const lower.Unit, name: []const u8, n: usize) ?u32 {
+        for (unit.bodies, 0..) |b, i| {
+            if (b.kind == .handler and b.params.len == n and std.mem.eql(u8, b.name, name)) return @intCast(i);
+        }
+        return null;
+    }
+
+    /// `get-key` of a literal key a Map has, as `instruction` makes it, or
+    /// false, having changed nothing: an Object reads a property, and a
+    /// missing key makes a Nothing.
+    fn fastGetKey(run: *Run, bounds: *const FastBounds, frame: *Frame, shown: []const u8) bool {
+        const items = frame.stack.items;
+        if (items.len == 0 or items[items.len - 1] != .value) return false;
+        const base = items[items.len - 1].value;
+        if (base.data != .map) return false;
+        const found = base.get(literalKey(shown) orelse return false) orelse return false;
+        if (!bounds.charge(run, costs.chargeUnmeasured(.get_key))) return false;
+        items[items.len - 1] = .{ .value = found.retain() };
+        base.release();
+        return true;
+    }
+
+    /// `set-key` of a literal key a Map already has, as `instruction` makes
+    /// it, or false, having changed nothing. With the key there, the result
+    /// has the Map's entries, so its charge is known before the write.
+    fn fastSetKey(g: *Group, run: *Run, bounds: *const FastBounds, frame: *Frame, shown: []const u8) bool {
+        const items = frame.stack.items;
+        if (items.len < 2 or items[items.len - 1] != .value or items[items.len - 2] != .value) return false;
+        const v = items[items.len - 1].value;
+        const base = items[items.len - 2].value;
+        if (base.data != .map) return false;
+        const key = literalKey(shown) orelse return false;
+        if (base.get(key) == null) return false;
+        const before: ChargeState = .of(g, run);
+        if (!bounds.charge(run, costs.chargeStatic(.set_key, &.{ .input = v, .result = base }))) return false;
+        // `mapSet` changes nothing it fails on; it ends the stack's
+        // reference to the Map it replaces.
+        var root = base;
+        model.mapSet(&root, key, v) catch {
+            before.restore(g, run);
+            return false;
+        };
+        frame.stack.items[items.len - 2] = .{ .value = root };
+        frame.stack.items.len -= 1;
+        v.release();
+        return true;
+    }
+
+    /// `next` over a List or Range: null, having changed nothing, for the
+    /// general loop; otherwise null inside when it pushed an item, or `exit`
+    /// when the subject is done.
+    fn fastNext(g: *Group, run: *Run, bounds: *const FastBounds, frame: *Frame, exit: u32) ??u32 {
+        const items = frame.stack.items;
+        if (items.len == 0 or items[items.len - 1] != .iterator or items.len == frame.stack.capacity) return null;
+        const it = items[items.len - 1].iterator;
+        const subject = it.subject orelse return null;
+        const before: ChargeState = .of(g, run);
+        if (!bounds.charge(run, costs.chargeUnmeasured(.next))) return null;
+        const item: *Value = switch (subject.data) {
+            .list => |list| if (it.position >= list.len) return @as(?u32, exit) else list[it.position].retain(),
+            .range => |r| blk: {
+                const from = r.from.data.number.integer(i64) catch unreachable;
+                const to = r.to.data.number.integer(i64) catch unreachable;
+                const p = from + @as(i64, @intCast(it.position));
+                if (p > to) return @as(?u32, exit);
+                break :blk chunks.numberValue(g.gpa, p) catch {
+                    before.restore(g, run);
+                    return null;
+                };
+            },
+            else => {
+                before.restore(g, run);
+                return null;
+            },
+        };
+        it.position += 1;
+        frame.stack.appendAssumeCapacity(.{ .value = item });
+        return @as(?u32, null);
     }
 
     /// `return` of the value on top of the top frame's stack to a caller in
     /// the same unit, or false, having changed nothing, for a return that
     /// ends the Run, leaves the unit, or can't be allocated or charged.
-    fn fastReturn(g: *Group, run: *Run, bounds: FastBounds) bool {
+    fn fastReturn(g: *Group, run: *Run, bounds: *const FastBounds) bool {
         const depth = run.frames.items.len;
         if (depth - 1 <= run.base) return false;
         const callee = &run.frames.items[depth - 1];
