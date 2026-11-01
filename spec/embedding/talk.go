@@ -907,8 +907,16 @@ const (
 
 // Object makes a handle for a Host-owned thing, the first time it crosses
 // into this Group. A duplicate id within the kind is "duplicate object id".
-// Any goroutine.
-func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
+// WithParent gives it its parent at once, even inside a Pump: "wrong group"
+// if the parent isn't this Group's, "invalid value" if it is disposed
+// (ADR 0152). Any goroutine.
+func (g *Group) Object(kind *ObjectKind, id string, native any, opts ...ObjectOption) (*Object, error)
+
+// ObjectOption configures Object.
+type ObjectOption func(*objectOptions)
+
+// WithParent makes the object with this parent.
+func WithParent(parent *Object) ObjectOption
 
 // ObjectByID returns the handle with this Object Kind name and id, disposed
 // or not, and false if the Group never made one. It is how a Host reaches the
