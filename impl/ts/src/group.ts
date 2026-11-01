@@ -5184,7 +5184,12 @@ export class TsGroup implements Group {
   }
 
   /** Makes a handle for a Host-owned thing, the first time it crosses in. */
-  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N> {
+  object<N>(
+    kind: ObjectKind<N>,
+    id: string,
+    native: N,
+    o?: { parent?: HostObject },
+  ): HostObject<N> {
     const key = `${kind.name}\u0000${id}`;
     if (this.objects.has(key)) {
       throw new HostError(
@@ -5192,8 +5197,27 @@ export class TsGroup implements Group {
         `The Group already has a ${kind.name} ${id}`,
       );
     }
+    // A parent given at creation takes effect at once: a new object has
+    // nothing queued for it to overtake (ADR 0152).
+    const up = o?.parent ? this.held(o.parent) : null;
+    if (up?.disposed) {
+      throw new HostError('invalid value', `${up.handle.value} is disposed`);
+    }
     const state = makeObject(kind, id, native);
+    state.parent = up;
     this.objects.set(key, state);
+    if (up) {
+      this.trace?.(
+        recordLine(
+          'object',
+          [],
+          [
+            ['object', traceValue(state.handle.value)],
+            ['parent', traceValue(up.handle.value)],
+          ],
+        ),
+      );
+    }
     return state.handle as HostObject<N>;
   }
 

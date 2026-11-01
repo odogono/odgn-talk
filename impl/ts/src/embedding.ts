@@ -99,7 +99,12 @@ export type Group = {
   inspect(): Inspection;
   load(o: LoadOptions): Script;
   readonly name: string;
-  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N>;
+  object<N>(
+    kind: ObjectKind<N>,
+    id: string,
+    native: N,
+    o?: { parent?: HostObject },
+  ): HostObject<N>;
   objectById(kind: string, id: string): HostObject | undefined;
   pump(now: bigint, o?: PumpOptions): PumpResult;
   replaceLibrary(l: Library, carry: CarryOver): Report[];
