@@ -10,6 +10,9 @@ import type { InstrumentMessage } from './session';
 /** The worklet processor's registered name. */
 export const INSTRUMENT_PROCESSOR = 'folio-instruments';
 
+/** What the page posts the worklet: the port the Play worker sends on. */
+export type InstrumentChannel = { port: MessagePort };
+
 /** What a rack is built from; plain data, so it crosses to the worklet. */
 export type RackSetup = {
   readonly instruments: readonly Pick<

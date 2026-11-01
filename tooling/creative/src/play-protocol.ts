@@ -15,7 +15,6 @@ import {
   type RichText,
 } from './model';
 import { type AudioReading } from './audio-clock';
-import { type InstrumentMessage } from './instruments/session';
 import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
 import {
   type VariableScript,
@@ -42,6 +41,11 @@ export type PlayRequest =
   | {
       /** The page's audio clock, when the session has Instruments (ADR 0156). */
       audioClock?: AudioReading;
+      /**
+       * The session's end of its channel to the Instrument worklet, which
+       * takes each InstrumentMessage straight from the worker (ADR 0156).
+       */
+      instrumentPort?: MessagePort;
       kind: 'open';
       pageIndex: number;
       performanceEpoch?: number;
@@ -207,11 +211,6 @@ export type PlayResponse =
   | ({ kind: 'view' } & PlayView)
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }
-  /**
-   * Commands for one of the session's Instruments (#1894), `at` seconds on
-   * the audio clock, or at once when absent.
-   */
-  | (InstrumentMessage & { kind: 'instrument'; session: number })
   | { kind: 'done' }
   | {
       error?: string;

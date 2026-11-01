@@ -42,6 +42,7 @@ import {
 import { type Report } from '@northtalk/ts';
 import { type DebugInstruction } from '@northtalk/ts/debug';
 import { type SoundBackend } from './sounds';
+import { type InstrumentMessage } from './instruments/session';
 import { text } from '@northtalk/ts';
 import { pointerValue } from './pointer';
 import { pausableClock } from '@northtalk/tooling/pausable-clock';
@@ -184,6 +185,8 @@ export class PlayHost {
   // else Host time less paused time (ADR 0128). Neither goes back.
   readonly #clock: () => bigint;
   #audio: AudioClock;
+  // The session's channel to the Instrument worklet, if it has Instruments.
+  #instrumentPort: MessagePort | undefined;
   #id = 0;
   #performanceTimer: ReturnType<typeof setInterval> | undefined;
   #timer: unknown;
@@ -260,6 +263,7 @@ export class PlayHost {
       case 'stop': {
         this.#close();
         session.stop(this.#clock());
+        this.#closeInstruments();
         this.#publishPerformance();
         this.#publish();
         this.#session = undefined;
@@ -450,6 +454,7 @@ export class PlayHost {
     if (this.#session) {
       this.#close();
       this.#session.stop(this.#clock());
+      this.#closeInstruments();
     }
     this.#id = request.session;
     this.#owners = new Map(
@@ -471,6 +476,8 @@ export class PlayHost {
     this.#placedIn = undefined;
     this.#play.newSession();
     this.#audio = new AudioClock(this.epochNow);
+    const port = request.instrumentPort;
+    this.#instrumentPort = port;
     if (request.audioClock) {
       this.#audio.read(request.audioClock);
     }
@@ -480,19 +487,17 @@ export class PlayHost {
       // The Performance window leaves out paused time too.
       performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
-      // A sound's Play-clock time goes to the worklet as audio time; without
-      // the audio clock there is no such time, so it plays on arrival.
+      // Commands go straight to the worklet over the session's port, never
+      // through the page (ADR 0156). A sound's Play-clock time goes as audio
+      // time; without the audio clock there is no such time, so it plays on
+      // arrival.
       instrumentBackend: ({ at, ...message }) =>
-        this.post({
-          response: {
-            kind: 'instrument',
-            session: request.session,
-            ...message,
-            ...(at !== undefined && this.#audio.active
-              ? { at: this.#audio.toAudio(at) }
-              : {}),
-          },
-        }),
+        port?.postMessage({
+          ...message,
+          ...(at !== undefined && this.#audio.active
+            ? { at: this.#audio.toAudio(at) }
+            : {}),
+        } satisfies InstrumentMessage),
     });
     if (request.performanceEpoch !== undefined) {
       this.#startPerformance(request.performanceEpoch);
@@ -630,6 +635,12 @@ export class PlayHost {
     clearInterval(this.#performanceTimer);
     this.#publishPerformance();
     this.#performanceTimer = setInterval(() => this.#publishPerformance(), 250);
+  }
+
+  // An ended session's commands go nowhere: its port closes after it stops.
+  #closeInstruments(): void {
+    this.#instrumentPort?.close();
+    this.#instrumentPort = undefined;
   }
 
   #close(): void {

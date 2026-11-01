@@ -460,12 +460,6 @@ export const mountPlay = (shell: StackShell): void => {
       }
       return;
     }
-    if (response.kind === 'instrument') {
-      if (response.session === sessionId) {
-        instrumentAudio?.send(response);
-      }
-      return;
-    }
     if (response.kind === 'stopSound') {
       voices.get(response.voice)?.stop();
       voices.delete(response.voice);
@@ -939,6 +933,12 @@ export const mountPlay = (shell: StackShell): void => {
     libraries = [...shell.editor.project.libraries];
     loadedScripts = owners.map(owner => owner.script ?? '');
     loadedLibraries = libraries.map(library => library.source);
+    // Each session's Instrument commands come over a fresh channel, from the
+    // worker to the worklet and never through this thread (ADR 0156).
+    const channel = instrumentAudio ? new MessageChannel() : undefined;
+    if (instrumentAudio && channel) {
+      instrumentAudio.listen(channel.port1);
+    }
     sessionId++;
     profiler.reset(sessionId);
     captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
@@ -953,16 +953,26 @@ export const mountPlay = (shell: StackShell): void => {
         edit,
       });
     });
-    post({
-      kind: 'open',
-      ...(captureEpoch === undefined ? {} : { performanceEpoch: captureEpoch }),
-      ...(instrumentAudio ? { audioClock: instrumentAudio.reading() } : {}),
-      session: sessionId,
-      project: playing,
-      pageIndex,
-      // A different game each time (ADR 0096), unless recording a test.
-      seed: record ? 0n : BigInt(Date.now()),
-    });
+    void supervisor.call(
+      {
+        kind: 'open',
+        ...(captureEpoch === undefined
+          ? {}
+          : { performanceEpoch: captureEpoch }),
+        ...(instrumentAudio && channel
+          ? {
+              audioClock: instrumentAudio.reading(),
+              instrumentPort: channel.port2,
+            }
+          : {}),
+        session: sessionId,
+        project: playing,
+        pageIndex,
+        // A different game each time (ADR 0096), unless recording a test.
+        seed: record ? 0n : BigInt(Date.now()),
+      },
+      channel ? [channel.port2] : [],
+    );
     // Draw the authored Page at once, as the worker starts its session.
     session.apply(firstView(playing, pageIndex, sessionId));
     syncMessage();
