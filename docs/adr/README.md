@@ -151,3 +151,6 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0154: A Remote Send's Caller Identity is vouched for by the receiving Host](0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)
 - [0155: A Peer may travel inside a Remote Send, and holding it is authority](0155-a-peer-may-travel-inside-a-remote-send-and-holding-it-is-authority.md)
 - [0156: Folio's Play clock follows the audio clock](0156-folios-play-clock-follows-the-audio-clock.md)
+- [0157: Folio Punches In an edited Script at the next bar](0157-folio-punches-in-an-edited-script-at-the-next-bar.md)
+- [0158: Folio plays Instruments on one Transport](0158-folio-plays-instruments-on-one-transport.md)
+- [0159: Folio plays Sound Patterns written in Mini-Notation](0159-folio-plays-sound-patterns-written-in-mini-notation.md)
