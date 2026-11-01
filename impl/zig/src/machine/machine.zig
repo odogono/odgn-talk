@@ -540,6 +540,7 @@ pub const EventBranch = union(enum) {
 
 /// No deadline: a `wait for` that can wait for ever.
 const never = wait_table.never;
+const group_allocator = @import("group_allocator.zig");
 
 /// A Script's work: a message for dispatch, or a Run ready to resume.
 pub const Work = union(enum) { message: Delivery, run: *Run };
@@ -7438,11 +7439,13 @@ pub const Group = struct {
         if (!g.fast_steps or g.release_pause or g.answering_crossing or run.select_at != null) return;
         if (g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) return;
         if (run.returned_op == null and run.returned_prop == null and run.landed != null) return;
-        const frame = &run.frames.items[run.frames.items.len - 1];
-        if (frame.restricted) return;
-        const unit = unitOf(run, frame);
-        switch (unit.code[frame.pc].op) {
-            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert => {},
+        const top = &run.frames.items[run.frames.items.len - 1];
+        if (top.restricted) return;
+        // Calls and returns stay within this unit, so its code and values
+        // are the same in every frame the fast path reaches.
+        const unit = unitOf(run, top);
+        switch (unit.code[top.pc].op) {
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return" => {},
             else => return,
         }
         for (unit.unwind) |e| if (e.kind == .finally) return;
@@ -7451,136 +7454,154 @@ pub const Group = struct {
         g.flushHeld();
         const bounds: FastBounds = .of(g, run, charged);
         const code = unit.code;
-        const stack = &frame.stack;
-        while (true) {
-            if (g.host_poll != null and g.host_poll_ticks +% 1 == 0) return;
-            if (bounds.preempted(run)) return;
-            const ins = code[frame.pc];
-            const ops = ins.operands;
-            const len = stack.items.len;
-            switch (ins.op) {
-                .@"const" => {
-                    const v = switch (unit.values[@intCast(ops[0].int)]) {
-                        .value => |v| v,
-                        else => return,
-                    };
-                    if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    stack.appendAssumeCapacity(.{ .value = v.retain() });
-                },
-                .load => {
-                    if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
-                },
-                .store => {
-                    if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    const s: usize = @intCast(ops[0].int);
-                    frame.locals[s].release();
-                    frame.locals[s] = pop(frame);
-                },
-                .move => {
-                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    const from: usize = @intCast(ops[0].int);
-                    const to: usize = @intCast(ops[1].int);
-                    frame.locals[to].release();
-                    frame.locals[to] = frame.locals[from].retain();
-                },
-                .jump => {
-                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    frame.pc = @intCast(ops[0].int);
-                    g.fastTick();
-                    continue;
-                },
-                .branch_false, .branch_true => {
-                    if (len == 0 or stack.items[len - 1] != .value) return;
-                    const v = stack.items[len - 1].value;
-                    if (v.data != .bool or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    _ = stack.pop();
-                    const taken = v.data.bool == (ins.op == .branch_true);
-                    v.release();
-                    g.fastTick();
-                    if (taken) {
+        // A call or return changes the top frame and starts again here,
+        // so the inner loop's frame and stack stay fixed.
+        frames: while (true) {
+            const frame = &run.frames.items[run.frames.items.len - 1];
+            const stack = &frame.stack;
+            while (true) {
+                if (g.host_poll != null and g.host_poll_ticks +% 1 == 0) return;
+                if (bounds.preempted(run)) return;
+                const ins = code[frame.pc];
+                const ops = ins.operands;
+                const len = stack.items.len;
+                switch (ins.op) {
+                    .@"const" => {
+                        const v = switch (unit.values[@intCast(ops[0].int)]) {
+                            .value => |v| v,
+                            else => return,
+                        };
+                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        stack.appendAssumeCapacity(.{ .value = v.retain() });
+                    },
+                    .load => {
+                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
+                    },
+                    .store => {
+                        if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        const s: usize = @intCast(ops[0].int);
+                        frame.locals[s].release();
+                        frame.locals[s] = pop(frame);
+                    },
+                    .move => {
+                        if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        const from: usize = @intCast(ops[0].int);
+                        const to: usize = @intCast(ops[1].int);
+                        frame.locals[to].release();
+                        frame.locals[to] = frame.locals[from].retain();
+                    },
+                    .jump => {
+                        if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
                         frame.pc = @intCast(ops[0].int);
-                        continue;
-                    }
-                },
-                .less, .greater, .less_or_equal, .greater_or_equal => {
-                    const pair = numberOperands(stack.items) orelse return;
-                    const order = model.Decimal.order(pair[0].data.number, pair[1].data.number);
-                    const b = switch (ins.op) {
-                        .less => order == .lt,
-                        .greater => order == .gt,
-                        .less_or_equal => order != .gt,
-                        else => order != .lt,
-                    };
-                    // Two Numbers compare no pairs: `scanned` is 0.
-                    const before: ChargeState = .of(g, run);
-                    if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
-                    g.fastTick();
-                    // A branch on the result, if nothing comes between them,
-                    // takes it without building the boolean.
-                    const branch = code[frame.pc + 1];
-                    if ((branch.op == .branch_false or branch.op == .branch_true) and
-                        !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
-                        !bounds.preempted(run) and
-                        bounds.charge(run, costs.chargeUnmeasured(branch.op)))
-                    {
-                        replaceOperands(stack, null);
                         g.fastTick();
-                        frame.pc = if (b == (branch.op == .branch_true)) @intCast(branch.operands[0].int) else frame.pc + 2;
                         continue;
-                    }
-                    const r = boolean(g.gpa, b) catch {
-                        // Refused: the comparison has not happened.
-                        before.restore(g, run);
-                        return;
-                    };
-                    replaceOperands(stack, r);
-                    frame.pc += 1;
-                    continue;
-                },
-                .add, .subtract, .multiply, .divide, .div, .mod => {
-                    const pair = valueOperands(stack.items) orelse return;
-                    if ((pair[0].data != .number and pair[0].data != .quantity) or
-                        (pair[1].data != .number and pair[1].data != .quantity)) return;
-                    const op: model.decimal.Operator = switch (ins.op) {
-                        .add => .add,
-                        .subtract => .subtract,
-                        .multiply => .multiply,
-                        .divide => .divide,
-                        .div => .div,
-                        else => .mod,
-                    };
-                    const numbers = pair[0].data == .number and pair[1].data == .number;
-                    const completed = if (numbers)
-                        g.fastArithmetic(run, bounds, frame, code, ins, op, pair, false)
-                    else
-                        g.fastArithmetic(run, bounds, frame, code, ins, op, pair, true);
-                    if (!completed) return;
-                    continue;
-                },
-                .convert => {
-                    if (len == 0 or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
-                    const v = stack.items[len - 1].value;
-                    const target = ops[0].unit_target;
-                    const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
-                    var probe: Value = .{ .allocator = g.gpa, .data = .{ .quantity = q } };
-                    const before: ChargeState = .of(g, run);
-                    if (!bounds.charge(run, costs.chargeStatic(.convert, &.{ .input = v, .result = &probe }))) return;
-                    if (v.references == 1) {
-                        v.data = .{ .quantity = q };
-                    } else {
-                        const r = model.scalar(g.gpa, .{ .quantity = q }) catch {
+                    },
+                    .branch_false, .branch_true => {
+                        if (len == 0 or stack.items[len - 1] != .value) return;
+                        const v = stack.items[len - 1].value;
+                        if (v.data != .bool or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        _ = stack.pop();
+                        const taken = v.data.bool == (ins.op == .branch_true);
+                        v.release();
+                        g.fastTick();
+                        if (taken) {
+                            frame.pc = @intCast(ops[0].int);
+                            continue;
+                        }
+                    },
+                    .less, .greater, .less_or_equal, .greater_or_equal => {
+                        const pair = numberOperands(stack.items) orelse return;
+                        const order = model.Decimal.order(pair[0].data.number, pair[1].data.number);
+                        const b = switch (ins.op) {
+                            .less => order == .lt,
+                            .greater => order == .gt,
+                            .less_or_equal => order != .gt,
+                            else => order != .lt,
+                        };
+                        // Two Numbers compare no pairs: `scanned` is 0.
+                        const before: ChargeState = .of(g, run);
+                        if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        g.fastTick();
+                        // A branch on the result, if nothing comes between them,
+                        // takes it without building the boolean.
+                        const branch = code[frame.pc + 1];
+                        if ((branch.op == .branch_false or branch.op == .branch_true) and
+                            !(g.host_poll != null and g.host_poll_ticks +% 1 == 0) and
+                            !bounds.preempted(run) and
+                            bounds.charge(run, costs.chargeUnmeasured(branch.op)))
+                        {
+                            replaceOperands(stack, null);
+                            g.fastTick();
+                            frame.pc = if (b == (branch.op == .branch_true)) @intCast(branch.operands[0].int) else frame.pc + 2;
+                            continue;
+                        }
+                        const r = boolean(g.gpa, b) catch {
+                            // Refused: the comparison has not happened.
                             before.restore(g, run);
                             return;
                         };
-                        v.release();
-                        stack.items[len - 1] = .{ .value = r };
-                    }
-                },
-                else => return,
+                        replaceOperands(stack, r);
+                        frame.pc += 1;
+                        continue;
+                    },
+                    .add, .subtract, .multiply, .divide, .div, .mod => {
+                        const pair = valueOperands(stack.items) orelse return;
+                        if ((pair[0].data != .number and pair[0].data != .quantity) or
+                            (pair[1].data != .number and pair[1].data != .quantity)) return;
+                        const op: model.decimal.Operator = switch (ins.op) {
+                            .add => .add,
+                            .subtract => .subtract,
+                            .multiply => .multiply,
+                            .divide => .divide,
+                            .div => .div,
+                            else => .mod,
+                        };
+                        const numbers = pair[0].data == .number and pair[1].data == .number;
+                        const completed = if (numbers)
+                            g.fastArithmetic(run, bounds, frame, code, ins, op, pair, false)
+                        else
+                            g.fastArithmetic(run, bounds, frame, code, ins, op, pair, true);
+                        if (!completed) return;
+                        continue;
+                    },
+                    .call => {
+                        const n: usize = @intCast(ops[1].int);
+                        if (len < n) return;
+                        for (stack.items[len - n ..]) |slot| if (slot != .value) return;
+                        if (!g.fastCall(run, bounds, @intCast(ops[0].int), n)) return;
+                        g.fastTick();
+                        continue :frames;
+                    },
+                    .@"return" => {
+                        if (len == 0 or stack.items[len - 1] != .value or !g.fastReturn(run, bounds)) return;
+                        g.fastTick();
+                        continue :frames;
+                    },
+                    .convert => {
+                        if (len == 0 or stack.items[len - 1] != .value or ops[0] != .unit_target) return;
+                        const v = stack.items[len - 1].value;
+                        const target = ops[0].unit_target;
+                        const q = conversions.numericUnit(g.gpa, v, &target.descriptor) orelse return;
+                        var probe: Value = .{ .allocator = g.gpa, .data = .{ .quantity = q } };
+                        const before: ChargeState = .of(g, run);
+                        if (!bounds.charge(run, costs.chargeStatic(.convert, &.{ .input = v, .result = &probe }))) return;
+                        if (v.references == 1) {
+                            v.data = .{ .quantity = q };
+                        } else {
+                            const r = model.scalar(g.gpa, .{ .quantity = q }) catch {
+                                before.restore(g, run);
+                                return;
+                            };
+                            v.release();
+                            stack.items[len - 1] = .{ .value = r };
+                        }
+                    },
+                    else => return,
+                }
+                frame.pc += 1;
+                g.fastTick();
             }
-            frame.pc += 1;
-            g.fastTick();
         }
     }
 
@@ -7626,6 +7647,60 @@ pub const Group = struct {
         };
         replaceOperands(stack, r);
         frame.pc += 1;
+        return true;
+    }
+
+    /// `call` of a body of the top frame's unit with its `n` arguments on
+    /// the stack, as `callFunction` makes it, or false, having changed
+    /// nothing, for a call the general loop makes: one that leaves off
+    /// parameters with defaults, binds `during`, passes the call depth or
+    /// can't be allocated or charged.
+    fn fastCall(g: *Group, run: *Run, bounds: FastBounds, body: u32, n: usize) bool {
+        const b = &unitOf(run, &run.frames.items[run.frames.items.len - 1]).bodies[body];
+        if (n != b.params.len or b.during != null) return false;
+        if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return false;
+        // Everything that can be refused, before anything changes. Growing
+        // the frames can move them, so the caller is found after.
+        run.frames.ensureUnusedCapacity(g.gpa, 1) catch return false;
+        const caller = &run.frames.items[run.frames.items.len - 1];
+        const locals = g.gpa.alloc(*Value, b.locals) catch return false;
+        var stack: std.ArrayList(Slot) = .empty;
+        stack.ensureTotalCapacity(g.gpa, 8) catch {
+            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+            return false;
+        };
+        // Slot 0 and any slot past the arguments share one Nothing.
+        const empty: ?*Value = if (b.locals > 0) nothing(g.gpa) catch null else null;
+        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(.call))) {
+            if (empty) |v| v.release();
+            group_allocator.freeFrameBuffer(g.gpa, Slot, stack.allocatedSlice());
+            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+            return false;
+        }
+        // The arguments move from the caller's stack to slots 1 to n.
+        const args = caller.stack.items[caller.stack.items.len - n ..];
+        for (locals, 0..) |*l, i| l.* = if (i >= 1 and i <= n) args[i - 1].value else empty.?.retain();
+        if (empty) |v| v.release();
+        caller.stack.items.len -= n;
+        caller.pc += 1;
+        run.frames.appendAssumeCapacity(.{ .library = caller.library, .body = body, .pc = b.first, .locals = locals, .stack = stack, .restricted = caller.restricted });
+        return true;
+    }
+
+    /// `return` of the value on top of the top frame's stack to a caller in
+    /// the same unit, or false, having changed nothing, for a return that
+    /// ends the Run, leaves the unit, or can't be allocated or charged.
+    fn fastReturn(g: *Group, run: *Run, bounds: FastBounds) bool {
+        const depth = run.frames.items.len;
+        if (depth - 1 <= run.base) return false;
+        const callee = &run.frames.items[depth - 1];
+        const caller = &run.frames.items[depth - 2];
+        if (caller.library != callee.library) return false;
+        caller.stack.ensureUnusedCapacity(g.gpa, 1) catch return false;
+        if (!bounds.charge(run, costs.chargeUnmeasured(.@"return"))) return false;
+        const v = pop(callee);
+        g.popFrame(run);
+        run.frames.items[run.frames.items.len - 1].stack.appendAssumeCapacity(.{ .value = v });
         return true;
     }
 

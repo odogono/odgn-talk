@@ -1,7 +1,7 @@
 //! The run loop's fast path for simple instructions (#1289) must leave
 //! everything a Host sees as the general loop leaves it: each Script below
 //! runs with `fast_steps` on and off, and the two Traces must match byte for
-//! byte, across Fuel and allocation limits and Fuel Slices.
+//! byte, across Fuel and allocation limits, Fuel Slices and call depths.
 const std = @import("std");
 const machine = @import("machine.zig");
 const model = @import("../value.zig");
@@ -68,6 +68,44 @@ const quantities =
     \\    put i / 3 into rounded
     \\  end repeat
     \\  return [total, distance, prior, whole, remainder, rounded]
+    \\end run
+    \\
+;
+
+/// Calls and returns: recursion, a call with no arguments (whose result
+/// needs room on an empty stack), a parameter default and a Lambda, which the
+/// general loop calls and the fast path may return from, and a call depth
+/// that grows with `n`.
+const calls =
+    \\function fib n
+    \\  if n < 2 then return n
+    \\  return fib(n - 1) + fib(n - 2)
+    \\end fib
+    \\
+    \\function seven
+    \\  return 7
+    \\end seven
+    \\
+    \\function scaled x, by = 3
+    \\  return x * by
+    \\end scaled
+    \\
+    \\function depth n
+    \\  if n < 1 then return 0
+    \\  return depth(n - 1) + 1
+    \\end depth
+    \\
+    \\on run n
+    \\  put given x: x + seven() into bump
+    \\  put 0 into total
+    \\  repeat for each i in 1..n
+    \\    add fib(i) to total
+    \\    add seven() to total
+    \\    add scaled(i) to total
+    \\    add scaled(i, 2) to total
+    \\    put bump(total) into total
+    \\  end repeat
+    \\  return [total, depth(n)]
     \\end run
     \\
 ;
@@ -157,10 +195,14 @@ test "the fast path's Runs match the general loop's to completion" {
     try expectSame(loop, 40, .{ .fast = true });
     try expectSame(mixed, 8, .{ .fast = true });
     try expectSame(quantities, 4, .{ .fast = true });
+    try expectSame(calls, 6, .{ .fast = true });
     // Shared locals keep their own values.
     const got = try trace(testing.allocator, mixed, 8, .{ .fast = true });
     defer testing.allocator.free(got);
     try testing.expect(std.mem.indexOf(u8, got, "value=[56.25, 8, 7, [2], \"34567\"]") != null);
+    const called = try trace(testing.allocator, calls, 6, .{ .fast = true });
+    defer testing.allocator.free(called);
+    try testing.expect(std.mem.indexOf(u8, called, "value=[209, 6]") != null);
 }
 
 test "the fast path faults where the general loop does on every Fuel and allocation limit" {
@@ -170,11 +212,13 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
+        try expectSame(calls, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
     }
     for (1..200) |alloc| {
         try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(loop, 20, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+        try expectSame(calls, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
     }
     // Quantity results occupy 24 logical bytes. Reach the later arithmetic
     // and its stores too, checking immediately below and at each 8-byte
@@ -209,7 +253,14 @@ test "the fast path is preempted where the general loop is at every Fuel Slice" 
         try expectSame(quantities, 4, .{ .fast = true, .slice = slice });
         try expectSame(loop, 20, .{ .fast = true, .slice = slice });
         try expectSame(mixed, 4, .{ .fast = true, .slice = slice });
+        try expectSame(calls, 4, .{ .fast = true, .slice = slice });
     }
+}
+
+test "fast calls fault on the call depth where the general loop does" {
+    // `depth(8)` needs nine frames above `run`'s; each limit below that
+    // faults at a different call.
+    for (1..12) |limit| try expectSame(calls, 8, .{ .fast = true, .limits = .{ .call_depth = limit } });
 }
 
 test "the fast path recovers from a refused result node" {
