@@ -152,7 +152,13 @@ pub const Decimal = struct {
         return d;
     }
 
-    pub fn order(a: Decimal, b: Decimal) std.math.Order {
+    pub inline fn order(a: Decimal, b: Decimal) std.math.Order {
+        // One exponent scales both coefficients alike.
+        if (a.exponent == b.exponent) if (small(a)) |n| if (small(b)) |m| return std.math.order(n, m);
+        return orderAligned(a, b);
+    }
+
+    fn orderAligned(a: Decimal, b: Decimal) std.math.Order {
         if (a.coefficient == 0 and b.coefficient == 0) return .eq;
         if (a.negative != b.negative) return if (a.negative) .lt else .gt;
         const magnitude: std.math.Order = if (a.coefficient == 0)
@@ -258,9 +264,59 @@ pub fn finish(n: *Big, d: *Big, exp: i32, ideal: i32, negative: bool, bounded: b
 }
 
 pub const Operator = enum { add, subtract, multiply, divide, div, mod };
-pub fn calculate(a: Allocator, op: Operator, x: Decimal, y: Decimal) Error!Decimal {
+/// Numbers of one exponent whose coefficients fit 62 bits, such as loop
+/// counters, totals and amounts in cents, are calculated inline in machine
+/// integers, giving `calculateInternal`'s exact result; anything else goes
+/// to it.
+pub inline fn calculate(a: Allocator, op: Operator, x: Decimal, y: Decimal) Error!Decimal {
+    if (calculateSmall(op, x, y)) |result| return result;
     return calculateInternal(a, op, x, y, true);
 }
+
+/// A coefficient below 2^62 with its sign, so that the sum or difference of
+/// two fits i64.
+inline fn small(d: Decimal) ?i64 {
+    if (d.coefficient >= 1 << 62) return null;
+    const m: i64 = @intCast(d.coefficient);
+    return if (d.negative) -m else m;
+}
+
+/// `calculateExact` for two small coefficients of one Script exponent, or
+/// null for a product that overflows i64 or leaves the exponent range, a
+/// division by zero or a quotient that is a fraction. A shared exponent
+/// cancels in a quotient and doubles in a product.
+inline fn calculateSmall(op: Operator, x: Decimal, y: Decimal) ?Decimal {
+    if (x.exponent != y.exponent or x.exponent > 0) return null;
+    const n = small(x) orelse return null;
+    const m = small(y) orelse return null;
+    var exponent = x.exponent;
+    const r: i64 = switch (op) {
+        .add => n + m,
+        .subtract => n - m,
+        .multiply => blk: {
+            exponent += y.exponent;
+            const product = @mulWithOverflow(n, m);
+            if (product[1] != 0) return null;
+            if (product[0] != 0 and exponent < -6176) return null;
+            break :blk product[0];
+        },
+        .divide => blk: {
+            if (m == 0 or @rem(n, m) != 0) return null;
+            exponent = 0;
+            break :blk @divTrunc(n, m);
+        },
+        // `div` truncates towards zero; `mod` takes the dividend's sign.
+        .div => blk: {
+            if (m == 0) return null;
+            exponent = 0;
+            break :blk @divTrunc(n, m);
+        },
+        .mod => if (m == 0) return null else @rem(n, m),
+    };
+    if (r == 0) return zero(exponent);
+    return .{ .coefficient = @abs(r), .exponent = exponent, .negative = r < 0 };
+}
+
 /// Only for quantity comparison in Base Units: intermediate magnitudes may
 /// exceed the Script number range, while retaining the specified precision.
 pub fn calculateUnbounded(a: Allocator, op: Operator, x: Decimal, y: Decimal) Error!Decimal {
@@ -841,9 +897,12 @@ fn expectGeneralAgreement(op: Operator, x: Decimal, y: Decimal, bounded: bool) !
     const expected = calculateGeneral(std.testing.allocator, op, x, y, bounded) catch |err| {
         try std.testing.expectError(err, calculateInternal(std.testing.allocator, op, x, y, bounded));
         try std.testing.expect(calculateExact(op, x, y, bounded) == null);
+        try std.testing.expect(calculateSmall(op, x, y) == null);
         return;
     };
     try std.testing.expectEqual(expected, try calculateInternal(std.testing.allocator, op, x, y, bounded));
+    if (calculateSmall(op, x, y)) |result| try std.testing.expectEqual(expected, result);
+    if (bounded) try std.testing.expectEqual(expected, try calculate(std.testing.allocator, op, x, y));
     if (calculateExact(op, x, y, bounded)) |exact| {
         try std.testing.expectEqual(expected, exact);
         // A successful fast path must not even attempt an allocation.
@@ -883,6 +942,48 @@ test "fixed-width operators agree with general arithmetic at precision and expon
                 }
             }
         }
+    }
+}
+
+test "small coefficients of one exponent agree with general arithmetic at 62-bit, product, exponent and sign boundaries" {
+    const limit: u128 = 1 << 62;
+    // 3037000499^2 fits i64 and 3037000500^2 does not.
+    const magnitudes = [_]u128{ 0, 1, 2, 7, 10, 100, 1 << 31, 3037000499, 3037000500, limit - 1, limit, limit + 1, coefficient_limit - 1 };
+    for (magnitudes) |xm| for (magnitudes) |ym| {
+        for ([_]bool{ false, true }) |xn| for ([_]bool{ false, true }) |yn| {
+            // Exponents: integers, cents, either side of half the range (a
+            // product's limit), the range's end, and two that differ.
+            for ([_][2]i32{ .{ 0, 0 }, .{ -2, -2 }, .{ -3088, -3088 }, .{ -3089, -3089 }, .{ -6176, -6176 }, .{ -1, 0 } }) |e| {
+                const x: Decimal = .{ .coefficient = xm, .exponent = e[0], .negative = xn and xm != 0 };
+                const y: Decimal = .{ .coefficient = ym, .exponent = e[1], .negative = yn and ym != 0 };
+                try expectOrderAgreement(x, y);
+                for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| {
+                    const product = op == .multiply;
+                    try std.testing.expectEqual(e[0] == e[1] and xm < limit and ym < limit and
+                        (!product or (xm * ym < 1 << 63 and (xm * ym == 0 or e[0] * 2 >= -6176))) and
+                        (switch (op) {
+                            .divide => ym != 0 and xm % ym == 0,
+                            .div, .mod => ym != 0,
+                            else => true,
+                        }), calculateSmall(op, x, y) != null);
+                    try expectGeneralAgreement(op, x, y, true);
+                }
+            }
+        };
+    };
+    var generator = std.Random.DefaultPrng.init(1906);
+    const random = generator.random();
+    for (0..20000) |i| {
+        const bits: u7 = if (i % 2 == 0) 62 else 20;
+        const exponent = -@as(i32, @intCast(random.uintLessThan(u32, 5)));
+        var x: Decimal = .{ .coefficient = random.int(u128) % (@as(u128, 1) << bits), .exponent = exponent, .negative = random.boolean() };
+        const y: Decimal = .{ .coefficient = random.int(u128) % (@as(u128, 1) << bits), .exponent = exponent, .negative = random.boolean() };
+        // A multiple of the divisor reaches the exact-quotient case.
+        if (i % 3 == 0) x.coefficient = y.coefficient * random.uintLessThan(u32, 1000) % (@as(u128, 1) << 62);
+        const xs: Decimal = .{ .coefficient = x.coefficient, .exponent = x.exponent, .negative = x.negative and x.coefficient != 0 };
+        const ys: Decimal = .{ .coefficient = y.coefficient, .exponent = y.exponent, .negative = y.negative and y.coefficient != 0 };
+        try expectOrderAgreement(xs, ys);
+        for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| try expectGeneralAgreement(op, xs, ys, true);
     }
 }
 
