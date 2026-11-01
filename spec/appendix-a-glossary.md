@@ -166,6 +166,18 @@ _Avoid_: route, listener, mount
 One HTTP request and its response, delivered to the Script whose Serve Registration matched it and answered only by the Run that Delivery started. In prose the inbound side is always an "HTTP request" in full, since a bare Request is the embedding call.
 _Avoid_: request (alone), connection, context
 
+**Peer**:
+A Host Object, reached through a `peer` Grant, that stands for one Exposed Script in another Script Group, on this Host or another. Only data values cross to it, and a Peer itself can't be passed on.
+_Avoid_: node, remote, pid, proxy, Peer Language (that is a benchmark's comparison language)
+
+**Exposed Script**:
+A Script that has claimed, through its own `peer` Grant, a logical name by which Scripts in other Groups may reach it. A Script that isn't exposed can't receive a Remote Send.
+_Avoid_: exported Script, published Script, served Script, Exposure (that is a Value Exposure)
+
+**Remote Send**:
+A `send` whose receiver is a Peer. It is delivered at most once, arrives at the Exposed Script as an ordinary Delivery, and with `and wait` gets the Run's return value as its reply.
+_Avoid_: RPC, remote call, cross-node message
+
 **Reconciliation Marker**:
 A Notification that calls for refreshing a Subscription's whole watched subset from the source's current state when individual change details are unavailable, such as after notification overload or an offline restore.
 _Avoid_: overflow event, dropped notification

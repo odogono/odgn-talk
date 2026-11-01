@@ -147,3 +147,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0150: The TS package has a lean entry without the stdlib Libraries](0150-the-ts-package-has-a-lean-entry-without-the-stdlib-libraries.md)
 - [0151: `http.fetch` makes one buffered request to an origin the Grant allows](0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
 - [0152: A Host Object may be given its parent when it is made](0152-a-host-object-may-be-given-its-parent-when-it-is-made.md)
+- [0153: A `send` to a Peer is a Remote Send, answered like an Operation](0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)
