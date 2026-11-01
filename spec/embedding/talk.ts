@@ -545,7 +545,7 @@ export interface HttpImpl {
  * it. The Core has checked the Shapes and raised `out of domain`, `wrong
  * kind`, `bad message name` and `not encodable`. Expose and reach start
  * suspending calls: answer reach with a Host Object of kind `peer` made in
- * the calling Group, or fail it with `bad address` or `unreachable`; answer
+ * the calling Group, or fail it with `bad address` or `not exposed`; answer
  * expose with Nothing, or fail it with `bad address` or `name in use`. Post
  * and call hear the Peer, the Selector and the arguments, through the sending
  * Script's Grant; answer call with the receiver's reply, or fail it with `bad
@@ -695,7 +695,6 @@ export interface Core {
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Optional for Hosts. */
   httpCapability(impl: HttpImpl, costs: Costs): CapabilityDef<unknown>;
-  peerCapability(impl: PeerImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

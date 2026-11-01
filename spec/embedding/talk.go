@@ -684,7 +684,7 @@ func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs C
 // it. The Core has checked the Shapes and raised `out of domain`, `wrong
 // kind`, `bad message name` and `not encodable`. Expose and Reach start
 // suspending calls: answer Reach with an Object of kind `peer` made in the
-// calling Group, or fail it with `bad address` or `unreachable`; answer
+// calling Group, or fail it with `bad address` or `not exposed`; answer
 // Expose with Nothing, or fail it with `bad address` or `name in use`. Post
 // and Call hear the Peer, the Selector and the arguments, through the sending
 // Script's Grant; answer Call with the receiver's reply, or fail it with `bad

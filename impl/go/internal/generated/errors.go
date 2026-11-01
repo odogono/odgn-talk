@@ -774,7 +774,7 @@ var Errors = ErrorsTable{
 			Message: "That name is already exposed",
 		},
 		ErrorsTableErrorEntry{
-			Code:       "unreachable",
+			Code:       "not exposed",
 			Fields:     []string{},
 			RaisedWhen: "A `peer` `reach` names a name no Script is exposed under; the Host raises it",
 			Sources: []string{

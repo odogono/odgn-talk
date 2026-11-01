@@ -773,7 +773,7 @@ pub const errors: ErrorsTable = .{
             .message = "That name is already exposed",
         },
         .{
-            .code = "unreachable",
+            .code = "not exposed",
             .fields = &.{},
             .raised_when = "A `peer` `reach` names a name no Script is exposed under; the Host raises it",
             .sources = &.{

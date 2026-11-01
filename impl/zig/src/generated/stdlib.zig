@@ -1798,7 +1798,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "A Peer: a Host Object of kind `peer` standing for the Exposed Script the text `address` names",
             .errors = &.{
                 "bad address",
-                "unreachable",
+                "not exposed",
                 "out of domain",
             },
         },

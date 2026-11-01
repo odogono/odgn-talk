@@ -205,7 +205,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 | `address in use` | none | An `http` `serve` asks for a host and port another listener already holds; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `bad address` | none | An `http` `serve` asks for a host or port its Grant binding doesn't allow, or one that can't be listened on, or a `fetch` names an origin its Grant binding doesn't allow, or a `peer` `expose` or `reach` names a name its Grant binding doesn't allow; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md), [ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md) |
 | `name in use` | none | A `peer` `expose` names a name another owner already exposes; the Host raises it | [ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md) |
-| `unreachable` | none | A `peer` `reach` names a name no Script is exposed under; the Host raises it | [ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md) |
+| `not exposed` | none | A `peer` `reach` names a name no Script is exposed under; the Host raises it | [ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md) |
 | `invalid response` | `field` | An `http` `respond` is given a `status` outside 100 to 599, a `headers` value that isn't text or a list of texts, two header names that differ only in case, or both `body` and `json`; `field` names the key, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md), [ADR 0151](../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md) |
 | `already responded` | none | An `http` `respond` names an HTTP Exchange that has already been answered; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `exchange closed` | none | An `http` `respond` names an HTTP Exchange whose client has gone; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
@@ -280,7 +280,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `address in use` | That address is already in use |
 | `bad address` | That address isn't allowed |
 | `name in use` | That name is already exposed |
-| `unreachable` | No Script is exposed under that name |
+| `not exposed` | No Script is exposed under that name |
 | `invalid response` | The response's {field} isn't valid |
 | `already responded` | That HTTP request has already been answered |
 | `exchange closed` | The client has gone |

@@ -1343,7 +1343,7 @@ name = "reach"
 mode = "suspending"
 call = "reach address"
 gives = "A Peer: a Host Object of kind `peer` standing for the Exposed Script the text `address` names"
-errors = ["bad address", "unreachable", "out of domain"]
+errors = ["bad address", "not exposed", "out of domain"]
 
 [[operation]]
 capability = "peer"

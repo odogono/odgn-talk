@@ -290,7 +290,7 @@ A Host that offers the optional [`peer`](07-libraries-and-the-standard-library.m
 - **The binding** is the Host's own description of the names the Grant may `reach` and `expose`, and how each resolves. The Core never reads it.
 - **One Grant:** `Load` refuses a Script given two Grants whose Capability is `peer`, as `invalid value`.
 - **The kind `peer`** is defined by the Core, with no properties. The implementation makes each Peer with `group.Object("peer", id, native)` in the calling Script's Group, and an id it can map back to a destination, including after a Restore.
-- **Answering:** `expose` and `reach` start suspending calls. `reach` is answered with the Peer, or failed with `bad address` or `unreachable`; `expose` with Nothing, or failed with `bad address` or `name in use`. `unexpose` is immediate and `post` fire-and-forget.
+- **Answering:** `expose` and `reach` start suspending calls. `reach` is answered with the Peer, or failed with `bad address` or `not exposed`; `expose` with Nothing, or failed with `bad address` or `name in use`. `unexpose` is immediate and `post` fire-and-forget.
 - **`post` and `call`** hear the Peer, the Selector as text and the arguments as a list, each from the sending Script's Grant. The implementation checks the Peer's destination against that Grant's binding. It answers `call` with the receiver's reply, or fails it with `bad address` or with `send failed` and `{reason, error}`. When a `call` is abandoned the implementation drops its reply when it comes; it never asks the receiver to stop.
 
 ### The peer router

@@ -28,7 +28,7 @@ Errors: [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-c
 
 A Peer: a Host Object of kind `peer` standing for the Exposed Script the text `address` names.
 
-Errors: [`bad address`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`unreachable`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
+Errors: [`bad address`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`not exposed`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of domain`](../../../spec/06-errors-and-limits.md#the-error-code-catalogue).
 
 ### post
 
