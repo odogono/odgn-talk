@@ -679,6 +679,28 @@ func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error
 // fetch from, none unless it says so.
 func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs Costs) (*CapabilityDef, error)
 
+// peer is optional (chapter 7, ADR 0153). The binding is the Host's own
+// description of the names a Grant may reach and expose; the Core never reads
+// it. The Core has checked the Shapes and raised `out of domain`, `wrong
+// kind`, `bad message name` and `not encodable`. Expose and Reach start
+// suspending calls: answer Reach with an Object of kind `peer` made in the
+// calling Group, or fail it with `bad address` or `unreachable`; answer
+// Expose with Nothing, or fail it with `bad address` or `name in use`. Post
+// and Call hear the Peer, the Selector and the arguments, through the sending
+// Script's Grant; answer Call with the receiver's reply, or fail it with `bad
+// address` or `send failed` and {reason, error}. A Remote Send is delivered
+// at most once.
+type PeerImpl interface {
+	Expose(c *Call, name string) error
+	Unexpose(c *Call, name string) error
+	Reach(c *Call, address string) error
+	Post(c *Call, peer *Object, message string, args []Value) error
+	Call(c *Call, peer *Object, message string, args []Value) error
+}
+
+// PeerCapability is optional for Hosts.
+func (c *Core) PeerCapability(impl PeerImpl, costs Costs) (*CapabilityDef, error)
+
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)
 // ---------------------------------------------------------------------------

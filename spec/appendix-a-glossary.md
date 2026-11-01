@@ -35,7 +35,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Standard Capability**:
-A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user` and `http`. `sqlite`, `user` and `http` are optional: a Host may choose not to offer one, but a Host that offers it follows every rule the spec gives for it.
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite`, `user`, `http` and `peer`. `sqlite`, `user`, `http` and `peer` are optional: a Host may choose not to offer one, but a Host that offers it follows every rule the spec gives for it.
 _Avoid_: built-in capability, system capability, core capability
 
 **Store**:
@@ -167,7 +167,7 @@ One HTTP request and its response, delivered to the Script whose Serve Registrat
 _Avoid_: request (alone), connection, context
 
 **Peer**:
-A Host Object, reached through a `peer` Grant, that stands for one Exposed Script in another Script Group, on this Host or another. Only data values cross to it, and a Peer itself can't be passed on.
+A Host Object, reached through a `peer` Grant, that stands for one Exposed Script in another Script Group, on this Host or another. Only data values cross to it, so a Peer never leaves its own Group.
 _Avoid_: node, remote, pid, proxy, Peer Language (that is a benchmark's comparison language)
 
 **Exposed Script**:

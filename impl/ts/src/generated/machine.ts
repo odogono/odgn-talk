@@ -1496,6 +1496,8 @@ export const errorMessages = {
   "invalid serve": "A Serve Registration's {field} isn't valid",
   "address in use": "That address is already in use",
   "bad address": "That address isn't allowed",
+  "name in use": "That name is already exposed",
+  "unreachable": "No Script is exposed under that name",
   "invalid response": "The response's {field} isn't valid",
   "already responded": "That HTTP request has already been answered",
   "exchange closed": "The client has gone",

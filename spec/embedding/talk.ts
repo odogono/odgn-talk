@@ -539,6 +539,26 @@ export interface HttpImpl {
   unserve(call: Call<unknown>, name: string): void;
   respond(call: Call<unknown>, exchange: HostObject, response: Value): void;
 }
+/**
+ * peer is optional (chapter 7, ADR 0153). The binding is the Host's own
+ * description of the names a Grant may reach and expose; the Core never reads
+ * it. The Core has checked the Shapes and raised `out of domain`, `wrong
+ * kind`, `bad message name` and `not encodable`. Expose and reach start
+ * suspending calls: answer reach with a Host Object of kind `peer` made in
+ * the calling Group, or fail it with `bad address` or `unreachable`; answer
+ * expose with Nothing, or fail it with `bad address` or `name in use`. Post
+ * and call hear the Peer, the Selector and the arguments, through the sending
+ * Script's Grant; answer call with the receiver's reply, or fail it with `bad
+ * address` or `send failed` and `{reason, error}`. A Remote Send is delivered
+ * at most once.
+ */
+export interface PeerImpl {
+  expose(call: Call<unknown>, name: string): void;
+  unexpose(call: Call<unknown>, name: string): void;
+  reach(call: Call<unknown>, address: string): void;
+  post(call: Call<unknown>, peer: HostObject, message: string, args: Value[]): void;
+  call(call: Call<unknown>, peer: HostObject, message: string, args: Value[]): void;
+}
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {
   write(call: Call<unknown>, value: Value): void;
@@ -675,6 +695,7 @@ export interface Core {
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Optional for Hosts. */
   httpCapability(impl: HttpImpl, costs: Costs): CapabilityDef<unknown>;
+  peerCapability(impl: PeerImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;
