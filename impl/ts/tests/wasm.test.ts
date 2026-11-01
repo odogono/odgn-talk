@@ -441,8 +441,8 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     'an object made with a parent inside a Pump routes the same Run to its owner (ADR 0152)',
     (core, nt) => {
       const room = core.defineObjectKind<null>({ name: 'room', props: {} });
-      let g!: ReturnType<typeof core.newGroup>;
-      let zone!: ReturnType<typeof g.object>;
+      const g = core.newGroup({ name: 'g' });
+      const zone = g.object(room, 'zone', null);
       const door = core.defineObjectKind<null>({
         name: 'door',
         props: {
@@ -451,8 +451,6 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
           },
         },
       });
-      g = core.newGroup({ name: 'g' });
-      zone = g.object(room, 'zone', null);
       g.load({
         name: 'zone',
         owner: zone,
