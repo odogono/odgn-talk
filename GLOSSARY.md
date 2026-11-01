@@ -393,9 +393,33 @@ _Avoid_: picture, image, display list
 A `clear` or `background` that replaces a Drawing's commands with its current style, followed by the `background` itself.
 _Avoid_: wipe, redraw
 
+**Instrument**:
+A named sound source a Folio Script plays notes and sounds on, such as a sampler of the Project's sounds, a sound chip or a synth.
+_Avoid_: synth (for the general idea), voice, channel (both are parts of an Instrument)
+
+**Transport**:
+A Play Session's one musical timeline: its tempo, time signature and current bar and beat, which Scripts keeping musical time follow.
+_Avoid_: clock (the Play clock is separate), sequencer, metronome
+
+**Sound Pattern**:
+A repeating musical figure a Script plays on an Instrument, one cycle per bar of the Transport, owned by the Script that started it.
+_Avoid_: pattern (unqualified), loop, sequence, riff
+
+**Mini-Notation**:
+The compact text form of a Sound Pattern, e.g. `"bd [hh hh] sd, - cp"`, in which spaces divide a cycle into steps, brackets subdivide a step and commas layer figures.
+_Avoid_: pattern string, step string
+
 **Group Element**:
 A named composite Element whose members are Elements on the same Page, including other Group Elements. Its members retain their Page-wide names.
 _Avoid_: Script Group (for a visual composite), folder, component
+
+**Palette**:
+An authored panel of Elements, kept with the Project, that is shown in its own floating window during Play, its Scripts running until the Play Session stops.
+_Avoid_: panel, custom window, widget, plugin
+
+**Add-on**:
+A separately loaded part of Folio that provides Element kinds or Instrument kinds a Project can use, loaded only when a Project or author needs it.
+_Avoid_: extension (an Extend's source), plugin, module
 
 **Script Recipe**:
 A small editable NorthTalk source example for a common authoring task.
@@ -432,6 +456,10 @@ _Avoid_: Step (alone), single-step, next
 **Stopped Run**:
 A Run held partway through at a Breakpoint or after a Statement Step while its Play Session is Paused; Watches and the Message Box evaluate in one of its frames, and a Resume or Statement Step continues it.
 _Avoid_: halted Run, broken Run, stopped session
+
+**Punch In**:
+To load an edited Script into a running Play Session, keeping its Script Variables, at the next bar if the Script keeps musical time; its Sound Patterns are replaced by those its new code starts. Unlike Fix and Continue, no paused Run is rewound.
+_Avoid_: hot reload, hot swap, live edit, live update
 
 **Message Box**:
 A window in Folio where an author types one line of NorthTalk and runs it at once. While browsing it acts on the Play Session; in Edit it changes the Project as one undoable edit.

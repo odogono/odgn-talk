@@ -22,3 +22,5 @@ The planned [browser creative tool](https://github.com/odogono/odgn-talk/issues/
 - Renaming an Element breaks the Scripts that use it, and the next Play reports the break as a load error. The editor may later offer to rename the references too.
 - Properties can be added to a kind later without breaking Scripts. Removing or renaming one, or a Grant or Operation, breaks saved Projects, which is why this is recorded here.
 - This records future Host policy for #154, like [ADR 0041](0041-authored-projects-are-separate-from-temporary-play-state.md). It changes neither the language Spec nor any Core.
+
+- Amended by [ADR 0158](0158-folio-plays-instruments-on-one-transport.md): Scripts also get Instrument names and the `transport` Grant, and `sound` plays through Instruments.
