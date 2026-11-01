@@ -188,8 +188,8 @@ fn digits(c: u128) u64 {
     // then correct it by one comparison, with no division.
     if (c <= std.math.maxInt(u64)) {
         const y: u64 = @intCast(c);
-        const bits: u64 = 64 - @clz(y | 1);
-        const estimate = (bits * 1233) >> 12; // floor(bits * log10(2))
+        const bits: usize = 64 - @clz(y | 1);
+        const estimate: usize = (bits * 1233) >> 12; // floor(bits * log10(2))
         // `| 1` counts 0 as one digit, and changes no comparison: 10^k is even.
         return estimate + @intFromBool((y | 1) >= powers_of_ten[estimate]);
     }
