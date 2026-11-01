@@ -1,0 +1,7 @@
+-- keeper.talk: the unowned-sends case's Script, which owns the home object.
+
+on go
+  send arrive with 1 to orphan
+  ring "up"
+  send missing with 2 to home
+end go

@@ -705,7 +705,7 @@ export const createHttpHost = (o: HttpHostOptions = {}): HttpHost => {
           break;
         }
         case 'unhandled': {
-          const x = byDelivery?.get(report.delivery);
+          const x = report.delivery && byDelivery?.get(report.delivery);
           if (x) {
             settle(x, 404);
           }

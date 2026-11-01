@@ -779,7 +779,14 @@ export type RunRecord =
     }
   | { detail: string; id: string; kind: 'call-failed'; op: string }
   | { id: string; kind: 'abandon' }
-  | { args: Value[]; kind: 'unhandled'; message: string; target: Value | null }
+  | {
+      args: Value[];
+      kind: 'unhandled';
+      message: string;
+      target: Value | null;
+      /** A Command Call's climb, whose target is the Script's owner. */
+      up?: true;
+    }
   | {
       error?: Value;
       kind: 'prop';
@@ -6061,6 +6068,7 @@ export class Run {
             message,
             args,
             target: object ? object.handle.value : null,
+            ...(up ? { up: true as const } : {}),
           });
           if (waits) {
             throw new ScriptError(

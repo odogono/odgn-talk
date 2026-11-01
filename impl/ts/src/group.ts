@@ -356,7 +356,8 @@ export type Report =
       script: string;
     }
   | {
-      delivery: string;
+      /** The Host Delivery's id; absent for a message a Script sent. */
+      delivery?: string;
       kind: 'unhandled';
       message: Message;
       /** The object it was delivered to; absent when addressed to a Script. */
@@ -4332,6 +4333,7 @@ export class TsGroup implements Group {
               })()
             : this.route(to);
         if (!r) {
+          this.unhandledSend(message, args, to as ObjectState);
           return null;
         }
         this.enqueue(r.s, to, {
@@ -4354,6 +4356,7 @@ export class TsGroup implements Group {
       sendUp: (message, args, reply) => {
         const r = this.route(s.owner?.parent ?? null);
         if (!r) {
+          this.unhandledSend(message, args, s.owner);
           return null;
         }
         this.enqueue(r.s, r.s.name, {
@@ -5287,6 +5290,20 @@ export class TsGroup implements Group {
     return null;
   }
 
+  // A Script's send that finds no Owning Script: an `unhandled` report with
+  // no Delivery id (chapter 5). The Run's records write its trace line.
+  private unhandledSend(
+    message: string,
+    args: Value[],
+    target: ObjectState | null,
+  ) {
+    this.drainReports.push({
+      kind: 'unhandled',
+      message: { name: message, args },
+      ...(target ? { target: target.handle } : {}),
+    });
+  }
+
   // A message past the last Owning Script: `unhandled`, and a `send … and
   // wait` or Request for it fails with `send failed`.
   private unhandled(delivery: Delivery, reports: Report[], run?: string) {
@@ -5313,14 +5330,12 @@ export class TsGroup implements Group {
       message: delivery.message,
       args: delivery.args,
     });
-    if (delivery.id) {
-      reports.push({
-        kind: 'unhandled',
-        delivery: delivery.id,
-        message: { name: delivery.message, args: delivery.args },
-        ...(delivery.target ? { target: delivery.target.handle } : {}),
-      });
-    }
+    reports.push({
+      kind: 'unhandled',
+      ...(delivery.id ? { delivery: delivery.id } : {}),
+      message: { name: delivery.message, args: delivery.args },
+      ...(delivery.target ? { target: delivery.target.handle } : {}),
+    });
     this.seal(delivery, { verdict: 'allowed' });
     this.answer(delivery, { kind: 'unhandled' });
   }
@@ -6220,6 +6235,10 @@ export class TsGroup implements Group {
         continue;
       }
       if (rec.kind === 'unhandled') {
+        const target = rec.up
+          ? (this.scripts.find(s => s.name === run.script.name)?.owner?.handle
+              .value ?? null)
+          : rec.target;
         this.trace?.(
           recordLine(
             'unhandled',
@@ -6230,7 +6249,7 @@ export class TsGroup implements Group {
                 'args',
                 rec.args.length ? traceValue(listValues(rec.args)) : null,
               ],
-              ['target', rec.target ? traceValue(rec.target) : null],
+              ['target', target ? traceValue(target) : null],
             ],
           ),
         );
