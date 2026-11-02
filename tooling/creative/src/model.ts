@@ -300,6 +300,11 @@ export type AddOnRef = {
   /** The lowercase hex SHA-256 of `code`'s UTF-8 bytes. */
   hash?: string;
   id: string;
+  /**
+   * A NorthTalk signature over `hash`, base64 Ed25519 (#1967); one that
+   * verifies skips the trust prompt.
+   */
+  signature?: string;
   version: string;
 };
 

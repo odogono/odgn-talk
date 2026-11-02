@@ -201,6 +201,17 @@ landed, and the Issue graph job ticks it as they close.
   suite.
 - First check: `bun test tooling/creative/tests/palettes.test.ts`.
 
+## Add-on signing
+
+- [add-ons/signing.ts](src/add-ons/signing.ts) (#1967): the shipped public
+  key, `verifyAddOn`, `addOnsToAsk` (used by `addOnsFor` in
+  [projects.ts](src/projects.ts)) and `signForPublishing` (used by
+  [tools/build.ts](tools/build.ts)); [add-ons/trust.ts](src/add-ons/trust.ts)
+  `vouch` trusts a verified hash for the visit.
+  [tools/add-on-key.ts](tools/add-on-key.ts) makes a key pair.
+- Tests: [add-on-signing.test.ts](tests/add-on-signing.test.ts) and the
+  WebCrypto case in the `add-ons` browser suite.
+
 ## Perform
 
 - [perform-layout.ts](src/perform-layout.ts): the Perform layout (#1999):

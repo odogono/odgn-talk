@@ -2,7 +2,13 @@
 // adding one loads it, lists it in the Project and draws it (#1901).
 import { blobImporter } from '../src/add-ons/loader';
 import { pageAddOnLoader, setPageAddOns } from '../src/add-ons/page';
+import {
+  generateSigningKeys,
+  signAddOn,
+  verifyAddOn,
+} from '../src/add-ons/signing';
 import { askToTrust } from '../src/add-ons/trust-prompt';
+import { sha256Hex } from '../src/project-file';
 import { createProject, type AddOnElement } from '../src/model';
 import { mountStack } from '../src/stack';
 import counter, {
@@ -124,6 +130,24 @@ export const runBrowserTests = async () => {
       !document.querySelector('dialog.trust-prompt'),
       'the prompt is gone',
     );
+  });
+
+  await test('the browser verifies a NorthTalk signature with WebCrypto (#1967)', async () => {
+    const keys = await generateSigningKeys();
+    const code = 'export default {}';
+    const ref = {
+      id: 'https://example.com/pads',
+      version: '0.1.0',
+      code,
+      hash: await sha256Hex(new TextEncoder().encode(code)),
+    };
+    const signed = await signAddOn(ref, keys.privateKey);
+    assert(await verifyAddOn(signed, keys.publicKey), 'a valid one verifies');
+    assert(
+      !(await verifyAddOn({ ...signed, code: 'x' }, keys.publicKey)),
+      'tampered code does not',
+    );
+    assert(!(await verifyAddOn(signed)), 'another key’s does not');
   });
 
   await test("the page's Content Security Policy lets trusted code load", async () => {
