@@ -182,12 +182,12 @@ var Grammar = GrammarTable{
 	},
 	Labels: GrammarTableLabels{
 		Reserved: []string{
+			"on",
 			"to",
 		},
 		Excluded: []string{
 			"from",
 			"otherwise",
-			"with",
 		},
 	},
 	Contextual: []GrammarTableContextualEntry{

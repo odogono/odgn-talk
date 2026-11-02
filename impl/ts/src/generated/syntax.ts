@@ -56,12 +56,12 @@ export const grammar = {
   ],
   "labels": {
     "reserved": [
+      "on",
       "to"
     ],
     "excluded": [
       "from",
-      "otherwise",
-      "with"
+      "otherwise"
     ]
   },
   "chunk": [

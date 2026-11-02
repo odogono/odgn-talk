@@ -94,6 +94,12 @@ export const toldLines = new WeakSet<SemanticNode>();
  * `SimpleStatement`, with the Grant and Operation each calls (ADR 0094). One
  * that is also in `toldLines` is called as `tell`; any other as `ask`.
  */
+/**
+ * The declared position of each argument of an Operation call whose labels
+ * leave out an Optional argument before a later one, by the call's node
+ * (ADR 0160). Every position not listed is passed as Nothing.
+ */
+export const argumentPositions = new WeakMap<SemanticNode, number[]>();
 export const hostCommands = new WeakMap<
   SemanticNode,
   { grant: string; operation: string }

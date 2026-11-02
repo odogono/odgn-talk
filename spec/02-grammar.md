@@ -126,8 +126,8 @@ Any Name may be an [Argument Label](#argument-labels), except these. Of the Rese
 
 <!-- generated: grammar.labels -->
 
-- **Reserved Words that may be labels:** `to`.
-- **Names that may not be labels:** `from`, `otherwise`, `with`.
+- **Reserved Words that may be labels:** `on`, `to`.
+- **Names that may not be labels:** `from`, `otherwise`.
 
 <!-- end -->
 

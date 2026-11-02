@@ -172,27 +172,64 @@ pub const Operation = struct {
     /// (ADR 0115).
     labels: []const []const u8 = &.{},
 
-    /// Whether a call with `args` arguments and these labels writes the
-    /// declared labels: none, or the declared ones in order, stopping where
-    /// trailing Optional arguments are left off. Null when they match, or
-    /// else the index of the first label that doesn't.
-    pub fn wrongLabel(o: Operation, labels: []const []const u8) ?usize {
+    /// The declared position of each argument of a call writing these
+    /// labels, into `out` (one more than `labels`). A labelled call writes
+    /// the declared labels in order and may leave out an Optional argument
+    /// with its label: each label takes the first declared position after
+    /// the previous argument's with that word (ADR 0115, ADR 0160). Null
+    /// when they match, or else the index of the first label that doesn't:
+    /// one with no such position, or one that skips a required argument.
+    pub fn labelPositions(o: Operation, labels: []const []const u8, out: []usize) ?usize {
+        out[0] = 0;
         for (labels, 0..) |l, i| {
-            if (i >= o.labels.len or !std.mem.eql(u8, l, o.labels[i])) return i;
+            const previous = out[i];
+            const at = for (o.labels[@min(previous, o.labels.len)..], previous..) |d, j| {
+                if (std.mem.eql(u8, d, l)) break j;
+            } else return i;
+            // Skipped positions previous + 1 .. at are left out; each must
+            // be Optional.
+            if (at > previous and previous + 1 < o.required) return i;
+            out[i + 1] = at + 1;
         }
         return null;
     }
 
+    /// Like `labelPositions`, with no positions kept.
+    pub fn wrongLabel(o: Operation, labels: []const []const u8) ?usize {
+        var buf: [16]usize = undefined;
+        if (labels.len + 1 > buf.len) return 0;
+        return o.labelPositions(labels, buf[0 .. labels.len + 1]);
+    }
+
+    /// The argument count a call writing `args` arguments and these labels
+    /// passes: those its labels leave out count (ADR 0160). Labels that
+    /// don't match count as written.
+    pub fn passedCount(o: Operation, args: usize, labels: []const []const u8) usize {
+        if (labels.len == 0 or labels.len + 1 != args) return args;
+        var buf: [16]usize = undefined;
+        if (args > buf.len) return args;
+        if (o.labelPositions(labels, buf[0..args]) != null) return args;
+        return buf[args - 1] + 1;
+    }
+
+    /// Each argument's declared position, in `buf`, for a labelled call
+    /// whose labels match; null when each is at its own index.
+    pub fn positionsOf(o: Operation, args: usize, labels: []const []const u8, buf: *[16]usize) ?[]const usize {
+        if (labels.len == 0 or labels.len + 1 != args or args > buf.len) return null;
+        if (o.labelPositions(labels, buf[0..args]) != null) return null;
+        return buf[0..args];
+    }
+
     /// Whether it is a Host Command whose spellings include `selector`: its
-    /// name, for a call with no labels, and for each number of arguments n
-    /// from 2 that it takes, its name and its first n − 1 labels as a
-    /// Selector, `move:to:` (ADR 0115).
+    /// name, for a call with no labels, and its name and each set of its
+    /// labels a call may write, leaving out only Optional arguments, as a
+    /// Selector, `move:to:` (ADR 0115, ADR 0160).
     pub fn spells(o: Operation, name: []const u8, labels: []const []const u8) bool {
         if (!o.command or !std.mem.eql(u8, o.name, name)) return false;
         if (labels.len == 0) return true;
-        const n = labels.len + 1;
-        if (n < o.required or n > o.total) return false;
-        return o.wrongLabel(labels) == null;
+        if (o.wrongLabel(labels) != null) return false;
+        const n = o.passedCount(labels.len + 1, labels);
+        return n >= o.required and n <= o.total;
     }
 };
 
@@ -292,11 +329,14 @@ pub fn needProblem(n: Need, grants: []const Grant) ?Code {
     const o = for (g.operations) |o| {
         if (std.mem.eql(u8, o.name, n.operation)) break o;
     } else return .missing_grant;
-    if (n.args < o.required or n.args > o.total) return .wrong_argument_count;
+    const passed = o.passedCount(n.args, n.labels);
+    if (passed < o.required or passed > o.total) return .wrong_argument_count;
     if (o.wrongLabel(n.labels) != null) return .wrong_labels;
+    var buf: [16]usize = undefined;
+    const positions = o.positionsOf(n.args, n.labels, &buf);
     if (o.accepts) |accepts| for (n.literals, 0..) |lit, i| {
         const l = lit orelse continue;
-        if (!accepts.call(accepts.context, i, l)) return .wrong_argument;
+        if (!accepts.call(accepts.context, if (positions) |ps| ps[i] else i, l)) return .wrong_argument;
     };
     const ok = if (n.line)
         n.waits == (o.mode == .suspending)
@@ -318,6 +358,11 @@ pub const Result = struct {
     needs: []const Need = &.{},
     /// The Command Calls that are Host Commands, by their name token.
     commands: std.AutoHashMapUnmanaged(Tok, HostCommand) = .empty,
+    /// The declared position of each argument of a Capability call or Host
+    /// Command whose labels leave out an Optional argument before a later
+    /// one, by its Operation or name token (ADR 0160). Every position not
+    /// listed is passed as Nothing.
+    positions: std.AutoHashMapUnmanaged(Tok, []const usize) = .empty,
     /// Every Name operand, call name and Container root, by token.
     refs: std.AutoHashMapUnmanaged(Tok, Ref),
     bodies: []const Body,
@@ -357,7 +402,7 @@ pub fn checkWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast.T
         }
         try out.append(arena, d);
     }
-    return .{ .diagnostics = out.items, .needs = c.needs.items, .commands = c.commands, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
+    return .{ .diagnostics = out.items, .needs = c.needs.items, .commands = c.commands, .positions = c.positions, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
 }
 
 /// What a checked Library exports: every top-level definition that isn't
@@ -573,6 +618,7 @@ const Checker = struct {
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     needs: std.ArrayList(Need) = .empty,
     commands: std.AutoHashMapUnmanaged(Tok, HostCommand) = .empty,
+    positions: std.AutoHashMapUnmanaged(Tok, []const usize) = .empty,
     refs: std.AutoHashMapUnmanaged(Tok, Ref) = .empty,
     bodies: std.ArrayList(Body) = .empty,
     suspends: std.StringHashMapUnmanaged(bool) = .empty,
@@ -1545,6 +1591,20 @@ const Checker = struct {
         return n;
     }
 
+    /// Each argument's declared position for a labelled call that leaves
+    /// out an Optional argument before a later one, kept for lowering by
+    /// `at` (ADR 0160); null when each is at its own index.
+    fn keepPositions(c: *Checker, at: Tok, o: Operation, args: usize, labels: []const []const u8) Allocator.Error!?[]const usize {
+        var buf: [16]usize = undefined;
+        const ps = o.positionsOf(args, labels, &buf) orelse return null;
+        for (ps, 0..) |p, i| if (p != i) {
+            const kept = try c.a.dupe(usize, ps);
+            try c.positions.put(c.a, at, kept);
+            return kept;
+        };
+        return null;
+    }
+
     /// The texts of label tokens.
     fn texts(c: *Checker, labels: []const Tok) Allocator.Error![]const []const u8 {
         if (labels.len == 0) return &.{};
@@ -1576,11 +1636,13 @@ const Checker = struct {
         const literals = try c.a.alloc(?Literal, cmd.args.len);
         for (cmd.args, literals) |arg, *l| l.* = try c.literal(arg);
         try c.needs.append(c.a, .{ .grant = g.name, .operation = o.name, .ask = !told, .line = false, .waits = waits, .args = cmd.args.len, .literals = literals, .labels = labels });
-        if (cmd.args.len < o.required or cmd.args.len > o.total) {
+        const positions = try c.keepPositions(cmd.name, o, cmd.args.len, labels);
+        const passed = o.passedCount(cmd.args.len, labels);
+        if (passed < o.required or passed > o.total) {
             try c.report(.wrong_argument_count, cmd.name);
         } else if (o.accepts) |accepts| for (cmd.args, literals, 0..) |arg, lit, i| {
             const l = lit orelse continue;
-            if (!accepts.call(accepts.context, i, l)) try c.report(.wrong_argument, arg.pos);
+            if (!accepts.call(accepts.context, if (positions) |ps| ps[i] else i, l)) try c.report(.wrong_argument, arg.pos);
         };
         if (waits != (o.mode == .suspending) or (cmd.into != null and o.mode == .fire_and_forget)) try c.report(.wrong_mode, cmd.name);
     }
@@ -1654,14 +1716,17 @@ const Checker = struct {
         const o = for (g.operations) |o| {
             if (std.mem.eql(u8, o.name, c.text(op.operation))) break o;
         } else return c.report(.unknown_operation, op.operation);
-        if (op.args.len < o.required or op.args.len > o.total) {
+        // Arguments the labels leave out count as passed (ADR 0160).
+        const positions = try c.keepPositions(op.operation, o, op.args.len, labels);
+        const passed = o.passedCount(op.args.len, labels);
+        if (passed < o.required or passed > o.total) {
             try c.report(.wrong_argument_count, op.operation);
         } else {
             // The count first, then the labels (ADR 0115).
             if (o.wrongLabel(labels)) |i| try c.report(.wrong_labels, op.labels[i]);
             if (o.accepts) |accepts| for (op.args, 0..) |arg, i| {
                 const lit = try c.literal(arg) orelse continue;
-                if (!accepts.call(accepts.context, i, lit)) try c.report(.wrong_argument, arg.pos);
+                if (!accepts.call(accepts.context, if (positions) |ps| ps[i] else i, lit)) try c.report(.wrong_argument, arg.pos);
             };
         }
         const waits = op.wait != null;
@@ -2799,7 +2864,7 @@ test "labelled Capability calls are checked against the declared labels (ADR 011
     try expectDiagnostics(
         \\on t a, b
         \\  ask world to move a at b
-        \\  tell world to mark a by b
+        \\  tell world to mark a by b at a
         \\  ask world to swap a to b
         \\  ask world to move a to b to a
         \\  tell world
@@ -2809,7 +2874,49 @@ test "labelled Capability calls are checked against the declared labels (ADR 011
         \\    ask world to fetch a to b and wait
         \\  end wait
         \\end t
-    , .{ .grants = &grants }, "wrong labels at 2:23\nwrong labels at 3:24\nwrong labels at 4:23\nwrong argument count at 5:16\nwrong labels at 7:17\nwrong labels at 10:26\n");
+    , .{ .grants = &grants }, "wrong labels at 2:23\nwrong labels at 3:29\nwrong labels at 4:23\nwrong argument count at 5:16\nwrong labels at 7:17\nwrong labels at 10:26\n");
+}
+
+test "a labelled call may leave out an Optional argument with its label (ADR 0160)" {
+    const grants = [_]Grant{.{ .name = "world", .operations = &.{
+        .{ .name = "mark", .mode = .fire_and_forget, .required = 1, .total = 3, .labels = &.{ "at", "by" } },
+        .{ .name = "play", .mode = .fire_and_forget, .required = 1, .total = 3, .labels = &.{ "on", "with" } },
+        .{ .name = "place", .mode = .fire_and_forget, .required = 2, .total = 3, .labels = &.{ "at", "by" } },
+    } }};
+    try expectDiagnostics(
+        \\on t a, b
+        \\  tell world to mark a by b
+        \\  tell world to play a with b
+        \\  tell world to play a on b with a
+        \\  tell world
+        \\    play a with b
+        \\  end tell
+        \\end t
+    , .{ .grants = &grants }, "");
+    // Skipping a required argument, or labels out of order, are wrong.
+    try expectDiagnostics(
+        \\on t a, b
+        \\  tell world to place a by b
+        \\  tell world to play a with b on a
+        \\end t
+    , .{ .grants = &grants }, "wrong labels at 2:25\nwrong labels at 3:31\n");
+    // A Library's need counts the left-out argument.
+    const o = grants[0].operations[1];
+    try testing.expectEqual(@as(usize, 3), o.passedCount(2, &.{"with"}));
+    try testing.expect(needProblem(.{ .grant = "world", .operation = "play", .ask = false, .line = false, .waits = false, .args = 2, .literals = &.{ null, null }, .labels = &.{"with"} }, &grants) == null);
+}
+
+test "a Host Command answers a Selector for each set of labels it may write (ADR 0160)" {
+    const play: Operation = .{ .name = "play", .mode = .fire_and_forget, .required = 1, .total = 3, .command = true, .labels = &.{ "on", "with" } };
+    try testing.expect(play.spells("play", &.{}));
+    try testing.expect(play.spells("play", &.{"on"}));
+    try testing.expect(play.spells("play", &.{"with"}));
+    try testing.expect(play.spells("play", &.{ "on", "with" }));
+    try testing.expect(!play.spells("play", &.{ "with", "on" }));
+    const mark: Operation = .{ .name = "mark", .mode = .fire_and_forget, .required = 2, .total = 3, .command = true, .labels = &.{ "at", "by" } };
+    try testing.expect(mark.spells("mark", &.{"at"}));
+    try testing.expect(!mark.spells("mark", &.{"by"}));
+    try testing.expect(mark.spells("mark", &.{ "at", "by" }));
 }
 
 test "a Library's labelled call is rechecked against an importer's labels (ADR 0115)" {
@@ -2873,7 +2980,8 @@ test "a labelled Host Command has a Selector for each labelled spelling (ADR 011
     while (it.next()) |t| resolved[lines.position(tree.tokens[t.*].start).line] = true;
     // By line: the plain and declared spellings resolve; `mark a at b` is
     // the Handler's; other labels and too many arguments stay messages.
-    try testing.expectEqualSlices(bool, &.{ false, false, true, true, true, false, true, false, false, true, false }, &resolved);
+    // `mark a by b` leaves out the Optional `at` argument (ADR 0160).
+    try testing.expectEqualSlices(bool, &.{ false, false, true, true, true, false, true, false, true, true, false }, &resolved);
     // Two Grants spelling one Selector clash at the call; spelling
     // different ones, they don't.
     const toward = [_]Operation{.{ .name = "move", .mode = .immediate, .required = 2, .total = 2, .command = true, .labels = &.{"toward"} }};

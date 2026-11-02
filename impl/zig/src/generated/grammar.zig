@@ -181,12 +181,12 @@ pub const grammar: GrammarTable = .{
     },
     .labels = .{
         .reserved = &.{
+            "on",
             "to",
         },
         .excluded = &.{
             "from",
             "otherwise",
-            "with",
         },
     },
     .contextual = &.{

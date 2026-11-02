@@ -2585,11 +2585,10 @@ test "Operation calls take Argument Labels between their arguments (ADR 0115)" {
     try testing.expectEqual(@as(usize, 0), lines[1].labels.len);
     try testing.expectEqual(@as(usize, 2), lines[1].args.len);
     try testing.expectEqual(@as(usize, 0), body[3].data.ask.labels.len);
-    // No labels after a comma-separated list, and never `from`, `with` or
+    // No labels after a comma-separated list, and never `from` or
     // `otherwise`.
     try expectOutcome("on t a, b\n  ask g to op a, b to c\nend t\n", "unexpected token at 2:20");
     try expectOutcome("on t a, b\n  ask g to op a from b\nend t\n", "unexpected token at 2:17");
-    try expectOutcome("on t a, b\n  tell g to op a with b\nend t\n", "unexpected token at 2:18");
 }
 
 test "a Container never passes through a Built-in property" {
@@ -2881,6 +2880,19 @@ test "otherwise is no Argument Label" {
     const command = parsed.result.tree.declarations[0].data.handler.body[0].data.command;
     try testing.expectEqual(@as(usize, 0), command.labels.len);
     try testing.expectEqual(@as(usize, 1), command.args.len);
+}
+
+test "on and with are Argument Labels in calls and Handler heads (ADR 0160)" {
+    try expectOutcome("on loop pattern on instrument\nend loop\n", "parses");
+    try expectOutcome("on play sound with options\nend play\n", "parses");
+    var parsed = try parseForTest("on t\n play \"rain\" on kit with 1\n loop 1 with 2\nend t\n");
+    defer parsed.deinit();
+    const body = parsed.result.tree.declarations[0].data.handler.body;
+    try testing.expectEqual(@as(usize, 2), body[0].data.command.labels.len);
+    try testing.expectEqual(@as(usize, 3), body[0].data.command.args.len);
+    try testing.expectEqual(@as(usize, 1), body[1].data.command.labels.len);
+    // `on` stays Reserved, so it can't start a Selector.
+    try expectOutcome("on on x to y\nend on\n", "unexpected token at 1:4");
 }
 
 test "object element references and counts (#1143)" {

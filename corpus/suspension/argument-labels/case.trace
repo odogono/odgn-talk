@@ -69,7 +69,7 @@ refused code="invalid value"
 refused code="invalid value"
 > decide-broadcast message=move:from: args=[1, 2]
 refused code="invalid value"
-> deliver to=a message=move:with: args=[1, 2]
+> deliver to=a message=move:otherwise: args=[1, 2]
 refused code="invalid value"
 > deliver to=a message=move:in: args=[1, 2]
 refused code="invalid value"

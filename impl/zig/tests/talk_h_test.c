@@ -1091,7 +1091,7 @@ static int decision_test(void) {
         talk_value_release(n);
     }
     bad |= talk_deciding_done(vetoed) || talk_deciding_decided(vetoed) != NULL;
-    talk_message selector = {"move:with:", 10, NULL, 0, NULL};
+    talk_message selector = {"move:otherwise:", 15, NULL, 0, NULL};
     bad |= talk_script_decide(script, &selector, NULL, &refused) != TALK_INVALID_VALUE || refused != NULL;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     const talk_decided *no = talk_deciding_decided(vetoed);
@@ -1101,7 +1101,7 @@ static int decision_test(void) {
     bad |= no == NULL || no->vetoes_len != 1 || !talk_value_as_text(no->vetoes[0].reason, &reason, &reason_len) || reason_len != 7 || memcmp(reason, "blocked", 7) != 0;
     const talk_decided *yes = talk_deciding_decided(allowed);
     bad |= !talk_deciding_done(allowed) || yes == NULL || yes->verdict != TALK_ALLOWED || yes->delivery_len != 2 || memcmp(yes->delivery, "d2", 2) != 0;
-    bad |= strstr(trace, "> decide to=s message=move:with:\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "> decide to=s message=move:otherwise:\nrefused code=\"invalid value\"\n") == NULL;
     bad |= strstr(trace, "decided d1 verdict=vetoed vetoes=[{script: \"s\", run: \"s/r1\", reason: \"blocked\"}]\n") == NULL;
     /* A Broadcast Decision reaches the Script that wants it, and one that
      * nothing wants is allowed at once. */

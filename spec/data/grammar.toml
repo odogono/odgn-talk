@@ -73,10 +73,10 @@ properties = [
 ]
 
 [labels]
-reserved = ["to"]
-# `from` and an operand in `wait for` is the event's source; `with` follows the
-# message name in `send` and continues a line.
-excluded = ["from", "otherwise", "with"]
+# `on` starts a Handler only at the start of a statement (ADR 0160).
+reserved = ["on", "to"]
+# `from` and an operand in `wait for` is the event's source.
+excluded = ["from", "otherwise"]
 
 [[contextual]]
 word = "a"
