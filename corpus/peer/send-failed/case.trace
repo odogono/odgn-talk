@@ -1,5 +1,5 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: send failed from a Remote Send's call.
-# Re-blessed for #1973: a Remote Send is charged at the capability rate, not send's; the new Fuel figures await review.
+# Re-blessed for #1973 (a Remote Send is charged at the capability rate, not send's); approved by the maintainer on 2026-11-02.
 > load s identity=7a14580fb486084eb30a5876b0bf9fbdde1c7609643821ff4e6873bfab9d4d35
 > deliver d1 to=s message=try1 args=[<object peer "billing">]
 > deliver d2 to=s message=try1 args=[<object peer "billing">]

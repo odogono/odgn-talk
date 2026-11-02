@@ -6,7 +6,7 @@ Evidence for #1971 on 2026-11-02. The normative rules are chapter 5's [Remote Se
 
 **Approved.** The maintainer approved all six first blessings on 2026-11-02, and each header records it. The TS runner wrote them with its own `--bless` (PR #1979), since only the TS Core offers `peer` yet; the Zig Core and Go API must replay them unchanged for #1973. Approval is separate from that agreement ([checking](../../../corpus/README.md#checking)).
 
-**Re-blessed for #1973, awaiting review.** The Zig Core showed that the TS Core charged a Remote Send at the `send` rate, which counts neither the Operation's declared cost nor its result's conversion. Chapter 5 says every rule for a call to the Operation applies, its cost included, so both Cores now charge it at the `capability` rate, after a restore too. Only the `seg` and `run` Fuel and allocation figures changed; TS and Zig agree on them, in both replays, through `bun run corpus:bless`.
+**Re-blessed for #1973, approved.** The maintainer approved the re-blessed figures on 2026-11-02. The Zig Core showed that the TS Core charged a Remote Send at the `send` rate, which counts neither the Operation's declared cost nor its result's conversion. Chapter 5 says every rule for a call to the Operation applies, its cost included, so both Cores now charge it at the `capability` rate, after a restore too. Only the `seg` and `run` Fuel and allocation figures changed; TS and Zig agree on them, in both replays, through `bun run corpus:bless`.
 
 | Case | Pins |
 | --- | --- |
