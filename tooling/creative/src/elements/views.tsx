@@ -124,6 +124,9 @@ const placeholderView: ElementKindView<AddOnKind> = {
           {addOn}
         </a>
         , which isn&apos;t loaded. Its settings are kept unchanged when saved.
+        <button data-load-add-on={addOn} type="button">
+          Load Add-on…
+        </button>
       </p>
     );
   },

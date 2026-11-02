@@ -13,7 +13,8 @@ import {
 } from './edit-lock';
 import { type BaseProjectName, createProject, type Project } from './model';
 import { createFromBase } from './base-projects';
-import { pageAddOns } from './add-ons/page';
+import { pageAddOns, pageTrust } from './add-ons/page';
+import { askToTrust } from './add-ons/trust-prompt';
 import { projectWithAddOns } from './add-ons/project';
 import {
   dropHandle,
@@ -193,6 +194,12 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const addOnsFor = async (
     project: DeepReadonly<Project>,
   ): Promise<Project> => {
+    const untrusted = (project.addOns ?? []).filter(
+      ref => ref.code !== undefined && !pageTrust.has(ref.hash!),
+    );
+    if (untrusted.length && (await askToTrust(untrusted))) {
+      pageTrust.trust(untrusted.map(ref => ref.hash!));
+    }
     const loaded = await projectWithAddOns(project, pageAddOns);
     if (loaded.problems.length) {
       notice(
@@ -206,6 +213,24 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     return loaded.project;
   };
+  // A placeholder's Info offers to load its Add-on again, asking to trust
+  // a Project Add-on first; the Project is read again, as on opening.
+  document.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-load-add-on]',
+    );
+    if (!button || !lock.editing) {
+      return;
+    }
+    void (async () => {
+      const before = editor.stamp();
+      const project = await addOnsFor(editor.snapshot());
+      if (editor.isCurrent(before)) {
+        editor.replaceProject(project);
+        shell.redraw();
+      }
+    })();
+  });
   byId('notice-close').addEventListener('click', () => {
     byId('notice-banner').hidden = true;
   });
@@ -913,6 +938,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     const { project } = content;
+    // A Base Project ships with Folio, so the Add-ons it brings are trusted.
+    pageTrust.trust(
+      (project.addOns ?? []).flatMap(ref => (ref.hash ? [ref.hash] : [])),
+    );
     const accepted = [];
     for (const asset of project.assets) {
       const data = content.assets.get(asset.hash);

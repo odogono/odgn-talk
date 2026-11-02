@@ -3,6 +3,7 @@
 // Code Browser; presenting plays it full-window with the editor hidden.
 // The session runs in the Play worker (#1225); the page draws from its
 // mirror of Play State and posts reader input to the worker.
+import { pageTrust } from './add-ons/page';
 import type { DeepReadonly } from './readonly';
 import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
 import { scriptNameProblems } from './script-names';
@@ -1003,6 +1004,9 @@ export const mountPlay = (shell: StackShell): void => {
           : {}),
         session: sessionId,
         project: playing,
+        trustedAddOns: (playing.addOns ?? []).flatMap(ref =>
+          ref.hash && pageTrust.has(ref.hash) ? [ref.hash] : [],
+        ),
         pageIndex,
         // A different game each time (ADR 0096), unless recording a test.
         seed: record ? 0n : BigInt(Date.now()),

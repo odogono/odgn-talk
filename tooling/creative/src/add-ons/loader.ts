@@ -29,6 +29,23 @@ export const chunkImporter: AddOnImporter = async entry =>
     }
   ).default;
 
+/** Imports a Project Add-on's code as a module, from a `blob:` URL. */
+export type CodeImporter = (code: string) => Promise<AddOnModule>;
+
+export const blobImporter: CodeImporter = async code => {
+  const url = URL.createObjectURL(
+    new Blob([code], { type: 'text/javascript' }),
+  );
+  try {
+    return ((await import(url)) as { default: AddOnModule }).default;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
+
+/** The message for a Project Add-on the reader hasn't trusted. */
+export const NOT_TRUSTED = "it carries code you haven't trusted";
+
 /** Why an Add-on a Project lists didn't load. */
 export type AddOnProblem = { id: string; message: string };
 
@@ -36,20 +53,30 @@ export { compareVersions } from './versions';
 
 export type AddOnLoaderOptions = {
   catalogue?: readonly CatalogueEntry[];
+  codeImporter?: CodeImporter;
   importer?: AddOnImporter;
   /** The page registers each kind's view; the worker and CLI don't. */
   onView?: (kind: AddOnKind, module: AddOnKindModule) => void;
+  /**
+   * Whether the reader trusts a Project Add-on, by its code's hash; none
+   * runs without (ADR 0162).
+   */
+  trusted?: (hash: string) => boolean;
 };
 
 export class AddOnLoader {
   readonly catalogue: readonly CatalogueEntry[];
   readonly #importer: AddOnImporter;
+  readonly #codeImporter: CodeImporter;
+  readonly #trusted: (hash: string) => boolean;
   readonly #onView?: AddOnLoaderOptions['onView'];
   readonly #loads = new Map<string, Promise<string | undefined>>();
 
   constructor(options: AddOnLoaderOptions = {}) {
     this.catalogue = options.catalogue ?? BUILT_IN_ADD_ONS;
     this.#importer = options.importer ?? chunkImporter;
+    this.#codeImporter = options.codeImporter ?? blobImporter;
+    this.#trusted = options.trusted ?? (() => false);
     this.#onView = options.onView;
   }
 
@@ -71,8 +98,7 @@ export class AddOnLoader {
 
   #loadOne(ref: AddOnRef): Promise<string | undefined> {
     if (ref.code !== undefined) {
-      // Project Add-ons load after the trust prompt (#1901).
-      return Promise.resolve('Add-ons carried in a Project are not loaded yet');
+      return this.#loadCode(ref, ref.code, ref.hash!);
     }
     const entry = this.entry(ref.id);
     if (!entry) {
@@ -86,7 +112,7 @@ export class AddOnLoader {
     let load = this.#loads.get(entry.id);
     if (!load) {
       load = this.#importer(entry).then(
-        module => this.#register(entry, module),
+        module => this.#register(entry.id, entry.version, module),
         (error: unknown) =>
           `it could not be fetched${error instanceof Error ? `: ${error.message}` : ''}`,
       );
@@ -101,12 +127,37 @@ export class AddOnLoader {
     return load;
   }
 
-  #register(entry: CatalogueEntry, module: AddOnModule): string | undefined {
-    if (module.id !== entry.id || module.version !== entry.version) {
-      return `its module is ${module.id} ${module.version}`;
+  /** A Project Add-on: its code runs only once the reader trusts it. */
+  #loadCode(
+    ref: AddOnRef,
+    code: string,
+    hash: string,
+  ): Promise<string | undefined> {
+    if (!this.#trusted(hash)) {
+      return Promise.resolve(NOT_TRUSTED);
+    }
+    let load = this.#loads.get(hash);
+    if (!load) {
+      load = this.#codeImporter(code).then(
+        module => this.#register(ref.id, ref.version, module),
+        (error: unknown) =>
+          `its code failed to load${error instanceof Error ? `: ${error.message}` : ''}`,
+      );
+      this.#loads.set(hash, load);
+    }
+    return load;
+  }
+
+  #register(
+    id: string,
+    version: string,
+    module: AddOnModule,
+  ): string | undefined {
+    if (module?.id !== id || module.version !== version) {
+      return `its module is ${String(module?.id)} ${String(module?.version)}`;
     }
     for (const [name, kindModule] of Object.entries(module.kinds)) {
-      const kind = `${entry.id}#${name}` as AddOnKind;
+      const kind = `${id}#${name}` as AddOnKind;
       const data = kindModule.data(DATA_API);
       // Every Element of the kind carries its full `kind`.
       const definition = {

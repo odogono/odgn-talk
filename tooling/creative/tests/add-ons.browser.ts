@@ -1,6 +1,8 @@
 // Dedicated page: the Tools window lists a built-in Add-on's kinds, and
 // adding one loads it, lists it in the Project and draws it (#1901).
+import { blobImporter } from '../src/add-ons/loader';
 import { pageAddOnLoader, setPageAddOns } from '../src/add-ons/page';
+import { askToTrust } from '../src/add-ons/trust-prompt';
 import { createProject, type AddOnElement } from '../src/model';
 import { mountStack } from '../src/stack';
 import counter, {
@@ -93,6 +95,42 @@ export const runBrowserTests = async () => {
     editor.undo();
     assert(editor.project.pages[0]!.elements.length === 0, 'both undone');
     assert(!editor.project.addOns?.length, 'the Add-on is unlisted again');
+  });
+
+  await test('the trust prompt says what trusting means, and declining is the default', async () => {
+    const ref = { id: 'https://example.com/pads', version: '0.1.0' };
+    const declined = askToTrust([ref]);
+    const dialog = document.querySelector<HTMLDialogElement>(
+      'dialog.trust-prompt',
+    )!;
+    assert(dialog.open, 'the prompt is open');
+    assert(dialog.textContent!.includes(ref.id), 'it names the Add-on');
+    assert(
+      dialog.textContent!.includes('reading your other Projects'),
+      'it says what a trusted Add-on can do',
+    );
+    assert(
+      document.activeElement?.textContent === 'Don\u2019t trust',
+      'declining has focus',
+    );
+    dialog.querySelector<HTMLButtonElement>('button[value="no"]')!.click();
+    assert((await declined) === false, 'declined');
+    const accepted = askToTrust([ref]);
+    document
+      .querySelector<HTMLButtonElement>('dialog.trust-prompt [data-trust]')!
+      .click();
+    assert((await accepted) === true, 'trusted');
+    assert(
+      !document.querySelector('dialog.trust-prompt'),
+      'the prompt is gone',
+    );
+  });
+
+  await test("the page's Content Security Policy lets trusted code load", async () => {
+    const module = await blobImporter(
+      "export default { id: 'https://example.com/csp', version: '1.0.0', kinds: {} };",
+    );
+    assert(module.id === 'https://example.com/csp', 'the module loaded');
   });
 
   return results;
