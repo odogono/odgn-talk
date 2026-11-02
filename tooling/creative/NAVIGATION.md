@@ -201,6 +201,17 @@ landed, and the Issue graph job ticks it as they close.
   suite.
 - First check: `bun test tooling/creative/tests/palettes.test.ts`.
 
+## Perform
+
+- [perform-layout.ts](src/perform-layout.ts): the Perform layout (#1999):
+  stage, divider and docked Code Browser, with the divider and code zoom
+  kept per Project in browser storage. [play-view.ts](src/play-view.ts)
+  starts the `perform` Play mode, its header button and ⌘⇧↩, and ⌘+/⌘−;
+  [shortcuts.ts](src/shortcuts.ts) has `isPerformKey`.
+- Tests: [perform-layout.test.ts](tests/perform-layout.test.ts) and the
+  `perform` browser suite.
+- First check: `bun test tooling/creative/tests/perform-layout.test.ts`.
+
 ## Group Elements
 
 - [tree/project-tree.ts](src/tree/project-tree.ts): the persistent mutable

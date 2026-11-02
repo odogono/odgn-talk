@@ -51,6 +51,13 @@ export const menuButtonForKey = (event: Key): string | undefined => {
   return undefined;
 };
 
+/** ⌘⇧↩ starts and stops Perform (#1999). */
+export const isPerformKey = (event: Key): boolean =>
+  (event.metaKey || event.ctrlKey) &&
+  !event.altKey &&
+  event.shiftKey &&
+  event.key === 'Enter';
+
 /** Whether a key toggles Play's Present mode: ⌘↩ or Ctrl+Enter. */
 export const isPlayKey = (event: Key): boolean =>
   (event.metaKey || event.ctrlKey) &&

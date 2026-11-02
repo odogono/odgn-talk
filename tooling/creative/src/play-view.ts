@@ -49,7 +49,8 @@ import { ElementView, renderElements } from './element-view';
 import { type PlayMode, type StackShell } from './stack';
 import { controls } from './play-controls';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
-import { isPlayKey } from './shortcuts';
+import { isPerformKey, isPlayKey } from './shortcuts';
+import { PerformLayout } from './perform-layout';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
 import { needsInstrumentAudio } from './pattern-checks';
@@ -85,6 +86,18 @@ export const mountPlay = (shell: StackShell): void => {
     },
     'Play',
   );
+  // Perform (#1999) plays the Project with the code and Palettes beside it.
+  const performButton = h(
+    'button',
+    {
+      type: 'button',
+      'aria-pressed': 'false',
+      title: 'Perform: play with the code beside the stage (⌘⇧↩)',
+      'data-perform': '',
+    },
+    'Perform',
+  );
+  const performLayout = new PerformLayout();
   const pauseButton = h(
     'button',
     {
@@ -129,6 +142,7 @@ export const mountPlay = (shell: StackShell): void => {
       pauseButton,
       stepButton,
       ...statementSteps,
+      performButton,
     ),
   );
   // Browse and Edit head the Tools window, as HyperCard's browse tool did.
@@ -824,12 +838,12 @@ export const mountPlay = (shell: StackShell): void => {
       1,
       Math.max(
         0.1,
-        (reader.clientWidth - (mode === 'present' ? 32 : 0)) / play.designWidth,
+        (reader.clientWidth - (mode === 'browse' ? 0 : 32)) / play.designWidth,
       ),
     );
     // Present places the Page by its alignment. Auto margins in the flex
     // reader centre it without clipping a Page larger than the window.
-    const presenting = mode === 'present';
+    const presenting = mode !== 'browse';
     const before = (align: string | undefined, start: string) =>
       presenting && align !== start ? 'auto' : '';
     const after = (align: string | undefined, end: string) =>
@@ -1080,7 +1094,14 @@ export const mountPlay = (shell: StackShell): void => {
     );
     recordTool.setAttribute('aria-pressed', String(Boolean(recorder)));
     editTool.setAttribute('aria-pressed', String(mode === undefined));
-    document.body.classList.toggle('playing', mode === 'present');
+    performButton.textContent = mode === 'perform' ? 'Stop' : 'Perform';
+    performButton.setAttribute('aria-pressed', String(mode === 'perform'));
+    // Perform hides the editor as Present does, keeping the code pane.
+    document.body.classList.toggle(
+      'playing',
+      mode === 'present' || mode === 'perform',
+    );
+    document.body.classList.toggle('performing', mode === 'perform');
     document.body.classList.toggle('browsing', mode === 'browse');
   };
   /**
@@ -1113,6 +1134,9 @@ export const mountPlay = (shell: StackShell): void => {
     reader.hidden = true;
     pageNode.replaceChildren();
     paletteWindows.clear();
+    if (performLayout.mounted) {
+      performLayout.unmount();
+    }
     drawModes();
     const index = shell.editor.project.pages.findIndex(
       p => p.name === pageName,
@@ -1226,6 +1250,13 @@ export const mountPlay = (shell: StackShell): void => {
     } else {
       document.body.append(toolbar, reader);
     }
+    if (mode === 'perform') {
+      performLayout.mount(reader, playing.name, () => {
+        if (session) {
+          draw();
+        }
+      });
+    }
     reader.hidden = false;
     drawModes();
     draw();
@@ -1236,6 +1267,13 @@ export const mountPlay = (shell: StackShell): void => {
       leave();
     } else {
       start('present');
+    }
+  });
+  performButton.addEventListener('click', () => {
+    if (mode === 'perform') {
+      leave();
+    } else {
+      start('perform');
     }
   });
   recordTool.addEventListener('click', () => {
@@ -1364,6 +1402,24 @@ export const mountPlay = (shell: StackShell): void => {
       if (!event.repeat) {
         toggle.click();
       }
+      return;
+    }
+    if (isPerformKey(event) && !prompts.contains(event.target as Node)) {
+      event.preventDefault();
+      if (!event.repeat) {
+        performButton.click();
+      }
+      return;
+    }
+    // ⌘+ and ⌘− zoom Perform's code, not the page.
+    if (
+      mode === 'perform' &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      ['=', '+', '-'].includes(event.key)
+    ) {
+      event.preventDefault();
+      performLayout.zoom(event.key === '-' ? -1 : 1);
       return;
     }
     // A prompt's keys, Escape included, answer the prompt.

@@ -1498,3 +1498,61 @@ body.playing #performance-window {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Perform (#1999): the stage on the left, the code and docked Palettes on
+   the right, with a draggable divider between them. */
+#perform {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 60fr auto 40fr;
+}
+#perform[hidden] {
+  display: none;
+}
+.perform-stage {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.perform-stage #reader {
+  flex: 1;
+  min-width: 0;
+}
+.perform-divider {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--line);
+}
+.perform-divider:focus-visible {
+  outline: 2px solid var(--accent, #36c);
+}
+.perform-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1.5px solid var(--line);
+}
+.perform-code {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.perform-palettes:empty {
+  display: none;
+}
+.perform-code .code-browser.docked {
+  position: static;
+  background: var(--panel);
+  flex: 1;
+  width: auto;
+  height: auto;
+  box-shadow: none;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+}
+.perform-code .code-browser.docked > .bar .close {
+  display: none;
+}
