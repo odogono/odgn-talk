@@ -278,7 +278,9 @@ export type LibraryOptions = {
 /**
  * Compile a Library, once per process for each code identity. `imports` holds
  * every Library its `use` lines name, other than the stdlib's, which are
- * always there. Throws LoadError.
+ * always there. `declarations` holds the Operations of every Capability its
+ * code calls, built with `operationDeclarations`; without them each `ask` or
+ * `tell` fails with `unknown operation`. Throws LoadError.
  */
 export const compileLibrary = (
   src: LibrarySource,

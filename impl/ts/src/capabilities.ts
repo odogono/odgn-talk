@@ -8,6 +8,7 @@ import {
   type ScriptError as HostScriptError,
 } from './errors';
 import type { HostObject, ObjectKind } from './objects';
+import type { GrantDecls } from './effects';
 import { parseUnit, unitEntry, unitText } from './units';
 import {
   bool,
@@ -1662,3 +1663,47 @@ export function defineCapability(...input: unknown[]): unknown {
     ? defineTyped
     : defineTyped(...(input as Parameters<CapabilityDefiner<unknown>>));
 }
+
+/**
+ * The Operation declarations a Library's Capability calls are checked
+ * against, for `compileLibrary`'s `declarations`. Takes CapabilityDefs, keyed
+ * by their names, or a map from the name each is granted under.
+ */
+export const operationDeclarations = (
+  capabilities:
+    | ReadonlyMap<string, CapabilityDef<unknown>>
+    | Iterable<CapabilityDef<unknown>>,
+): GrantDecls => {
+  const entries: Iterable<readonly [string, CapabilityDef<unknown>]> =
+    typeof (capabilities as ReadonlyMap<string, unknown>).get === 'function'
+      ? (capabilities as ReadonlyMap<string, CapabilityDef<unknown>>)
+      : [...(capabilities as Iterable<CapabilityDef<unknown>>)].map(
+          c => [c.name, c] as const,
+        );
+  const declarations: Record<
+    string,
+    Record<
+      string,
+      {
+        args: Shape[];
+        command?: boolean;
+        labels?: string[];
+        mode: ValueOperation<unknown>['mode'];
+      }
+    >
+  > = Object.create(null);
+  for (const [name, capability] of entries) {
+    declarations[name] = Object.fromEntries(
+      [...capability.operations].map(([operation, op]) => [
+        operation,
+        {
+          args: op.args ?? [],
+          mode: op.mode,
+          ...(op.labels?.length ? { labels: op.labels } : {}),
+          ...(op.command ? { command: true } : {}),
+        },
+      ]),
+    );
+  }
+  return declarations;
+};

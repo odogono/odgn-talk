@@ -9,6 +9,8 @@ import {
   type ScopeDecl,
 } from './capabilities';
 import type { GrantDecls } from './effects';
+import { operationDeclarations } from './capabilities';
+export { operationDeclarations };
 import type { Limits } from './machine';
 import { LoadError } from './errors';
 import {
@@ -129,37 +131,6 @@ export type Setup = {
     costs: Record<string, { alloc?: number; fuel?: number }>;
     perStep?: number;
   }[];
-};
-
-export const operationDeclarations = (
-  capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
-): GrantDecls => {
-  const declarations: Record<
-    string,
-    Record<
-      string,
-      {
-        args: Shape[];
-        command?: boolean;
-        labels?: string[];
-        mode: OperationSpec['mode'];
-      }
-    >
-  > = Object.create(null);
-  for (const [name, capability] of capabilities) {
-    declarations[name] = Object.fromEntries(
-      [...capability.operations].map(([operation, op]) => [
-        operation,
-        {
-          args: op.args ?? [],
-          mode: op.mode,
-          ...(op.labels?.length ? { labels: op.labels } : {}),
-          ...(op.command ? { command: true } : {}),
-        },
-      ]),
-    );
-  }
-  return declarations;
 };
 
 /**
