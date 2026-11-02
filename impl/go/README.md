@@ -711,7 +711,7 @@ Help and quit are terminal actions and are not recorded.
 
 ### Running a Script file
 
-`northtalk [-port n] app.talk [args...]` runs the file as one Script, named
+`northtalk [-port n] [-listen addr] [-peer name=addr]... [-peer-key file] app.talk [args...]` runs the file as one Script, named
 for the file, as [chapter 12's Script Runner](../../spec/12-sessions-and-tooling.md#the-script-runner)
 and the TS Runner do. A first argument after the flags that ends in `.talk` or
 names an existing file is run; arguments after it, flags included, go to
@@ -728,6 +728,16 @@ Node's ICU by `node impl/go/internal/cmd/northtalk/gen-locale-data.ts`; it suppo
 and the tags listed there, and any other tag falls back by lookup, so a tag the
 TS Runner resolves through Intl, such as `de-CH`, may resolve to `de` here.
 `und` has en-US names and symbols, as the TS Runner has on an en-US runtime.
+
+`peer` carries Remote Sends to other Runners, Go or TS, over the transport of
+[chapter 12's Runner peers](../../spec/12-sessions-and-tooling.md#runner-peers)
+([ADR 0163](../../docs/adr/0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)):
+`-listen HOST:PORT` accepts them over mutual TLS, `-peer NAME=tls://HOST:PORT#KEY`
+lets `reach NAME` find a listener whose key has that fingerprint, and
+`-peer-key` reads a PEM ECDSA P-256 key and certificate so the key survives a
+restart. `tcp://` addresses use plain TCP instead, on loopback only, where
+`caller` gives Nothing. The implementation is
+[`peers.go`](internal/cmd/northtalk/peers.go).
 The main module requires `sqlite/`; it stays cgo-free. It exits 0 when no
 Run, queued message, timer, Serve Registration or open Exchange is left, 1
 after any uncaught error or a load diagnostic (`file:line:col: message`), and

@@ -34,6 +34,10 @@ type runOptions struct {
 	file string
 	args []string // the arguments after the file, given to `start`
 	port *int     // overrides every `serve`'s port; -port or PORT
+	// --listen, --peer and --peer-key (chapter 12, Runner peers).
+	listen  *peerAddress
+	remotes map[string]peerRemote
+	peerKey string
 }
 
 // runIO is the Runner's outside world, injected so tests can drive it.
@@ -110,6 +114,11 @@ func runScript(o runOptions, rio runIO) int {
 		stderr.line(err.Error())
 		return 1
 	}
+	peers, err := newRunnerPeers(core, peerOptions{keyFile: o.peerKey, listen: o.listen, remotes: o.remotes, log: stderr.line})
+	if err != nil {
+		stderr.line(err.Error())
+		return 1
+	}
 	stores := store.New(store.SessionQuotas())
 	pool := driver.NewPool(driver.PoolOptions{Workers: 1, OnPump: func(m *driver.Member, r talk.PumpResult, err error) {
 		if err != nil {
@@ -162,6 +171,8 @@ func runScript(o runOptions, rio runIO) int {
 	}
 	def, err = core.HTTPCapabilityWith(h, fetcher, talk.Costs{"serve": {}, "unserve": {}, "respond": {}, "fetch": {}})
 	grant("http", def, err, nil)
+	def, err = core.PeerCapability(peers, talk.Costs{"expose": {}, "unexpose": {}, "reach": {}, "post": {}, "call": {}, "caller": {}})
+	grant("peer", def, err, nil)
 	databases := newLazySqlite()
 	def, err = core.SqliteCapability(databases, talk.Costs{"query": {}, "change": {}, "begin": {}, "commit": {}, "rollback": {}}, 0)
 	grant("sqlite", def, err, talk.SqliteBinding{Database: "main", MaxRows: maxRows})
@@ -198,6 +209,7 @@ func runScript(o runOptions, rio runIO) int {
 	// Stops everything the Runner started.
 	shutDown := func(code int) int {
 		timers.stop()
+		peers.close()
 		pool.Close()
 		if err := h.Close(); err != nil {
 			stderr.line(err.Error())
@@ -211,7 +223,7 @@ func runScript(o runOptions, rio runIO) int {
 	// Serve Registrations or open HTTP Exchanges. A pending `console.read` or
 	// `user` prompt keeps its Run alive.
 	done := func() bool {
-		if stopping.Load() || timers.live() || h.Registrations() > 0 || h.OpenExchanges() > 0 {
+		if stopping.Load() || timers.live() || peers.listening() || h.Registrations() > 0 || h.OpenExchanges() > 0 {
 			return false
 		}
 		busy := false
@@ -236,6 +248,7 @@ func runScript(o runOptions, rio runIO) int {
 			signalled = code
 			stopping.Store(true)
 			h.StopAccepting()
+			peers.stopListening()
 			// A Script without a `stop` Handler ends that Run `unhandled`.
 			_, _ = script.Deliver(talk.Message{Name: "stop"})
 			go func() {
@@ -247,6 +260,10 @@ func runScript(o runOptions, rio runIO) int {
 		}
 	}()
 
+	if err := peers.start(member.Group()); err != nil {
+		stderr.line(err.Error())
+		return shutDown(1)
+	}
 	args := make([]talk.Value, len(o.args))
 	for i, a := range o.args {
 		args[i] = mustText(a)
