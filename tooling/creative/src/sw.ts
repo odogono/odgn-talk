@@ -1,14 +1,16 @@
 // Folio's service worker (#823; design in
 // docs/research/creative-tool-project-storage.md section 8): it precaches
 // the app shell the build lists, so authoring and Play work with the
-// network off and no backend. Projects stay in IndexedDB and are never
-// cached as responses. A new worker waits instead of taking over: the
-// page flushes autosave, sends SKIP_WAITING, then reloads (offline.ts).
+// network off and no backend. Projects stay in IndexedDB; only Example
+// Project files are cached, when first fetched (ADR 0161). A new worker
+// waits instead of taking over: the page flushes autosave, sends
+// SKIP_WAITING, then reloads (offline.ts).
 //
-// The build replaces the two declarations below with the precache list
-// and a version hashed from the shell's contents (tools/build.ts). The
-// listener logic takes its scope as an argument so tests can drive it
+// The build replaces the declarations below with the on-demand prefixes,
+// the precache list and a version hashed from the shell's contents
+// (tools/build.ts). The listener logic takes its scope as an argument so tests can drive it
 // with a fake Cache Storage and network (tests/service-worker.test.ts).
+declare const __FOLIO_ON_DEMAND__: string[];
 declare const __FOLIO_PRECACHE__: string[];
 declare const __FOLIO_VERSION__: string;
 
@@ -20,6 +22,13 @@ const CACHE_PREFIX = 'folio-';
 /** The Cache Storage name holding one build of the app shell. */
 export const cacheNameFor = (version: string): string =>
   `${CACHE_PREFIX}${version}`;
+
+/**
+ * The Cache Storage name holding files fetched on demand, such as Example
+ * Projects (ADR 0161). It outlives each build, so what an author opened
+ * online stays openable offline after Folio updates.
+ */
+export const ON_DEMAND_CACHE = `${CACHE_PREFIX}on-demand`;
 
 /** The part of a Cache this worker uses. */
 export type CacheLike = {
@@ -64,6 +73,11 @@ const offlinePage = (): Response =>
 export type ServiceWorkerConfig = {
   /** The registration scope as an absolute URL; shell paths resolve on it. */
   base: string;
+  /**
+   * URL prefixes, relative to `base`, of files that are not precached but
+   * kept when first fetched and served from the network first after that.
+   */
+  onDemand?: readonly string[];
   precache: readonly string[];
   version: string;
 };
@@ -71,8 +85,11 @@ export type ServiceWorkerConfig = {
 /** Registers the install, activate, fetch and message listeners. */
 export const installServiceWorker = (
   scope: ServiceWorkerScopeLike,
-  { base, precache, version }: ServiceWorkerConfig,
+  { base, onDemand = [], precache, version }: ServiceWorkerConfig,
 ): void => {
+  const onDemandPrefixes = onDemand.map(entry => new URL(entry, base).href);
+  const isOnDemand = (url: string): boolean =>
+    onDemandPrefixes.some(prefix => url.startsWith(prefix));
   const cacheName = cacheNameFor(version);
   const shell = precache.map(entry => new URL(entry, base).href);
   const shellUrls = new Set(shell);
@@ -89,7 +106,11 @@ export const installServiceWorker = (
     event.waitUntil(
       (async () => {
         for (const name of await scope.caches.keys()) {
-          if (name.startsWith(CACHE_PREFIX) && name !== cacheName) {
+          if (
+            name.startsWith(CACHE_PREFIX) &&
+            name !== cacheName &&
+            name !== ON_DEMAND_CACHE
+          ) {
             await scope.caches.delete(name);
           }
         }
@@ -104,9 +125,25 @@ export const installServiceWorker = (
     }
   });
 
+  const respondOnDemand = async (url: string): Promise<Response> => {
+    const cache = await scope.caches.open(ON_DEMAND_CACHE);
+    try {
+      const response = await scope.fetch(url);
+      if (response.ok) {
+        await cache.put(url, response.clone());
+      }
+      return response;
+    } catch {
+      return (await cache.match(url)) ?? offlinePage();
+    }
+  };
+
   const respond = async (
     request: FetchEventLike['request'],
   ): Promise<Response> => {
+    if (isOnDemand(request.url)) {
+      return respondOnDemand(request.url);
+    }
     // A navigation to a precached page, such as an Example Project's
     // `<slug>/`, gets that page; without its closing `/` it redirects
     // there, as the host does, so the page's `../` URLs stay under the
@@ -152,6 +189,7 @@ if (
 ) {
   installServiceWorker(candidate as ServiceWorkerScopeLike, {
     base: candidate.registration.scope,
+    onDemand: __FOLIO_ON_DEMAND__,
     precache: __FOLIO_PRECACHE__,
     version: __FOLIO_VERSION__,
   });

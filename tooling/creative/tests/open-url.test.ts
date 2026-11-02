@@ -1,6 +1,7 @@
 // Reading `?open=<url>` and fetching the `.folio` file it names (#1677).
 import { expect, test } from 'bun:test';
 import {
+  fetchExampleFile,
   fetchProjectFile,
   fileNameOf,
   openUrlOf,
@@ -76,4 +77,27 @@ test('says why a file could not be opened', async () => {
       fetchGiving(new Response('<html>')),
     ),
   ).rejects.toThrow("isn't a .folio file");
+});
+
+test('fetches an Example Project from its file under Folio', async () => {
+  const asked: string[] = [];
+  const fetchFn = ((url: string) => {
+    asked.push(url);
+    return Promise.resolve(new Response(ZIP));
+  }) as unknown as typeof fetch;
+  const bytes = await fetchExampleFile('first-sounds', fetchFn);
+  expect([...bytes]).toEqual([...ZIP]);
+  expect(asked).toEqual(['projects/first-sounds.folio']);
+});
+
+test('an Example Project never fetched online says so when offline', async () => {
+  // The service worker answers 503 for a file it never kept (ADR 0161).
+  for (const answer of [
+    new Response('', { status: 503 }),
+    new TypeError('Failed to fetch'),
+  ]) {
+    await expect(
+      fetchExampleFile('first-sounds', fetchGiving(answer)),
+    ).rejects.toThrow('Open it once while online');
+  }
 });

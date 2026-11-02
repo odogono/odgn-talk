@@ -228,3 +228,43 @@ test('a precached page under the scope loads as itself, not as the index', async
   });
   expect(await other!.text()).toBe('body of ./');
 });
+
+test('an on-demand file is kept on its first fetch and served offline, across versions', async () => {
+  const { fetchViaWorker, fire, scope, world } = makeWorld();
+  const url = `${BASE}projects/first-sounds.folio`;
+  world.network.set(url, 'first sounds v1');
+  const config = { base: BASE, onDemand: ['./projects/'], precache: [] };
+  installServiceWorker(scope, { ...config, version: 'v1' });
+  await fire('install');
+  // Not precached: nothing downloads until something asks for it.
+  expect(world.cachesByName.get(cacheNameFor('v1'))?.has(url) ?? false).toBe(
+    false,
+  );
+  const get = () => fetchViaWorker({ method: 'GET', mode: 'cors', url });
+  expect(await (await get())!.text()).toBe('first sounds v1');
+  // Online, the network wins, so a newer build's file replaces the kept one.
+  world.network.set(url, 'first sounds v2');
+  expect(await (await get())!.text()).toBe('first sounds v2');
+  // A new version of Folio keeps what was fetched on demand.
+  installServiceWorker(scope, { ...config, version: 'v2' });
+  await fire('activate');
+  world.offline = true;
+  expect(await (await get())!.text()).toBe('first sounds v2');
+});
+
+test('an on-demand file never fetched says so plainly when offline', async () => {
+  const { fetchViaWorker, scope, world } = makeWorld();
+  installServiceWorker(scope, {
+    base: BASE,
+    onDemand: ['./projects/'],
+    precache: [],
+    version: 'v1',
+  });
+  world.offline = true;
+  const response = await fetchViaWorker({
+    method: 'GET',
+    mode: 'cors',
+    url: `${BASE}projects/first-sounds.folio`,
+  });
+  expect(response!.status).toBe(503);
+});
