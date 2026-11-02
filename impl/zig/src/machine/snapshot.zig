@@ -3702,12 +3702,15 @@ test "Argument Labels are in the Group Fingerprint and restore's declaration mat
     ops[0].labels = &.{"to"};
     try testing.expectEqualSlices(u8, &print, &(try g.groupFingerprint()));
     // A wrong length, or a word that can't be a label, isn't valid.
-    for ([_][]const []const u8{ &.{ "to", "by" }, &.{"from"}, &.{"with"}, &.{"otherwise"}, &.{"if"}, &.{"two words"}, &.{""}, &.{"9x"} }) |labels| {
+    for ([_][]const []const u8{ &.{ "to", "by" }, &.{"from"}, &.{"otherwise"}, &.{"if"}, &.{"two words"}, &.{""}, &.{"9x"} }) |labels| {
         ops[0].labels = labels;
         try testing.expect(!capability.validScopes());
     }
-    ops[0].labels = &.{"_x"};
-    try testing.expect(capability.validScopes());
+    // `on` and `with` may be labels (ADR 0160).
+    for ([_][]const []const u8{ &.{"_x"}, &.{"on"}, &.{"with"} }) |labels| {
+        ops[0].labels = labels;
+        try testing.expect(capability.validScopes());
+    }
 }
 
 test "a save restores to the same save, and a restored Group goes on" {

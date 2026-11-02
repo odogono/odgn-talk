@@ -40,7 +40,9 @@ func TestDefineCapabilityChecksLabels(t *testing.T) {
 		{[]Shape{TextShape, TextShape, NumberShape}, []string{"to"}, false},
 		{[]Shape{TextShape}, []string{"to"}, false},
 		{two, []string{"from"}, false},
-		{two, []string{"with"}, false},
+		// `on` and `with` may be labels (ADR 0160).
+		{two, []string{"with"}, true},
+		{two, []string{"on"}, true},
 		{two, []string{"otherwise"}, false},
 		{two, []string{"into"}, false},
 		{two, []string{"and"}, false},

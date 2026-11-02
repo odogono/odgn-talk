@@ -129,8 +129,8 @@ const fingerprint = (labels?: string[]) => {
 
 describe('declaring', () => {
   test.each([
-    ['a word that is not a label', ['from']],
-    ['an excluded word', ['with']],
+    ['an excluded word', ['from']],
+    ['`otherwise`', ['otherwise']],
     ['a Reserved Word other than `to`', ['into']],
     ['a non-word', ['to:']],
     ['too many', ['to', 'by']],
@@ -140,8 +140,8 @@ describe('declaring', () => {
       HostError,
     );
   });
-  test('takes `to`, any Name, and an empty list', () => {
-    for (const labels of [['to'], ['toward'], []]) {
+  test('takes `to`, `on`, `with`, any Name, and an empty list', () => {
+    for (const labels of [['to'], ['on'], ['with'], ['toward'], []]) {
       expect(() =>
         defineCapability('x', { op: { ...fire, labels } }),
       ).not.toThrow();
@@ -223,7 +223,9 @@ describe('load checks', () => {
     ['tell world to mark "a" at "b" by "c"', []],
     ['ask world to move "a" at "b"', ['wrong labels 2:25']],
     ['ask world to swap "a" to "b"', ['wrong labels 2:25']],
-    ['tell world to mark "a" by "b"', ['wrong labels 2:26']],
+    // An Optional argument may be left out with its label (ADR 0160).
+    ['tell world to mark "a" by "b"', []],
+    ['tell world to mark "a" by "b" at "c"', ['wrong labels 2:33']],
     ['tell world to mark "a" at "b" at "c"', ['wrong labels 2:33']],
     ['ask world to move "a" to "b" to "c"', ['wrong argument count 2:16']],
     ['ask world to move "a" to "b" and wait', ['wrong mode 2:3']],
@@ -259,6 +261,38 @@ describe('lowering and calls', () => {
   test('a labelled call lowers as the positional one', () => {
     expect(code('ask world to move a to b into x')).toBe(
       code('ask world to move a, b into x'),
+    );
+  });
+  test('a left-out Optional argument is passed as Nothing', () => {
+    const lines = run('on go\n  tell world to mark "a" by "c"\nend go');
+    expect(lines.filter(l => l.startsWith('call '))).toEqual([
+      'call s/r1.c1 op=world.mark args=["a", nothing, "c"]',
+    ]);
+  });
+  test('a skipping call lowers as the positional one with nothing', () => {
+    const marks: GrantDecls = {
+      world: {
+        mark: {
+          mode: 'fire-and-forget',
+          args: [
+            shape.text,
+            shape.optional(shape.text),
+            shape.optional(shape.text),
+          ],
+          labels: ['on', 'with'],
+        },
+      },
+    };
+    const lowered = (body: string) =>
+      disassemble(
+        compileSource(`on go a, b\n  ${body}\nend go`, {
+          name: 's',
+          unit: 'script',
+          grants: marks,
+        }).unit!,
+      ).replaceAll(/ \d+:\d+ /g, ' ');
+    expect(lowered('tell world to mark a with b')).toBe(
+      lowered('tell world to mark a, nothing, b'),
     );
   });
   test('the Host function sees only positional arguments', () => {
@@ -313,15 +347,45 @@ describe('Host Commands', () => {
     expect(lines.at(-1)).toBe('vars s seen=["handled", "moved"]');
   });
 
-  test('a labelled spelling exists only for the argument counts it accepts', () => {
-    // `mark` takes 3 arguments, or 2 dropping none (its Optional isn't last),
-    // so `mark:at:` isn't a spelling and climbs.
+  test('a labelled spelling leaves out only Optional arguments', () => {
+    // `mark`'s `by` argument is required, so `mark:at:` isn't a spelling and
+    // climbs, while `mark:by:` leaves out the Optional `at` (ADR 0160).
+    const by = run('on go\n  mark "a" by "c"\nend go', grants());
+    expect(by.filter(l => l.startsWith('call '))).toEqual([
+      'call s/r1.c1 op=board.mark args=["a", nothing, "c"] result="marked"',
+    ]);
     const lines = run(
       'on go\n  mark "a" at "b" by "c"\n  mark "a" at "b"\nend go',
       grants(),
     );
     expect(lines.filter(l => l.startsWith('call ')).length).toBe(1);
     expect(lines).toContain('unhandled message=mark:at: args=["a", "b"]');
+  });
+
+  test('`on` and `with` are labels, in calls and Handler heads', () => {
+    const sound = defineCapability('sound', {
+      loop: {
+        mode: 'fire-and-forget',
+        command: true,
+        args: [
+          shape.text,
+          shape.optional(shape.text),
+          shape.optional(shape.text),
+        ],
+        labels: ['on', 'with'],
+        cost: { fuel: 1 },
+        fire: () => {},
+      },
+    });
+    const lines = run(
+      'on play p on i with o\n  loop p on i with o\nend play\non go\n  loop "a" on "b" with "c"\n  loop "a" with "c"\n  play "x" on "y" with "z"\nend go',
+      { sound: sound.grant('all', undefined) },
+    );
+    expect(lines.filter(l => l.startsWith('call '))).toEqual([
+      'call s/r1.c1 op=sound.loop args=["a", "b", "c"]',
+      'call s/r1.c2 op=sound.loop args=["a", nothing, "c"]',
+      'call s/r1.c3 op=sound.loop args=["x", "y", "z"]',
+    ]);
   });
 
   test('two Grants offering one labelled spelling clash at the call', () => {

@@ -49,7 +49,7 @@ func TestHostMessageSelectorValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"move:", "move:to", "move::to:", ":to:", "move:from:", "move:with:", "move:in:", "all:to:", "on:to:", "move:_:", "move:to:\n"} {
+	for _, name := range []string{"move:", "move:to", "move::to:", ":to:", "move:from:", "move:otherwise:", "move:in:", "all:to:", "on:to:", "move:_:", "move:to:\n"} {
 		_, err := s.Deliver(Message{Name: name, Args: []Value{Int(1), Int(2)}})
 		if e, ok := err.(*HostError); !ok || e.Code != InvalidValue {
 			t.Fatalf("%q: %v", name, err)

@@ -154,3 +154,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0157: Folio Punches In an edited Script at the next bar](0157-folio-punches-in-an-edited-script-at-the-next-bar.md)
 - [0158: Folio plays Instruments on one Transport](0158-folio-plays-instruments-on-one-transport.md)
 - [0159: Folio plays Sound Patterns written in Mini-Notation](0159-folio-plays-sound-patterns-written-in-mini-notation.md)
+- [0160: A labelled Operation call may skip an Optional argument, and `on` and `with` may be labels](0160-a-labelled-operation-call-may-skip-an-optional-argument.md)

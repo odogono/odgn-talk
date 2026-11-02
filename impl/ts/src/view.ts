@@ -4,6 +4,7 @@
 // explicit stack, so deep source doesn't depend on the native call stack.
 import { grammar } from './generated/syntax';
 import {
+  argumentPositions,
   hostCommands,
   toldLines,
   type Binding,
@@ -421,6 +422,22 @@ const labelsOf = (list: SemanticElement | undefined): { labels?: string[] } => {
       : [];
   return labels.length ? { labels } : {};
 };
+// An Operation call's arguments at their declared positions, with Nothing
+// for each Optional one its labels leave out (ADR 0160).
+const positioned = (node: SemanticNode, args: Expr[], at: Pos): Expr[] => {
+  const positions = argumentPositions.get(node);
+  if (!positions) {
+    return args;
+  }
+  const out: Expr[] = [];
+  positions.forEach((position, i) => {
+    while (out.length < position) {
+      out.push({ k: 'literal', pos: at, value: 'nothing' });
+    }
+    out.push(args[i]!);
+  });
+  return out;
+};
 const words = (node: SemanticNode) =>
   node.children
     .map(child => (child.kind === 'node' ? '' : child.text))
@@ -608,7 +625,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         pos: at,
         grant: target.name.text,
         operation: (children[3] as Leaf).text,
-        args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        args: positioned(node, list >= 0 ? of<Expr[]>(children[list]) : [], at),
         ...labelsOf(children[list]),
         ...(into >= 0 && { into: of<SemanticName>(children[into]) }),
         wait: nodeAt(4, 'AndWait') >= 0,
@@ -638,7 +655,11 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
               pos: pos(child),
               grant: target.name.text,
               operation: (child.children[0] as Leaf).text,
-              args: list >= 0 ? of<Expr[]>(child.children[list]) : [],
+              args: positioned(
+                child,
+                list >= 0 ? of<Expr[]>(child.children[list]) : [],
+                pos(child),
+              ),
               ...labelsOf(child.children[list]),
               ...resultInto(child.children, of),
               wait: child.children.some(
@@ -1234,7 +1255,7 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
         pos: at,
         grant: command.grant,
         operation: command.operation,
-        args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        args: positioned(node, list >= 0 ? of<Expr[]>(children[list]) : [], at),
         ...resultInto(children, of),
         wait: children.some(
           child => child.kind === 'node' && child.rule === 'AndWait',

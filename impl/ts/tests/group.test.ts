@@ -677,7 +677,7 @@ test('Host message selectors reject malformed parts and mismatched arity at the 
     'move::to:',
     ':to:',
     'move:from:',
-    'move:with:',
+    'move:otherwise:',
     'move:in:',
     'all:to:',
     'on:to:',

@@ -19,6 +19,11 @@ on play
   ask world to move first(pieces) to "e4"
   -- `to` is reserved, so a chunk word before it stays a Name.
   ask world to move word to x
+  -- `on` and `with` are labels, and an Optional argument's label may be
+  -- left out with it (ADR 0160).
+  tell sound to loop "bd hh" on drums with {gain: 0.8}
+  tell sound to play "rain" with {repeat: true}
+  loop "bd*2, hh*4" on drums with {gain: 0.5}
   -- A one-line `if` ends the labelled call at `else`.
   if ready then ask world to move a to b else ask world to move b to a
 end play

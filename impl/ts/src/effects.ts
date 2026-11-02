@@ -7,6 +7,7 @@
 import { acceptsArgumentCount, type Shape } from './capabilities';
 import type { Report } from './control';
 import {
+  argumentPositions,
   hostCommands,
   toldLines,
   type SemanticElement,
@@ -281,48 +282,85 @@ export const checkEffectCall = (
   }
   const list = nodesOf(node, 'ExpressionList')[0];
   const args = list ? nodesOf(list, 'Expression') : [];
+  const labels = list ? nodesOf(list, 'Label') : [];
+  const labelled = labels.length ? labelledPositions(decl, labels) : null;
+  // Arguments a call's labels leave out count as passed (ADR 0160).
+  const positions = Array.isArray(labelled) ? labelled : args.map((_, i) => i);
   if (
     (say && args.length !== 1) ||
-    !acceptsArgumentCount(decl.args, args.length)
+    !acceptsArgumentCount(decl.args, (positions.at(-1) ?? -1) + 1)
   ) {
     report('wrong argument count', op);
     return;
   }
-  // A labelled call writes the declared labels in order, so one that leaves
-  // off trailing Optional arguments writes a prefix of them (ADR 0115).
-  const declared = decl.labels ?? [];
-  const wrong = (list ? nodesOf(list, 'Label') : []).find(
-    (label, i) => firstLeaf(label)?.text !== declared[i],
-  );
-  if (wrong) {
-    report('wrong labels', firstLeaf(wrong)!);
+  // Wrong labels don't stop the Shape checks, as `wrong labels` is a rule of
+  // its own (chapter 4).
+  if (labelled && !Array.isArray(labelled)) {
+    report('wrong labels', firstLeaf(labelled.wrong)!);
+  }
+  if (positions.some((position, i) => position !== i)) {
+    argumentPositions.set(node, positions);
   }
   args.forEach((arg, i) => {
     const literal = literalOf(arg);
-    if (literal && !fits(literal, decl.args[i]!)) {
+    if (literal && !fits(literal, decl.args[positions[i] ?? i]!)) {
       report('wrong argument', firstLeaf(arg)!);
     }
   });
 };
 
 /**
+ * Each argument's declared position. A labelled call writes the declared
+ * labels in order, and may leave out an Optional argument with its label:
+ * each label takes the first declared position after the previous
+ * argument's with that word (ADR 0115, ADR 0160). A label with no such
+ * position, or one that skips a required argument, is wrong.
+ */
+const labelledPositions = (
+  decl: { args: readonly Shape[]; labels?: readonly string[] },
+  labels: readonly SemanticNode[],
+): number[] | { wrong: SemanticNode } => {
+  const declared = decl.labels ?? [];
+  const positions = [0];
+  for (const label of labels) {
+    const previous = positions.at(-1)!;
+    const at = declared.indexOf(firstLeaf(label)?.text ?? '', previous);
+    if (
+      at < 0 ||
+      decl.args
+        .slice(previous + 1, at + 1)
+        .some(shape => shape.k !== 'optional')
+    ) {
+      return { wrong: label };
+    }
+    positions.push(at + 1);
+  }
+  return positions;
+};
+
+/**
  * The Selectors a Host Command answers: its name, and for an Operation with
- * `labels`, its name and the labels of each argument count it accepts past
- * the first, so `move` with `labels = ["to"]` answers `move` and `move:to:`
- * (ADR 0115).
+ * `labels`, one for each set of labels a call may write, leaving out only
+ * Optional arguments, so `move` with `labels = ["to"]` answers `move` and
+ * `move:to:` (ADR 0115, ADR 0160).
  */
 const commandSelectors = (
   operation: string,
   decl: { args: readonly Shape[]; labels?: readonly string[] },
 ): string[] => {
-  const selectors = [operation];
+  const selectors = new Set([operation]);
   const labels = decl.labels ?? [];
-  for (let n = 2; n <= labels.length + 1; n++) {
-    if (acceptsArgumentCount(decl.args, n)) {
-      selectors.push(`${[operation, ...labels.slice(0, n - 1)].join(':')}:`);
+  // Each subset of the labelled positions, as a bit mask over `labels`.
+  for (let mask = 1; mask < 2 ** labels.length; mask++) {
+    const written = labels.filter((_, i) => mask & (2 ** i));
+    const leftOut = decl.args.filter(
+      (shape, i) => i > 0 && !(mask & (2 ** (i - 1))) && shape.k !== 'optional',
+    );
+    if (!leftOut.length) {
+      selectors.add(`${[operation, ...written].join(':')}:`);
     }
   }
-  return selectors;
+  return [...selectors];
 };
 
 /**

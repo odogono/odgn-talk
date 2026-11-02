@@ -74,3 +74,4 @@ Settled in #338.
 - **Delivery:** the spec lands with this ADR (ADR 0032): chapters 2, 5 and 9, and the label words in `grammar.toml`'s `[labels]`. Both Cores, corpus cases, the Manifest tooling and the LSP follow in later changes.
 - **The language stays `1.0-rc.2`.** Every source that parsed before parses the same way, and the language is still a prerelease. A new version would re-bless the whole corpus before either Core has labels.
 - **Checked by `tools/grammar/`** (#338): no new two-token decision and no relexes. The sketch, every `talk` block in `docs/` and `spec/`, the stdlib and the corpus parse unchanged.
+- Amended by [ADR 0160](0160-a-labelled-operation-call-may-skip-an-optional-argument.md): `on` and `with` may be labels.

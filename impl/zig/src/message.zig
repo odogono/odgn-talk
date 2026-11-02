@@ -7410,7 +7410,7 @@ test "Argument Labels are declared, validated and checked through frames (ADR 01
     defer c.deinit();
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{0}));
     // Only a list of Argument Label words, one per argument after the first.
-    for ([_][]const u8{ "\"to\"", "[\"to\",\"by\"]", "[\"from\"]", "[\"with\"]", "[\"if\"]", "[1]", "[\"a b\"]" }) |labels| {
+    for ([_][]const u8{ "\"to\"", "[\"to\",\"by\"]", "[\"from\"]", "[\"otherwise\"]", "[\"if\"]", "[1]", "[\"a b\"]" }) |labels| {
         const refused = try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"bad\",\"ops\":[{{\"name\":\"move\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\"],\"result\":\"text\",\"labels\":{s}}}]}}", .{ 1, labels });
         try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
     }
@@ -7437,7 +7437,7 @@ test "Argument Labels are declared, validated and checked through frames (ADR 01
     _ = try okOf(try c.send(frame, .{ 8, "router", "[\"to\"]" }));
     const refused = try c.send(frame, .{ 9, "other", "[\"toward\"]" });
     try std.testing.expect(refused.object.get("err").?.object.get("diagnostics").?.array.items.len == 1);
-    const invalid = try c.send(frame, .{ 10, "third", "[\"with\"]" });
+    const invalid = try c.send(frame, .{ 10, "third", "[\"otherwise\"]" });
     try std.testing.expectEqualStrings("invalid value", invalid.object.get("err").?.object.get("code").?.string);
 }
 

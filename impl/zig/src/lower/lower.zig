@@ -1317,8 +1317,7 @@ const Frame = struct {
             try f.emit(.tell, &.{ .{ .text = "console" }, .{ .text = "write" }, .{ .int = @intCast(c.args.len) } }, first, "");
             return;
         }
-        for (c.args) |arg| try f.expr(arg);
-        const n: i64 = @intCast(c.args.len);
+        const n = try f.positioned(c.name, c.args);
         const waits = c.wait != null;
         if (l.checked.commands.get(c.name)) |hc| {
             // A Host Command is the `tell` or `ask` the checker chose (ADR
@@ -1390,12 +1389,28 @@ const Frame = struct {
         try f.expr(e);
     }
 
+    /// An Operation call's arguments at their declared positions, with
+    /// Nothing for each Optional one its labels leave out, as the positional
+    /// call writing `nothing` there (ADR 0160). Answers the count passed.
+    fn positioned(f: *Frame, at: Tok, args: []const *const Expr) Allocator.Error!i64 {
+        const positions = f.l.checked.positions.get(at) orelse {
+            for (args) |arg| try f.expr(arg);
+            return @intCast(args.len);
+        };
+        var next: usize = 0;
+        for (args, positions) |arg, p| {
+            while (next < p) : (next += 1) try f.constAt(try f.l.constant("nothing", "nothing"), at);
+            try f.expr(arg);
+            next += 1;
+        }
+        return @intCast(next);
+    }
+
     fn operation(f: *Frame, at: Tok, op: ast.Operation, ask: bool, line: bool) Allocator.Error!void {
         const l = f.l;
         const grant = l.text(op.target.?.data.name);
         const name = l.text(op.operation);
-        for (op.args) |arg| try f.expr(arg);
-        const n: i64 = @intCast(op.args.len);
+        const n = try f.positioned(op.operation, op.args);
         const operands: []const Operand = &.{ .{ .text = grant }, .{ .text = name }, .{ .int = n } };
         const mode = l.operationMode(grant, name);
         const waits = op.wait != null;
@@ -3223,6 +3238,43 @@ test "a Host Command lowers to the same instructions as its tell or ask" {
         if (x.op == .ask or x.op == .tell or x.op == .ask_wait) calls += 1;
     }
     try testing.expectEqual(@as(usize, 3), calls);
+}
+
+test "a call leaving out an Optional argument lowers as the positional call with nothing (ADR 0160)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const world = [_]check.Operation{
+        .{ .name = "mark", .mode = .fire_and_forget, .required = 1, .total = 3, .labels = &.{ "on", "with" } },
+        .{ .name = "loop", .mode = .fire_and_forget, .required = 1, .total = 3, .command = true, .labels = &.{ "on", "with" } },
+    };
+    const context: check.Context = .{ .grants = &.{.{ .name = "world", .operations = &world }} };
+    const pairs = [_][2][]const u8{
+        .{ "on go a, b\n  tell world to mark a with b\nend go\n", "on go a, b\n  tell world to mark a, nothing, b\nend go\n" },
+        .{ "on go a, b\n  tell world\n    mark a with b\n  end tell\nend go\n", "on go a, b\n  tell world\n    mark a, nothing, b\n  end tell\nend go\n" },
+        .{ "on go a, b\n  loop a with b\nend go\n", "on go a, b\n  tell world to loop a, nothing, b\nend go\n" },
+    };
+    for (pairs) |pair| {
+        var texts: [2][]const u8 = undefined;
+        for (pair, &texts) |source, *text| {
+            const parsed = try parser.parse(a, source);
+            const checked = try check.check(a, &parsed.tree, context);
+            try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+            const unit = try lower(a, &parsed.tree, &checked, .{ .name = "s", .context = context });
+            var out: std.Io.Writer.Allocating = .init(a);
+            for (unit.code) |ins| {
+                try out.writer.print("{t}", .{ins.op});
+                for (ins.operands) |o| switch (o) {
+                    .text => |t| try out.writer.print(" {s}", .{t}),
+                    .int => |n| try out.writer.print(" {d}", .{n}),
+                    else => {},
+                };
+                try out.writer.writeByte('\n');
+            }
+            text.* = out.written();
+        }
+        try testing.expectEqualStrings(texts[1], texts[0]);
+    }
 }
 
 test "a Result Target is moved or stored from it, mapped to its name (ADR 0112)" {

@@ -574,11 +574,6 @@ end t
 on t
   ask world to move "pass" from "hangar"
 end t
--- case: `with` can't be an Operation's label
--- expect: unexpected token at 2:29
-on t
-  tell world to move "pass" with "hangar"
-end t
 -- case: `into` is an `ask`'s Result Target, never a label, so it takes a bare Name
 -- expect: unexpected token at 2:33
 on t
@@ -620,11 +615,6 @@ end t
 -- expect: unexpected token at 2:15
 on t
   move knight in sq
-end t
--- case: `with` can't be a label
--- expect: unexpected token at 2:12
-on t
-  fill box with water
 end t
 -- case: `from` can't be a label
 -- expect: unexpected token at 2:15

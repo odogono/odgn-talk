@@ -2,7 +2,7 @@
 # Labelled Selectors follow the Message Path and preserve the Target.
 > load board identity=c66fb22f6e57a39906d36544ba2a00a795a6fe0a8d04d9ce07db488ffd8f8217
 > load knight identity=1eb04300b0545fe63cd4ad4e5f47e1276811fcef8e7a81714ddf1c79e54910f5
-> decide to=<object piece "knight"> message=move:with: args=[1, 2]
+> decide to=<object piece "knight"> message=move:otherwise: args=[1, 2]
 refused code="invalid value"
 > request to=<object piece "knight"> message=move:to: args=[1]
 refused code="invalid value"
