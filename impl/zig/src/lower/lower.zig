@@ -43,6 +43,39 @@ pub const Instruction = struct {
     note: []const u8,
 };
 
+/// The run loop's dense copy of an `Instruction`, at the same index in
+/// `Unit.ops` as the instruction in `Unit.code`. Its first two operands
+/// are inline when they are integers (an index, a slot, a count or a
+/// resolved label); other operands are read from `code`. Derived when a
+/// unit is lowered, and never shown or saved (#1931).
+pub const Op = struct {
+    op: Opcode,
+    a: u32 = 0,
+    b: u32 = 0,
+};
+
+/// What an `Op` holds for an operand that is not a small integer. Indexing
+/// with it fails a bounds check, so it can't be read as a real index.
+pub const no_operand = std.math.maxInt(u32);
+
+pub fn compact(a: Allocator, code: []const Instruction) Allocator.Error![]const Op {
+    const out = try a.alloc(Op, code.len);
+    for (code, out) |ins, *o| o.* = .{
+        .op = ins.op,
+        .a = if (ins.operands.len > 0) inlineOperand(ins.operands[0]) else no_operand,
+        .b = if (ins.operands.len > 1) inlineOperand(ins.operands[1]) else no_operand,
+    };
+    return out;
+}
+
+fn inlineOperand(x: Operand) u32 {
+    return switch (x) {
+        .int => |n| if (n >= 0 and n < no_operand) @intCast(n) else no_operand,
+        .label => |l| l,
+        else => no_operand,
+    };
+}
+
 pub const BodyKind = enum { init, function, handler, fallback, lambda, event };
 
 pub const Body = struct {
@@ -108,6 +141,8 @@ pub const Unit = struct {
     objects: []const []const u8,
     bodies: []const Body,
     code: []const Instruction,
+    /// `code` as the run loop reads it; see `Op`.
+    ops: []const Op,
     unwind: []const Unwind,
     offers: []const OfferRecord,
     events: []const Event,
@@ -123,6 +158,9 @@ pub fn lowerStdlibIntrinsics(unit: *Unit) void {
                 ins.op = .call_restricted;
                 ins.operands = &.{};
             }
+        }
+        for (@constCast(unit.ops[body.first..body.last])) |*op| {
+            if (op.op == .call_value) op.* = .{ .op = .call_restricted, .a = no_operand, .b = no_operand };
         }
     }
 }
@@ -638,6 +676,7 @@ const Lowerer = struct {
             .objects = l.objects.items,
             .bodies = l.laid_bodies.items,
             .code = l.code.items,
+            .ops = try compact(l.a, l.code.items),
             .unwind = l.unwind.items,
             .offers = l.offers.items,
             .events = l.events.items,
