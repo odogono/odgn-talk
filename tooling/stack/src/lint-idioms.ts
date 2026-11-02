@@ -179,6 +179,7 @@ export type IdiomId =
   | 'if-then-return-bool'
   | 'impossible-kind'
   | 'kindof-comparison'
+  | 'redundant-guard'
   | 'suggest-arithmetic-command'
   | 'suggest-is-in'
   | 'suggest-match'
@@ -682,6 +683,192 @@ const rangeLoops = (declaration: SyntaxNode) => {
   });
 };
 
+// What a pattern's match guarantees about the value it matched (chapter 4,
+// Destructuring): a list pattern a list, and without a rest its length; a map
+// pattern a map; a Text Pattern text; a literal a value `=` to it. A list or
+// map pattern with an entry also guarantees the value isn't empty.
+const patternFacts = (pattern: SyntaxNode, ignoringCase: boolean) => {
+  const [primary, ...rest] = pattern.children.filter(
+    child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+  );
+  const alias =
+    rest.length === 2 &&
+    rest[0]!.kind === 'token' &&
+    rest[0]!.v === 'as' &&
+    rest[1]!.kind === 'node'
+      ? nameToken(rest[1]!)
+      : undefined;
+  if (
+    primary?.kind !== 'node' ||
+    primary.rule !== 'PatternPrimary' ||
+    (rest.length && !alias)
+  ) {
+    return undefined;
+  }
+  const open = primary.children[0];
+  const inner = nodes(primary);
+  if (open?.kind === 'token' && open.v === '[') {
+    const elements = inner.filter(child => child.rule === 'Pattern');
+    const spread = tokens(primary).some(token => token.v.startsWith('...'));
+    return {
+      alias,
+      kind: 'list',
+      length: spread ? undefined : elements.length,
+      nonEmpty: elements.length > 0,
+    };
+  }
+  if (open?.kind === 'token' && open.v === '{') {
+    const keys = inner.filter(
+      child => child.rule === 'MapKey' || child.rule === 'Name',
+    );
+    return { alias, kind: 'map', nonEmpty: keys.length > 0 };
+  }
+  if (inner.length === 1 && inner[0]!.rule === 'TextPattern') {
+    return { alias, kind: 'text' };
+  }
+  const literal = tokensIn(primary);
+  return isLiteral(literal[0]) &&
+    literal.slice(1).every(token => token.t === 'unit') &&
+    !ignoringCase
+    ? { alias, literal }
+    : undefined;
+};
+const sameTokens = (a: Token[], b: Token[]) =>
+  a.length === b.length &&
+  a.every((token, i) => token.t === b[i]!.t && token.v === b[i]!.v);
+// The test a Guard's conjunct makes of `names`, if the facts guarantee it.
+const guaranteed = (
+  conjunct: SyntaxNode,
+  names: Set<string>,
+  facts: NonNullable<ReturnType<typeof patternFacts>>,
+) => {
+  const comparison = core(conjunct);
+  const operator = tokens(comparison)
+    .map(token => token.v)
+    .join(' ');
+  const operands = nodes(comparison).filter(
+    child => child.rule === 'Concat' || child.rule === 'Kind',
+  );
+  const ignoring = nodes(comparison).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  const subject = (node: SyntaxNode | undefined) => {
+    const name = node && nameToken(node);
+    return name && names.has(name.v) ? name : undefined;
+  };
+  if (comparison.rule !== 'Comparison' || ignoring) {
+    return undefined;
+  }
+  if (
+    operator === 'is not empty' &&
+    operands.length === 1 &&
+    facts.nonEmpty &&
+    subject(operands[0])
+  ) {
+    return 'is not empty';
+  }
+  if (operands.length !== 2) {
+    return undefined;
+  }
+  const [left, right] = operands as [SyntaxNode, SyntaxNode];
+  if (
+    (operator === 'is a' || operator === 'is an') &&
+    subject(left) &&
+    right.rule === 'Kind' &&
+    tokensIn(right)
+      .map(token => token.v)
+      .join(' ') === facts.kind
+  ) {
+    return `is ${operator.slice(3)} ${facts.kind}`;
+  }
+  if (operator !== '=' && operator !== 'is') {
+    return undefined;
+  }
+  for (const [one, other] of [
+    [left, right],
+    [right, left],
+  ] as const) {
+    const counted = lengthOf(one);
+    const number = intLiteral(other);
+    if (
+      facts.length !== undefined &&
+      counted &&
+      names.has(counted.v) &&
+      number &&
+      Number(number.v) === facts.length
+    ) {
+      return `has length ${facts.length}`;
+    }
+    if (
+      facts.literal &&
+      subject(one) &&
+      sameTokens(tokensIn(other), facts.literal)
+    ) {
+      return `= ${facts.literal.map(token => token.raw).join(' ')}`;
+    }
+  }
+  return undefined;
+};
+// Each `where` Guard after a pattern, with the conjuncts its pattern makes
+// redundant: tests of the pattern's `as` name or a `match` subject's name.
+const redundantGuards = (node: SyntaxNode) => {
+  const children = node.children.filter(
+    child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+  );
+  let matchName: Token | undefined;
+  let ignoringCase = false;
+  if (node.rule === 'Match') {
+    const subject = children[1];
+    matchName = subject?.kind === 'node' ? nameToken(subject) : undefined;
+    ignoringCase = nodes(node).some(
+      child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+    );
+  }
+  const out: { conjunct: SyntaxNode; guard: SyntaxNode; test: string }[] = [];
+  for (const [i, child] of children.entries()) {
+    const where = children[i + 1];
+    const guard = children[i + 2];
+    if (
+      child.kind !== 'node' ||
+      child.rule !== 'Pattern' ||
+      where?.kind !== 'token' ||
+      where.v !== 'where' ||
+      guard?.kind !== 'node'
+    ) {
+      continue;
+    }
+    const facts = patternFacts(child, ignoringCase);
+    if (!facts) {
+      continue;
+    }
+    // A name the pattern binds hides the subject's.
+    const bound = new Set(
+      tokensIn(child)
+        .filter(token => token.t === 'word')
+        .map(token => token.v),
+    );
+    const names = new Set<string>();
+    if (facts.alias) {
+      names.add(facts.alias.v);
+    }
+    if (matchName && !bound.has(matchName.v)) {
+      names.add(matchName.v);
+    }
+    const top = core(guard);
+    const conjuncts =
+      top.rule === 'And' && tokens(top).every(token => token.v === 'and')
+        ? nodes(top)
+        : [top];
+    for (const conjunct of conjuncts) {
+      const test = guaranteed(conjunct, names, facts);
+      if (test) {
+        out.push({ guard, conjunct, test });
+      }
+    }
+  }
+  return out;
+};
+
 /** Advice for one node of the tree, before its subjects' bindings are known. */
 export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
   const first = tokensIn(node)[0];
@@ -775,6 +962,13 @@ export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
         params: { name: found.name.v, from: found.from.v },
       });
     }
+  }
+  for (const redundant of redundantGuards(node)) {
+    out.push({
+      id: 'redundant-guard',
+      at: tokensIn(redundant.conjunct)[0]!,
+      params: { test: redundant.test },
+    });
   }
   const symbol = symbolComparison(node);
   if (symbol) {
@@ -986,6 +1180,41 @@ export const idiomEdit = (
             .join(', ')}]`,
         }
       : undefined;
+  }
+  if (id === 'redundant-guard') {
+    let found: ReturnType<typeof redundantGuards>[number] | undefined;
+    find(tree, node => {
+      found = redundantGuards(node).find(
+        each => tokensIn(each.conjunct)[0]!.pos === start,
+      );
+      return !!found;
+    });
+    if (!found || hasComment(found.guard)) {
+      return undefined;
+    }
+    const { guard, conjunct } = found;
+    const top = core(guard);
+    const conjuncts = top.rule === 'And' ? nodes(top) : [top];
+    if (conjuncts.length === 1) {
+      // Remove ` where c`, back to the end of the pattern.
+      const end = spanOf(guard).end;
+      let from = spanOf(guard).start;
+      from = source.lastIndexOf('where', from);
+      while (from > 0 && /[\t ]/.test(source[from - 1]!)) {
+        from--;
+      }
+      return { start: from, end, newText: '' };
+    }
+    // Remove the conjunct and the `and` beside it.
+    const index = conjuncts.indexOf(conjunct);
+    const span = spanOf(conjunct);
+    return index === 0
+      ? { start: span.start, end: spanOf(conjuncts[1]!).start, newText: '' }
+      : {
+          start: spanOf(conjuncts[index - 1]!).end,
+          end: span.end,
+          newText: '',
+        };
   }
   if (id === 'suggest-every-of') {
     return everyOfEdit(tree, source, start);

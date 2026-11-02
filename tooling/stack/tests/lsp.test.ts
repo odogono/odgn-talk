@@ -637,6 +637,17 @@ describe('language server', () => {
       },
     ]);
   });
+  test('offers the redundant-guard fix as a quick fix', () => {
+    const { request } = setup(
+      'on demo v\nmatch v\nwhen [a] where v is a list then say a\nend match\nend demo',
+    );
+    expect(request('textDocument/codeAction', lineRange(2))).toMatchObject([
+      {
+        title: 'Remove the redundant test',
+        edit: { changes: { [uri]: [{ newText: '' }] } },
+      },
+    ]);
+  });
   test('offers the suggest-every-of rewrite as a quick fix', () => {
     const { request } = setup(
       'on demo\nput [1, 2] into xs\nput [] into big\nrepeat for each x in xs\nif x > 1 then put x after big\nend repeat\nsay big\nend demo',

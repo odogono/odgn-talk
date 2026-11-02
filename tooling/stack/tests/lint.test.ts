@@ -42,10 +42,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships thirty-eight implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(38);
+test('ships thirty-nine implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(39);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(38);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(39);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -1553,4 +1553,96 @@ test('every-of advice needs a loop over a known list that only filters', async (
   ]) {
     expect(idiomLints(negative, 'suggest-every-of')).toEqual([]);
   }
+});
+
+test('redundant guard advice finds tests the pattern already makes', async () => {
+  const source = [
+    'on pick c',
+    '  match c',
+    '    when [a, b] where c is a list and a > 0 then return "pair"',
+    '    when {name: n} as m where m is not empty then return n',
+    '    when 5 kg where c = 5 kg then return "five"',
+    '    when [_, ...] where the length of c = 1 then return "long"',
+    '  end match',
+    '  return "other"',
+    'end pick',
+  ].join('\n');
+  expect(
+    lint(source, { profile: 'standard' })
+      .lints.filter(l => l.id === 'redundant-guard')
+      .map(l => [l.span.line, l.message]),
+  ).toEqual([
+    [
+      3,
+      'The pattern already ensures this value is a list, so this test is always true.',
+    ],
+    [
+      4,
+      'The pattern already ensures this value is not empty, so this test is always true.',
+    ],
+    [
+      5,
+      'The pattern already ensures this value = 5 kg, so this test is always true.',
+    ],
+  ]);
+  const args = [
+    list(num(1), num(2)),
+    list(num(-1), num(2)),
+    list(num(3)),
+    num(5000),
+    text('x'),
+  ];
+  // Each fix keeps the answers, and the last removes the whole Guard.
+  let fixed = source;
+  for (let i = 0; i < 2; i++) {
+    fixed = rewrite(fixed, 'redundant-guard')!;
+  }
+  fixed = await answersMatch(fixed, 'redundant-guard', args);
+  for (const arg of args) {
+    expect(await answer(fixed, arg)).toBe(await answer(source, arg));
+  }
+  expect(fixed).toContain('when [a, b] where a > 0 then');
+  expect(fixed).toContain('when {name: n} as m then return n');
+  const lines = (each: string) =>
+    idiomLints(each, 'redundant-guard').map(l => l.span.line);
+  // A list pattern without a rest fixes the length.
+  expect(
+    lines(
+      source.replace(
+        '[_, ...] where the length of c = 1',
+        '[_, _] where 2 is the length of c',
+      ),
+    ),
+  ).toEqual([3, 4, 5, 6]);
+  for (const [line, negative] of [
+    [3, source.replace('c is a list', 'c is a map')],
+    [3, source.replace('match c', 'match c & ""')],
+    [3, source.replace('[a, b] where c', '[c, b] where c')],
+    [
+      6,
+      source.replace(
+        '[_, ...] where the length of c = 1',
+        '[_] where the length of c = 2',
+      ),
+    ],
+    [5, source.replace('5 kg where c = 5 kg', '5 kg where c = 5')],
+    [
+      5,
+      source
+        .replace('match c', 'match c ignoring case')
+        .replace('5 kg where c = 5 kg', '"a" where c = "a"'),
+    ],
+    [4, source.replace('{name: n}', '{}')],
+  ] as const) {
+    expect(lines(negative)).not.toContain(line);
+  }
+  expect(
+    idiomLints(
+      source.replace(
+        '    when [a, b]',
+        '    -- lint: ignore redundant-guard\n    when [a, b]',
+      ),
+      'redundant-guard',
+    ),
+  ).toHaveLength(2);
 });

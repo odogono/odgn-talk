@@ -265,6 +265,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "redundant-guard",
+    "flags": "a Guard, or one `and` of it, that tests what its pattern already guarantees of its `as` name or the `match` subject: its kind, a list pattern's length, or a literal's value",
+    "beginner": "hint",
+    "standard": "hint",
+    "message": "The pattern already ensures this value {test}, so this test is always true.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",
