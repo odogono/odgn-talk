@@ -14,12 +14,14 @@ const transcript = session.transcript;
 const Session = session.Session;
 
 const usage =
-    \\usage: northtalk [--port <n>] <file.talk> [args...]
+    \\usage: northtalk [--port <n>] [--listen tcp://<host:port>] [--peer <name>=tcp://<host:port>]... <file.talk> [args...]
     \\       northtalk [--transcript <file>] [--trace <file>]
     \\
     \\Given a Script file, runs it: Delivers start with the arguments after
     \\it, and exits once nothing can happen again. --port, or the PORT
-    \\environment variable, overrides every http serve's port.
+    \\environment variable, overrides every http serve's port. --listen and
+    \\--peer carry Remote Sends to other Runners over plain TCP on loopback;
+    \\this Runner has no TLS yet.
     \\
     \\Otherwise reads Entries and Session Commands (`:help` lists none; see chapter 12)
     \\from standard input. An Entry may span lines: the REPL waits for more
@@ -230,19 +232,36 @@ pub fn main(init: std.process.Init) !u8 {
     var stderr = std.Io.File.stderr().writerStreaming(io, &stderr_buffer);
     const e = &stderr.interface;
     defer e.flush() catch {};
-    // A Script file, after an optional --port (ADR 0126).
-    const runs: usize = if (args.len > 1 and std.mem.eql(u8, args[1], "--port")) 3 else 1;
+    // A Script file, after the Runner's flags, each with a value (ADR 0126).
+    var runs: usize = 1;
+    var port_flag: ?[]const u8 = null;
+    var listen: ?runner.peers.Address = null;
+    var remotes: std.ArrayList(runner.peers.Remote) = .empty;
+    while (runs + 1 < args.len) : (runs += 2) {
+        const flag = args[runs];
+        const value = args[runs + 1];
+        if (std.mem.eql(u8, flag, "--port")) {
+            port_flag = value;
+        } else if (std.mem.eql(u8, flag, "--listen")) {
+            listen = runner.peers.parseListen(value) catch |err| return peerFlagError(e, "--listen", value, err);
+        } else if (std.mem.eql(u8, flag, "--peer")) {
+            const remote = runner.peers.parsePeer(value) catch |err| return peerFlagError(e, "--peer", value, err);
+            try remotes.append(arena, remote);
+        } else if (std.mem.eql(u8, flag, "--peer-key")) {
+            return peerFlagError(e, "--peer-key", value, error.NoTls);
+        } else break;
+    }
     if (args.len > runs and runner.isScriptFile(io, args[runs])) {
         var port: ?u16 = null;
-        const value: ?[]const u8 = if (runs == 3) args[2] else init.environ_map.get("PORT");
-        if (value) |v| if (runs == 3 or v.len > 0) {
+        const value: ?[]const u8 = port_flag orelse init.environ_map.get("PORT");
+        if (value) |v| if (port_flag != null or v.len > 0) {
             port = runner.portOf(v) orelse {
                 try e.print("--port needs a port from 0 to 65535, not {s}\n", .{v});
                 return 2;
             };
         };
         try e.flush();
-        return runner.run(gpa, io, .{ .file = args[runs], .args = args[runs + 1 ..], .port = port });
+        return runner.run(gpa, io, .{ .file = args[runs], .args = args[runs + 1 ..], .port = port, .listen = listen, .remotes = remotes.items });
     }
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -339,4 +358,16 @@ pub fn main(init: std.process.Init) !u8 {
         if (l == null) break;
     }
     return 0;
+}
+
+/// A `peer` flag the native Runner can't take: TLS it doesn't have yet, an
+/// address off loopback, or a malformed one.
+fn peerFlagError(e: *std.Io.Writer, flag: []const u8, value: []const u8, err: runner.peers.ParseError) !u8 {
+    switch (err) {
+        error.NoTls => try e.print("{s} {s}: the native Runner offers peer over tcp:// on loopback only; it has no TLS yet\n", .{ flag, value }),
+        error.NotLoopback => try e.print("{s} {s}: tcp:// is only for loopback\n", .{ flag, value }),
+        error.Malformed => try e.print("{s} wants tcp://HOST:PORT, or NAME=tcp://HOST:PORT for --peer, not {s}\n", .{ flag, value }),
+    }
+    try e.flush();
+    return 2;
 }
