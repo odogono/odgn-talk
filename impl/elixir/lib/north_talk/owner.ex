@@ -30,6 +30,7 @@ defmodule NorthTalk.Owner do
   @protocol 1
   @paused_inputs "paused-inputs-v1"
   @elements "object-elements-v1"
+  @climb "climb-v1"
   @default_fuel_slice 10_000
 
   defstruct [
@@ -127,11 +128,13 @@ defmodule NorthTalk.Owner do
     callbacks? = want_callbacks? and Binary.callbacks_feature() in offered
     paused? = @paused_inputs in offered
     elements? = @elements in offered
+    climb? = @climb in offered
 
     features =
       if(pump?, do: [Binary.feature()], else: []) ++
         if(callbacks?, do: [Binary.callbacks_feature()], else: []) ++
-        if(paused?, do: [@paused_inputs], else: []) ++ if(elements?, do: [@elements], else: [])
+        if(paused?, do: [@paused_inputs], else: []) ++
+        if(elements?, do: [@elements], else: []) ++ if(climb?, do: [@climb], else: [])
 
     if features == [] do
       {:ok, state}
@@ -513,7 +516,7 @@ defmodule NorthTalk.Owner do
         pending = Enum.map(ok["pending"], &pending_call(state, name, &1))
         entry = %{group_entry() | unsettled: MapSet.new(pending, & &1.call)}
         state = put_in(state.groups[name], entry)
-        state = Enum.reduce(Enum.map(ok["reports"] || [], &report(state, name, &1)), state, &settle(&2, name, &1))
+        state = settle_all(state, name, Enum.map(ok["reports"] || [], &report(state, name, &1)))
 
         restored = %Restored{
           group: %Group{owner: self(), name: name},
@@ -574,12 +577,8 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:send, kind, %Group{name: g}, to, name, args}, from, state) do
-    fields = %{
-      "group" => g,
-      "to" => target(state, g, to),
-      "message" => %{"name" => name, "args" => encode(state, g, args)}
-    }
-
+    fields = %{"group" => g, "message" => %{"name" => name, "args" => encode(state, g, args)}}
+    fields = if kind == "broadcast", do: fields, else: Map.put(fields, "to", target(state, g, to))
     queue(state, kind, g, fields, from)
   rescue
     error in HostError -> {:reply, {:error, error}, state}
@@ -648,15 +647,13 @@ defmodule NorthTalk.Owner do
   defp queue(state, kind, g, fields, from) do
     case exchange(state, kind, fields) do
       {{:ok, ok}, state} ->
-        delivery = ok["delivery"]
+        # A Broadcast's id is its own; each recipient gets a delivery id.
+        delivery = ok["delivery"] || ok["broadcast"]
 
-        state =
-          if kind == "deliver",
-            do: state,
-            else: put_in(state.waiters[{g, delivery}], from)
-
+        waits? = kind not in ["deliver", "broadcast"]
+        state = if waits?, do: put_in(state.waiters[{g, delivery}], from), else: state
         state = schedule_pump(state, g)
-        if kind == "deliver", do: {:reply, {:ok, delivery}, state}, else: {:noreply, state}
+        if waits?, do: {:noreply, state}, else: {:reply, {:ok, delivery}, state}
 
       {error, state} ->
         {:reply, error, state}
@@ -878,7 +875,7 @@ defmodule NorthTalk.Owner do
   defp reports(state, g, ok) do
     reports = Enum.map(ok["reports"] || [], &report(state, g, &1))
     state = abandon(state, g, ok["abandoned"] || [])
-    state = Enum.reduce(reports, state, &settle(&2, g, &1))
+    state = settle_all(state, g, reports)
     {Enum.map(reports, &elem(&1, 0)), state}
   end
 
@@ -916,8 +913,9 @@ defmodule NorthTalk.Owner do
     }
   end
 
+  # A report without `climbed`, which only says whether its Request waits on.
   defp report(state, g, r) do
-    plain = plain(r)
+    plain = r |> plain() |> Map.delete("climbed")
 
     value =
       case r["result"] do
@@ -925,15 +923,32 @@ defmodule NorthTalk.Owner do
         v -> decode(state, g, v)
       end
 
-    {plain, value}
+    {plain, value, r["climbed"] == true}
   end
 
-  defp settle(state, g, {report, value}) do
+  # A Request whose message passed every Handler on its Message Path ends
+  # `unhandled`, reported beside the last Run's `run end`.
+  defp settle_all(state, g, reports) do
+    unhandled = for {%{"kind" => "unhandled", "delivery" => d}, _, _} <- reports, d != nil, into: MapSet.new(), do: d
+    Enum.reduce(reports, state, &settle(&2, g, &1, unhandled))
+  end
+
+  defp settle(state, g, {report, value, climbed?}, unhandled) do
     if pid = state.reports_to, do: send(pid, {:north_talk, %Group{owner: self(), name: g}, report})
+    delivery = report["delivery"]
 
     case report["kind"] do
+      # Its message went on up the Message Path: the asker still waits.
+      "run end" when climbed? ->
+        state
+
       "run end" ->
-        reply(state, g, report["delivery"], outcome(report, value))
+        if MapSet.member?(unhandled, delivery),
+          do: reply(state, g, delivery, {:error, unhandled(report)}),
+          else: reply(state, g, delivery, outcome(report, value))
+
+      "unhandled" when delivery != nil ->
+        reply(state, g, delivery, {:error, unhandled(report)})
 
       # A stopped or reloaded Script's Runs end with no `run end`, and the
       # messages in its mailbox are dropped.
@@ -961,6 +976,14 @@ defmodule NorthTalk.Owner do
         %{state | waiters: waiters}
     end
   end
+
+  defp unhandled(report),
+    do: %ScriptError{
+      outcome: "unhandled",
+      error: %{"code" => "unhandled"},
+      delivery: report["delivery"],
+      report: report
+    }
 
   defp discarded(report, delivery),
     do: %ScriptError{outcome: "discarded", error: %{"code" => report["reason"]}, delivery: delivery, report: report}
