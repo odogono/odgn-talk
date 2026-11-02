@@ -137,6 +137,17 @@ landed, and the Issue graph job ticks it as they close.
   changes into one `control` request at a time; the worker's
   `PlaySession.control` sets the fields and sends `change`. Tests:
   [controls.test.ts](tests/controls.test.ts) and the `controls` browser suite.
+- Bindings (#1904): [bindings.ts](src/bindings.ts) reads, checks and applies
+  an Element's `bindings`, which a kind allows through its definition's
+  `bindings`. The page sends a bound parameter to the worklet itself
+  (`InstrumentAudio.send`) and marks the `control` request `applied`, so
+  `PlaySession.control` only records it; tempo is set on the worker's
+  Transport. Meters bound to an output take the worklet's `levels`
+  ([rack.ts](src/instruments/rack.ts)) in `play-view.ts`'s `showLevels`.
+  Info's menus are `BindingFields` in [info-panel.tsx](src/info-panel.tsx);
+  the tree's `setBinding` takes the target's range, and renaming an
+  Instrument renames its bindings. Tests: [bindings.test.ts](tests/bindings.test.ts)
+  through the harness's `control`, and the `bindings` browser suite.
 - Loading Add-ons (#1901): an Add-on module ([add-ons/api.ts](src/add-ons/api.ts))
   imports nothing from Folio; Folio passes its kinds' data and view factories
   their helpers and Preact. [catalogue.ts](src/add-ons/catalogue.ts) lists the

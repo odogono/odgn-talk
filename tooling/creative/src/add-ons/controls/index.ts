@@ -40,8 +40,18 @@ const fit = ({ min, max, step }: Ranged, v: number): number => {
 
 // --- Data -------------------------------------------------------------------
 
+// What Info lets bind (#1904): a value to a parameter or the tempo, or a
+// meter's to an Instrument's output.
+const VALUE = { fields: ['value'] } as const;
+const OUTPUT = { fields: ['value'], output: true } as const;
+
 const rangedData =
-  (label: string, icon: string, size: { height: number; width: number }) =>
+  (
+    label: string,
+    icon: string,
+    size: { height: number; width: number },
+    bindings: AddOnKindData['bindings'],
+  ) =>
   ({ commonProperties, property }: AddOnDataApi): AddOnKindData => {
     const value: PropertyDescriptor = {
       ...property('value', 'number'),
@@ -56,6 +66,7 @@ const rangedData =
       label,
       icon,
       creatable: true,
+      bindings,
       properties: {
         ...commonProperties,
         value,
@@ -88,6 +99,7 @@ const toggleData = ({
   label: 'Toggle',
   icon: '◐',
   creatable: true,
+  bindings: { fields: ['value'] },
   properties: { ...commonProperties, value: property('value', 'boolean') },
   create: base => ({ ...base, width: 56, height: 32, value: false }) as Toggle,
   check: (c, e, path, { base }) =>
@@ -112,6 +124,7 @@ const xyData = ({
     label: 'XY pad',
     icon: '⌖',
     creatable: true,
+    bindings: { fields: ['x', 'y'] },
     properties: { ...commonProperties, x: unit('x'), y: unit('y') },
     create: base =>
       ({ ...base, width: 160, height: 160, x: 0.5, y: 0.5 }) as XY,
@@ -595,17 +608,17 @@ export default defineAddOn({
   version: CONTROLS_VERSION,
   kinds: {
     slider: {
-      data: rangedData('Slider', '▭', { width: 160, height: 32 }),
+      data: rangedData('Slider', '▭', { width: 160, height: 32 }, VALUE),
       view: sliderView,
     },
     knob: {
-      data: rangedData('Knob', '◔', { width: 64, height: 64 }),
+      data: rangedData('Knob', '◔', { width: 64, height: 64 }, VALUE),
       view: knobView,
     },
     toggle: { data: toggleData, view: toggleView },
     xy: { data: xyData, view: xyView },
     meter: {
-      data: rangedData('Level meter', '▮', { width: 24, height: 120 }),
+      data: rangedData('Level meter', '▮', { width: 24, height: 120 }, OUTPUT),
       view: meterView,
     },
   },

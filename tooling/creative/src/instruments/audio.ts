@@ -11,6 +11,7 @@ import type { DeepReadonly } from '../readonly';
 import { soundDecodeOrder } from '../pattern-checks';
 import { DEFAULT_SAMPLER, isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
+import type { InstrumentMessage } from './session';
 import { samplerEngine } from './sampler';
 import { INSTRUMENT_KINDS } from './registry';
 import { splitAddOnKind } from '../elements/add-on';
@@ -18,6 +19,7 @@ import { addOnWorklet, BUILT_IN_ADD_ONS } from '../add-ons/catalogue';
 import {
   INSTRUMENT_PROCESSOR,
   type InstrumentChannel,
+  type LevelReport,
   type NoteOnset,
   type RackSetup,
 } from './rack';
@@ -49,12 +51,19 @@ export type InstrumentAudio = {
   listen(port: MessagePort): void;
   /** The audio clock now, paired with the absolute time. */
   reading(): AudioReading;
+  /**
+   * Sends a bound control's change straight to the worklet, ahead of the
+   * worker (#1904); false until the worklet is running.
+   */
+  send(message: InstrumentMessage): boolean;
   /** Suspends or resumes the audio, as the Play Session pauses. */
   setPaused(paused: boolean): void;
 };
 
 export type InstrumentAudioOptions = {
   onError(message: string): void;
+  /** Each Instrument's output level, about 30 times a second, for meters. */
+  onLevels?(levels: Record<string, number>): void;
   /** Each note as it starts, for tests. */
   onNote?(onset: NoteOnset): void;
   /** A fresh audio-clock reading for the Play worker. */
@@ -68,7 +77,7 @@ export type InstrumentAudioOptions = {
 export const startInstrumentAudio = (
   project: DeepReadonly<Project>,
   soundBytes: (asset: DeepReadonly<Asset>) => Promise<ArrayBuffer>,
-  { onError, onNote, onReading }: InstrumentAudioOptions,
+  { onError, onLevels, onNote, onReading }: InstrumentAudioOptions,
 ): InstrumentAudio => {
   const context = new AudioContext({ latencyHint: 'interactive' });
   let node: AudioWorkletNode | undefined;
@@ -163,12 +172,21 @@ export const startInstrumentAudio = (
       node = new AudioWorkletNode(context, INSTRUMENT_PROCESSOR, {
         numberOfInputs: 0,
         outputChannelCount: [2],
-        processorOptions: { setup, report: onNote !== undefined },
+        processorOptions: {
+          setup,
+          report: onNote !== undefined,
+          levels: onLevels !== undefined,
+        },
       });
-      if (onNote) {
-        node.port.addEventListener('message', (event: MessageEvent) =>
-          onNote(event.data as NoteOnset),
-        );
+      if (onNote || onLevels) {
+        node.port.addEventListener('message', (event: MessageEvent) => {
+          const data = event.data as LevelReport | NoteOnset;
+          if ('levels' in data) {
+            onLevels?.(data.levels);
+          } else {
+            onNote?.(data);
+          }
+        });
         node.port.start();
       }
       node.connect(context.destination);
@@ -217,6 +235,13 @@ export const startInstrumentAudio = (
       handOver();
     },
     reading,
+    send(message) {
+      if (closed || !node) {
+        return false;
+      }
+      node.port.postMessage({ message } satisfies InstrumentChannel);
+      return true;
+    },
     setPaused(next) {
       if (closed || next === paused) {
         return;

@@ -21,6 +21,7 @@ import {
   type MirrorPalette,
 } from './play-mirror';
 import { PaletteWindows } from './palette-windows';
+import { boundChange, hasOutputMeters, outputMeters } from './bindings';
 import { mountPlayPrompts } from './play-prompts';
 import { type CodeSelection } from './code-browser-panel';
 import {
@@ -451,8 +452,66 @@ export const mountPlay = (shell: StackShell): void => {
   const post = (request: PlayRequest) => void supervisor.call(request);
   // A control's changes (#1902): one at a time per control, the latest
   // replacing any still waiting, so a drag never queues a Run per frame.
-  const pendingControls = new Map<string, { waiting?: ControlFields }>();
+  const pendingControls = new Map<
+    string,
+    { applied: boolean; waiting?: ControlFields }
+  >();
   /** `pageIndex` names a Palette the control is on (#1903). */
+  /**
+   * Sends each bound parameter in `fields` to the audio; true when every
+   * one went, or none was bound.
+   */
+  const applyBindings = (element: Element, fields: ControlFields): boolean => {
+    let all = true;
+    for (const [field, value] of Object.entries(fields)) {
+      const bound = playing && boundChange(playing, element, field, value);
+      if (bound?.kind !== 'parameter') {
+        continue;
+      }
+      all =
+        (instrumentAudio?.send({
+          instrument: bound.instrument,
+          commands: [
+            { kind: 'set', parameter: bound.parameter, value: bound.value },
+          ],
+        }) ??
+          false) &&
+        all;
+    }
+    return all;
+  };
+  /**
+   * Meters bound to an Instrument's output show its level as the audio
+   * reports it, on the showing Page and open Palettes, with no worker.
+   */
+  const showLevels = (levels: Record<string, number>) => {
+    if (!session) {
+      return;
+    }
+    const elements = [
+      ...session.elementsOf(),
+      ...[...session.palettes.values()].flatMap(p => p.elements),
+    ];
+    let changed = false;
+    for (const [instrument, meters] of outputMeters(elements)) {
+      const level = levels[instrument] ?? 0;
+      for (const meter of meters) {
+        const ranged = meter as unknown as {
+          max: number;
+          min: number;
+          value: number;
+        };
+        const value = ranged.min + level * (ranged.max - ranged.min);
+        if (Math.abs(ranged.value - value) > 1e-4) {
+          ranged.value = value;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      draw();
+    }
+  };
   const control = (
     element: Element,
     fields: ControlFields,
@@ -461,15 +520,21 @@ export const mountPlay = (shell: StackShell): void => {
     if (!allowed().takesInput || index === undefined) {
       return;
     }
+    // Bound parameters go straight to the audio, ahead of the worker, which
+    // then only records them (#1904).
+    const applied = applyBindings(element, fields);
     const key = `${index}/${element.name}`;
     const busy = pendingControls.get(key);
     if (busy) {
       busy.waiting = { ...busy.waiting, ...fields };
+      busy.applied = busy.applied && applied;
       return;
     }
-    const state: { waiting?: ControlFields } = {};
+    const state: { applied: boolean; waiting?: ControlFields } = {
+      applied: true,
+    };
     pendingControls.set(key, state);
-    const deliver = (next: ControlFields) =>
+    const deliver = (next: ControlFields, nextApplied: boolean) =>
       void supervisor
         .call({
           kind: 'control',
@@ -477,17 +542,20 @@ export const mountPlay = (shell: StackShell): void => {
           pageIndex: index,
           target: element.name,
           fields: next,
+          ...(nextApplied ? { applied: true } : {}),
         })
         .finally(() => {
           const waiting = state.waiting;
+          const waitingApplied = state.applied;
           state.waiting = undefined;
+          state.applied = true;
           if (waiting) {
-            deliver(waiting);
+            deliver(waiting, waitingApplied);
           } else {
             pendingControls.delete(key);
           }
         });
-    deliver(fields);
+    deliver(fields, applied);
   };
   /** `pageIndex` names the Page `target` is on, if it isn't the showing one. */
   const sendTo = (
@@ -1089,6 +1157,7 @@ export const mountPlay = (shell: StackShell): void => {
         },
         {
           onError: message => errors.add([{ owner: project, message }]),
+          ...(hasOutputMeters(project) ? { onLevels: showLevels } : {}),
           onReading: reading =>
             post({ kind: 'audioClock', session: sessionId, reading }),
         },

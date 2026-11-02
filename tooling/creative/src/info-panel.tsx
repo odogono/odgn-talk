@@ -9,7 +9,15 @@ import {
   type NameCheck,
   type StackEditor,
 } from './editing';
-import { PAGE_ALIGNS_X, PAGE_ALIGNS_Y, pageCount } from './model';
+import {
+  PAGE_ALIGNS_X,
+  PAGE_ALIGNS_Y,
+  pageCount,
+  type Element,
+  type Project,
+} from './model';
+import type { DeepReadonly } from './readonly';
+import { bindableFields, bindingChoices, bindingProblem } from './bindings';
 import { checkbox, color, field, input } from './elements/controls';
 import { kindOf } from './elements/registry';
 import { kindInfo } from './elements/views';
@@ -253,6 +261,63 @@ const NameField = ({
   );
 };
 
+/**
+ * A control's binding menus (#1904): each field it lets bind, to tempo or
+ * an Instrument parameter of its shape, or a meter to an output; with why a
+ * binding can't apply, such as an Instrument that has gone.
+ */
+const BindingFields = ({
+  disabled,
+  element,
+  project,
+}: {
+  disabled: boolean;
+  element: DeepReadonly<Element>;
+  project: DeepReadonly<Project>;
+}) => {
+  const { fields, output } = bindableFields(element);
+  return (
+    <>
+      {fields.map(name => {
+        const current = element.bindings?.[name];
+        const choices = bindingChoices(project, element, name);
+        const problem =
+          current === undefined
+            ? undefined
+            : bindingProblem(project, element, name, current);
+        return (
+          <Fragment key={name}>
+            {field(
+              output
+                ? 'Shows'
+                : fields.length > 1
+                  ? `Bind ${name} to`
+                  : 'Bind to',
+              <select
+                data-binding={name}
+                disabled={disabled}
+                value={current ?? ''}
+              >
+                <option value="">Nothing</option>
+                {current !== undefined &&
+                  !choices.some(c => c.value === current) && (
+                    <option value={current}>{current}</option>
+                  )}
+                {choices.map(choice => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>,
+            )}
+            {problem && <p className="muted">{problem}</p>}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+};
+
 const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
   const { project, pageIndex } = editor.state.value;
   const page = editor.currentPage.value.page;
@@ -317,6 +382,11 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
           ))}
         </div>
         {kindInfo(element, disabled)}
+        <BindingFields
+          disabled={disabled}
+          element={element}
+          project={project}
+        />
         {checkbox('visible', 'Visible', element.visible, disabled)}
       </Fragment>
     );

@@ -95,6 +95,7 @@ import {
   type SoundBackend,
 } from './sounds';
 import { patternProblems, projectPatternNames } from './pattern-checks';
+import { bindingProblems, boundChange } from './bindings';
 
 type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
@@ -901,6 +902,11 @@ export class PlaySession {
           message: `Instrument “${instrument.name}” needs the Add-on ${instrumentAddOn(instrument.kind)}, which isn't loaded`,
         });
       }
+    }
+    // A binding that can't apply is reported; its control still sends
+    // `change` (#1904).
+    for (const { element, message } of bindingProblems(project)) {
+      this.problems.push({ owner: element, line: 1, message });
     }
     this.instruments = new InstrumentSession(
       project.instruments,
@@ -1798,6 +1804,8 @@ export class PlaySession {
   control(
     element: DeepReadonly<Element>,
     fields: Readonly<Record<string, number | boolean>>,
+    /** Whether the page already sent bound parameters to the audio. */
+    { applied = false }: { applied?: boolean } = {},
   ): void {
     const properties = kindOf(element).properties;
     const args: Value[] = [];
@@ -1815,6 +1823,18 @@ export class PlaySession {
         throw error;
       }
       args.push(typeof value === 'number' ? num(value) : bool(value));
+      // A bound field sets its target with no Run and no Fuel (#1904).
+      const bound = boundChange(this.project, element, field, value);
+      if (bound?.kind === 'tempo') {
+        this.transport.setTempo(bound.value, this.#lastPump);
+      } else if (bound) {
+        this.instruments.setParameter(
+          bound.instrument,
+          bound.parameter,
+          bound.value,
+          !applied,
+        );
+      }
     }
     if (args.length) {
       this.send(element, 'change', args);
@@ -1869,7 +1889,11 @@ export class PlaySession {
    * starting one. A Pump that stops returns at once, its result provisional:
    * it finishes, and is accounted, when a later `advance` completes it.
    */
+  /** The Play clock at the last Pump, when a bound tempo change takes effect. */
+  #lastPump = 0n;
+
   pump(now: bigint, outOfBand = false, advance?: () => PumpResult) {
+    this.#lastPump = now;
     if (!advance && !outOfBand && !this.debugPaused) {
       this.#applyPunches(now);
     }

@@ -280,6 +280,26 @@ Project's `pages`, so a Page's index counts Pages only.
 The `palettes` browser suite covers the strip, Info, Browse and Present
 windows, the Window menu, `show` and kept positions.
 
+## Binding controls
+
+The controls Add-on's slider, knob, toggle and XY pad can drive sound with
+no Script. Select one and choose, in Info, what it binds to: the tempo, or
+an Instrument parameter of the same kind of value, shown as `bass › cutoff`.
+An XY pad binds its x and y apart. A slider or knob takes the target's range
+when it binds, so it reads in the target's units, such as hertz; an XY pad's
+0 to 1 is spread across the target's range. A level meter instead shows an
+Instrument's output.
+
+During Play, moving a bound control sets its target at once: the page sends
+a parameter straight to the audio, and the Play worker only records it, so
+no Run starts and no Fuel is spent, and Scripts read the new value. A
+Script on the control still gets `change`. A tempo binding sets the
+Transport's tempo, as `setTempo` does. Bindings save with the control in
+`bindings`, such as `{"value": "bass.cutoff"}`, and follow an Instrument
+when it is renamed. One that names a missing Instrument or parameter, or
+one of the wrong kind, says why in Info and in the Errors window at Play,
+and sets nothing.
+
 ## Page size
 
 Click empty space on the Page or desk, or press Escape, to select the Page.

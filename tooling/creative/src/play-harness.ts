@@ -137,6 +137,18 @@ export class PlayHarness {
     await this.send(name, 'click', [harnessClick(element, given)]);
   }
 
+  /**
+   * Moves the named control on the current Page, as the reader's drag does,
+   * and settles; a bound field sets its target with no Run (#1904).
+   */
+  async control(
+    name: string,
+    fields: Readonly<Record<string, number | boolean>>,
+  ): Promise<void> {
+    this.play.control(this.element(name), fields);
+    await this.settle();
+  }
+
   /** Reports a press on the named Element held for `held` ms. */
   async hold(name: string, held: number): Promise<void> {
     const { width, height } = this.element(name);

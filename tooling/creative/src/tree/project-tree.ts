@@ -986,6 +986,73 @@ export class ProjectTree {
       this.#setInstruments(
         this.#project.instruments.map(i => (i.id === id ? next : i)),
       );
+      // Bindings follow a renamed Instrument (#1904).
+      if ('name' in change && change.name !== current.name) {
+        this.#renameBindings(current.name, next.name);
+      }
+    });
+  }
+  #renameBindings(from: string, to: string): void {
+    for (const page of this.#project.pages) {
+      for (const element of allElements(page.elements)) {
+        const bindings = element.bindings;
+        if (!bindings) {
+          continue;
+        }
+        const renamed = Object.fromEntries(
+          Object.entries(bindings).map(([field, text]) => [
+            field,
+            text === from
+              ? to
+              : text.startsWith(`${from}.`)
+                ? `${to}${text.slice(from.length)}`
+                : text,
+          ]),
+        );
+        if (!equal(renamed, bindings)) {
+          this.#field(element, 'bindings', renamed);
+        }
+      }
+    }
+  }
+  /**
+   * Binds a control's field to `text`, or unbinds it (#1904). A ranged
+   * control takes the target's range, so its value reads as the target's.
+   */
+  setBinding(
+    element: DeepReadonly<Element>,
+    field: string,
+    text: string | undefined,
+    range?: { max: number; min: number },
+  ): void {
+    this.transaction(() => {
+      const node = this.#mutable(element);
+      const next = { ...node.bindings };
+      if (text === undefined) {
+        delete next[field];
+      } else {
+        next[field] = text;
+      }
+      this.#field(
+        node,
+        'bindings',
+        Object.keys(next).length ? next : undefined,
+      );
+      const ranged = node as unknown as Record<string, unknown>;
+      if (
+        range &&
+        typeof ranged.min === 'number' &&
+        typeof ranged.max === 'number' &&
+        typeof ranged.value === 'number'
+      ) {
+        this.#field(node, 'min', range.min);
+        this.#field(node, 'max', range.max);
+        this.#field(
+          node,
+          'value',
+          Math.min(range.max, Math.max(range.min, ranged.value)),
+        );
+      }
     });
   }
   removeInstrument(id: number): void {
