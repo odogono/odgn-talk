@@ -24,7 +24,8 @@ defmodule NorthTalk.Owner do
     Result,
     ScriptError,
     Transport,
-    Value
+    Value,
+    Verdict
   }
 
   @protocol 1
@@ -269,6 +270,9 @@ defmodule NorthTalk.Owner do
   def handle_call({m, %Group{name: g}, _}, _from, state)
       when m in [:add_library, :pump] and not is_map_key(state.groups, g),
       do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:decide, %Group{name: g}, _, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
 
   def handle_call({:send, _, %Group{name: g}, _, _, _}, _from, state) when not is_map_key(state.groups, g),
     do: {:reply, {:error, no_group(g)}, state}
@@ -585,6 +589,30 @@ defmodule NorthTalk.Owner do
   end
 
   # A Function Value call has the shape of a request.
+  # A Decision's handle settles from its `decided` report, never from a
+  # `run end`, so it waits under its own key.
+  def handle_call({:decide, %Group{name: g}, to, name, args}, _from, state) do
+    fields = %{"group" => g, "message" => %{"name" => name, "args" => encode(state, g, args)}}
+
+    fields =
+      if to == :broadcast, do: Map.put(fields, "broadcast", true), else: Map.put(fields, "to", target(state, g, to))
+
+    case exchange(state, "decide", fields) do
+      {{:ok, ok}, state} ->
+        delivery = ok["delivery"] || ok["broadcast"]
+        id = make_ref()
+        state = put_in(state.handles[id], %{group: g, delivery: delivery, result: nil, awaiters: %{}})
+        state = put_in(state.waiters[{g, {:decided, delivery}}], {:handle, id})
+        pending = %NorthTalk.Pending{owner: self(), group: g, delivery: delivery, id: id}
+        {:reply, {:ok, pending}, schedule_pump(state, g)}
+
+      {error, state} ->
+        {:reply, error, state}
+    end
+  rescue
+    error in HostError -> {:reply, {:error, error}, state}
+  end
+
   def handle_call({:call, %Group{name: g}, fun, args}, from, state) do
     fields = %{"group" => g, "fn" => encode(state, g, fun), "args" => encode(state, g, args)}
     queue(state, "call", g, fields, from)
@@ -946,6 +974,9 @@ defmodule NorthTalk.Owner do
         if MapSet.member?(unhandled, delivery),
           do: reply(state, g, delivery, {:error, unhandled(report)}),
           else: reply(state, g, delivery, outcome(report, value))
+
+      "decided" ->
+        reply(state, g, {:decided, report["broadcast"] || delivery}, {:ok, Verdict.new(report)})
 
       "unhandled" when delivery != nil ->
         reply(state, g, delivery, {:error, unhandled(report)})

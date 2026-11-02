@@ -200,6 +200,24 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:send, "broadcast", group, nil, name, args})
 
   @doc """
+  Asks a Script or a Host Object, by a Decision, whether something may
+  happen. Returns a `NorthTalk.Pending` at once; `await/2` gives
+  `{:ok, %NorthTalk.Verdict{}}` once the first deciding Run seals it, at the
+  end of its first Segment. The Decision climbs a Message Path as a Request
+  does, and one that reaches its end is allowed.
+  """
+  def decide(%Group{owner: owner} = group, to, name, args \\ []),
+    do: GenServer.call(owner, {:decide, group, to, name, args})
+
+  @doc """
+  Asks every Script that wants the message, as `broadcast/3` sends it, by one
+  Decision. It is vetoed if any recipient vetoes, undecided if none does but
+  one is undecided, and allowed otherwise, including with no recipients.
+  """
+  def decide_broadcast(%Group{owner: owner} = group, name, args \\ []),
+    do: GenServer.call(owner, {:decide, group, :broadcast, name, args})
+
+  @doc """
   Sends a message to a Script or a Host Object and waits until the Run that
   answers it ends, after it climbs any Message Path. Returns its
   `NorthTalk.Result`, or a `NorthTalk.ScriptError` when the Run didn't
@@ -402,6 +420,8 @@ defmodule NorthTalk do
         add_library: 2,
         deliver: 4,
         broadcast: 3,
+        decide: 4,
+        decide_broadcast: 3,
         request: 5,
         pump: 2,
         stop: 3,
