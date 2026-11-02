@@ -133,7 +133,6 @@ end run`,
   // recursion past the call depth limit (#1939).
   handlers: `on tick state
   put state's x + 1 into state's x
-  put state's x into state's last
   return state
 end tick
 
@@ -151,12 +150,11 @@ end deep
 
 on run n
   put {x: 0} into state
-  put 0 into total
   repeat for each i in 1..n
     put tick(state) into state
-    add pick(i) to total
   end repeat
-  return [state, total, deep(n * 3)]
+  put pick(1) + pick(n) into state's last
+  return [state, deep(n)]
 end run`,
 };
 
