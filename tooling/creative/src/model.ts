@@ -124,13 +124,14 @@ export type GroupElement = ElementBase & { kind: 'group'; members: Element[] };
 export type AddOnKind = `${string}#${string}`;
 
 /**
- * An Element whose kind comes from an Add-on Folio has not loaded: a
- * placeholder. `saved` is its file form, written back unchanged apart from
- * the common properties, so no data is lost (ADR 0162).
+ * An Element whose kind comes from an Add-on. A loaded kind keeps its own
+ * fields beside the common ones, as built-in kinds do. A placeholder, whose
+ * Add-on Folio has not loaded, keeps its file form in `saved`, written back
+ * unchanged apart from the common properties, so no data is lost (ADR 0162).
  */
 export type AddOnElement = ElementBase & {
   kind: AddOnKind;
-  saved: Readonly<Record<string, unknown>>;
+  saved?: Readonly<Record<string, unknown>>;
 };
 
 export type Element =

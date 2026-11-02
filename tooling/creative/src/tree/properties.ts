@@ -7,7 +7,7 @@ import {
   type PropertyOwner,
 } from '../elements/definition';
 import { placeholderKind, PLACEHOLDER_OBJECT_KIND } from '../elements/add-on';
-import { ELEMENT_KINDS, kindOf } from '../elements/registry';
+import { addOnKinds, ELEMENT_KINDS, kindOf } from '../elements/registry';
 
 /** Authoring-only Page placement; absent reads as center. */
 const pageAlign = (
@@ -53,8 +53,23 @@ const byKind = new Map(
 /** Shared by tree mutation, Play reads and the Script manifest. */
 export const propertiesForKind = (
   kind: string,
-): ReadonlyMap<string, PropertyDescriptor> =>
-  byKind.get(kind) ?? byKind.get(PLACEHOLDER_OBJECT_KIND)!;
+): ReadonlyMap<string, PropertyDescriptor> => {
+  const known = byKind.get(kind);
+  if (known) {
+    return known;
+  }
+  // A loaded Add-on kind, by its kind or its Object Kind's name.
+  const entry = addOnKinds().find(
+    e => e.kind === kind || e.objectKind === kind,
+  );
+  if (!entry) {
+    return byKind.get(PLACEHOLDER_OBJECT_KIND)!;
+  }
+  const properties = new Map(Object.entries(entry.definition.properties));
+  byKind.set(entry.kind, properties);
+  byKind.set(entry.objectKind, properties);
+  return properties;
+};
 export const propertiesOf = (
   owner: PropertyOwner,
 ): ReadonlyMap<string, PropertyDescriptor> =>

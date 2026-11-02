@@ -13,6 +13,8 @@ import {
 } from './edit-lock';
 import { type BaseProjectName, createProject, type Project } from './model';
 import { createFromBase } from './base-projects';
+import { pageAddOns } from './add-ons/page';
+import { projectWithAddOns } from './add-ons/project';
 import {
   dropHandle,
   FileAccessError,
@@ -183,6 +185,26 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const notice = (text: string): void => {
     byId('notice-text').textContent = text;
     byId('notice-banner').hidden = false;
+  };
+  /**
+   * The Project with the kinds of every Add-on it lists that can load; the
+   * rest stay placeholders, and a notice says why (ADR 0162).
+   */
+  const addOnsFor = async (
+    project: DeepReadonly<Project>,
+  ): Promise<Project> => {
+    const loaded = await projectWithAddOns(project, pageAddOns);
+    if (loaded.problems.length) {
+      notice(
+        loaded.problems
+          .map(
+            p =>
+              `The Add-on ${p.id} didn't load: ${p.message}. Its Elements show as placeholders.`,
+          )
+          .join(' '),
+      );
+    }
+    return loaded.project;
   };
   byId('notice-close').addEventListener('click', () => {
     byId('notice-banner').hidden = true;
@@ -813,6 +835,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     const before = editor.stamp();
     try {
       await loadAssets(loaded.project);
+      loaded.project = await addOnsFor(loaded.project);
       if (!editor.isCurrent(before)) {
         notice(
           'Your current edits stay on the desk. Open the other Project from Projects when ready.',
@@ -1157,6 +1180,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     await loadAssets(loaded.project);
+    loaded.project = await addOnsFor(loaded.project);
     if (!editor.isCurrent(expected) || currentId.value !== previewId) {
       notice(
         'Your current edits stay on the desk. Open the earlier version again when ready.',
@@ -1222,7 +1246,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         .catch(() => undefined);
       if (loaded) {
         record = loaded.record;
-        editor.replaceProject(loaded.project);
+        editor.replaceProject(await addOnsFor(loaded.project));
         shell.redraw();
       }
       applyEditing(true);
@@ -1301,6 +1325,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         .loadProject(currentId.value)
         .then(async loaded => {
           await loadAssets(loaded.project);
+          loaded.project = await addOnsFor(loaded.project);
           record = loaded.record;
           editor.replaceProject(loaded.project);
           shell.redraw();

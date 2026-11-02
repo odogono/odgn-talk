@@ -46,6 +46,19 @@ export const elementShape = shape.oneOf(
     kind,
   })),
 );
+
+/**
+ * Adds a loaded Add-on kind's Object Kind to `elementShape`. Grants read the
+ * shape when a Play Session starts, so kinds load before sessions do.
+ */
+export const addElementShape = (objectKind: string): void => {
+  const { of } = elementShape as unknown as {
+    of: { k: 'object'; kind: string }[];
+  };
+  if (!of.some(s => s.kind === objectKind)) {
+    of.splice(of.length - 1, 0, { k: 'object', kind: objectKind });
+  }
+};
 export const pageShape = { k: 'object' as const, kind: 'page' };
 export const canvasShape = { k: 'object' as const, kind: 'canvas' };
 

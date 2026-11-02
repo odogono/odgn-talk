@@ -22,7 +22,8 @@ import {
 import {
   type Asset,
   isTextAlign,
-  type BuiltInKind,
+  type AddOnKind,
+  type ElementKind,
   type Page,
   type Project,
   type TextElement,
@@ -30,6 +31,8 @@ import {
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { CREATABLE_KINDS, kindOf } from './elements/registry';
+import { isAddOnKind, splitAddOnKind } from './elements/add-on';
+import { pageAddOns } from './add-ons/page';
 import { importSound, SOUND_ACCEPT } from './sounds';
 import { type CodeSelection } from './code-browser-panel';
 import {
@@ -216,6 +219,19 @@ export type StackShell = {
  * the Project is closed off: another tab holds its edit lock (#752), or an
  * earlier version is being previewed.
  */
+/** A Tools window button that adds an Element of `kind`. */
+const toolButton = (kind: string, label: string, icon: string) =>
+  h(
+    'button',
+    {
+      type: 'button',
+      'data-kind': kind,
+      title: `Add ${label.toLowerCase()}`,
+    },
+    h('span', { 'aria-hidden': 'true' }, icon),
+    label,
+  );
+
 export const mountStack = (
   initialProject: DeepReadonly<Project>,
   options: { readOnly?: boolean } = {},
@@ -1032,26 +1048,37 @@ export const mountStack = (
     });
   });
 
-  // The Tools window adds Elements.
+  // The Tools window adds Elements: built-in kinds, then each built-in
+  // Add-on's, which load the first time one is added (#1901).
   byId('tools').replaceChildren(
     ...CREATABLE_KINDS.map(kind => {
       const { label, icon } = kindOf(kind);
-      return h(
-        'button',
-        {
-          type: 'button',
-          'data-kind': kind,
-          title: `Add ${label.toLowerCase()}`,
-        },
-        h('span', { 'aria-hidden': 'true' }, icon),
-        label,
-      );
+      return toolButton(kind, label, icon);
     }),
+    ...pageAddOns.catalogue.flatMap(entry =>
+      entry.kinds.map(k =>
+        toolButton(`${entry.id}#${k.name}`, k.label, k.icon),
+      ),
+    ),
   );
+  const addAddOnElement = async (kind: AddOnKind): Promise<void> => {
+    const { addOn } = splitAddOnKind(kind)!;
+    const ref = { id: addOn, version: pageAddOns.entry(addOn)!.version };
+    const [problem] = await pageAddOns.load([ref]);
+    if (problem) {
+      byId('notice-text').textContent =
+        `The Add-on ${problem.id} didn't load: ${problem.message}.`;
+      byId('notice-banner').hidden = false;
+      return;
+    }
+    edit(() => editor.addElement(kind, ref));
+  };
   byId('tools').addEventListener('click', event => {
     const kind = (event.target as HTMLElement).closest('button')?.dataset
-      .kind as BuiltInKind | undefined;
-    if (kind && kindOf(kind).asset) {
+      .kind as ElementKind | undefined;
+    if (kind && isAddOnKind(kind)) {
+      void addAddOnElement(kind);
+    } else if (kind && kindOf(kind).asset) {
       // An Element that shows an asset starts by choosing one.
       chooseImage();
     } else if (kind) {

@@ -130,6 +130,20 @@ landed, and the Issue graph job ticks it as they close.
   Kind (`scriptKindOf`), and Play reports it in the Errors window. In-memory
   Projects are checked in their saved form. Tests:
   [add-ons.test.ts](tests/add-ons.test.ts).
+- Loading Add-ons (#1901): an Add-on module ([add-ons/api.ts](src/add-ons/api.ts))
+  imports nothing from Folio; Folio passes its kinds' data and view factories
+  their helpers and Preact. [catalogue.ts](src/add-ons/catalogue.ts) lists the
+  built-in ones, which [build.ts](tools/build.ts) writes as `add-ons/<slug>-<version>.js`
+  and the service worker keeps on demand. [loader.ts](src/add-ons/loader.ts)
+  registers kinds with the registry and `elementShape`;
+  [page.ts](src/add-ons/page.ts) is the page's loader, which also registers
+  views, and [play.worker.ts](src/play.worker.ts) loads a session's Add-ons
+  before opening it. [project.ts](src/add-ons/project.ts)'s
+  `projectWithAddOns` reads a Project again once its Add-ons load, turning
+  placeholders into their kinds; [projects.ts](src/projects.ts) calls it on
+  every open. The Tools window lists catalogue kinds and loads on first use.
+  Tests: [add-on-loader.test.ts](tests/add-on-loader.test.ts), the
+  `add-ons` browser suite, and [fixtures/counter-add-on.ts](tests/fixtures/counter-add-on.ts).
 - [project-file.ts](src/project-file.ts) over [zip.ts](src/zip.ts): the
   `.folio` file.
 - Tests: [model.test.ts](tests/model.test.ts),

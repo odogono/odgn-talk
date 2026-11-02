@@ -88,7 +88,7 @@ export const placeholderKind = defineElementKind<AddOnKind>({
   },
   // The saved form, in its saved key order, with the common fields as now.
   save: element => {
-    const out: Obj = { ...element.saved, kind: element.kind };
+    const out: Obj = { ...element.saved!, kind: element.kind };
     for (const field of COMMON_FIELDS) {
       if (element[field] === undefined) {
         delete out[field];

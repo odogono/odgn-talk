@@ -24,7 +24,7 @@ import {
   type Obj,
   type ValidationIssue,
 } from './elements/checker';
-import { addOnIdProblem } from './elements/add-on';
+import { addOnIdProblem, placeholderKind } from './elements/add-on';
 import { isElementKind, kindOf } from './elements/registry';
 import { migrateClicks } from './click-migration';
 import { migrateSounds } from './sound-migration';
@@ -351,8 +351,13 @@ export const validateProject = (
  * The parsed-JSON form of a Project file's `project.json`. The model is
  * plain JSON data, so this is an independent copy plus the format header.
  */
+// An Element still holding its saved form keeps it, even once its Add-on
+// has loaded, until the Project is read again (#1901).
 const savedElement = (element: Element): Obj =>
-  kindOf(element).save?.(element, savedElement) ?? { ...element };
+  ('saved' in element && element.saved !== undefined
+    ? placeholderKind
+    : kindOf(element)
+  ).save?.(element as never, savedElement) ?? { ...element };
 export const serializeProject = (project: DeepReadonly<Project>): Obj => {
   const copy = projectWithoutIds(project);
   return {

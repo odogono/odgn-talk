@@ -24,7 +24,8 @@ import {
   type Asset,
   type CanvasElement,
   type Element,
-  type BuiltInKind,
+  type AddOnRef,
+  type ElementKind,
   type GroupElement,
   type Page,
   type Project,
@@ -756,9 +757,15 @@ export class StackEditor {
     });
   }
 
-  /** Adds an Element of `kind` named like `button1`, and selects it. */
-  addElement(kind: BuiltInKind): DeepReadonly<Element> {
+  /**
+   * Adds an Element of `kind` named like `button1`, and selects it; an
+   * Add-on's kind lists its Add-on in the same edit.
+   */
+  addElement(kind: ElementKind, addOn?: AddOnRef): DeepReadonly<Element> {
     return this.edit(edit => {
+      if (addOn) {
+        edit.tree.useAddOn(addOn);
+      }
       const page = pageOf(edit);
       const step = (page.elements.length % 10) * CASCADE;
       const element = edit.tree.create(kind, scopeParent(edit));
