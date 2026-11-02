@@ -206,8 +206,17 @@ export type Instrument = {
   voices: number;
 };
 
+/** The Base Projects a new Project can start as a copy of (ADR 0161). */
+export const BASE_PROJECT_NAMES = ['blank', 'music'] as const;
+export type BaseProjectName = (typeof BASE_PROJECT_NAMES)[number];
+
+/** Which Base Project, and which version of it, a Project was copied from. */
+export type BaseProjectRef = { name: BaseProjectName; version: number };
+
 export type Project = {
   assets: Asset[];
+  /** The Base Project it was copied from; for attribution and updates only. */
+  base?: BaseProjectRef;
   /** The Project-wide width every Page is laid out against, in pixels. */
   designWidth: number;
   instruments: Instrument[];

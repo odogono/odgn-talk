@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import {
+  BASE_BUDGET_BYTES,
+  baseFilePath,
+  MUSIC_BASE_VERSION,
+} from '../src/base-projects';
 import { EXAMPLE_BUDGET_BYTES, EXAMPLE_PROJECTS } from '../src/examples';
 import {
   KIT_BUDGET_BYTES,
@@ -11,7 +17,7 @@ import {
 } from '../src/kits/kits';
 import { parseMiniNotation } from '../src/mini-notation';
 import { patternTexts } from '../src/pattern-checks';
-import { readProjectFile } from '../src/project-file';
+import { readProjectFile, serializeProject } from '../src/project-file';
 import {
   build,
   dist,
@@ -164,6 +170,35 @@ test('First Sounds carries every kit sound its patterns play (ADR 0161)', async 
     const path = KIT_FILES.find(file => file.key === key)!.path;
     expect(assets.get(asset!.hash), key).toEqual(rendered.get(path)!);
   }
+}, 60_000);
+
+// Music's content at each version. Changing what Music holds without
+// bumping MUSIC_BASE_VERSION fails here; bump both together.
+const MUSIC_FINGERPRINTS: Record<number, string> = {
+  1: 'b30574a18706a79a',
+};
+
+test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {
+  await build({ minify: false });
+  const path = resolve(dist, baseFilePath('music'));
+  expect(statSync(path).size).toBeLessThanOrEqual(BASE_BUDGET_BYTES);
+  const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
+  expect(worker).not.toContain(baseFilePath('music'));
+  const { assets, project } = await readProjectFile(readFileSync(path));
+  expect(project.base).toEqual({ name: 'music', version: MUSIC_BASE_VERSION });
+  const rendered = renderKitFiles();
+  expect(project.assets.map(a => a.name).sort()).toEqual(
+    KIT_FILES.map(file => file.key).sort(),
+  );
+  for (const file of KIT_FILES) {
+    const asset = project.assets.find(a => a.name === file.key)!;
+    expect(assets.get(asset.hash), file.key).toEqual(rendered.get(file.path)!);
+  }
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify(serializeProject(project)))
+    .digest('hex')
+    .slice(0, 16);
+  expect(fingerprint).toBe(MUSIC_FINGERPRINTS[MUSIC_BASE_VERSION]!);
 }, 60_000);
 
 test('the built-in kits are built, precached with their licence and within budget', async () => {
