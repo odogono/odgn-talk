@@ -130,6 +130,13 @@ words = ["yes", "no"]
 is = "whether the reloaded Scripts' Script Variables carry over"
 
 [[record.key]]
+key = "mailbox"
+type = "word"
+words = ["keep"]
+optional = true
+is = "`keep` when each reloaded Script's mailbox is kept rather than dropped"
+
+[[record.key]]
 key = "source"
 type = "value"
 is = "the new source, as text"

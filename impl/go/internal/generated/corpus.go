@@ -180,6 +180,15 @@ var Corpus = CorpusTable{
 					},
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:  "mailbox",
+					Type: "word",
+					Is:   "`keep` when each reloaded Script's mailbox is kept rather than dropped",
+					Words: []string{
+						"keep",
+					},
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:  "source",
 					Type: "value",
 					Is:   "the new source, as text",

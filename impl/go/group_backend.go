@@ -17,7 +17,7 @@ type groupBackend interface {
 	setParent(o, parent *Object) error
 	dispose(*Object) error
 	addLibrary(*Library) error
-	replaceLibrary(*Library, CarryOver) ([]Report, error)
+	replaceLibrary(*Library, CarryOver, bool) ([]Report, error)
 	reload(s *Script, source string, carry CarryOver, keepMailbox bool) ([]Report, error)
 	extend(s *Script, source string) error
 	queued() bool

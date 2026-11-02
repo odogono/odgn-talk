@@ -1544,8 +1544,9 @@ talk_host_error_code talk_add_library(talk_group *g, talk_library *l);
  * them, its extensions too. If any fails to check, nothing changes:
  * TALK_LOAD_REFUSED, its diagnostics in the Trace. A name the Group doesn't
  * hold is TALK_INVALID_VALUE. The recompiled Libraries live as long as the
- * Core. Its reports go to *reports, as talk_script_reload's do. */
-talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry, talk_reports **reports);
+ * Core. Its reports go to *reports, as talk_script_reload's do. With
+ * o->keep_mailbox, every reloaded Script keeps its mailbox; o may be NULL. */
+talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry, const talk_reload_options *o, talk_reports **reports);
 
 /* Save and restore (chapter 10). A save restores only on the Zig Core.
  * Save is a worker call between Pumps: the save's bytes, which the caller

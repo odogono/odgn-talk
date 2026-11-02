@@ -4181,7 +4181,12 @@ export class TsGroup implements Group {
   }
 
   /** Worker. Prepare every dependent before changing the Group. */
-  replaceLibrary(l: Library, carry: CarryOver): Report[] {
+  replaceLibrary(
+    l: Library,
+    carry: CarryOver,
+    o?: { keepMailbox?: boolean },
+  ): Report[] {
+    const keepMailbox = !!o?.keepMailbox;
     this.worker();
     this.requireKnownEffects();
     this.trace?.(
@@ -4190,6 +4195,7 @@ export class TsGroup implements Group {
         [l.name],
         [
           ['carry', carry === 'carry variables' ? 'yes' : 'no'],
+          ['mailbox', keepMailbox ? 'keep' : null],
           ['source', displayText(l.source)],
           ['identity', identityOf(l)],
         ],
@@ -4235,12 +4241,13 @@ export class TsGroup implements Group {
           carry,
           libraries,
           s.units.slice(1).map(u => u.source),
+          keepMailbox,
         ),
       }));
     this.discardReason = 'library replacement';
     let reports: Report[];
     try {
-      reports = this.replaceScripts(replacements);
+      reports = this.replaceScripts(replacements, keepMailbox);
     } finally {
       this.discardReason = 'stop';
     }

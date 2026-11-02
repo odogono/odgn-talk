@@ -94,7 +94,7 @@ test "Library Constant and default containers are reused per Home and renewed on
     const extended = try read(&g, "a");
     try testing.expectEqual(reloaded.data.list[0], extended.data.list[0]);
 
-    const replaced = try g.replaceLibrary(fresh, true, testing.allocator);
+    const replaced = try g.replaceLibrary(fresh, true, false, testing.allocator);
     try testing.expect(replaced == .replaced);
     rebuilt = replaced.replaced;
     try testing.expectEqual(@as(usize, 1), replaced.replaced.len);

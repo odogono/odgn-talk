@@ -210,7 +210,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `reload` | `script` | `carry`, `mailbox`?, `source`, `identity`\* | reloads the Script from the source given |
 | `extend` | `script` | `source`, `identity`\* | extends the Script with an Entry |
 | `add-library` | `library` | `identity`\* | adds the Library that case.toml names |
-| `replace-library` | `library` | `carry`, `source`, `identity`\* | replaces the Library with the source given |
+| `replace-library` | `library` | `carry`, `mailbox`?, `source`, `identity`\* | replaces the Library with the source given |
 | `pump` |  | `clock`, `fuel-slice`?, `fuel-cap`? | a Pump, with its one Clock reading |
 | `deliver` | `delivery` | `to`, `message`, `args`?, `limits`? | a Delivery |
 | `request` | `delivery` | `to`, `message`, `args`?, `limits`? | a Request: a Delivery whose result the Host waits for |
@@ -251,6 +251,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `extend` | `identity` | `hex` | the extended Script's new code identity |
 | `add-library` | `identity` | `hex` | the Library's code identity |
 | `replace-library` | `carry` | `word` | whether the reloaded Scripts' Script Variables carry over: `yes`, `no` |
+| `replace-library` | `mailbox` | `word` | `keep` when each reloaded Script's mailbox is kept rather than dropped: `keep` |
 | `replace-library` | `source` | `value` | the new source, as text |
 | `replace-library` | `identity` | `hex` | the new source's code identity |
 | `pump` | `clock` | `instant` | the Clock reading |

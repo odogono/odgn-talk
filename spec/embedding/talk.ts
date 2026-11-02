@@ -783,8 +783,8 @@ export interface Group {
   load(o: LoadOptions): Script;
   /** Worker, Host Input. */
   addLibrary(l: Library): void;
-  /** Worker, one atomic Host Input. Recompiles dependents and stop-and-reloads importers. */
-  replaceLibrary(l: Library, carry: CarryOver): Report[];
+  /** Worker, one atomic Host Input. Recompiles dependents and stop-and-reloads importers; keepMailbox keeps each one's mailbox, as Reload's does. */
+  replaceLibrary(l: Library, carry: CarryOver, o?: { keepMailbox?: boolean }): Report[];
   /**
    * Any time, inside a Pump too. Throws HostError "duplicate object id". A
    * parent takes effect at once; it is "wrong group" if not this Group's and

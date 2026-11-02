@@ -71,7 +71,7 @@ fn replacementTrace(deferred: bool, status: caps.EffectStatus, fail_at: usize, f
     _ = try g.deliver("a", "go", &.{}, false);
     _ = try g.deliver("b", "go", &.{}, false);
     try g.pumpWith(.{ .seconds = 1790000000, .micros = 0 }, 40, 0);
-    var result = try g.replaceLibrary(fresh, true, gpa);
+    var result = try g.replaceLibrary(fresh, true, false, gpa);
     if (!finish) {
         try testing.expect(result == .paused);
         return out.toOwnedSlice();
@@ -113,7 +113,7 @@ fn replacementTrace(deferred: bool, status: caps.EffectStatus, fail_at: usize, f
         try testing.expectError(error.EffectStateUnknown, g.load("c", "on go\nend go\n", .{}));
         try testing.expectError(error.EffectStateUnknown, g.reload(a, source, false, false));
         try testing.expectError(error.EffectStateUnknown, g.extend(a, "on extra\nend extra\n"));
-        try testing.expectError(error.EffectStateUnknown, g.replaceLibrary(fresh, false, gpa));
+        try testing.expectError(error.EffectStateUnknown, g.replaceLibrary(fresh, false, false, gpa));
     }
     return out.toOwnedSlice();
 }

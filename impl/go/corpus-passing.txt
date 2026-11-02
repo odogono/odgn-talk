@@ -335,6 +335,8 @@ reload/extend-units
 reload/extension-state-cap
 reload/function-staleness
 reload/reload-carry-and-discard
+reload/replace-library-drop-mailbox
+reload/replace-library-keep-mailbox
 reload/replacement-transitive
 rewind/at-crossing
 rewind/decision-at-crossing

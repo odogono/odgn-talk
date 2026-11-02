@@ -1,0 +1,18 @@
+# replace-library-drop-mailbox: without `mailbox`, a Library replacement
+# drops each reloaded importer's mailbox, and its messages never run
+# (spec chapter 10, "Reload", Replacing a Library).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"

@@ -665,7 +665,7 @@ test "Extend, Reload and Library replacement refused at any allocation leave not
             const reloaded = group.reload(s, source, true, true) catch break :blk false;
             if (reloaded != .reloaded) break :blk false;
             if ((group.reload(s, "on", false, false) catch break :blk false) != .refused) break :blk false;
-            const replaced = group.replaceLibrary(next, true, gpa) catch break :blk false;
+            const replaced = group.replaceLibrary(next, true, false, gpa) catch break :blk false;
             if (replaced != .replaced) break :blk false;
             memory.allocator().free(replaced.replaced);
             group.pump(.{ .seconds = 1790000002, .micros = 0 }) catch break :blk false;

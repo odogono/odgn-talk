@@ -155,9 +155,9 @@ func (b *zigGroup) addLibrary(l *Library) error {
 	return err
 }
 
-func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
+func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver, keepMailbox bool) ([]Report, error) {
 	how := map[CarryOver]string{ResetVariables: "reset variables", CarryVariables: "carry variables"}[carry]
-	fields := map[string]any{"identity": zigIdentity(l.id), "carry": how}
+	fields := map[string]any{"identity": zigIdentity(l.id), "carry": how, "keepMailbox": keepMailbox}
 	if err := b.beginWorker("replace-library", fields); err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error)
 		return nil, err
 	}
 	var reports []Report
-	_, err = b.exchangeDecoded("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how}, func(reply zigResponse) error {
+	_, err = b.exchangeDecoded("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how, "keepMailbox": keepMailbox}, func(reply zigResponse) error {
 		if reply.failure != nil {
 			return nil
 		}

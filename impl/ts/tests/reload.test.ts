@@ -343,6 +343,40 @@ describe('Library replacement', () => {
     const good = operationalReports(g.pump(1_000_000n).reports)[0]!;
     expect('result' in good && good.result!.toString()).toBe('1');
   });
+
+  test('keepMailbox counts each importer’s kept messages toward its cap', () => {
+    const { g, trace } = setup();
+    g.addLibrary(
+      compileLibrary({
+        name: 'base',
+        version: '1',
+        source: 'function count\n  return 1\nend count',
+      }),
+    );
+    // a's Script Variable fits its cap alone, but not with the note kept.
+    const source = `use count from base\nscript variable t = "${'z'.repeat(60)}"\non go\n  repeat forever\n  end repeat\nend go\non note x\nend note`;
+    g.load({ name: 'a', source, limits: { persistentState: 200 } });
+    g.script('a')!.deliver({ name: 'go' });
+    g.script('a')!.deliver({
+      name: 'note',
+      args: [readDisplay('"' + 'x'.repeat(150) + '"')],
+    });
+    g.pump(0n, { fuelSlice: 5 });
+    const grown = compileLibrary({
+      name: 'base',
+      version: '2',
+      source: 'function count\n  return 2\nend count',
+    });
+    trace.length = 0;
+    expect(() =>
+      g.replaceLibrary(grown, 'carry variables', { keepMailbox: true }),
+    ).toThrow(expect.objectContaining({ code: 'state too large' }));
+    expect(trace[0]).toStartWith(
+      '> replace-library base carry=yes mailbox=keep ',
+    );
+    expect(trace.some(l => l.startsWith('stopped '))).toBe(false);
+    expect(g.replaceLibrary(grown, 'carry variables')).toBeArray();
+  });
 });
 
 describe('code-change boundaries', () => {

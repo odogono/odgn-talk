@@ -1129,7 +1129,7 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 
 `Reload` returns the reports for the Runs it discarded. Unlike Stop Script, it isn't sticky: the reloaded Script takes new messages at once.
 
-- **Replacing a Library** stop-and-reloads every Script that imports it, directly or through another Library, as one Reload each, all in one Host Input ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). If any of them fails to load, nothing changes.
+- **Replacing a Library** stop-and-reloads every Script that imports it, directly or through another Library, as one Reload each, all in one Host Input ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). If any of them fails to load, nothing changes. With `keepMailbox`, every one of those Reloads keeps its Script's mailbox, as a `Reload` with `keepMailbox` does, and its kept messages count toward that Script's Persistent State cap with its carried Script Variables; a cap refusal for any of them leaves every Script unchanged.
 
 ### Carrying variables over
 

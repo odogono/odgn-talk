@@ -770,8 +770,8 @@ end openScript
 - **Failure keeps the music:** if the new code doesn't load, the old code
   keeps running and the problem shows in Errors.
 - **Libraries:** every loaded Script that imports the Library, directly or
-  through another, reloads on one bar, all or none. A Library replacement
-  doesn't yet keep those Scripts' mailboxes (#1951).
+  through another, reloads on one bar, all or none, each keeping its Script
+  Variables and mailbox.
 - The edit is an ordinary authored edit, saved and undoable. A Script that
   isn't loaded, such as one on another Page, only has its edit saved, and the
   Code Browser says so.

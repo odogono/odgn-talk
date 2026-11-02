@@ -179,6 +179,15 @@ pub const corpus: CorpusTable = .{
                     },
                 },
                 .{
+                    .key = "mailbox",
+                    .type = "word",
+                    .is = "`keep` when each reloaded Script's mailbox is kept rather than dropped",
+                    .words = &.{
+                        "keep",
+                    },
+                    .optional = true,
+                },
+                .{
                     .key = "source",
                     .type = "value",
                     .is = "the new source, as text",
