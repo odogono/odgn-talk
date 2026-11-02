@@ -227,3 +227,40 @@ export const projectMusicSounds = (
   }
   return keys;
 };
+
+/**
+ * The order to decode a Project's sounds for its samplers (#1958): `named`,
+ * those its Scripts and Libraries name in literal pattern and `play`
+ * texts, in the order they appear, decode before audio starts; `later`,
+ * every other sound, decodes after, so a name built at run time still
+ * plays once its sound has decoded.
+ */
+export const soundDecodeOrder = (
+  project: DeepReadonly<Project>,
+): { later: string[]; named: string[] } => {
+  const sounds = project.assets.filter(isSoundAsset).map(a => a.name);
+  const known = new Set(sounds);
+  const named: string[] = [];
+  const add = (name: string) => {
+    if (known.has(name) && !named.includes(name)) {
+      named.push(name);
+    }
+  };
+  const sources = [
+    ...scriptOwners(project).map(owner => owner.script ?? ''),
+    ...project.libraries.map(library => library.source),
+  ];
+  for (const source of sources) {
+    for (const { text } of patternTexts(source)) {
+      if (known.has(text)) {
+        add(text);
+        continue;
+      }
+      const parsed = parseMiniNotation(text);
+      for (const word of parsed.ok ? parsed.pattern.words() : []) {
+        add(soundKey(word.value));
+      }
+    }
+  }
+  return { named, later: sounds.filter(name => !named.includes(name)) };
+};

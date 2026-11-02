@@ -8,6 +8,7 @@
 import type { AudioReading } from '../audio-clock';
 import type { Asset, Project } from '../model';
 import type { DeepReadonly } from '../readonly';
+import { soundDecodeOrder } from '../pattern-checks';
 import { DEFAULT_SAMPLER, isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
 import { samplerEngine } from './sampler';
@@ -103,13 +104,17 @@ export const startInstrumentAudio = (
     }
   };
 
+  const soundAsset = (name: string) =>
+    project.assets.find(a => a.name === name && isSoundAsset(a))!;
+
   void (async () => {
     try {
-      const decoding = Promise.all(
-        project.assets
-          .filter(isSoundAsset)
-          .map(asset => decode(asset.name, () => soundBytes(asset))),
-      );
+      // Sounds the Scripts name decode before audio starts; the rest
+      // follow in the background (#1958).
+      const { named, later } = soundDecodeOrder(project);
+      const decodeNamed = (name: string) =>
+        decode(name, () => soundBytes(soundAsset(name)));
+      const decoding = Promise.all(named.map(decodeNamed));
       const [samples] = await Promise.all([
         decoding,
         context.audioWorklet.addModule(WORKLET_URL),
@@ -149,6 +154,22 @@ export const startInstrumentAudio = (
       }
       node.connect(context.destination);
       handOver();
+      const worklet = node;
+      void (async () => {
+        for (const name of later) {
+          const decoded = await decodeNamed(name);
+          if (closed) {
+            return;
+          }
+          if (decoded) {
+            const [, sample] = decoded;
+            worklet.port.postMessage({
+              name,
+              sample,
+            } satisfies InstrumentChannel);
+          }
+        }
+      })();
       if (!paused) {
         await context.resume();
       }

@@ -4,6 +4,7 @@
 // (#1927), with the Play clock following the audio clock, and the worklet
 // reports the sample each note starts on.
 import { kitSoundAsset } from '../src/base-projects';
+import { KIT_SOUND_KEYS } from '../src/kits/kits';
 import { DEFAULT_SAMPLER } from '../src/sounds';
 import type { Envelope } from '@northtalk/tooling/worker-supervisor';
 import { startInstrumentAudio } from '../src/instruments/audio';
@@ -35,12 +36,13 @@ const playBeats = async (
   ms: number,
   projectScript = '',
   during?: () => Promise<void>,
+  sounds: readonly string[] = ['bd', 'hh'],
 ) => {
   const project = createProject('Beats');
   project.instruments.push(createInstrument('synth', 'lead'));
   // The default sampler plays only the Project's own sounds (ADR 0161).
   const bytes = new Map<string, Uint8Array>();
-  for (const key of ['bd', 'hh']) {
+  for (const key of sounds) {
     const sound = await kitSoundAsset(key);
     project.assets.push(sound.asset);
     bytes.set(sound.asset.hash, sound.bytes);
@@ -187,6 +189,20 @@ end beat
       `Enough default sampler steps sounded: ${kit.length}`,
     );
     onGrid(kit, 0.5);
+  });
+
+  await test('with every Music sound, a loop still sounds from the first bars while the rest decode (#1958)', async () => {
+    const onsets = await playBeats(
+      '',
+      2600,
+      'on startPlay\n  tell transport to setTempo 240\n  loop "bd hh"\nend startPlay\n',
+      undefined,
+      KIT_SOUND_KEYS,
+    );
+    const steps = onsets.filter(o => o.instrument === DEFAULT_SAMPLER);
+    assert(steps.length >= 4, `Enough steps sounded: ${steps.length}`);
+    assert(steps[0]!.time < 1.5, `The first step came at ${steps[0]!.time} s`);
+    onGrid(steps, 0.5);
   });
 
   await test('a second loop replaces the first on the next bar (#1896)', async () => {
