@@ -7,6 +7,7 @@ import {
   type Grant,
   type Shape,
 } from '@northtalk/ts';
+import { PLACEHOLDER_OBJECT_KIND } from '../elements/add-on';
 import { ELEMENT_KINDS } from '../model';
 
 /** One Operation's declaration, without its Host function. */
@@ -40,7 +41,10 @@ export const grantAll = <B>(
 
 /** Any Element, as the `elements` and `folio` Operations take one. */
 export const elementShape = shape.oneOf(
-  ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
+  ...[...ELEMENT_KINDS, PLACEHOLDER_OBJECT_KIND].map(kind => ({
+    k: 'object' as const,
+    kind,
+  })),
 );
 export const pageShape = { k: 'object' as const, kind: 'page' };
 export const canvasShape = { k: 'object' as const, kind: 'canvas' };

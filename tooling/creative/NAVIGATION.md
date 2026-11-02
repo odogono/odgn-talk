@@ -123,6 +123,13 @@ landed, and the Issue graph job ticks it as they close.
   the CLI and the Play worker load no JSX. Ask `kindOf(element)` rather than
   branching on `kind`; the registry's header lists the branches that remain,
   and why. A new kind is a new file registered in both.
+- Add-ons (ADR 0162, #1901): `Project.addOns` lists them by URL, and
+  [add-on.ts](src/elements/add-on.ts) reads kinds named `<url>#<name>`. Until
+  a loader registers one, `kindOf` gives the placeholder definition, which
+  keeps the file form in `saved`; Scripts see it as the `placeholder` Object
+  Kind (`scriptKindOf`), and Play reports it in the Errors window. In-memory
+  Projects are checked in their saved form. Tests:
+  [add-ons.test.ts](tests/add-ons.test.ts).
 - [project-file.ts](src/project-file.ts) over [zip.ts](src/zip.ts): the
   `.folio` file.
 - Tests: [model.test.ts](tests/model.test.ts),

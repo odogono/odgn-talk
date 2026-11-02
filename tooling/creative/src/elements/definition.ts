@@ -1,9 +1,11 @@
 // One Element kind's definition (#1900): what Folio knows about a kind
 // lives here, with what it draws and its Info controls in `views.tsx`, and
-// code outside `elements/` asks the registry rather than branching on `kind`. Room is left for parameter bindings and for
-// kinds that load asynchronously; neither exists yet.
+// code outside `elements/` asks the registry rather than branching on `kind`.
+// Kinds from Add-ons (ADR 0162) are placeholders until the loader exists.
 import type { CSSProperties } from 'preact';
 import type {
+  AddOnElement,
+  AddOnKind,
   Element,
   ElementBase,
   ElementKind,
@@ -78,10 +80,14 @@ export const commonProperties = {
   visible: property('visible', 'boolean'),
 };
 
-type Of<K extends ElementKind> = Extract<Element, { kind: K }>;
+type Of<K extends ElementKind> = K extends AddOnKind
+  ? AddOnElement
+  : Extract<Element, { kind: K }>;
 
 /** What `check` is given besides the raw object. */
 export type CheckContext = {
+  /** The URLs of the Add-ons the Project lists. */
+  addOns: ReadonlySet<string>;
   /** The common properties, read and checked; Groups derive their own. */
   base(): ElementBase;
   /** How deep in Groups this Element sits. */

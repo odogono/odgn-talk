@@ -116,6 +116,23 @@ export type CanvasElement = ElementBase & {
 
 export type GroupElement = ElementBase & { kind: 'group'; members: Element[] };
 
+/**
+ * An Element kind an Add-on provides (ADR 0162): the Add-on's URL, then
+ * `#` and the kind's name, such as
+ * `https://northtalk.org/add-ons/music-controls#knob`.
+ */
+export type AddOnKind = `${string}#${string}`;
+
+/**
+ * An Element whose kind comes from an Add-on Folio has not loaded: a
+ * placeholder. `saved` is its file form, written back unchanged apart from
+ * the common properties, so no data is lost (ADR 0162).
+ */
+export type AddOnElement = ElementBase & {
+  kind: AddOnKind;
+  saved: Readonly<Record<string, unknown>>;
+};
+
 export type Element =
   | TextElement
   | ImageElement
@@ -124,9 +141,12 @@ export type Element =
   | EllipseElement
   | LineElement
   | CanvasElement
-  | GroupElement;
+  | GroupElement
+  | AddOnElement;
 
 export type ElementKind = Element['kind'];
+/** The kinds built into Folio. */
+export type BuiltInKind = Exclude<ElementKind, AddOnKind>;
 
 // Each kind's defaults, drawing and checks live in its definition (#1900).
 export { createElement, ELEMENT_KINDS } from './elements/registry';
@@ -213,7 +233,23 @@ export type BaseProjectName = (typeof BASE_PROJECT_NAMES)[number];
 /** Which Base Project, and which version of it, a Project was copied from. */
 export type BaseProjectRef = { name: BaseProjectName; version: number };
 
+/**
+ * An Add-on a Project uses (ADR 0162), named by its URL. A built-in one
+ * comes with Folio; a Project Add-on carries its code, and the code's
+ * SHA-256, in the file.
+ */
+export type AddOnRef = {
+  /** A Project Add-on's code. */
+  code?: string;
+  /** The lowercase hex SHA-256 of `code`'s UTF-8 bytes. */
+  hash?: string;
+  id: string;
+  version: string;
+};
+
 export type Project = {
+  /** The Add-ons it uses; absent when none. */
+  addOns?: AddOnRef[];
   assets: Asset[];
   /** The Base Project it was copied from; for attribution and updates only. */
   base?: BaseProjectRef;

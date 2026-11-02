@@ -57,7 +57,7 @@ export const sharedLinkFor = async (
       "This Project has images or sounds, which a link can't carry. Export it as a .folio file to share it.",
     );
   }
-  const result = validateProjectJson(project);
+  const result = validateProjectJson(serializeProject(project));
   if ('issues' in result) {
     throw new ProjectFileError(
       `This Project cannot be shared: ${result.issues.map(i => `${i.path}: ${i.message}`).join('; ')}.`,

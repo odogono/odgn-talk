@@ -13,8 +13,13 @@
 //   travel as `DrawingView`s rather than with the Element.
 // - Button activation (`play-view.ts`): Enter and Space click a focused
 //   button, and a click returns the keys to the Page, as in a browser.
-import type { Element, ElementBase, ElementKind } from '../model';
+import type { BuiltInKind, Element, ElementBase, ElementKind } from '../model';
 import type { DeepReadonly } from '../readonly';
+import {
+  isAddOnKind,
+  placeholderKind,
+  PLACEHOLDER_OBJECT_KIND,
+} from './add-on';
 import { buttonKind } from './button';
 import { canvasKind } from './canvas';
 import type { ElementKindDefinition } from './definition';
@@ -24,7 +29,7 @@ import { lineKind } from './line';
 import { ellipseKind, rectangleKind } from './shapes';
 import { textKind } from './text';
 
-const DEFINITIONS: { readonly [K in ElementKind]: ElementKindDefinition<K> } = {
+const DEFINITIONS: { readonly [K in BuiltInKind]: ElementKindDefinition<K> } = {
   text: textKind,
   image: imageKind,
   button: buttonKind,
@@ -35,11 +40,19 @@ const DEFINITIONS: { readonly [K in ElementKind]: ElementKindDefinition<K> } = {
   group: groupKind,
 };
 
-/** Every kind, in Tools window order. */
-export const ELEMENT_KINDS = Object.keys(DEFINITIONS) as readonly ElementKind[];
+/** Every built-in kind, in Tools window order. */
+export const ELEMENT_KINDS = Object.keys(DEFINITIONS) as readonly BuiltInKind[];
 
-export const isElementKind = (kind: unknown): kind is ElementKind =>
+export const isBuiltInKind = (kind: unknown): kind is BuiltInKind =>
   typeof kind === 'string' && Object.hasOwn(DEFINITIONS, kind);
+
+/** A built-in kind or an Add-on's. */
+export const isElementKind = (kind: unknown): kind is ElementKind =>
+  isBuiltInKind(kind) || (typeof kind === 'string' && isAddOnKind(kind));
+
+/** The Object Kind a Script sees an Element of `kind` as. */
+export const scriptKindOf = (kind: ElementKind): string =>
+  isBuiltInKind(kind) ? kind : PLACEHOLDER_OBJECT_KIND;
 
 /** The kinds a Script or the Tools window may create. */
 export const CREATABLE_KINDS = ELEMENT_KINDS.filter(
@@ -52,8 +65,12 @@ export const CREATABLE_KINDS = ELEMENT_KINDS.filter(
  */
 export const kindOf = (
   of: ElementKind | DeepReadonly<Element>,
-): ElementKindDefinition =>
-  DEFINITIONS[typeof of === 'string' ? of : of.kind] as ElementKindDefinition;
+): ElementKindDefinition => {
+  const kind = typeof of === 'string' ? of : of.kind;
+  return (
+    isBuiltInKind(kind) ? DEFINITIONS[kind] : placeholderKind
+  ) as ElementKindDefinition;
+};
 
 const base = (name: string): ElementBase => ({
   name,
@@ -65,7 +82,8 @@ const base = (name: string): ElementBase => ({
 });
 
 /** A new Element of `kind` with that kind's default properties. */
-export const createElement = <K extends ElementKind>(
+export const createElement = <K extends BuiltInKind>(
   kind: K,
   name: string,
-): Extract<Element, { kind: K }> => DEFINITIONS[kind].create(base(name));
+): Extract<Element, { kind: K }> =>
+  DEFINITIONS[kind].create(base(name)) as Extract<Element, { kind: K }>;

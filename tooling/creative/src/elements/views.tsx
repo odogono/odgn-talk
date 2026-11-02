@@ -13,14 +13,21 @@ import {
   type ButtonStyle,
   type CanvasElement,
   type Element,
+  type AddOnElement,
+  type AddOnKind,
+  type BuiltInKind,
   type ElementKind,
   type LineElement,
   type TextAlign,
 } from '../model';
 import type { DeepReadonly } from '../readonly';
+import { splitAddOnKind } from './add-on';
 import { controls, type InfoControls } from './controls';
+import { isBuiltInKind } from './registry';
 
-type Of<K extends ElementKind> = DeepReadonly<Extract<Element, { kind: K }>>;
+type Of<K extends ElementKind> = DeepReadonly<
+  K extends BuiltInKind ? Extract<Element, { kind: K }> : AddOnElement
+>;
 
 /** What a kind's Info section is given. */
 export type InfoContext = { controls: InfoControls; disabled: boolean };
@@ -95,7 +102,34 @@ const shapeView: ElementKindView<'rectangle' | 'ellipse'> = {
   ),
 };
 
-const VIEWS: { readonly [K in ElementKind]: ElementKindView<K> } = {
+/** An Element whose Add-on isn't loaded, linking to the Add-on's page. */
+const placeholderView: ElementKindView<AddOnKind> = {
+  Contents: ({ element }) => {
+    const { addOn, name } = splitAddOnKind(element.kind)!;
+    return (
+      <span className="placeholder">
+        Missing Add-on: {name}{' '}
+        <a href={addOn} rel="noreferrer" target="_blank">
+          {addOn}
+        </a>
+      </span>
+    );
+  },
+  info: element => {
+    const { addOn, name } = splitAddOnKind(element.kind)!;
+    return (
+      <p className="muted">
+        This {name} needs the Add-on{' '}
+        <a href={addOn} rel="noreferrer" target="_blank">
+          {addOn}
+        </a>
+        , which isn&apos;t loaded. Its settings are kept unchanged when saved.
+      </p>
+    );
+  },
+};
+
+const VIEWS: { readonly [K in BuiltInKind]: ElementKindView<K> } = {
   text: {
     info: (
       element,
@@ -231,7 +265,9 @@ const VIEWS: { readonly [K in ElementKind]: ElementKindView<K> } = {
 
 /** The view half of `element`'s kind; its functions take that Element. */
 export const viewOf = (element: DeepReadonly<Element>): ElementKindView =>
-  VIEWS[element.kind] as ElementKindView;
+  (isBuiltInKind(element.kind)
+    ? VIEWS[element.kind]
+    : placeholderView) as ElementKindView;
 
 /** `element`'s Info section. */
 export const kindInfo = (

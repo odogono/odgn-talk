@@ -121,6 +121,18 @@ button:disabled {
   color: var(--muted);
   font-size: 14px;
 }
+.el.placeholder {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  overflow: hidden;
+  border: 2px dashed var(--muted);
+  background: rgb(0 0 0 / 5%);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
 .el.button {
   display: grid;
   place-items: center;
