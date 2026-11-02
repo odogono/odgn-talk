@@ -16,7 +16,7 @@ import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
-import { kindOf, scriptKindOf } from './elements/registry';
+import { addOnKinds, kindOf, scriptKindOf } from './elements/registry';
 import { PLACEHOLDER_OBJECT_KIND } from './elements/add-on';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import type { InstrumentKind } from './instruments/kind';
@@ -67,44 +67,55 @@ const props = (kind: string): ManifestProperty[] =>
       readOnly: !descriptor.set,
       ...(descriptor.setCost ? { setCost: descriptor.setCost } : {}),
     }));
-// Any Element, as a Page or Group's members are.
-const elementShape = {
-  oneOf: [...ELEMENT_KINDS, PLACEHOLDER_OBJECT_KIND].map(kind => ({
-    object: kind,
-  })),
+// The built-in kinds, then each loaded Add-on kind as its Object Kind.
+const elementObjectKinds = (): string[] => [
+  ...ELEMENT_KINDS,
+  ...addOnKinds().map(entry => entry.objectKind),
+];
+
+const buildObjectKinds = () => {
+  // Any Element, as a Page or Group's members are.
+  const elementShape = {
+    oneOf: [...elementObjectKinds(), PLACEHOLDER_OBJECT_KIND].map(kind => ({
+      object: kind,
+    })),
+  };
+  const collection = {
+    shape: elementShape,
+    countCost: { fuel: 1, alloc: 0 },
+    atCost: { fuel: 1, alloc: 0 },
+    findCost: { fuel: 1, alloc: 0 },
+  };
+  return [
+    { name: 'project', props: props('project') },
+    // Play's Page Object Collection (#1143), as data.
+    { name: 'page', props: props('page'), elements: collection },
+    ...ELEMENT_KINDS.map(name => ({
+      name,
+      props: props(name),
+      ...(kindOf(name).container ? { elements: collection } : {}),
+    })),
+    ...addOnKinds().map(entry => ({
+      name: entry.objectKind,
+      props: props(entry.objectKind),
+    })),
+    // An Element whose Add-on isn't loaded (ADR 0162); Play refuses its reads.
+    { name: PLACEHOLDER_OBJECT_KIND, props: props(PLACEHOLDER_OBJECT_KIND) },
+  ];
 };
 
-// Shared by every Script's manifest.
-const objectKinds = [
-  { name: 'project', props: props('project') },
-  {
-    name: 'page',
-    props: props('page'),
-    // Play's Page Object Collection (#1143), as data.
-    elements: {
-      shape: elementShape,
-      countCost: { fuel: 1, alloc: 0 },
-      atCost: { fuel: 1, alloc: 0 },
-      findCost: { fuel: 1, alloc: 0 },
-    },
-  },
-  ...ELEMENT_KINDS.map(name => ({
-    name,
-    props: props(name),
-    ...(kindOf(name).container
-      ? {
-          elements: {
-            shape: elementShape,
-            countCost: { fuel: 1, alloc: 0 },
-            atCost: { fuel: 1, alloc: 0 },
-            findCost: { fuel: 1, alloc: 0 },
-          },
-        }
-      : {}),
-  })),
-  // An Element whose Add-on isn't loaded (ADR 0162); Play refuses its reads.
-  { name: PLACEHOLDER_OBJECT_KIND, props: props(PLACEHOLDER_OBJECT_KIND) },
-];
+// Shared by every Script's manifest; rebuilt when an Add-on adds kinds.
+let cached: { count: number; kinds: ReturnType<typeof buildObjectKinds> } = {
+  count: -1,
+  kinds: [],
+};
+const sharedObjectKinds = () => {
+  const count = addOnKinds().length;
+  if (cached.count !== count) {
+    cached = { count, kinds: buildObjectKinds() };
+  }
+  return cached.kinds;
+};
 // Each Instrument kind's parameters, as its objects' properties (ADR 0158).
 const instrumentObjectKinds = [...INSTRUMENT_KINDS.values()].map(kind => ({
   name: kind.name,
@@ -143,7 +154,15 @@ const instrumentEntries = (project: DeepReadonly<Project>) =>
   });
 
 // Each Grant's entry, derived from its definition (#1453).
-const grants = manifestGrants();
+// Rebuilt with the shared Object Kinds, since Grants take any Element.
+let cachedGrants = { count: -1, grants: manifestGrants() };
+const sharedGrants = () => {
+  const count = addOnKinds().length;
+  if (cachedGrants.count !== count) {
+    cachedGrants = { count, grants: manifestGrants() };
+  }
+  return cachedGrants.grants;
+};
 const messages = [
   'click',
   'pointerEnter',
@@ -241,8 +260,8 @@ export const scriptManifest = (
           ]
         : []),
     ],
-    objectKinds: [...objectKinds, ...instrumentObjectKinds],
-    grants: [...grants, ...instruments.map(entry => entry.grant)],
+    objectKinds: [...sharedObjectKinds(), ...instrumentObjectKinds],
+    grants: [...sharedGrants(), ...instruments.map(entry => entry.grant)],
     messages: scriptMessages(owner.script ?? ''),
   };
 };
@@ -265,7 +284,7 @@ export const testScriptManifest = (
     ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
     { name: 'project', kind: 'project' },
   ],
-  objectKinds,
+  objectKinds: sharedObjectKinds(),
   grants: [manifestGrant(harnessGrant)],
   messages: [],
 });

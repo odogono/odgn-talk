@@ -13,6 +13,9 @@ import { soundKey } from '../src/sounds';
 import { parseMiniNotation } from '../src/mini-notation';
 import { patternTexts } from '../src/pattern-checks';
 import { readProjectFile, serializeProject } from '../src/project-file';
+import type { AddOnModule } from '../src/add-ons/api';
+import { addOnChunk } from '../src/add-ons/catalogue';
+import { COUNTER_ADD_ON, COUNTER_ENTRY } from './fixtures/counter-add-on';
 import {
   build,
   dist,
@@ -126,7 +129,7 @@ test('Example Projects are fetched on demand, never precached', async () => {
     ).size;
     expect(size, example.slug).toBeLessThanOrEqual(EXAMPLE_BUDGET_BYTES);
   }
-  expect(worker).toContain(JSON.stringify(['./projects/']));
+  expect(worker).toContain('onDemand: ["./projects/", "./add-ons/"]');
 }, 60_000);
 
 test('First Sounds carries every kit sound its patterns play (ADR 0161)', async () => {
@@ -198,4 +201,26 @@ test('the build writes no kit sounds outside Project files (ADR 0161)', async ()
   expect(wavs).toEqual([]);
   const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
   expect(worker).not.toContain('.wav');
+}, 60_000);
+
+test('each built-in Add-on is its own chunk, fetched on demand and imported whole (#1901)', async () => {
+  const entry = COUNTER_ENTRY;
+  await build({
+    minify: true,
+    addOns: [
+      { entry, source: resolve(import.meta.dir, 'fixtures/counter-add-on.ts') },
+    ],
+  });
+  const chunk = resolve(dist, addOnChunk(entry));
+  expect(existsSync(chunk)).toBe(true);
+  const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
+  expect(worker).not.toContain(addOnChunk(entry));
+  expect(worker).toContain('./add-ons/');
+  // It brings no Preact of its own; Folio hands it one.
+  expect(readFileSync(chunk, 'utf8')).not.toContain('__H');
+  const module = (await import(chunk)) as { default: AddOnModule };
+  expect(module.default).toMatchObject({
+    id: COUNTER_ADD_ON,
+    version: '1.1.0',
+  });
 }, 60_000);

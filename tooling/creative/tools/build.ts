@@ -24,6 +24,11 @@ import {
 } from '../src/examples';
 import { baseFilePath, createMusicBase } from '../src/base-projects';
 import { writeProjectFile } from '../src/project-file';
+import {
+  addOnChunk,
+  BUILT_IN_ADD_ONS,
+  type CatalogueEntry,
+} from '../src/add-ons/catalogue';
 import { iconPng, iconSvg } from './icons';
 
 const root = resolve(import.meta.dir, '..');
@@ -59,8 +64,41 @@ export const examplePrecacheFiles = EXAMPLE_PROJECTS.map(
   example => `./${example.slug}/`,
 );
 
-/** URL prefixes the service worker keeps when first fetched (ADR 0161). */
-export const onDemandPrefixes = ['./projects/'];
+/**
+ * URL prefixes the service worker keeps when first fetched: Base and
+ * Example Projects (ADR 0161) and built-in Add-ons (ADR 0162).
+ */
+export const onDemandPrefixes = ['./projects/', './add-ons/'];
+
+/** A built-in Add-on to build: its catalogue entry and its source. */
+export type AddOnSource = { entry: CatalogueEntry; source: string };
+
+const builtInAddOns = (): AddOnSource[] =>
+  BUILT_IN_ADD_ONS.map(entry => ({
+    entry,
+    source: resolve(root, 'src/add-ons', entry.slug, 'index.ts'),
+  }));
+
+/** Builds each Add-on as its own chunk, fetched on demand (#1901). */
+const buildAddOns = async (
+  addOns: readonly AddOnSource[],
+  minify: boolean,
+): Promise<void> => {
+  for (const { entry, source } of addOns) {
+    const result = await Bun.build({
+      entrypoints: [source],
+      outdir: dist,
+      target: 'browser',
+      format: 'esm',
+      naming: addOnChunk(entry),
+      minify,
+      sourcemap: 'linked',
+    });
+    if (!result.success) {
+      throw new AggregateError(result.logs, `Add-on ${entry.id} build failed`);
+    }
+  }
+};
 
 /** The file in `dist/` behind a precached URL. */
 export const shellFile = (entry: string): string =>
@@ -100,7 +138,13 @@ const writeExamples = async (): Promise<void> => {
   }
 };
 
-export const build = async ({ minify = true } = {}): Promise<void> => {
+export const build = async ({
+  minify = true,
+  addOns = builtInAddOns(),
+}: {
+  addOns?: readonly AddOnSource[];
+  minify?: boolean;
+} = {}): Promise<void> => {
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
   const result = await Bun.build({
@@ -136,6 +180,7 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
   );
   writeFileSync(resolve(dist, 'apple-touch-icon.png'), iconPng(180));
   await writeExamples();
+  await buildAddOns(addOns, minify);
 
   const precache = [...precacheFiles, ...examplePrecacheFiles];
   const hash = createHash('sha256');

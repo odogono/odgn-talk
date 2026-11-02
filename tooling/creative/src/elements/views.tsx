@@ -21,9 +21,9 @@ import {
   type TextAlign,
 } from '../model';
 import type { DeepReadonly } from '../readonly';
-import { splitAddOnKind } from './add-on';
+import { placeholderKind, splitAddOnKind } from './add-on';
 import { controls, type InfoControls } from './controls';
-import { isBuiltInKind } from './registry';
+import { isBuiltInKind, kindOf } from './registry';
 
 type Of<K extends ElementKind> = DeepReadonly<
   K extends BuiltInKind ? Extract<Element, { kind: K }> : AddOnElement
@@ -267,7 +267,20 @@ const VIEWS: { readonly [K in BuiltInKind]: ElementKindView<K> } = {
 export const viewOf = (element: DeepReadonly<Element>): ElementKindView =>
   (isBuiltInKind(element.kind)
     ? VIEWS[element.kind]
-    : placeholderView) as ElementKindView;
+    : kindOf(element) === placeholderKind
+      ? placeholderView
+      : (ADD_ON_VIEWS.get(element.kind) ?? {})) as ElementKindView;
+
+// What each loaded Add-on kind draws and its Info controls (#1901).
+const ADD_ON_VIEWS = new Map<string, ElementKindView<AddOnKind>>();
+
+/** Registers what an Add-on kind draws; the page's half of loading it. */
+export const registerAddOnView = (
+  kind: AddOnKind,
+  view: ElementKindView<AddOnKind>,
+): void => {
+  ADD_ON_VIEWS.set(kind, view);
+};
 
 /** `element`'s Info section. */
 export const kindInfo = (

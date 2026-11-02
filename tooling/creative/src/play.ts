@@ -15,8 +15,8 @@ import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
-import { isAddOnKind, missingAddOn } from './elements/add-on';
-import { scriptKindOf } from './elements/registry';
+import { missingAddOn } from './elements/add-on';
+import { isPlaceholderKind, scriptKindOf } from './elements/registry';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import { LEAD_US, Transport } from './transport';
@@ -878,7 +878,7 @@ export class PlaySession {
                     ? shape.bool
                     : shape.text,
               get: ({ native }) => {
-                if ('kind' in native && isAddOnKind(native.kind)) {
+                if ('kind' in native && isPlaceholderKind(native.kind)) {
                   throw new ScriptError(
                     'out of domain',
                     missingAddOn(native.name, native.kind),
@@ -897,7 +897,7 @@ export class PlaySession {
                       { native }: HostObject<ScriptOwner>,
                       value: Value,
                     ) => {
-                      if ('kind' in native && isAddOnKind(native.kind)) {
+                      if ('kind' in native && isPlaceholderKind(native.kind)) {
                         throw new ScriptError(
                           'out of domain',
                           missingAddOn(native.name, native.kind),
@@ -1231,7 +1231,7 @@ export class PlaySession {
     for (const owner of owners) {
       // Scripts see a placeholder's reads fail only as a Host error, so the
       // Errors window says which Add-on it needs (ADR 0162).
-      if ('kind' in owner && isAddOnKind(owner.kind)) {
+      if ('kind' in owner && isPlaceholderKind(owner.kind)) {
         this.problems.push({
           owner,
           line: 1,

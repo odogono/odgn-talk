@@ -30,7 +30,9 @@ Instrument kinds use the same mechanism. An Instrument kind's code may come from
 
 ## Naming
 
-An Add-on is named by a URL, such as `https://northtalk.org/add-ons/music-controls`, whose page describes the Add-on, its versions and its kinds. An Element kind from it is that URL, `#` and the kind's name, such as `…/music-controls#knob`, so each Element names its Add-on, a placeholder can link to the page, and two Add-ons' kinds can't clash. The version is kept once, in the `.folio` file's Add-on list, not in the URL.
+An Add-on is named by a URL, such as `https://northtalk.org/add-ons/music-controls`, whose page describes the Add-on, its versions and its kinds. An Element kind from it is that URL, `#` and the kind's name, such as `…/music-controls#knob`, so each Element names its Add-on, a placeholder can link to the page, and two Add-ons' kinds can't clash. The version is kept once, in the `.folio` file's Add-on list, not in the URL. Folio ships one version of each built-in Add-on and loads it for any Project that lists the same or an older version, whose Elements its kinds' checks migrate; the Project is then saved at the loaded version. A Project that needs a newer version keeps placeholders.
+
+Scripts see each loaded kind as an Object Kind named by the kind's name, such as `knob`, so an Add-on can't load a kind whose name a built-in kind or another loaded Add-on already has.
 
 The URL is an identity, never a download location: Folio never fetches code from it, and it grants no trust. An unsigned Project Add-on that claims a `northtalk.org` URL still gets the trust prompt.
 

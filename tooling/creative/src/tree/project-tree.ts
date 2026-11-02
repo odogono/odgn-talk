@@ -1,4 +1,6 @@
 import type { DeepReadonly, Mutable } from '../readonly';
+import { compareVersions } from '../add-ons/versions';
+import { createAnyElement, scriptKindOf } from '../elements/registry';
 import {
   createElement,
   createPage,
@@ -10,7 +12,8 @@ import {
   type Asset,
   type CanvasElement,
   type Element,
-  type BuiltInKind,
+  type AddOnRef,
+  type ElementKind,
   type GroupElement,
   type Instrument,
   type InstrumentParameterValue,
@@ -1002,6 +1005,26 @@ export class ProjectTree {
     }
     this.#field(this.#project, 'instruments', next);
   }
+  /**
+   * Lists an Add-on the Project uses, or moves it to `ref`'s version when
+   * it is newer (ADR 0162).
+   */
+  useAddOn(ref: AddOnRef): void {
+    this.transaction(() => {
+      const current = this.#project.addOns ?? [];
+      const listed = current.find(a => a.id === ref.id);
+      if (listed && compareVersions(listed.version, ref.version) >= 0) {
+        return;
+      }
+      this.#field(
+        this.#project,
+        'addOns',
+        listed
+          ? current.map(a => (a.id === ref.id ? { ...a, ...ref } : a))
+          : [...current, ref],
+      );
+    });
+  }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));
   }
@@ -1112,7 +1135,7 @@ export class ProjectTree {
     return element;
   }
   create(
-    kind: BuiltInKind,
+    kind: ElementKind,
     parent: TreeParent,
     name?: string,
     hooks: TreeHooks = {},
@@ -1121,7 +1144,7 @@ export class ProjectTree {
       const owner = this.#mutable(parent);
       const page = 'elements' in owner ? owner : this.#pages.get(owner)!;
       const taken = this.#elementNames(page);
-      const nextName = name ?? freshName(`${kind}1`, taken);
+      const nextName = name ?? freshName(`${scriptKindOf(kind)}1`, taken);
       if (!isIdentifierName(nextName) || taken.has(nextName)) {
         throw new TreeError('Element name is unavailable');
       }
@@ -1130,7 +1153,7 @@ export class ProjectTree {
           ? () => hooks.authorize!(this.#ordered.get(page)!.length * 8)
           : undefined,
       );
-      return this.#publish(owner, createElement(kind, nextName), hooks);
+      return this.#publish(owner, createAnyElement(kind, nextName), hooks);
     });
   }
   insert(

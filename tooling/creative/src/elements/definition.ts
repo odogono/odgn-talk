@@ -1,7 +1,7 @@
 // One Element kind's definition (#1900): what Folio knows about a kind
 // lives here, with what it draws and its Info controls in `views.tsx`, and
 // code outside `elements/` asks the registry rather than branching on `kind`.
-// Kinds from Add-ons (ADR 0162) are placeholders until the loader exists.
+// Kinds from Add-ons (ADR 0162) register when their Add-on loads (#1901).
 import type { CSSProperties } from 'preact';
 import type {
   AddOnElement,
