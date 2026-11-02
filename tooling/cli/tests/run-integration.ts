@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fingerprintOf, newPeerKey } from '../src/peers';
 
 const scripts = {
   'hello.talk': 'on start args\n  say "hello " & args\nend start\n',
@@ -137,5 +138,123 @@ export const verifyHttpExample = async (
     assert.equal(stdout, `listening on ${port}\n`);
   } finally {
     child.kill('SIGKILL');
+  }
+};
+
+const billing = [
+  'on start args',
+  '  ask peer to expose "billing" and wait',
+  '  say "ready"',
+  'end start',
+  'on charge amount',
+  '  ask peer to caller',
+  '  say "charge " & amount & " from " & the name of it',
+  '  if amount > 100 then',
+  '    throw {code: "too much"}',
+  '  end if',
+  '  return amount + 1',
+  'end charge',
+  'on note line',
+  '  ask peer to caller',
+  '  say "note " & line & " from " & the name of it',
+  'end note',
+  '',
+].join('\n');
+
+const shop = [
+  'on start args',
+  '  ask peer to reach "billing" into billing and wait',
+  '  send charge with 12 to billing into total and wait',
+  '  say "total " & total',
+  '  try',
+  '    send charge with 500 to billing and wait',
+  '  catch e',
+  '    say the code of e & " " & the reason of e',
+  '  end try',
+  '  send note with "hi" to billing',
+  '  send charge with 1 to billing and wait',
+  'end start',
+  '',
+].join('\n');
+
+/**
+ * Two Runners carry Remote Sends over mutual TLS (chapter 12, Runner
+ * peers): a call and its reply, a Script error as `send failed`, a post,
+ * the Caller Identity named by the listener's `--peer`, and a pinned key
+ * that doesn't match.
+ */
+export const verifyRunnerPeers = async (runtime: string, entry: string) => {
+  const directory = mkdtempSync(join(tmpdir(), 'northtalk-peers-'));
+  const at = (name: string) => join(directory, name);
+  writeFileSync(at('billing.talk'), billing);
+  writeFileSync(at('shop.talk'), shop);
+  const shopKey = newPeerKey();
+  writeFileSync(at('shop.pem'), shopKey);
+  const shopPrint = fingerprintOf(
+    /-{5}BEGIN CERTIFICATE-{5}[\S\s]+?-{5}END CERTIFICATE-{5}/u.exec(
+      shopKey,
+    )![0],
+  );
+  const child = spawn(
+    runtime,
+    [
+      entry,
+      '--listen',
+      '127.0.0.1:0',
+      '--peer',
+      `shop=tls://127.0.0.1:1#${shopPrint}`,
+      at('billing.talk'),
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', chunk => {
+    stdout += chunk;
+  });
+  const exited = new Promise<number | null>(resolve =>
+    child.on('exit', code => resolve(code)),
+  );
+  try {
+    const address = await new Promise<string>((resolve, reject) => {
+      child.stderr.setEncoding('utf8').on('data', chunk => {
+        stderr += chunk;
+        const found = /listening on (tls:\/\/\S+)\n/u.exec(stderr);
+        if (found) {
+          resolve(found[1]!);
+        }
+      });
+      void exited.then(code =>
+        reject(new Error(`exited ${code} before listening: ${stderr}`)),
+      );
+    });
+    const run = (peer: string) =>
+      spawnSync(
+        runtime,
+        [entry, '--peer-key', at('shop.pem'), '--peer', peer, at('shop.talk')],
+        { encoding: 'utf8', timeout: 20_000 },
+      );
+    const shopRun = run(`billing=${address}`);
+    assert.equal(shopRun.status, 0, shopRun.stderr);
+    assert.equal(shopRun.stdout, 'total 13\nsend failed errored\n');
+    assert.equal(shopRun.stderr, `peer: key ${shopPrint}\n`);
+    // The listener's output comes through a pipe: wait for all of it.
+    const want =
+      'ready\ncharge 12 from shop\ncharge 500 from shop\nnote hi from shop\ncharge 1 from shop\n';
+    for (let i = 0; i < 100 && stdout.length < want.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.equal(stdout, want);
+    // A listener whose key isn't the pinned one is never reached.
+    const wrong = run(
+      `billing=${address.replace(/#.*/u, `#${'0'.repeat(64)}`)}`,
+    );
+    assert.equal(wrong.status, 1);
+    assert.match(wrong.stderr, /uncaught error in start: bad address/u);
+    child.kill('SIGINT');
+    assert.equal(await exited, 130);
+  } finally {
+    child.kill('SIGKILL');
+    rmSync(directory, { recursive: true, force: true });
   }
 };

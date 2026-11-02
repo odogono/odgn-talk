@@ -5,7 +5,7 @@
 The `northtalk` command: running a Script file, the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@northtalk/ts/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@northtalk/tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
-northtalk [--port <n>] <file.talk> [args…]
+northtalk [--port <n>] [--listen <host:port>] [--peer <name=tls://host:port#key>]… [--peer-key <file>] <file.talk> [args…]
 northtalk [repl] [--transcript <file>]
 northtalk replay <transcript> [--trace <file>]
 northtalk fmt [--check] <file>…
@@ -46,10 +46,17 @@ node tooling/cli/dist/main.js --port 0 examples/http/hello.talk
 ```
 
 - **Loading:** the file is one Script, named by its basename, with the stdlib Libraries. A load error prints `file:line:column: message` on stderr and exits 1.
-- **Grants**, each under its own name and trimmed to what the Script uses: `console` (`say` writes a line to stdout; `read` takes the next stdin line, and at the end of input the reading Run is cancelled), `clock`, `timer`, `calendar` (bound to `UTC`) and `locale` (bound to `und`) from the runtime's Intl data, an in-memory `store` (`default`), `sqlite` on a database in a temporary directory that is removed at exit, `http` with any address, and `user` only when stdin is a terminal, asking as the REPL does.
+- **Grants**, each under its own name and trimmed to what the Script uses: `console` (`say` writes a line to stdout; `read` takes the next stdin line, and at the end of input the reading Run is cancelled), `clock`, `timer`, `calendar` (bound to `UTC`) and `locale` (bound to `und`) from the runtime's Intl data, an in-memory `store` (`default`), `sqlite` on a database in a temporary directory that is removed at exit, `http` with any address, `peer` (below), and `user` only when stdin is a terminal, asking as the REPL does.
 - **Starting:** `start` is Delivered with one argument, the list of the arguments after the file, so the Handler is `on start args`.
 - **Exit:** once there are no live Runs or queued messages, no timers, no Serve Registrations and no open HTTP Exchanges. The code is 0, or 1 when a Run ended with an uncaught error, a Limit Fault or a failed effect, each written to stderr as `file:line:column: uncaught error in <handler>: <code>: <message> <fields>`.
 - **`--port <n>`** before the file, or the `PORT` environment variable, sets the port of every `serve`.
+- **Peers:** `peer` carries Remote Sends to other Runners over mutual TLS, each end known by its key fingerprint ([Runner peers](../../spec/12-sessions-and-tooling.md#runner-peers); [ADR 0163](../../docs/adr/0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)). `--listen <host:port>` accepts them and prints `peer: listening on tls://<host>:<port>#<key>` on stderr; a listening Runner doesn't exit for want of work. `--peer <name>=tls://<host>:<port>#<key>` lets `reach <name>` find that Runner's exposure, refusing a listener with another key. `--peer-key <file>` reads a PEM Ed25519 key and certificate, so the key, and the addresses pinned to it, survive a restart; without it each start makes a new key. A Script may `expose` any name, and `caller` gives `{key}`, with `name` when a `--peer` names the sender's key.
+
+  ```sh
+  bun run northtalk --listen 127.0.0.1:7400 billing.talk
+  bun run northtalk --peer billing=tls://127.0.0.1:7400#<key> shop.talk
+  ```
+
 - **Signals:** the first SIGINT or SIGTERM stops accepting connections, Delivers `stop` (a Script without a `stop` Handler ends that Run `unhandled`), waits up to 5 seconds for open HTTP Exchanges, answers the rest 503, stops the Group and exits 130 or 143. A second signal exits at once.
 
 ## Lints

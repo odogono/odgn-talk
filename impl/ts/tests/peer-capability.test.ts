@@ -80,3 +80,31 @@ test('a send to a Peer is the Grant post, with the Peer, Selector and arguments'
     ['billing', 'charge', ['12', '{to: [<object peer "billing">]}']],
   ]);
 });
+
+test('GrantsAsUsed keeps post and call with reach, and caller with expose', () => {
+  const peer = peerCapability(noPeer, costs);
+  const g = newGroup({ name: 'g' });
+  g.load({
+    name: 'shop',
+    source: 'on go\n  ask peer to reach "billing" and wait\nend go',
+    grants: { peer: peer.grant('all', null) },
+    grantsAsUsed: true,
+  });
+  g.load({
+    name: 'billing',
+    source: 'on go\n  ask peer to expose "billing" and wait\nend go',
+    grants: { peer: peer.grant('all', null) },
+    grantsAsUsed: true,
+  });
+  expect(g.script('shop')!.grants()['peer']!.sort()).toEqual([
+    'call',
+    'post',
+    'reach',
+  ]);
+  expect(g.script('billing')!.grants()['peer']!.sort()).toEqual([
+    'call',
+    'caller',
+    'expose',
+    'post',
+  ]);
+});
