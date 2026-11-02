@@ -14,6 +14,7 @@ import {
 import { type BaseProjectName, createProject, type Project } from './model';
 import { createFromBase } from './base-projects';
 import { pageAddOns, pageTrust } from './add-ons/page';
+import { addOnsToAsk } from './add-ons/signing';
 import { askToTrust } from './add-ons/trust-prompt';
 import { projectWithAddOns } from './add-ons/project';
 import {
@@ -194,9 +195,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const addOnsFor = async (
     project: DeepReadonly<Project>,
   ): Promise<Project> => {
-    const untrusted = (project.addOns ?? []).filter(
-      ref => ref.code !== undefined && !pageTrust.has(ref.hash!),
-    );
+    // A NorthTalk signature that verifies needs no prompt (#1967).
+    const untrusted = await addOnsToAsk(project.addOns ?? [], pageTrust);
     if (untrusted.length && (await askToTrust(untrusted))) {
       pageTrust.trust(untrusted.map(ref => ref.hash!));
     }

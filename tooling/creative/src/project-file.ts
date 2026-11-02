@@ -321,8 +321,13 @@ const checkAddOn = (c: Checker, raw: unknown, path: string): AddOnRef => {
   if (hash !== undefined && !/^[0-9a-f]{64}$/u.test(hash)) {
     c.fail(`${path}.hash`, 'expected a lowercase hex SHA-256');
   }
+  const signature = c.optStr(a.signature, `${path}.signature`);
+  if (signature !== undefined && code === undefined) {
+    c.fail(`${path}.signature`, 'only a Project Add-on with code is signed');
+  }
   setDefined(ref, 'code', code);
   setDefined(ref, 'hash', hash);
+  setDefined(ref, 'signature', signature);
   return ref;
 };
 

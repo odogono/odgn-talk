@@ -7,6 +7,9 @@ const KEY = 'folio-trusted-add-ons';
 
 export class TrustStore {
   readonly #hashes = new Set<string>();
+  // NorthTalk-signed Add-ons (#1967), trusted for this visit only, so a
+  // rotated key stops vouching for them at the next Folio release.
+  readonly #signed = new Set<string>();
   readonly #storage: Storage | undefined;
 
   constructor(storage: Storage | undefined = globalThis.localStorage) {
@@ -26,7 +29,14 @@ export class TrustStore {
   }
 
   has(hash: string): boolean {
-    return this.#hashes.has(hash);
+    return this.#hashes.has(hash) || this.#signed.has(hash);
+  }
+
+  /** Trusts Add-ons whose NorthTalk signature verified, without saving. */
+  vouch(hashes: readonly string[]): void {
+    for (const hash of hashes) {
+      this.#signed.add(hash);
+    }
   }
 
   /** Every trusted hash, as the Play worker is told them. */

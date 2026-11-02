@@ -280,6 +280,34 @@ Project's `pages`, so a Page's index counts Pages only.
 The `palettes` browser suite covers the strip, Info, Browse and Present
 windows, the Window menu, `show` and kept positions.
 
+## Signing Project Add-ons
+
+A Project Add-on carries its own code, so Folio asks before running it
+([ADR 0162](../../docs/adr/0162-folio-add-ons-provide-element-and-instrument-kinds-palettes-and-controls.md)).
+The Project Add-ons in the Base and Example Projects NorthTalk publishes are
+signed instead (#1967). The deploy build (`.github/workflows/site.yml`) signs
+the hash of each one with the NorthTalk Ed25519 key, from the
+`NORTHTALK_ADD_ON_SIGNING_KEY` secret, and writes the signature next to its
+code in the `.folio` file. With `FOLIO_REQUIRE_SIGNED_ADD_ONS=1`, as the
+deploy sets it, the build fails on any published Project Add-on that doesn't
+verify. A local build without the key leaves them unsigned.
+
+Folio ships only the public key, `NORTHTALK_ADD_ON_KEY` in
+[signing.ts](src/add-ons/signing.ts), and checks a signature with WebCrypto.
+One that verifies trusts the Add-on for this visit, without the prompt,
+wherever the file came from. A missing signature, another key's, or changed
+code falls back to the prompt. Signing by other authors is not supported.
+
+To rotate the key:
+
+1. `bun tools/add-on-key.ts <file>` writes a new private key to `<file>` and
+   prints the public key.
+2. Put the public key in `NORTHTALK_ADD_ON_KEY` and open a PR.
+3. Before it merges, run `gh secret set NORTHTALK_ADD_ON_SIGNING_KEY < <file>`,
+   then delete the file.
+4. The deploy re-signs everything it publishes. Files signed with the old key
+   stop verifying and ask again.
+
 ## Binding controls
 
 The controls Add-on's slider, knob, toggle and XY pad can drive sound with

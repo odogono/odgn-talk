@@ -3,7 +3,9 @@ name: northtalk.org
 # Build the site, with Folio and the Go module paths, and deploy its Worker
 # on each push to main that changes it (ADR 0140). Needs the repo secrets
 # CLOUDFLARE_API_TOKEN (Workers Scripts: Edit, Workers Routes: Edit) and
-# CLOUDFLARE_ACCOUNT_ID, and the repo variable CF_WEB_ANALYTICS_TOKEN.
+# CLOUDFLARE_ACCOUNT_ID, the Folio Add-on signing key
+# NORTHTALK_ADD_ON_SIGNING_KEY (#1967), and the repo variable
+# CF_WEB_ANALYTICS_TOKEN.
 on:
   push:
     branches: [main]
@@ -47,6 +49,10 @@ jobs:
         env:
           ASTRO_TELEMETRY_DISABLED: '1'
           CF_WEB_ANALYTICS_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
+          # Signs Folio's published Project Add-ons and fails the deploy on
+          # one that doesn't verify (#1967).
+          NORTHTALK_ADD_ON_SIGNING_KEY: ${{ secrets.NORTHTALK_ADD_ON_SIGNING_KEY }}
+          FOLIO_REQUIRE_SIGNED_ADD_ONS: '1'
       - run: bunx wrangler deploy
         working-directory: tooling/site
         env:

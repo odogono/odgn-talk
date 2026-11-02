@@ -24,6 +24,7 @@ import {
 } from '../src/examples';
 import { baseFilePath, createMusicBase } from '../src/base-projects';
 import { writeProjectFile } from '../src/project-file';
+import { SIGNING_KEY_ENV, signForPublishing } from '../src/add-ons/signing';
 import type { AddOnModule } from '../src/add-ons/api';
 import { AddOnLoader } from '../src/add-ons/loader';
 import {
@@ -153,13 +154,21 @@ const writeExamples = async (): Promise<void> => {
   }
   const page = readFileSync(resolve(dist, 'index.html'), 'utf8');
   mkdirSync(resolve(dist, 'projects'), { recursive: true });
+  // The release build signs each published Project Add-on and refuses one
+  // that doesn't verify (#1967); a local build without the key leaves them.
+  const signing = {
+    privateKey: process.env[SIGNING_KEY_ENV],
+    require: process.env.FOLIO_REQUIRE_SIGNED_ADD_ONS === '1',
+  };
   const music = await createMusicBase();
+  await signForPublishing(music.project, 'Music', signing);
   writeFileSync(
     resolve(dist, baseFilePath('music')),
     await writeProjectFile(music.project, music.assets),
   );
   for (const example of EXAMPLE_PROJECTS) {
     const { assets, project } = await example.create();
+    await signForPublishing(project, example.slug, signing);
     writeFileSync(
       resolve(dist, exampleFilePath(example.slug)),
       await writeProjectFile(project, assets),
