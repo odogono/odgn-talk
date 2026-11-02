@@ -180,7 +180,7 @@ const pageIndexOf = (event: Event) => {
   return index === undefined ? undefined : Number(index);
 };
 
-export type PlayMode = 'browse' | 'present';
+export type PlayMode = 'browse' | 'perform' | 'present';
 
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
