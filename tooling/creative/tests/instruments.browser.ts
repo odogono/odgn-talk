@@ -189,13 +189,16 @@ export const runBrowserTests = async () => {
       },
     });
     node.connect(context.destination);
+    // The node's port only takes the channel the Play worker sends on.
+    const { port1: sending, port2: listening } = new MessageChannel();
+    node.port.postMessage({ port: listening }, [listening]);
     // An offline render outruns the port, so pause it until the notes land.
     void context.suspend(128 / 44_100).then(async () => {
-      node.port.postMessage({
+      sending.postMessage({
         instrument: 'lead',
         commands: [{ kind: 'note', note: 60, velocity: 1 }],
       });
-      node.port.postMessage({
+      sending.postMessage({
         instrument: 'chip',
         commands: [{ kind: 'note', note: 69, velocity: 1 }],
       });
