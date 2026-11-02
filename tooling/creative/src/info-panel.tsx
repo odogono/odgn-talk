@@ -9,8 +9,9 @@ import {
   type StackEditor,
 } from './editing';
 import { PAGE_ALIGNS_X, PAGE_ALIGNS_Y } from './model';
-import { checkbox, color, controls, field, input } from './elements/controls';
+import { checkbox, color, field, input } from './elements/controls';
 import { kindOf } from './elements/registry';
+import { kindInfo } from './elements/views';
 import { isSoundAsset } from './sounds';
 import type { ParameterDefinition } from './instruments/kind';
 import { INSTRUMENT_KINDS } from './instruments/registry';
@@ -313,7 +314,7 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
             </Fragment>
           ))}
         </div>
-        {kindOf(element).info?.(element, { controls, disabled })}
+        {kindInfo(element, disabled)}
         {checkbox('visible', 'Visible', element.visible, disabled)}
       </Fragment>
     );

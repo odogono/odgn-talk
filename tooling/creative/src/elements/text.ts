@@ -1,14 +1,9 @@
-/** @jsxImportSource preact */
-// The pragma lets code run outside Folio's tsconfig, such as `bun test`
-// from the repo root, compile this file: model.ts reaches every kind.
 // The text Element: rich text the reader may be allowed to edit.
 import {
   alignParagraph,
   isTextAlign,
-  plainTextOf,
   richTextFromPlainText,
   setTextAlign,
-  TEXT_ALIGNS,
   textAlignOf,
   textOf,
   type Paragraph,
@@ -21,13 +16,6 @@ import type { DeepReadonly, Mutable } from '../readonly';
 import { PROPERTY_FUEL } from '../tree/rules';
 import { setDefined, type Checker } from './checker';
 import { commonProperties, defineElementKind, property } from './definition';
-
-const ALIGN_LABELS: Record<TextAlign, string> = {
-  left: 'Left',
-  center: 'Centre',
-  right: 'Right',
-  justify: 'Justified',
-};
 
 const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
   const paragraphs = c.arr(value, path) ?? [];
@@ -117,45 +105,4 @@ export const textKind = defineElementKind({
     contentEditable:
       element.editable && visible && takesInput ? 'true' : 'false',
   }),
-  info: (
-    element,
-    {
-      controls: { field, fontField, input, color, checkbox, select },
-      disabled,
-    },
-  ) => (
-    <>
-      <button data-edit-text={element.name} disabled={disabled} type="button">
-        Edit formatted text
-      </button>
-      {field(
-        'Plain text (replaces formatting)',
-        <textarea
-          data-field="text"
-          disabled={disabled}
-          rows={4}
-          value={plainTextOf(element.richText)}
-        />,
-      )}
-      {fontField(element.font, disabled)}
-      {field(
-        'Alignment (all paragraphs)',
-        select(
-          'textAlign',
-          textAlignOf(element),
-          disabled,
-          TEXT_ALIGNS,
-          ALIGN_LABELS,
-        ),
-      )}
-      <div className="row">
-        {field(
-          'Size',
-          input('textSize', element.textSize, disabled, 'number', { min: 1 }),
-        )}
-        {field('Colour', color('textColor', element.textColor, disabled))}
-      </div>
-      {checkbox('editable', 'Reader can edit', element.editable, disabled)}
-    </>
-  ),
 });

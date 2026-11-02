@@ -118,10 +118,11 @@ landed, and the Issue graph job ticks it as they close.
   `state.value` as a document snapshot.
 - [elements/](src/elements/registry.ts): one definition per Element kind
   ([definition.ts](src/elements/definition.ts)): its properties, defaults,
-  drawing, Info controls, file checks and migrations, and what Play sends the
-  page. Ask `kindOf(element)` rather than branching on `kind`; the registry's
-  header lists the branches that remain, and why. A new kind is a new file
-  registered in [registry.ts](src/elements/registry.ts).
+  styles, file checks and migrations, and what Play sends the page. What it
+  draws and its Info controls are in [views.tsx](src/elements/views.tsx), so
+  the CLI and the Play worker load no JSX. Ask `kindOf(element)` rather than
+  branching on `kind`; the registry's header lists the branches that remain,
+  and why. A new kind is a new file registered in both.
 - [project-file.ts](src/project-file.ts) over [zip.ts](src/zip.ts): the
   `.folio` file.
 - Tests: [model.test.ts](tests/model.test.ts),

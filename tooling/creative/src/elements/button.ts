@@ -1,22 +1,6 @@
-/** @jsxImportSource preact */
-// The pragma lets code run outside Folio's tsconfig, such as `bun test`
-// from the repo root, compile this file: model.ts reaches every kind.
 // The button Element: a labelled control the reader clicks.
-import {
-  BUTTON_DEFAULTS,
-  BUTTON_STYLES,
-  BUTTON_STYLES_PROSE,
-  isButtonStyle,
-  type ButtonStyle,
-} from '../model';
+import { BUTTON_DEFAULTS, BUTTON_STYLES_PROSE, isButtonStyle } from '../model';
 import { commonProperties, defineElementKind, property } from './definition';
-
-const STYLE_LABELS: Record<ButtonStyle, string> = {
-  rounded: 'Rounded',
-  rectangle: 'Rectangle',
-  shadowed: 'Shadowed',
-  transparent: 'Transparent (invisible)',
-};
 
 export const buttonKind = defineElementKind({
   kind: 'button',
@@ -87,33 +71,9 @@ export const buttonKind = defineElementKind({
     fontSize: `${element.textSize}px`,
   }),
   className: element => ` button-${element.style}`,
-  Contents: ({ element }) => (
-    <span className="button-label">{element.label}</span>
-  ),
   readerAttributes: (element, { visible }) => ({
     tabIndex: visible ? 0 : -1,
     role: 'button',
     'aria-label': element.label || element.name,
   }),
-  info: (
-    element,
-    { controls: { field, fontField, input, color, select }, disabled },
-  ) => (
-    <>
-      {field('Label', input('label', element.label, disabled))}
-      {field(
-        'Style',
-        select('style', element.style, disabled, BUTTON_STYLES, STYLE_LABELS),
-      )}
-      {fontField(element.font, disabled)}
-      {field(
-        'Size',
-        input('textSize', element.textSize, disabled, 'number', { min: 1 }),
-      )}
-      <div className="row">
-        {field('Fill', color('fill', element.fill, disabled))}
-        {field('Text', color('textColor', element.textColor, disabled))}
-      </div>
-    </>
-  ),
 });

@@ -1,8 +1,8 @@
-// One Element kind's definition (#1900): everything Folio knows about a
-// kind lives here, and code outside `elements/` asks the registry rather
-// than branching on `kind`. Room is left for parameter bindings and for
+// One Element kind's definition (#1900): what Folio knows about a kind
+// lives here, with what it draws and its Info controls in `views.tsx`, and
+// code outside `elements/` asks the registry rather than branching on `kind`. Room is left for parameter bindings and for
 // kinds that load asynchronously; neither exists yet.
-import type { ComponentChildren, CSSProperties } from 'preact';
+import type { CSSProperties } from 'preact';
 import type {
   Element,
   ElementBase,
@@ -13,7 +13,6 @@ import type {
 import type { DeepReadonly } from '../readonly';
 import { GEOMETRY_FUEL, PROPERTY_FUEL, type Box } from '../tree/rules';
 import type { Checker, Obj } from './checker';
-import type { InfoControls } from './controls';
 
 export type PropertyOwner = DeepReadonly<Project | Page | Element>;
 export type PropertyValue = string | number | boolean;
@@ -92,9 +91,6 @@ export type CheckContext = {
   name: string;
 };
 
-/** What a kind's Info section is given. */
-export type InfoContext = { controls: InfoControls; disabled: boolean };
-
 /** What Play's page adds to a kind's view for the reader. */
 export type ReaderContext = { takesInput: boolean; visible: boolean };
 
@@ -115,12 +111,6 @@ export type ElementKindDefinition<K extends ElementKind = ElementKind> = {
   className?(element: DeepReadonly<Of<K>>): string;
   /** It holds member Elements, which a Script reaches as its `elements`. */
   container?: true;
-  /** What it draws inside its box. */
-  Contents?(props: {
-    element: DeepReadonly<Of<K>>;
-    imageUrl?: string;
-    reader: boolean;
-  }): ComponentChildren;
   /** Scripts and the Tools window can make one; Groups come from grouping. */
   creatable: boolean;
   /** A new one with the kind's defaults, at `base`. */
@@ -134,8 +124,6 @@ export type ElementKindDefinition<K extends ElementKind = ElementKind> = {
   forPage?(element: DeepReadonly<Of<K>>): Of<K>;
   /** The Tools window's glyph for it. */
   icon: string;
-  /** Its own controls in Info, after the box. */
-  info?(element: DeepReadonly<Of<K>>, context: InfoContext): ComponentChildren;
   kind: K;
   /** Its name in Info and the Tools window. */
   label: string;

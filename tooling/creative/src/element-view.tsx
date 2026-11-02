@@ -11,6 +11,7 @@ import {
 } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { kindOf } from './elements/registry';
+import { viewOf } from './elements/views';
 import type { Element } from './model';
 import type { DeepReadonly } from './readonly';
 import { renderRichText } from './rich-text-dom';
@@ -48,7 +49,7 @@ export const ElementView = ({
 }: ElementViewProps) => {
   const node = useRef<HTMLDivElement>(null);
   const kind = kindOf(element);
-  const Contents = kind.Contents;
+  const Contents = viewOf(element).Contents;
   // Rich text is painted directly, so the in-place editor can own it.
   const text = element.kind === 'text' ? element.richText : undefined;
   // Paints rich text unless an editor owns it or it is already showing.

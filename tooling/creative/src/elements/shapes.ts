@@ -1,6 +1,3 @@
-/** @jsxImportSource preact */
-// The pragma lets code run outside Folio's tsconfig, such as `bun test`
-// from the repo root, compile this file: model.ts reaches every kind.
 // Rectangle and ellipse Elements: filled shapes with a border of any width.
 import {
   commonProperties,
@@ -51,18 +48,6 @@ const shape = <K extends Shape>(
       borderColor: element.stroke,
       borderWidth: `${element.thickness}px`,
     }),
-    info: (element, { controls: { field, input, color }, disabled }) => (
-      <>
-        <div className="row">
-          {field('Fill', color('fill', element.fill, disabled))}
-          {field('Stroke', color('stroke', element.stroke, disabled))}
-        </div>
-        {field(
-          'Thickness',
-          input('thickness', element.thickness, disabled, 'number', { min: 0 }),
-        )}
-      </>
-    ),
   }) as ElementKindDefinition as ElementKindDefinition<K>;
 
 export const rectangleKind = shape('rectangle', 'Rectangle', '■', '#f0a020');

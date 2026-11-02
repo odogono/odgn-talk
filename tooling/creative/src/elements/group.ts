@@ -1,6 +1,3 @@
-/** @jsxImportSource preact */
-// The pragma lets code run outside Folio's tsconfig, such as `bun test`
-// from the repo root, compile this file: model.ts reaches every kind.
 // The group Element: member Elements moved, shown and scripted together.
 // Its box is derived from its members; an empty one keeps a saved position.
 import type { Element, GroupElement } from '../model';
