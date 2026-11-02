@@ -83,6 +83,22 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 
 - **Changing code:** `reload/4` stops and reloads a Script, carrying its Script Variables over unless `variables: :reset`; `replace_library/3` does so for every Script importing a Library, all or nothing; `extend/3` adds names without stopping anything. `stop/3` stops a Script. A Run discarded by any of them fails its waiting request with a `NorthTalk.ScriptError` of outcome `"discarded"`.
 - **Save and restore:** `save/1` returns a Group's bytes, refused with `effects pending` while a scope or participant is live. `restore/4` makes a new Group from them in this or another owner, rebinding each Script's Grants through `grants:`; a Grant not given restores revoked, and `resolve_object:` restores each saved Host Object live from its Kind and id, or disposed. Each pending call in the `NorthTalk.Restored` is settled with `settle/3`: an answer, a failure, `:reissue`, which calls its callback again, or `{:adopt, ref}`, settled later by `answer/3` or `fail/3`. An automatic owner first Pumps a restored Group once every pending call is settled; any still unsettled at the first Pump fails with `call lost`. Saves are per Core: only a Zig Core reads one. Grant bindings, callbacks and waiting requests are not saved, so `:reports_to` gets the outcome of a Run that was waited on.
+- **Supervised groups:** `NorthTalk.Groups` gives each long-lived Script Group, such as a tenant or room, its own owner and reactor instance, found by a key. `start_group/4` runs the application's `init.(owner, key)` in a process of its own, so loading or restoring holds up no other group, and returns once the Group is ready; `lookup/2` finds it only then. A failed or timed-out initialization stops everything it started. Any owner exit, a trap included, restarts the group and runs `init` again against a fresh instance, so the application chooses fresh state or its last save. Each group has its own restart budget, 3 in 5 s by default; one that exhausts it stops alone and `:notify` is told. Old handles are never redirected: a call through one after a restart exits with `:noproc`, so reacquire the Group with `lookup/2`. `stop_group/2` releases the instance without a restart.
+
+  ```elixir
+  children = [{NorthTalk.Groups, name: MyApp.Rooms, notify: MyApp.RoomWatcher}]
+
+  init = fn owner, key ->
+    with {:ok, group} <- NorthTalk.new_group(owner, key),
+         {:ok, _} <- NorthTalk.load(group, "room", source),
+         do: {:ok, group}
+  end
+
+  {:ok, group} = NorthTalk.Groups.start_group(MyApp.Rooms, "room-1", init)
+  {:ok, group} = NorthTalk.Groups.lookup(MyApp.Rooms, "room-1")
+  :ok = NorthTalk.Groups.stop_group(MyApp.Rooms, "room-1")
+  ```
+
 - **Lost instances:** if the reactor is lost other than by a trap or a timeout ([Limits and faults](#limits-and-faults)), such as by a malformed reply, the owner fails every waiting request with `instance lost` and stops, so its supervisor can restart it.
 
 ## Not offered
@@ -138,6 +154,7 @@ Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process hea
 | --- | --- |
 | [`lib/north_talk.ex`](lib/north_talk.ex) | The public API. |
 | [`examples/shop/`](examples/shop/) | The OTP example and getting-started guide. |
+| [`lib/north_talk/groups.ex`](lib/north_talk/groups.ex) | Supervised groups: one owner per Script Group, a ready lookup by key, and a restart budget per group. |
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
 | [`lib/north_talk/object_kind.ex`](lib/north_talk/object_kind.ex) | Object Kinds: properties, Object Collections and their declarations. |

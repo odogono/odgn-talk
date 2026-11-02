@@ -36,6 +36,13 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Copy from: [`owner_test.exs`](test/owner_test.exs). Handler, `return` and `script variable` Scripts are written inline there.
 - Check: `mix test test/owner_test.exs`
 
+## Supervised groups
+
+- Files: [`groups.ex`](lib/north_talk/groups.ex). Its moduledoc states the initialization, lookup, stale-handle and restart contracts.
+- Copy from: [`groups_test.exs`](test/groups_test.exs) for an init function, a trapping owner and an exhausted budget
+- Gotcha: the Registry forgets a stopped process a moment after it exits, so check a looked-up pid is alive.
+- Check: `mix test test/groups_test.exs`
+
 ## Values and the Value Encoding
 
 - Files: [`value.ex`](lib/north_talk/value.ex), [`types.ex`](lib/north_talk/types.ex), [`map.ex`](lib/north_talk/map.ex), [`clock.ex`](lib/north_talk/clock.ex)
