@@ -10,11 +10,25 @@ import {
   scalar,
 } from '../elements/definition';
 import type { ElementKindDefinition } from '../elements/definition';
-import { registerAddOnKind } from '../elements/registry';
+import { isObjectKindTaken, registerAddOnKind } from '../elements/registry';
+import { NOTE_OPERATIONS, SAMPLER_OPERATIONS } from '../instruments/operations';
+import {
+  instrumentObjectKindNames,
+  registerInstrumentKind,
+} from '../instruments/registry';
 import type { AddOnKind, AddOnRef } from '../model';
-import type { AddOnDataApi, AddOnKindModule, AddOnModule } from './api';
+import type {
+  AddOnDataApi,
+  AddOnInstrumentApi,
+  AddOnKindModule,
+  AddOnModule,
+} from './api';
 import { compareVersions } from './versions';
 import { addOnChunk, BUILT_IN_ADD_ONS, type CatalogueEntry } from './catalogue';
+
+const INSTRUMENT_API: AddOnInstrumentApi = {
+  operations: { note: NOTE_OPERATIONS, sampler: SAMPLER_OPERATIONS },
+};
 
 const DATA_API: AddOnDataApi = { commonProperties, property, readOnly, scalar };
 
@@ -139,13 +153,21 @@ export class AddOnLoader {
     let load = this.#loads.get(hash);
     if (!load) {
       load = this.#codeImporter(code).then(
-        module => this.#register(ref.id, ref.version, module),
+        module =>
+          module?.instruments && Object.keys(module.instruments).length
+            ? 'Instrument kinds in a Project Add-on are not supported yet'
+            : this.#register(ref.id, ref.version, module),
         (error: unknown) =>
           `its code failed to load${error instanceof Error ? `: ${error.message}` : ''}`,
       );
       this.#loads.set(hash, load);
     }
     return load;
+  }
+
+  /** Registers a module already in hand, such as a test's. */
+  register(module: AddOnModule): string | undefined {
+    return this.#register(module.id, module.version, module);
   }
 
   #register(
@@ -169,12 +191,26 @@ export class AddOnLoader {
           return element && { ...element, kind };
         },
       } as ElementKindDefinition<AddOnKind> as ElementKindDefinition;
-      const problem = registerAddOnKind(kind, definition, name);
+      const problem = instrumentObjectKindNames().has(name)
+        ? `another kind is already named ${name}`
+        : registerAddOnKind(kind, definition, name);
       if (problem) {
         return problem;
       }
       addElementShape(name);
       this.#onView?.(kind, kindModule);
+    }
+    for (const [name, instrument] of Object.entries(module.instruments ?? {})) {
+      const problem = registerInstrumentKind(
+        `${id}#${name}`,
+        instrument.kind(INSTRUMENT_API),
+        { label: instrument.label, name: instrument.instanceName },
+        { id, version },
+        isObjectKindTaken,
+      );
+      if (problem) {
+        return problem;
+      }
     }
     return undefined;
   }

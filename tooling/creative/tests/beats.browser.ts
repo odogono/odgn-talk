@@ -12,6 +12,7 @@ import type { NoteOnset } from '../src/instruments/rack';
 import { createInstrument } from '../src/instruments/registry';
 import { createProject } from '../src/model';
 import type { PlayRequest } from '../src/play-protocol';
+import { INSTRUMENTS_REF, SYNTH_KIND } from './helpers/instruments';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -39,7 +40,8 @@ const playBeats = async (
   sounds: readonly string[] = ['bd', 'hh'],
 ) => {
   const project = createProject('Beats');
-  project.instruments.push(createInstrument('synth', 'lead'));
+  project.addOns = [INSTRUMENTS_REF];
+  project.instruments.push(createInstrument(SYNTH_KIND, 'lead'));
   // The default sampler plays only the Project's own sounds (ADR 0161).
   const bytes = new Map<string, Uint8Array>();
   for (const key of sounds) {

@@ -23,6 +23,7 @@ import {
 } from '../src/recipes';
 import { StackEditor } from '../src/editing';
 import { scriptNameProblems } from '../src/script-names';
+import { SYNTH_KIND } from './helpers/instruments';
 
 const fixture = () => {
   const project = createProject('Mystery');
@@ -284,7 +285,7 @@ test('sound Recipes offer only audio assets and play through the Play Host', () 
 test('Loop a pattern loops Mini-Notation on the default sampler or an Instrument', () => {
   const { project, button } = fixture();
   withMusicSounds(project);
-  project.instruments.push(createInstrument('synth', 'bass'));
+  project.instruments.push(createInstrument(SYNTH_KIND, 'bass'));
   const targets = recipeTargets(project, button, 'loopPattern');
   expect(targets).toEqual([
     { name: 'Default sampler', reference: '' },

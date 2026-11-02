@@ -19,6 +19,7 @@ import {
   type TextElement,
 } from '../model';
 import { createInstrument } from '../instruments/registry';
+import { INSTRUMENTS_REF, synthInstrument } from '../add-ons/instruments/ids';
 import { kitSoundAsset } from '../base-projects';
 import { projectMusicSounds } from '../pattern-checks';
 import { recipeSource, recipeText, type RecipeTarget } from '../recipes';
@@ -339,11 +340,12 @@ const lessonPage = (lesson: Lesson, index: number): Page => {
  */
 export const createFirstSoundsProject = async (): Promise<ExampleContent> => {
   const project = createProject(FIRST_SOUNDS_PROJECT_NAME);
+  project.addOns = [INSTRUMENTS_REF];
   project.instruments.push(
     createInstrument('sampler', 'kick'),
     createInstrument('sampler', 'hats'),
     createInstrument('sampler', 'claps'),
-    createInstrument('synth', 'bass'),
+    synthInstrument('bass'),
   );
   // Every Session starts at the same tempo; the last Page changes it.
   project.script = `on startPlay\n  tell transport to setTempo ${START_TEMPO}\nend startPlay\n`;

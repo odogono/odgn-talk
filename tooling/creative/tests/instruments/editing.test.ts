@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { StackEditor } from '../../src/editing';
 import { createElement, createProject } from '../../src/model';
 import { readProjectFile, writeProjectFile } from '../../src/project-file';
+import { SYNTH_KIND, YM2149_KIND } from '../helpers/instruments';
 
 const editor = () => {
   const project = createProject('Band');
@@ -12,8 +13,8 @@ const editor = () => {
 test('adding gives each Instrument a fresh name and an id', () => {
   const e = editor();
   e.edit(({ tree }) => {
-    tree.addInstrument('synth', 'synth');
-    tree.addInstrument('synth', 'synth');
+    tree.addInstrument(SYNTH_KIND, 'synth');
+    tree.addInstrument(SYNTH_KIND, 'synth');
     tree.addInstrument('sampler', 'go');
   });
   const [first, second, third] = e.project.instruments;
@@ -30,7 +31,7 @@ test('adding gives each Instrument a fresh name and an id', () => {
 
 test('changes are checked, undoable and saved', async () => {
   const e = editor();
-  const id = e.edit(({ tree }) => tree.addInstrument('synth', 'synth').id!);
+  const id = e.edit(({ tree }) => tree.addInstrument(SYNTH_KIND, 'synth').id!);
   e.edit(({ tree }) => {
     tree.changeInstrument(id, { parameter: 'cutoff', value: 900 });
     tree.changeInstrument(id, { voices: 2 });
@@ -70,7 +71,7 @@ test('changes are checked, undoable and saved', async () => {
 
 test('removing an Instrument is undoable', () => {
   const e = editor();
-  const id = e.edit(({ tree }) => tree.addInstrument('ym2149', 'chip').id!);
+  const id = e.edit(({ tree }) => tree.addInstrument(YM2149_KIND, 'chip').id!);
   e.edit(({ tree }) => tree.removeInstrument(id));
   expect(e.project.instruments).toEqual([]);
   e.undo();
@@ -79,7 +80,7 @@ test('removing an Instrument is undoable', () => {
 
 test('an Element or Page cannot be renamed to an Instrument name', () => {
   const e = editor();
-  e.edit(({ tree }) => tree.addInstrument('synth', 'bass'));
+  e.edit(({ tree }) => tree.addInstrument(SYNTH_KIND, 'bass'));
   expect(e.renameElement('go', 'bass').ok).toBe(false);
   expect(e.renamePage('bass').ok).toBe(false);
 });

@@ -95,6 +95,12 @@ export const registerAddOnKind = (
   return undefined;
 };
 
+/** Whether Scripts already see an Element Object Kind named `name`. */
+export const isObjectKindTaken = (name: string): boolean =>
+  isBuiltInKind(name) ||
+  RESERVED_OBJECT_KINDS.has(name) ||
+  [...ADD_ON_KINDS.values()].some(e => e.objectKind === name);
+
 /** Forgets every Add-on kind; for tests. */
 export const resetAddOnKinds = (): void => ADD_ON_KINDS.clear();
 

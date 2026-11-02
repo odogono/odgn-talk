@@ -31,6 +31,7 @@ import {
 } from '../script-names';
 import {
   createInstrument,
+  instrumentKindAddOn,
   instrumentProblems,
   RESERVED_INSTRUMENT_NAMES,
 } from '../instruments/registry';
@@ -939,6 +940,11 @@ export class ProjectTree {
       instrument.id =
         this.#allocateId?.() ??
         Math.max(0, ...this.#project.instruments.map(i => i.id ?? 0)) + 1;
+      // An Add-on's kind lists its Add-on, as an Add-on's Element does.
+      const addOn = instrumentKindAddOn(kind);
+      if (addOn) {
+        this.useAddOn(addOn);
+      }
       this.#setInstruments([...this.#project.instruments, instrument]);
       return this.#project.instruments.at(-1)!;
     });

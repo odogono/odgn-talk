@@ -24,8 +24,11 @@ import {
 } from '../src/examples';
 import { baseFilePath, createMusicBase } from '../src/base-projects';
 import { writeProjectFile } from '../src/project-file';
+import type { AddOnModule } from '../src/add-ons/api';
+import { AddOnLoader } from '../src/add-ons/loader';
 import {
   addOnChunk,
+  addOnWorklet,
   BUILT_IN_ADD_ONS,
   type CatalogueEntry,
 } from '../src/add-ons/catalogue';
@@ -97,6 +100,23 @@ const buildAddOns = async (
     if (!result.success) {
       throw new AggregateError(result.logs, `Add-on ${entry.id} build failed`);
     }
+    if (entry.worklet) {
+      const worklet = await Bun.build({
+        entrypoints: [resolve(source, '..', 'worklet.ts')],
+        outdir: dist,
+        target: 'browser',
+        format: 'esm',
+        naming: addOnWorklet(entry),
+        minify,
+        sourcemap: 'linked',
+      });
+      if (!worklet.success) {
+        throw new AggregateError(
+          worklet.logs,
+          `Add-on ${entry.id} worklet build failed`,
+        );
+      }
+    }
   }
 };
 
@@ -117,6 +137,20 @@ export const examplePage = (page: string, slug: string): string =>
     );
 
 const writeExamples = async (): Promise<void> => {
+  // Built-in Add-ons' kinds write every parameter, so the files don't
+  // depend on what was loaded when they were built (#1901).
+  for (const problem of await new AddOnLoader({
+    importer: async entry =>
+      (
+        (await import(
+          resolve(root, 'src/add-ons', entry.slug, 'index.ts')
+        )) as {
+          default: AddOnModule;
+        }
+      ).default,
+  }).load(BUILT_IN_ADD_ONS)) {
+    throw new Error(`Add-on ${problem.id}: ${problem.message}`);
+  }
   const page = readFileSync(resolve(dist, 'index.html'), 'utf8');
   mkdirSync(resolve(dist, 'projects'), { recursive: true });
   const music = await createMusicBase();

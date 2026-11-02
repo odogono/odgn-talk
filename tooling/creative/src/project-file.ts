@@ -24,7 +24,12 @@ import {
   type Obj,
   type ValidationIssue,
 } from './elements/checker';
-import { addOnIdProblem, placeholderKind } from './elements/add-on';
+import {
+  addOnIdProblem,
+  placeholderKind,
+  splitAddOnKind,
+} from './elements/add-on';
+import { migrateInstrumentKinds } from './add-ons/instruments/migration';
 import { isElementKind, kindOf } from './elements/registry';
 import { migrateClicks } from './click-migration';
 import { migrateSounds } from './sound-migration';
@@ -34,7 +39,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 9;
+export const CURRENT_FORMAT = 10;
 const APP = 'northtalk-creative';
 
 export type { ValidationIssue } from './elements/checker';
@@ -205,6 +210,10 @@ const checkInstrument = (
   const saved = isObj(instrument.parameters) ? instrument.parameters : {};
   if (!isObj(instrument.parameters)) {
     c.fail(`${path}.parameters`, 'expected an object');
+  }
+  const addOn = splitAddOnKind(kind)?.addOn;
+  if (addOn && !c.addOns.has(addOn)) {
+    c.fail(`${path}.kind`, `the Add-on ${addOn} is not in addOns`);
   }
   const definition = INSTRUMENT_KINDS.get(kind);
   return {
@@ -397,6 +406,8 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   7: data => ({ ...data }),
   // Format 9 adds the optional `addOns` (ADR 0162); older Projects use none.
   8: data => ({ ...data }),
+  // Format 10 moves the synth and YM2149 into the Instruments Add-on.
+  9: migrateInstrumentKinds,
 };
 
 /**

@@ -26,7 +26,7 @@ One Element kind definition serves built-in kinds and both forms of Add-on. It d
 - the parameters its properties can bind to;
 - the Play State it carries between the worker and the page.
 
-Instrument kinds use the same mechanism. An Instrument kind's code may come from an Add-on, but the sounds it plays are the Project's own (ADR 0161). A new Project copies its Base Project's Project Add-ons and Palettes along with its sounds, so it never depends on the Base Project.
+Instrument kinds use the same mechanism, and are named the same way. The synth and YM2149 moved into a built-in Instruments Add-on (`https://northtalk.org/add-ons/instruments`), whose engines the audio worklet loads from a module of their own; format 10 renames older Projects' kinds and lists the Add-on. The sampler stays in Folio, because a Sound Pattern without `on` plays on one in every Project. An Instrument kind's code may come from an Add-on, but the sounds it plays are the Project's own (ADR 0161). A new Project copies its Base Project's Project Add-ons and Palettes along with its sounds, so it never depends on the Base Project.
 
 ## Naming
 

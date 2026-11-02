@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { EXAMPLE_PROJECTS } from '../src/examples';
 import { PlaySession } from '../src/play';
 import { scriptNameProblems } from '../src/script-names';
+import './helpers/instruments';
 
 test('Example Projects have unique names and descriptions', () => {
   const names = EXAMPLE_PROJECTS.map(example => example.name);

@@ -24,6 +24,11 @@ import {
   validateProjectJson,
   writeProjectFile,
 } from '../../src/project-file';
+import {
+  INSTRUMENTS_REF,
+  SYNTH_KIND,
+  YM2149_KIND,
+} from '../helpers/instruments';
 
 const RATE = 44_100;
 
@@ -280,21 +285,19 @@ describe('the YM2149', () => {
 
 describe('the registry', () => {
   test('every kind declares play, release and stop and valid defaults', () => {
-    for (const kind of INSTRUMENT_KINDS.values()) {
+    for (const [id, kind] of INSTRUMENT_KINDS) {
       expect(Object.keys(kind.operations).sort()).toEqual([
         'play',
         'release',
         'stop',
       ]);
       expect(kind.voices).toBeLessThanOrEqual(kind.maxVoices);
-      expect(
-        instrumentProblems([createInstrument(kind.name, kind.name)]),
-      ).toEqual([]);
+      expect(instrumentProblems([createInstrument(id, kind.name)])).toEqual([]);
     }
   });
 
   test('bad Instruments are found with their paths', () => {
-    const synth = createInstrument('synth', 'lead');
+    const synth = createInstrument(SYNTH_KIND, 'lead');
     expect(
       instrumentProblems([
         { ...synth, name: '2lead' },
@@ -327,7 +330,7 @@ describe('the registry', () => {
       },
       {
         path: 'instruments[4].kind',
-        message: 'expected one of sampler, ym2149, synth',
+        message: 'there is no Instrument kind “theremin”',
       },
       {
         path: 'instruments[5].parameters.cutoff',
@@ -361,11 +364,12 @@ describe('the registry', () => {
 describe('Instruments in the .folio file', () => {
   test('they round-trip through a Project file', async () => {
     const project = createProject('Band');
-    const bass = createInstrument('synth', 'bass');
+    project.addOns = [INSTRUMENTS_REF];
+    const bass = createInstrument(SYNTH_KIND, 'bass');
     bass.parameters.cutoff = 800;
     bass.parameters.waveform = 'square';
     bass.voices = 4;
-    project.instruments.push(bass, createInstrument('ym2149', 'chip'), {
+    project.instruments.push(bass, createInstrument(YM2149_KIND, 'chip'), {
       ...createInstrument('sampler', 'drums'),
       id: 7,
     });
@@ -374,7 +378,7 @@ describe('Instruments in the .folio file', () => {
     );
     expect(read.instruments).toEqual([
       bass,
-      createInstrument('ym2149', 'chip'),
+      createInstrument(YM2149_KIND, 'chip'),
       createInstrument('sampler', 'drums'),
     ]);
   });
@@ -391,13 +395,19 @@ describe('Instruments in the .folio file', () => {
     const json = serializeProject(createProject('Old'));
     const result = validateProjectJson({
       ...json,
+      addOns: [INSTRUMENTS_REF],
       instruments: [
-        { name: 'bass', kind: 'synth', voices: 2, parameters: { cutoff: 900 } },
+        {
+          name: 'bass',
+          kind: SYNTH_KIND,
+          voices: 2,
+          parameters: { cutoff: 900 },
+        },
       ],
     });
     expect('project' in result && result.project.instruments[0]).toEqual({
       name: 'bass',
-      kind: 'synth',
+      kind: SYNTH_KIND,
       voices: 2,
       parameters: { ...defaultParameters(synthEngine), cutoff: 900 },
     });
@@ -407,7 +417,8 @@ describe('Instruments in the .folio file', () => {
     const json = serializeProject(createProject('Bad'));
     const result = validateProjectJson({
       ...json,
-      instruments: [{ name: 'bass', kind: 'synth', voices: 99 }],
+      addOns: [INSTRUMENTS_REF],
+      instruments: [{ name: 'bass', kind: SYNTH_KIND, voices: 99 }],
     });
     expect('issues' in result && result.issues).toEqual([
       { path: 'instruments[0].parameters', message: 'expected an object' },

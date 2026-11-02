@@ -8,6 +8,7 @@ import { PlaySession } from '../src/play';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
 import { DEFAULT_SAMPLER } from '../src/sounds';
+import { SYNTH_KIND } from './helpers/instruments';
 
 const ms = (n: number) => BigInt(n) * 1000n;
 
@@ -15,7 +16,7 @@ const ms = (n: number) => BigInt(n) * 1000n;
 const project = (...clicks: string[]) => {
   const p = withMusicSounds(createProject('Groove'));
   p.instruments.push(
-    createInstrument('synth', 'bass'),
+    createInstrument(SYNTH_KIND, 'bass'),
     createInstrument('sampler', 'drums'),
   );
   clicks.forEach((body, i) => {

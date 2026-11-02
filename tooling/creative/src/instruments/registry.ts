@@ -9,18 +9,77 @@ import {
   parameterProblem,
   type InstrumentKind,
 } from './kind';
-import { NOTE_OPERATIONS, SAMPLER_OPERATIONS } from './operations';
+import { isAddOnKind, splitAddOnKind } from '../elements/add-on';
+import { SAMPLER_OPERATIONS } from './operations';
 import { samplerEngine } from './sampler';
-import { synthEngine } from './synth';
-import { ym2149Engine } from './ym2149';
 
-export const INSTRUMENT_KINDS: ReadonlyMap<string, InstrumentKind> = new Map(
-  [
-    { ...samplerEngine, operations: SAMPLER_OPERATIONS },
-    { ...ym2149Engine, operations: NOTE_OPERATIONS },
-    { ...synthEngine, operations: NOTE_OPERATIONS },
-  ].map(kind => [kind.name, kind]),
-);
+const KINDS = new Map<string, InstrumentKind>([
+  [samplerEngine.name, { ...samplerEngine, operations: SAMPLER_OPERATIONS }],
+]);
+
+/**
+ * Every Instrument kind Folio has: its own sampler, then each kind a loaded
+ * Add-on registered, by `<url>#<name>` (#1901).
+ */
+export const INSTRUMENT_KINDS: ReadonlyMap<string, InstrumentKind> = KINDS;
+
+/** Each kind's Object Kind name, as Scripts see its Instruments. */
+export const instrumentObjectKindNames = (): Set<string> =>
+  new Set([...KINDS.values()].map(kind => kind.name));
+
+/**
+ * Registers an Add-on's Instrument kind; the problem when its name, which
+ * Scripts see as an Object Kind, is taken, else undefined.
+ */
+export const registerInstrumentKind = (
+  kind: string,
+  definition: InstrumentKind,
+  names: InstrumentKindNames,
+  addOn: { id: string; version: string },
+  taken: (name: string) => boolean,
+): string | undefined => {
+  if (KINDS.has(kind)) {
+    return undefined;
+  }
+  if (
+    instrumentObjectKindNames().has(definition.name) ||
+    taken(definition.name)
+  ) {
+    return `another kind is already named ${definition.name}`;
+  }
+  KINDS.set(kind, definition);
+  NAMES.set(kind, names);
+  ADD_ONS.set(kind, addOn);
+  return undefined;
+};
+
+const ADD_ONS = new Map<string, { id: string; version: string }>();
+
+/** The Add-on, and its loaded version, an Instrument kind comes from. */
+export const instrumentKindAddOn = (
+  kind: string,
+): { id: string; version: string } | undefined => ADD_ONS.get(kind);
+
+/** A kind's name in Info, and the name a new Instrument of it is given. */
+export type InstrumentKindNames = { label: string; name: string };
+
+const NAMES = new Map<string, InstrumentKindNames>([
+  [samplerEngine.name, { label: 'Sampler', name: 'drums' }],
+]);
+
+/** `kind`'s names; a missing Add-on kind is named by its own name. */
+export const instrumentKindNames = (kind: string): InstrumentKindNames => {
+  const own = splitAddOnKind(kind)?.name ?? kind;
+  return NAMES.get(kind) ?? { label: own, name: own };
+};
+
+/** Whether `kind` is an Add-on's Instrument kind that hasn't loaded. */
+export const isMissingInstrumentKind = (kind: string): boolean =>
+  !KINDS.has(kind) && isAddOnKind(kind);
+
+/** The Add-on an Instrument of a missing kind needs. */
+export const instrumentAddOn = (kind: string): string | undefined =>
+  splitAddOnKind(kind)?.addOn;
 
 /** The most voices a Play Session's Instruments may have between them. */
 export const SESSION_VOICES = 64;
@@ -82,10 +141,14 @@ export const instrumentProblems = (
     }
     names.add(instrument.name);
     const kind = INSTRUMENT_KINDS.get(instrument.kind);
+    if (!kind && isAddOnKind(instrument.kind)) {
+      // Kept as saved until its Add-on loads, as a placeholder Element is.
+      return;
+    }
     if (!kind) {
       issues.push({
         path: `${path}.kind`,
-        message: `expected one of ${[...INSTRUMENT_KINDS.keys()].join(', ')}`,
+        message: `there is no Instrument kind “${instrument.kind}”`,
       });
       return;
     }

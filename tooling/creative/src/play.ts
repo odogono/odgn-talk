@@ -27,7 +27,11 @@ import {
   type PatternTarget,
 } from './sound-patterns';
 import type { SoundCall } from './grants/sound';
-import { INSTRUMENT_KINDS } from './instruments/registry';
+import {
+  instrumentAddOn,
+  instrumentObjectKindNames,
+  isMissingInstrumentKind,
+} from './instruments/registry';
 import {
   InstrumentSession,
   silentInstrumentBackend,
@@ -835,6 +839,17 @@ export class PlaySession {
         });
       }
     });
+    // An Instrument whose Add-on isn't loaded has no Grant, so Scripts that
+    // play it fail; the Errors window says which Add-on it needs (ADR 0162).
+    for (const instrument of project.instruments) {
+      if (isMissingInstrumentKind(instrument.kind)) {
+        this.problems.push({
+          owner: project,
+          line: 1,
+          message: `Instrument “${instrument.name}” needs the Add-on ${instrumentAddOn(instrument.kind)}, which isn't loaded`,
+        });
+      }
+    }
     this.instruments = new InstrumentSession(
       project.instruments,
       options.instrumentBackend,
@@ -860,9 +875,10 @@ export class PlaySession {
     });
     const originals = scriptOwners(project);
     const copies = scriptOwners(this.project);
+    const instrumentNames = instrumentObjectKindNames();
     this.#kinds = new Map(
       scriptManifest(project, project)
-        .objectKinds.filter(def => !INSTRUMENT_KINDS.has(def.name))
+        .objectKinds.filter(def => !instrumentNames.has(def.name))
         .map(def => {
           const props: Record<string, PropDef<ScriptOwner>> = {};
           const descriptors = propertiesForKind(def.name);

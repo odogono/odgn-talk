@@ -12,6 +12,9 @@ import { soundDecodeOrder } from '../pattern-checks';
 import { DEFAULT_SAMPLER, isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
 import { samplerEngine } from './sampler';
+import { INSTRUMENT_KINDS } from './registry';
+import { splitAddOnKind } from '../elements/add-on';
+import { addOnWorklet, BUILT_IN_ADD_ONS } from '../add-ons/catalogue';
 import {
   INSTRUMENT_PROCESSOR,
   type InstrumentChannel,
@@ -20,6 +23,18 @@ import {
 } from './rack';
 
 const WORKLET_URL = './instruments.worklet.js';
+
+/** The worklet modules of the built-in Add-ons the Instruments use. */
+export const addOnWorklets = (project: DeepReadonly<Project>): string[] =>
+  BUILT_IN_ADD_ONS.filter(
+    entry =>
+      entry.worklet &&
+      project.instruments.some(
+        i =>
+          splitAddOnKind(i.kind)?.addOn === entry.id &&
+          INSTRUMENT_KINDS.has(i.kind),
+      ),
+  ).map(entry => `./${addOnWorklet(entry)}`);
 
 /** How often the Play worker hears the audio clock while it runs. */
 const READING_MS = 250;
@@ -118,6 +133,10 @@ export const startInstrumentAudio = (
       const [samples] = await Promise.all([
         decoding,
         context.audioWorklet.addModule(WORKLET_URL),
+        // Each built-in Add-on whose engines the Instruments use (#1901).
+        ...addOnWorklets(project).map(url =>
+          context.audioWorklet.addModule(url),
+        ),
       ]);
       if (closed) {
         return;

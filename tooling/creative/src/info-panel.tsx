@@ -15,17 +15,8 @@ import { kindOf } from './elements/registry';
 import { kindInfo } from './elements/views';
 import { isSoundAsset } from './sounds';
 import type { ParameterDefinition } from './instruments/kind';
-import { INSTRUMENT_KINDS } from './instruments/registry';
-
-/** Each Instrument kind's name in Info, and the name a new one is given. */
-export const INSTRUMENT_KIND_NAMES: Record<
-  string,
-  { label: string; name: string }
-> = {
-  sampler: { label: 'Sampler', name: 'drums' },
-  ym2149: { label: 'YM2149 sound chip', name: 'chip' },
-  synth: { label: 'Synth', name: 'synth' },
-};
+import { INSTRUMENT_KINDS, instrumentKindNames } from './instruments/registry';
+import { pageAddOns } from './add-ons/page';
 
 /** `envelopePeriod` as `Envelope period`. */
 const parameterLabel = (name: string): string => {
@@ -104,9 +95,8 @@ const InstrumentsSection = ({
               key={instrument.id}
             >
               <legend>
-                {INSTRUMENT_KIND_NAMES[instrument.kind]?.label ??
-                  instrument.kind}{' '}
-                “{instrument.name}”
+                {instrumentKindNames(instrument.kind).label}
+                {kind ? '' : ' (Add-on not loaded)'} “{instrument.name}”
               </legend>
               {field(
                 'Name',
@@ -164,9 +154,20 @@ const InstrumentsSection = ({
           data-new-instrument=""
           disabled={disabled}
         >
-          {[...INSTRUMENT_KINDS.keys()].map(kind => (
+          {[
+            ...[...INSTRUMENT_KINDS.keys()].map(kind => ({
+              kind,
+              label: instrumentKindNames(kind).label,
+            })),
+            // A built-in Add-on's kinds load when one is added (#1901).
+            ...pageAddOns.catalogue.flatMap(entry =>
+              (entry.instruments ?? [])
+                .map(i => ({ kind: `${entry.id}#${i.name}`, label: i.label }))
+                .filter(({ kind }) => !INSTRUMENT_KINDS.has(kind)),
+            ),
+          ].map(({ kind, label }) => (
             <option key={kind} value={kind}>
-              {INSTRUMENT_KIND_NAMES[kind]?.label ?? kind}
+              {label}
             </option>
           ))}
         </select>
