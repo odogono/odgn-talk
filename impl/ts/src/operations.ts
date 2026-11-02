@@ -112,8 +112,10 @@ import {
   canonicalNumber,
   decimalParts,
   mapWithEntry,
+  smallCoefficient,
+  smallDecimalNumber,
+  smallExponent,
   smallInteger,
-  smallNumber,
 } from './values';
 import {
   combine,
@@ -585,11 +587,11 @@ export const comparison = (
     const { equal, scanned } = equals(a, b, fold);
     return { result: bool(op === 'equal' ? equal : !equal), scanned };
   }
-  const x = smallOf(a);
-  const y = smallOf(b);
+  const x = smallCoefficientOf(a);
+  const y = smallCoefficientOf(b);
   let scanned = 0;
   let o: number;
-  if (!Number.isNaN(x) && !Number.isNaN(y)) {
+  if (!Number.isNaN(x) && !Number.isNaN(y) && exponentOf(a) === exponentOf(b)) {
     o = x < y ? -1 : x > y ? 1 : 0;
   } else {
     const comparer = new Comparer(fold);
@@ -876,32 +878,83 @@ const dateArithmetic = (op: string, a: Value, b: Value): Value => {
   );
 };
 
+const MIN_EXPONENT = -6176;
 /**
- * Add, subtract or multiply two small integers (see `smallInteger`), or
- * undefined when either isn't one or the result isn't a safe integer. The
- * exact result needs no rounding, so it equals the Decimal path's.
+ * Add, subtract or multiply two small Decimals: safe-integer coefficients x
+ * and y with exponents ex and ey (see `smallCoefficient`). Undefined when
+ * either isn't one, when adding or subtracting unequal exponents, or when the
+ * result's coefficient isn't a safe integer or its exponent is out of range.
+ * Such a result is exact and at the ideal exponent, so it equals the Decimal
+ * path's.
  */
 export const smallArithmetic = (
   op: string,
   x: number,
+  ex: number,
   y: number,
+  ey: number,
 ): Value | undefined => {
-  const r =
-    op === 'add'
-      ? x + y
-      : op === 'subtract'
-        ? x - y
-        : op === 'multiply'
-          ? x * y
-          : Number.NaN;
-  return Number.isSafeInteger(r) ? smallNumber(r) : undefined;
+  let r: number;
+  let e = ex;
+  if (op === 'multiply') {
+    r = x * y;
+    e = ex + ey;
+    if (e < MIN_EXPONENT) {
+      return undefined;
+    }
+  } else if (op === 'divide') {
+    return smallQuotient(x, ex, y, ey);
+  } else if (ex !== ey) {
+    return undefined;
+  } else {
+    r = op === 'add' ? x + y : op === 'subtract' ? x - y : Number.NaN;
+  }
+  return Number.isSafeInteger(r) ? smallDecimalNumber(r, e) : undefined;
+};
+// x×10^ex ÷ y×10^ey when it terminates within a safe-integer coefficient.
+// The fewest digits after the ideal exponent (ex - ey) is the exact writing
+// nearest it, which the Decimal path picks.
+const smallQuotient = (
+  x: number,
+  ex: number,
+  y: number,
+  ey: number,
+): Value | undefined => {
+  if (y === 0 || Number.isNaN(x) || Number.isNaN(y)) {
+    return undefined;
+  }
+  let n = x;
+  let e = ex - ey;
+  for (; e > 0; e--) {
+    n *= 10;
+  }
+  while (Number.isSafeInteger(n) && e >= MIN_EXPONENT) {
+    if (n % y === 0) {
+      return smallDecimalNumber(n / y, e);
+    }
+    n *= 10;
+    e--;
+  }
+  return undefined;
 };
 /** A number Value's small integer, or NaN. */
 export const smallOf = (v: Value): number =>
   v.kind === 'number' ? smallInteger(v.asDecimal()!) : Number.NaN;
+/** A number Value's small coefficient (see `smallCoefficient`), or NaN. */
+export const smallCoefficientOf = (v: Value): number =>
+  v.kind === 'number' ? smallCoefficient(v.asDecimal()!) : Number.NaN;
+/** A number Value's exponent, or 0 for another kind. */
+export const exponentOf = (v: Value): number =>
+  v.kind === 'number' ? smallExponent(v.asDecimal()!) : 0;
 
 export const arithmetic = (op: string, a: Value, b: Value): Value => {
-  const small = smallArithmetic(op, smallOf(a), smallOf(b));
+  const small = smallArithmetic(
+    op,
+    smallCoefficientOf(a),
+    exponentOf(a),
+    smallCoefficientOf(b),
+    exponentOf(b),
+  );
   if (small) {
     return small;
   }

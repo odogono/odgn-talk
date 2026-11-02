@@ -83,7 +83,7 @@ import {
   wrongKind,
   randomBound,
   smallArithmetic,
-  smallOf,
+  smallCoefficientOf,
 } from './operations';
 import { readDisplay } from './readers';
 import { validComputedMessageName } from './selectors';
@@ -122,8 +122,11 @@ import {
   nothing,
   num,
   quantity,
+  smallCoefficient,
+  smallExponent,
   text,
   Value,
+  type Decimal,
   type FunctionRef,
 } from './values';
 import type { PatternElement } from './view';
@@ -1109,9 +1112,9 @@ const iteratorOver = (v: Value): Iterator => {
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 const isBoolean = (item: Item | undefined): boolean =>
   isValue(item) && item.kind === 'boolean';
-// A stack item's small integer (see `smallInteger`), or NaN.
-const smallAt = (item: Item | undefined): number =>
-  isValue(item) ? smallOf(item) : Number.NaN;
+// A stack item's Decimal, or undefined when it isn't a number.
+const decimalAt = (item: Item | undefined): Decimal | undefined =>
+  isValue(item) ? item.asDecimal() : undefined;
 
 // Shrinking length is expensive on JavaScriptCore, even for a single operand.
 const drop = (stack: Item[], n: number): void => {
@@ -1156,7 +1159,7 @@ const compareCharges: Charge[] = [];
 // size are all a number result's measures.
 const numberCharges: Charge[][] = [];
 const numberCharge = (rate: number, result: Value): Charge => {
-  const n = Math.abs(smallOf(result));
+  const n = Math.abs(smallCoefficientOf(result));
   let digits = 1;
   for (let ten = 10; n >= ten; ten *= 10) {
     digits++;
@@ -2862,9 +2865,18 @@ export class Run {
         case Op.GreaterOrEqual:
         case Op.Equal:
         case Op.NotEqual: {
-          const x = smallAt(stack.at(-2));
-          const y = smallAt(stack.at(-1));
-          if (Number.isNaN(x) || Number.isNaN(y)) {
+          const left = decimalAt(stack.at(-2));
+          const right = decimalAt(stack.at(-1));
+          if (!left || !right) {
+            break;
+          }
+          const x = smallCoefficient(left);
+          const y = smallCoefficient(right);
+          if (
+            Number.isNaN(x) ||
+            Number.isNaN(y) ||
+            smallExponent(left) !== smallExponent(right)
+          ) {
             break;
           }
           cost = compareCharges[ins.rate] ??= charge(ins.rate, {
@@ -2948,11 +2960,18 @@ export class Run {
         case Op.Add:
         case Op.Subtract:
         case Op.Multiply: {
-          result = smallArithmetic(
-            ins.op,
-            smallAt(stack.at(-2)),
-            smallAt(stack.at(-1)),
-          );
+          const left = decimalAt(stack.at(-2));
+          const right = decimalAt(stack.at(-1));
+          result =
+            left && right
+              ? smallArithmetic(
+                  ins.op,
+                  smallCoefficient(left),
+                  smallExponent(left),
+                  smallCoefficient(right),
+                  smallExponent(right),
+                )
+              : undefined;
           if (result) {
             cost = numberCharge(ins.rate, result);
           }
