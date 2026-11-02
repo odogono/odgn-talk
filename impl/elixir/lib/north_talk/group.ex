@@ -66,3 +66,28 @@ defmodule NorthTalk.Pumped do
   @type t :: %__MODULE__{pending: NorthTalk.Pending.t(), pump: {:ok, map()} | {:error, Exception.t()}}
   defstruct [:pending, :pump]
 end
+
+defmodule NorthTalk.Verdict do
+  @moduledoc """
+  The answer to a Decision: `verdict` is `:allowed`, `:vetoed` or
+  `:undecided`. `vetoes` lists each veto as `%{script, run, reason}` and
+  `undecided` each recipient that didn't decide as `%{script, run, outcome}`,
+  in recipient order. `report` is the `decided` report.
+  """
+  @type t :: %__MODULE__{verdict: :allowed | :vetoed | :undecided, vetoes: [map()], undecided: [map()], report: map()}
+  defstruct [:verdict, :report, vetoes: [], undecided: []]
+
+  @verdicts %{"allowed" => :allowed, "vetoed" => :vetoed, "undecided" => :undecided}
+
+  @doc false
+  def new(report) do
+    %__MODULE__{
+      verdict: Map.fetch!(@verdicts, report["verdict"]),
+      vetoes: Enum.map(report["vetoes"] || [], &entry(&1, ["script", "run", "reason"])),
+      undecided: Enum.map(report["undecided"] || [], &entry(&1, ["script", "run", "outcome"])),
+      report: report
+    }
+  end
+
+  defp entry(row, keys), do: Map.new(keys, &{String.to_atom(&1), row[&1]})
+end
