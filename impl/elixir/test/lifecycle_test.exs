@@ -259,4 +259,69 @@ defmodule NorthTalk.LifecycleTest do
     assert :ok = NorthTalk.extend(group, "s", "on more\n  return 1\nend more\n")
     assert {:ok, %Result{value: 1}} = NorthTalk.request(group, "s", "more")
   end
+
+  # Two Capabilities whose coordinator/1 maps every binding to one hook, as
+  # a Host backing both with one database would (ADR 0069).
+  defp shared(pid) do
+    hook = fn phase, %Effect{} = e ->
+      send(pid, {:shared, phase, e.grants})
+      :ok
+    end
+
+    op = fn name ->
+      %{"write" => {[result: "nothing", segment_bound: true], fn [], _ -> send(pid, {:op, name}) && {:ok, nil} end}}
+    end
+
+    [
+      Capability.from_functions("world", op.("world"), coordinator: fn _ -> hook end),
+      Capability.from_functions("timer", op.("timer"), coordinator: fn _ -> hook end)
+    ]
+  end
+
+  test "Grants mapped to one coordinator share a Segment's participant" do
+    owner = start_supervised!({NorthTalk, drive: :auto})
+    Enum.each(shared(self()), &(:ok = NorthTalk.define_capability!(owner, &1)))
+    group = NorthTalk.new_group!(owner, "g", [])
+
+    grants = %{
+      "w" => NorthTalk.grant!(owner, "world", binding: :a),
+      "t" => NorthTalk.grant!(owner, "timer", binding: :b)
+    }
+
+    NorthTalk.load!(group, "s", "on go\n  ask w to write\n  ask t to write\nend go\n", grants: grants)
+
+    assert {:ok, _} = NorthTalk.request(group, "s", "go")
+    assert_receive {:shared, :begin, [{"w", :a}]}
+    assert_receive {:op, "world"}
+    assert_receive {:op, "timer"}
+    assert_receive {:shared, :commit, [{"w", :a}, {"t", :b}]}
+    refute_received {:shared, :begin, _}
+  end
+
+  test "Grants mapped to different coordinators conflict in one Segment" do
+    owner = start_supervised!({NorthTalk, drive: :auto})
+    pid = self()
+    hook = fn tag -> fn phase, _ -> send(pid, {tag, phase}) && :ok end end
+    op = %{"write" => {[result: "nothing", segment_bound: true], fn [], _ -> {:ok, nil} end}}
+    :ok = NorthTalk.define_capability!(owner, Capability.from_functions("db", op, coordinator: &hook.(&1)))
+    group = NorthTalk.new_group!(owner, "g", [])
+    grants = %{"a" => NorthTalk.grant!(owner, "db", binding: :one), "b" => NorthTalk.grant!(owner, "db", binding: :two)}
+    NorthTalk.load!(group, "s", "on go\n  ask a to write\n  ask b to write\nend go\n", grants: grants)
+
+    assert {:error, %ScriptError{error: %{"code" => "segment participant conflict", "participant" => "a"}}} =
+             NorthTalk.request(group, "s", "go")
+  end
+
+  test "a Capability takes effect or coordinator, not both" do
+    assert_raise ArgumentError, fn ->
+      Capability.from_functions("x", %{}, effect: fn _, _ -> :ok end, coordinator: fn _ -> nil end)
+    end
+  end
+
+  test "a coordinator that isn't a hook is invalid value at the Grant" do
+    owner = start_supervised!({NorthTalk, []})
+    op = %{"write" => {[result: "nothing", segment_bound: true], fn [], _ -> {:ok, nil} end}}
+    :ok = NorthTalk.define_capability!(owner, Capability.from_functions("db", op, coordinator: fn _ -> nil end))
+    assert {:error, %HostError{code: "invalid value"}} = NorthTalk.grant(owner, "db", binding: 1)
+  end
 end

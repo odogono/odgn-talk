@@ -62,6 +62,9 @@ defmodule NorthTalk.Owner do
     # {group, script, grant name}.
     capabilities: %{},
     bindings: %{},
+    # The Message Layer's name for each Segment Coordinator, by the term
+    # a Capability's coordinator/1 returned (ADR 0069).
+    coordinators: %{},
     # Suspending calls not yet settled, by {group, call id}: their Task's
     # monitor ref, or their deferred ref, each indexed back to the call.
     calls: %{},
@@ -367,7 +370,7 @@ defmodule NorthTalk.Owner do
 
     fields =
       %{"name" => capability.name, "ops" => Capability.declarations(capability)}
-      |> then(&if(capability.effect, do: Map.put(&1, "segmentLifecycle", true), else: &1))
+      |> then(&if(capability.effect || capability.coordinator, do: Map.put(&1, "segmentLifecycle", true), else: &1))
       |> then(&if(capability.release, do: Map.put(&1, "release", true), else: &1))
 
     case exchange(state, "define-capability", fields) do
@@ -380,12 +383,18 @@ defmodule NorthTalk.Owner do
     ops = with list when is_list(list) <- Keyword.get(opts, :ops, :all), do: list
     fields = %{"capability" => name, "ops" => if(ops == :all, do: "all", else: ops)}
 
-    if Map.has_key?(state.capabilities, name) do
+    with %Capability{} = capability <- state.capabilities[name],
+         {:ok, coordinator} <- coordinator(capability, opts[:binding]) do
+      {fields, state} = name_coordinator(state, fields, coordinator)
       {reply, state} = exchange(state, "grant", fields)
-      grant = &%Grant{owner: self(), handle: &1["grant"], capability: name, binding: opts[:binding]}
+
+      grant =
+        &%Grant{owner: self(), handle: &1["grant"], capability: name, binding: opts[:binding], coordinator: coordinator}
+
       {:reply, ok(reply, grant), state}
     else
-      {:reply, {:error, %HostError{code: "invalid value", detail: "no Capability #{name}"}}, state}
+      nil -> {:reply, {:error, %HostError{code: "invalid value", detail: "no Capability #{name}"}}, state}
+      error -> {:reply, error, state}
     end
   end
 
@@ -1178,17 +1187,39 @@ defmodule NorthTalk.Owner do
     with %Grant{owner: ^me} <- grant, do: grant, else: (_ -> nil)
   end
 
+  # Maps a Grant's binding to its Segment Coordinator once, at creation.
+  defp coordinator(%Capability{coordinator: nil}, _binding), do: {:ok, nil}
+
+  defp coordinator(%Capability{coordinator: map, name: name}, binding) do
+    case Capability.hook(map, [binding]) do
+      {module, fun} = hook when is_atom(module) and is_atom(fun) -> {:ok, hook}
+      hook when is_function(hook, 2) -> {:ok, hook}
+      other -> {:error, %HostError{code: "invalid value", detail: "#{name} coordinator returned #{inspect(other)}"}}
+    end
+  rescue
+    e -> {:error, %HostError{code: "invalid value", detail: Exception.message(e)}}
+  end
+
+  # Equal coordinator terms get one name, so their Grants share a participant.
+  defp name_coordinator(state, fields, nil), do: {fields, state}
+
+  defp name_coordinator(state, fields, coordinator) do
+    id = Map.get_lazy(state.coordinators, coordinator, fn -> "ex-coordinator-#{map_size(state.coordinators) + 1}" end)
+    {Map.put(fields, "coordinator", id), put_in(state.coordinators[coordinator], id)}
+  end
+
   @phases %{"begin" => :begin, "commit" => :commit, "rollback" => :rollback}
   @statuses [:ok, :failed, :unknown]
 
   # A Segment lifecycle crossing goes to the first enrolled Grant's
-  # Capability. Anything but a status it returns is `unknown`.
+  # coordinator, or else its Capability's effect hook. Anything but a status it returns is `unknown`.
   defp effect(state, g, need) do
     script = need["script"]
     grants = Enum.map(need["grants"] || [need["grant"]], &{&1, state.bindings[{g, script, &1}]})
 
     with %Grant{} = grant <- state.bindings[{g, script, need["grant"]}],
-         %Capability{effect: hook} = capability when hook != nil <- state.capabilities[grant.capability] do
+         %Capability{} = capability <- state.capabilities[grant.capability],
+         hook when hook != nil <- grant.coordinator || capability.effect do
       effect = %Effect{
         group: %Group{owner: self(), name: g},
         script: script,

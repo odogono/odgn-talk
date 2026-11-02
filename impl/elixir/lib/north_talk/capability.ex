@@ -50,13 +50,24 @@ defmodule NorthTalk.Capability do
   phase, `:begin`, `:commit` or `:rollback`, and a `NorthTalk.Effect`, and
   returns `:ok`, `:failed` or `:unknown`, optionally as
   `{status, detail}`. A raise, an exit, a timeout or anything else is
-  `:unknown`, which stops the Group.
+  `:unknown`, which stops the Group. Each Grant is then its own Segment
+  Coordinator, so a second Segment-bound Grant in one Segment raises
+  `segment participant conflict`.
+
+  To let Grants share a Segment's participant, define `coordinator/1`
+  instead. It gets a Grant's binding when the Grant is created and returns
+  that Grant's Segment Coordinator: a hook taking the same arguments as
+  `effect/2`, as a function of arity 2 or `{module, function}`. Grants whose
+  coordinators are equal terms, from this Capability or another, share one
+  participant, and the hook's `NorthTalk.Effect` lists every enrolled Grant.
+  A Capability defines `effect/2` or `coordinator/1`, not both.
 
   A Capability may define `release/1`, its Grant release hook. It gets a
   `NorthTalk.Release` when one Script's named Grant stops being effective,
   and drops what it holds for it. Its result and any failure are ignored.
 
-  `from_functions/3` takes them as the `:effect` and `:release` options.
+  `from_functions/3` takes them as the `:effect`, `:coordinator` and
+  `:release` options.
 
   ## Results
 
@@ -97,7 +108,7 @@ defmodule NorthTalk.Capability do
   """
 
   @enforce_keys [:name]
-  defstruct [:name, :effect, :release, timeout: 5_000, operations: %{}]
+  defstruct [:name, :effect, :coordinator, :release, timeout: 5_000, operations: %{}]
 
   @type failure :: String.t() | %{required(:code) => String.t(), optional(atom) => term}
   @type result :: {:ok, term} | {:error, failure} | :noreply | {:defer, term}
@@ -135,7 +146,7 @@ defmodule NorthTalk.Capability do
     end
 
     hooks =
-      [effect: 2, release: 1]
+      [effect: 2, coordinator: 1, release: 1]
       |> Enum.filter(fn {hook, arity} -> Module.defines?(env.module, {hook, arity}) end)
       |> Enum.map(fn {hook, _} -> {hook, {env.module, hook}} end)
 
@@ -157,8 +168,8 @@ defmodule NorthTalk.Capability do
   @doc """
   A Capability from plain functions, for tests and quick experiments.
   `operations` maps each Operation's name to `{declaration, fun}`, where `fun`
-  takes the arguments and a `NorthTalk.Call`. `:effect` and `:release` are
-  the lifecycle hooks, as functions of arity 2 and 1.
+  takes the arguments and a `NorthTalk.Call`. `:effect`, `:coordinator` and
+  `:release` are the lifecycle hooks, as functions of arity 2, 1 and 1.
   """
   def from_functions(name, operations, opts \\ []) do
     build(name, Enum.map(operations, fn {op, {decl, fun}} when is_function(fun, 2) -> {op, decl, fun} end), opts)
@@ -166,6 +177,9 @@ defmodule NorthTalk.Capability do
 
   @doc false
   def build(name, operations, opts) do
+    if opts[:effect] && opts[:coordinator],
+      do: raise(ArgumentError, "Capability #{name} takes effect or coordinator, not both")
+
     ops =
       Map.new(operations, fn {op, decl, fun} ->
         {op, %{mode: Keyword.get(decl, :mode, :immediate), declaration: declaration(op, decl), fun: fun}}
@@ -176,6 +190,7 @@ defmodule NorthTalk.Capability do
       timeout: Keyword.get(opts, :timeout, 5_000),
       operations: ops,
       effect: opts[:effect],
+      coordinator: opts[:coordinator],
       release: opts[:release]
     }
   end
@@ -288,7 +303,8 @@ defmodule NorthTalk.Grant do
   `binding`, which every call through it reads. Pass it to `NorthTalk.load/4`
   under the name the Script uses: `grants: %{"stock" => grant}`. One Grant may
   be given to many Scripts, and one Capability granted under several names
-  with different bindings.
+  with different bindings. `coordinator` is the Segment Coordinator its
+  Capability's `coordinator/1` mapped the binding to, or `nil`.
   """
-  defstruct [:owner, :handle, :capability, :binding]
+  defstruct [:owner, :handle, :capability, :binding, :coordinator]
 end
