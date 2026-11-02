@@ -1,5 +1,5 @@
 //! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale`,
-//! `timer`, `console`, `store`, `sqlite`, `user` and `http`, with the declarations the chapter fixes. Each factory takes the
+//! `timer`, `console`, `store`, `sqlite`, `user`, `http` and `peer`, with the declarations the chapter fixes. Each factory takes the
 //! Host's implementation, one Host function per Operation, and a cost per
 //! Operation. The Core makes the chapter's own checks: option words and
 //! Locale tags before a call, which are charged nothing, and the result rules
@@ -18,7 +18,7 @@ const Value = model.Value;
 const Shape = caps.Shape;
 
 /// The Standard Capabilities this Core defines so far.
-pub const Which = enum { clock, calendar, locale, timer, console, store, sqlite, user, http };
+pub const Which = enum { clock, calendar, locale, timer, console, store, sqlite, user, http, peer };
 
 /// Each one's Operations, in name order, as its declarations list them.
 pub fn operations(which: Which) []const []const u8 {
@@ -32,6 +32,7 @@ pub fn operations(which: Which) []const []const u8 {
         .sqlite => &.{ "begin", "change", "commit", "query", "rollback" },
         .user => &.{ "choose", "confirm", "enter", "notify" },
         .http => &.{ "fetch", "respond", "serve", "unserve" },
+        .peer => &.{ "call", "caller", "expose", "post", "reach", "unexpose" },
     };
 }
 
@@ -283,6 +284,36 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             result = try Kinds.kind(gpa, .nothing);
             errors = &.{ "invalid response", "already responded", "exchange closed", "not owner" };
         },
+        // A Remote Send is `post` or `call` of the sending Script's one
+        // `peer` Grant (chapter 5); no `maxPending`, so `call`, `expose` and
+        // `reach` wait for the Script's MaxWait.
+        .peer => if (eq(name, "post") or eq(name, "call")) {
+            try args.append(gpa, try Shape.objectOf(gpa, peer_kind));
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            try args.append(gpa, try Shape.listOf(gpa, try Kinds.kind(gpa, .any)));
+            if (eq(name, "call")) {
+                result = try Kinds.kind(gpa, .any);
+                errors = &.{ "send failed", "out of domain", "wrong kind", "bad message name", "not encodable" };
+                mode = .suspending;
+            } else {
+                errors = &.{ "out of domain", "wrong kind", "bad message name", "not encodable" };
+                mode = .fire_and_forget;
+            }
+        } else if (eq(name, "expose") or eq(name, "reach")) {
+            try args.append(gpa, if (eq(name, "expose")) try Kinds.optionalText(gpa) else try Kinds.kind(gpa, .text));
+            result = try Shape.objectOf(gpa, peer_kind);
+            errors = if (eq(name, "expose")) &.{ "bad address", "name in use", "out of domain" } else &.{ "bad address", "not exposed", "out of domain" };
+            mode = .suspending;
+        } else if (eq(name, "unexpose")) {
+            const either = try gpa.alloc(*Shape, 2);
+            either[0] = try Kinds.kind(gpa, .text);
+            either[1] = try Shape.objectOf(gpa, peer_kind);
+            try args.append(gpa, try Shape.oneOf(gpa, either));
+            result = try Kinds.kind(gpa, .nothing);
+            errors = &.{"out of domain"};
+        } else {
+            result = try Kinds.kind(gpa, .any);
+        },
         .console => if (eq(name, "write")) {
             try args.append(gpa, try Kinds.kind(gpa, .value));
             mode = .fire_and_forget;
@@ -327,10 +358,13 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{.{ "column", .text }}
         else if (std.mem.eql(u8, code, "out of domain"))
             &.{ .{ "function", .text }, .{ "value", .value } }
+        else if (std.mem.eql(u8, code, "send failed"))
+            &.{ .{ "reason", .text }, .{ "error", .any } }
         else
             &.{};
         const out = try gpa.alloc(caps.Field, fields.len);
-        for (fields, out) |f, *x| x.* = .{ .key = try gpa.dupe(u8, f[0]), .shape = try Shape.kind(gpa, f[1]) };
+        // `send failed`'s `error` is there only for `errored`.
+        for (fields, out) |f, *x| x.* = .{ .key = try gpa.dupe(u8, f[0]), .shape = try Shape.kind(gpa, f[1]), .optional = std.mem.eql(u8, f[0], "error") };
         // The limits each quota error may name (chapter 6).
         const choice: ?caps.Choice = if (std.mem.eql(u8, code, "store full"))
             .{ .field = "limit", .words = &.{ "size", "keys", "value" } }
@@ -342,7 +376,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             null;
         const core = for ([_][]const u8{ "invalid key", "invalid watch", "invalid serve", "invalid response", "invalid request", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
             if (std.mem.eql(u8, x, code)) break true;
-        } else false;
+        } else which == .peer and !std.mem.eql(u8, code, "send failed") and !std.mem.eql(u8, code, "bad address") and !std.mem.eql(u8, code, "name in use") and !std.mem.eql(u8, code, "not exposed");
         d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
     }
     return .{
@@ -371,6 +405,7 @@ pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .sqlite => if (eq(name, "query") or eq(name, "change")) beforeSqlite else null,
             .user => if (eq(name, "choose")) beforeChoose else null,
             .http => beforeHttp,
+            .peer => if (eq(name, "caller")) null else beforePeer,
             else => null,
         },
         .after = switch (which) {
@@ -513,6 +548,57 @@ fn beforeStore(a: Allocator, op: *const caps.Operation, args: []const *Value, bi
     if (args[0].data.text.len == 0) return .{ .invalid_field = .{ .code = "invalid watch", .field = "name" } };
     if (std.mem.eql(u8, op.name, "watch") and !plainName(effectiveMessage(args))) return .{ .invalid_field = .{ .code = "invalid watch", .field = "message" } };
     return null;
+}
+
+/// The Core-fixed Object Kind of a Peer (chapter 9, The `peer` factory).
+pub const peer_kind = "peer";
+
+/// `peer`'s own checks, before the call is charged: an empty name or
+/// address is `out of domain`; a Remote Send's message must be a Selector a
+/// computed `send` could use, and its arguments may hold no Host Object
+/// but a Peer, at any depth (chapter 5, Remote Sends).
+fn beforePeer(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    _ = binding;
+    const sending = std.mem.eql(u8, op.name, "post") or std.mem.eql(u8, op.name, "call");
+    if (!sending) {
+        if (args.len > 0 and args[0].data == .text and args[0].data.text.len == 0) return .{ .out_of_domain = args[0] };
+        return null;
+    }
+    const sent = args[2].data.list;
+    if (!@import("machine.zig").messageName(args[1].data.text, sent.len)) return .{ .bad_message_name = .{ .name = args[1], .arguments = sent.len } };
+    // Path values outlive this call in the raised error: they take the
+    // argument's own allocator, as `sqlite`'s do.
+    const gpa = args[2].allocator;
+    var path: std.ArrayList(*Value) = .empty;
+    defer path.deinit(a);
+    if (try strayObject(a, gpa, args[2], &path)) {
+        const kept = model.list(gpa, path.items) catch return error.OutOfMemory;
+        for (path.items) |v| v.release();
+        return .{ .mismatch = .{ .bad = .{ .not_encodable = .{ .path = kept.data.list, .kind = "object" } }, .position = 3, .keep = kept } };
+    }
+    for (path.items) |v| v.release();
+    return null;
+}
+
+/// Whether `v` holds a Host Object other than a Peer; `path` then locates
+/// the first, by list index and map key.
+fn strayObject(a: Allocator, gpa: Allocator, v: *const Value, path: *std.ArrayList(*Value)) Allocator.Error!bool {
+    switch (v.data) {
+        .object => |o| return !std.mem.eql(u8, o.kind, peer_kind),
+        .list => |xs| for (xs, 1..) |x, i| {
+            try path.append(a, @import("chunks.zig").numberValue(gpa, @intCast(i)) catch return error.OutOfMemory);
+            if (try strayObject(a, gpa, x, path)) return true;
+            path.pop().?.release();
+        },
+        .map => |m| for (0..m.len) |i| {
+            const p = m.at(i);
+            try path.append(a, model.text(gpa, p.key) catch return error.OutOfMemory);
+            if (try strayObject(a, gpa, p.value, path)) return true;
+            path.pop().?.release();
+        },
+        else => {},
+    }
+    return false;
 }
 
 /// `http`'s own checks, before the call is charged: `serve`'s and
@@ -740,7 +826,7 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
     const nothing = try fresh(gpa, made, try model.scalar(gpa, .nothing));
     switch (ctx.which) {
         .clock => {},
-        .timer, .console, .sqlite => try out.appendSlice(gpa, args),
+        .timer, .console, .sqlite, .peer => try out.appendSlice(gpa, args),
         .user => {
             // The message or items, then each option, in the order the
             // Host function takes them: an omitted text is empty, and an

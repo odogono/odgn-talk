@@ -685,11 +685,11 @@ func (c *Core) HTTPCapabilityWith(server HTTPImpl, client HTTPFetchImpl, costs C
 // kind`, `bad message name` and `not encodable`. Expose and Reach start
 // suspending calls: answer Reach with an Object of kind `peer` made in the
 // calling Group, or fail it with `bad address` or `not exposed`; answer
-// Expose with Nothing, or fail it with `bad address` or `name in use`. Post
-// and Call hear the Peer, the Selector and the arguments, through the sending
-// Script's Grant; answer Call with the receiver's reply, or fail it with `bad
-// address` or `send failed` and {reason, error}. A Remote Send is delivered
-// at most once.
+// Expose with the exposure's Peer, or fail it with `bad address` or `name in
+// use`. Post and Call hear the Peer, the Selector and the arguments, through
+// the sending Script's Grant; answer Call with the receiver's reply, or fail
+// it with `send failed` and {reason, error}. A Remote Send is delivered at
+// most once.
 type PeerImpl interface {
 	// Expose with name "" makes a new unnamed exposure. It answers with the
 	// exposure's Peer.
@@ -706,6 +706,10 @@ type PeerImpl interface {
 
 // PeerCapability is optional for Hosts.
 func (c *Core) PeerCapability(impl PeerImpl, costs Costs) (*CapabilityDef, error)
+
+// PeerKind is the Core-fixed Object Kind `peer`, with no properties, which a
+// Host makes each Peer with.
+func (c *Core) PeerKind() *ObjectKind
 
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)

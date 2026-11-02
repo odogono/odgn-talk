@@ -2594,7 +2594,7 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const which: ?standard.Which = if (field(msg, "standard")) |v| std.meta.stringToEnum(standard.Which, asText(v) orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value) else null;
     if (which) |w| {
         switch (w) {
-            .calendar, .locale, .store, .sqlite, .user, .http => {},
+            .calendar, .locale, .store, .sqlite, .user, .http, .peer => {},
             else => return hostError(s.gpa, ref, .invalid_value),
         }
         if (w == .http) {

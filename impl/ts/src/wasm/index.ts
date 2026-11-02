@@ -167,6 +167,7 @@ export type {
   HttpImpl,
   HttpServerImpl,
 } from '../http-capability';
+export type { PeerImpl } from '../peer-capability';
 
 import { limitDefaults } from '../generated/machine';
 /** Chapter 9's default Limits, which the reactor shares. */

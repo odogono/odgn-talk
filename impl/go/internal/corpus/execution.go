@@ -65,6 +65,9 @@ type crossingReplay struct {
 	adopted     map[string]bool
 	saveIDs     map[string]string
 	visibleSave int
+	// callers holds each Remote Send's Caller Identity, as the case wrote
+	// it, by the delivery id its `deliver` or `request` line made.
+	callers map[string]string
 }
 
 // Replay controls and refusals while the corresponding Host function is active.
@@ -93,6 +96,12 @@ func crossingKey(r Record) string {
 }
 
 func (r *crossingReplay) Record(line string) {
+	// The Core never sees a Caller Identity; the runner writes it.
+	if strings.HasPrefix(line, "> deliver ") || strings.HasPrefix(line, "> request ") {
+		if words := strings.SplitN(line, " ", 4); len(words) > 2 && r.callers[words[2]] != "" {
+			line += " caller=" + r.callers[words[2]]
+		}
+	}
 	if r.hidden {
 		r.hiddenLines = append(r.hiddenLines, line)
 		return
@@ -161,7 +170,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" {
 			for _, raw := range standards {
 				name := raw.(Setup)["capability"].(string)
-				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" && name != "sqlite" && name != "user" && name != "http" {
+				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" && name != "sqlite" && name != "user" && name != "http" && name != "peer" {
 					return name + " Standard Capability factory remains deferred"
 				}
 			}
@@ -251,7 +260,7 @@ type executionReplay struct {
 
 func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSource func(Setup) (string, error)) (*executionReplay, error) {
 	x := &executionReplay{records: records, roundTrip: roundTrip, readSource: readSource, inside: map[int]bool{}, deliveries: map[string]*replayDelivery{}, saves: map[string][]byte{}}
-	crossings := &crossingReplay{lines: &x.lines, inputs: map[string][][]int{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
+	crossings := &crossingReplay{lines: &x.lines, inputs: map[string][][]int{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}, callers: map[string]string{}}
 	inPump, crossing := false, ""
 	for i, r := range records {
 		if r.Input && r.Name == "pump" && !(i+1 < len(records) && records[i+1].Name == "refused") {
@@ -791,14 +800,22 @@ func (x *executionReplay) apply(i int) error {
 			} else if r.Name == "decide" {
 				id, decision, e = x.g.Decide(ctx, target, m)
 			} else {
-				_, e = x.g.Deliver(target, m)
+				id, e = x.g.Deliver(target, m)
 			}
 		} else if r.Name == "request" {
 			id, pending, e = s.Request(ctx, m)
 		} else if r.Name == "decide" {
 			id, decision, e = s.Decide(ctx, m)
 		} else {
-			_, e = s.Deliver(m)
+			id, e = s.Deliver(m)
+		}
+		if raw, ok := fields["caller"]; ok && e == nil {
+			caller, err := values.construct(raw.Value)
+			if err != nil {
+				return err
+			}
+			crossings.callers[string(id)] = raw.Raw
+			x.operations.callers[string(id)] = caller
 		}
 		if pending != nil {
 			deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}

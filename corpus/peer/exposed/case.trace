@@ -1,4 +1,5 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: the peer Standard Capability's exposed side.
+# Re-blessed for #1973 (a Remote Send is charged at the capability rate, not send's); approved by the maintainer on 2026-11-02.
 > load server identity=3c0ee7b9deded53c5462e1cabea6c2c20ef16d775204676c24fadc9455a5c06f
 > deliver d1 to=server message=start
 > pump clock=2026-11-02T12:00:00Z
@@ -49,8 +50,8 @@ pumped state=idle fuel=26
 call server/r2.c1 op=peer.caller args=[] result={principal: "alice", host: "laptop"}
 call server/r2.c2 op=peer.post args=[<object peer "browser">, "said", ["welcome ann"]]
 send server/r2 to=server message=local
-seg server/r2 start delivery=d2 handler=join clause=1 fuel=91 alloc=418 state=557 end=return
-run server/r2 outcome=completed delivery=d2 handler=join value={nick: "ann", who: "alice"} fuel=91 alloc=418
+seg server/r2 start delivery=d2 handler=join clause=1 fuel=84 alloc=418 state=557 end=return
+run server/r2 outcome=completed delivery=d2 handler=join value={nick: "ann", who: "alice"} fuel=84 alloc=418
 call server/r3.c1 op=peer.caller args=[] result={principal: "alice", host: "laptop"}
 seg server/r3 start delivery=d3 handler=say clause=1 fuel=38 alloc=468 state=685 end=return
 run server/r3 outcome=completed delivery=d3 handler=say fuel=38 alloc=468
@@ -60,7 +61,7 @@ run server/r4 outcome=completed delivery=d4 handler=say fuel=35 alloc=138
 call server/r5.c1 op=peer.caller args=[] result=nothing
 seg server/r5 start from=server/r2 handler=local clause=1 fuel=35 alloc=138 state=738 end=return
 run server/r5 outcome=completed handler=local fuel=35 alloc=138
-pumped state=idle fuel=199
+pumped state=idle fuel=192
 > stub peer.unexpose value=nothing
 > stub peer.unexpose value=nothing
 > deliver d5 to=server message=stop

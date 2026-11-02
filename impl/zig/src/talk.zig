@@ -1164,6 +1164,13 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const bound = g.core.gpa.alloc(machine.NamedObject, objects_in.len) catch return .out_of_memory;
     defer g.core.gpa.free(bound);
     for (objects_in, bound) |x, *b| b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
+    // Every Remote Send goes through the Script's one `peer` Grant (chapter 7).
+    var peers: usize = 0;
+    for (given) |x| peers += @intFromBool(std.mem.eql(u8, x.grant.capability.name, "peer"));
+    if (peers > 1) {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
+        return .invalid_value;
+    }
     const limits = limitsOf(o.limits) catch {
         g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
         return .invalid_value;
@@ -3106,6 +3113,7 @@ pub const TimerImpl = extern struct { context: ?*anyopaque, schedule: OperationF
 pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
 pub const UserImpl = extern struct { context: ?*anyopaque, confirm: OperationFn, choose: OperationFn, enter: OperationFn, notify: OperationFn };
 pub const HttpImpl = extern struct { context: ?*anyopaque, serve: OperationFn, unserve: OperationFn, respond: OperationFn, fetch: OperationFn };
+pub const PeerImpl = extern struct { context: ?*anyopaque, expose: OperationFn, unexpose: OperationFn, reach: OperationFn, post: OperationFn, call: OperationFn, caller: OperationFn };
 
 /// The largest cost component: 2^53 - 1.
 const max_cost = 9_007_199_254_740_991;
@@ -3212,6 +3220,28 @@ export fn talk_http_capability(c: *Core, impl: *const HttpImpl, costs: ?*const C
     // In name order: fetch, respond, serve, unserve. A null function leaves
     // its Operation out.
     return defineStandard(c, .http, &.{ impl.fetch, impl.respond, impl.serve, impl.unserve }, impl.context, costs, out);
+}
+
+export fn talk_peer_capability(c: *Core, impl: *const PeerImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: call, caller, expose, post, reach, unexpose.
+    return defineStandard(c, .peer, &.{ impl.call, impl.caller, impl.expose, impl.post, impl.reach, impl.unexpose }, impl.context, costs, out);
+}
+
+/// The Core-fixed kind `peer`, defined the first time it is asked for, so
+/// a Restore finds it by name as any defined kind.
+export fn talk_peer_kind(c: *Core) ?*const objects.Kind {
+    for (c.kinds.items) |k| if (std.mem.eql(u8, k.name, standard.peer_kind)) return k;
+    const k = c.gpa.create(objects.Kind) catch return null;
+    k.* = .{ .name = c.gpa.dupe(u8, standard.peer_kind) catch {
+        c.gpa.destroy(k);
+        return null;
+    }, .props = &.{} };
+    c.kinds.append(c.gpa, k) catch {
+        c.gpa.free(k.name);
+        c.gpa.destroy(k);
+        return null;
+    };
+    return k;
 }
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {

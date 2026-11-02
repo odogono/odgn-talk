@@ -26,6 +26,8 @@ const (
 type Core struct {
 	mu          sync.Mutex
 	objectKinds map[string]*ObjectKind
+	// peerKind is the Core-fixed Object Kind `peer`, made when first asked for.
+	peerKind *ObjectKind
 	// Each comparable StoreImpl's one Segment Coordinator (ADR 0069).
 	storeCoordinators map[StoreImpl]*SegmentLifecycle
 	// libraryChecker is the Group whose guest checks CompileLibrary's Libraries.

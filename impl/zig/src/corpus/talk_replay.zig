@@ -22,8 +22,6 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         } else return "a Host Input talk.h doesn't make yet";
         if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
-            // A Remote Send's Caller Identity is only `peer`'s to give (#1973).
-            if (field(input, "caller") != null) return "a Caller Identity, which needs peer";
             if (std.mem.startsWith(u8, to, "<object ")) continue;
             for (s.units) |u| {
                 if (std.mem.eql(u8, u.name, to)) break;
@@ -34,7 +32,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http", "peer" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -443,6 +441,11 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
         try check(c.talk_define_object_kind(core, &def, &kind));
         try kinds.put(a, name, kind);
     }
+    // A `peer` case's Peers take the Core's own kind (chapter 11, Stubs).
+    for (all) |t| if (std.mem.eql(u8, t.header, "[[standard]]") and std.mem.eql(u8, case_setup.field(t, "capability").?.string, "peer")) {
+        if (kinds.contains("peer")) return error.MalformedCase;
+        try kinds.put(a, "peer", @constCast(c.talk_peer_kind(core) orelse return error.OutOfMemory));
+    };
     store.kinds = kinds;
     store.group = group;
     for (all) |t| {
@@ -585,6 +588,13 @@ const Sink = struct {
             return sink.out.print(sink.gpa, "> restore from=s{d}{s}", .{ sink.renamed.get(n) orelse n, rest[end..] });
         }
         try sink.out.appendSlice(sink.gpa, text);
+        // The Core never sees a Caller Identity; the runner writes it.
+        if (std.mem.startsWith(u8, text, "> deliver ") or std.mem.startsWith(u8, text, "> request ")) {
+            var words = std.mem.splitScalar(u8, text, ' ');
+            _ = words.next();
+            _ = words.next();
+            if (callers.get(words.next() orelse "")) |shown| try sink.out.print(sink.gpa, " caller={s}", .{shown});
+        }
     }
 };
 
@@ -871,6 +881,26 @@ fn standardHost(comptime key: []const u8) c.talk_operation_fn {
     }.f;
 }
 
+/// Each Remote Send's Caller Identity, as the case wrote it, by the
+/// delivery id its `deliver` or `request` line made.
+var callers: std.StringHashMapUnmanaged([]const u8) = .empty;
+
+/// `peer.caller`: the Caller Identity of the line whose Delivery started
+/// the calling Run, or Nothing.
+fn callerHost(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    _ = context;
+    _ = args;
+    _ = len;
+    _ = err;
+    cross();
+    var id: [*c]const u8 = null;
+    var id_len: usize = 0;
+    c.talk_call_delivery(call, &id, &id_len);
+    const shown: []const u8 = if (id_len > 0) callers.get(id[0..id_len]) orelse "nothing" else "nothing";
+    if (c.talk_parse_display(shown.ptr, shown.len, result) != c.TALK_OK) return c.TALK_CALL_BROKEN;
+    return c.TALK_CALL_ANSWERED;
+}
+
 /// Defines the case's Standard Capabilities from its `[[standard]]` tables.
 fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call), effects: *Effects) !void {
     for (all) |t| {
@@ -894,6 +924,8 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "confirm", c.TALK_SUSPENDING }, .{ "choose", c.TALK_SUSPENDING }, .{ "enter", c.TALK_SUSPENDING }, .{ "notify", c.TALK_FIRE_AND_FORGET } }
         else if (std.mem.eql(u8, which, "http"))
             &.{ .{ "serve", c.TALK_SUSPENDING }, .{ "unserve", c.TALK_IMMEDIATE }, .{ "respond", c.TALK_IMMEDIATE }, .{ "fetch", c.TALK_SUSPENDING } }
+        else if (std.mem.eql(u8, which, "peer"))
+            &.{ .{ "expose", c.TALK_SUSPENDING }, .{ "reach", c.TALK_SUSPENDING }, .{ "call", c.TALK_SUSPENDING }, .{ "post", c.TALK_FIRE_AND_FORGET }, .{ "unexpose", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "sqlite"))
             &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
@@ -930,6 +962,12 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             const serving = server or !client;
             const impl: c.talk_http_impl = .{ .context = hosts, .serve = if (serving) standardHost("http.serve") else null, .unserve = if (serving) standardHost("http.unserve") else null, .respond = if (serving) standardHost("http.respond") else null, .fetch = if (client) standardHost("http.fetch") else null };
             try check(c.talk_http_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "peer")) {
+            // The runner plays the other side of one Remote Send per case;
+            // `caller` gives the `caller` of the line whose Delivery
+            // started the Run.
+            const impl: c.talk_peer_impl = .{ .context = hosts, .expose = standardHost("peer.expose"), .reach = standardHost("peer.reach"), .call = standardHost("peer.call"), .post = standardHost("peer.post"), .unexpose = standardHost("peer.unexpose"), .caller = callerHost };
+            try check(c.talk_peer_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
             try check(c.talk_console_capability(core, &impl, &all_costs, &def));
@@ -1666,6 +1704,7 @@ pub const Host = struct {
         try defineStandard(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineObjects(a, h.core, h.group, all, &h.store);
         made_by_store = &h.store;
+        callers = .empty;
         try compileLibraries(a, sources, h.core, all, &h.defs, &h.libraries, &h.library_sources, &h.declarations);
         return h;
     }
@@ -1713,6 +1752,8 @@ pub const Host = struct {
             const key = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, op[dot + 1 ..] });
             const host_ = h.hosts.get(key) orelse {
                 if (std.mem.eql(u8, capability, "clock")) continue;
+                // `peer.caller` answers from its line's `caller`, live or not.
+                if (std.mem.eql(u8, key, "peer.caller")) continue;
                 return error.UnknownOperation;
             };
             const refused = field(line, "charge-refused") != null;
@@ -1898,7 +1939,7 @@ pub const Host = struct {
             var owned_value: ?*c.talk_value = null;
             defer if (owned_value) |v| c.talk_value_release(v);
             if (std.mem.eql(u8, how, "answer")) {
-                owned_value = parsed(field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
+                owned_value = parsedWithObjects(a, field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
                 st.answer = owned_value;
             } else if (std.mem.eql(u8, how, "fail")) {
                 if (!scriptError(a, field(input, "error") orelse return error.MalformedCase, &e)) return error.MalformedCase;
@@ -1948,14 +1989,22 @@ pub const Host = struct {
             const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len, .limits = if (has_override) &override else null };
             var pending: ?*c.talk_pending = null;
             var deciding: ?*c.talk_deciding = null;
+            // A Remote Send's Caller Identity, kept by the delivery id the
+            // line makes, for `caller` and for the line the Core writes.
+            const caller = field(input, "caller");
+            if (caller != null and std.mem.eql(u8, name, "decide")) return error.MalformedCase;
+            var made_id: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+            defer if (made_id.data != null) c.talk_owned_bytes_release(&made_id);
+            const id_out: ?*c.talk_owned_bytes = if (caller != null) &made_id else null;
             const code = if (std.mem.eql(u8, name, "decide"))
                 (if (to_object) |o| c.talk_decide(h.group, o, &m, null, &deciding) else c.talk_script_decide(to, &m, null, &deciding))
             else if (to_object) |o|
-                (if (std.mem.eql(u8, name, "deliver")) c.talk_deliver(h.group, o, &m, null) else c.talk_request(h.group, o, &m, null, &pending))
+                (if (std.mem.eql(u8, name, "deliver")) c.talk_deliver(h.group, o, &m, id_out) else c.talk_request(h.group, o, &m, id_out, &pending))
             else if (std.mem.eql(u8, name, "deliver"))
-                c.talk_script_deliver(to, &m, null)
+                c.talk_script_deliver(to, &m, id_out)
             else
-                c.talk_script_request(to, &m, null, &pending);
+                c.talk_script_request(to, &m, id_out, &pending);
+            if (caller) |shown| if (made_id.data != null) try callers.put(a, try a.dupe(u8, made_id.data[0..made_id.len]), try a.dupe(u8, shown));
             // A refusal at the call is in the Trace, as a `refused` record.
             if (code != c.TALK_INVALID_VALUE and code != c.TALK_ERR_MAILBOX_FULL) try check(code);
             if (pending) |p| try requests.append(a, p);
@@ -2070,7 +2119,8 @@ pub const Host = struct {
             const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
             const call = calls.get(id) orelse return error.UnknownCall;
             if (std.mem.eql(u8, name, "answer")) {
-                const v = parsed(field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
+                // A `reach` or `expose` is answered with a Peer the case made.
+                const v = parsedWithObjects(a, field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
                 defer c.talk_value_release(v);
                 if (field(input, "fuel")) |n| {
                     try check(c.talk_call_answer_with_cost(call, v, try std.fmt.parseInt(i64, n, 10)));

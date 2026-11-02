@@ -21,6 +21,9 @@ pub const Measures = struct {
     steps: u64 = 0,
     /// A Built-in's rate key, `builtin.<name>`, in place of `call-builtin`'s.
     builtin: []const u8 = "",
+    /// A rate key in place of the instruction's own: `capability` for a
+    /// Remote Send, which is charged as the call it makes (chapter 5).
+    rate: []const u8 = "",
     args: []const *Value = &.{},
     /// Allocation beyond the formula's: `bin-bits`'s later values, whose
     /// sizes add to the first's, and an Operation's declared allocation.
@@ -82,6 +85,7 @@ const instruction_rates = blk: {
 /// Built-ins and unsupported formulas keep the generic evaluator.
 pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
     if (m.builtin.len > 0) return charge(if (m.restricted_refusal) "restricted-refusal" else m.builtin, m);
+    if (m.rate.len > 0 and !m.restricted_refusal) return chargeRateGeneric(find(m.rate), m);
     const rate = if (m.restricted_refusal) comptime find("restricted-refusal") else instruction_rates[@backingInt(op)];
     return chargeRate(rate, m);
 }

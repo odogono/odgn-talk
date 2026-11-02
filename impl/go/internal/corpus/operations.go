@@ -23,6 +23,9 @@ type operationReplay struct {
 	// replay Host, rather than an unknown outcome.
 	strict    bool
 	malformed error
+	// callers is the execution's Caller Identities by delivery id, which
+	// `peer.caller` gives (chapter 11, Stubs).
+	callers map[string]talk.Value
 	// coordinators holds each case `coordinator` name's Segment Coordinator;
 	// coordinator is the name of the Grant being created.
 	coordinators map[string]*talk.SegmentLifecycle
@@ -30,7 +33,7 @@ type operationReplay struct {
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
-	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
+	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}, callers: map[string]talk.Value{}}
 	out.effectStubs = map[string][]map[string]Field{}
 	out.startFailures = map[string]Field{}
 	out.coordinators = map[string]*talk.SegmentLifecycle{}
@@ -156,6 +159,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"confirm", "choose", "enter", "notify"}
 		case "http":
 			names = []string{"serve", "unserve", "respond", "fetch"}
+		case "peer":
+			names = []string{"expose", "unexpose", "reach", "post", "call", "caller"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -234,6 +239,18 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				out.declarations[name]["fetch"] = talk.OperationCheck{Mode: talk.Suspending}
 			}
 			def, err = core.HTTPCapabilityWith(server, fetcher, costs)
+		case "peer":
+			def, err = core.PeerCapability(replayPeer{out}, costs)
+			peer := talk.ObjectShape(core.PeerKind())
+			sent := []talk.Shape{peer, talk.TextShape, talk.ListOf(talk.AnyShape)}
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"expose":   {Mode: talk.Suspending, Args: []talk.Shape{talk.Optional(talk.TextShape)}},
+				"unexpose": {Mode: talk.Immediate, Args: []talk.Shape{talk.OneOf(talk.TextShape, peer)}},
+				"reach":    {Mode: talk.Suspending, Args: []talk.Shape{talk.TextShape}},
+				"post":     {Mode: talk.FireAndForget, Args: sent},
+				"call":     {Mode: talk.Suspending, Args: sent},
+				"caller":   {Mode: talk.Immediate, Args: []talk.Shape{}},
+			}
 		case "sqlite":
 			if _, old := row["perRow"]; old {
 				return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "sqlite perRow is replaced by perStep"}
@@ -685,6 +702,45 @@ func (h replayUser) Enter(c *talk.Call, _ string, _ string) error { return h.pro
 func (h replayUser) Notify(c *talk.Call, _ string, _ string) error {
 	_, err := h.replay.invoke("user.notify", talk.FireAndForget, c)
 	return err
+}
+
+// replayPeer plays the other side of one Remote Send per case (chapter 11,
+// Stubs): expose, reach and call wait for `answer` and `fail` lines, post
+// takes fire-and-forget Stubs, unexpose a Stub that gives Nothing, and
+// caller the Caller Identity of the line whose Delivery started the Run.
+type replayPeer struct{ replay *operationReplay }
+
+func (h replayPeer) Expose(c *talk.Call, _ string) error { return h.making("peer.expose", c) }
+func (h replayPeer) Reach(c *talk.Call, _ string) error  { return h.making("peer.reach", c) }
+
+// making makes the Peers case.toml says the Operation makes, then waits as
+// any suspending call does, for the `answer` line that gives one.
+func (h replayPeer) making(operation string, c *talk.Call) error {
+	if h.replay.values != nil && h.replay.values.madeBy != nil {
+		if err := h.replay.values.madeBy(operation); err != nil {
+			return err
+		}
+	}
+	return replayUser(h).prompt(operation, c)
+}
+func (h replayPeer) Call(c *talk.Call, _ *talk.Object, _ string, _ []talk.Value) error {
+	return replayUser(h).prompt("peer.call", c)
+}
+func (h replayPeer) Post(c *talk.Call, _ *talk.Object, _ string, _ []talk.Value) error {
+	_, err := h.replay.invoke("peer.post", talk.FireAndForget, c)
+	return err
+}
+func (h replayPeer) Unexpose(c *talk.Call, _ string, _ *talk.Object) error {
+	return replayHTTP(h).nothing("peer.unexpose", c)
+}
+func (h replayPeer) Caller(c *talk.Call) (talk.Value, error) {
+	if h.replay.crossing != nil {
+		h.replay.crossing(string(c.ID()))
+	}
+	if caller, ok := h.replay.callers[c.Delivery()]; ok && c.Delivery() != "" {
+		return caller, nil
+	}
+	return talk.Nothing, nil
 }
 
 type replayHTTP struct{ replay *operationReplay }
