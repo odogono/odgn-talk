@@ -321,7 +321,7 @@ The LSP, the formatter, the debugger and the Lint engine are one TypeScript tool
 
 #### Runner peers
 
-The flags come before the file, as `--port` does. Each Runner has a key: an Ed25519 key read from the PEM file `--peer-key FILE`, which holds the key and a certificate for it, or one made at start. Its **key fingerprint** is the lowercase hexadecimal SHA-256 of the key's DER SubjectPublicKeyInfo, and when any of these flags is given the Runner writes it to standard error as `peer: key <fingerprint>`.
+The flags come before the file, as `--port` does. Each Runner has a key: an ECDSA P-256 key read from the PEM file `--peer-key FILE`, which holds the key and a certificate for it, or one made at start. Its **key fingerprint** is the lowercase hexadecimal SHA-256 of the key's DER SubjectPublicKeyInfo, and when any of these flags is given the Runner writes it to standard error as `peer: key <fingerprint>`.
 
 - **`--listen HOST:PORT`**, or `tls://HOST:PORT`, accepts Remote Sends from other Runners, over TLS 1.3 with both ends presenting a certificate for their key. It accepts any key. Port 0 picks a free port, and the Runner writes `peer: listening on tls://<host>:<port>#<fingerprint>` to standard error once it listens. A Runner that listens doesn't exit for want of work until it stops listening.
 - **`--listen tcp://HOST:PORT`** accepts them over plain TCP instead, writing `peer: listening on tcp://<host>:<port>`. `HOST` must be `127.0.0.1`, `::1` or `localhost`, since nothing checks a plain connection's ends.

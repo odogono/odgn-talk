@@ -41,7 +41,7 @@ import {
 const MAX_FRAME = 16 * 1024 * 1024;
 
 export type PeerOptions = {
-  /** `--peer-key`: a PEM file with an Ed25519 key and its certificate. */
+  /** `--peer-key`: a PEM file with an ECDSA P-256 key and its certificate. */
   keyFile?: string;
   /** `--listen [tls://|tcp://]HOST:PORT`. */
   listen?: Address;
@@ -122,8 +122,10 @@ const concat = (parts: Uint8Array[]) => {
   return out;
 };
 const ascii = (s: string) => new TextEncoder().encode(s);
-// Ed25519's algorithm identifier, 1.3.101.112.
-const ED25519 = seq(der(0x06, Uint8Array.from([0x2b, 0x65, 0x70])));
+// ecdsa-with-SHA256, 1.2.840.10045.4.3.2: every TLS 1.3 stack takes P-256.
+const ECDSA_SHA256 = seq(
+  der(0x06, Uint8Array.from([0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02])),
+);
 // CN=northtalk: the certificate only carries the key.
 const NAME = seq(
   der(
@@ -145,16 +147,16 @@ const certificate = (privateKey: KeyObject, publicKey: KeyObject): string => {
   const tbs = seq(
     der(0xa0, der(0x02, Uint8Array.of(2))),
     der(0x02, serial),
-    ED25519,
+    ECDSA_SHA256,
     NAME,
     seq(der(0x17, ascii('250101000000Z')), der(0x18, ascii('99991231235959Z'))),
     NAME,
     spki,
   );
-  const signature = new Uint8Array(sign(null, tbs, privateKey));
+  const signature = new Uint8Array(sign('sha256', tbs, privateKey));
   const cert = seq(
     tbs,
-    ED25519,
+    ECDSA_SHA256,
     der(0x03, concat([Uint8Array.of(0), signature])),
   );
   const body = Buffer.from(cert)
@@ -190,7 +192,9 @@ const identity = (keyFile?: string): Identity => {
       .toString();
     return { cert: `${cert}\n`, fingerprint: fingerprintOf(cert), key };
   }
-  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const { privateKey, publicKey } = generateKeyPairSync('ec', {
+    namedCurve: 'prime256v1',
+  });
   const cert = certificate(privateKey, publicKey);
   return {
     cert,
