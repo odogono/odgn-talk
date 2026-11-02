@@ -422,7 +422,7 @@ An authored panel of Elements, kept with the Project and authored like a Page, t
 _Avoid_: panel, custom window, widget, plugin
 
 **Add-on**:
-A separately loaded part of Folio that provides Element kinds or Instrument kinds a Project can use, loaded only when a Project or author needs it.
+A separately loaded part of Folio that provides Element kinds or Instrument kinds a Project can use, either built with Folio and referenced by version, or carried in the Project's `.folio` file and run only once trusted.
 _Avoid_: extension (an Extend's source), plugin, module
 
 **Script Recipe**:
