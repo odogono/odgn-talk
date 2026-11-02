@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SessionHost } from '@northtalk/ts/session';
-import { readManifest } from '../src/lsp/manifest';
+import { commandSelectors, readManifest } from '../src/lsp/manifest';
 import {
   createLanguageServer,
   type RpcMessage,
@@ -1956,6 +1956,26 @@ describe('Argument Labels on Operations (ADR 0115)', () => {
         'on move piece at square\nend move\non demo\n  move "a" at "b"\nend demo',
       ),
     ).not.toContain('shadowed-host-command');
+  });
+
+  test('a labelled Host Command answers each spelling that leaves out only Optional arguments', () => {
+    const optional = { k: 'optional', of: { k: 'any' } } as const;
+    const text = { k: 'kind', kind: 'text' } as const;
+    expect(
+      commandSelectors({
+        name: 'play',
+        args: [text, optional, optional],
+        labels: ['on', 'with'],
+      } as never),
+    ).toEqual(['play', 'play:on:', 'play:with:', 'play:on:with:']);
+    // `on` is required, so no spelling leaves it out (ADR 0160).
+    expect(
+      commandSelectors({
+        name: 'play',
+        args: [text, text, optional],
+        labels: ['on', 'with'],
+      } as never),
+    ).toEqual(['play', 'play:on:', 'play:on:with:']);
   });
 
   test('the server advertises signature help', () => {
