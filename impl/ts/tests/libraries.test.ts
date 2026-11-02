@@ -2,10 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import {
   codeIdentity,
   compileLibrary,
+  defineCapability,
   HostError,
   LoadError,
   newGroup,
+  num,
+  operationDeclarations,
   parseInstant,
+  shape,
   type Library,
 } from '../src/index';
 
@@ -272,4 +276,46 @@ test('optional-read and operand errors in stdlib-attributed code point at its en
       'at: {unit: "s", handler: "go", line: 5, column: 1}',
     );
   }
+});
+
+describe('operationDeclarations', () => {
+  const api = defineCapability('api', {
+    price: {
+      mode: 'immediate',
+      result: shape.number,
+      cost: { fuel: 0 },
+      do: () => num(7),
+    },
+  });
+  const source = 'function price\nask api to price into p\nreturn p\nend price';
+
+  test('a Library that asks a Capability needs its declarations', () => {
+    expect(() =>
+      compileLibrary({ name: 'shop', version: '1', source }),
+    ).toThrow(LoadError);
+  });
+
+  test('builds them from CapabilityDefs, keyed by name', () => {
+    const declarations = operationDeclarations([api]);
+    expect(declarations).toEqual(
+      operationDeclarations(new Map([['api', api]])),
+    );
+    const shop = compileLibrary(
+      { name: 'shop', version: '1', source },
+      [],
+      declarations,
+    );
+    const lines: string[] = [];
+    const g2 = newGroup({ name: 'g2', trace: line => lines.push(line) });
+    g2.addLibrary(shop);
+    g2.load({
+      name: 's',
+      source:
+        'use price from shop\nscript variable p = 0\non go\nput price() into p\nend go',
+      grants: { api: api.grant('all', undefined) },
+    }).deliver({ name: 'go' });
+    g2.pump(parseInstant('2026-09-30T09:00:00Z'));
+    g2.inspect();
+    expect(lines.at(-1)).toContain('7');
+  });
 });

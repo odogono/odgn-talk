@@ -47,6 +47,7 @@ export {
   type SuspendingOp,
   type FireOp,
   type CapabilityDefiner,
+  operationDeclarations,
   type Operations,
   type PlainArg,
   type PlainResult,

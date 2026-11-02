@@ -64,6 +64,7 @@ export {
   type GrantContext,
   type ImmediateOp,
   type Operation,
+  operationDeclarations,
   type Operations,
   type PlainArg,
   type PlainResult,
