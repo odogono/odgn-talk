@@ -143,7 +143,9 @@ const certificate = (privateKey: KeyObject, publicKey: KeyObject): string => {
     publicKey.export({ format: 'der', type: 'spki' }),
   );
   const serial = randomBytes(16);
-  serial[0]! &= 0x7f;
+  // Positive, with a nonzero first byte, so the DER INTEGER is minimal:
+  // a leading 0x00 before a byte under 0x80 is illegal padding.
+  serial[0] = (serial[0]! & 0x7f) | 0x40;
   const tbs = seq(
     der(0xa0, der(0x02, Uint8Array.of(2))),
     der(0x02, serial),
