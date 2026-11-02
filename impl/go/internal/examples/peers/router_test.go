@@ -153,7 +153,9 @@ func (w *world) started() {
 func TestCallRoundTrip(t *testing.T) {
 	w := setUp(t)
 	w.started()
+	// One at a time: each reply comes back on its own goroutine.
 	w.deliver(w.s, "pay", talk.Int(12))
+	w.settle(w.shop, w.billing)
 	w.deliver(w.s, "pay", talk.Int(500))
 	w.settle(w.shop, w.billing)
 	w.expect(w.shop, "got", `[13, ["send failed", "errored"]]`)
