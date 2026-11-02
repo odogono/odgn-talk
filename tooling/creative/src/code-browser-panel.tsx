@@ -231,7 +231,7 @@ const Columns = (props: Props) => {
         <Item
           current={group === page.id}
           key={page.id}
-          label={`Page: ${page.name}`}
+          label={`${page.palette ? 'Palette' : 'Page'}: ${page.name}`}
           onSelect={() => openGroup(page.id!)}
         />
       ))}

@@ -173,8 +173,56 @@ export type Page = {
   /** Session-local editor identity; omitted from files and storage. */
   id?: number;
   name: string;
+  /** Present on a Palette, which Play shows in its own floating window. */
+  palette?: PaletteSettings;
   script?: string;
 };
+
+/**
+ * A Palette's own settings (#1903). A Palette is a Page that Play shows in a
+ * floating window rather than navigating to; its `height` and this `width`
+ * are its size.
+ */
+export type PaletteSettings = {
+  /** Whether Play opens its window when it starts. */
+  openOnPlay: boolean;
+  /** The window's title; absent means the Palette's name. */
+  title?: string;
+  width: number;
+};
+
+/** A Palette: a Page with Palette settings. */
+export type Palette = Page & { palette: PaletteSettings };
+
+export const isPalette = (
+  page: DeepReadonly<Page>,
+): page is DeepReadonly<Palette> => page.palette !== undefined;
+
+/**
+ * A Project keeps its Palettes after its Pages in `pages`, so a Page's index
+ * counts Pages only and every Page-wide rule (names, Scripts, editing)
+ * covers Palettes too. These read the two lists apart.
+ */
+export const pagesOf = <P extends DeepReadonly<Project> | Project>(
+  project: P,
+): P['pages'] => project.pages.filter(page => !page.palette) as P['pages'];
+export const palettesOf = <P extends DeepReadonly<Project> | Project>(
+  project: P,
+): P['pages'] => project.pages.filter(page => page.palette) as P['pages'];
+/** How many Pages the Project has, leaving out its Palettes. */
+export const pageCount = (project: DeepReadonly<Project>): number => {
+  const first = project.pages.findIndex(page => page.palette);
+  return first < 0 ? project.pages.length : first;
+};
+
+/** The width a Page or Palette is laid out against. */
+export const pageWidth = (
+  project: DeepReadonly<Project>,
+  page: DeepReadonly<Page>,
+): number => page.palette?.width ?? project.designWidth;
+
+export const DEFAULT_PALETTE_WIDTH = 240;
+export const DEFAULT_PALETTE_HEIGHT = 160;
 
 /** One row of the asset table: a Script-facing name for stored bytes. */
 export type Asset = {
@@ -360,6 +408,14 @@ export const createPage = (name: string): Page => ({
   height: DEFAULT_PAGE_HEIGHT,
   background: '#fdfcf8',
   elements: [],
+});
+
+export const createPalette = (name: string): Palette => ({
+  name,
+  height: DEFAULT_PALETTE_HEIGHT,
+  background: '#fdfcf8',
+  elements: [],
+  palette: { width: DEFAULT_PALETTE_WIDTH, openOnPlay: true },
 });
 
 export const createProject = (name: string): Project => ({

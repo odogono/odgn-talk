@@ -2,7 +2,7 @@ import type { DeepReadonly } from './readonly';
 import '@preact/signals';
 import { Component, createRef, render } from 'preact';
 import type { StackEditor } from './editing';
-import type { Asset, Page } from './model';
+import { pageWidth, type Asset, type Page } from './model';
 
 const THUMBNAIL_WIDTH = 96;
 
@@ -78,10 +78,11 @@ const PageStrip = ({
   editor: StackEditor;
 }) => {
   const { project, pageIndex } = editor.state.value;
+  // Pages are numbered; the Palettes after them are listed apart (#1903).
   return (
     <>
       {project.pages.map((page, index) => (
-        <li key={page.id}>
+        <li className={page.palette ? 'palette' : undefined} key={page.id}>
           <button
             aria-current={index === pageIndex ? 'page' : undefined}
             data-page={index}
@@ -92,12 +93,16 @@ const PageStrip = ({
             <Thumbnail
               assets={project.assets}
               assetsRevision={editor.assetsRevision}
-              designWidth={project.designWidth}
+              designWidth={pageWidth(project, page)}
               drawPage={drawPage}
               page={page}
               pageRevision={editor.pageRevision(page.id!)}
             />
-            <span>{`${index + 1}. ${page.name}`}</span>
+            <span>
+              {page.palette
+                ? `Palette: ${page.name}`
+                : `${index + 1}. ${page.name}`}
+            </span>
           </button>
         </li>
       ))}

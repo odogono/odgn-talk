@@ -66,6 +66,7 @@ import {
   type CanvasElement,
   type Element,
   type Page,
+  palettesOf,
   type Project,
   type ProjectLibrary,
   type RichText,
@@ -452,8 +453,49 @@ export class PlaySession {
   }
 
   #setVisible(value: Value, visible: boolean): void {
+    const palette = this.project.pages.find(
+      p => this.#objects.get(p) === value.asObject(),
+    );
+    if (palette) {
+      if (!palette.palette) {
+        throw new ScriptError(
+          'out of domain',
+          `“${palette.name}” is a Page; go to it instead`,
+        );
+      }
+      this.setPaletteOpen(palette.name, visible);
+      return;
+    }
     const { element } = this.#element(value);
     this.#tree.setProperty(element, 'visible', visible);
+  }
+
+  /** The Palettes, after the Pages (#1903). */
+  get palettes(): readonly DeepReadonly<Page>[] {
+    return palettesOf(this.project);
+  }
+
+  /**
+   * The Palettes whose windows are open, by name. Each opens when Play
+   * starts if it says so; Scripts and the reader open and close them, but
+   * their Scripts run either way.
+   */
+  readonly openPalettes = new Set<string>();
+
+  /** Opens or closes a Palette's window, by `show`, `hide` or the reader. */
+  setPaletteOpen(name: string, open: boolean): void {
+    if (
+      !this.ended &&
+      this.palettes.some(p => p.name === name) &&
+      this.openPalettes.has(name) !== open
+    ) {
+      if (open) {
+        this.openPalettes.add(name);
+      } else {
+        this.openPalettes.delete(name);
+      }
+      this.changed = true;
+    }
   }
 
   // The state each Grant reads (#1453); the Grants are built once a session's
@@ -469,10 +511,19 @@ export class PlaySession {
     return {
       transport: { transport: this.transport },
       pages: {
-        pageIndex: page =>
-          this.project.pages.findIndex(
+        pageIndex: page => {
+          const index = this.project.pages.findIndex(
             p => this.#objects.get(p) === page.value.asObject(),
-          ),
+          );
+          const palette = this.project.pages[index]?.palette;
+          if (palette) {
+            throw new ScriptError(
+              'out of domain',
+              `“${this.project.pages[index]!.name}” is a Palette; show opens it`,
+            );
+          }
+          return index;
+        },
         requestPage: index => this.goTo(index),
       },
       elements: {
@@ -870,6 +921,10 @@ export class PlaySession {
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
     }
+    // Play shows Pages; a Palette shows in its window instead.
+    if (project.pages[pageIndex]?.palette) {
+      this.pageIndex = 0;
+    }
     this.#tree = new ProjectTree(project, undefined, { trackWork: true });
     this.#tree.subscribe(() => {
       this.changed = true;
@@ -999,7 +1054,22 @@ export class PlaySession {
     this.#librarySources = new Map(
       project.libraries.map(library => [library.name, library]),
     );
-    this.#load([this.project, this.page, ...allElements(this.page.elements)]);
+    // Palette Scripts load once, as the Project Script does, and run across
+    // Page changes until Stop (#1903).
+    for (const palette of this.palettes) {
+      if (palette.palette!.openOnPlay) {
+        this.openPalettes.add(palette.name);
+      }
+    }
+    this.#load([
+      this.project,
+      ...this.palettes.flatMap(palette => [
+        palette,
+        ...allElements(palette.elements),
+      ]),
+      this.page,
+      ...allElements(this.page.elements),
+    ]);
     // A session that only runs Message Box commands sends no events.
     if (this.#events) {
       this.send(this.project, 'startPlay');
@@ -1233,16 +1303,29 @@ export class PlaySession {
       ),
       ...this.#instrumentObjects,
     };
-    const pageObjects = {
-      ...pages,
-      ...Object.fromEntries(
-        allElements(this.page.elements).map(e => [
-          e.name,
-          this.#objects.get(e)!,
-        ]),
-      ),
-      thisPage: this.#objects.get(this.page)!,
-      project: this.#objects.get(this.project)!,
+    // A Script on a Palette sees the Palette's Elements, and the Palette as
+    // `thisPage`, whichever Page is showing.
+    const containerObjects = new Map<
+      DeepReadonly<Page>,
+      Record<string, HostObject<ScriptOwner>>
+    >();
+    const objectsOf = (container: DeepReadonly<Page>) => {
+      let objects = containerObjects.get(container);
+      if (!objects) {
+        objects = {
+          ...pages,
+          ...Object.fromEntries(
+            allElements(container.elements).map(e => [
+              e.name,
+              this.#objects.get(e)!,
+            ]),
+          ),
+          thisPage: this.#objects.get(container)!,
+          project: this.#objects.get(this.project)!,
+        };
+        containerObjects.set(container, objects);
+      }
+      return objects;
     };
     const patternNames = projectPatternNames(this.project);
     for (const owner of owners) {
@@ -1260,15 +1343,20 @@ export class PlaySession {
       }
       const id = this.#objects.get(owner)!.id;
       const suffix = id.startsWith('dynamic:') ? `:${id}` : '';
-      const name =
+      const container =
         owner === this.project
-          ? PROJECT_UNIT
-          : owner === this.page
-            ? `page:${this.page.name}`
-            : `element:${this.page.name}/${owner.name}${suffix}`;
+          ? undefined
+          : 'kind' in owner
+            ? this.#tree.pageOf(owner)!
+            : (owner as DeepReadonly<Page>);
+      const name = !container
+        ? PROJECT_UNIT
+        : owner === container
+          ? `${container.palette ? 'palette' : 'page'}:${container.name}`
+          : `element:${container.name}/${owner.name}${suffix}`;
       this.#owners.set(name, owner);
       this.#scripts.set(owner, name);
-      const objects = owner === this.project ? pages : pageObjects;
+      const objects = container ? objectsOf(container) : pages;
       // A bad pattern is reported but never stops the Script loading.
       for (const problem of patternProblems(owner.script, patternNames)) {
         this.problems.push({
@@ -1888,7 +1976,10 @@ export class PlaySession {
     this.#pendingClones = [];
     if (!this.ended) {
       this.#load(
-        clones.filter(element => this.#tree.pageOf(element) === this.page),
+        clones.filter(element => {
+          const page = this.#tree.pageOf(element);
+          return page === this.page || !!page?.palette;
+        }),
       );
     }
     for (const report of result.reports) {

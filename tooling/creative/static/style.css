@@ -308,6 +308,11 @@ button:disabled {
   border: 1.5px solid var(--line);
   pointer-events: none;
 }
+/* Palettes follow the Pages, set apart by a rule. */
+#thumbnails li:not(.palette) + li.palette {
+  border-left: 1.5px dashed var(--line);
+  padding-left: 0.8rem;
+}
 #thumbnails [aria-current] .thumbnail {
   border-color: #ff3d7f;
   box-shadow: 3px 3px 0 #ff3d7f;

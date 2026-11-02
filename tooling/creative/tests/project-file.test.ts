@@ -256,7 +256,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 10)',
+    'newer version of the app (format 99; this app reads up to 11)',
   );
 });
 

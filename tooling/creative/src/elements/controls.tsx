@@ -37,7 +37,7 @@ export const input = (
   value: string | number,
   disabled: boolean,
   type: 'text' | 'number' | 'color' = 'text',
-  extra: { min?: number } = {},
+  extra: { min?: number; placeholder?: string } = {},
 ) => {
   const props = { 'data-field': name, value, disabled, ...extra };
   // Preact's accessible input types require a literal input type per branch.

@@ -4,6 +4,9 @@ import { createAnyElement, scriptKindOf } from '../elements/registry';
 import {
   createElement,
   createPage,
+  createPalette,
+  pageCount,
+  palettesOf,
   duplicateElement,
   duplicatePage,
   freshName,
@@ -1357,10 +1360,11 @@ export class ProjectTree {
   addPage(after: number): DeepReadonly<Page> {
     return this.transaction(() => {
       const page = createPage(
-        freshName(`page${this.#project.pages.length + 1}`, this.#pageNames()),
+        freshName(`page${pageCount(this.#project) + 1}`, this.#pageNames()),
       );
       const next = [...this.#project.pages];
-      next.splice(after + 1, 0, page);
+      // A new Page goes among the Pages, never among the Palettes after them.
+      next.splice(Math.min(after, pageCount(this.#project) - 1) + 1, 0, page);
       this.#children(this.#project, next);
       return page;
     });
@@ -1377,7 +1381,7 @@ export class ProjectTree {
   removePage(page: DeepReadonly<Page>): void {
     this.transaction(() => {
       this.#mutable(page);
-      if (this.#project.pages.length === 1) {
+      if (!page.palette && pageCount(this.#project) === 1) {
         throw new TreeError('A Project must keep at least one Page');
       }
       this.#children(
@@ -1386,11 +1390,27 @@ export class ProjectTree {
       );
     });
   }
+  /** Adds a Palette after every other, keeping Palettes after Pages. */
+  addPalette(): DeepReadonly<Page> {
+    return this.transaction(() => {
+      const palette = createPalette(
+        freshName(
+          `palette${palettesOf(this.#project).length + 1}`,
+          this.#pageNames(),
+        ),
+      );
+      this.#children(this.#project, [...this.#project.pages, palette]);
+      return palette;
+    });
+  }
+  /** Moves a Page among Pages, or a Palette among Palettes. */
   movePage(from: number, to: number): void {
     this.transaction(() => {
       const next = [...this.#project.pages];
       const [page] = next.splice(from, 1);
-      if (!page || to < 0 || to > next.length) {
+      const count = pageCount(this.#project);
+      const [low, high] = page?.palette ? [count, next.length] : [0, count - 1];
+      if (!page || to < low || to > high) {
         throw new TreeError('Unknown Page position');
       }
       next.splice(to, 0, page);

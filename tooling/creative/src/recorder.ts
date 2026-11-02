@@ -14,7 +14,8 @@ export const FRAME_MS = 16;
 export const RECORDED_SCRIPT = 'recorded.test';
 
 /** Input a Recorded Test can't replay, as its comment names it. */
-export type Unrecorded = 'typing' | 'a prompt answer' | 'a held press';
+export type Unrecorded =
+  'typing' | 'a prompt answer' | 'a held press' | 'Palette input';
 
 type Event = { at: number } & (
   | { key: string; kind: 'key' }

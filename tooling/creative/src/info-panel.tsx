@@ -9,7 +9,7 @@ import {
   type NameCheck,
   type StackEditor,
 } from './editing';
-import { PAGE_ALIGNS_X, PAGE_ALIGNS_Y } from './model';
+import { PAGE_ALIGNS_X, PAGE_ALIGNS_Y, pageCount } from './model';
 import { checkbox, color, field, input } from './elements/controls';
 import { kindOf } from './elements/registry';
 import { kindInfo } from './elements/views';
@@ -322,10 +322,63 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
     );
   }
   const sounds = project.assets.filter(isSoundAsset);
+  if (page.palette) {
+    const first = pageCount(project);
+    return (
+      <Fragment key={page.id}>
+        <h2>Palette “{page.name}”</h2>
+        <NameField current={page.name} disabled={disabled} refused={refused} />
+        {scriptButtons('page', 'Edit Palette Script')}
+        {field(
+          'Title',
+          input('paletteTitle', page.palette.title ?? '', disabled, 'text', {
+            placeholder: page.name,
+          }),
+        )}
+        <div className="row">
+          {field(
+            'Width',
+            input('paletteWidth', page.palette.width, disabled, 'number', {
+              min: MIN_PAGE_WIDTH,
+            }),
+          )}
+          {field(
+            'Height',
+            input('pageHeight', page.height, disabled, 'number', {
+              min: MIN_PAGE_HEIGHT,
+            }),
+          )}
+        </div>
+        {field('Background', color('background', page.background, disabled))}
+        {checkbox(
+          'openOnPlay',
+          'Open when Play starts',
+          page.palette.openOnPlay,
+          disabled,
+        )}
+        <div className="row">
+          <button
+            data-move-page={-1}
+            disabled={disabled || pageIndex === first}
+            type="button"
+          >
+            ← Earlier
+          </button>
+          <button
+            data-move-page={1}
+            disabled={disabled || pageIndex === project.pages.length - 1}
+            type="button"
+          >
+            Later →
+          </button>
+        </div>
+      </Fragment>
+    );
+  }
   return (
     <Fragment key={page.id}>
       <h2>
-        Page {pageIndex + 1} of {project.pages.length}
+        Page {pageIndex + 1} of {pageCount(project)}
       </h2>
       <NameField current={page.name} disabled={disabled} refused={refused} />
       {scriptButtons('page', 'Edit Page Script')}
@@ -378,7 +431,7 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
         </button>
         <button
           data-move-page={1}
-          disabled={disabled || pageIndex === project.pages.length - 1}
+          disabled={disabled || pageIndex === pageCount(project) - 1}
           type="button"
         >
           Later →

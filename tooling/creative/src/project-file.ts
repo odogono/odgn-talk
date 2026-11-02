@@ -39,7 +39,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 10;
+export const CURRENT_FORMAT = 11;
 const APP = 'northtalk-creative';
 
 export type { ValidationIssue } from './elements/checker';
@@ -177,6 +177,22 @@ const checkPage = (c: Checker, value: unknown, path: string): Page => {
   return page;
 };
 
+/** A Palette: a Page's fields, then its window's title, width and opening. */
+const checkPalette = (c: Checker, value: unknown, path: string): Page => {
+  const page = checkPage(c, value, path);
+  const p = c.obj(value, path) ?? {};
+  const openOnPlay = p.openOnPlay;
+  if (typeof openOnPlay !== 'boolean') {
+    c.fail(`${path}.openOnPlay`, 'expected true or false');
+  }
+  page.palette = {
+    width: c.num(p.width, `${path}.width`, 'positive') ?? 1,
+    openOnPlay: openOnPlay === true,
+  };
+  setDefined(page.palette, 'title', c.optStr(p.title, `${path}.title`));
+  return page;
+};
+
 const checkAsset = (c: Checker, value: unknown, path: string): Asset => {
   const a = c.obj(value, path) ?? {};
   const hash = c.str(a.hash, `${path}.hash`) ?? '';
@@ -281,7 +297,18 @@ export const validateProjectJson = (
   const pages = (c.arr(root.pages, 'pages') ?? []).map((raw, i) =>
     checkPage(c, raw, `pages[${i}]`),
   );
-  c.unique(pages, i => `pages[${i}]`, 'Page');
+  const palettes =
+    root.palettes === undefined
+      ? []
+      : (c.arr(root.palettes, 'palettes') ?? []).map((raw, i) =>
+          checkPalette(c, raw, `palettes[${i}]`),
+        );
+  // Pages and Palettes share one namespace in Scripts.
+  c.unique(
+    [...pages, ...palettes],
+    i => (i < pages.length ? `pages[${i}]` : `palettes[${i - pages.length}]`),
+    palettes.length ? 'Page or Palette' : 'Page',
+  );
   const assets = (c.arr(root.assets, 'assets') ?? []).map((raw, i) =>
     checkAsset(c, raw, `assets[${i}]`),
   );
@@ -316,7 +343,7 @@ export const validateProjectJson = (
     name: c.str(root.name, 'name') ?? '',
     designWidth: c.num(root.designWidth, 'designWidth', 'positive') ?? 1,
     script: c.str(root.script, 'script') ?? '',
-    pages,
+    pages: [...pages, ...palettes],
     assets,
     instruments,
     libraries,
@@ -369,14 +396,27 @@ const savedElement = (element: Element): Obj =>
   ).save?.(element as never, savedElement) ?? { ...element };
 export const serializeProject = (project: DeepReadonly<Project>): Obj => {
   const copy = projectWithoutIds(project);
+  const pages = copy.pages.filter(page => !page.palette);
+  const palettes = copy.pages.flatMap(({ palette, ...page }) =>
+    palette ? [{ ...page, ...palette }] : [],
+  );
   return {
     format: CURRENT_FORMAT,
     app: APP,
     ...copy,
-    pages: copy.pages.map(page => ({
+    pages: pages.map(page => ({
       ...page,
       elements: page.elements.map(savedElement),
     })),
+    // Palettes are written after Pages, each with its settings inline.
+    ...(palettes.length
+      ? {
+          palettes: palettes.map(page => ({
+            ...page,
+            elements: page.elements.map(savedElement),
+          })),
+        }
+      : {}),
   };
 };
 
@@ -408,6 +448,8 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   8: data => ({ ...data }),
   // Format 10 moves the synth and YM2149 into the Instruments Add-on.
   9: migrateInstrumentKinds,
+  // Format 11 adds the optional `palettes` (#1903); older Projects have none.
+  10: data => ({ ...data }),
 };
 
 /**

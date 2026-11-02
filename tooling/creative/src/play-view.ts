@@ -14,7 +14,13 @@ import { mountMessageWindow } from './message-window';
 import { type Element, type Project, type TextElement } from './model';
 import { kindOf } from './elements/registry';
 import { firstView } from './play-host';
-import { commitDrawings, PlayMirror, type MirrorPage } from './play-mirror';
+import {
+  commitDrawings,
+  PlayMirror,
+  type MirrorPage,
+  type MirrorPalette,
+} from './play-mirror';
+import { PaletteWindows } from './palette-windows';
 import { mountPlayPrompts } from './play-prompts';
 import { type CodeSelection } from './code-browser-panel';
 import {
@@ -446,18 +452,23 @@ export const mountPlay = (shell: StackShell): void => {
   // A control's changes (#1902): one at a time per control, the latest
   // replacing any still waiting, so a drag never queues a Run per frame.
   const pendingControls = new Map<string, { waiting?: ControlFields }>();
-  const control = (element: Element, fields: ControlFields) => {
-    const index = session?.page.index;
+  /** `pageIndex` names a Palette the control is on (#1903). */
+  const control = (
+    element: Element,
+    fields: ControlFields,
+    index = session?.page.index,
+  ) => {
     if (!allowed().takesInput || index === undefined) {
       return;
     }
-    const busy = pendingControls.get(element.name);
+    const key = `${index}/${element.name}`;
+    const busy = pendingControls.get(key);
     if (busy) {
       busy.waiting = { ...busy.waiting, ...fields };
       return;
     }
     const state: { waiting?: ControlFields } = {};
-    pendingControls.set(element.name, state);
+    pendingControls.set(key, state);
     const deliver = (next: ControlFields) =>
       void supervisor
         .call({
@@ -473,7 +484,7 @@ export const mountPlay = (shell: StackShell): void => {
           if (waiting) {
             deliver(waiting);
           } else {
-            pendingControls.delete(element.name);
+            pendingControls.delete(key);
           }
         });
     deliver(fields);
@@ -488,7 +499,13 @@ export const mountPlay = (shell: StackShell): void => {
     if (!allowed().takesInput) {
       return;
     }
-    if (recorder && message === 'click' && !('index' in target)) {
+    const onPalette = [...(session?.palettes.values() ?? [])].some(
+      palette => palette.pageIndex === pageIndex,
+    );
+    if (recorder && onPalette) {
+      // A Recorded Test clicks the showing Page's Elements by name only.
+      recorder.unrecorded('Palette input');
+    } else if (recorder && message === 'click' && !('index' in target)) {
       recorder.click(target.name, args![0] as ClickEvent);
     } else if (recorder && message === 'pointerHeld') {
       recorder.unrecorded('a held press');
@@ -653,11 +670,78 @@ export const mountPlay = (shell: StackShell): void => {
     );
   };
 
+  // Palettes take clicks and pointer moves; their text is never editable,
+  // and a held press is the showing Page's alone.
+  const paletteAttributes = (
+    palette: MirrorPalette,
+    element: Element,
+  ): HTMLAttributes<HTMLDivElement> => {
+    const visible = palette.shown.has(element);
+    const send = (message: ReaderMessage, args?: ReaderArg[]) =>
+      sendTo(element, message, args, palette.pageIndex);
+    const click = (event: MouseEvent) =>
+      send('click', [clickAt(event.currentTarget as HTMLElement, event)]);
+    return {
+      hidden: !visible,
+      ...kindOf(element).readerAttributes?.(element, {
+        visible,
+        takesInput: false,
+      }),
+      onPointerEnter: event => {
+        if (event.pointerType !== 'touch') {
+          send('pointerEnter');
+        }
+      },
+      onPointerLeave: event => {
+        if (event.pointerType !== 'touch') {
+          send('pointerLeave');
+        }
+      },
+      onAuxClick: event => {
+        if (event.button === 1 || event.button === 2) {
+          click(event);
+        }
+      },
+      onClick: click,
+    };
+  };
+  const paletteWindows = new PaletteWindows({
+    setOpen: (name, open) => {
+      if (session && !session.ended) {
+        post({ kind: 'palette', session: sessionId, name, open });
+      }
+    },
+    render: (palette, node) =>
+      renderElements(
+        node,
+        palette.elements
+          .filter(element => !kindOf(element).container)
+          .map(element =>
+            createElement(ElementView, {
+              key: element.id,
+              element,
+              reader: true,
+              editing: false,
+              className: '',
+              imageUrl: shell.images.elementUrl(element, playing!.assets),
+              attributes: paletteAttributes(palette, element),
+              ...(allowed().takesInput
+                ? {
+                    change: (fields: ControlFields) =>
+                      control(element, fields, palette.pageIndex),
+                  }
+                : {}),
+            }),
+          ),
+      ),
+  });
+
   const draw = () => {
     if (!session) {
       return;
     }
     const play = session;
+    paletteWindows.draw(play.palettes);
     if (drawnPage !== play.page) {
       // Old Page Scripts have stopped; release to any surviving Project
       // Handler and require a fresh press on the new Page.
@@ -960,6 +1044,7 @@ export const mountPlay = (shell: StackShell): void => {
     prompts.clear();
     reader.hidden = true;
     pageNode.replaceChildren();
+    paletteWindows.clear();
     drawModes();
     const index = shell.editor.project.pages.findIndex(
       p => p.name === pageName,
@@ -984,7 +1069,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     mode = next;
     // A Recorded Test starts where every test does: the first Page, seed 0.
-    const pageIndex = record ? 0 : shell.editor.pageIndex;
+    // Play shows a Palette in its window, so from one it starts there too.
+    const pageIndex =
+      record || shell.editor.page.palette ? 0 : shell.editor.pageIndex;
     recorder = record ? new Recorder(() => performance.now()) : undefined;
     shell.setPlaying(mode);
     generation = shell.editor.generation;
