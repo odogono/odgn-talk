@@ -11,7 +11,8 @@ import {
   type ProjectChannel,
   type ProjectMessage,
 } from './edit-lock';
-import { createProject, type Project } from './model';
+import { type BaseProjectName, createProject, type Project } from './model';
+import { createFromBase } from './base-projects';
 import {
   dropHandle,
   FileAccessError,
@@ -874,7 +875,32 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     await showLoaded(loaded, id);
   };
 
-  const newProject = async (): Promise<void> => {
+  /**
+   * Starts a new Project as a copy of a Base Project (ADR 0161). Its
+   * sounds are decoded before anything is saved, as an import's are.
+   */
+  const newProject = async (base: BaseProjectName): Promise<void> => {
+    let content: Awaited<ReturnType<typeof createFromBase>>;
+    try {
+      content = await createFromBase(base, UNTITLED);
+    } catch (error) {
+      notice(
+        `Couldn't start a ${base === 'music' ? 'Music' : 'Blank'} Project: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    const { project } = content;
+    const accepted = [];
+    for (const asset of project.assets) {
+      const data = content.assets.get(asset.hash);
+      if (!data) {
+        continue;
+      }
+      const file = new File([data as Uint8Array<ArrayBuffer>], asset.fileName);
+      accepted.push(
+        isSoundAsset(asset) ? await importSound(file) : await importImage(file),
+      );
+    }
     editor.finishPendingEdit();
     await autosave.flush();
     if (hasUnsafeChanges()) {
@@ -883,7 +909,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       );
       return;
     }
-    const project = createProject(UNTITLED);
+    for (const imported of accepted) {
+      shell.images.add(imported);
+    }
     if (!storage) {
       await showLoaded(
         { project, migrated: false },
@@ -891,7 +919,13 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       );
       return;
     }
-    const created = await storage.saveProject(undefined, project);
+    const assets = new Map(
+      accepted.map(imported => [
+        imported.asset.hash,
+        storageAsset(imported.bytes, imported.asset.mediaType),
+      ]),
+    );
+    const created = await storage.saveProject(undefined, project, { assets });
     channel?.post({ type: 'list-changed' });
     await showLoaded({ project, migrated: false, record: created }, created.id);
   };
@@ -1062,7 +1096,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     const [next] = records;
     await (next
       ? storage.loadProject(next.id).then(loaded => showLoaded(loaded, next.id))
-      : newProject());
+      : newProject('blank'));
   };
 
   /** Loads the Project list; a hidden window is loaded when it opens. */
@@ -1300,7 +1334,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   byId('close-versions').addEventListener('click', () => {
     byId('versions-window').hidden = true;
   });
-  byId('new-project').addEventListener('click', () => void newProject());
+  byId('new-project').addEventListener('click', () => void newProject('blank'));
+  byId('new-music-project').addEventListener(
+    'click',
+    () => void newProject('music'),
+  );
   mountProjectsWindow(
     {
       examples: byId('example-list'),

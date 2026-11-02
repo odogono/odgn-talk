@@ -256,7 +256,7 @@ test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
   const file = await fileWithJson({ ...serializeProject(project), format: 99 });
   await expect(readProjectFile(file)).rejects.toThrow(
-    'newer version of the app (format 99; this app reads up to 7)',
+    'newer version of the app (format 99; this app reads up to 8)',
   );
 });
 
@@ -449,4 +449,26 @@ test('a Test Script needs an identifier and then .test, once each', () => {
     });
   }
   expect(json('a.test', 'a.test')).toHaveProperty('issues');
+});
+
+test('a Project remembers its Base Project, and older files have none', async () => {
+  const project = createProject('Beats');
+  project.base = { name: 'music', version: 1 };
+  const read = await readProjectFile(
+    await writeProjectFile(project, new Map()),
+  );
+  expect(read.project.base).toEqual({ name: 'music', version: 1 });
+  const old = serializeProject(createProject('Old'));
+  expect(
+    validateProjectJson({ ...migrateProjectJson({ ...old, format: 7 }) }),
+  ).not.toHaveProperty('issues');
+  expect(migrateProjectJson({ ...old, format: 7 }).base).toBeUndefined();
+  const bad = validateProjectJson({
+    ...serializeProject(createProject('Bad')),
+    base: { name: 'jazz', version: 0 },
+  });
+  expect('issues' in bad && bad.issues.map(i => i.path)).toEqual([
+    'base.name',
+    'base.version',
+  ]);
 });

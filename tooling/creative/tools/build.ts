@@ -23,6 +23,7 @@ import {
   EXAMPLE_PROJECTS,
   exampleFilePath,
 } from '../src/examples';
+import { baseFilePath, createMusicBase } from '../src/base-projects';
 import { KIT_FILES, kitNotice, renderKitFiles } from '../src/kits/kits';
 import { writeProjectFile } from '../src/project-file';
 import { iconPng, iconSvg } from './icons';
@@ -98,6 +99,11 @@ export const examplePage = (page: string, slug: string): string =>
 const writeExamples = async (): Promise<void> => {
   const page = readFileSync(resolve(dist, 'index.html'), 'utf8');
   mkdirSync(resolve(dist, 'projects'), { recursive: true });
+  const music = await createMusicBase();
+  writeFileSync(
+    resolve(dist, baseFilePath('music')),
+    await writeProjectFile(music.project, music.assets),
+  );
   for (const example of EXAMPLE_PROJECTS) {
     const { assets, project } = await example.create();
     writeFileSync(

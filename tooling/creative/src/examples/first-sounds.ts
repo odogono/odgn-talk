@@ -19,9 +19,8 @@ import {
   type TextElement,
 } from '../model';
 import { createInstrument } from '../instruments/registry';
-import { renderKitSound } from '../kits/kits';
+import { kitSoundAsset } from '../base-projects';
 import { projectKitKeys } from '../pattern-checks';
-import { sha256Hex } from '../project-file';
 import { recipeSource, recipeText, type RecipeTarget } from '../recipes';
 import { type ExampleContent } from './index';
 
@@ -349,16 +348,9 @@ export const createFirstSoundsProject = async (): Promise<ExampleContent> => {
   project.pages = LESSONS.map(lessonPage);
   const assets = new Map<string, Uint8Array>();
   for (const key of [...projectKitKeys(project)].sort()) {
-    const bytes = renderKitSound(key);
-    const hash = await sha256Hex(bytes);
-    assets.set(hash, bytes);
-    project.assets.push({
-      name: key,
-      fileName: `${key.replace(':', '-')}.wav`,
-      hash,
-      mediaType: 'audio/wav',
-      size: bytes.length,
-    });
+    const { asset, bytes } = await kitSoundAsset(key);
+    assets.set(asset.hash, bytes);
+    project.assets.push(asset);
   }
   return { project, assets };
 };

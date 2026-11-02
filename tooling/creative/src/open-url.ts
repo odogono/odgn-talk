@@ -87,19 +87,19 @@ export const fetchProjectFile = async (
 };
 
 /**
- * The bytes of an Example Project's `.folio` file. The service worker
- * keeps it once fetched, so it opens offline after one online open
- * (ADR 0161).
+ * The bytes of a `.folio` file Folio serves, such as an Example Project's
+ * or a Base Project's. The service worker keeps it once fetched, so it
+ * opens offline after one online open (ADR 0161).
  */
-export const fetchExampleFile = async (
-  slug: string,
+export const fetchKeptFile = async (
+  path: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<Uint8Array> => {
   const notKept =
     "it isn't kept for offline use yet. Open it once while online, then it opens offline too.";
   let response: Response;
   try {
-    response = await fetchFn(exampleFilePath(slug));
+    response = await fetchFn(path);
   } catch {
     throw new Error(notKept);
   }
@@ -111,3 +111,9 @@ export const fetchExampleFile = async (
   }
   return new Uint8Array(await response.arrayBuffer());
 };
+
+/** The bytes of an Example Project's `.folio` file. */
+export const fetchExampleFile = (
+  slug: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<Uint8Array> => fetchKeptFile(exampleFilePath(slug), fetchFn);

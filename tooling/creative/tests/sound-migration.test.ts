@@ -74,7 +74,7 @@ test('a format 6 Project migrates every Script, Group members included', () => {
   });
 });
 
-test('reading a format 6 file rewrites its loops and saves format 7', () => {
+test('reading a format 6 file rewrites its loops and saves the current format', () => {
   const project = createProject('Rain');
   project.pages[0]!.script =
     'on openPage\n  tell sound to loop "rain"\nend openPage';
@@ -86,6 +86,5 @@ test('reading a format 6 file rewrites its loops and saves format 7', () => {
   expect(result.project.pages[0]!.script).toBe(
     'on openPage\n  tell sound to play "rain" with {repeat: true}\nend openPage',
   );
-  expect(CURRENT_FORMAT).toBe(7);
-  expect(serializeProject(result.project).format).toBe(7);
+  expect(serializeProject(result.project).format).toBe(CURRENT_FORMAT);
 });

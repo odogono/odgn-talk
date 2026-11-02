@@ -7,7 +7,9 @@ import {
   isPageAlignX,
   isPageAlignY,
   projectWithoutIds,
+  BASE_PROJECT_NAMES,
   type Asset,
+  type BaseProjectName,
   type Element,
   type ElementBase,
   type Instrument,
@@ -30,7 +32,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 7;
+export const CURRENT_FORMAT = 8;
 const APP = 'northtalk-creative';
 
 export type { ValidationIssue } from './elements/checker';
@@ -267,6 +269,21 @@ export const validateProjectJson = (
     libraries,
     testScripts,
   };
+  if (root.base !== undefined) {
+    const base = c.obj(root.base, 'base') ?? {};
+    const name = c.str(base.name, 'base.name');
+    if (
+      name !== undefined &&
+      !(BASE_PROJECT_NAMES as readonly string[]).includes(name)
+    ) {
+      c.fail('base.name', `expected one of ${BASE_PROJECT_NAMES.join(', ')}`);
+    }
+    const version = c.num(base.version, 'base.version', 'positive');
+    if (version !== undefined && !Number.isInteger(version)) {
+      c.fail('base.version', 'expected a whole number');
+    }
+    project.base = { name: name as BaseProjectName, version: version ?? 1 };
+  }
   if (project.name === '' && typeof root.name === 'string') {
     c.fail('name', 'the Project needs a name');
   }
@@ -324,6 +341,8 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   4: migrateClicks,
   5: data => ({ ...data, instruments: [] }),
   6: migrateSounds,
+  // Format 8 adds the optional `base`; older Projects have none.
+  7: data => ({ ...data }),
 };
 
 /**
