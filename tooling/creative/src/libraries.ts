@@ -18,6 +18,50 @@ export type LibraryProblem = {
   message: string;
 };
 
+/** The Libraries a Script's or Library's source imports, with their lines. */
+export const importsOf = (
+  source: string,
+  unit: 'library' | 'script',
+): { line: number; name: string }[] => {
+  const tree = checkSource(source, { unit }).tree;
+  const imports: { line: number; name: string }[] = [];
+  const collect = (node: SemanticElement): void => {
+    if (node.kind === 'name' && node.role === 'library') {
+      imports.push({ name: node.text, line: node.span.line });
+    } else if (node.kind === 'node') {
+      node.children.forEach(collect);
+    }
+  };
+  if (tree) {
+    collect(tree.root);
+  }
+  return imports;
+};
+
+/**
+ * The Libraries that import `name`, directly or through others, with `name`
+ * itself: a Library replacement changes every one of them.
+ */
+export const dependentLibraries = (
+  sources: readonly DeepReadonly<ProjectLibrary>[],
+  name: string,
+): Set<string> => {
+  const affected = new Set([name]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const library of sources) {
+      if (
+        !affected.has(library.name) &&
+        importsOf(library.source, 'library').some(i => affected.has(i.name))
+      ) {
+        affected.add(library.name);
+        grew = true;
+      }
+    }
+  }
+  return affected;
+};
+
 export const compileProjectLibraries = (
   sources: readonly DeepReadonly<ProjectLibrary>[],
   declarations: GrantDecls,
@@ -49,18 +93,7 @@ export const compileProjectLibraries = (
       state.set(source.name, 'failed');
       return false;
     }
-    const tree = checkSource(source.source, { unit: 'library' }).tree;
-    const imports: { line: number; name: string }[] = [];
-    const collect = (node: SemanticElement): void => {
-      if (node.kind === 'name' && node.role === 'library') {
-        imports.push({ name: node.text, line: node.span.line });
-      } else if (node.kind === 'node') {
-        node.children.forEach(collect);
-      }
-    };
-    if (tree) {
-      collect(tree.root);
-    }
+    const imports = importsOf(source.source, 'library');
     let blocked = false;
     for (const dependency of imports) {
       const imported = byName.get(dependency.name);

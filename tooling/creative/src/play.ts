@@ -4,7 +4,11 @@ import { grantDeclarations, grantsFor, type GrantStates } from './grants';
 import { PUMP_FUEL } from './grants/elements';
 import { elementShape } from './grants/grant';
 import type { UserPrompt } from './grants/user';
-import { compileProjectLibraries } from './libraries';
+import {
+  compileProjectLibraries,
+  dependentLibraries,
+  importsOf,
+} from './libraries';
 import { FuelMeasurements } from './fuel';
 import { PerformanceCapture } from './performance';
 import type { DeepReadonly } from './readonly';
@@ -13,7 +17,7 @@ import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
-import { Transport } from './transport';
+import { LEAD_US, Transport } from './transport';
 import { DEFAULT_KIT_INSTRUMENT } from './kits/kits';
 import { parseMiniNotation } from './mini-notation';
 import {
@@ -31,6 +35,7 @@ import {
 import {
   bool,
   defineObjectKind,
+  HostError,
   list,
   LoadError,
   MailboxFull,
@@ -110,7 +115,32 @@ export type PlayMessage =
   | 'keyDown'
   | 'keyUp'
   | 'textChanged'
-  | 'frame';
+  | 'frame'
+  | 'openScript';
+
+/** What a Punch In loads: one authored Script, or a Library by name. */
+export type PunchTarget =
+  | { kind: 'library'; name: string }
+  | { kind: 'script'; owner: DeepReadonly<ScriptOwner> };
+
+/**
+ * How a Punch In was taken (ADR 0157): applied at the next Pump, waiting for
+ * a bar, or not applied because the Script isn't loaded or a Run is stopped.
+ * A load that fails later shows in Errors and keeps the old code.
+ */
+export type PunchReply =
+  | { bar: number; kind: 'bar' }
+  | { kind: 'notLoaded' }
+  | { kind: 'now' }
+  | { kind: 'resumeFirst' };
+
+type Punch = {
+  /** The first beat of the bar it waits for; undefined for at once. */
+  count: number | undefined;
+  key: string;
+  source: string;
+  target: PunchTarget;
+};
 
 type CstNode = {
   children?: CstNode[];
@@ -776,6 +806,7 @@ export class PlaySession {
     } = {},
   ) {
     this.performance = new PerformanceCapture(options.performanceNow);
+    this.#events = options.events !== false;
     this.group = newGroup({
       name: 'play',
       trace: line => this.#trace(line),
@@ -928,7 +959,7 @@ export class PlaySession {
     );
     this.#load([this.project, this.page, ...allElements(this.page.elements)]);
     // A session that only runs Message Box commands sends no events.
-    if (options.events !== false) {
+    if (this.#events) {
       this.send(this.project, 'startPlay');
       this.send(this.page, 'openPage');
     }
@@ -1218,23 +1249,8 @@ export class PlaySession {
             grants: this.#grants,
           });
         }
-        this.#targets.set(name, {
-          id: ++this.#nextTarget,
-          label: unitLabel(name),
-          source: owner.script,
-          manifest: scriptManifest(this.project, owner),
-          commands: new Map(),
-          next: 1,
-        });
-        if (definesHandler(owner.script, 'frame')) {
-          this.#frames.set(name, { busy: false, last: undefined });
-          this.performance.frameScript(name);
-        }
-        if (definesHandler(owner.script, 'beat')) {
-          this.#beats.add(name);
-        } else {
-          this.#beats.delete(name);
-        }
+        this.#register(name, owner, owner.script);
+        this.#openScript(name, owner.script);
       } catch (error) {
         if (!(error instanceof LoadError)) {
           throw error;
@@ -1248,6 +1264,268 @@ export class PlaySession {
         }
       }
     }
+  }
+
+  /** Whether this session sends events; Edit's Message Box session doesn't. */
+  readonly #events: boolean;
+
+  // A loaded Script's Message Box context and its `frame` and `beat`.
+  #register(name: string, owner: ScriptOwner, source: string): void {
+    this.#targets.set(name, {
+      id: ++this.#nextTarget,
+      label: unitLabel(name),
+      source,
+      manifest: scriptManifest(this.project, owner),
+      commands: new Map(),
+      next: 1,
+    });
+    if (definesHandler(source, 'frame')) {
+      this.#frames.set(name, { busy: false, last: undefined });
+      this.performance.frameScript(name);
+    } else {
+      this.#frames.delete(name);
+    }
+    if (definesHandler(source, 'beat')) {
+      this.#beats.add(name);
+    } else {
+      this.#beats.delete(name);
+    }
+  }
+
+  // `openScript` goes straight to a Script that has just loaded or been
+  // Punched In, never up the Message Path (ADR 0157).
+  #openScript(name: string, source: string): void {
+    if (this.#events && definesHandler(source, 'openScript')) {
+      this.group.script(name)!.deliver({ name: 'openScript', args: [] });
+    }
+  }
+
+  /** Punch Ins waiting for their bar or the next Pump, oldest first. */
+  #punches: Punch[] = [];
+
+  /**
+   * Punches In an edited Script or Library (ADR 0157): its loaded Scripts
+   * reload with their Script Variables and mailbox, then get `openScript`.
+   * A Script that keeps musical time, handling `beat` or owning a Sound
+   * Pattern, waits for the next bar; any other applies at the next Pump.
+   * Applying waits while the session is paused, and is refused while a Run
+   * is stopped, since the reload would discard it.
+   */
+  punchIn(target: PunchTarget, source: string, now: bigint): PunchReply {
+    if (this.debugPaused) {
+      return { kind: 'resumeFirst' };
+    }
+    const names = this.#punched(target);
+    if (this.ended || !names.length) {
+      return { kind: 'notLoaded' };
+    }
+    const musical = names.some(
+      name => this.#beats.has(name) || this.patterns.owns(name),
+    );
+    const count = musical ? this.#nextBarCount(now) : undefined;
+    const key =
+      target.kind === 'library'
+        ? `library:${target.name}`
+        : `script:${ownerId(target.owner)}`;
+    // A second Punch In before the bar replaces the first.
+    this.#punches = this.#punches.filter(punch => punch.key !== key);
+    this.#punches.push({ count, key, source, target });
+    return count === undefined
+      ? { kind: 'now' }
+      : { kind: 'bar', bar: this.transport.position(count).bar };
+  }
+
+  /** The loaded Scripts a Punch In reloads, by name. */
+  #punched(target: PunchTarget): string[] {
+    if (target.kind === 'script') {
+      return [...this.#targets.keys()].filter(name => {
+        const owner = this.#owners.get(name);
+        return owner && this.#authored.get(owner) === target.owner;
+      });
+    }
+    const affected = dependentLibraries(this.project.libraries, target.name);
+    return [...this.#targets].flatMap(([name, loaded]) =>
+      importsOf(loaded.source, 'script').some(i => affected.has(i.name))
+        ? [name]
+        : [],
+    );
+  }
+
+  /** The first beat of the next bar to start at least a lead after `now`. */
+  #nextBarCount(now: bigint): number | undefined {
+    if (!this.transport.running) {
+      return undefined;
+    }
+    const perBar = this.transport.beatsPerBar;
+    const bars = this.transport.countAt(now + LEAD_US) / perBar;
+    // A millionth of a bar absorbs the grid's rounding to whole microseconds.
+    return Math.ceil(bars - 1e-6) * perBar;
+  }
+
+  /** When the next waiting Punch In applies. */
+  #nextPunch(): bigint | undefined {
+    let next: bigint | undefined;
+    for (const { count } of this.#punches) {
+      const due =
+        count === undefined || !this.transport.running
+          ? 0n
+          : this.transport.timeOf(count) - LEAD_US;
+      if (next === undefined || due < next) {
+        next = due;
+      }
+    }
+    return next;
+  }
+
+  // Before the bar's beats and steps go out, so the new code gets its first
+  // `beat` and its Sound Patterns start on the bar the old ones end.
+  #applyPunches(now: bigint): void {
+    if (!this.#punches.length || this.ended || this.navigating) {
+      return;
+    }
+    const due = this.#punches.filter(
+      ({ count }) =>
+        count === undefined ||
+        !this.transport.running ||
+        now >= this.transport.timeOf(count) - LEAD_US,
+    );
+    this.#punches = this.#punches.filter(punch => !due.includes(punch));
+    for (const punch of due) {
+      const names = this.#punched(punch.target);
+      if (punch.count !== undefined && this.transport.running) {
+        for (const name of names) {
+          this.patterns.punchedAt(
+            name,
+            punch.count / this.transport.beatsPerBar,
+          );
+        }
+      }
+      if (punch.target.kind === 'library') {
+        this.#punchLibrary(punch.target.name, punch.source, names);
+      } else {
+        this.#punchScripts(names, punch.source);
+      }
+    }
+  }
+
+  #punchScripts(names: string[], source: string): void {
+    const patternNames = projectPatternNames(this.project);
+    for (const name of names) {
+      const owner = this.#owners.get(name)!;
+      const authored = this.#authored.get(owner)!;
+      try {
+        const reports = this.group
+          .script(name)!
+          .reload(source, 'carry variables', { keepMailbox: true });
+        this.fuel.observe(reports);
+        this.performance.reports(reports);
+      } catch (error) {
+        this.#punchFailed(error, authored);
+        continue;
+      }
+      for (const problem of patternProblems(source, patternNames)) {
+        this.problems.push({
+          owner: authored,
+          line: problem.line,
+          message: problem.message,
+        });
+      }
+      this.#tree.setScript(owner, source);
+      this.#afterPunch(name, owner, source);
+    }
+  }
+
+  #punchLibrary(name: string, source: string, scripts: string[]): void {
+    const library = this.project.libraries.find(l => l.name === name);
+    if (!library) {
+      return;
+    }
+    const compiled = compileProjectLibraries(
+      this.project.libraries.map(l => (l === library ? { ...l, source } : l)),
+      grantDeclarations(),
+    );
+    const replacement = compiled.libraries.find(l => l.name === name);
+    const failed = compiled.problems.filter(p => p.library.name === name);
+    if (!replacement || failed.length) {
+      for (const problem of failed) {
+        this.problems.push({
+          owner: this.project,
+          line: problem.line,
+          message: problem.message,
+          target: { kind: 'library', library },
+        });
+      }
+      return;
+    }
+    try {
+      // Every importer reloads on one call, all or none.
+      const reports = this.group.replaceLibrary(replacement, 'carry variables');
+      this.fuel.observe(reports);
+      this.performance.reports(reports);
+    } catch (error) {
+      this.#punchFailed(error, this.project, library);
+      return;
+    }
+    if (library.id !== undefined) {
+      this.#tree.setLibrarySource(library.id, source);
+    }
+    for (const updated of this.project.libraries) {
+      this.#librarySources.set(updated.name, updated);
+    }
+    for (const script of scripts) {
+      const owner = this.#owners.get(script)!;
+      this.#afterPunch(script, owner, this.#targets.get(script)!.source);
+    }
+  }
+
+  // A failed load leaves the old code running and reports in Errors.
+  #punchFailed(
+    error: unknown,
+    owner: DeepReadonly<ScriptOwner>,
+    library?: DeepReadonly<ProjectLibrary>,
+  ): void {
+    const target = library
+      ? { target: { kind: 'library' as const, library } }
+      : {};
+    if (error instanceof LoadError) {
+      for (const diagnostic of error.diagnostics) {
+        const importer = this.#owners.get(diagnostic.unit);
+        this.problems.push(
+          importer
+            ? {
+                owner: this.#authored.get(importer)!,
+                line: diagnostic.line,
+                message: diagnostic.code,
+              }
+            : {
+                owner,
+                line: diagnostic.line,
+                message: diagnostic.code,
+                ...target,
+              },
+        );
+      }
+    } else if (error instanceof HostError) {
+      this.problems.push({
+        owner,
+        line: 1,
+        message: `Could not Punch In: ${error.message}`,
+        ...target,
+      });
+    } else {
+      throw error;
+    }
+  }
+
+  #afterPunch(name: string, owner: ScriptOwner, source: string): void {
+    for (const unit of this.#commandUnits) {
+      if (unit.startsWith(`${name}+`)) {
+        this.#commandUnits.delete(unit);
+      }
+    }
+    this.#register(name, owner, source);
+    this.#openScript(name, source);
+    this.changed = true;
   }
 
   /** Changes Page as a Script's `go to` does, by closing this one first. */
@@ -1417,6 +1695,9 @@ export class PlaySession {
    * it finishes, and is accounted, when a later `advance` completes it.
    */
   pump(now: bigint, outOfBand = false, advance?: () => PumpResult) {
+    if (!advance && !outOfBand && !this.debugPaused) {
+      this.#applyPunches(now);
+    }
     if (!advance && !outOfBand) {
       this.#deliverBeats(now);
     }
@@ -1426,10 +1707,14 @@ export class PlaySession {
     }
     // Steps go out after the Runs that started or replaced their patterns.
     this.patterns.schedule(now);
+    if (result.state !== 'sliced') {
+      this.patterns.settle();
+    }
     let next = result.nextDeadline;
     for (const due of [
       this.#nextBeatDelivery(),
       this.patterns.nextDeadline(),
+      this.ended ? undefined : this.#nextPunch(),
     ]) {
       if (due !== undefined && (next === undefined || due < next)) {
         next = due;

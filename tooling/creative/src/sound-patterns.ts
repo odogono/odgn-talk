@@ -84,6 +84,12 @@ export class SoundPatterns {
   /** One-shot steps from `play`, in time order. */
   #shots: Shot[] = [];
 
+  /**
+   * The bar each Punched In Script's new loops start on (ADR 0157), kept
+   * until the Pump that applied it ends, so a late Pump doesn't move them.
+   */
+  readonly #punched = new Map<string, number>();
+
   /** Whether loops play; Edit holds them without playing (ADR 0159). */
   readonly #loopsPlay: boolean;
 
@@ -105,6 +111,14 @@ export class SoundPatterns {
         instrument: loop.target.instrument,
         text: loop.segments.at(-1)!.text,
       }));
+  }
+
+  /** Whether a Script loops a Sound Pattern or has `play` steps to send. */
+  owns(owner: string): boolean {
+    return (
+      [...this.#loops.values()].some(loop => loop.owner === owner) ||
+      this.#shots.some(shot => shot.owner === owner)
+    );
   }
 
   /** Whether any Script loops a Sound Pattern. */
@@ -129,7 +143,13 @@ export class SoundPatterns {
   ): void {
     const key = `${owner}\u0000${target.instrument}`;
     const existing = this.#loops.get(key);
-    const from = this.#nextBar(existing?.cursor, now);
+    const punched = this.#transport.running
+      ? this.#punched.get(owner)
+      : undefined;
+    const from =
+      punched !== undefined && !existing
+        ? punched
+        : this.#nextBar(existing?.cursor, now);
     if (!existing) {
       this.#loops.set(key, {
         owner,
@@ -170,6 +190,16 @@ export class SoundPatterns {
     this.#shots.sort((a, b) =>
       a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
     );
+  }
+
+  /** A Punch In's new loops for `owner` start on `bar`, until `settle`. */
+  punchedAt(owner: string, bar: number): void {
+    this.#punched.set(owner, bar);
+  }
+
+  /** Ends the Pump's Punch Ins: later loops start on the next bar. */
+  settle(): void {
+    this.#punched.clear();
   }
 
   /**

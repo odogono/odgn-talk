@@ -15,7 +15,13 @@ import {
   type Project,
 } from './model';
 import { type MessageReply, valueReply } from './message';
-import { PlaySession, PUMP_FUEL, unitLabel, type PendingPrompt } from './play';
+import {
+  PlaySession,
+  PUMP_FUEL,
+  unitLabel,
+  type PendingPrompt,
+  type PunchReply,
+} from './play';
 import {
   type BreakpointView,
   type DrawingView,
@@ -32,7 +38,7 @@ import {
   type LineEngine,
   type MeasuredReply,
 } from './message-line';
-import { scriptOwners } from './script-manifest';
+import { scriptOwners, type ScriptOwner } from './script-manifest';
 import {
   valueEncoder,
   variablesOf,
@@ -250,7 +256,9 @@ export class PlayHost {
       reply(
         request.kind === 'message'
           ? { kind: 'message', error: 'Play has stopped.' }
-          : { kind: 'done' },
+          : request.kind === 'punchIn'
+            ? { kind: 'punchIn', reply: { kind: 'notLoaded' } }
+            : { kind: 'done' },
       );
       return;
     }
@@ -408,6 +416,36 @@ export class PlayHost {
           session.frame(this.#clock());
         }
         break;
+      }
+      case 'punchIn': {
+        // While paused the Play clock stands still, so a Punch In waiting for
+        // a bar applies at the first one after Resume.
+        const { place } = request;
+        const owner =
+          place.kind === 'script'
+            ? ([...this.#owners].find(([, i]) => i === place.owner)?.[0] as
+                ScriptOwner | undefined)
+            : undefined;
+        const library =
+          place.kind === 'library'
+            ? session.project.libraries[place.index]
+            : undefined;
+        const answer: PunchReply = owner
+          ? session.punchIn(
+              { kind: 'script', owner },
+              request.source,
+              this.#clock(),
+            )
+          : library
+            ? session.punchIn(
+                { kind: 'library', name: library.name },
+                request.source,
+                this.#clock(),
+              )
+            : { kind: 'notLoaded' };
+        this.#schedule();
+        reply({ kind: 'punchIn', reply: answer });
+        return;
       }
       case 'inspect': {
         reply({

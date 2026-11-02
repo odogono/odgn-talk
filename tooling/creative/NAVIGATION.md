@@ -8,7 +8,7 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 Read only your section, e.g.
 `sed -n '/^## Mini-Notation/,/^## /p' tooling/creative/NAVIGATION.md`.
-Sections: Running and testing; Play Session and reader input; Project model and Project files; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
+Sections: Running and testing; Play Session and reader input; Project model and Project files; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; Punch In; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
 
 Music work belongs to map #1887; its task list shows which children have
 landed, and the Issue graph job ticks it as they close.
@@ -318,6 +318,25 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   cases in [message.test.ts](tests/message.test.ts).
 - First check: `bun test tooling/creative/tests/sound-patterns.test.ts`.
 - Browser: `beats` suite on `/beats-test.html`.
+
+## Punch In
+
+Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
+
+- [play.ts](src/play.ts): `PlaySession.punchIn` queues it, at once or for
+  the next bar if the Script keeps musical time; `pump` applies it first,
+  reloading with `carry variables` and the mailbox kept (a Library through
+  `replaceLibrary`), then sends `openScript`, which `#load` also sends.
+  [sound-patterns.ts](src/sound-patterns.ts)'s `punchedAt` holds the new
+  loops to the punch bar for that Pump.
+- [play-host.ts](src/play-host.ts) answers the `punchIn` request
+  ([play-protocol.ts](src/play-protocol.ts)); [scripts.ts](src/scripts.ts)
+  binds ⌘↩ and shows the note, [edit-menu.tsx](src/edit-menu.tsx) has the
+  command, and [play-view.ts](src/play-view.ts) sends it.
+- Tests: [punch-in.test.ts](tests/punch-in.test.ts) covers the session and
+  Pause through the host; [punch-in.browser.ts](tests/punch-in.browser.ts).
+- First check: `bun test tooling/creative/tests/punch-in.test.ts`.
+- Browser: `punch-in` suite on `/punch-in-test.html`.
 
 ## The folio Grant and hide/show
 

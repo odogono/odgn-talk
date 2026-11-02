@@ -741,6 +741,42 @@ sent to the audio one lead ahead of its time;
 scheduling, replacement on the bar and ownership, and the `beats` browser
 suite proves that steps land on their samples.
 
+## Punch In
+
+While browsing, **⌘↩** in the Code Browser, or **Edit → Punch In**, loads
+the edited Script or Library into the running Play Session without stopping
+the music (ADR 0157, #1897):
+
+```talk
+on openScript
+  loop "bd [hh hh] sd hh"     -- edit this line, press ⌘↩: the new groove starts on the next bar
+end openScript
+```
+
+- **When:** a Script that keeps musical time, handling `beat` or owning a
+  Sound Pattern, is Punched In at the next bar; any other at once. The Code
+  Browser says which.
+- **What it keeps:** the Script reloads with its Script Variables and
+  mailbox; its Runs are discarded and its Sound Patterns released. Folio then
+  sends it `openScript`, which every Script also gets when it loads, so a
+  Script that starts its loops there keeps playing, its new loops starting
+  on the bar the old ones end.
+- **Failure keeps the music:** if the new code doesn't load, the old code
+  keeps running and the problem shows in Errors.
+- **Libraries:** every loaded Script that imports the Library, directly or
+  through another, reloads on one bar, all or none. A Library replacement
+  doesn't yet keep those Scripts' mailboxes (#1951).
+- The edit is an ordinary authored edit, saved and undoable. A Script that
+  isn't loaded, such as one on another Page, only has its edit saved, and the
+  Code Browser says so.
+- **While Paused** it waits for the next bar after Resume. **While a Run is
+  stopped** at a Breakpoint it's refused: Resume first.
+
+[`src/play.ts`](src/play.ts)'s `punchIn` applies it at the start of a Pump,
+before the bar's beats and steps go out.
+[`tests/punch-in.test.ts`](tests/punch-in.test.ts) covers each case, and the
+`punch-in` browser suite drives ⌘↩ and the Edit menu.
+
 ## Canvas
 
 A canvas Element shows its Drawing over its `fill`: the commands Scripts and
