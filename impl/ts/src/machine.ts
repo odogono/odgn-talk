@@ -2818,9 +2818,13 @@ export class Run {
       return;
     }
     let frame = this.frame;
-    if (frame.restricted || frame.clauseCharge) {
+    // The entry frame's clause charge reports its payment, which `step` does.
+    if (frame.restricted || (frame.clauseCharge && frame === this.frames[0])) {
       return;
     }
+    // A called Handler's clause rate rides on its first instruction's charge.
+    const clauseFuel = fixedCharges[CLAUSE]!.fuel;
+    let clause = frame.clauseCharge ? clauseFuel : 0;
     let { locals, stack, code } = frame;
     let instructions = code.unit.code;
     const m = this.m;
@@ -2892,6 +2896,7 @@ export class Run {
             (following.opcode === Op.BranchFalse ||
               following.opcode === Op.BranchTrue) &&
             branch &&
+            clause === 0 &&
             fuel + cost.fuel < end &&
             fuel + cost.fuel + branch.fuel <= fuelLimit &&
             alloc + cost.alloc + branch.alloc <= allocLimit
@@ -2928,6 +2933,18 @@ export class Run {
           if (isValue(receiver) && receiver.kind === 'map') {
             cost = fixedCharges[ins.rate];
           }
+          break;
+        }
+        case Op.SetKey: {
+          // A key the Map already has keeps its entry count, so the charge
+          // is known before the write.
+          cost = this.fastSetKeyCharge(ins, stack);
+          break;
+        }
+        case Op.CallHandler: {
+          // Only the unit's own Handler, whose first clause takes the
+          // arguments; anything else is `step`'s.
+          cost = this.fastCallHandlerCharge(ins, code);
           break;
         }
         case Op.Append: {
@@ -2980,10 +2997,15 @@ export class Run {
       }
       if (
         !cost ||
-        fuel + cost.fuel > fuelLimit ||
+        fuel + clause + cost.fuel > fuelLimit ||
         alloc + cost.alloc > allocLimit
       ) {
         break;
+      }
+      if (clause !== 0) {
+        frame.clauseCharge = false;
+        fuel += clause;
+        clause = 0;
       }
       fuel += cost.fuel;
       alloc += cost.alloc;
@@ -3030,10 +3052,17 @@ export class Run {
         case Op.GetKey:
           stack[stack.length - 1] = (stack.at(-1) as Value).get(a as string);
           break;
+        case Op.SetKey:
+          stack.pop();
+          stack[stack.length - 1] = this.m.result!;
+          break;
         case Op.Call:
+        case Op.CallHandler:
         case Op.Return: {
           frame.pc = pc;
-          if (opcode === Op.Call) {
+          if (opcode === Op.CallHandler) {
+            this.fastCallHandler(code, a as string, b as number);
+          } else if (opcode === Op.Call) {
             const body = code.unit.bodies[a as number]!;
             const args = stack.slice(stack.length - (b as number)) as Value[];
             this.push(code, body, this.fillDefaults(code, body, args), null);
@@ -3049,6 +3078,7 @@ export class Run {
           ({ locals, stack, code } = frame);
           instructions = code.unit.code;
           pc = frame.pc;
+          clause = frame.clauseCharge ? clauseFuel : 0;
           continue;
         }
         default:
@@ -3060,6 +3090,54 @@ export class Run {
     frame.pc = pc;
     this.fuel = fuel;
     this.alloc = alloc;
+  }
+
+  /**
+   * `fastSteps`' charge for writing a key its Map already has, with the new
+   * Map version left as the measured result; or nothing, for `step`. The
+   * entry count doesn't change, so the result's charge is the Map's.
+   */
+  private fastSetKeyCharge(
+    ins: Instruction,
+    stack: Item[],
+  ): Charge | undefined {
+    const receiver = stack.at(-2);
+    const input = stack.at(-1);
+    const key = ins.operands[0] as string;
+    if (
+      !isValue(receiver) ||
+      !isValue(input) ||
+      receiver.kind !== 'map' ||
+      !receiver.hasKey(key)
+    ) {
+      return undefined;
+    }
+    const m = this.m;
+    resetMeasured(m);
+    m.input = input;
+    m.result = receiver;
+    const cost = charge(ins.rate, m, this.instructionCharge);
+    m.result = setKey(receiver, key, input);
+    return cost;
+  }
+
+  /** `fastSteps`' charge for calling the unit's own Handler, whose first clause takes the arguments. */
+  private fastCallHandlerCharge(
+    ins: Instruction,
+    code: Code,
+  ): Charge | undefined {
+    const clauses = code.clauses.get(ins.operands[0] as string);
+    return clauses?.[0]?.params.length === ins.operands[1] &&
+      !this.callWouldExceedDepth()
+      ? fixedCharges[CALL]
+      : undefined;
+  }
+
+  private fastCallHandler(code: Code, name: string, n: number) {
+    const stack = this.frame.stack;
+    const args = stack.slice(stack.length - n) as Value[];
+    drop(stack, n);
+    this.dispatch({ clauses: code.clauses.get(name)!, code, next: 0, args });
   }
 
   /**

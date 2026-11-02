@@ -128,6 +128,34 @@ end down
 on run n
   return down(n * 3)
 end run`,
+  // Keys written to a Map that has them, and to one that doesn't; the
+  // Script's own Handlers called, through a Guard, a second clause and
+  // recursion past the call depth limit (#1939).
+  handlers: `on tick state
+  put state's x + 1 into state's x
+  return state
+end tick
+
+on pick v where v > 2
+  return v * 2
+end pick
+on pick v
+  return v
+end pick
+
+on deep n
+  if n = 0 then return 0
+  return deep(n - 1) + 1
+end deep
+
+on run n
+  put {x: 0} into state
+  repeat for each i in 1..n
+    put tick(state) into state
+  end repeat
+  put pick(1) + pick(n) into state's last
+  return [state, deep(n)]
+end run`,
 };
 
 type Limits = {
@@ -194,7 +222,7 @@ describe('fast steps', () => {
       }
       for (
         let depth = 1;
-        source.includes('function') && depth <= 3 * n + 2;
+        /function|deep/.test(source) && depth <= 3 * n + 2;
         depth++
       ) {
         same({ callDepth: depth });
