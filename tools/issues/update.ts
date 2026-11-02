@@ -8,7 +8,7 @@
 // Needs an authenticated `gh` (GH_TOKEN in CI).
 
 import { execFileSync } from 'node:child_process';
-import { type Issue, renderGraph } from './graph';
+import { type Issue, renderGraph, tickMaps } from './graph';
 
 // The pinned "Issue dependency graph" issue; it is left out of its own graph.
 const GRAPH_ISSUE = 1243;
@@ -79,6 +79,21 @@ for (const line of out.split('\n')) {
     subIssues: n.subIssues.nodes.map(s => s.number),
     title: n.title,
   });
+}
+
+// Tick each map's task list before drawing, so the graph reads the same
+// state the maps show.
+for (const [number, mapBody] of tickMaps(issues)) {
+  if (process.argv.includes('--print')) {
+    console.error(`#${number}: task list out of date`);
+    continue;
+  }
+  gh(
+    ['issue', 'edit', String(number), '--repo', REPO, '--body-file', '-'],
+    mapBody,
+  );
+  issues.get(number)!.body = mapBody;
+  console.log(`Ticked #${number}'s task list`);
 }
 
 const generated = new Date().toISOString().replace(/\.\d+Z$/, 'Z');

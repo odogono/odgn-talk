@@ -29,6 +29,8 @@ by ±5–8%. A detached baseline worktree comes from
 behind. For the WASI embedding itself (Pump and Capability exchanges, startup,
 memory), use the [Message Layer C Host](../../bench/message-layer-c/README.md);
 `impl/go/request-pump-bench.sh` compares against a pinned `BASE`, not `main`.
+To see where the time goes, run `bun run bench:profile:zig <benchmark>
+[--base origin/main]` ([Profiling](../../bench/README.md#profiling)).
 
 A new module's tests run only once the `test` block in
 [`root.zig`](src/root.zig) references it (`_ = binary_value;`).

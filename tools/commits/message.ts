@@ -58,7 +58,12 @@ export const parseCommitSubject = (
   const description = match.groups.description!;
   const errors: string[] = [];
   if (!(TYPES as readonly string[]).includes(type)) {
-    errors.push(`unknown type "${type}"; use one of ${TYPES.join(', ')}`);
+    errors.push(
+      `unknown type "${type}"; use one of ${TYPES.join(', ')}` +
+        (type === 'style'
+          ? '; fold formatting into the commit it formats with `git commit --amend`'
+          : ''),
+    );
   }
   if (scope !== undefined && !(SCOPES as readonly string[]).includes(scope)) {
     errors.push(`unknown scope "${scope}"; use one of ${SCOPES.join(', ')}`);

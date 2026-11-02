@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { type Issue, quiet, relations, renderGraph } from './graph';
+import { type Issue, quiet, relations, renderGraph, tickMaps } from './graph';
 
 const issue = (number: number, fields: Partial<Issue> = {}): Issue => ({
   assignees: [],
@@ -101,5 +101,30 @@ test('draws open issues inside their open parents, coloured by blockers', () => 
 test('quiet stops GitHub linking issue numbers and people', () => {
   expect(quiet('#12 by @ana-b, C# and a@')).toBe(
     '`#12` by `@ana-b`, C# and a@',
+  );
+});
+
+test('ticks an open map task list to match its children', () => {
+  const edits = tickMaps(
+    byNumber(
+      issue(1, {
+        labels: ['wayfinder:map'],
+        body: '- [ ] #2 Done\n- [x] #3 Reopened\n- [ ] #4 Open\n- [ ] #9 Unknown',
+      }),
+      issue(2, { state: 'CLOSED' }),
+      issue(3),
+      issue(4),
+      issue(5, { labels: ['wayfinder:map'], body: '- [ ] #4 Open' }),
+      issue(6, {
+        state: 'CLOSED',
+        labels: ['wayfinder:map'],
+        body: '- [ ] #2',
+      }),
+    ),
+  );
+  expect(edits).toEqual(
+    new Map([
+      [1, '- [x] #2 Done\n- [ ] #3 Reopened\n- [ ] #4 Open\n- [ ] #9 Unknown'],
+    ]),
   );
 });

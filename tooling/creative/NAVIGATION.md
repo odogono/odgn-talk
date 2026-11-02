@@ -6,6 +6,13 @@ Behaviour and limitations are in the [Folio guide](README.md); domain terms in
 [ADR index](../../docs/adr/README.md). Commands run from the repository root.
 List files with `rg --files tooling/creative` before opening one by name.
 
+Read only your section, e.g.
+`sed -n '/^## Mini-Notation/,/^## /p' tooling/creative/NAVIGATION.md`.
+Sections: Running and testing; Play Session and reader input; Project model and Project files; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
+
+Music work belongs to map #1887; its task list shows which children have
+landed, and the Issue graph job ticks it as they close.
+
 ## Running and testing
 
 - Fresh worktree: `bun install --frozen-lockfile`.
@@ -30,6 +37,7 @@ List files with `rg --files tooling/creative` before opening one by name.
   `--timeout` sets each step's limit and `--run-timeout` (default 300000 ms)
   fails a run that hangs. Once per
   machine: `bunx playwright install chromium-headless-shell`.
+  The `instruments` suite fails on `main` until #1946 is fixed.
 - Browser suites by hand: with the server running, `bun run --cwd tooling/creative build:browser-tests`
   ([build-browser-tests.ts](tools/build-browser-tests.ts)) rebuilds the app
   and every suite, and prints where each one runs: `/<suite>-test.html` (a
