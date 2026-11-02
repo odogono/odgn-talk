@@ -1,0 +1,22 @@
+# peer/save-restore: a Group saved with a Remote Send's `call` pending. The
+# restore returns the call as pending, and the Host settles it with Fail,
+# `send failed` with `reason` `unreachable`, since a Remote Send is
+# delivered at most once. The Exposed Script's Run that a Remote Send
+# started is restored too, and `caller` still gives its Caller Identity,
+# which the Host keeps across the restore (chapter 7, Saving; chapter 9,
+# The peer router; chapter 10, Settling pending calls).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objects]]
+kind = "peer"
+id = "billing"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { peer = { ops = "all" } }

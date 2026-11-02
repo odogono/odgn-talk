@@ -192,6 +192,8 @@ const tsOnly = new Set([
   'ParseError',
   'ParseResult',
   'RecoveringParseResult',
+  // `peer` routes Remote Sends in the TS Core only, until the Zig Core's #1973.
+  'PeerImpl',
   'RecoveryDiagnostic',
   'Run',
   'RunRecord',
@@ -232,6 +234,8 @@ const tsOnly = new Set([
   'parseEntry',
   'parseSource',
   'parseSourceRecovering',
+  'peerCapability',
+  'peerKind',
   'stdlibNames',
   'stdlibSources',
   'syntaxSelector',

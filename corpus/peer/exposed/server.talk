@@ -1,0 +1,48 @@
+script variable got = []
+script variable inbox = nothing
+
+on start
+  ask peer to expose "chat" and wait
+  put it after got
+  ask peer to expose and wait
+  put it into inbox
+  put it after got
+  repeat for each name in ["", "admin", "taken"]
+    try
+      ask peer to expose name and wait
+    catch {code: code}
+      put code after got
+    end try
+  end repeat
+  repeat for each address in ["", "nowhere", "ghost"]
+    try
+      ask peer to reach address and wait
+    catch {code: code}
+      put code after got
+    end try
+  end repeat
+end start
+
+on join nick, client
+  ask peer to caller
+  put it after got
+  send said with "welcome " & nick to client
+  send local to me
+  return {nick: nick, who: the principal of it}
+end join
+
+on say line
+  ask peer to caller
+  put [line, it] after got
+end say
+
+on local
+  ask peer to caller
+  put ["local", it] after got
+end local
+
+on stop
+  ask peer to unexpose "chat"
+  ask peer to unexpose inbox
+  put "unexposed" after got
+end stop

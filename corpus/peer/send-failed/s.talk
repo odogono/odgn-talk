@@ -1,0 +1,18 @@
+script variable seen = []
+
+on try1 p
+  try
+    send charge with 1 to p and wait
+    put it after seen
+  catch e
+    put e after seen
+  end try
+end try1
+
+on both p
+  wait for all
+    send price with "a" to p into a and wait
+    send price with "b" to p into b and wait
+  end wait
+  put [a, b] after seen
+end both

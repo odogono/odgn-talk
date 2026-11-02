@@ -22,6 +22,8 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         } else return "a Host Input talk.h doesn't make yet";
         if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
+            // A Remote Send's Caller Identity is only `peer`'s to give (#1973).
+            if (field(input, "caller") != null) return "a Caller Identity, which needs peer";
             if (std.mem.startsWith(u8, to, "<object ")) continue;
             for (s.units) |u| {
                 if (std.mem.eql(u8, u.name, to)) break;

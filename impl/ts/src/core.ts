@@ -17,6 +17,7 @@ import { sqliteCapability } from './sqlite-capability';
 import { storeCapability } from './store-capability';
 import { userCapability } from './user-capability';
 import { httpCapability } from './http-capability';
+import { peerCapability, peerKind } from './peer-capability';
 import { coreVersions } from './versions';
 
 /** The TS Core: the embedding interface's Core, with its Groups typed as TsGroup. */
@@ -48,6 +49,8 @@ const core: TsCore = Object.freeze({
   sqliteCapability,
   userCapability,
   httpCapability,
+  peerCapability,
+  peerKind,
   compileLibrary,
   newGroup,
   restore,

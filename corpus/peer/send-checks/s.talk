@@ -1,0 +1,42 @@
+script variable seen = []
+
+on go p, w, gone
+  put 5 into notText
+  try
+    send ("not a name") with 1 to p
+  catch e
+    put e after seen
+  end try
+  try
+    send ("charge:") with 1, 2 to p and wait
+  catch e
+    put e after seen
+  end try
+  try
+    send charge with 1 to gone
+  catch e
+    put e after seen
+  end try
+  try
+    send charge with {pay: [w]} to p
+  catch e
+    put e after seen
+  end try
+  try
+    send charge with (given x: x) to p and wait
+  catch e
+    put e after seen
+  end try
+  try
+    ask peer to call p, notText, [] and wait
+  catch e
+    put e after seen
+  end try
+  try
+    wait for paid from p
+  catch e
+    put e after seen
+  end try
+  send forward with {to: [p]}, "a" to p
+  put "sent" after seen
+end go

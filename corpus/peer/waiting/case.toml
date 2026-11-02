@@ -1,0 +1,22 @@
+# peer/waiting: a Remote Send's `call` waits as any suspending call does.
+# `peer` declares no `maxPending`, so it waits for the Script's MaxWait, and
+# a shorter Timeout Block wins; either abandons the call, and a late answer
+# is noted and ignored. Cancelling the Run, or stopping the Script, abandons
+# a pending one too; the Host never asks the receiver to stop (chapter 5,
+# Remote Sends; chapter 9, The `peer` factory).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objects]]
+kind = "peer"
+id = "billing"
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { maxWaitMs = 5000 }
+grants = { peer = { ops = "all" } }

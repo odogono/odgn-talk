@@ -546,11 +546,11 @@ export interface HttpImpl {
  * kind`, `bad message name` and `not encodable`. Expose and reach start
  * suspending calls: answer reach with a Host Object of kind `peer` made in
  * the calling Group, or fail it with `bad address` or `not exposed`; answer
- * expose with Nothing, or fail it with `bad address` or `name in use`. Post
- * and call hear the Peer, the Selector and the arguments, through the sending
- * Script's Grant; answer call with the receiver's reply, or fail it with `bad
- * address` or `send failed` and `{reason, error}`. A Remote Send is delivered
- * at most once.
+ * expose with the exposure's Peer, or fail it with `bad address` or `name in
+ * use`. Post and call hear the Peer, the Selector and the arguments, through
+ * the sending Script's Grant; answer call with the receiver's reply, or fail
+ * it with `send failed` and `{reason, error}`. A Remote Send is delivered at
+ * most once.
  */
 export interface PeerImpl {
   /** No name makes a new unnamed exposure. Answers with the exposure's Peer. */
@@ -699,6 +699,10 @@ export interface Core {
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Optional for Hosts. */
   httpCapability(impl: HttpImpl, costs: Costs): CapabilityDef<unknown>;
+  /** Optional for Hosts. At most one peer Grant per Script; Load refuses a second as "invalid value". */
+  peerCapability(impl: PeerImpl, costs: Costs): CapabilityDef<unknown>;
+  /** The Core-fixed Object Kind `peer`, with no properties; the Host makes each Peer with it. */
+  readonly peerKind: ObjectKind<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

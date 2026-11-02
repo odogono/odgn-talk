@@ -3639,6 +3639,15 @@ export class TsGroup implements Group {
       this.held(object);
     }
     const grants = new Map(Object.entries(o.grants ?? {}));
+    // Every Remote Send goes through the Script's one `peer` Grant (chapter 7).
+    if (
+      [...grants.values()].filter(g => g.capability.name === 'peer').length > 1
+    ) {
+      throw new HostError(
+        'invalid value',
+        `Script ${o.name} has more than one peer Grant`,
+      );
+    }
     const p = prepare(
       'script',
       o.name,

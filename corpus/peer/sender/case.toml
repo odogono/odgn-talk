@@ -1,0 +1,24 @@
+# peer/sender: one side of Remote Sends, from the sending Group. `reach`
+# waits for the Host's Peer; a plain `send` to it is the Grant's `post`, and
+# `send … and wait` its `call`, answered with the receiver's reply. A
+# Peer handed back in the reply is a Peer of this Group (chapter 5, Remote
+# Sends; ADRs 0153 and 0155).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objects]]
+kind = "peer"
+id = "billing"
+madeBy = "peer.reach"
+[[objects]]
+kind = "peer"
+id = "receipts"
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { peer = { ops = "all" } }

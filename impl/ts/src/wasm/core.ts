@@ -25,6 +25,7 @@ import { sqliteCapability } from '../sqlite-capability';
 import { storeCapability } from '../store-capability';
 import { userCapability } from '../user-capability';
 import { httpCapability } from '../http-capability';
+import { peerKind } from '../peer-capability';
 import { WasmGroup, bytesFrame, bytesOfFrame, type GroupCore } from './group';
 import type { Versions } from '../versions';
 import { Session } from './session';
@@ -147,6 +148,14 @@ export class WasmCore implements Core {
   sqliteCapability = sqliteCapability;
   userCapability = userCapability;
   httpCapability = httpCapability;
+  peerKind = peerKind;
+  /** The Zig Core doesn't route Remote Sends yet (#1973). */
+  peerCapability(): never {
+    throw new HostError(
+      'invalid value',
+      'The Zig Core does not offer peer yet',
+    );
+  }
 
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N> {
     const kind = defineObjectKind(k);

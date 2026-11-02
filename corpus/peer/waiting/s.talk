@@ -1,0 +1,26 @@
+script variable got = []
+
+on slow p
+  try
+    send charge with 1 to p and wait
+    put it after got
+  catch {code: code}
+    put code after got
+  end try
+end slow
+
+on bounded p
+  try
+    with timeout of 2 s
+      send charge with 2 to p and wait
+    end timeout
+    put it after got
+  catch {code: code}
+    put code after got
+  end try
+end bounded
+
+on forgotten p
+  send charge with 3 to p and wait
+  put it after got
+end forgotten

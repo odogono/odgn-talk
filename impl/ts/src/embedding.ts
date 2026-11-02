@@ -37,6 +37,7 @@ import type { sqliteCapability } from './sqlite-capability';
 import type { storeCapability } from './store-capability';
 import type { userCapability } from './user-capability';
 import type { httpCapability } from './http-capability';
+import type { peerCapability } from './peer-capability';
 import { requireArgs, type Value } from './values';
 import type { Versions } from './versions';
 
@@ -60,6 +61,10 @@ export type Core = {
   httpCapability: typeof httpCapability;
   localeCapability: typeof localeCapability;
   newGroup(o: GroupOptions): Group;
+  /** Optional for Hosts (ADR 0153). */
+  peerCapability: typeof peerCapability;
+  /** The Core-fixed Object Kind of a Peer, which the Host makes Peers with. */
+  readonly peerKind: ObjectKind<unknown>;
   restore(
     save: Uint8Array,
     o: RestoreOptions,

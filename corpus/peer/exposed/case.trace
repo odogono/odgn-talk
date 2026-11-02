@@ -1,0 +1,74 @@
+# Unblessed: the peer Standard Capability's exposed side (#1971); first blessing awaits human review.
+> load server identity=3c0ee7b9deded53c5462e1cabea6c2c20ef16d775204676c24fadc9455a5c06f
+> deliver d1 to=server message=start
+> pump clock=2026-11-02T12:00:00Z
+call server/r1.c1 op=peer.expose args=["chat"]
+seg server/r1 start delivery=d1 handler=start clause=1 fuel=20 alloc=0 state=376 end=ask-wait
+pumped state=idle fuel=20 next=2026-11-02T12:00:30Z
+> answer server/r1.c1 value=<object peer "chat">
+> pump clock=2026-11-02T12:00:01Z
+call server/r1.c2 op=peer.expose args=[]
+seg server/r1 resume fuel=26 alloc=40 state=416 end=ask-wait
+pumped state=idle fuel=26 next=2026-11-02T12:00:31Z
+> answer server/r1.c2 value=<object peer "inbox-1">
+> pump clock=2026-11-02T12:00:02Z
+raise server/r1 code="out of domain" at=server:33 pos=12:7
+call server/r1.c3 op=peer.expose args=["admin"]
+seg server/r1 resume fuel=67 alloc=199 state=1143 end=ask-wait
+pumped state=idle fuel=67 next=2026-11-02T12:00:32Z
+> fail server/r1.c3 error={code: "bad address"}
+> pump clock=2026-11-02T12:00:03Z
+raise server/r1 code="bad address" at=server:33 pos=12:7
+call server/r1.c4 op=peer.expose args=["taken"]
+seg server/r1 resume fuel=39 alloc=51 state=1099 end=ask-wait
+pumped state=idle fuel=39 next=2026-11-02T12:00:33Z
+> fail server/r1.c4 error={code: "name in use"}
+> pump clock=2026-11-02T12:00:04Z
+raise server/r1 code="name in use" at=server:33 pos=12:7
+raise server/r1 code="out of domain" at=server:62 pos=19:7
+call server/r1.c5 op=peer.reach args=["nowhere"]
+seg server/r1 resume fuel=75 alloc=212 state=1690 end=ask-wait
+pumped state=idle fuel=75 next=2026-11-02T12:00:34Z
+> fail server/r1.c5 error={code: "bad address"}
+> pump clock=2026-11-02T12:00:05Z
+raise server/r1 code="bad address" at=server:62 pos=19:7
+call server/r1.c6 op=peer.reach args=["ghost"]
+seg server/r1 resume fuel=38 alloc=51 state=1645 end=ask-wait
+pumped state=idle fuel=38 next=2026-11-02T12:00:35Z
+> fail server/r1.c6 error={code: "not exposed"}
+> pump clock=2026-11-02T12:00:06Z
+raise server/r1 code="not exposed" at=server:62 pos=19:7
+seg server/r1 resume fuel=26 alloc=51 state=294 end=return
+run server/r1 outcome=completed delivery=d1 handler=start fuel=291 alloc=604
+pumped state=idle fuel=26
+> stub peer.post
+> request d2 to=server message=join args=["ann", <object peer "browser">] caller={principal: "alice", host: "laptop"}
+> deliver d3 to=server message=say args=["hi"] caller={principal: "alice", host: "laptop"}
+> deliver d4 to=server message=say args=["plain"]
+> pump clock=2026-11-02T12:00:07Z
+call server/r2.c1 op=peer.caller args=[] result={principal: "alice", host: "laptop"}
+call server/r2.c2 op=peer.post args=[<object peer "browser">, "said", ["welcome ann"]]
+send server/r2 to=server message=local
+seg server/r2 start delivery=d2 handler=join clause=1 fuel=91 alloc=418 state=557 end=return
+run server/r2 outcome=completed delivery=d2 handler=join value={nick: "ann", who: "alice"} fuel=91 alloc=418
+call server/r3.c1 op=peer.caller args=[] result={principal: "alice", host: "laptop"}
+seg server/r3 start delivery=d3 handler=say clause=1 fuel=38 alloc=468 state=685 end=return
+run server/r3 outcome=completed delivery=d3 handler=say fuel=38 alloc=468
+call server/r4.c1 op=peer.caller args=[] result=nothing
+seg server/r4 start delivery=d4 handler=say clause=1 fuel=35 alloc=138 state=701 end=return
+run server/r4 outcome=completed delivery=d4 handler=say fuel=35 alloc=138
+call server/r5.c1 op=peer.caller args=[] result=nothing
+seg server/r5 start from=server/r2 handler=local clause=1 fuel=35 alloc=138 state=738 end=return
+run server/r5 outcome=completed handler=local fuel=35 alloc=138
+pumped state=idle fuel=199
+> stub peer.unexpose value=nothing
+> stub peer.unexpose value=nothing
+> deliver d5 to=server message=stop
+> pump clock=2026-11-02T12:00:08Z
+call server/r6.c1 op=peer.unexpose args=["chat"] result=nothing
+call server/r6.c2 op=peer.unexpose args=[<object peer "inbox-1">] result=nothing
+seg server/r6 start delivery=d5 handler=stop clause=1 fuel=46 alloc=49 state=771 end=return
+run server/r6 outcome=completed delivery=d5 handler=stop fuel=46 alloc=49
+pumped state=idle fuel=46
+> vars
+vars server got=[<object peer "chat">, <object peer "inbox-1">, "out of domain", "bad address", "name in use", "out of domain", "bad address", "not exposed", {principal: "alice", host: "laptop"}, ["hi", {principal: "alice", host: "laptop"}], ["plain", nothing], ["local", nothing], "unexposed"] inbox=<object peer "inbox-1">

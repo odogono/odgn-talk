@@ -1,0 +1,34 @@
+# peer/send-checks: what a `send` to a Peer checks before anything crosses,
+# in `send`'s order: a computed name, then a disposed Peer; then, through
+# the Grant's `post` or `call`, a Function Value (the Shape check) and a
+# Host Object other than a Peer (`not encodable`, `kind` "object"), while
+# a Peer may sit at any depth. A Script with no `peer` Grant, and `wait for
+# … from` a Peer, raise `out of domain`; `ask peer to call` with a message
+# that isn't text is `wrong kind` (chapter 5, Remote Sends; chapter 7).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objectKinds]]
+name = "widget"
+props = []
+[[objects]]
+kind = "widget"
+id = "w1"
+[[objects]]
+kind = "peer"
+id = "billing"
+[[objects]]
+kind = "peer"
+id = "gone"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { peer = { ops = "all" } }
+[[scripts]]
+name = "plain"
+source = "plain.talk"

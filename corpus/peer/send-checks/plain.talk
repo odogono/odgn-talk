@@ -1,0 +1,9 @@
+script variable seen = []
+
+on go p
+  try
+    send charge with 1 to p
+  catch e
+    put e after seen
+  end try
+end go
