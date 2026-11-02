@@ -30,7 +30,8 @@ import {
   splitAddOnKind,
 } from './elements/add-on';
 import { migrateInstrumentKinds } from './add-ons/instruments/migration';
-import { isElementKind, kindOf } from './elements/registry';
+import { isElementKind, isPlaceholderKind, kindOf } from './elements/registry';
+import { parseBinding } from './bindings';
 import { migrateClicks } from './click-migration';
 import { migrateSounds } from './sound-migration';
 import { defaultParameters } from './instruments/kind';
@@ -96,6 +97,50 @@ export const assetEntryName = (asset: Asset): string => {
 // The builders below run even after a failure, so one read reports every
 // problem. Their placeholder values are discarded whenever issues exist.
 
+/** A control's bindings: field names to binding text, read as written. */
+const checkBindings = (
+  c: Checker,
+  raw: unknown,
+  path: string,
+): Record<string, string> | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const bindings = c.obj(raw, `${path}.bindings`) ?? {};
+  const read: Record<string, string> = {};
+  for (const [field, text] of Object.entries(bindings)) {
+    const value = c.str(text, `${path}.bindings.${field}`);
+    if (value !== undefined) {
+      read[field] = value;
+    }
+  }
+  return Object.keys(read).length ? read : undefined;
+};
+
+/**
+ * A loaded kind's bindings name only fields it lets bind, each in a form it
+ * reads; whether the Instrument is there is Play's and Info's to say, so
+ * renaming or removing one never makes a Project unreadable.
+ */
+const checkBound = (c: Checker, element: Element, path: string): void => {
+  if (!element.bindings || isPlaceholderKind(element.kind)) {
+    return;
+  }
+  const { fields = [], output = false } = kindOf(element).bindings ?? {};
+  for (const [field, text] of Object.entries(element.bindings)) {
+    if (!fields.includes(field)) {
+      c.fail(`${path}.bindings.${field}`, `${field} can't be bound`);
+    } else if (!parseBinding(text, output)) {
+      c.fail(
+        `${path}.bindings.${field}`,
+        output
+          ? 'expected an Instrument name'
+          : 'expected tempo or an Instrument parameter such as bass.cutoff',
+      );
+    }
+  }
+};
+
 const checkElement = (
   c: Checker,
   value: unknown,
@@ -121,7 +166,7 @@ const checkElement = (
     c.fail(`${path}.kind`, `unknown Element kind ${JSON.stringify(e.kind)}`);
     return undefined;
   }
-  return kindOf(k).check(c, e, path, {
+  const checked = kindOf(k).check(c, e, path, {
     addOns: c.addOns,
     name,
     depth,
@@ -136,9 +181,14 @@ const checkElement = (
         visible: c.bool(e.visible, `${path}.visible`) ?? true,
       };
       setDefined(base, 'script', c.optStr(e.script, `${path}.script`));
+      setDefined(base, 'bindings', checkBindings(c, e.bindings, path));
       return base;
     },
   });
+  if (checked) {
+    checkBound(c, checked, path);
+  }
+  return checked;
 };
 
 const checkPage = (c: Checker, value: unknown, path: string): Page => {

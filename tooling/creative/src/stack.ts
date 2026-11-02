@@ -1,3 +1,4 @@
+import { bindingRange } from './bindings';
 import { kitSoundAsset } from './base-projects';
 import type { DeepReadonly } from './readonly';
 import { allElements, elementVisibility } from './tree/rules';
@@ -627,6 +628,25 @@ export const mountStack = (
       return;
     }
     if (writeInstrument(target)) {
+      return;
+    }
+    // A control's binding (#1904): one undoable edit, taking the target's
+    // range when it has one.
+    const binding = target.dataset.binding;
+    const [bound] = editor.selected;
+    if (binding && bound && editor.selected.length === 1) {
+      const text = target.value || undefined;
+      edit(() =>
+        editor.edit(({ tree }) =>
+          tree.setBinding(
+            bound,
+            binding,
+            text,
+            text === undefined ? undefined : bindingRange(editor.project, text),
+          ),
+        ),
+      );
+      draw();
       return;
     }
     if (target.dataset.field === 'name') {

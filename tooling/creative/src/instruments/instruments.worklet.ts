@@ -5,6 +5,8 @@ import {
   INSTRUMENT_PROCESSOR,
   type InstrumentChannel,
   InstrumentRack,
+  LEVEL_INTERVAL,
+  type LevelReport,
   type NoteOnset,
   type RackSetup,
 } from './rack';
@@ -15,25 +17,36 @@ declare const currentTime: number;
 declare function registerProcessor(
   name: string,
   processor: new (options: {
-    processorOptions: { report?: boolean; setup: RackSetup };
+    processorOptions: {
+      levels?: boolean;
+      report?: boolean;
+      setup: RackSetup;
+    };
   }) => unknown,
 ): void;
 declare class AudioWorkletProcessor {
   readonly port: {
     onmessage: ((event: { data: InstrumentChannel }) => void) | null;
-    postMessage(message: NoteOnset): void;
+    postMessage(message: LevelReport | NoteOnset): void;
   };
 }
 
 class InstrumentProcessor extends AudioWorkletProcessor {
   readonly #rack: InstrumentRack;
+  /** Whether meters show the output, and when they last heard (#1904). */
+  readonly #levels: boolean;
+  #reported = 0;
 
-  /** With `report`, posts each note's onset back, for tests. */
+  /**
+   * With `report`, posts each note's onset back, for tests; with `levels`,
+   * each Instrument's output level for meters.
+   */
   constructor(options: {
-    processorOptions: { report?: boolean; setup: RackSetup };
+    processorOptions: { levels?: boolean; report?: boolean; setup: RackSetup };
   }) {
     super();
-    const { report, setup } = options.processorOptions;
+    const { levels, report, setup } = options.processorOptions;
+    this.#levels = levels === true;
     this.#rack = new InstrumentRack(
       setup,
       sampleRate,
@@ -46,6 +59,10 @@ class InstrumentProcessor extends AudioWorkletProcessor {
         this.#rack.addSample(data.name, data.sample);
         return;
       }
+      if ('message' in data) {
+        this.#rack.receive(data.message);
+        return;
+      }
       data.port.onmessage = (event: MessageEvent<InstrumentMessage>) =>
         this.#rack.receive(event.data);
     };
@@ -55,6 +72,10 @@ class InstrumentProcessor extends AudioWorkletProcessor {
     const [left, right] = outputs[0] ?? [];
     if (left && right) {
       this.#rack.process(left, right, currentTime);
+    }
+    if (this.#levels && currentTime - this.#reported >= LEVEL_INTERVAL) {
+      this.#reported = currentTime;
+      this.port.postMessage({ levels: this.#rack.levels() });
     }
     return true;
   }

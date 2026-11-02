@@ -308,7 +308,9 @@ export class PlayHost {
         const target =
           page && session.elementsOf(page).find(e => e.name === request.target);
         if (target && !this.#play.paused) {
-          session.control(target, request.fields);
+          session.control(target, request.fields, {
+            applied: request.applied === true,
+          });
         }
         break;
       }

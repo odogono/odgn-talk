@@ -195,6 +195,27 @@ export class InstrumentSession {
     return objectKind;
   }
 
+  /**
+   * Sets a parameter for a bound control (#1904), with no Run. `send` is
+   * false when the page already sent it to the audio, so a later value it
+   * sent is never overtaken by this one.
+   */
+  setParameter(
+    instrument: string,
+    parameter: string,
+    value: InstrumentParameterValue,
+    send: boolean,
+  ): void {
+    const state = this.#instruments.get(instrument);
+    if (!state || !(parameter in state.parameters)) {
+      return;
+    }
+    state.parameters[parameter] = value;
+    if (send) {
+      this.#send(instrument, [{ kind: 'set', parameter, value }]);
+    }
+  }
+
   /** Each Instrument's object kind, by Instrument name. */
   objectKinds(): Map<string, ObjectKind<string>> {
     return new Map(

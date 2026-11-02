@@ -16,7 +16,16 @@ export const INSTRUMENT_PROCESSOR = 'folio-instruments';
  * a sound decoded after the rack started (#1958).
  */
 export type InstrumentChannel =
-  { port: MessagePort } | { name: string; sample: SampleBuffer };
+  | { port: MessagePort }
+  | { name: string; sample: SampleBuffer }
+  /** A bound control's change, straight from the page (#1904). */
+  | { message: InstrumentMessage };
+
+/** How often the worklet reports output levels for meters, in seconds. */
+export const LEVEL_INTERVAL = 1 / 30;
+
+/** Each Instrument's peak output since the last report, from 0 to 1. */
+export type LevelReport = { levels: Record<string, number> };
 
 /** What a rack is built from; plain data, so it crosses to the worklet. */
 export type RackSetup = {
@@ -37,6 +46,8 @@ export type NoteOnset = {
 
 export class InstrumentRack {
   readonly #hosts = new Map<string, ChipHost<InstrumentCommand>>();
+  /** Each Instrument's peak since `levels` was last read (#1904). */
+  readonly #peaks = new Map<string, number>();
   /** Shared with every sampler, so a sound added later plays at once. */
   readonly #samples: Map<string, SampleBuffer>;
 
@@ -100,12 +111,27 @@ export class InstrumentRack {
     right.fill(0);
     const frames = Math.min(left.length, right.length);
     const buffer = new Float32Array(frames * 2);
-    for (const host of this.#hosts.values()) {
+    for (const [name, host] of this.#hosts) {
       host.process(buffer, currentTime);
+      let peak = this.#peaks.get(name) ?? 0;
       for (let frame = 0; frame < frames; frame++) {
-        left[frame]! += buffer[frame * 2]!;
-        right[frame]! += buffer[frame * 2 + 1]!;
+        const l = buffer[frame * 2]!;
+        const r = buffer[frame * 2 + 1]!;
+        left[frame]! += l;
+        right[frame]! += r;
+        peak = Math.max(peak, Math.abs(l), Math.abs(r));
       }
+      this.#peaks.set(name, peak);
     }
+  }
+
+  /** Each Instrument's peak output since last asked, from 0 to 1. */
+  levels(): Record<string, number> {
+    const levels: Record<string, number> = {};
+    for (const [name, peak] of this.#peaks) {
+      levels[name] = Math.min(1, peak);
+      this.#peaks.set(name, 0);
+    }
+    return levels;
   }
 }

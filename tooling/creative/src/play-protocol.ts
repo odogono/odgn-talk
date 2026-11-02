@@ -61,6 +61,11 @@ export type PlayRequest =
       trustedAddOns?: string[];
     }
   | {
+      /**
+       * Whether the page sent the bound parameters to the audio itself, so
+       * the worker only records them (#1904).
+       */
+      applied?: boolean;
       /** A control's new field values (#1902). */
       fields: Record<string, number | boolean>;
       kind: 'control';

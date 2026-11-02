@@ -48,7 +48,7 @@ export const scalar = (
   shape: PropertyDescriptor['shape'],
 ): PropertyDescriptor => ({
   shape,
-  get: owner => (owner as Record<string, PropertyValue>)[field]!,
+  get: owner => (owner as unknown as Record<string, PropertyValue>)[field]!,
   set: (_owner, value, writer) => writer.field(field, value),
 });
 /** Element writes cost Fuel; Project and Page writes are authoring-only. */
@@ -103,6 +103,11 @@ export type ReaderContext = { takesInput: boolean; visible: boolean };
 export type ElementKindDefinition<K extends ElementKind = ElementKind> = {
   /** The asset it shows, by name, when it shows one. */
   asset?(element: DeepReadonly<Of<K>>): string;
+  /**
+   * The fields Info lets bind to an Instrument parameter or the tempo, or,
+   * with `output`, the one field that shows an Instrument's output (#1904).
+   */
+  bindings?: { readonly fields: readonly string[]; readonly output?: true };
   /**
    * Reads one from a Project file, migrating older formats; reports problems
    * on `c` and still returns a placeholder so one read finds them all.

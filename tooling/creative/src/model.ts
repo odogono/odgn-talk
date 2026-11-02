@@ -29,6 +29,11 @@ export type Paragraph = { align?: Exclude<TextAlign, 'left'>; runs: TextRun[] };
 export type RichText = Paragraph[];
 
 export type ElementBase = {
+  /**
+   * A control's fields bound to an Instrument parameter, `tempo` or, for a
+   * meter, an Instrument's output, such as `{value: "bass.cutoff"}` (#1904).
+   */
+  bindings?: Record<string, string>;
   height: number;
   /** Session-local editor identity; omitted from files and storage. */
   id?: number;
