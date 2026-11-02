@@ -24,6 +24,7 @@ const ACTIONS = [
   'playSound',
   'loopSound',
   'stopSound',
+  'loopPattern',
 ] as const;
 
 const ACTION_NAMES: Record<(typeof ACTIONS)[number], string> = {
@@ -34,6 +35,7 @@ const ACTION_NAMES: Record<(typeof ACTIONS)[number], string> = {
   playSound: 'Play a sound',
   loopSound: 'Loop a sound',
   stopSound: 'Stop a sound',
+  loopPattern: 'Loop a pattern',
 };
 
 type Position = 'new' | 'start' | 'end' | 'cursor';
@@ -81,6 +83,7 @@ const RecipePicker = ({
     value =>
       owner !== project ||
       value === 'navigate' ||
+      value === 'loopPattern' ||
       SOUND_RECIPE_KINDS.includes(value),
   );
   // Choosing an action re-reads its targets and the Script's placement, and
@@ -197,6 +200,9 @@ const RecipePicker = ({
     action === 'text'
       ? 'Replacing a text Element’s contents clears mixed formatting.'
       : '',
+    action === 'loopPattern'
+      ? 'The pattern loops from the next bar; looping another on the same Instrument changes the groove on the bar after.'
+      : '',
     SOUND_RECIPE_KINDS.includes(action)
       ? 'Sounds a Page or Element Script starts stop when the reader leaves that Page; sounds the Project Script starts keep playing.'
       : '',
@@ -245,10 +251,10 @@ const RecipePicker = ({
           ))}
         </select>
       </label>
-      <label hidden={action !== 'text'}>
-        New text
+      <label hidden={action !== 'text' && action !== 'loopPattern'}>
+        {action === 'loopPattern' ? 'Pattern' : 'New text'}
         <textarea
-          aria-label="New text"
+          aria-label={action === 'loopPattern' ? 'Pattern' : 'New text'}
           onChange={() => setPrepared(undefined)}
           onInput={event => {
             setPrepared(undefined);

@@ -9,6 +9,7 @@ import {
   type Project,
   type TextElement,
 } from '../src/model';
+import { createInstrument } from '../src/instruments/registry';
 import { PlaySession } from '../src/play';
 import { clickEvent, pointerValue } from '../src/pointer';
 
@@ -277,4 +278,34 @@ test('sound Recipes offer only audio assets and play through the Play Host', () 
   ]);
   play.stop(0n);
   expect(play.sounds.playing()).toEqual([]);
+});
+
+test('Loop a pattern loops Mini-Notation on the default kit or an Instrument', () => {
+  const { project, button } = fixture();
+  project.instruments.push(createInstrument('synth', 'bass'));
+  const targets = recipeTargets(project, button, 'loopPattern');
+  expect(targets).toEqual([
+    { name: 'Default kit', reference: '' },
+    { name: 'bass', reference: 'bass' },
+  ]);
+  expect(recipeSource('loopPattern', targets[0]!, ' bd hh sd hh ')).toBe(
+    'loop "bd hh sd hh"',
+  );
+  expect(recipeSource('loopPattern', targets[1]!, '<c3 e3 g3>*4')).toBe(
+    'loop "<c3 e3 g3>*4" on bass',
+  );
+  expect(() => recipeSource('loopPattern', targets[0]!, '  ')).toThrow(
+    'Write a pattern',
+  );
+  // Inserted into a click handler, it changes the groove when clicked.
+  button.script = insert(
+    '',
+    recipeSource('loopPattern', targets[0]!, 'bd*2, hh*4'),
+    'new',
+  );
+  expect(parseSource(button.script).error).toBeNull();
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click', [primaryClick]);
+  drain(play);
+  expect(play.problems).toEqual([]);
 });

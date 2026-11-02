@@ -230,8 +230,8 @@ export const runBrowserTests = async () => {
         ),
       ]
         .map(option => option.value)
-        .join(',') === 'navigate,playSound,loopSound,stopSound',
-      'Navigation and sounds for Project',
+        .join(',') === 'navigate,playSound,loopSound,stopSound,loopPattern',
+      'Navigation, sounds and patterns for Project',
     );
     assert(
       picker().textContent!.includes('passed up'),

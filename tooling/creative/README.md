@@ -415,13 +415,16 @@ Both Tetris Example Projects ship `game.test`, and Sonar ships `sonar.test`.
 
 Choose **Add action…** in the Code Browser or Info to insert a click action:
 **Go to a Page**, **Show an Element**, **Hide an Element**, **Change text**,
-**Play a sound**, **Loop a sound** or **Stop a sound**.
+**Play a sound**, **Loop a sound**, **Stop a sound** or **Loop a pattern**.
 Navigation offers every Page. Element actions offer only the Script's own
 Page; change-text targets are buttons (`label`) and text Elements (`text`).
 The owning Element is the default target and is written as `me`. Sound
 actions offer the Project's sounds by the name Scripts use; **Stop a sound**
-also offers all sounds the Script started. Project Scripts offer navigation
-and sounds. Page and Project handlers receive clicks
+also offers all sounds the Script started. **Loop a pattern** takes
+Mini-Notation and offers the default kit and the Project's Instruments,
+writing `loop "bd hh sd hh"` or `loop "c2 e2" on bass`; inserted in a click
+handler, it changes the groove on the next bar. Project Scripts offer
+navigation, sounds and patterns. Page and Project handlers receive clicks
 passed up the Message Path. Replacing text clears mixed formatting.
 
 The picker previews ordinary NorthTalk source, highlighting the insertion.
@@ -732,6 +735,9 @@ stop bass                                  -- this Script's pattern on bass
 - **Message Box:** during Play a pattern belongs to the targeted Script. In
   Edit, `play` is a preview through its own audio, and `loop` replies that it
   starts when you Browse.
+- **Script Recipes:** **Loop a pattern** inserts a `loop`. See this in Folio:
+  [First Sounds](https://northtalk.org/folio/first-sounds) teaches patterns a
+  Page at a time.
 
 [`src/sound-patterns.ts`](src/sound-patterns.ts) schedules the steps, each
 sent to the audio one lead ahead of its time;
@@ -1607,3 +1613,27 @@ Reload, then run
 `await import('/tetris.browser.js').then(m => m.runCanvasBrowserTests())`
 for the Canvas views, keyboard input, New Game button and retained Drawing
 across a second Browse.
+
+### First Sounds
+
+**Projects → Open First Sounds**, or <https://northtalk.org/folio/first-sounds>,
+teaches Sound Patterns and Mini-Notation with the built-in kits, after
+Strudel's First Sounds workshop
+([#1898](https://github.com/odogono/odgn-talk/issues/1898)). Its six Pages
+each cover one idea: a sound, sequences and rests, subdivision, alternation,
+parallel layers, then tempo and Instruments. It needs no assets.
+
+Each Page Script loops its layers on `openPage` with the source **Loop a
+pattern** inserts, and its `on click` answers the Page's buttons, which have
+no Scripts, through the Message Path. A Mute button per layer stops that
+layer and loops it again; each groove button, labelled with its source,
+changes a layer on the next bar. A Script loops one pattern per Instrument,
+so the layers Page gives each layer its own sampler, and the last Page adds a
+synth bass and tempo buttons. The Page Scripts are generated from the
+`LESSONS` list in [`src/examples/first-sounds.ts`](src/examples/first-sounds.ts),
+so they share one shape.
+
+[`tests/first-sounds.test.ts`](tests/first-sounds.test.ts) plays every Page
+through the [Play harness](src/play-harness.ts), whose `advance` pumps at
+each deadline and whose `notes` lists the steps sent to the Instruments, and
+the `first-sounds` browser suite plays it in a real browser.
