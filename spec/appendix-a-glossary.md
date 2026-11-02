@@ -420,7 +420,7 @@ A named composite Element whose members are Elements on the same Page, including
 _Avoid_: Script Group (for a visual composite), folder, component
 
 **Palette**:
-An authored panel of Elements, kept with the Project, that is shown in its own floating window during Play, its Scripts running until the Play Session stops.
+An authored panel of Elements, kept with the Project and authored like a Page, that is shown in its own floating window during Browse and Present, its Scripts running across Page changes until the Play Session stops.
 _Avoid_: panel, custom window, widget, plugin
 
 **Add-on**:
