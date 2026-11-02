@@ -315,12 +315,18 @@ export const grantDeclarations = (manifest: HostManifest): GrantDecls =>
  * first, so `move` with `labels = ["to"]` answers `move` and `move:to:`
  * (ADR 0115). Only a trailing Optional suffix may be left off. */
 export const commandSelectors = (op: ManifestOperation): string[] => {
+  // One Selector for each set of labels a call may write, leaving out only
+  // Optional arguments (ADR 0115, ADR 0160), as the Core resolves them.
   const labels = op.labels ?? [];
-  const selectors = [op.name];
-  for (let n = 2; n <= labels.length + 1; n++) {
-    if (op.args.slice(n).every(s => s.k === 'optional')) {
-      selectors.push(`${[op.name, ...labels.slice(0, n - 1)].join(':')}:`);
+  const selectors = new Set([op.name]);
+  for (let mask = 1; mask < 2 ** labels.length; mask++) {
+    const required = op.args.some(
+      (s, i) => i > 0 && !(mask & (2 ** (i - 1))) && s.k !== 'optional',
+    );
+    if (!required) {
+      const written = labels.filter((_, i) => mask & (2 ** i));
+      selectors.add(`${[op.name, ...written].join(':')}:`);
     }
   }
-  return selectors;
+  return [...selectors];
 };
