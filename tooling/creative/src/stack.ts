@@ -20,8 +20,6 @@ import {
 } from './editing';
 import {
   type Asset,
-  ELEMENT_KINDS,
-  hasBorder,
   isTextAlign,
   type ElementKind,
   type Page,
@@ -30,6 +28,7 @@ import {
   textOf,
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
+import { CREATABLE_KINDS, kindOf } from './elements/registry';
 import { importSound, SOUND_ACCEPT } from './sounds';
 import { type CodeSelection } from './code-browser-panel';
 import {
@@ -50,21 +49,9 @@ import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
 import {
   INSTRUMENT_KIND_NAMES,
-  KIND_NAMES,
   mountInfoPanel,
   type NameRefusal,
 } from './info-panel';
-
-const KIND_ICONS: Record<ElementKind, string> = {
-  text: 'T',
-  image: '▨',
-  button: '▭',
-  rectangle: '■',
-  ellipse: '●',
-  line: '╱',
-  canvas: '▦',
-  group: '▱',
-};
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -84,10 +71,7 @@ const renderPage = (
         element,
         className: selected.has(element.name) ? 'selected' : '',
         hidden: !visibility.get(element.name),
-        imageUrl:
-          element.kind === 'image'
-            ? images.url(assets.find(a => a.name === element.image))
-            : undefined,
+        imageUrl: images.elementUrl(element, assets),
       }),
     ),
   );
@@ -351,7 +335,7 @@ export const mountStack = (
     const [single] = selected;
     if (
       single &&
-      single.kind !== 'group' &&
+      !kindOf(single).container &&
       selected.length === 1 &&
       !editor.readOnly
     ) {
@@ -490,7 +474,7 @@ export const mountStack = (
           if (['left', 'top', 'width', 'height'].includes(key)) {
             const next =
               key === 'width' || key === 'height'
-                ? Math.max(element.kind === 'line' ? 0 : 1, Number(value))
+                ? Math.max(kindOf(element).flat ? 0 : 1, Number(value))
                 : Number(value);
             draft.tree.setGeometry(element, { [key]: next });
           } else if (key === 'text' && element.kind === 'text') {
@@ -502,12 +486,7 @@ export const mountStack = (
               draft.tree.setProperty(element, 'textAlign', value);
             }
           } else {
-            let minimum: number | undefined;
-            if (key === 'thickness' && hasBorder(element)) {
-              minimum = 0;
-            } else if (key === 'textSize' && element.kind === 'button') {
-              minimum = 1;
-            }
+            const minimum = kindOf(element).properties[key]?.infoMin;
             draft.tree.setProperty(
               element,
               key,
@@ -1025,23 +1004,25 @@ export const mountStack = (
 
   // The Tools window adds Elements.
   byId('tools').replaceChildren(
-    ...ELEMENT_KINDS.filter(kind => kind !== 'group').map(kind =>
-      h(
+    ...CREATABLE_KINDS.map(kind => {
+      const { label, icon } = kindOf(kind);
+      return h(
         'button',
         {
           type: 'button',
           'data-kind': kind,
-          title: `Add ${KIND_NAMES[kind].toLowerCase()}`,
+          title: `Add ${label.toLowerCase()}`,
         },
-        h('span', { 'aria-hidden': 'true' }, KIND_ICONS[kind]),
-        KIND_NAMES[kind],
-      ),
-    ),
+        h('span', { 'aria-hidden': 'true' }, icon),
+        label,
+      );
+    }),
   );
   byId('tools').addEventListener('click', event => {
     const kind = (event.target as HTMLElement).closest('button')?.dataset
       .kind as ElementKind | undefined;
-    if (kind === 'image') {
+    if (kind && kindOf(kind).asset) {
+      // An Element that shows an asset starts by choosing one.
       chooseImage();
     } else if (kind) {
       edit(() => editor.addElement(kind));

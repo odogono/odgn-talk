@@ -1,6 +1,5 @@
-import type { DeepReadonly } from './readonly';
 import type { ReadonlySignal } from '@preact/signals';
-import { Fragment, render, type ComponentChildren } from 'preact';
+import { Fragment, render } from 'preact';
 import { useState } from 'preact/hooks';
 import {
   labelSuggestion,
@@ -9,18 +8,10 @@ import {
   type NameCheck,
   type StackEditor,
 } from './editing';
-import {
-  BUTTON_STYLES,
-  PAGE_ALIGNS_X,
-  PAGE_ALIGNS_Y,
-  plainTextOf,
-  TEXT_ALIGNS,
-  textAlignOf,
-  type Element,
-  type ElementKind,
-  type ButtonStyle,
-  type TextAlign,
-} from './model';
+import { PAGE_ALIGNS_X, PAGE_ALIGNS_Y } from './model';
+import { checkbox, color, field, input } from './elements/controls';
+import { kindOf } from './elements/registry';
+import { kindInfo } from './elements/views';
 import { isSoundAsset } from './sounds';
 import type { ParameterDefinition } from './instruments/kind';
 import { INSTRUMENT_KINDS } from './instruments/registry';
@@ -191,36 +182,6 @@ const InstrumentsSection = ({
   );
 };
 
-export const KIND_NAMES: Record<ElementKind, string> = {
-  text: 'Text',
-  image: 'Image',
-  button: 'Button',
-  rectangle: 'Rectangle',
-  ellipse: 'Ellipse',
-  line: 'Line',
-  canvas: 'Canvas',
-  group: 'Group',
-};
-const ALIGN_LABELS: Record<TextAlign, string> = {
-  left: 'Left',
-  center: 'Centre',
-  right: 'Right',
-  justify: 'Justified',
-};
-const FONTS = [
-  'system-ui, sans-serif',
-  'sans-serif',
-  'serif',
-  'monospace',
-  'cursive',
-];
-const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
-  rounded: 'Rounded',
-  rectangle: 'Rectangle',
-  shadowed: 'Shadowed',
-  transparent: 'Transparent (invisible)',
-};
-
 /** A refused name: what the author typed, and why it was refused. */
 export type NameRefusal = {
   attempted: string;
@@ -232,69 +193,6 @@ type InfoProps = {
   previewName: ReadonlySignal<string | undefined>;
   refusal: ReadonlySignal<NameRefusal | undefined>;
 };
-
-const field = (label: string, control: ComponentChildren) => (
-  <label className="field">
-    <span>{label}</span>
-    {control}
-  </label>
-);
-
-const fontField = (font: string, disabled: boolean) =>
-  field(
-    'Font',
-    <select data-field="font" disabled={disabled} value={font}>
-      {(FONTS.includes(font) ? FONTS : [font, ...FONTS]).map(value => (
-        <option key={value} value={value}>
-          {value}
-        </option>
-      ))}
-    </select>,
-  );
-
-const input = (
-  name: string,
-  value: string | number,
-  disabled: boolean,
-  type: 'text' | 'number' | 'color' = 'text',
-  extra: { min?: number } = {},
-) => {
-  const props = { 'data-field': name, value, disabled, ...extra };
-  // Preact's accessible input types require a literal input type per branch.
-  switch (type) {
-    case 'number':
-      return <input type="number" {...props} />;
-    case 'color':
-      return <input type="color" {...props} />;
-    default:
-      return <input type="text" {...props} />;
-  }
-};
-
-const color = (name: string, value: string, disabled: boolean) =>
-  input(
-    name,
-    /^#[0-9a-f]{6}$/iu.test(value) ? value : '#000000',
-    disabled,
-    'color',
-  );
-
-const checkbox = (
-  name: string,
-  label: string,
-  checked: boolean,
-  disabled: boolean,
-) => (
-  <label className="check">
-    <input
-      checked={checked}
-      data-field={name}
-      disabled={disabled}
-      type="checkbox"
-    />
-    {label}
-  </label>
-);
 
 // Names commit on change, unlike the other live fields. Keep the typed draft
 // through unrelated panel updates until the accepted name or refusal changes.
@@ -378,148 +276,6 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
       </button>
     </>
   );
-  const kindInfo = (element: DeepReadonly<Element>) => {
-    switch (element.kind) {
-      case 'text':
-        return (
-          <>
-            <button
-              data-edit-text={element.name}
-              disabled={disabled}
-              type="button"
-            >
-              Edit formatted text
-            </button>
-            {field(
-              'Plain text (replaces formatting)',
-              <textarea
-                data-field="text"
-                disabled={disabled}
-                rows={4}
-                value={plainTextOf(element.richText)}
-              />,
-            )}
-            {fontField(element.font, disabled)}
-            {field(
-              'Alignment (all paragraphs)',
-              <select
-                data-field="textAlign"
-                disabled={disabled}
-                value={textAlignOf(element)}
-              >
-                {TEXT_ALIGNS.map(align => (
-                  <option key={align} value={align}>
-                    {ALIGN_LABELS[align]}
-                  </option>
-                ))}
-              </select>,
-            )}
-            <div className="row">
-              {field(
-                'Size',
-                input('textSize', element.textSize, disabled, 'number', {
-                  min: 1,
-                }),
-              )}
-              {field('Colour', color('textColor', element.textColor, disabled))}
-            </div>
-            {checkbox(
-              'editable',
-              'Reader can edit',
-              element.editable,
-              disabled,
-            )}
-          </>
-        );
-      case 'image':
-        return (
-          <button
-            data-replace-image={element.name}
-            disabled={disabled}
-            type="button"
-          >
-            Replace image…
-          </button>
-        );
-      case 'button':
-        return (
-          <>
-            {field('Label', input('label', element.label, disabled))}
-            {field(
-              'Style',
-              <select
-                data-field="style"
-                disabled={disabled}
-                value={element.style}
-              >
-                {BUTTON_STYLES.map(style => (
-                  <option key={style} value={style}>
-                    {BUTTON_STYLE_LABELS[style]}
-                  </option>
-                ))}
-              </select>,
-            )}
-            {fontField(element.font, disabled)}
-            {field(
-              'Size',
-              input('textSize', element.textSize, disabled, 'number', {
-                min: 1,
-              }),
-            )}
-            <div className="row">
-              {field('Fill', color('fill', element.fill, disabled))}
-              {field('Text', color('textColor', element.textColor, disabled))}
-            </div>
-          </>
-        );
-      case 'rectangle':
-      case 'ellipse':
-        return (
-          <>
-            <div className="row">
-              {field('Fill', color('fill', element.fill, disabled))}
-              {field('Stroke', color('stroke', element.stroke, disabled))}
-            </div>
-            {field(
-              'Thickness',
-              input('thickness', element.thickness, disabled, 'number', {
-                min: 0,
-              }),
-            )}
-          </>
-        );
-      case 'canvas':
-        return (
-          <>
-            {field('Fill', color('fill', element.fill, disabled))}
-            <p className="muted">
-              Drawing: {element.drawing.length}{' '}
-              {element.drawing.length === 1 ? 'command' : 'commands'}
-            </p>
-            <button
-              data-clear-drawing={element.name}
-              disabled={disabled || !element.drawing.length}
-              type="button"
-            >
-              Clear drawing
-            </button>
-          </>
-        );
-      case 'line':
-        return (
-          <div className="row">
-            {field('Stroke', color('stroke', element.stroke, disabled))}
-            {field(
-              'Thickness',
-              input('thickness', element.thickness, disabled, 'number', {
-                min: 1,
-              }),
-            )}
-          </div>
-        );
-    }
-  };
-
   if (selected.length > 1) {
     return (
       <>
@@ -534,17 +290,13 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
     return (
       <Fragment key={element.id}>
         <h2>
-          {KIND_NAMES[element.kind]} “{element.name}”
+          {kindOf(element).label} “{element.name}”
         </h2>
         {scriptButtons('element', 'Edit Script')}
         <NameField
           current={element.name}
           disabled={disabled}
-          offer={
-            element.kind === 'button'
-              ? labelSuggestion(page, element, project)
-              : undefined
-          }
+          offer={labelSuggestion(page, element, project)}
           refused={refused}
         />
         <div className="grid">
@@ -555,16 +307,14 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
                 input(
                   key,
                   element[key],
-                  disabled ||
-                    (element.kind === 'group' &&
-                      (key === 'width' || key === 'height')),
+                  disabled || !kindOf(element).properties[key]!.set,
                   'number',
                 ),
               )}
             </Fragment>
           ))}
         </div>
-        {kindInfo(element)}
+        {kindInfo(element, disabled)}
         {checkbox('visible', 'Visible', element.visible, disabled)}
       </Fragment>
     );

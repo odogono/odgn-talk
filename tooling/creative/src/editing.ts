@@ -1,5 +1,6 @@
 import type { DeepReadonly } from './readonly';
 import { allElements, findElement, outerElement } from './tree/rules';
+import { kindOf } from './elements/registry';
 // The Stack editor's state and edits (#749): which Page is showing, which
 // Elements are selected, and the moves, resizes, renames and Page edits the
 // shell makes. Pure TS over the Project model, so it is tested without a DOM.
@@ -21,7 +22,6 @@ import {
   isIdentifierName,
   suggestName,
   type Asset,
-  type ButtonElement,
   type CanvasElement,
   type Element,
   type ElementKind,
@@ -108,19 +108,23 @@ export const checkPageName = (
   checkName(name, pageNamesTaken(project, current), 'Page or Element', current);
 
 /**
- * The name suggested from a button's label, or `undefined` when the button
- * already has it.
+ * The name suggested from an Element's label, such as a button's, or
+ * `undefined` when its kind has no label or it already has that name.
  */
 export const labelSuggestion = (
   page: DeepReadonly<Page>,
-  button: DeepReadonly<ButtonElement>,
+  element: DeepReadonly<Element>,
   project?: DeepReadonly<Project>,
 ): string | undefined => {
+  const label = kindOf(element).properties.label;
+  if (!label) {
+    return undefined;
+  }
   const suggestion = freshName(
-    suggestName(button.label),
-    elementNamesNear(page, button.name, project),
+    suggestName(String(label.get(element))),
+    elementNamesNear(page, element.name, project),
   );
-  return suggestion === button.name ? undefined : suggestion;
+  return suggestion === element.name ? undefined : suggestion;
 };
 
 /** A box handle: a corner or the middle of an edge. */
@@ -146,7 +150,7 @@ type Box = Pick<Element, 'height' | 'left' | 'top' | 'width'>;
 
 /** The smallest size a resize leaves; a line may be flat in either direction. */
 const minimumSize = (element: DeepReadonly<Element>) =>
-  element.kind === 'line' ? 0 : 8;
+  kindOf(element).flat ? 0 : 8;
 
 /**
  * `box` resized by dragging `handle` by (dx, dy) design pixels. The opposite
@@ -778,12 +782,12 @@ export class StackEditor {
       return;
     }
     const target = replacement ? this.element(replacement) : undefined;
-    if (replacement && target?.kind !== 'image') {
+    if (replacement && !(target && kindOf(target).asset)) {
       return;
     }
     this.edit(edit => {
       const asset = edit.tree.addAsset(imported);
-      if (target?.kind === 'image') {
+      if (target) {
         edit.tree.setProperty(target, 'image', asset.name);
       } else {
         const element = edit.tree.create('image', scopeParent(edit));
@@ -831,7 +835,7 @@ export class StackEditor {
   /** Starts resizing the one selected Element by a handle, if exactly one is. */
   startResize(handle: Handle): Gesture | undefined {
     const [element] = this.selected;
-    if (!element || element.kind === 'group' || this.selection.length !== 1) {
+    if (!element || kindOf(element).container || this.selection.length !== 1) {
       return undefined;
     }
     const origin: Box = { ...element };

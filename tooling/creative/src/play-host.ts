@@ -46,6 +46,7 @@ import {
   type WatchResult,
 } from './variables';
 import { type Report } from '@northtalk/ts';
+import { kindOf } from './elements/registry';
 import { type DebugInstruction } from '@northtalk/ts/debug';
 import { type SoundBackend } from './sounds';
 import { type InstrumentMessage } from './instruments/session';
@@ -72,11 +73,7 @@ const pageAlign = ({ alignX, alignY }: DeepReadonly<Page>) => ({
 });
 
 const withoutMembers = (element: DeepReadonly<Element>): Element =>
-  (element.kind === 'group'
-    ? { ...element, members: [] }
-    : element.kind === 'canvas'
-      ? { ...element, drawing: [] }
-      : element) as Element;
+  (kindOf(element).forPage?.(element) ?? element) as Element;
 
 /** What changed in each Drawing since `sent` last recorded it. */
 const drawingViews = (
