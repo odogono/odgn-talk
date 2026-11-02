@@ -46,8 +46,12 @@ const parameters = {
 type SamplerVoice = Voice & {
   buffer: SampleBuffer | undefined;
   fade: number;
+  /** The note's own pan, or undefined for the Instrument's. */
+  pan: number | undefined;
   position: number;
   rate: number;
+  /** The note's own speed, or undefined for the Instrument's. */
+  speed: number | undefined;
   velocity: number;
 };
 
@@ -62,8 +66,10 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
     buffer: undefined,
     fade: 0,
     note: 0,
+    pan: undefined,
     position: 0,
     rate: 0,
+    speed: undefined,
     velocity: 0,
   }));
   const releaseWhere = (match: (voice: SamplerVoice) => boolean) => {
@@ -96,6 +102,8 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
             (buffer.sampleRate / sampleRate) *
             2 ** ((command.note - ROOT_NOTE) / 12);
           voice.velocity = Math.max(0, Math.min(1, command.velocity));
+          voice.pan = command.pan;
+          voice.speed = command.speed;
           break;
         }
         case 'release':
@@ -113,14 +121,14 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
     render: count => {
       const frames = Math.max(0, count);
       const output = new Float32Array(frames * 2);
-      const speed = values.number('speed');
       const gain = values.number('gain');
-      const [panLeft, panRight] = panGains(values.number('pan'));
       for (const voice of voices) {
         const buffer = voice.buffer;
         if (!voice.active || !buffer) {
           continue;
         }
+        const speed = voice.speed ?? values.number('speed');
+        const [panLeft, panRight] = panGains(voice.pan ?? values.number('pan'));
         const first = buffer.channels[0]!;
         const second = buffer.channels[1] ?? first;
         const length = first.length;

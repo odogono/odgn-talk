@@ -110,6 +110,7 @@ const shapeOf = (definition: ParameterDefinition) =>
 const declared = ({
   description: _description,
   examples: _examples,
+  labels: _labels,
   ...operation
 }: OperationDeclaration) => ({
   ...operation,

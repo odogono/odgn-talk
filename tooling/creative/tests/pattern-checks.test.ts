@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { KIT_SAMPLE_NAMES } from '../src/kits/kits';
 import { createElement, createProject } from '../src/model';
 import {
+  needsInstrumentAudio,
   patternDiagnostics,
   patternProblems,
   patternTexts,
@@ -95,4 +96,31 @@ test('a Script’s pattern problems are reported when it loads, and it still loa
     { owner: button, line: 2, message: 'This “[” has no “]”.' },
   ]);
   expect(play.group.script('element:page1/button1')).toBeDefined();
+});
+
+test('a pattern `on` an Instrument is checked as its kind plays', () => {
+  const instruments = new Map([
+    ['bass', false],
+    ['drums', true],
+  ]);
+  const source =
+    'on click\n  loop "c3 e3 zz" on bass with {gain: 0.5}\n  loop "bd zz" on drums\n  loop "zz" on other\n  play "Door Creak" on drums\nend click';
+  expect(
+    patternProblems(source, { ...names, instruments }).map(
+      p => `${p.line} ${p.message}`,
+    ),
+  ).toEqual([
+    '2 “zz” is not a note bass can play.',
+    '3 No sound or sample is named “zz”.',
+    // A whole Project sound's name plays only without `on`.
+    '5 No sound or sample is named “Door”.',
+    '5 No sound or sample is named “Creak”.',
+  ]);
+});
+
+test('a Project needs Instrument audio for Instruments or a pattern word', () => {
+  const p = createProject('Quiet');
+  expect(needsInstrumentAudio(p)).toBe(false);
+  p.pages[0]!.script = 'on openPage\n  loop "bd hh"\nend openPage';
+  expect(needsInstrumentAudio(p)).toBe(true);
 });

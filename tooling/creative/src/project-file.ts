@@ -28,6 +28,7 @@ import {
   type TextRun,
 } from './model';
 import { migrateClicks } from './click-migration';
+import { migrateSounds } from './sound-migration';
 import { defaultParameters } from './instruments/kind';
 import { INSTRUMENT_KINDS, instrumentProblems } from './instruments/registry';
 import { drawingProblem } from './drawing';
@@ -35,7 +36,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 6;
+export const CURRENT_FORMAT = 7;
 const APP = 'northtalk-creative';
 
 export type ValidationIssue = { message: string; path: string };
@@ -596,6 +597,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   3: data => ({ ...data, testScripts: [] }),
   4: migrateClicks,
   5: data => ({ ...data, instruments: [] }),
+  6: migrateSounds,
 };
 
 /**

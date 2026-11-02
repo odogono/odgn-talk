@@ -146,7 +146,7 @@ test('a reader edit keeps its history when the worker echoes it', async () => {
 test('sounds play through the page and stop with the session', async () => {
   const project = fixture();
   project.pages[0]!.elements[0]!.script =
-    'on click\n tell sound to loop "beep"\nend click';
+    'on click\n tell sound to play "beep" with {repeat: true}\nend click';
   const { replies, request } = hosted(project);
   request({
     kind: 'send',

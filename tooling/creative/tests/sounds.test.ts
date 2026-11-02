@@ -198,7 +198,8 @@ test('sounds survive export and import, and unused sounds follow the Script rule
   // Without a Script nothing can play the sound, so export drops it; with
   // one, a Script may choose it by name dynamically, so it stays.
   expect(projectForExport(project).assets).toEqual([]);
-  project.script = 'on startPlay\n tell sound to loop "waves"\nend startPlay';
+  project.script =
+    'on startPlay\n tell sound to play "waves" with {repeat: true}\nend startPlay';
   expect(projectForExport(project).assets).toEqual([sound.asset]);
   const missing = await readProjectFile(
     await writeProjectFile(project, new Map(), { allowMissing: true }),

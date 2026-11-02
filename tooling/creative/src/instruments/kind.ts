@@ -32,11 +32,15 @@ export type ParameterDefinition =
 /** What a Play Session asks of an Instrument's Chip. */
 export type InstrumentCommand =
   | { readonly kind: 'reset' }
-  /// Starts a note at `velocity` from 0 to 1; a sampler also takes a sound.
+  /// Starts a note at `velocity` from 0 to 1; a sampler also takes a sound,
+  /// and a Sound Pattern's own `pan` and `speed`, which replace the
+  /// Instrument's for that note.
   | {
       readonly kind: 'note';
       readonly note: number;
+      readonly pan?: number;
       readonly sound?: string;
+      readonly speed?: number;
       readonly velocity: number;
     }
   /// Releases every voice playing `note`.

@@ -118,7 +118,7 @@ export const runBrowserTests = async () => {
     shell.editor.edit(({ project, tree }) => {
       tree.setScript(
         project.pages[0]!.elements[0]!,
-        'on click {button: 0}\n tell sound to loop "waves"\nend click',
+        'on click {button: 0}\n tell sound to play "waves" with {repeat: true}\nend click',
       );
     });
     const play = new PlaySession(shell.editor.project, 0, {

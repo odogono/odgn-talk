@@ -658,23 +658,29 @@ sound by name dynamically. A missing or undecodable sound stays in the asset
 table as a placeholder; importing reports it, and playing it in Play is a
 Script error naming the sound.
 
-Every Script gets the `sound` Grant during Play:
+Every Script gets the `sound` Grant during Play. Its `play`, `loop` and
+`stop` are Host Commands, so `tell sound to` is optional:
 
 ```talk
-tell sound to play "waves"
-tell sound to loop "rain"
-tell sound to stop "rain"
-tell sound to stop
+play "waves"
+play "rain" with {repeat: true}
+stop "rain"
+stop
 ```
 
-A sound belongs to the Script that started it (#735), and `stop` reaches
-only that Script's sounds — with no name, all of them. Playing a name the
+`play` with a Project sound's name plays the whole sound, and `with
+{repeat: true}` repeats it end to end until it is stopped. Any other text is
+a [Sound Pattern](#sound-patterns). A sound belongs to the Script that
+started it (#735), and `stop` reaches only that Script's sounds and Sound
+Patterns — with no name, all of them. Playing a name the
 Project has no sound for is an error against the Script and line. Leaving a
 Page stops its Page and Element Scripts' sounds; the Project Script's sounds
 carry on across navigation. Stop and Escape stop all audio at
 once (ADR 0086), as does deleting an Element whose Script started a sound.
 Replaying a name restarts that Script's voice for it. Script Recipes offer
-**Play a sound**, **Loop a sound** and **Stop a sound** for every owner. See this in Folio:
+**Play a sound**, **Loop a sound** (`play … with {repeat: true}`) and **Stop a
+sound** for every owner. Projects saved before format 7 had `tell sound to
+loop "name"` for a repeating sound; opening one rewrites it to that. See this in Folio:
 [The Lighthouse Mystery](https://northtalk.org/folio/lighthouse) plays its bell and waves.
 
 [`src/sounds.ts`](src/sounds.ts) owns sound intake, the per-session
@@ -693,6 +699,47 @@ Every result must have `passed: true`. Reload before repeating, and rebuild
 both files after an app rebuild. Which browsers play WAV, and why the
 Project picker has no extension filter, are recorded in
 [the storage research](../../docs/research/creative-tool-project-storage.md#device-checks-from-739-recorded-for-822).
+
+## Sound Patterns
+
+`play` and `loop` also take Mini-Notation, which Folio plays itself on the
+Transport, one cycle per bar, so no Run or Fuel is spent per note (ADR 0159,
+#1896):
+
+```talk
+loop "bd [hh hh] sd hh"                    -- the default kit, from the next bar
+loop "hh*8, - cp" on drums with {gain: 0.8}
+loop "<c3 e3 g3>*4" on bass
+play "c3 e3 g3" on bass                    -- once, spread over one bar from now
+stop bass                                  -- this Script's pattern on bass
+```
+
+- **`loop`** starts on the next bar and repeats each bar. **`play`** spreads
+  one cycle over one bar from now, or from its beat in a `beat` Handler.
+  **`stop`** ends the Script's patterns, all of them or those on one
+  Instrument.
+- **`on`** names an Instrument, by itself or its name; without it the default
+  kit plays. On a sampler each step is a sound or kit sample (`bd:2` is a
+  variant); on any other kind each step is a note.
+- **`with`** takes `gain` (0 to 1), `pan` (-1 to 1) and a sampler's `speed`.
+  `on` and `with` are Argument Labels, and either may be left out (ADR 0160).
+- **Ownership:** a pattern belongs to the Script that started it, with one
+  loop per Instrument per Script, so a second `loop` on the same Instrument
+  replaces the first on the next bar. Stopping the Script, leaving its Page,
+  deleting its Element and Stop end its patterns, as they end its sounds.
+- Literal pattern texts are checked when the Script loads and underlined in
+  the Code Browser; a text built at run time is checked when it plays.
+- **Message Box:** during Play a pattern belongs to the targeted Script. In
+  Edit, `play` is a preview through its own audio, and `loop` replies that it
+  starts when you Browse.
+
+[`src/sound-patterns.ts`](src/sound-patterns.ts) schedules the steps, each
+sent to the audio one lead ahead of its time;
+[`src/grants/sound.ts`](src/grants/sound.ts) declares the Host Commands and
+[`src/play.ts`](src/play.ts) resolves their targets and options.
+[`tests/sound-patterns.test.ts`](tests/sound-patterns.test.ts) covers
+scheduling, replacement on the bar and ownership, and the `beats` browser
+suite proves that steps land on their samples.
 
 ## Canvas
 
