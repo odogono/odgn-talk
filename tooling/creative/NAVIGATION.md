@@ -250,6 +250,25 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
 - Browser: `instruments` suite on `/instruments-test.html` covers Info and the
   built worklet; also run `info-panel` and `sounds`.
 
+## Built-in kits
+
+The sample kits Folio ships (ADR 0158, #1895), synthesised and CC0.
+
+- [kits/kits.ts](src/kits/kits.ts): each kit's samples, source and licence,
+  `DEFAULT_KIT`, the `DEFAULT_KIT_INSTRUMENT` sampler a pattern without `on`
+  plays, `kitSampleKey` for `name:n`, `KIT_FILES`, and `KIT_BUDGET_BYTES`.
+  [kits/synth.ts](src/kits/synth.ts) holds the oscillators, noise and filters;
+  [wav.ts](src/wav.ts) encodes WAV.
+- [tools/build.ts](tools/build.ts) writes `kits/<kit>/<name>.wav` and
+  `kits/LICENSE.txt` and precaches them.
+  [instruments/audio.ts](src/instruments/audio.ts) fetches and decodes them
+  for every sampler, ahead of the Project's sounds, and adds the default kit's
+  sampler; [pattern-checks.ts](src/pattern-checks.ts) knows their names.
+- Tests: [kits.test.ts](tests/kits.test.ts) covers licences, names, variants,
+  the WAVs and the rack; [build.test.ts](tests/build.test.ts) checks the
+  budget and precache.
+- First check: `bun test tooling/creative/tests/kits.test.ts`.
+
 ## Mini-Notation
 
 Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).

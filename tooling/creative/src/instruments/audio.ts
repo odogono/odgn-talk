@@ -2,12 +2,16 @@
 // running the Instrument worklet, built from the session's Project. The
 // Play worker has no audio, so it sends each InstrumentMessage, timed on
 // this context's clock, straight to the worklet over a port this hands it,
-// and its Play clock follows the readings this sends it (ADR 0156).
+// and its Play clock follows the readings this sends it (ADR 0156). The
+// built-in kits (#1895) are fetched from the app, which the service worker
+// keeps for offline use, and a sampler for the default kit always plays.
 import type { AudioReading } from '../audio-clock';
 import type { Asset, Project } from '../model';
 import type { DeepReadonly } from '../readonly';
+import { DEFAULT_KIT_INSTRUMENT, KIT_FILES } from '../kits/kits';
 import { isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
+import { samplerEngine } from './sampler';
 import {
   INSTRUMENT_PROCESSOR,
   type InstrumentChannel,
@@ -19,6 +23,15 @@ const WORKLET_URL = './instruments.worklet.js';
 
 /** How often the Play worker hears the audio clock while it runs. */
 const READING_MS = 250;
+
+/** A built-in kit's sound, from the app (offline, from the service worker). */
+const kitBytes = async (path: string): Promise<ArrayBuffer> => {
+  const response = await fetch(`./${path}`);
+  if (!response.ok) {
+    throw new Error(`${path} answered ${response.status}`);
+  }
+  return response.arrayBuffer();
+};
 
 export type InstrumentAudio = {
   /** Stops the audio for good. */
@@ -82,18 +95,19 @@ export const startInstrumentAudio = (
   });
 
   const decode = async (
-    asset: DeepReadonly<Asset>,
+    name: string,
+    bytes: () => Promise<ArrayBuffer>,
   ): Promise<[string, SampleBuffer] | undefined> => {
     try {
-      const audio = await context.decodeAudioData(await soundBytes(asset));
+      const audio = await context.decodeAudioData(await bytes());
       const channels = Array.from(
         { length: Math.min(2, audio.numberOfChannels) },
         (_, i) => audio.getChannelData(i),
       );
-      return [asset.name, { channels, sampleRate: audio.sampleRate }];
+      return [name, { channels, sampleRate: audio.sampleRate }];
     } catch (error) {
       onError(
-        `Sound “${asset.name}” could not be decoded for the sampler: ${error instanceof Error ? error.message : String(error)}`,
+        `Sound “${name}” could not be decoded for the sampler: ${error instanceof Error ? error.message : String(error)}`,
       );
       return undefined;
     }
@@ -101,11 +115,13 @@ export const startInstrumentAudio = (
 
   void (async () => {
     try {
-      const needsSamples = project.instruments.some(i => i.kind === 'sampler');
-      const decoding: Promise<([string, SampleBuffer] | undefined)[]> =
-        needsSamples
-          ? Promise.all(project.assets.filter(isSoundAsset).map(decode))
-          : Promise.resolve([]);
+      // Kits come first, so a Project sound with a kit sample's name wins.
+      const decoding = Promise.all([
+        ...KIT_FILES.map(file => decode(file.key, () => kitBytes(file.path))),
+        ...project.assets
+          .filter(isSoundAsset)
+          .map(asset => decode(asset.name, () => soundBytes(asset))),
+      ]);
       const [samples] = await Promise.all([
         decoding,
         context.audioWorklet.addModule(WORKLET_URL),
@@ -114,14 +130,20 @@ export const startInstrumentAudio = (
         return;
       }
       const setup: RackSetup = {
-        instruments: project.instruments.map(
-          ({ kind, name, parameters, voices }) => ({
+        instruments: [
+          ...project.instruments.map(({ kind, name, parameters, voices }) => ({
             kind,
             name,
             parameters: { ...parameters },
             voices,
-          }),
-        ),
+          })),
+          {
+            kind: samplerEngine.name,
+            name: DEFAULT_KIT_INSTRUMENT,
+            parameters: {},
+            voices: samplerEngine.voices,
+          },
+        ],
         samples: samples.filter(
           (entry): entry is [string, SampleBuffer] => entry !== undefined,
         ),

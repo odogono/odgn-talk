@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { KIT_SAMPLE_NAMES } from '../src/kits/kits';
 import { createElement, createProject } from '../src/model';
 import {
   patternDiagnostics,
@@ -82,9 +83,12 @@ test('a Script’s pattern problems are reported when it loads, and it still loa
     mediaType: 'audio/wav',
     size: 3,
   });
-  expect(projectPatternNames(project).sounds).toEqual(new Set(['bd']));
+  // The Project's sounds join the built-in kits' samples.
+  const sounds = projectPatternNames(project).sounds;
+  expect(sounds).toEqual(new Set([...KIT_SAMPLE_NAMES, 'bd']));
+  expect(sounds.has('oh')).toBe(true);
   const button = createElement('button', 'button1');
-  button.script = 'on click\n  loop "bd [cp"\nend click\non hello\nend hello';
+  button.script = 'on click\n  loop "bd [zz"\nend click\non hello\nend hello';
   project.pages[0]!.elements.push(button);
   const play = new PlaySession(project);
   expect(play.problems).toEqual([

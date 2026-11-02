@@ -18,6 +18,7 @@ import {
 } from '../model';
 import { sha256Hex } from '../project-file';
 import { recipeSource, type RecipeTarget } from '../recipes';
+import { encodeWav } from '../wav';
 
 import { type ExampleContent } from './index';
 
@@ -76,36 +77,8 @@ const CELLAR_ART = SVG(`
 <circle cx="540" cy="60" r="16" fill="#ffe66d" opacity=".85"/>
 <rect x="536" y="72" width="8" height="18" fill="#d9a441"/>`);
 
-/** One second or so of 16-bit PCM WAV from mono samples in [-1, 1]. */
-const wav = (samples: Float32Array, rate = 22_050): Uint8Array => {
-  const bytes = new Uint8Array(44 + samples.length * 2);
-  const view = new DataView(bytes.buffer);
-  const ascii = (offset: number, text: string) => {
-    for (let i = 0; i < text.length; i++) {
-      view.setUint8(offset + i, text.charCodeAt(i));
-    }
-  };
-  ascii(0, 'RIFF');
-  view.setUint32(4, bytes.length - 8, true);
-  ascii(8, 'WAVEfmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, rate, true);
-  view.setUint32(28, rate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  ascii(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(
-      44 + i * 2,
-      Math.max(-1, Math.min(1, samples[i]!)) * 32_767,
-      true,
-    );
-  }
-  return bytes;
-};
+const wav = (samples: Float32Array, rate = 22_050): Uint8Array =>
+  encodeWav(samples, rate);
 
 /** A short decaying bell: the sound of finding a clue. */
 const bellWav = (): Uint8Array => {

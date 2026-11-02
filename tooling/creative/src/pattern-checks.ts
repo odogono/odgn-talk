@@ -4,6 +4,7 @@
 // when they play.
 import { parseSource } from '@northtalk/ts';
 import { rangeAt, type LspDiagnostic } from '@northtalk/tooling/lsp';
+import { KIT_SAMPLE_NAMES } from './kits/kits';
 import { parseMiniNotation } from './mini-notation';
 import type { DeepReadonly } from './readonly';
 import type { Project } from './model';
@@ -36,7 +37,10 @@ export type PatternProblem = {
 export const projectPatternNames = (
   project: DeepReadonly<Project>,
 ): PatternNames => ({
-  sounds: new Set(project.assets.filter(isSoundAsset).map(a => a.name)),
+  sounds: new Set([
+    ...KIT_SAMPLE_NAMES,
+    ...project.assets.filter(isSoundAsset).map(a => a.name),
+  ]),
 });
 
 const PATTERN_OPERATIONS = new Set(['play', 'loop']);
