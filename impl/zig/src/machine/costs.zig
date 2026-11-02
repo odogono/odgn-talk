@@ -98,6 +98,38 @@ pub inline fn chargeStatic(comptime op: Opcode, m: *const Measures) Charge {
     return .{ .fuel = base.fuel + m.fuel_extra, .alloc = base.alloc + m.alloc_extra };
 }
 
+/// `chargeStatic(op, &.{ .result = r })` for an instruction whose result `r`
+/// is a Number, measured from its Decimal, so the hot path builds no probe
+/// Value to measure (#1931). A Number's only nonzero measures are its
+/// logical size and its digits; the test below holds this to `chargeStatic`.
+pub inline fn chargeNumber(comptime op: Opcode, result: *const model.Decimal) Charge {
+    const rate = comptime instruction_rates[@backingInt(op)] orelse return .{ .fuel = 0, .alloc = 0 };
+    const formula = comptime rate.formula orelse @compileError("chargeNumber needs a generated formula");
+    const m: NumberMeasures = .{ .result = result };
+    return @call(.always_inline, rates.evaluateSpecialized, .{ formula, &m, measureNumber });
+}
+
+const NumberMeasures = struct {
+    input: ?*const model.Decimal = null,
+    result: ?*const model.Decimal,
+    scanned: u64 = 0,
+    count: u64 = 0,
+    steps: u64 = 0,
+    declared: u64 = 0,
+};
+
+/// `measure` of a Number Value holding `d`.
+inline fn measureNumber(which: u8, d: *const model.Decimal) u64 {
+    return switch (which) {
+        rates.measure_size => number_size,
+        rates.measure_digits => digits(d.coefficient),
+        else => 0,
+    };
+}
+
+/// `size` of every Number.
+const number_size = 16;
+
 // Each instruction's charge when its formulas measure nothing: no subject,
 // and zero scanned, count, steps and declared Fuel.
 const unmeasured_charges = blk: {
@@ -108,7 +140,7 @@ const unmeasured_charges = blk: {
 };
 
 /// `chargeInstruction(op, &.{})`, read from a table.
-pub fn chargeUnmeasured(op: Opcode) Charge {
+pub inline fn chargeUnmeasured(op: Opcode) Charge {
     return unmeasured_charges[@backingInt(op)];
 }
 
@@ -232,6 +264,18 @@ pub fn contents(v: *const Value) u64 {
 /// its children.
 pub fn size(v: *const Value) u64 {
     return model.logicalSize(v);
+}
+
+test "a Number result's charge measured from its Decimal is its Value's" {
+    const gpa = std.testing.allocator;
+    for ([_][]const u8{ "0", "7", "-12", "123456789.25", "18446744073709551615", "18446744073709551616", "-99999999999999999999999999999999", "0.000000000000000000000000000001" }) |text| {
+        const d = try model.Decimal.parse(text);
+        var probe: Value = .{ .allocator = gpa, .data = .{ .number = d } };
+        try std.testing.expectEqual(@as(u64, number_size), size(&probe));
+        inline for (.{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| {
+            try std.testing.expectEqualDeep(chargeStatic(op, &.{ .result = &probe }), chargeNumber(op, &d));
+        }
+    }
 }
 
 test "resolved instruction rates agree with keyed charging and dynamic overrides" {
