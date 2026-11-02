@@ -30,6 +30,8 @@ wait it
 
 **Built-in kits**
 
+[ADR 0161](0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md) supersedes this section: kit sounds are now the Project's own assets, copied from the Music Base Project.
+
 - Folio ships sample kits with CC0 or similarly clear licences. A Sound Pattern played without `on` plays the default kit.
 - Engines copied from other projects ship without those projects' sound assets.
 
