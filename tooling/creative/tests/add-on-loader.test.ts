@@ -1,13 +1,26 @@
 // Loading built-in Add-ons and registering their kinds (ADR 0162, #1901).
 import { expect, test } from 'bun:test';
-import { AddOnLoader, compareVersions } from '../src/add-ons/loader';
+import {
+  AddOnLoader,
+  compareVersions,
+  NOT_TRUSTED,
+} from '../src/add-ons/loader';
+import { TrustStore } from '../src/add-ons/trust';
 import { projectWithAddOns } from '../src/add-ons/project';
 import type { AddOnModule } from '../src/add-ons/api';
 import type { CatalogueEntry } from '../src/add-ons/catalogue';
-import { createAnyElement, kindOf } from '../src/elements/registry';
+import {
+  createAnyElement,
+  isPlaceholderKind,
+  kindOf,
+} from '../src/elements/registry';
 import { createElement, createProject, type AddOnElement } from '../src/model';
 import { PlaySession } from '../src/play';
-import { serializeProject, validateProjectJson } from '../src/project-file';
+import {
+  serializeProject,
+  sha256Hex,
+  validateProjectJson,
+} from '../src/project-file';
 import counter, {
   COUNTER_ADD_ON,
   COUNTER_ENTRY,
@@ -113,7 +126,7 @@ test('an Add-on Folio lacks, or a newer version, stays a placeholder with a reas
     },
     {
       id: 'https://example.com/pads',
-      message: 'Add-ons carried in a Project are not loaded yet',
+      message: NOT_TRUSTED,
     },
   ]);
 });
@@ -148,4 +161,87 @@ test("an Add-on kind may not take a built-in kind's name", async () => {
   expect(await loader.load([{ id: clash.id, version: '1.0.0' }])).toEqual([
     { id: clash.id, message: 'another kind is already named button' },
   ]);
+});
+
+// A Project Add-on as a `.folio` file carries it: built JavaScript.
+const PADS = 'https://example.com/pads';
+const PADS_CODE = `export default {
+  id: '${PADS}',
+  version: '0.1.0',
+  kinds: {
+    pad: {
+      data: ({ commonProperties, property }) => ({
+        label: 'Pad',
+        icon: '▢',
+        creatable: true,
+        properties: { ...commonProperties, hits: property('hits', 'number') },
+        create: base => ({ ...base, hits: 0 }),
+        check: (c, e, path, { base }) => ({
+          ...base(),
+          hits: c.num(e.hits, path + '.hits', 'finite') ?? 0,
+        }),
+      }),
+    },
+  },
+};`;
+
+const padsRef = async (code = PADS_CODE) => ({
+  id: PADS,
+  version: '0.1.0',
+  code,
+  hash: await sha256Hex(new TextEncoder().encode(code)),
+});
+
+test('a Project Add-on runs only once its code is trusted, by hash', async () => {
+  const ref = await padsRef();
+  const trusted = new Set<string>();
+  const loader = new AddOnLoader({ trusted: hash => trusted.has(hash) });
+  expect(await loader.load([ref])).toEqual([
+    { id: PADS, message: NOT_TRUSTED },
+  ]);
+  expect(isPlaceholderKind(`${PADS}#pad`)).toBe(true);
+  trusted.add(ref.hash);
+  expect(await loader.load([ref])).toEqual([]);
+  expect(createAnyElement(`${PADS}#pad`, 'pad1')).toMatchObject({
+    kind: `${PADS}#pad`,
+    hits: 0,
+  });
+  // Changed code has another hash, so it asks again.
+  const changed = await padsRef(`${PADS_CODE}\n// changed`);
+  expect(await loader.load([changed])).toEqual([
+    { id: PADS, message: NOT_TRUSTED },
+  ]);
+});
+
+test('a Project Add-on must be the Add-on the Project names', async () => {
+  const ref = { ...(await padsRef()), version: '0.2.0' };
+  const loader = new AddOnLoader({ trusted: () => true });
+  expect(await loader.load([ref])).toEqual([
+    { id: PADS, message: `its module is ${PADS} 0.1.0` },
+  ]);
+  const broken = await padsRef('export default {');
+  expect((await loader.load([broken]))[0]!.message).toStartWith(
+    'its code failed to load',
+  );
+});
+
+test('trust is remembered in browser storage, and survives storage failing', () => {
+  const items = new Map<string, string>();
+  const storage = {
+    getItem: (k: string) => items.get(k) ?? null,
+    setItem: (k: string, v: string) => items.set(k, v),
+  } as unknown as Storage;
+  new TrustStore(storage).trust(['abc']);
+  expect(new TrustStore(storage).has('abc')).toBe(true);
+  const failing = {
+    getItem: () => {
+      throw new Error('denied');
+    },
+    setItem: () => {
+      throw new Error('denied');
+    },
+  } as unknown as Storage;
+  const store = new TrustStore(failing);
+  store.trust(['def']);
+  expect(store.has('def')).toBe(true);
 });

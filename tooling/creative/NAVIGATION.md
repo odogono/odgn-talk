@@ -142,6 +142,10 @@ landed, and the Issue graph job ticks it as they close.
   `projectWithAddOns` reads a Project again once its Add-ons load, turning
   placeholders into their kinds; [projects.ts](src/projects.ts) calls it on
   every open. The Tools window lists catalogue kinds and loads on first use.
+  Project Add-ons import from a `blob:` URL once [trust.ts](src/add-ons/trust.ts)
+  holds their hash; [trust-prompt.ts](src/add-ons/trust-prompt.ts) asks on
+  opening, Base Project copies are trusted, a placeholder's Info offers
+  "Load Add-on…", and the Play worker runs the hashes the page sends.
   Tests: [add-on-loader.test.ts](tests/add-on-loader.test.ts), the
   `add-ons` browser suite, and [fixtures/counter-add-on.ts](tests/fixtures/counter-add-on.ts).
 - [project-file.ts](src/project-file.ts) over [zip.ts](src/zip.ts): the

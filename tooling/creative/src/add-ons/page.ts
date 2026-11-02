@@ -6,6 +6,7 @@ import { controls } from '../elements/controls';
 import { registerAddOnView } from '../elements/views';
 import type { AddOnViewApi } from './api';
 import { AddOnLoader, type AddOnLoaderOptions } from './loader';
+import { TrustStore } from './trust';
 
 const VIEW_API: AddOnViewApi = {
   controls,
@@ -14,11 +15,15 @@ const VIEW_API: AddOnViewApi = {
   hooks: { useEffect, useLayoutEffect, useRef, useState },
 };
 
+/** The Project Add-ons this reader trusts (ADR 0162). */
+export const pageTrust = new TrustStore();
+
 /** A page loader, which also registers each kind's view. */
 export const pageAddOnLoader = (
   options: Omit<AddOnLoaderOptions, 'onView'> = {},
 ): AddOnLoader =>
   new AddOnLoader({
+    trusted: hash => pageTrust.has(hash),
     ...options,
     onView: (kind, module) => {
       if (module.view) {

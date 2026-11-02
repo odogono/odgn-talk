@@ -1475,3 +1475,21 @@ body.playing #performance-window {
 #message-window .message-log .copy {
   float: right;
 }
+
+.trust-prompt {
+  max-width: min(32rem, calc(100vw - 32px));
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+.trust-prompt h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+.trust-prompt code {
+  overflow-wrap: anywhere;
+}
+.trust-prompt-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

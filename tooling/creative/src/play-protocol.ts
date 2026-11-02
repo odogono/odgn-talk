@@ -57,6 +57,8 @@ export type PlayRequest =
       project: Project;
       seed: bigint;
       session: number;
+      /** The hashes of the Project Add-ons the reader trusts (ADR 0162). */
+      trustedAddOns?: string[];
     }
   | {
       args?: ReaderArg[];

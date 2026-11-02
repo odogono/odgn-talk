@@ -8,7 +8,9 @@ import { PlayHost } from './play-host';
 import { type PlayRequest } from './play-protocol';
 
 const host = new PlayHost(reply => postMessage(reply));
-const addOns = new AddOnLoader();
+// The page asks the reader; the worker runs what the page says they trust.
+const trusted = new Set<string>();
+const addOns = new AddOnLoader({ trusted: hash => trusted.has(hash) });
 let waiting: Envelope<PlayRequest>[] | undefined;
 
 const receive = (data: Envelope<PlayRequest>): void => {
@@ -16,6 +18,9 @@ const receive = (data: Envelope<PlayRequest>): void => {
   if (request.kind !== 'open' || !request.project.addOns?.length) {
     host.receive(data);
     return;
+  }
+  for (const hash of request.trustedAddOns ?? []) {
+    trusted.add(hash);
   }
   waiting = [];
   void addOns.load(request.project.addOns).then(() => {
