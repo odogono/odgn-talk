@@ -2110,7 +2110,7 @@ static int reload_test(void) {
     bad |= talk_load(group, &user_load, &t) != TALK_OK;
     talk_library_source next_src = {"lib", 3, "2", 1, "constant k = 2\n", 15};
     bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced, NULL) != TALK_OK;
-    bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES, NULL) != TALK_OK;
+    bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES, NULL, NULL) != TALK_OK;
     talk_inspect(group, NULL);
     bad |= strstr(trace, "refused code=\"name reused\"\n") == NULL;
     bad |= strstr(trace, "stopped s reason=\"reload\"\n") == NULL;

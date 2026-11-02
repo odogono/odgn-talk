@@ -2471,7 +2471,7 @@ pub const Group = struct {
     /// for a replacement, the Scripts still to replace from `next`.
     pub const PausedWork = union(enum) {
         reload: struct { script: *Script, fresh: *Script, keep_mailbox: bool },
-        replace: struct { rebuilt: []Rebuilt, next: usize, step: ReplaceStep, made: []*Library, libraries: []*Library },
+        replace: struct { rebuilt: []Rebuilt, next: usize, step: ReplaceStep, made: []*Library, libraries: []*Library, keep_mailbox: bool },
     };
     pub const Rebuilt = struct { script: *Script, fresh: *Script };
     /// Where a library replacement's terminations are: every rollback
@@ -2495,7 +2495,7 @@ pub const Group = struct {
                 if (result != .paused) g.dropFresh(x.fresh);
                 return .{ .reload = result };
             },
-            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.step, x.made, x.libraries) },
+            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.step, x.made, x.libraries, x.keep_mailbox) },
         }
     }
 
@@ -2738,12 +2738,15 @@ pub const Group = struct {
     /// the Group holds, then stop-and-reloads every Script that imports any
     /// of them, its extensions too, in load order, as one Host Input. If any
     /// fails, nothing changes. `compiler` makes the recompiled Libraries,
-    /// which outlive the Group.
-    pub fn replaceLibrary(g: *Group, l: *Library, carry: bool, compiler: Allocator) !ReplaceResult {
+    /// which outlive the Group. With `keep_mailbox`, every reloaded Script
+    /// keeps its mailbox, as a Reload's does, and it counts toward the cap.
+    pub fn replaceLibrary(g: *Group, l: *Library, carry: bool, keep_mailbox: bool, compiler: Allocator) !ReplaceResult {
         try g.checkCodeChange();
         g.flushChargeRefusals();
         if (g.trace) |out| {
-            out.print("> replace-library {s} carry={s} source=", .{ l.name, if (carry) "yes" else "no" }) catch {};
+            out.print("> replace-library {s} carry={s}", .{ l.name, if (carry) "yes" else "no" }) catch {};
+            if (keep_mailbox) out.writeAll(" mailbox=keep") catch {};
+            out.writeAll(" source=") catch {};
             display.writeSource(out, l.source) catch {};
             out.print(" identity={x}\n", .{l.identity}) catch {};
         }
@@ -2816,7 +2819,7 @@ pub const Group = struct {
                 fresh.identity = codeIdentity(s.name, s.source, .script, fresh.imports);
                 for (fresh.extensions.items) |x| fresh.identity = extendedIdentity(fresh.identity, x.identity);
                 if (carry) try g.carryOver(s, fresh);
-                if (g.carriedState(s, fresh, false) > s.limits.persistent_state) {
+                if (g.carriedState(s, fresh, keep_mailbox) > s.limits.persistent_state) {
                     g.write("refused code=\"state too large\"\n", .{});
                     break :blk .state_too_large;
                 }
@@ -2837,14 +2840,14 @@ pub const Group = struct {
             return e;
         };
         owns_given = false;
-        return g.finishReplace(pending, 0, .start, owned_made, given);
+        return g.finishReplace(pending, 0, .start, owned_made, given, keep_mailbox);
     }
 
     /// A checked library replacement's terminations and replacements, from
     /// the Script at `from`. Paused at a lifecycle crossing, it keeps its
     /// state in `paused_work`; otherwise it frees `rebuilt` and gives
     /// `made` to the caller.
-    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, step: ReplaceStep, made: []*Library, libraries: []*Library) !ReplaceResult {
+    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, step: ReplaceStep, made: []*Library, libraries: []*Library, keep_mailbox: bool) !ReplaceResult {
         g.reworking = true;
         defer g.reworking = false;
         var paused = false;
@@ -2873,7 +2876,7 @@ pub const Group = struct {
                     }
                 }.less);
                 for (runs.items) |r| g.cleanupLifecycle(r, .stopped) catch {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .rollback, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .rollback, .made = made, .libraries = libraries, .keep_mailbox = keep_mailbox } };
                     paused = true;
                     return .paused;
                 };
@@ -2884,9 +2887,9 @@ pub const Group = struct {
             const x = rebuilt[i];
             // Terminate every old Script before publishing any new code.
             // A fatal stop may itself pause while cleaning up other Scripts.
-            g.stopScript(x.script, "reload", null, .{ .release = .reload, .discard = "library replacement" }) catch |e| {
+            g.stopScript(x.script, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload, .discard = "library replacement" }) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries, .keep_mailbox = keep_mailbox } };
                     paused = true;
                     return .paused;
                 }
@@ -2895,7 +2898,7 @@ pub const Group = struct {
             // A Grant release hook waits for the Host before the next
             // Script stops, and before any code is published.
             if (g.release_pause) {
-                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .step = .stop, .made = made, .libraries = libraries } };
+                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .step = .stop, .made = made, .libraries = libraries, .keep_mailbox = keep_mailbox } };
                 paused = true;
                 return .paused;
             }
@@ -2904,7 +2907,7 @@ pub const Group = struct {
         if (g.fatal) {
             for (g.scripts.items) |s| g.stopScript(s, "effect state unknown", null, .{}) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .step = .stop, .made = made, .libraries = libraries, .keep_mailbox = keep_mailbox } };
                     paused = true;
                     return .paused;
                 }
@@ -2977,7 +2980,7 @@ pub const Group = struct {
         reload: struct { script: *Script, source: []const u8, carry: bool, keep_mailbox: bool },
         extend: struct { script: *Script, source: []const u8 },
         add_library: *Library,
-        replace_library: struct { library: *Library, carry: bool },
+        replace_library: struct { library: *Library, carry: bool, keep_mailbox: bool = false },
         inspect,
         counters: []const u8,
     };
@@ -3024,7 +3027,9 @@ pub const Group = struct {
             },
             .add_library => |l| out.print("> add-library {s} identity={x}", .{ l.name, l.identity }) catch {},
             .replace_library => |r| {
-                out.print("> replace-library {s} carry={s} source=", .{ r.library.name, if (r.carry) "yes" else "no" }) catch {};
+                out.print("> replace-library {s} carry={s}", .{ r.library.name, if (r.carry) "yes" else "no" }) catch {};
+                if (r.keep_mailbox) out.writeAll(" mailbox=keep") catch {};
+                out.writeAll(" source=") catch {};
                 display.writeSource(out, r.library.source) catch {};
                 out.print(" identity={x}", .{r.library.identity}) catch {};
             },

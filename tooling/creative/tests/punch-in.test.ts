@@ -203,6 +203,37 @@ test('a Library is Punched In with every Script that imports it, on one bar', ()
   expect(play.problems).toEqual([]);
 });
 
+test('a Library Punch In keeps each importer’s mailbox for the new code', () => {
+  const p = project('');
+  p.libraries.push({
+    id: 1,
+    name: 'fmt',
+    source: 'function tag n\n  return "old " & n\nend tag',
+  });
+  const button = createElement('button', 'go');
+  button.script =
+    'use tag from fmt\non hold\n  repeat 100000 times\n    put 1 into x\n  end repeat\nend hold\non poke\n  set the label of me to tag(1)\nend poke';
+  p.pages[0]!.elements.push(button);
+  const { label, play, pumpAt } = session(p);
+  pumpAt(0n);
+  // The Fuel Slice preempts `hold`, so `poke` is still in the mailbox when
+  // the Punch In applies.
+  play.send(play.page.elements[1]!, 'hold' as never);
+  play.send(play.page.elements[1]!, 'poke' as never);
+  expect(play.pump(ms(10)).state).toBe('sliced');
+  expect(label('go')).toBe('Button');
+  expect(
+    play.punchIn(
+      { kind: 'library', name: 'fmt' },
+      'function tag n\n  return "new " & n\nend tag',
+      ms(20),
+    ),
+  ).toEqual({ kind: 'now' });
+  pumpAt(ms(20));
+  expect(label('go')).toBe('new 1');
+  expect(play.problems).toEqual([]);
+});
+
 test('a Library Punch In that an importer can’t load changes none of them', () => {
   const p = withLibrary('bd');
   const { play, runTo, steps } = session(p);

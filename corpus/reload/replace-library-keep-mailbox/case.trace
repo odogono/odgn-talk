@@ -1,0 +1,23 @@
+# Unblessed: a Library replacement keeps its importers' mailboxes (#1951); first blessing awaits human review.
+# - The Fuel Slice preempts a/r1 so d2 is still in a's mailbox at the replacement.
+# - a/r1 is discarded, and d2 is kept, so its note runs the new fmt and got="v2 x".
+
+> add-library fmt identity=cd82443ea90f298cc3e3613ca634b8dfaab4e6ac189ee048d0d44487c38d28f0
+> load a identity=4646e123d875681c2cdbc1059429a8dcea803045b5fe23eb096f91802b9816c1
+
+> deliver d1 to=a message=go
+> deliver d2 to=a message=note args=["x"]
+> pump clock=2026-10-28T10:00:00Z fuel-slice=50
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=50 alloc=66
+pumped state=sliced fuel=50
+
+> replace-library fmt carry=yes mailbox=keep source="function label x" & newline & "  return " & quote & "v2 " & quote & " & x" & newline & "end label" & newline identity=da44bf7e6f6d4b9ec0f710355a502481c5d565a30034dcc6b5789f67ec078691
+stopped a reason="reload" discarded=[a/r1]
+
+> pump clock=2026-10-28T10:00:01Z
+seg a/r2 start delivery=d2 handler=note clause=1 fuel=26 alloc=20 state=20 end=return
+run a/r2 outcome=completed delivery=d2 handler=note fuel=26 alloc=20
+pumped state=idle fuel=26
+
+> vars
+vars a got="v2 x"

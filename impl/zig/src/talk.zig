@@ -1511,10 +1511,11 @@ export fn talk_call_pump(g: *Group, f: *Value, args: ?[*]const *Value, len: usiz
 /// Replaces a Library the Group holds, a worker call: the Libraries that
 /// import it are recompiled, and the Core owns them; the Scripts that import
 /// any of them are stop-and-reloaded. A refusal changes nothing.
-export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver, reports: ?*?*Reports) HostErrorCode {
+export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver, o: ?*const ReloadOptions, reports: ?*?*Reports) HostErrorCode {
     if (reports) |r| r.* = null;
+    const keep_mailbox = if (o) |x| x.keep_mailbox else false;
     g.group.checkWorker() catch |err| {
-        g.group.refuseWorker(.{ .replace_library = .{ .library = l, .carry = carry == .carry_variables } });
+        g.group.refuseWorker(.{ .replace_library = .{ .library = l, .carry = carry == .carry_variables, .keep_mailbox = keep_mailbox } });
         g.flush();
         return status(err);
     };
@@ -1525,7 +1526,7 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver,
     // Room for every Library it could recompile, so that once the Group
     // uses them the Core can own them.
     c.libraries.ensureUnusedCapacity(c.gpa, g.group.libraries.items.len) catch return .out_of_memory;
-    var replaced = g.group.replaceLibrary(l, carry == .carry_variables, c.gpa) catch |err| return status(err);
+    var replaced = g.group.replaceLibrary(l, carry == .carry_variables, keep_mailbox, c.gpa) catch |err| return status(err);
     // A C Host answers inside its calls, so a pause here is only
     // `defer_crossings`' (a testing aid): go on at once.
     while (replaced == .paused) replaced = (g.group.resumeWork() catch |err| return status(err)).replace;

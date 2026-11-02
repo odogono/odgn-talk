@@ -3422,8 +3422,8 @@ fn compileLibraryReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
-/// `add-library` (`identity`) and `replace-library` (`identity`, `carry`),
-/// the latter replying with `reports`.
+/// `add-library` (`identity`) and `replace-library` (`identity`, `carry`,
+/// optional `keepMailbox`), the latter replying with `reports`.
 fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const library = libraryOf(s, field(msg, "identity") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -3436,15 +3436,16 @@ fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
         return holdForReleases(s, ref, entry, finishOk(s, &o, entry), .plain);
     }
     const carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const keep_mailbox = if (field(msg, "keepMailbox")) |k| asBool(k) orelse return hostError(s.gpa, ref, .invalid_value) else false;
     entry.group.flush();
     freeTrace(s.gpa, takeTrace(entry));
-    return runWork(s, ref, entry, .{ .replace = .{ .library = library, .carry = carry == .carry_variables } });
+    return runWork(s, ref, entry, .{ .replace = .{ .library = library, .carry = carry == .carry_variables, .keep_mailbox = keep_mailbox } });
 }
 
 /// A Reload or library replacement to start, or one paused to go on with.
 const Work = union(enum) {
     reload: struct { script: *machine.Script, source: []const u8, carry: bool, keep_mailbox: bool },
-    replace: struct { library: *machine.Library, carry: bool },
+    replace: struct { library: *machine.Library, carry: bool, keep_mailbox: bool },
     resumed,
 };
 
@@ -3463,7 +3464,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
             // Room for every Library it could recompile, which the Core
             // owns once the Group uses them.
             c.libraries.ensureUnusedCapacity(c.gpa, mg.libraries.items.len) catch return workError(s, ref, entry, .out_of_memory);
-            break :blk .{ .replace = mg.replaceLibrary(x.library, x.carry, c.gpa) catch |e| return workError(s, ref, entry, talk.status(e)) };
+            break :blk .{ .replace = mg.replaceLibrary(x.library, x.carry, x.keep_mailbox, c.gpa) catch |e| return workError(s, ref, entry, talk.status(e)) };
         },
         .resumed => mg.resumeWork() catch |e| return workError(s, ref, entry, talk.status(e)),
     };
@@ -4778,7 +4779,7 @@ fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8
             g.refuseWorker(.{ .add_library = library });
         } else {
             const carry = carryOf(field(msg, "carry")) orelse return;
-            g.refuseWorker(.{ .replace_library = .{ .library = library, .carry = carry == .carry_variables } });
+            g.refuseWorker(.{ .replace_library = .{ .library = library, .carry = carry == .carry_variables, .keep_mailbox = asBool(field(msg, "keepMailbox")) orelse false } });
         }
     }
 }
@@ -7031,7 +7032,10 @@ test "compile-library gives identity and needs, add-library serves a load, and r
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"use scale from util\\non go\\n  return scale(5)\\nend go\\n\"}}", .{8}));
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     try std.testing.expectEqual(@as(i64, 10), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}))).object.get("result").?.integer);
-    const replaced = try okOf(try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\"}}", .{ 11, id2 }));
+    // `keepMailbox` is an optional boolean.
+    const bad = try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\",\"keepMailbox\":\"yes\"}}", .{ 14, id2 });
+    try std.testing.expectEqualStrings("invalid value", bad.object.get("err").?.object.get("code").?.string);
+    const replaced = try okOf(try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\",\"keepMailbox\":true}}", .{ 11, id2 }));
     try std.testing.expect(replaced.object.get("reports").? == .array);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{12}));
     try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{13}))).object.get("result").?.integer);

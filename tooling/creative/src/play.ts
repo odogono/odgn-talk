@@ -1458,8 +1458,12 @@ export class PlaySession {
       return;
     }
     try {
-      // Every importer reloads on one call, all or none.
-      const reports = this.group.replaceLibrary(replacement, 'carry variables');
+      // Every importer reloads on one call, all or none, keeping its mailbox.
+      const reports = this.group.replaceLibrary(
+        replacement,
+        'carry variables',
+        { keepMailbox: true },
+      );
       this.fuel.observe(reports);
       this.performance.reports(reports);
     } catch (error) {

@@ -440,7 +440,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `new-group` | `name`, `trace`: a boolean, optional `seed`: an integer from 0 to 2^64 − 1, in the integer encoding | – | `NewGroup` |
 | `drop-group` (`group-exchanges-v1`) | – | – | the Host letting go of a Group ([dropping a Group](embedding/group-exchanges.md#dropping-a-group)) |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
-| `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` and `abandoned` | `AddLibrary`, `ReplaceLibrary` |
+| `add-library`, `replace-library` | `identity`, and `carry` and optional `keepMailbox` for a replace | –, or `reports` and `abandoned` | `AddLibrary`, `ReplaceLibrary` |
 | `object` | `kind`, `id`, optional `parent` | – | `Object` |
 | `set-parent`, `dispose` | `object`, and `parent` | – | `SetParent`, `Dispose` |
 | `deliver`, `request` | `to`: `{object}` or `{script}`, `message`: `{name, args (V), limits}` | `delivery` | `Deliver`, `Request` |

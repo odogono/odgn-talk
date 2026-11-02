@@ -1944,7 +1944,7 @@ pub const Session = struct {
             if (added != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(added)});
         } else {
             var reports: ?*c.talk_reports = null;
-            const replaced = c.talk_replace_library(s.group, library, c.TALK_CARRY_VARIABLES, &reports);
+            const replaced = c.talk_replace_library(s.group, library, c.TALK_CARRY_VARIABLES, null, &reports);
             defer c.talk_reports_release(reports);
             if (replaced != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(replaced)});
             s.follow(reports);

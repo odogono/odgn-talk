@@ -1810,7 +1810,8 @@ pub const Host = struct {
             var l: ?*c.talk_library = null;
             try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l, null));
             const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
-            const code = c.talk_replace_library(h.group, l, carry, null);
+            const o: c.talk_reload_options = .{ .keep_mailbox = std.mem.eql(u8, field(input, "mailbox") orelse "", "keep") };
+            const code = c.talk_replace_library(h.group, l, carry, &o, null);
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
                 try h.library_sources.put(a, library, source);

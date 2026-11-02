@@ -107,7 +107,11 @@ export type Group = {
   ): HostObject<N>;
   objectById(kind: string, id: string): HostObject | undefined;
   pump(now: bigint, o?: PumpOptions): PumpResult;
-  replaceLibrary(l: Library, carry: CarryOver): Report[];
+  replaceLibrary(
+    l: Library,
+    carry: CarryOver,
+    o?: { keepMailbox?: boolean },
+  ): Report[];
   request(to: HostObject, m: Message, o?: CancellationOptions): Requested;
   requestPump(
     to: HostObject,

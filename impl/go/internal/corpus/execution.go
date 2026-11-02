@@ -681,7 +681,7 @@ func (x *executionReplay) apply(i int) error {
 		if fields["carry"].Raw == "yes" {
 			carry = talk.CarryVariables
 		}
-		_, err = x.g.ReplaceLibrary(l, carry)
+		_, err = x.g.ReplaceLibrary(l, carry, talk.ReloadOptions{KeepMailbox: fields["mailbox"].Raw == "keep"})
 		if err != nil {
 			if _, ok := err.(*talk.HostError); !ok {
 				if _, ok := err.(*talk.LoadError); !ok {

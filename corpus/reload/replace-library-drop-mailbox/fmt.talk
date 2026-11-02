@@ -1,0 +1,5 @@
+-- fmt.talk: replace-library-drop-mailbox's Library. Replacing it reloads a, which imports it.
+
+function label x
+  return "v1 " & x
+end label

@@ -86,7 +86,7 @@ const dualCore = async (
       const add = group.addLibrary.bind(group);
       const replace = group.replaceLibrary.bind(group);
       group.addLibrary = l => add(onZig(l));
-      group.replaceLibrary = (l, carry) => replace(onZig(l), carry);
+      group.replaceLibrary = (l, carry, o) => replace(onZig(l), carry, o);
     }
     return group;
   };

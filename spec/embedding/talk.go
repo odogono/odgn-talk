@@ -942,7 +942,8 @@ func (g *Group) AddLibrary(l *Library) error
 // every Library that imports it, from the source it already holds, and then
 // stop-and-reloads every importing Script. It is atomic: if any of them fails
 // to check, nothing changes and the LoadError holds every diagnostic.
-func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error)
+// KeepMailbox keeps every reloaded Script's mailbox, as Reload's does.
+func (g *Group) ReplaceLibrary(l *Library, carry CarryOver, o ...ReloadOptions) ([]Report, error)
 
 type CarryOver int
 

@@ -1380,6 +1380,7 @@ const driveReplay = function* (
             r.fields.get('carry') === 'yes'
               ? 'carry variables'
               : 'reset variables',
+            { keepMailbox: r.fields.get('mailbox') === 'keep' },
           );
           registered = core.replacementLibraries(registered, library);
           break;

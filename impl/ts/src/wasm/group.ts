@@ -1107,11 +1107,16 @@ export class WasmGroup implements Group {
     this.worker('add-library', { identity: bytesFrame(l.identity) });
   }
 
-  replaceLibrary(l: Library, carry: CarryOver): Report[] {
+  replaceLibrary(
+    l: Library,
+    carry: CarryOver,
+    o?: { keepMailbox?: boolean },
+  ): Report[] {
     this.#core.install(this.#session, l);
     return this.lifecycle('replace-library', {
       identity: bytesFrame(l.identity),
       carry,
+      keepMailbox: o?.keepMailbox,
     });
   }
 
