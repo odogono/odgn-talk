@@ -78,3 +78,6 @@ export const exampleFilePath = (slug: string): string =>
  * opens. The build writes one copy of Folio's page per Example Project.
  */
 export const EXAMPLE_META = 'folio-example';
+
+/** The most bytes an Example Project's `.folio` file may take. */
+export const EXAMPLE_BUDGET_BYTES = 512 * 1024;

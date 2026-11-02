@@ -4,7 +4,7 @@
 // when they play.
 import { parseSource } from '@northtalk/ts';
 import { rangeAt, type LspDiagnostic } from '@northtalk/tooling/lsp';
-import { KIT_SAMPLE_NAMES } from './kits/kits';
+import { KIT_SAMPLE_NAMES, kitSampleKey } from './kits/kits';
 import { parseMiniNotation } from './mini-notation';
 import type { DeepReadonly } from './readonly';
 import type { Project } from './model';
@@ -199,3 +199,29 @@ export const needsInstrumentAudio = (project: DeepReadonly<Project>): boolean =>
     ...scriptOwners(project).map(owner => owner.script ?? ''),
     ...project.libraries.map(library => library.source),
   ].some(source => /\b(?:play|loop)\b/u.test(source));
+
+/**
+ * The sampler keys of the kit sounds a Project's Scripts play in pattern
+ * texts written as literals, such as `bd` and `bd:1`. Names built at run
+ * time are not seen.
+ */
+export const projectKitKeys = (project: DeepReadonly<Project>): Set<string> => {
+  const samplers = new Set(
+    project.instruments.filter(i => i.kind === 'sampler').map(i => i.name),
+  );
+  const keys = new Set<string>();
+  for (const owner of scriptOwners(project)) {
+    for (const { on, text } of patternTexts(owner.script ?? '')) {
+      const parsed = parseMiniNotation(text);
+      if (!parsed.ok || (on !== undefined && !samplers.has(on))) {
+        continue;
+      }
+      for (const { value } of parsed.pattern.words()) {
+        if (KIT_SAMPLE_NAMES.has(value.name)) {
+          keys.add(kitSampleKey(value.name, value.index));
+        }
+      }
+    }
+  }
+  return keys;
+};

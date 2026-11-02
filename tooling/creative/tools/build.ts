@@ -6,7 +6,8 @@
 // version hashed from their contents, so a rebuild with no shell change
 // keeps the installed worker, and a changed shell offers an update. Each
 // Example Project gets a `.folio` file and a copy of the page at
-// `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141). The
+// `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141); the
+// service worker keeps a `.folio` file when first fetched (ADR 0161). The
 // built-in kits are rendered to `kits/` and precached too (#1895).
 import { createHash } from 'node:crypto';
 import {
@@ -51,11 +52,16 @@ export const precacheFiles = [
   './UNICODE-LICENSE.txt',
 ];
 
-/** Each Example Project's page and `.folio` file, precached with the shell. */
-export const examplePrecacheFiles = EXAMPLE_PROJECTS.flatMap(example => [
-  `./${example.slug}/`,
-  `./${exampleFilePath(example.slug)}`,
-]);
+/**
+ * Each Example Project's page, precached with the shell. Its `.folio` file
+ * carries its own sounds, so it is fetched on demand instead (ADR 0161).
+ */
+export const examplePrecacheFiles = EXAMPLE_PROJECTS.map(
+  example => `./${example.slug}/`,
+);
+
+/** URL prefixes the service worker keeps when first fetched (ADR 0161). */
+export const onDemandPrefixes = ['./projects/'];
 
 /** The built-in kits' sounds and licence notice, precached for offline Play (#1895). */
 export const KIT_NOTICE = 'kits/LICENSE.txt';
@@ -164,6 +170,7 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     minify,
     sourcemap: 'linked',
     define: {
+      __FOLIO_ON_DEMAND__: JSON.stringify(onDemandPrefixes),
       __FOLIO_PRECACHE__: JSON.stringify(precache),
       __FOLIO_VERSION__: JSON.stringify(version),
     },

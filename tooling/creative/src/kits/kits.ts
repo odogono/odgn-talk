@@ -307,3 +307,14 @@ export const kitNotice = (): string =>
       ...kit.samples.map(s => `  ${s.name}: ${s.description}`),
     ].join('\n'),
   ).join('\n\n') + '\n';
+
+/** Renders one kit sound, by its sampler key, as WAV bytes. */
+export const renderKitSound = (key: string): Uint8Array => {
+  const [name, n = '0'] = key.split(':');
+  const found = KITS.flatMap(kit => kit.samples).find(s => s.name === name);
+  const variant = found?.variants[Number(n)];
+  if (!variant) {
+    throw new Error(`No kit sound has the key “${key}”`);
+  }
+  return encodeWav(variant(), KIT_RATE);
+};

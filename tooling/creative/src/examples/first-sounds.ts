@@ -19,6 +19,9 @@ import {
   type TextElement,
 } from '../model';
 import { createInstrument } from '../instruments/registry';
+import { renderKitSound } from '../kits/kits';
+import { projectKitKeys } from '../pattern-checks';
+import { sha256Hex } from '../project-file';
 import { recipeSource, recipeText, type RecipeTarget } from '../recipes';
 import { type ExampleContent } from './index';
 
@@ -330,8 +333,8 @@ const lessonPage = (lesson: Lesson, index: number): Page => {
 };
 
 /**
- * Builds First Sounds. It needs no assets: every sound is a built-in kit
- * sample or a synth note.
+ * Builds First Sounds. It carries, as its own sounds, every kit sound its
+ * patterns play, so the file needs nothing else to play (ADR 0161).
  */
 export const createFirstSoundsProject = async (): Promise<ExampleContent> => {
   const project = createProject(FIRST_SOUNDS_PROJECT_NAME);
@@ -344,5 +347,18 @@ export const createFirstSoundsProject = async (): Promise<ExampleContent> => {
   // Every Session starts at the same tempo; the last Page changes it.
   project.script = `on startPlay\n  tell transport to setTempo ${START_TEMPO}\nend startPlay\n`;
   project.pages = LESSONS.map(lessonPage);
-  return { project, assets: new Map() };
+  const assets = new Map<string, Uint8Array>();
+  for (const key of [...projectKitKeys(project)].sort()) {
+    const bytes = renderKitSound(key);
+    const hash = await sha256Hex(bytes);
+    assets.set(hash, bytes);
+    project.assets.push({
+      name: key,
+      fileName: `${key.replace(':', '-')}.wav`,
+      hash,
+      mediaType: 'audio/wav',
+      size: bytes.length,
+    });
+  }
+  return { project, assets };
 };

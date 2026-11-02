@@ -25,13 +25,9 @@ import {
   type ProjectFileHandle,
 } from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
-import {
-  EXAMPLE_PROJECTS,
-  exampleFilePath,
-  type ExampleProject,
-} from './examples';
+import { EXAMPLE_PROJECTS } from './examples';
 import { importSound, isSoundAsset } from './sounds';
-import { fetchProjectFile, fileNameOf } from './open-url';
+import { fetchExampleFile, fetchProjectFile, fileNameOf } from './open-url';
 import { readSharedLink, sharedLinkFor } from './shared-link';
 import {
   PROJECT_MIMETYPE,
@@ -901,63 +897,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   /**
-   * Opens a fresh copy of an Example Project (#824), like an import: it
-   * never overwrites the Project on the desk, and its assets are decoded
-   * before anything is saved, so a copy that cannot play is refused.
-   */
-  const openExample = async (example: ExampleProject): Promise<void> => {
-    try {
-      const content = await example.create();
-      const accepted = [];
-      for (const asset of content.project.assets) {
-        const data = content.assets.get(asset.hash)!;
-        const file = new File(
-          [data as Uint8Array<ArrayBuffer>],
-          asset.fileName,
-        );
-        accepted.push(
-          isSoundAsset(asset)
-            ? await importSound(file)
-            : await importImage(file),
-        );
-      }
-      editor.finishPendingEdit();
-      await autosave.flush();
-      if (hasUnsafeChanges()) {
-        notice(
-          "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
-        );
-        return;
-      }
-      const assets = new Map(
-        accepted.map(imported => [
-          imported.asset.hash,
-          storageAsset(imported.bytes, imported.asset.mediaType),
-        ]),
-      );
-      const created = storage
-        ? await storage.saveProject(undefined, content.project, { assets })
-        : undefined;
-      const id = created?.id ?? `unsaved-${crypto.randomUUID()}`;
-      for (const imported of accepted) {
-        shell.images.add(imported);
-      }
-      channel?.post({ type: 'list-changed' });
-      await showLoaded(
-        { project: content.project, migrated: false, record: created },
-        id,
-      );
-      notice(
-        `Opened a fresh copy of “${example.name}”. Choose Browse in Tools to try it, then make it your own.`,
-      );
-    } catch (error) {
-      notice(`Couldn't open “${example.name}”: ${String(error)}`);
-    }
-  };
-
-  /**
-   * Opens the Example Project at `/folio/<slug>` (#1676) from the
-   * `.folio` file the build wrote for it.
+   * Opens a copy of an Example Project, from the Projects window (#824)
+   * or at `/folio/<slug>` (#1676), from the `.folio` file the build wrote
+   * for it, which carries its own sounds (ADR 0161).
    */
   const openExampleFile = async (slug: string): Promise<void> => {
     const example = EXAMPLE_PROJECTS.find(e => e.slug === slug);
@@ -969,13 +911,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       source: `example:${slug}`,
       name: `“${example.name}”`,
       fileName: `${slug}.folio`,
-      load: async () => {
-        const response = await fetch(exampleFilePath(slug));
-        if (!response.ok) {
-          throw new Error(`the server answered ${response.status}`);
-        }
-        return new Uint8Array(await response.arrayBuffer());
-      },
+      load: () => fetchExampleFile(slug),
     });
   };
 
@@ -1405,7 +1341,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
             .catch(error => notice(String(error)));
         },
         open: id => void openProject(id),
-        openExample: example => void openExample(example),
+        openExample: example => void openExampleFile(example.slug),
         previewVersion: version =>
           void previewVersion(version.seq, version.savedAt),
         // The field stays until the list shows the new name.

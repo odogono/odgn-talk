@@ -2,6 +2,7 @@
  * Opening a `.folio` file from any URL with `/folio/?open=<url>`
  * (ADR 0141, #1677). The host must serve the file with CORS. No DOM.
  */
+import { exampleFilePath } from './examples';
 
 /** The query parameter naming a `.folio` file to open. */
 export const OPEN_PARAM = 'open';
@@ -83,4 +84,30 @@ export const fetchProjectFile = async (
     throw new Error(`The file at ${parsed.href} isn't a .folio file.`);
   }
   return bytes;
+};
+
+/**
+ * The bytes of an Example Project's `.folio` file. The service worker
+ * keeps it once fetched, so it opens offline after one online open
+ * (ADR 0161).
+ */
+export const fetchExampleFile = async (
+  slug: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<Uint8Array> => {
+  const notKept =
+    "it isn't kept for offline use yet. Open it once while online, then it opens offline too.";
+  let response: Response;
+  try {
+    response = await fetchFn(exampleFilePath(slug));
+  } catch {
+    throw new Error(notKept);
+  }
+  if (response.status === 503) {
+    throw new Error(notKept);
+  }
+  if (!response.ok) {
+    throw new Error(`the server answered ${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
 };

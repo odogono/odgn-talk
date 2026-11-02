@@ -1,8 +1,16 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EXAMPLE_PROJECTS } from '../src/examples';
-import { KIT_BUDGET_BYTES, KIT_FILES } from '../src/kits/kits';
+import { EXAMPLE_BUDGET_BYTES, EXAMPLE_PROJECTS } from '../src/examples';
+import {
+  KIT_BUDGET_BYTES,
+  KIT_FILES,
+  KIT_SAMPLE_NAMES,
+  kitSampleKey,
+  renderKitFiles,
+} from '../src/kits/kits';
+import { parseMiniNotation } from '../src/mini-notation';
+import { patternTexts } from '../src/pattern-checks';
 import { readProjectFile } from '../src/project-file';
 import {
   build,
@@ -110,6 +118,51 @@ test('each Example Project has a static page and a .folio file', async () => {
     );
     expect(loaded.project.name).toBe(example.name);
     expect(loaded.missingAssets).toEqual([]);
+  }
+}, 60_000);
+
+test('Example Projects are fetched on demand, never precached', async () => {
+  await build({ minify: false });
+  const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
+  for (const example of EXAMPLE_PROJECTS) {
+    expect(worker).not.toContain(`projects/${example.slug}.folio`);
+    const size = statSync(
+      resolve(dist, 'projects', `${example.slug}.folio`),
+    ).size;
+    expect(size, example.slug).toBeLessThanOrEqual(EXAMPLE_BUDGET_BYTES);
+  }
+  expect(worker).toContain(JSON.stringify(['./projects/']));
+}, 60_000);
+
+test('First Sounds carries every kit sound its patterns play (ADR 0161)', async () => {
+  await build({ minify: false });
+  const { assets, project } = await readProjectFile(
+    readFileSync(resolve(dist, 'projects', 'first-sounds.folio')),
+  );
+  const samplers = new Set(
+    project.instruments.filter(i => i.kind === 'sampler').map(i => i.name),
+  );
+  const played = new Set<string>();
+  for (const source of [project.script, ...project.pages.map(p => p.script)]) {
+    for (const { on, text } of patternTexts(source ?? '')) {
+      const parsed = parseMiniNotation(text);
+      if (!parsed.ok || (on !== undefined && !samplers.has(on))) {
+        continue;
+      }
+      for (const word of parsed.pattern.words()) {
+        if (KIT_SAMPLE_NAMES.has(word.value.name)) {
+          played.add(kitSampleKey(word.value.name, word.value.index));
+        }
+      }
+    }
+  }
+  expect(played.size).toBeGreaterThan(0);
+  const rendered = renderKitFiles();
+  for (const key of played) {
+    const asset = project.assets.find(a => a.name === key);
+    expect(asset, key).toBeDefined();
+    const path = KIT_FILES.find(file => file.key === key)!.path;
+    expect(assets.get(asset!.hash), key).toEqual(rendered.get(path)!);
   }
 }, 60_000);
 
