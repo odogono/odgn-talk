@@ -10,7 +10,7 @@ import {
   tempoButtonName,
   TEMPOS,
 } from '../src/examples/first-sounds';
-import { DEFAULT_KIT_INSTRUMENT } from '../src/kits/kits';
+import { DEFAULT_SAMPLER } from '../src/sounds';
 import { patternProblems, projectPatternNames } from '../src/pattern-checks';
 import { PlayHarness } from '../src/play-harness';
 
@@ -58,14 +58,13 @@ for (const [index, lesson] of LESSONS.entries()) {
     await game.advance(BAR_MS * 2);
     for (const layer of lesson.layers) {
       expect(
-        layerNotes(game, from, layer.instrument ?? DEFAULT_KIT_INSTRUMENT)
-          .length,
+        layerNotes(game, from, layer.instrument ?? DEFAULT_SAMPLER).length,
       ).toBeGreaterThan(0);
     }
 
     // Muting a layer silences it, leaving the others; Unmute brings it back.
     for (const layer of lesson.layers) {
-      const instrument = layer.instrument ?? DEFAULT_KIT_INSTRUMENT;
+      const instrument = layer.instrument ?? DEFAULT_SAMPLER;
       const mute = muteButtonName(layer.name);
       await game.click(mute);
       expect(game.element(mute)).toMatchObject({
@@ -92,7 +91,7 @@ for (const [index, lesson] of LESSONS.entries()) {
     // Each groove button changes its layer, so its notes change.
     for (const [i, groove] of lesson.grooves.entries()) {
       const layer = lesson.layers.find(l => l.name === groove.layer)!;
-      const instrument = layer.instrument ?? DEFAULT_KIT_INSTRUMENT;
+      const instrument = layer.instrument ?? DEFAULT_SAMPLER;
       from = game.sent.length;
       await game.advance(BAR_MS);
       const before = layerNotes(game, from, instrument);
@@ -118,7 +117,7 @@ test('a muted layer stays muted until its groove changes', async () => {
   await game.advance(BAR_MS);
   const from = game.sent.length;
   await game.advance(BAR_MS);
-  expect(heard(game, from)).toEqual([`${DEFAULT_KIT_INSTRUMENT} sd`]);
+  expect(heard(game, from)).toEqual([`${DEFAULT_SAMPLER} sd`]);
 });
 
 test('leaving a Page stops its layers before the next Page loops its own', async () => {
@@ -130,7 +129,7 @@ test('leaving a Page stops its layers before the next Page loops its own', async
   await game.advance(BAR_MS);
   // A bar of "bd hh sd hh" alone: the first Page's "bd" has stopped.
   expect([...heard(game, from)].sort()).toEqual(
-    ['bd', 'hh', 'hh', 'sd'].map(s => `${DEFAULT_KIT_INSTRUMENT} ${s}`),
+    ['bd', 'hh', 'hh', 'sd'].map(s => `${DEFAULT_SAMPLER} ${s}`),
   );
 });
 

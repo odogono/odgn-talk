@@ -18,8 +18,7 @@ import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import { LEAD_US, Transport } from './transport';
-import { DEFAULT_KIT_INSTRUMENT } from './kits/kits';
-import { parseMiniNotation } from './mini-notation';
+import { parseMiniNotation, wholeSoundPattern } from './mini-notation';
 import {
   SoundPatterns,
   type PatternOptions,
@@ -80,7 +79,14 @@ import {
   messageSource,
   type LoadedMessageTarget,
 } from './message-script';
-import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
+import {
+  DEFAULT_SAMPLER,
+  isSoundAsset,
+  missingSoundMessage,
+  SoundBoard,
+  soundKey,
+  type SoundBackend,
+} from './sounds';
 import { patternProblems, projectPatternNames } from './pattern-checks';
 
 type ScriptOwner = DeepReadonly<Project | Page | Element>;
@@ -639,10 +645,10 @@ export class PlaySession {
     this.patterns.stop(owner, this.#patternTarget(target).instrument);
   }
 
-  /** The Instrument `on` names, or the default kit without one. */
+  /** The Instrument `on` names, or the default sampler without one. */
   #patternTarget(on: Value | null | undefined): PatternTarget {
     if (on === null || on === undefined) {
-      return { instrument: DEFAULT_KIT_INSTRUMENT, sampler: true };
+      return { instrument: DEFAULT_SAMPLER, sampler: true };
     }
     const native = on.asObject()?.native;
     const name =
@@ -706,9 +712,10 @@ export class PlaySession {
 
   /**
    * `play` and `loop` (ADR 0159). Without `on`, a text that names a whole
-   * Project sound plays it as `play` always has, and `with {repeat: true}`
-   * repeats it. Any other text is Mini-Notation, checked here since a text
-   * built at run time has no load-time check.
+   * Project sound plays it as one step on the default sampler, and `play`
+   * `with {repeat: true}` repeats it outside the Transport. Any other text
+   * is Mini-Notation, checked here since a text built at run time has no
+   * load-time check (ADR 0161).
    */
   #soundPattern(
     verb: 'loop' | 'play',
@@ -720,12 +727,13 @@ export class PlaySession {
     const { repeat, ...given } = this.#patternOptions(options);
     const target = this.#patternTarget(on);
     const owner = call.scriptName;
-    if (
-      verb === 'play' &&
+    const names =
       (on === null || on === undefined) &&
-      this.project.assets.some(a => a.name === source && isSoundAsset(a))
-    ) {
-      this.#playSound(owner, source, repeat ?? false);
+      this.project.assets.some(a => a.name === source && isSoundAsset(a));
+    // Only a repeating whole sound plays outside the Transport, as it
+    // always has; every other `play` is timed by it (ADR 0161).
+    if (verb === 'play' && names && repeat === true) {
+      this.#playSound(owner, source, true);
       return;
     }
     if (repeat !== undefined) {
@@ -736,7 +744,9 @@ export class PlaySession {
           : `No Project sound is named “${source}” to repeat`,
       );
     }
-    const parsed = parseMiniNotation(source);
+    const parsed = names
+      ? ({ ok: true, pattern: wholeSoundPattern(source) } as const)
+      : parseMiniNotation(source);
     if (!parsed.ok) {
       throw new ScriptError(
         'out of domain',
@@ -746,11 +756,12 @@ export class PlaySession {
     const sounds = projectPatternNames(this.project).sounds;
     for (const word of parsed.pattern.words()) {
       const { name, note } = word.value;
-      if (target.sampler ? !sounds.has(name) : note === undefined) {
+      const key = soundKey(word.value);
+      if (target.sampler ? !sounds.has(key) : note === undefined) {
         throw new ScriptError(
           'out of domain',
           target.sampler
-            ? `No sound or sample is named “${name}”`
+            ? missingSoundMessage(key).replace(/\.$/u, '')
             : `“${name}” is not a note ${target.instrument} can play`,
         );
       }

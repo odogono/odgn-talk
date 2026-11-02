@@ -1,5 +1,5 @@
 // 16-bit PCM WAV from mono samples, for sounds Folio makes itself: the
-// Example Projects' sounds and the built-in kits (#1895).
+// Example and Base Projects' sounds (#1895, ADR 0161).
 
 /** Mono samples in [-1, 1] as a 16-bit PCM WAV file. */
 export const encodeWav = (samples: Float32Array, rate: number): Uint8Array => {

@@ -396,3 +396,11 @@ const patternOf = (layers: Step[][]): Pattern => {
     words: () => layers.flatMap(words),
   };
 };
+
+/**
+ * A one-step pattern that plays a Project sound by its whole name, which
+ * may hold spaces or other characters Mini-Notation words can't
+ * (ADR 0161).
+ */
+export const wholeSoundPattern = (name: string): Pattern =>
+  patternOf([[{ from: 0, kind: 'word', to: name.length, value: { name } }]]);

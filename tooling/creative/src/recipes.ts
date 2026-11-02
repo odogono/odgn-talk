@@ -45,9 +45,9 @@ export const recipeTargets = (
     }));
   }
   if (kind === 'loopPattern') {
-    // The empty reference loops on the default kit, without `on`.
+    // The empty reference loops on the default sampler, without `on`.
     return [
-      { name: 'Default kit', reference: '' },
+      { name: 'Default sampler', reference: '' },
       ...project.instruments.map(i => ({ name: i.name, reference: i.name })),
     ];
   }

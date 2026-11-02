@@ -1,18 +1,19 @@
 // Sound Patterns: `play`, `loop` and `stop` (ADR 0159, #1896), on the
 // harness's virtual clock. At 120 bpm in 4/4 a bar is 2 s, and the
 // Transport starting at the first Pump puts bar 0 at 0.1 s.
+import { withMusicSounds } from './music-sounds';
 import { expect, test } from 'bun:test';
 import { createElement, createProject, type Project } from '../src/model';
 import { PlaySession } from '../src/play';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
-import { DEFAULT_KIT_INSTRUMENT } from '../src/kits/kits';
+import { DEFAULT_SAMPLER } from '../src/sounds';
 
 const ms = (n: number) => BigInt(n) * 1000n;
 
 /** A Project whose buttons, named in order, each run one click Handler. */
 const project = (...clicks: string[]) => {
-  const p = createProject('Groove');
+  const p = withMusicSounds(createProject('Groove'));
   p.instruments.push(
     createInstrument('synth', 'bass'),
     createInstrument('sampler', 'drums'),
@@ -63,7 +64,7 @@ const session = (p: Project) => {
   return { click, play, pumpAt, runTo, sent, steps };
 };
 
-test('loop starts on the next bar and repeats each bar on the default kit', () => {
+test('loop starts on the next bar and repeats each bar on the default sampler', () => {
   const { click, play, pumpAt, runTo, steps } = session(
     project('  loop "bd hh"'),
   );
@@ -75,10 +76,10 @@ test('loop starts on the next bar and repeats each bar on the default kit', () =
   expect(steps()).toEqual([]);
   runTo(ms(5000), ms(700));
   expect(steps()).toEqual([
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `3.1 ${DEFAULT_KIT_INSTRUMENT} hh`,
-    `4.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `5.1 ${DEFAULT_KIT_INSTRUMENT} hh`,
+    `2.1 ${DEFAULT_SAMPLER} bd`,
+    `3.1 ${DEFAULT_SAMPLER} hh`,
+    `4.1 ${DEFAULT_SAMPLER} bd`,
+    `5.1 ${DEFAULT_SAMPLER} hh`,
   ]);
 });
 
@@ -90,7 +91,7 @@ test('each step is sent one lead ahead, and the Pump wakes for it', () => {
   expect(pumpAt(ms(1999)).nextDeadline).toBe(ms(2000));
   expect(steps()).toEqual([]);
   expect(pumpAt(ms(2000)).nextDeadline).toBe(ms(3000));
-  expect(steps()).toEqual([`2.1 ${DEFAULT_KIT_INSTRUMENT} bd`]);
+  expect(steps()).toEqual([`2.1 ${DEFAULT_SAMPLER} bd`]);
 });
 
 test('a second loop on the same Instrument replaces the first on the next bar', () => {
@@ -107,10 +108,10 @@ test('a second loop on the same Instrument replaces the first on the next bar', 
   click(0);
   runTo(ms(6200), ms(2500));
   expect(steps()).toEqual([
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `3.1 ${DEFAULT_KIT_INSTRUMENT} hh`,
-    `4.1 ${DEFAULT_KIT_INSTRUMENT} sd`,
-    `6.1 ${DEFAULT_KIT_INSTRUMENT} sd`,
+    `2.1 ${DEFAULT_SAMPLER} bd`,
+    `3.1 ${DEFAULT_SAMPLER} hh`,
+    `4.1 ${DEFAULT_SAMPLER} sd`,
+    `6.1 ${DEFAULT_SAMPLER} sd`,
   ]);
 });
 
@@ -122,7 +123,7 @@ test('loops on different Instruments play together', () => {
   click(0);
   runTo(ms(3200), ms(700));
   expect(steps()).toEqual([
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
+    `2.1 ${DEFAULT_SAMPLER} bd`,
     '2.1 bass 48',
     '3.1 bass 52',
   ]);
@@ -175,10 +176,10 @@ test('play spreads one cycle over one bar from now, and does not repeat', () => 
   click(0);
   runTo(ms(6000), ms(700));
   expect(steps()).toEqual([
-    `0.7 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `1.2 ${DEFAULT_KIT_INSTRUMENT} hh`,
-    `1.7 ${DEFAULT_KIT_INSTRUMENT} sd`,
-    `2.2 ${DEFAULT_KIT_INSTRUMENT} hh`,
+    `0.7 ${DEFAULT_SAMPLER} bd`,
+    `1.2 ${DEFAULT_SAMPLER} hh`,
+    `1.7 ${DEFAULT_SAMPLER} sd`,
+    `2.2 ${DEFAULT_SAMPLER} hh`,
   ]);
 });
 
@@ -188,7 +189,7 @@ test('a play from a beat Handler starts on the beat’s musical time', () => {
     'on beat bar, beat, count\n  if count = 1 then\n    play "bd"\n  end if\nend beat';
   const { runTo, steps } = session(p);
   runTo(ms(700));
-  expect(steps()).toEqual([`0.6 ${DEFAULT_KIT_INSTRUMENT} bd`]);
+  expect(steps()).toEqual([`0.6 ${DEFAULT_SAMPLER} bd`]);
 });
 
 test('Sound Patterns belong to the Script that started them', () => {
@@ -200,8 +201,8 @@ test('Sound Patterns belong to the Script that started them', () => {
   click(1);
   runTo(ms(2200), ms(700));
   expect(steps()).toEqual([
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} sd`,
+    `2.1 ${DEFAULT_SAMPLER} bd`,
+    `2.1 ${DEFAULT_SAMPLER} sd`,
   ]);
   // The third button's `stop` ends only its own, which it has none of.
   click(2);
@@ -222,8 +223,8 @@ test('stop ends a Script’s patterns, all of them or on one Instrument', () => 
   click(2);
   runTo(ms(4200), ms(700));
   expect(steps()).toEqual([
-    `2.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
-    `4.1 ${DEFAULT_KIT_INSTRUMENT} bd`,
+    `2.1 ${DEFAULT_SAMPLER} bd`,
+    `4.1 ${DEFAULT_SAMPLER} bd`,
   ]);
 });
 
@@ -291,4 +292,26 @@ test('`tell sound to` spells the same Operations', () => {
   click(0);
   runTo(ms(2200), ms(700));
   expect(steps()).toEqual(['2.1 drums bd']);
+});
+
+test('name:n plays the Project sound of that name, never wrapping (ADR 0161)', () => {
+  const p = project('  loop "bd:1 bd:0"');
+  for (const name of ['bd', 'bd:1']) {
+    p.assets.push({
+      name,
+      fileName: `${name}.wav`,
+      hash: name.padEnd(64, '0'),
+      mediaType: 'audio/wav',
+      size: 3,
+    });
+  }
+  const { click, play, pumpAt, runTo, steps } = session(p);
+  pumpAt(0n);
+  click(0);
+  runTo(ms(1500));
+  expect(play.problems).toEqual([]);
+  expect(steps()).toEqual([
+    `0.1 ${DEFAULT_SAMPLER} bd:1`,
+    `1.1 ${DEFAULT_SAMPLER} bd`,
+  ]);
 });

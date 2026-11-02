@@ -6,7 +6,7 @@
 // `loop` starts on the next bar and repeats each bar, one cycle per bar; a
 // Script has at most one loop per Instrument, and a second `loop` replaces
 // the first on the next bar. `play` spreads one cycle over one bar from now.
-import { KIT_SAMPLE_NAMES, kitSampleKey } from './kits/kits';
+import { soundKey } from './sounds';
 import type { InstrumentCommand } from './instruments/kind';
 import type { InstrumentMessage } from './instruments/session';
 import { Time, type Pattern, type PatternEvent } from './mini-notation';
@@ -21,7 +21,7 @@ export type PatternOptions = {
 
 /** How an Instrument turns a step into a note. */
 export type PatternTarget = {
-  /** The Instrument's name, or the default kit's. */
+  /** The Instrument's name, or the default sampler's. */
   readonly instrument: string;
   /** A sampler plays steps as sounds, any other kind as notes. */
   readonly sampler: boolean;
@@ -68,11 +68,8 @@ const justAfter = (bars: number) =>
 // repeats the note is never cut off by the release before it.
 const RELEASE_EARLY_US = 2000n;
 
-/** The sampler key a step plays: a kit sample's variant, or a Project sound. */
-export const stepSound = (event: PatternEvent): string =>
-  KIT_SAMPLE_NAMES.has(event.value.name)
-    ? kitSampleKey(event.value.name, event.value.index)
-    : event.value.name;
+/** The Project sound a step plays. */
+export const stepSound = (event: PatternEvent): string => soundKey(event.value);
 
 const seconds = (t: bigint) => Number(t) / 1_000_000;
 

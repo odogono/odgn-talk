@@ -1,6 +1,6 @@
 // First Sounds (#1898): Folio's take on Strudel's First Sounds workshop. Each
 // Page teaches one idea of Sound Patterns and Mini-Notation (ADR 0159) with
-// the built-in kits (ADR 0158): a sound, sequences and rests, subdivision,
+// the Music sounds it carries (ADR 0161): a sound, sequences and rests, subdivision,
 // alternation, parallel layers, then tempo and Instruments.
 //
 // Every Page Script is built the same way, so a reader can compare them. The
@@ -20,7 +20,7 @@ import {
 } from '../model';
 import { createInstrument } from '../instruments/registry';
 import { kitSoundAsset } from '../base-projects';
-import { projectKitKeys } from '../pattern-checks';
+import { projectMusicSounds } from '../pattern-checks';
 import { recipeSource, recipeText, type RecipeTarget } from '../recipes';
 import { type ExampleContent } from './index';
 
@@ -29,9 +29,9 @@ export const FIRST_SOUNDS_PROJECT_NAME = 'First Sounds';
 export const START_TEMPO = 120;
 export const TEMPOS = [90, 120, 150] as const;
 
-/** One loop on a Page: on the default kit, or on a named Instrument. */
+/** One loop on a Page: on the default sampler, or on a named Instrument. */
 export type Layer = {
-  /** The Instrument it plays on; the default kit when absent. */
+  /** The Instrument it plays on; the default sampler when absent. */
   instrument?: string;
   /** Names its Script variables and its Mute button, as `kick`. */
   name: string;
@@ -56,7 +56,7 @@ export const LESSONS: readonly Lesson[] = [
     name: 'aSound',
     title: '1. A sound',
     lesson:
-      'This Page loops one sound with loop "bd": a bass drum, once every bar. "bd" names a sample in the default kit. Others are sd (snare), hh (closed hi-hat), oh (open hi-hat), cp (clap), rim, lt, mt and ht (toms), cb (cowbell) and cr (crash). A number picks a variant: "bd:1" is a punchier kick. Click a pattern to hear it from the next bar.',
+      'This Page loops one sound with loop "bd": a bass drum, once every bar. "bd" names one of this Project’s sounds, which came with it. Others are sd (snare), hh (closed hi-hat), oh (open hi-hat), cp (clap), rim, lt, mt and ht (toms), cb (cowbell) and cr (crash). A number picks a variant: "bd:1" is a punchier kick. Click a pattern to hear it from the next bar.',
     layers: [{ name: 'beat', pattern: 'bd' }],
     grooves: [
       { layer: 'beat', pattern: 'sd' },
@@ -127,9 +127,9 @@ export const LESSONS: readonly Lesson[] = [
   },
 ];
 
-/** The Recipe target for a layer: its Instrument, or the default kit. */
+/** The Recipe target for a layer: its Instrument, or the default sampler. */
 const instrumentTarget = (layer: Layer): RecipeTarget => ({
-  name: layer.instrument ?? 'Default kit',
+  name: layer.instrument ?? 'Default sampler',
   reference: layer.instrument ?? '',
 });
 
@@ -159,10 +159,12 @@ const unmute = (l: Layer) => [
 /** The Page Script that loops a Lesson's layers and answers its buttons. */
 export const lessonScript = (lesson: Lesson): string => {
   const layer = (name: string) => lesson.layers.find(l => l.name === name)!;
-  // Stopping the default kit means `stop` without a target, which ends every
+  // Stopping the default sampler means `stop` without a target, which ends every
   // pattern the Script started, so it may only be a Page's one layer.
   if (lesson.layers.length > 1 && lesson.layers.some(l => !l.instrument)) {
-    throw new Error(`${lesson.name}: a layer on the default kit plays alone`);
+    throw new Error(
+      `${lesson.name}: a layer on the default sampler plays alone`,
+    );
   }
   const muteClicks = lesson.layers.map(l => [
     `if the name of the target = ${recipeText(muteButtonName(l.name))} then`,
@@ -347,7 +349,7 @@ export const createFirstSoundsProject = async (): Promise<ExampleContent> => {
   project.script = `on startPlay\n  tell transport to setTempo ${START_TEMPO}\nend startPlay\n`;
   project.pages = LESSONS.map(lessonPage);
   const assets = new Map<string, Uint8Array>();
-  for (const key of [...projectKitKeys(project)].sort()) {
+  for (const key of [...projectMusicSounds(project)].sort()) {
     const { asset, bytes } = await kitSoundAsset(key);
     assets.set(asset.hash, bytes);
     project.assets.push(asset);

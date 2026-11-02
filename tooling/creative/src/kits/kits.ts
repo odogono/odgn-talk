@@ -1,10 +1,9 @@
-// Folio's built-in sample kits (ADR 0158, #1895): a drum machine and a
-// handful of one-shots, so `loop "bd hh sd oh"` plays before anything is
-// imported. Every sound is synthesised by the code below rather than
-// recorded, so the kits carry no third-party licence: they are dedicated
-// to the public domain under CC0 1.0. The build writes each sound to
-// `kits/<kit>/<name>.wav`, the service worker precaches them, and
-// `tests/build.test.ts` holds them to `KIT_BUDGET_BYTES`.
+// The sample kits behind the Music Base Project (ADR 0161, #1895): a
+// drum machine and a handful of one-shots. Every sound is synthesised by
+// the code below rather than recorded, so the kits carry no third-party
+// licence: they are dedicated to the public domain under CC0 1.0. Folio
+// plays none of them directly; the build renders them into Music and
+// First Sounds as those Projects' own sounds.
 import { encodeWav } from '../wav';
 import {
   attack,
@@ -35,9 +34,6 @@ export type Kit = {
   /** Where the sounds come from. */
   readonly source: string;
 };
-
-/** The most bytes every kit's WAV files may take between them. */
-export const KIT_BUDGET_BYTES = 512 * 1024;
 
 const SOURCE =
   'Synthesised by tooling/creative/src/kits/kits.ts in the NorthTalk repository; no recordings are used.';
@@ -236,79 +232,21 @@ export const SHOTS: Kit = {
   ],
 };
 
-/** Every built-in kit. Sample names are unique across kits. */
+/** Every kit. Sample names are unique across kits. */
 export const KITS: readonly Kit[] = [DRUMS, SHOTS];
 
-/** The kit a Sound Pattern plays when it names no Instrument. */
-export const DEFAULT_KIT = DRUMS;
-
 /**
- * The Instrument name the default kit's sampler plays under. A Script
- * can't write it as a name, so it never clashes with an authored
- * Instrument.
+ * Every kit sound's name, in kit order: `name` for a sample's first
+ * variant and `name:n` for the others, as the Music Base Project names
+ * its sounds (ADR 0161).
  */
-export const DEFAULT_KIT_INSTRUMENT = '#kit';
-
-/** Every kit sample's name, for pattern checks. */
-export const KIT_SAMPLE_NAMES: ReadonlySet<string> = new Set(
-  KITS.flatMap(kit => kit.samples.map(s => s.name)),
-);
-
-/**
- * The sampler's key for `name:index`: `name` for the first variant and
- * `name:n` for the others. An index past the last variant wraps around.
- */
-export const kitSampleKey = (name: string, index = 0): string => {
-  const found = KITS.flatMap(kit => kit.samples).find(s => s.name === name);
-  const count = found?.variants.length ?? 1;
-  const n = ((index % count) + count) % count;
-  return n === 0 ? name : `${name}:${n}`;
-};
-
-/** One kit sound as a file the build writes. */
-export type KitFile = {
-  /** The sampler's key for it. */
-  readonly key: string;
-  /** Its path under the app's root, e.g. `kits/drums/bd-1.wav`. */
-  readonly path: string;
-};
-
-/** Every kit sound's file, in kit order. */
-export const KIT_FILES: readonly KitFile[] = KITS.flatMap(kit =>
+export const KIT_SOUND_KEYS: readonly string[] = KITS.flatMap(kit =>
   kit.samples.flatMap(s =>
-    s.variants.map((_, n) => ({
-      key: n === 0 ? s.name : `${s.name}:${n}`,
-      path: `kits/${kit.name}/${s.name}${n === 0 ? '' : `-${n}`}.wav`,
-    })),
+    s.variants.map((_, n) => (n === 0 ? s.name : `${s.name}:${n}`)),
   ),
 );
 
-/** Renders every kit sound as WAV bytes, keyed by its file's path. */
-export const renderKitFiles = (): Map<string, Uint8Array> => {
-  const files = new Map<string, Uint8Array>();
-  let at = 0;
-  for (const kit of KITS) {
-    for (const s of kit.samples) {
-      for (const variant of s.variants) {
-        files.set(KIT_FILES[at++]!.path, encodeWav(variant(), KIT_RATE));
-      }
-    }
-  }
-  return files;
-};
-
-/** The kits' licence notice, written beside the sounds. */
-export const kitNotice = (): string =>
-  KITS.map(kit =>
-    [
-      `${kit.name}: ${kit.description}`,
-      `Source: ${kit.source}`,
-      `Licence: ${kit.licence}`,
-      ...kit.samples.map(s => `  ${s.name}: ${s.description}`),
-    ].join('\n'),
-  ).join('\n\n') + '\n';
-
-/** Renders one kit sound, by its sampler key, as WAV bytes. */
+/** Renders one kit sound, by its name such as `bd:1`, as WAV bytes. */
 export const renderKitSound = (key: string): Uint8Array => {
   const [name, n = '0'] = key.split(':');
   const found = KITS.flatMap(kit => kit.samples).find(s => s.name === name);

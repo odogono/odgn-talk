@@ -4,7 +4,7 @@
 // worker keeps once fetched. Each carries every sound it plays, and a
 // copy records which Base Project and version it came from.
 import { createInstrument } from './instruments/registry';
-import { KIT_FILES, renderKitSound } from './kits/kits';
+import { KIT_SOUND_KEYS, renderKitSound } from './kits/kits';
 import {
   type Asset,
   type BaseProjectName,
@@ -58,7 +58,7 @@ export const createMusicBase = async (): Promise<{
   project.instruments.push(createInstrument('synth', 'bass'));
   project.script = MUSIC_SCRIPT;
   const assets = new Map<string, Uint8Array>();
-  for (const { key } of KIT_FILES) {
+  for (const key of KIT_SOUND_KEYS) {
     const { asset, bytes } = await kitSoundAsset(key);
     assets.set(asset.hash, bytes);
     project.assets.push(asset);

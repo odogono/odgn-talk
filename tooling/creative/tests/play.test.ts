@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import type { InstrumentMessage } from '../src/instruments/session';
+import { DEFAULT_SAMPLER } from '../src/sounds';
 import { text } from '@northtalk/ts';
 import { createElement, createPage, createProject, textOf } from '../src/model';
 import { definesHandler, PlaySession } from '../src/play';
@@ -619,11 +621,11 @@ const soundAsset = (name: string, mediaType = 'audio/mpeg') => ({
   size: 3,
 });
 
-test('the sound Grant plays and loops for the owning Script; stop is owner-scoped', () => {
+test('the sound Grant repeats a whole sound for the owning Script; stop is owner-scoped', () => {
   const project = fixture();
   project.assets.push(soundAsset('waves'), soundAsset('rain'));
   project.pages[0]!.elements[0]!.script = `on click
- tell sound to play "waves"
+ tell sound to play "waves" with {repeat: true}
  tell sound to play "rain" with {repeat: true}
 end click
 on pointerLeave
@@ -637,7 +639,7 @@ end click`;
   drain(play);
   expect(play.problems).toEqual([]);
   expect(play.sounds.playing()).toEqual([
-    { owner: 'element:page1/button1', name: 'waves', loop: false },
+    { owner: 'element:page1/button1', name: 'waves', loop: true },
     { owner: 'element:page1/button1', name: 'rain', loop: true },
   ]);
   // Another Element's Script cannot stop the button's rain.
@@ -651,6 +653,28 @@ end click`;
   expect(play.sounds.playing()).toEqual([]);
 });
 
+test('playing a whole sound once is a step on the default sampler (ADR 0161)', () => {
+  const project = fixture();
+  project.assets.push(soundAsset('Door Creak'));
+  project.pages[0]!.elements[0]!.script =
+    'on click\n tell sound to play "Door Creak"\nend click';
+  const sent: InstrumentMessage[] = [];
+  const play = new PlaySession(project, 0, {
+    instrumentBackend: message => sent.push(message),
+  });
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems).toEqual([]);
+  expect(play.sounds.playing()).toEqual([]);
+  expect(
+    sent.flatMap(m =>
+      m.commands.flatMap(c =>
+        c.kind === 'note' ? [[m.instrument, c.sound]] : [],
+      ),
+    ),
+  ).toEqual([[DEFAULT_SAMPLER, 'Door Creak']]);
+});
+
 for (const bad of ['missing', 'picture']) {
   test(`playing ${bad === 'missing' ? 'a missing sound' : 'an image as a sound'} reports against the Script`, () => {
     const project = fixture();
@@ -662,7 +686,7 @@ for (const bad of ['missing', 'picture']) {
     expect(play.sounds.playing()).toEqual([]);
     // Loading reports the unknown name; playing it reports again.
     expect(play.problems.map(p => p.message)[0]).toBe(
-      `No sound or sample is named “${bad}”.`,
+      `No sound is named “${bad}”.`,
     );
     expect(play.problems).toHaveLength(2);
     expect(play.problems[1]?.owner).toBe(project.pages[0]!.elements[0]);

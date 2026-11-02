@@ -3,6 +3,8 @@
 // worklet on a real AudioContext, sending its commands over a MessageChannel
 // (#1927), with the Play clock following the audio clock, and the worklet
 // reports the sample each note starts on.
+import { kitSoundAsset } from '../src/base-projects';
+import { DEFAULT_SAMPLER } from '../src/sounds';
 import type { Envelope } from '@northtalk/tooling/worker-supervisor';
 import { startInstrumentAudio } from '../src/instruments/audio';
 import type { NoteOnset } from '../src/instruments/rack';
@@ -36,6 +38,13 @@ const playBeats = async (
 ) => {
   const project = createProject('Beats');
   project.instruments.push(createInstrument('synth', 'lead'));
+  // The default sampler plays only the Project's own sounds (ADR 0161).
+  const bytes = new Map<string, Uint8Array>();
+  for (const key of ['bd', 'hh']) {
+    const sound = await kitSoundAsset(key);
+    project.assets.push(sound.asset);
+    bytes.set(sound.asset.hash, sound.bytes);
+  }
   project.script = projectScript;
   project.pages[0]!.script = script;
   const onsets: NoteOnset[] = [];
@@ -48,7 +57,7 @@ const playBeats = async (
     );
   const audio = startInstrumentAudio(
     project,
-    () => Promise.reject(new Error('no sounds')),
+    async asset => bytes.get(asset.hash)!.slice().buffer,
     {
       onError: message => {
         throw new Error(message);
@@ -166,14 +175,17 @@ end beat
     onGrid(onsets, 0.125);
   });
 
-  await test('a loop on the default kit plays its samples on the bar (#1896)', async () => {
+  await test('a loop on the default sampler plays its samples on the bar (#1896)', async () => {
     const onsets = await playBeats(
       '',
       2600,
       'on startPlay\n  tell transport to setTempo 240\n  loop "bd hh"\nend startPlay\n',
     );
-    const kit = onsets.filter(o => o.instrument === '#kit');
-    assert(kit.length >= 4, `Enough kit steps sounded: ${kit.length}`);
+    const kit = onsets.filter(o => o.instrument === DEFAULT_SAMPLER);
+    assert(
+      kit.length >= 4,
+      `Enough default sampler steps sounded: ${kit.length}`,
+    );
     onGrid(kit, 0.5);
   });
 
