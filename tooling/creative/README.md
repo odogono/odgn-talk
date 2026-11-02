@@ -1142,7 +1142,9 @@ code pane shows one Script at a time, with the recent ones as tabs above it;
 Punches In as in Browse. Errors never stop the show: a Punch In that fails to
 compile keeps the last good version playing, a runtime error stops only its
 Handler, and the latest error shows over the code until a good Punch In
-clears it. Each session uses a fresh Core
+clears it. Open Palettes dock in a column under the code; tick **Float over
+the stage in Perform** in a Palette's Info to keep its window floating
+instead. The Window menu still opens and closes them. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,

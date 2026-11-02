@@ -227,7 +227,7 @@ const checkPage = (c: Checker, value: unknown, path: string): Page => {
   return page;
 };
 
-/** A Palette: a Page's fields, then its window's title, width and opening. */
+/** A Palette: a Page's fields, then its window's title, width, opening and floating. */
 const checkPalette = (c: Checker, value: unknown, path: string): Page => {
   const page = checkPage(c, value, path);
   const p = c.obj(value, path) ?? {};
@@ -240,6 +240,11 @@ const checkPalette = (c: Checker, value: unknown, path: string): Page => {
     openOnPlay: openOnPlay === true,
   };
   setDefined(page.palette, 'title', c.optStr(p.title, `${path}.title`));
+  if (p.float !== undefined && typeof p.float !== 'boolean') {
+    c.fail(`${path}.float`, 'expected true or false');
+  } else if (p.float === true) {
+    page.palette.float = true;
+  }
   return page;
 };
 

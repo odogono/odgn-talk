@@ -212,8 +212,11 @@ landed, and the Issue graph job ticks it as they close.
   perform-layout.ts; [scripts.ts](src/scripts.ts) `onShow`/`show` feed the
   tabs through `shell.code`; play-view.ts handles ⌥-click and lets Punch In
   run while performing (`punching` in [play-controls.ts](src/play-controls.ts)).
+- Docked Palettes (#2001): `PaletteSettings.float` (file `float`, Info
+  `floatInPerform`); [palette-windows.ts](src/palette-windows.ts) docks a
+  window in the layout's `palettes` column through its `dock` option.
 - Tests: [perform-layout.test.ts](tests/perform-layout.test.ts) and the
-  `perform` and `perform-code` browser suites.
+  `perform`, `perform-code` and `perform-palettes` browser suites.
 - First check: `bun test tooling/creative/tests/perform-layout.test.ts`.
 
 ## Group Elements

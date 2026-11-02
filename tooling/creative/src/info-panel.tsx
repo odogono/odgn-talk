@@ -426,6 +426,12 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
           page.palette.openOnPlay,
           disabled,
         )}
+        {checkbox(
+          'floatInPerform',
+          'Float over the stage in Perform',
+          page.palette.float === true,
+          disabled,
+        )}
         <div className="row">
           <button
             data-move-page={-1}

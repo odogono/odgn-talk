@@ -821,6 +821,10 @@ export const mountPlay = (shell: StackShell): void => {
     };
   };
   const paletteWindows = new PaletteWindows({
+    dock: () =>
+      mode === 'perform' && performLayout.mounted
+        ? performLayout.palettes
+        : undefined,
     setOpen: (name, open) => {
       if (session && !session.ended) {
         post({ kind: 'palette', session: sessionId, name, open });
