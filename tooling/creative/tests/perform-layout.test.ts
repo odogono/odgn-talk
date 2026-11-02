@@ -5,6 +5,7 @@ import {
   DEFAULT_PERFORM,
   loadPerform,
   normalPerform,
+  recentTabs,
   savePerform,
   zoomed,
 } from '../src/perform-layout';
@@ -50,4 +51,23 @@ test('⌘+ and ⌘− step the zoom within its range', () => {
   expect(zoomed(1, -1)).toBe(0.9);
   expect(zoomed(3, 1)).toBe(3);
   expect(zoomed(0.5, -1)).toBe(0.5);
+});
+
+const tab = (id: number) => ({
+  label: `Script ${id}`,
+  source: { kind: 'script' as const, id },
+});
+
+test('the code pane keeps recent Scripts as tabs, in place, up to the limit', () => {
+  let state = recentTabs([], tab(1));
+  state = recentTabs(state.tabs, tab(2));
+  expect(state.current).toBe(1);
+  state = recentTabs(state.tabs, { ...tab(1), label: 'renamed' });
+  expect(state).toEqual({
+    current: 0,
+    tabs: [{ ...tab(1), label: 'renamed' }, tab(2)],
+  });
+  state = recentTabs(state.tabs, tab(3), 2);
+  expect(state.tabs.map(t => t.source.id)).toEqual([2, 3]);
+  expect(state.current).toBe(1);
 });

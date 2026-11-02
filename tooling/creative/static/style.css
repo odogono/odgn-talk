@@ -1556,3 +1556,41 @@ body.playing #performance-window {
 .perform-code .code-browser.docked > .bar .close {
   display: none;
 }
+/* Perform's code pane shows one Script at a time (#2000): the recent ones
+   as tabs above it, and the latest error over it. */
+.perform-code .code-browser.docked .code-browser-columns {
+  display: none;
+}
+.perform-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.perform-tabs:empty {
+  display: none;
+}
+.perform-tabs [role='tab'] {
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  padding: 0.3rem 0.7rem;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.perform-tabs [aria-selected='true'] {
+  background: var(--panel);
+  font-weight: 600;
+}
+.perform-error {
+  padding: 0.4rem 0.7rem;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.9rem;
+}
+.perform-error[hidden] {
+  display: none;
+}

@@ -1136,7 +1136,13 @@ header (⌘⇧↩), is for live coding in front of an audience: one window with
 the stage on the left, scaled to fit, and the Code Browser docked on the
 right, so the audience sees the code being played. The Errors window stays
 hidden. Drag the divider (or focus it and use the arrow keys) to share the
-width, and ⌘+ and ⌘− zoom the code; both are remembered for each Project. Each session uses a fresh Core
+width, and ⌘+ and ⌘− zoom the code; both are remembered for each Project. The
+code pane shows one Script at a time, with the recent ones as tabs above it;
+⌥-click an Element on the stage to open its Script without clicking it. ⌘↩
+Punches In as in Browse. Errors never stop the show: a Punch In that fails to
+compile keeps the last good version playing, a runtime error stops only its
+Handler, and the latest error shows over the code until a good Punch In
+clears it. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,

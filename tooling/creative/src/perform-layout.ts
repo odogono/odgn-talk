@@ -2,8 +2,36 @@
 // audience, with the stage on the left, scaled to fit, and the code pane and
 // docked Palettes on the right. The divider and the code's zoom are
 // remembered for each Project, so a set opens as it was last played.
+import { type CodeSelection } from './code-browser-panel';
 import { h } from './dom';
 import { showWindow } from './windows';
+
+/** A Script the code pane showed, as one of its tabs (#2000). */
+export type PerformTab = { label: string; source: CodeSelection };
+
+/** How many recent Scripts the code pane keeps as tabs. */
+export const MAX_TABS = 5;
+
+const tabKey = (source: CodeSelection) => `${source.kind}:${source.id}`;
+
+/**
+ * The tabs after `shown` is shown: an open tab stays in its place, and a new
+ * one goes last, the least recently shown dropped past the limit.
+ */
+export const recentTabs = (
+  tabs: readonly PerformTab[],
+  shown: PerformTab,
+  max = MAX_TABS,
+): { current: number; tabs: PerformTab[] } => {
+  const at = tabs.findIndex(t => tabKey(t.source) === tabKey(shown.source));
+  if (at >= 0) {
+    const next = [...tabs];
+    next[at] = shown;
+    return { tabs: next, current: at };
+  }
+  const next = [...tabs, shown].slice(-max);
+  return { tabs: next, current: next.length - 1 };
+};
 
 /** Where the divider sits and how large the code is, for one Project. */
 export type PerformSettings = {
@@ -107,6 +135,13 @@ export class PerformLayout {
   /** Where #2001 docks Palettes. */
   readonly palettes: HTMLElement;
   readonly divider: HTMLElement;
+  /** The recent Scripts, one tab each. */
+  readonly tabBar: HTMLElement;
+  /** The last error, shown over the code instead of in the Errors window. */
+  readonly banner: HTMLElement;
+  #tabs: PerformTab[] = [];
+  #current = -1;
+  #open: (source: CodeSelection) => void = () => {};
   #stage: HTMLElement;
   #project = '';
   #settings = DEFAULT_PERFORM;
@@ -123,6 +158,16 @@ export class PerformLayout {
       'aria-label': 'Resize the stage and the code',
       tabindex: '0',
     });
+    this.tabBar = h('div', {
+      class: 'perform-tabs',
+      role: 'tablist',
+      'aria-label': 'Recent Scripts',
+    });
+    this.banner = h('div', {
+      class: 'perform-error',
+      role: 'alert',
+      hidden: true,
+    });
     this.code = h('div', { class: 'perform-code', 'aria-label': 'Code' });
     this.palettes = h('div', {
       class: 'perform-palettes',
@@ -133,7 +178,14 @@ export class PerformLayout {
       { id: 'perform', hidden: true },
       this.#stage,
       this.divider,
-      h('div', { class: 'perform-side' }, this.code, this.palettes),
+      h(
+        'div',
+        { class: 'perform-side' },
+        this.tabBar,
+        this.banner,
+        this.code,
+        this.palettes,
+      ),
     );
     this.#dragDivider();
   }
@@ -142,9 +194,22 @@ export class PerformLayout {
     return this.#settings;
   }
 
-  /** Lays out `reader` for the Project named `project`. */
-  mount(reader: HTMLElement, project: string, onResize: () => void): void {
+  /**
+   * Lays out `reader` for the Project named `project`; `open` shows a tab's
+   * Script in the Code Browser.
+   */
+  mount(
+    reader: HTMLElement,
+    project: string,
+    onResize: () => void,
+    open: (source: CodeSelection) => void = () => {},
+  ): void {
     this.#project = project;
+    this.#open = open;
+    this.#tabs = [];
+    this.#current = -1;
+    this.#drawTabs();
+    this.problem(undefined);
     this.#onResize = onResize;
     this.#settings = loadPerform(project);
     this.#reader = { node: reader, parent: reader.parentNode };
@@ -175,6 +240,42 @@ export class PerformLayout {
     this.#browser = undefined;
     this.node.hidden = true;
     this.node.remove();
+  }
+
+  /** Notes the Code Browser showing `tab`, adding or selecting its tab. */
+  shown(tab: PerformTab): void {
+    if (!this.mounted) {
+      return;
+    }
+    ({ tabs: this.#tabs, current: this.#current } = recentTabs(
+      this.#tabs,
+      tab,
+    ));
+    this.#drawTabs();
+  }
+
+  /** Shows an error over the code, or clears it. */
+  problem(message: string | undefined): void {
+    this.banner.hidden = !message;
+    this.banner.textContent = message ?? '';
+  }
+
+  #drawTabs(): void {
+    this.tabBar.replaceChildren(
+      ...this.#tabs.map((tab, index) => {
+        const button = h(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': String(index === this.#current),
+          },
+          tab.label,
+        );
+        button.addEventListener('click', () => this.#open(tab.source));
+        return button;
+      }),
+    );
   }
 
   get mounted(): boolean {
