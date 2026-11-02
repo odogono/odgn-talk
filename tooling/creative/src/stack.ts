@@ -539,7 +539,11 @@ export const mountStack = (
             'paletteWidth',
             Math.max(MIN_PAGE_WIDTH, value as number),
           );
-        } else if (key === 'paletteTitle' || key === 'openOnPlay') {
+        } else if (
+          key === 'paletteTitle' ||
+          key === 'openOnPlay' ||
+          key === 'floatInPerform'
+        ) {
           draft.tree.setProperty(page, key, value as string | boolean);
         } else if (key === 'alignX' || key === 'alignY') {
           draft.tree.setProperty(page, key, String(value));

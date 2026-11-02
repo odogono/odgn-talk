@@ -23,6 +23,8 @@ export class PaletteWindows {
 
   constructor(
     private readonly options: {
+      /** Where Perform docks Palettes that don't float, while performing (#2001). */
+      dock?(): HTMLElement | undefined;
       /** Draws a Palette's Elements into its page node. */
       render(palette: MirrorPalette, page: HTMLElement): void;
       /** Asks the worker to open or close a Palette's window. */
@@ -81,6 +83,7 @@ export class PaletteWindows {
         height: `${palette.height}px`,
         background: palette.background,
       });
+      this.#place(win.node, palette);
       if (palette.open && win.node.hidden) {
         win.node.hidden = false;
         bringWindowForward(win.node);
@@ -89,6 +92,16 @@ export class PaletteWindows {
       }
       this.#open.set(palette.name, palette.open);
       this.options.render(palette, win.page);
+    }
+  }
+
+  /** Docks a Palette's window in Perform's column, or floats it. */
+  #place(node: HTMLElement, palette: MirrorPalette): void {
+    const dock = palette.float ? undefined : this.options.dock?.();
+    const into = dock ?? document.body;
+    node.classList.toggle('docked', !!dock);
+    if (node.parentElement !== into) {
+      into.append(node);
     }
   }
 

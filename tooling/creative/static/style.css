@@ -1539,9 +1539,6 @@ body.playing #performance-window {
   min-height: 0;
   display: flex;
 }
-.perform-palettes:empty {
-  display: none;
-}
 .perform-code .code-browser.docked {
   position: static;
   background: var(--panel);
@@ -1593,4 +1590,28 @@ body.playing #performance-window {
 }
 .perform-error[hidden] {
   display: none;
+}
+/* Perform docks Palettes in the column under the code (#2001); one set to
+   float keeps its window over the stage. */
+.perform-palettes {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 6px;
+  max-height: 50%;
+  overflow: auto;
+  border-top: 1.5px solid var(--line);
+  background: var(--bg);
+}
+.perform-palettes:not(:has(.palette-window:not([hidden]))) {
+  display: none;
+}
+.perform-palettes .palette-window.docked {
+  position: static;
+  box-shadow: none;
+}
+/* Perform keeps the Window menu, to open and close Palettes. */
+.performing #window-menu {
+  display: revert;
 }

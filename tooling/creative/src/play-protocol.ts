@@ -197,6 +197,8 @@ export type DrawingView = {
 export type PaletteView = {
   background: string;
   elements: { element: Element; shown: boolean }[];
+  /** Whether Perform floats it rather than docking it (#2001). */
+  float: boolean;
   height: number;
   name: string;
   /** Whether its window is open. */

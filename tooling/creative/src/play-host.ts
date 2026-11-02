@@ -128,6 +128,7 @@ const paletteView = (
   width: palette.palette!.width,
   height: palette.height,
   background: palette.background,
+  float: palette.palette!.float === true,
   open: play.openPalettes.has(palette.name),
   pageIndex: play.project.pages.indexOf(palette),
   elements: play.elementsOf(palette).map(element => ({

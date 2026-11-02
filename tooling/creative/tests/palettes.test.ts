@@ -278,3 +278,25 @@ test('Play started on a Palette starts on the first Page', () => {
   const play = new PlaySession(withPalette(), 2);
   expect(play.page.name).toBe('page1');
 });
+
+test('a Palette can float in Perform, saved only when set (#2001)', () => {
+  const editor = new StackEditor(withPalette());
+  editor.edit(({ tree, project }) =>
+    tree.setProperty(project.pages[2]!, 'floatInPerform', true),
+  );
+  expect(editor.project.pages[2]!.palette?.float).toBe(true);
+  const json = serializeProject(editor.project);
+  expect((json.palettes as Record<string, unknown>[])[0]!.float).toBe(true);
+  expect(validateProjectJson(json)).toHaveProperty(
+    'project.pages.2.palette.float',
+    true,
+  );
+  editor.edit(({ tree, project }) =>
+    tree.setProperty(project.pages[2]!, 'floatInPerform', false),
+  );
+  expect(editor.project.pages[2]!.palette).not.toHaveProperty('float');
+  (json.palettes as Record<string, unknown>[])[0]!.float = 'yes';
+  expect(validateProjectJson(json)).toMatchObject({
+    issues: [{ path: 'palettes[0].float' }],
+  });
+});
