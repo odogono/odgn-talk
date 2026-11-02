@@ -97,6 +97,10 @@ comptime {
 pub const Diagnostic = struct {
     code: Code,
     offset: usize = 0,
+    /// An `unknown name` inside a Whose Clause condition: only its first
+    /// token is a Whose Key, so this was probably meant as `it's <name>`
+    /// (ADR 0074). The Name's token.
+    whose_name: ?ast.Tok = null,
     /// An inherited veto keeps its position in the defining code unit.
     inherited_position: ?lexer.Lines.Position = null,
 
@@ -606,6 +610,8 @@ const In = enum { normal, guard, whose, initialiser };
 const Checker = struct {
     /// Collecting a `replace`'s Captures, which bind as roots do.
     in_replace: bool = false,
+    /// How many Whose Clause conditions enclose the expression in hand.
+    whose_depth: u32 = 0,
     roots: std.AutoHashMapUnmanaged(u32, std.ArrayList([]const u8)) = .empty,
     a: Allocator,
     /// Each body's Scope and its working tables, freed when the body
@@ -2186,7 +2192,7 @@ const Checker = struct {
                     try c.nameValue(t, r);
                     if (in == .initialiser) c.constantName(t, r);
                 } else {
-                    try c.report(.unknown_name, t);
+                    try c.diagnostics.append(c.a, .{ .code = .unknown_name, .offset = c.start(t), .whose_name = if (c.whose_depth > 0) t else null });
                     if (in == .initialiser) c.notConstant(t);
                 }
             },
@@ -2274,6 +2280,8 @@ const Checker = struct {
                         if (wh.kind != .item and !c.chainHasItem(wh.source)) try c.report(.no_item_chunk, wh.delimited.?);
                     }
                 }
+                c.whose_depth += 1;
+                defer c.whose_depth -= 1;
                 try c.expr(s, wh.condition, if (in == .normal) .whose else in);
             },
             .list => |items| for (items) |item| try c.expr(s, item.value, in),
@@ -2660,6 +2668,17 @@ fn diagnose(a: Allocator, source: []const u8, context: Context) ![]const u8 {
         },
     }
     return out.toOwnedSlice(a);
+}
+
+test "an unknown later name in a Whose condition is marked for an `it's` hint" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const source = "on t things\nput every element of things whose item is not nothing and container is nothing into items\nreturn region\nend\n";
+    const result = try parser.parse(arena.allocator(), source);
+    const checked = try check(arena.allocator(), &result.tree, .{});
+    try testing.expectEqual(2, checked.diagnostics.len);
+    try testing.expect(checked.diagnostics[0].whose_name != null);
+    try testing.expect(checked.diagnostics[1].whose_name == null);
 }
 
 fn expectDiagnostics(source: []const u8, context: Context, expected: []const u8) !void {

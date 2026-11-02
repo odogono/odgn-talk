@@ -1567,6 +1567,21 @@ pub const Broadcast = struct {
 /// A Broadcast's recipient: its Script and its own delivery id.
 pub const Recipient = struct { script: *Script, delivery: u64 };
 
+/// An `unknown name` inside a Whose Clause condition, kept beside its
+/// `diag` record so a load-error reply can suggest `it's <name>`. Wording
+/// is outside parity, so it stays out of the Trace.
+pub const WhoseHint = struct {
+    unit: []u8,
+    line: i64,
+    column: i64,
+    name: []u8,
+
+    fn free(h: WhoseHint, gpa: Allocator) void {
+        gpa.free(h.unit);
+        gpa.free(h.name);
+    }
+};
+
 pub const Group = struct {
     /// The name a save records: the Host's for a new Group, borrowed, and
     /// the save's for a restored one, in `keep`.
@@ -1593,6 +1608,8 @@ pub const Group = struct {
     on_ready: ?*const fn (?*anyopaque) callconv(.c) void = null,
     ready_context: ?*anyopaque = null,
     refused_charges: std.ArrayList(ChargeRefusal) = .empty,
+    /// The Whose Hints of each unit whose latest lowering was refused.
+    whose_hints: std.ArrayList(WhoseHint) = .empty,
     deliveries: u64 = 0,
     trace: ?*std.Io.Writer,
     /// Reusable scratch memory for a single instruction.
@@ -1781,6 +1798,8 @@ pub const Group = struct {
         g.batch.deinit(g.gpa);
         for (g.refused_charges.items) |x| g.gpa.free(x.call);
         g.refused_charges.deinit(g.gpa);
+        for (g.whose_hints.items) |h| h.free(g.gpa);
+        g.whose_hints.deinit(g.gpa);
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
         g.libraries.deinit(g.gpa);
@@ -2127,6 +2146,34 @@ pub const Group = struct {
     /// extension inherits them.
     pub const Lowered = struct { unit: lower.Unit, names: []const check.Inherited };
 
+    /// Forgets the Whose Hints of `label`'s earlier refusal.
+    fn dropWhoseHints(g: *Group, label: []const u8) void {
+        var i: usize = 0;
+        while (i < g.whose_hints.items.len) {
+            const h = g.whose_hints.items[i];
+            if (std.mem.eql(u8, h.unit, label)) {
+                h.free(g.gpa);
+                _ = g.whose_hints.orderedRemove(i);
+            } else i += 1;
+        }
+    }
+
+    fn addWhoseHint(g: *Group, label: []const u8, line: anytype, column: anytype, name: []const u8) !void {
+        const unit = try g.gpa.dupe(u8, label);
+        errdefer g.gpa.free(unit);
+        const owned = try g.gpa.dupe(u8, name);
+        errdefer g.gpa.free(owned);
+        try g.whose_hints.append(g.gpa, .{ .unit = unit, .line = @intCast(line), .column = @intCast(column), .name = owned });
+    }
+
+    /// The Whose Hint for an `unknown name` at a position, if any.
+    pub fn whoseHint(g: *const Group, unit: []const u8, line: i64, column: i64) ?[]const u8 {
+        for (g.whose_hints.items) |h| {
+            if (h.line == line and h.column == column and std.mem.eql(u8, h.unit, unit)) return h.name;
+        }
+        return null;
+    }
+
     /// Checks and lowers parsed code in `a`, writing its `diag` records
     /// under `label`: null when refused, with how many in `refused`. A
     /// successful lowering releases the parse storage before keeping code.
@@ -2137,6 +2184,7 @@ pub const Group = struct {
         var checking: precise.PreciseArena = .init(g.gpa);
         defer checking.deinit();
         var lines = parsed.lines;
+        g.dropWhoseHints(label);
         const tree = switch (parsed.result) {
             .failure => |d| {
                 const p = lines.position(d.offset);
@@ -2158,6 +2206,7 @@ pub const Group = struct {
             for (diagnostics.items) |d| {
                 const p = d.position(&lines);
                 g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
+                if (d.whose_name) |n| try g.addWhoseHint(label, p.line, p.column, t.text(n));
             }
             refused.* = diagnostics.items.len;
             return null;

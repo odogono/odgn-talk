@@ -606,7 +606,7 @@ fn diagnosticMessage(code: []const u8) []const u8 {
 
 /// The `load error` reply for a refused load, from the `diag` records
 /// its Trace made: `diag <unit> code="…" pos=<line>:<col>`.
-fn loadError(gpa: Allocator, ref: i64, lines: []const []u8) []u8 {
+fn loadError(gpa: Allocator, ref: i64, lines: []const []u8, group: *const machine.Group) []u8 {
     if (handling) |s| s.reply_error = true;
     var o = Out.init(gpa);
     defer o.deinit();
@@ -626,7 +626,8 @@ fn loadError(gpa: Allocator, ref: i64, lines: []const []u8) []u8 {
         const colon = std.mem.indexOfScalar(u8, pos, ':') orelse continue;
         const line_no = std.fmt.parseInt(i64, pos[0..colon], 10) catch continue;
         const col = std.fmt.parseInt(i64, pos[colon + 1 ..], 10) catch continue;
-        writeDiagnostic(&o, &first, code, unit, line_no, col);
+        const hint = if (std.mem.eql(u8, code, "unknown name")) group.whoseHint(unit, line_no, col) else null;
+        writeDiagnostic(&o, &first, code, unit, line_no, col, hint);
     }
     o.raw("]}}") catch {};
     return o.finish() catch protocolError(gpa, ref, "out of memory");
@@ -640,18 +641,24 @@ fn libraryLoadError(gpa: Allocator, ref: i64, e: *const talk.LoadError) []u8 {
     o.int(ref) catch {};
     o.raw(",\"err\":{\"kind\":\"load error\",\"diagnostics\":[") catch {};
     var first = true;
-    for (e.diagnostics[0..e.diagnostics_len]) |d| writeDiagnostic(&o, &first, d.code[0..d.code_len], d.unit[0..d.unit_len], d.line, d.col);
+    for (e.diagnostics[0..e.diagnostics_len]) |d| writeDiagnostic(&o, &first, d.code[0..d.code_len], d.unit[0..d.unit_len], d.line, d.col, null);
     o.raw("]}}") catch {};
     return o.finish() catch protocolError(gpa, ref, "out of memory");
 }
 
-fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, line: i64, col: i64) void {
+/// `whose_name` is an unknown name inside a Whose Clause condition, where
+/// only the first token is a Whose Key (ADR 0074).
+fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, line: i64, col: i64, whose_name: ?[]const u8) void {
     if (!first.*) o.raw(",") catch {};
     first.* = false;
     o.raw("{\"code\":") catch {};
     o.text(code) catch {};
     o.raw(",\"message\":") catch {};
-    o.text(diagnosticMessage(code)) catch {};
+    if (whose_name) |n| {
+        const hint = std.fmt.allocPrint(o.buf.allocator, "unknown name: {s}; only a Whose condition's first name is a key, so write `it's {s}`", .{ n, n }) catch null;
+        defer if (hint) |h| o.buf.allocator.free(h);
+        o.text(hint orelse diagnosticMessage(code)) catch {};
+    } else o.text(diagnosticMessage(code)) catch {};
     o.raw(",\"unit\":") catch {};
     o.text(unit) catch {};
     o.raw(",\"line\":") catch {};
@@ -2834,7 +2841,7 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         if (s.crossing_trace) return entryLoadError(s, ref, entry);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
-        return loadError(s.gpa, ref, lines);
+        return loadError(s.gpa, ref, lines, &entry.group.group);
     }
     if (code != .ok) {
         if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
@@ -3313,7 +3320,7 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
         if (s.crossing_trace) return entryLoadError(s, ref, entry);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
-        return loadError(s.gpa, ref, lines);
+        return loadError(s.gpa, ref, lines, &entry.group.group);
     }
     if (code != .ok) {
         if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
@@ -3503,7 +3510,7 @@ fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     if (s.crossing_trace) return holdForReleases(s, ref, entry, entryLoadError(s, ref, entry), .outer);
     const lines = takeTrace(entry);
     defer freeTrace(s.gpa, lines);
-    return holdForReleases(s, ref, entry, loadError(s.gpa, ref, lines), .outer);
+    return holdForReleases(s, ref, entry, loadError(s.gpa, ref, lines, &entry.group.group), .outer);
 }
 
 fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
@@ -5782,9 +5789,9 @@ fn entryLoadError(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
             for (t.diagnostics.items) |line| s.gpa.free(line);
             t.diagnostics.clearRetainingCapacity();
         }
-        return loadError(s.gpa, ref, t.diagnostics.items);
+        return loadError(s.gpa, ref, t.diagnostics.items, &entry.group.group);
     };
-    return loadError(s.gpa, ref, entry.pending_trace.items);
+    return loadError(s.gpa, ref, entry.pending_trace.items, &entry.group.group);
 }
 
 /// Streaming Trace writer used only by inline-inputs-v1. It calls the Host
@@ -6679,6 +6686,26 @@ test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     try std.testing.expectEqualStrings("limit fault", spun.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("fuel", spun.object.get("limit").?.string);
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{10}));
+}
+
+test "a later unknown name in a Whose condition suggests `it's` (#1937)" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
+    const source = "on look things\\nput every item of things whose it is not nothing and container is nothing into items\\nreturn [items, region]\\nend look\\n";
+    for ([_]i64{ 2, 3 }) |ref| {
+        // A second refusal of the same Script keeps one hint, not two.
+        const refused = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"" ++ source ++ "\"}}", .{ref});
+        const diagnostics = refused.object.get("err").?.object.get("diagnostics").?.array.items;
+        try std.testing.expectEqual(@as(usize, 2), diagnostics.len);
+        try std.testing.expectEqualStrings("unknown name", diagnostics[0].object.get("code").?.string);
+        try std.testing.expectEqualStrings("unknown name: container; only a Whose condition's first name is a key, so write `it's container`", diagnostics[0].object.get("message").?.string);
+        try std.testing.expectEqualStrings(diagnosticMessage("unknown name"), diagnostics[1].object.get("message").?.string);
+    }
+    try std.testing.expectEqual(@as(usize, 1), s.groups.values()[0].group.group.whose_hints.items.len);
 }
 
 test "object-elements-v1: a collection declaration and its prop needs (#1143)" {

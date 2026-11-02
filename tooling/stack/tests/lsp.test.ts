@@ -1111,7 +1111,7 @@ describe('language server', () => {
       [
         'unknown name',
         { line: 4, character: 41 },
-        "unknown name: region; a key of the chunk is `it's region`",
+        "unknown name: region; only a Whose condition's first name is a key, so write `it's region`",
       ],
     ]);
   });
