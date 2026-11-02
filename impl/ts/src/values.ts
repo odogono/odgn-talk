@@ -127,7 +127,7 @@ let editMapValue: (
   value: Value | undefined,
 ) => Value;
 let makeDecimal: (canonical: string | undefined, parts: Dec) => Decimal;
-let makeSmallDecimal: (n: number) => Decimal;
+let makeSmallDecimal: (n: number, exponent: number) => Decimal;
 /** Internal: a Decimal's cached, immutable arithmetic representation. */
 export let decimalParts: (decimal: Decimal) => Dec;
 /**
@@ -135,6 +135,13 @@ export let decimalParts: (decimal: Decimal) => Dec;
  * written with exponent 0, or NaN. The fast paths compute on it directly.
  */
 export let smallInteger: (decimal: Decimal) => number;
+/**
+ * Internal: a Decimal's coefficient as a signed JS number when it is a safe
+ * integer, or NaN; `smallExponent` is then its exponent. The fast paths
+ * compute on the pair directly.
+ */
+export let smallCoefficient: (decimal: Decimal) => number;
+export let smallExponent: (decimal: Decimal) => number;
 export let isDecimal: (input: unknown) => input is Decimal;
 /** Internal: owned Map pairs. Never pass these arrays to a Host. */
 export let ownedMapPairs: (value: Value) => Pairs | undefined;
@@ -143,16 +150,18 @@ export let textStorage: (value: Value) => TextStorage;
 let textValue: (storage: TextStorage) => Value;
 
 export class Decimal {
-  // Arithmetic results make their text on first use. Small integers also
-  // defer their BigInt parts until arithmetic needs them.
+  // Arithmetic results make their text on first use. Small coefficients
+  // also defer their BigInt parts until arithmetic needs them.
   #canonical: string | undefined;
   #parts: Dec | undefined;
   readonly #small: number;
+  readonly #exponent: number;
   private constructor(
     token: symbol,
     canonical: string | undefined,
     parts: Dec | undefined,
     small: number,
+    exponent: number,
   ) {
     if (token !== decimalToken) {
       invalidValue('Use a numeric constructor');
@@ -160,6 +169,7 @@ export class Decimal {
     this.#canonical = canonical;
     this.#parts = parts && frozenParts(parts);
     this.#small = small;
+    this.#exponent = exponent;
     Object.preventExtensions(this);
   }
   static {
@@ -170,23 +180,29 @@ export class Decimal {
         decimalToken,
         canonical,
         parts,
-        parts.exponent === 0 && parts.coefficient <= SAFE
+        parts.coefficient <= SAFE
           ? Number(parts.coefficient) * (parts.negative ? -1 : 1) + 0
           : Number.NaN,
+        parts.exponent,
       );
-    makeSmallDecimal = n => new Decimal(decimalToken, undefined, undefined, n);
+    makeSmallDecimal = (n, exponent) =>
+      new Decimal(decimalToken, undefined, undefined, n, exponent);
     decimalParts = decimal =>
       (decimal.#parts ??= frozenParts({
         coefficient: BigInt(Math.abs(decimal.#small)),
-        exponent: 0,
+        exponent: decimal.#exponent,
         negative: decimal.#small < 0,
       }));
-    smallInteger = decimal => decimal.#small;
+    smallInteger = decimal =>
+      decimal.#exponent === 0 ? decimal.#small : Number.NaN;
+    smallCoefficient = decimal => decimal.#small;
+    smallExponent = decimal => decimal.#exponent;
   }
   toString(): string {
-    return (this.#canonical ??= this.#parts
-      ? formatDec(this.#parts)
-      : String(this.#small));
+    return (this.#canonical ??=
+      this.#parts || this.#exponent !== 0
+        ? formatDec(decimalParts(this))
+        : String(this.#small));
   }
   toBigInt(): bigint {
     const parts = decimalParts(this);
@@ -709,7 +725,13 @@ export const dec = (s: string): Value => {
 /** Internal: a checked arithmetic result, retaining its coefficient directly. */
 /** A safe integer as a number Value, without BigInt or text work. */
 export const smallNumber = (n: number): Value =>
-  makeValue('number', makeSmallDecimal(n + 0));
+  makeValue('number', makeSmallDecimal(n + 0, 0));
+/**
+ * A safe-integer coefficient and an exponent within chapter 3's limits
+ * (-6176 to 0) as a number Value, without BigInt or text work.
+ */
+export const smallDecimalNumber = (n: number, exponent: number): Value =>
+  makeValue('number', makeSmallDecimal(n + 0, exponent));
 
 export const canonicalNumber = (parts: Dec): Value =>
   makeValue('number', makeDecimal(undefined, parts));

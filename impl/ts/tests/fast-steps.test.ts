@@ -46,6 +46,23 @@ end run`,
   put big * big into square
   return [big, square, zero, i]
 end run`,
+  // Fractions with equal exponents take the small lane; unequal ones,
+  // divisions and comparisons across exponents take the Decimal path.
+  fractions: `on run n
+  put 0 into total
+  put 0 into i
+  repeat while i < n
+    add 1 to i
+    add 0.125 to total
+    add 1.25 * i to total
+    subtract 0.5 from total
+    add i / 8 to total
+    if total > 2.5 and total < 1000.75 then
+      add 0.001 to total
+    end if
+  end repeat
+  return total
+end run`,
   // A Guard and a Queueing Policy select the clause while instructions run;
   // `run` is delivered twice, so the second is dropped.
   policies: `on run n where n > 2, dropping
