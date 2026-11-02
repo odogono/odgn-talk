@@ -12,7 +12,8 @@ import { KIT_SOUND_KEYS, renderKitSound } from '../src/kits/kits';
 import { soundKey } from '../src/sounds';
 import { parseMiniNotation } from '../src/mini-notation';
 import { patternTexts } from '../src/pattern-checks';
-import { readProjectFile, serializeProject } from '../src/project-file';
+import { readProjectFile } from '../src/project-file';
+import { readZip } from '../src/zip';
 import type { AddOnModule } from '../src/add-ons/api';
 import { addOnChunk } from '../src/add-ons/catalogue';
 import { COUNTER_ADD_ON, COUNTER_ENTRY } from './fixtures/counter-add-on';
@@ -167,6 +168,8 @@ test('First Sounds carries every kit sound its patterns play (ADR 0161)', async 
 // format's number is left out, so a format change alone keeps the version.
 const MUSIC_FINGERPRINTS: Record<number, string> = {
   1: 'baec8a15f77e0622',
+  // The synth moved into the Instruments Add-on (#1901).
+  2: 'a926e5ae965e9fc8',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {
@@ -184,7 +187,14 @@ test('the Music Base Project carries every kit sound, fetched on demand (ADR 016
     const asset = project.assets.find(a => a.name === key)!;
     expect(assets.get(asset.hash), key).toEqual(renderKitSound(key));
   }
-  const { format: _format, ...content } = serializeProject(project);
+  // The file's own JSON, so Add-ons registered by other tests, which fill
+  // in their kinds' defaults on reading, don't change it.
+  const saved = JSON.parse(
+    new TextDecoder().decode(
+      (await readZip(readFileSync(path))).get('project.json')!,
+    ),
+  ) as Record<string, unknown>;
+  const { format: _format, ...content } = saved;
   const fingerprint = createHash('sha256')
     .update(JSON.stringify(content))
     .digest('hex')

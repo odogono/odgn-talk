@@ -13,6 +13,7 @@ import {
 import { DEFAULT_SAMPLER } from '../src/sounds';
 import { patternProblems, projectPatternNames } from '../src/pattern-checks';
 import { PlayHarness } from '../src/play-harness';
+import './helpers/instruments';
 
 const BAR_MS = (60_000 / START_TEMPO) * 4;
 

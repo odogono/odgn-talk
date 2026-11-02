@@ -22,6 +22,11 @@ import type {
   scalar,
 } from '../elements/definition';
 import type { ElementKindView } from '../elements/views';
+import type { InstrumentKind } from '../instruments/kind';
+import type {
+  NOTE_OPERATIONS,
+  SAMPLER_OPERATIONS,
+} from '../instruments/operations';
 
 /** The helpers an Add-on kind's data half is given. */
 export type AddOnDataApi = {
@@ -52,11 +57,34 @@ export type AddOnKindModule = {
   view?(api: AddOnViewApi): ElementKindView<AddOnKind>;
 };
 
+/** What an Add-on's Instrument kind is given: the shared Operations. */
+export type AddOnInstrumentApi = {
+  operations: {
+    note: typeof NOTE_OPERATIONS;
+    sampler: typeof SAMPLER_OPERATIONS;
+  };
+};
+
+/**
+ * An Instrument kind (ADR 0158) an Add-on provides. Its engine also runs in
+ * the audio worklet, from the Add-on's worklet module, which registers it
+ * with `registerWorkletEngine` under the same kind.
+ */
+export type AddOnInstrumentModule = {
+  /** The name a new Instrument of the kind is given, such as `synth`. */
+  instanceName: string;
+  kind(api: AddOnInstrumentApi): InstrumentKind;
+  /** Its name in Info. */
+  label: string;
+};
+
 /** An Add-on module's default export. */
 export type AddOnModule = {
   /** The Add-on's URL (ADR 0162). */
   id: string;
-  /** Its kinds by name, each written `<id>#<name>` in a Project. */
+  /** Its Instrument kinds by name, written `<id>#<name>` as Element kinds are. */
+  instruments?: Readonly<Record<string, AddOnInstrumentModule>>;
+  /** Its Element kinds by name, each written `<id>#<name>` in a Project. */
   kinds: Readonly<Record<string, AddOnKindModule>>;
   version: string;
 };

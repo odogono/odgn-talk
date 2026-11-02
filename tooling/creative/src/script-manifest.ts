@@ -117,15 +117,17 @@ const sharedObjectKinds = () => {
   return cached.kinds;
 };
 // Each Instrument kind's parameters, as its objects' properties (ADR 0158).
-const instrumentObjectKinds = [...INSTRUMENT_KINDS.values()].map(kind => ({
-  name: kind.name,
-  props: Object.entries(kind.parameters).map(([name, parameter]) => ({
-    name,
-    shape: parameter.shape,
-    readOnly: false,
-    setCost: { fuel: 1 },
-  })),
-}));
+// Built per call, since Add-ons register kinds as they load (#1901).
+const instrumentObjectKinds = () =>
+  [...INSTRUMENT_KINDS.values()].map(kind => ({
+    name: kind.name,
+    props: Object.entries(kind.parameters).map(([name, parameter]) => ({
+      name,
+      shape: parameter.shape,
+      readOnly: false,
+      setCost: { fuel: 1 },
+    })),
+  }));
 
 /** An Instrument's Grant entry: its name, over its kind's Capability. */
 const instrumentGrant = (name: string, kind: InstrumentKind) => ({
@@ -260,7 +262,7 @@ export const scriptManifest = (
           ]
         : []),
     ],
-    objectKinds: [...sharedObjectKinds(), ...instrumentObjectKinds],
+    objectKinds: [...sharedObjectKinds(), ...instrumentObjectKinds()],
     grants: [...sharedGrants(), ...instruments.map(entry => entry.grant)],
     messages: scriptMessages(owner.script ?? ''),
   };

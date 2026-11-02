@@ -7,10 +7,11 @@ import { createInstrument } from '../../src/instruments/registry';
 import type { InstrumentMessage } from '../../src/instruments/session';
 import { scriptManifest } from '../../src/script-manifest';
 import { scriptNameProblems } from '../../src/script-names';
+import { SYNTH_KIND, YM2149_KIND } from '../helpers/instruments';
 
 const band = () => {
   const project = createProject('Band');
-  const bass = createInstrument('synth', 'bass');
+  const bass = createInstrument(SYNTH_KIND, 'bass');
   bass.parameters.cutoff = 800;
   project.instruments.push(bass, createInstrument('sampler', 'drums'));
   project.pages[0]!.elements.push(createElement('button', 'go'));
@@ -153,8 +154,8 @@ test('a Page or Element named like an Instrument is a name problem', () => {
 test('the rack mixes every Instrument and routes commands by name', () => {
   const setup = {
     instruments: [
-      createInstrument('synth', 'lead'),
-      { ...createInstrument('ym2149', 'chip'), parameters: { pan: 1 } },
+      createInstrument(SYNTH_KIND, 'lead'),
+      { ...createInstrument(YM2149_KIND, 'chip'), parameters: { pan: 1 } },
     ],
     samples: [],
   };

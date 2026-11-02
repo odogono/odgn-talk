@@ -5,6 +5,7 @@ import { ChipHost } from '../audio/chip-host';
 import type { Instrument } from '../model';
 import type { InstrumentCommand, SampleBuffer } from './kind';
 import { INSTRUMENT_ENGINES } from './engines';
+import { workletEngine } from './worklet-engines';
 import type { InstrumentMessage } from './session';
 
 /** The worklet processor's registered name. */
@@ -47,7 +48,9 @@ export class InstrumentRack {
     const samples = new Map(setup.samples);
     this.#samples = samples;
     for (const instrument of setup.instruments) {
-      const kind = INSTRUMENT_ENGINES.get(instrument.kind);
+      const kind =
+        INSTRUMENT_ENGINES.get(instrument.kind) ??
+        workletEngine(instrument.kind);
       if (!kind) {
         continue;
       }

@@ -33,6 +33,7 @@ import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { CREATABLE_KINDS, kindOf } from './elements/registry';
 import { isAddOnKind, splitAddOnKind } from './elements/add-on';
 import { pageAddOns } from './add-ons/page';
+import { instrumentKindNames } from './instruments/registry';
 import { importSound, SOUND_ACCEPT } from './sounds';
 import { type CodeSelection } from './code-browser-panel';
 import {
@@ -51,11 +52,7 @@ import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
-import {
-  INSTRUMENT_KIND_NAMES,
-  mountInfoPanel,
-  type NameRefusal,
-} from './info-panel';
+import { mountInfoPanel, type NameRefusal } from './info-panel';
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -650,11 +647,7 @@ export const mountStack = (
       const kind = info.querySelector<HTMLSelectElement>(
         '[data-new-instrument]',
       )!.value;
-      edit(() =>
-        editor.edit(({ tree }) =>
-          tree.addInstrument(kind, INSTRUMENT_KIND_NAMES[kind]?.name ?? kind),
-        ),
-      );
+      void addInstrument(kind);
     } else if (button?.dataset.removeInstrument) {
       const id = Number(button.dataset.removeInstrument);
       edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
@@ -1047,6 +1040,32 @@ export const mountStack = (
       top: (event.clientY - rect.top) / scale,
     });
   });
+
+  /** Adds an Instrument, loading and listing its Add-on first (#1901). */
+  const addInstrument = async (kind: string): Promise<void> => {
+    const addOn = isAddOnKind(kind) ? splitAddOnKind(kind)!.addOn : undefined;
+    const ref = addOn && {
+      id: addOn,
+      version: pageAddOns.entry(addOn)!.version,
+    };
+    if (ref) {
+      const [problem] = await pageAddOns.load([ref]);
+      if (problem) {
+        byId('notice-text').textContent =
+          `The Add-on ${problem.id} didn't load: ${problem.message}.`;
+        byId('notice-banner').hidden = false;
+        return;
+      }
+    }
+    edit(() =>
+      editor.edit(({ tree }) => {
+        if (ref) {
+          tree.useAddOn(ref);
+        }
+        tree.addInstrument(kind, instrumentKindNames(kind).name);
+      }),
+    );
+  };
 
   // The Tools window adds Elements: built-in kinds, then each built-in
   // Add-on's, which load the first time one is added (#1901).

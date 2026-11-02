@@ -247,6 +247,15 @@ path and commit it came from. No original game's sound assets are included.
 
 Instrument kinds, editing in Info and Play wiring (ADR 0158, #1894).
 
+- The synth and YM2149 are the built-in Instruments Add-on (#1901):
+  [add-ons/instruments/](src/add-ons/instruments/index.ts) registers their
+  kinds, named `https://northtalk.org/add-ons/instruments#synth`, and its
+  [worklet.ts](src/add-ons/instruments/worklet.ts) their engines in the audio
+  worklet ([worklet-engines.ts](src/instruments/worklet-engines.ts)).
+  [ids.ts](src/add-ons/instruments/ids.ts) names them without loading them;
+  [migration.ts](src/add-ons/instruments/migration.ts) is format 10. Only the
+  sampler stays in Folio. Tests register it with
+  [helpers/instruments.ts](tests/helpers/instruments.ts).
 - [instruments/kind.ts](src/instruments/kind.ts): an `InstrumentEngine`
   (parameters, voice cap and Chip factory), the `InstrumentKind` that adds
   its Operations, the `InstrumentCommand`s a Chip takes, and parameter checks.

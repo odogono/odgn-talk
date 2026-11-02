@@ -9,6 +9,7 @@ import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
 import { scriptManifest } from '../src/script-manifest';
 import { LEAD_US, Transport } from '../src/transport';
+import { SYNTH_KIND } from './helpers/instruments';
 
 const ms = (n: number) => BigInt(n) * 1000n;
 
@@ -69,7 +70,7 @@ test('a session far behind skips to the latest beat', () => {
 
 const band = (script: string) => {
   const project = createProject('Band');
-  project.instruments.push(createInstrument('synth', 'bass'));
+  project.instruments.push(createInstrument(SYNTH_KIND, 'bass'));
   project.pages[0]!.script = script;
   project.pages[0]!.elements.push(createElement('button', 'go'));
   return project;

@@ -4,6 +4,7 @@
 import { createProject } from '../src/model';
 import { INSTRUMENT_PROCESSOR } from '../src/instruments/rack';
 import { mountStack } from '../src/stack';
+import { SYNTH_KIND, YM2149_KIND } from '../src/add-ons/instruments/ids';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -46,12 +47,23 @@ const controls = () => [
   ),
 ];
 
-const add = (kind: string) => {
+// An Add-on's kind loads its Add-on first, so adding one finishes later.
+let shell: ReturnType<typeof mountStack>;
+
+const add = async (kind: string) => {
+  const before = shell.editor.project.instruments.length;
   commit(
     info().querySelector<HTMLSelectElement>('[data-new-instrument]')!,
     kind,
   );
   info().querySelector<HTMLButtonElement>('[data-add-instrument]')!.click();
+  for (let i = 0; i < 100; i++) {
+    if (shell.editor.project.instruments.length > before) {
+      return;
+    }
+    await settled();
+  }
+  throw new Error(`No ${kind} was added`);
 };
 
 export const runBrowserTests = async () => {
@@ -64,7 +76,7 @@ export const runBrowserTests = async () => {
       results.push({ name, passed: false, error: String(error) });
     }
   };
-  const shell = mountStack(createProject('Instrument browser check'));
+  shell = mountStack(createProject('Instrument browser check'));
   const instruments = () => shell.editor.project.instruments;
 
   await test('Info adds an Instrument of each kind with its defaults', async () => {
@@ -72,14 +84,14 @@ export const runBrowserTests = async () => {
       info().textContent!.includes('No Instruments yet.'),
       'An empty Project says so',
     );
-    add('synth');
-    add('ym2149');
-    add('sampler');
+    await add(SYNTH_KIND);
+    await add(YM2149_KIND);
+    await add('sampler');
     await settled();
     assert(
       instruments()
         .map(i => `${i.kind}:${i.name}`)
-        .join() === 'synth:synth,ym2149:chip,sampler:drums',
+        .join() === `${SYNTH_KIND}:synth,${YM2149_KIND}:chip,sampler:drums`,
       `Three Instruments added, named for their kinds: ${instruments()
         .map(i => i.name)
         .join()}`,
@@ -88,7 +100,11 @@ export const runBrowserTests = async () => {
       fieldset('synth') && fieldset('chip') && fieldset('drums'),
       'Info lists each',
     );
-    add('synth');
+    await add(SYNTH_KIND);
+    assert(
+      shell.editor.project.addOns?.length === 1,
+      'The Instruments Add-on is listed once',
+    );
     assert(
       instruments()[3]!.name === 'synth2',
       'A second synth gets a fresh name',
@@ -175,14 +191,28 @@ export const runBrowserTests = async () => {
   await test('the built worklet plays every Instrument', async () => {
     const context = new OfflineAudioContext(2, 22_050, 44_100);
     await context.audioWorklet.addModule('./instruments.worklet.js');
+    // The synth and YM2149 engines come from the Add-on's worklet module.
+    await context.audioWorklet.addModule(
+      './add-ons/instruments-1.0.0.worklet.js',
+    );
     const node = new AudioWorkletNode(context, INSTRUMENT_PROCESSOR, {
       numberOfInputs: 0,
       outputChannelCount: [2],
       processorOptions: {
         setup: {
           instruments: [
-            { kind: 'synth', name: 'lead', voices: 4, parameters: { pan: -1 } },
-            { kind: 'ym2149', name: 'chip', voices: 3, parameters: { pan: 1 } },
+            {
+              kind: SYNTH_KIND,
+              name: 'lead',
+              voices: 4,
+              parameters: { pan: -1 },
+            },
+            {
+              kind: YM2149_KIND,
+              name: 'chip',
+              voices: 3,
+              parameters: { pan: 1 },
+            },
           ],
           samples: [],
         },
