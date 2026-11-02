@@ -17,6 +17,7 @@ import {
   type PlayView,
   type PromptView,
   type StoppedRun,
+  type TransportView,
 } from './play-protocol';
 import { type ReaderTextPlay } from './play-text';
 
@@ -35,6 +36,8 @@ export class PlayMirror implements ReaderTextPlay {
   designWidth = 0;
   navigating = false;
   paused = false;
+  /** The Transport as the worker last sent it (#2002). */
+  transport: (TransportView & { at: number }) | undefined;
   /** The Run a Breakpoint stopped, while the session is paused there. */
   stoppedRun: StoppedRun | undefined;
   ended = false;
@@ -97,6 +100,9 @@ export class PlayMirror implements ReaderTextPlay {
     this.designWidth = view.designWidth;
     this.navigating = view.navigating;
     this.paused = view.paused;
+    if (view.transport) {
+      this.transport = { ...view.transport, at: performance.now() };
+    }
     this.stoppedRun = view.stoppedRun;
     this.ended = view.ended;
     this.wantsFrames = view.wantsFrames;

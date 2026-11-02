@@ -9,6 +9,37 @@ import { showWindow } from './windows';
 /** A Script the code pane showed, as one of its tabs (#2000). */
 export type PerformTab = { label: string; source: CodeSelection };
 
+/** The Transport as the worker last sent it, with when it arrived (ms). */
+export type ClockAnchor = {
+  at: number;
+  beatsPerBar: number;
+  count?: number;
+  tempo: number;
+};
+
+/**
+ * The toolbar's tempo and position at page time `now` (ms), such as
+ * “120 BPM · bar 3.2”, counting on from the anchor by the tempo.
+ */
+export const clockText = (
+  anchor: ClockAnchor | undefined,
+  now: number,
+): string => {
+  if (!anchor) {
+    return '';
+  }
+  const tempo = `${anchor.tempo} BPM`;
+  if (anchor.count === undefined) {
+    return tempo;
+  }
+  const count = Math.floor(
+    anchor.count + (Math.max(0, now - anchor.at) * anchor.tempo) / 60_000,
+  );
+  const bar = Math.floor(count / anchor.beatsPerBar) + 1;
+  const beat = (count % anchor.beatsPerBar) + 1;
+  return `${tempo} · bar ${bar}.${beat}`;
+};
+
 /** How many recent Scripts the code pane keeps as tabs. */
 export const MAX_TABS = 5;
 
@@ -135,11 +166,18 @@ export class PerformLayout {
   /** Where #2001 docks Palettes. */
   readonly palettes: HTMLElement;
   readonly divider: HTMLElement;
+  /** Hush, Revert, and the tempo and bar (#2002). */
+  readonly toolbar: HTMLElement;
+  readonly hushButton: HTMLButtonElement;
+  readonly revertButton: HTMLButtonElement;
+  readonly clock: HTMLElement;
   /** The recent Scripts, one tab each. */
   readonly tabBar: HTMLElement;
   /** The last error, shown over the code instead of in the Errors window. */
   readonly banner: HTMLElement;
   #tabs: PerformTab[] = [];
+  #anchor: ClockAnchor | undefined;
+  #ticking: ReturnType<typeof setInterval> | undefined;
   #current = -1;
   #open: (source: CodeSelection) => void = () => {};
   #stage: HTMLElement;
@@ -158,6 +196,36 @@ export class PerformLayout {
       'aria-label': 'Resize the stage and the code',
       tabindex: '0',
     });
+    this.hushButton = h(
+      'button',
+      {
+        type: 'button',
+        'data-hush': '',
+        title: 'Hush: silence every sound and pattern, and keep playing (⌘⇧.)',
+      },
+      'Hush',
+    );
+    this.revertButton = h(
+      'button',
+      {
+        type: 'button',
+        'data-revert': '',
+        title: 'Revert: put back the Script as Play last loaded it',
+      },
+      'Revert',
+    );
+    this.clock = h('span', {
+      class: 'perform-clock',
+      'aria-live': 'off',
+      'aria-label': 'Tempo and bar',
+    });
+    this.toolbar = h(
+      'div',
+      { class: 'perform-toolbar', role: 'toolbar', 'aria-label': 'Perform' },
+      this.hushButton,
+      this.revertButton,
+      this.clock,
+    );
     this.tabBar = h('div', {
       class: 'perform-tabs',
       role: 'tablist',
@@ -181,6 +249,7 @@ export class PerformLayout {
       h(
         'div',
         { class: 'perform-side' },
+        this.toolbar,
         this.tabBar,
         this.banner,
         this.code,
@@ -238,6 +307,9 @@ export class PerformLayout {
     }
     this.#reader = undefined;
     this.#browser = undefined;
+    clearInterval(this.#ticking);
+    this.#ticking = undefined;
+    this.#anchor = undefined;
     this.node.hidden = true;
     this.node.remove();
   }
@@ -252,6 +324,19 @@ export class PerformLayout {
       tab,
     ));
     this.#drawTabs();
+  }
+
+  /** Counts on from the Transport the worker sent, while mounted. */
+  showTransport(anchor: ClockAnchor | undefined): void {
+    this.#anchor = anchor;
+    this.#tick();
+    if (!this.#ticking && this.mounted) {
+      this.#ticking = setInterval(() => this.#tick(), 50);
+    }
+  }
+
+  #tick(): void {
+    this.clock.textContent = clockText(this.#anchor, performance.now());
   }
 
   /** Shows an error over the code, or clears it. */

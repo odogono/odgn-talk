@@ -316,3 +316,27 @@ test('name:n plays the Project sound of that name, never wrapping (ADR 0161)', (
     `1.1 ${DEFAULT_SAMPLER} bd`,
   ]);
 });
+
+test('Hush stops every loop and note, and the session plays on (#2002)', () => {
+  const { click, play, pumpAt, runTo, sent, steps } = session(
+    project('  loop "bd hh"\n  loop "c3" on bass'),
+  );
+  pumpAt(0n);
+  click(0);
+  runTo(ms(3000));
+  expect(steps().length).toBeGreaterThan(0);
+  const from = sent.length;
+  play.hush();
+  expect(sent.slice(from).map(m => m.commands)).toContainEqual([
+    { kind: 'stop' },
+  ]);
+  const before = steps().length;
+  runTo(ms(9000), ms(3000));
+  expect(steps().length).toBe(before);
+  expect(play.ended).toBe(false);
+  expect(play.transport.running).toBe(true);
+  // A new loop after Hush plays again.
+  click(0);
+  runTo(ms(13_000), ms(9000));
+  expect(steps().length).toBeGreaterThan(before);
+});

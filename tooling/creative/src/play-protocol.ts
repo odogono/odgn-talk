@@ -83,6 +83,8 @@ export type PlayRequest =
       target?: string;
     }
   | { kind: 'frame'; session: number }
+  /** Perform's Hush (#2002): silence every sound and stop every pattern. */
+  | { kind: 'hush'; session: number }
   /** The reader opens or closes a Palette's window (#1903). */
   | { kind: 'palette'; name: string; open: boolean; session: number }
   | { epoch: number; kind: 'performance'; session: number }
@@ -194,6 +196,17 @@ export type DrawingView = {
  * A Palette as the page draws it in its window (#1903): every Element,
  * sent whole whenever any of it changes, since Palettes are small.
  */
+/**
+ * The Transport as Perform's toolbar shows it: the tempo and time signature,
+ * and while it runs the fractional beat count when the view was made, from
+ * which the page counts on by the tempo.
+ */
+export type TransportView = {
+  beatsPerBar: number;
+  count?: number;
+  tempo: number;
+};
+
 export type PaletteView = {
   background: string;
   elements: { element: Element; shown: boolean }[];
@@ -251,6 +264,8 @@ export type PlayView = {
   session: number;
   /** The Run a Breakpoint stopped, while the session is paused there. */
   stoppedRun?: StoppedRun;
+  /** The Transport's tempo, and where it is while running, for Perform's toolbar (#2002). */
+  transport?: TransportView;
   wantsFrames: boolean;
 };
 

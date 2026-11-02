@@ -1615,3 +1615,19 @@ body.playing #performance-window {
 .performing #window-menu {
   display: revert;
 }
+/* Perform's toolbar (#2002): Hush, Revert, and the tempo and bar. */
+.perform-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.perform-toolbar [data-hush] {
+  font-weight: 600;
+}
+.perform-clock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}

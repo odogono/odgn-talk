@@ -194,6 +194,8 @@ export type StackShell = {
   /** The Code Browser's shown source, for Perform's tabs (#2000). */
   code: {
     onShow(listener: (source: CodeSelection, label: string) => void): void;
+    replace(text: string): void;
+    readonly selected: CodeSelection;
     show(source: CodeSelection): void;
   };
   editor: StackEditor;
@@ -1286,6 +1288,10 @@ export const mountStack = (
     },
     code: {
       onShow: listener => scripts.onShow(listener),
+      replace: text => scripts.replace(text),
+      get selected() {
+        return scripts.selected;
+      },
       show: source => scripts.show(source),
     },
     editor,

@@ -2121,6 +2121,16 @@ export class PlaySession {
     }
   }
 
+  /**
+   * Perform's Hush (#2002): every sound and Instrument note stops and every
+   * pattern ends, but the session, its Scripts and the Transport go on.
+   */
+  hush(): void {
+    this.sounds.stopAll();
+    this.patterns.stopAll();
+    this.instruments.stopAll();
+  }
+
   stop(now: bigint): void {
     if (this.ended) {
       return;
