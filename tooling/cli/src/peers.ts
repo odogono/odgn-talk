@@ -518,7 +518,10 @@ export class RunnerPeers {
         }
         resolve(this.adopt(socket, key, false));
       });
-      socket.once('error', () => resolve(undefined));
+      socket.once('error', error => {
+        this.o.log(`peer: ${name}: ${error.message}`);
+        resolve(undefined);
+      });
     });
   }
 
