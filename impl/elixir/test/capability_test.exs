@@ -266,4 +266,63 @@ defmodule NorthTalk.CapabilityTest do
 
     assert is_binary(id) and is_binary(now)
   end
+
+  test "an Operation declared as a command is called by its name alone", %{owner: owner, group: group} do
+    me = self()
+
+    cap =
+      Capability.from_functions("mover", %{
+        "moveTo" =>
+          {[args: ["text", "text"], command: true],
+           fn [thing, place], _ -> send(me, {:moved, thing, place}) && {:ok, nil} end}
+      })
+
+    :ok = NorthTalk.define_capability!(owner, cap)
+    grant = NorthTalk.grant!(owner, "mover")
+    NorthTalk.load!(group, "s", "on go\n  moveTo \"lamp\", \"cellar\"\n  return 1\nend go\n", grants: %{"m" => grant})
+
+    assert {:ok, %Result{value: 1}} = NorthTalk.request(group, "s", "go")
+    assert_received {:moved, "lamp", "cellar"}
+  end
+
+  test "a bare name that isn't a command calls a Handler, not the Operation", %{owner: owner, group: group} do
+    me = self()
+
+    cap =
+      Capability.from_functions("still", %{
+        "stay" => {[args: ["text"]], fn [_], _ -> send(me, :stayed) && {:ok, nil} end}
+      })
+
+    :ok = NorthTalk.define_capability!(owner, cap)
+
+    NorthTalk.load!(group, "s", "on go\n  stay \"here\"\nend go\n\non stay place\n  return place\nend stay\n",
+      grants: %{"s" => NorthTalk.grant!(owner, "still")}
+    )
+
+    assert {:ok, %Result{}} = NorthTalk.request(group, "s", "go")
+    refute_received :stayed
+  end
+
+  test "a Library calls a Capability with its caller's Grant", %{owner: owner, group: group} do
+    cap =
+      Capability.from_functions("probe", %{
+        "look" => {[args: ["text"], result: "text"], fn [x], _ -> {:ok, "saw " <> x} end},
+        "poke" => {[args: ["text"], command: true], fn [_], _ -> {:ok, nil} end}
+      })
+
+    :ok = NorthTalk.define_capability!(owner, cap)
+
+    source = "function peek x\n  poke x\n  ask p to look x\n  return it\nend peek\n"
+    lib = NorthTalk.compile_library!(owner, "eyes", "1", source, capabilities: [{"p", "probe"}])
+    :ok = NorthTalk.add_library!(group, lib)
+
+    NorthTalk.load!(group, "s", "use peek from eyes\n\non go\n  return peek(\"owl\")\nend go\n",
+      grants: %{"p" => NorthTalk.grant!(owner, "probe")}
+    )
+
+    assert {:ok, %Result{value: "saw owl"}} = NorthTalk.request(group, "s", "go")
+
+    assert {:error, %NorthTalk.HostError{code: "invalid value"}} =
+             NorthTalk.compile_library(owner, "x", "1", source, capabilities: ["nope"])
+  end
 end

@@ -444,22 +444,28 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:compile_library, name, version, source, opts}, _from, state) do
-    fields = %{
-      "name" => name,
-      "version" => version,
-      "source" => source,
-      "imports" => Enum.map(Keyword.get(opts, :imports, []), &identity/1),
-      "declarations" => %{}
-    }
+    case library_declarations(state, Keyword.get(opts, :capabilities, [])) do
+      {:ok, declarations} ->
+        fields = %{
+          "name" => name,
+          "version" => version,
+          "source" => source,
+          "imports" => Enum.map(Keyword.get(opts, :imports, []), &identity/1),
+          "declarations" => declarations
+        }
 
-    {reply, state} = exchange(state, "compile-library", fields)
+        {reply, state} = exchange(state, "compile-library", fields)
 
-    reply =
-      ok(reply, fn ok ->
-        %Library{name: name, version: version, identity: ok["identity"]["$bytes"], needs: plain(ok["needs"])}
-      end)
+        reply =
+          ok(reply, fn ok ->
+            %Library{name: name, version: version, identity: ok["identity"]["$bytes"], needs: plain(ok["needs"])}
+          end)
 
-    {:reply, reply, state}
+        {:reply, reply, state}
+
+      error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_call({:add_library, %Group{name: g}, %Library{} = library}, _from, state) do
@@ -1658,6 +1664,27 @@ defmodule NorthTalk.Owner do
   end
 
   defp live!(_state, _g, value), do: value
+
+  # The Grant declarations a Library is compiled against: each defined
+  # Capability under its own name, or `{grant, capability}` under another.
+  defp library_declarations(state, capabilities) do
+    Enum.reduce_while(capabilities, {:ok, %{}}, fn entry, {:ok, acc} ->
+      {grant, name} = if is_tuple(entry), do: entry, else: {entry, entry}
+
+      case state.capabilities[name] do
+        %Capability{} = capability ->
+          ops =
+            Map.new(Capability.declarations(capability), fn decl ->
+              {decl["name"], Map.take(decl, ["mode", "args", "command", "labels"])}
+            end)
+
+          {:cont, {:ok, Map.put(acc, grant, ops)}}
+
+        nil ->
+          {:halt, {:error, %HostError{code: "invalid value", detail: "no Capability #{name}"}}}
+      end
+    end)
+  end
 
   defp identity(%Library{identity: id}), do: %{"$bytes" => id}
 

@@ -173,8 +173,11 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:load, group, name, source, opts})
 
   @doc """
-  Compiles a Library. `imports:` lists the `NorthTalk.Library` values it uses.
-  A Library is compiled once per owner and added to each Group that uses it.
+  Compiles a Library. `imports:` lists the `NorthTalk.Library` values it uses,
+  and `capabilities:` the defined Capabilities its functions may call with
+  their caller's Grants: each a name, granted under that name, or
+  `{grant, capability}`. A Library is compiled once per owner and added to
+  each Group that uses it.
   """
   def compile_library(owner, name, version, source, opts \\ []),
     do: GenServer.call(owner, {:compile_library, name, version, source, opts})

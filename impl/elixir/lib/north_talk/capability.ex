@@ -41,6 +41,8 @@ defmodule NorthTalk.Capability do
       `%{opens: name, abandon: op}`, or closes, `%{closes: name}`.
     * `:segment_bound` - `true` for an immediate Operation whose effects
       belong to the Segment's participant.
+    * `:command` - `true` to let Scripts also call the Operation as a Host
+      Command, by its name alone, as in `moveTo thing, place` (ADR 0094).
     * `:description`, `:examples` - documentation for tooling.
 
   ## Lifecycle hooks
@@ -225,6 +227,7 @@ defmodule NorthTalk.Capability do
       {"errors", decl[:errors] && Enum.map(decl[:errors], &error_decl/1)},
       {"scope", decl[:scope] && scope(decl[:scope])},
       {"segmentBound", if(decl[:segment_bound], do: true)},
+      {"command", if(decl[:command], do: true)},
       {"description", decl[:description]},
       {"examples", decl[:examples]}
     ]
