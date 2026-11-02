@@ -1,4 +1,9 @@
-import { isPageAlignX, isPageAlignY, type Page } from '../model';
+import {
+  isPageAlignX,
+  isPageAlignY,
+  type Page,
+  type PaletteSettings,
+} from '../model';
 import type { DeepReadonly } from '../readonly';
 import {
   nameProperty,
@@ -24,6 +29,37 @@ const pageAlign = (
     writer.field(field, value === 'center' ? undefined : value),
 });
 
+/**
+ * A Palette's window settings (#1903), authoring-only. Each writes the
+ * whole `palette` object, so undo restores it in one step; a Page has none.
+ */
+const paletteSetting = <K extends keyof PaletteSettings>(
+  key: K,
+  shape: PropertyDescriptor['shape'],
+  absent: PaletteSettings[K],
+): PropertyDescriptor => ({
+  shape,
+  script: false,
+  get: owner =>
+    ((owner as DeepReadonly<Page>).palette?.[key] ?? absent) as never,
+  validate: owner =>
+    (owner as DeepReadonly<Page>).palette
+      ? undefined
+      : 'Only a Palette has this',
+  set: (owner, value, writer) => {
+    const next = { ...(owner as DeepReadonly<Page>).palette! } as Record<
+      string,
+      unknown
+    >;
+    if (key === 'title' && value === '') {
+      delete next.title;
+    } else {
+      next[key] = value;
+    }
+    writer.field('palette', next);
+  },
+});
+
 const fields: Record<string, Readonly<Record<string, PropertyDescriptor>>> = {
   project: {
     name: nameProperty,
@@ -35,6 +71,9 @@ const fields: Record<string, Readonly<Record<string, PropertyDescriptor>>> = {
     height: scalar('height', 'number'),
     alignX: pageAlign('alignX', isPageAlignX, 'left, center or right'),
     alignY: pageAlign('alignY', isPageAlignY, 'top, center or bottom'),
+    paletteTitle: paletteSetting('title', 'text', ''),
+    paletteWidth: paletteSetting('width', 'number', 0),
+    openOnPlay: paletteSetting('openOnPlay', 'boolean', false),
   },
   // Each Element kind's properties are in its definition.
   ...Object.fromEntries(

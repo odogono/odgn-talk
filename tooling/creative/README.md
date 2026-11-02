@@ -245,6 +245,41 @@ The `groups` unit and browser suites cover authoring, history, nested geometry,
 collections, visibility, routing, persistence, limits and failure atomicity.
 Tetris's window frame and Game Over alert use Group Elements.
 
+## Palettes
+
+A Palette is a panel of Elements kept with the Project and shown in its own
+floating window during Browse and Present, such as a mixer or a set of
+controls that stays put while the Pages change. Add one with ◇ in the Pages
+strip, which lists Palettes after the Pages. Select one to edit it on the
+stage as you would a Page: its Elements, its Script and their Scripts.
+
+Select the Palette itself to set, in Info, its window's title (the
+Palette's name when empty), its width and height, its background and
+whether it opens when Play starts. Its side handles change only its own
+width. Earlier and Later move it among the Palettes, and it can always be
+deleted, since the Project keeps at least one Page but needs no Palette.
+
+When Play starts, from any Page, every Palette's Scripts load with the
+Project Script and run until Stop, whichever Page is showing; Play started
+while a Palette shows starts on the first Page. A Script on a Palette sees
+its own Elements by name and the Palette as `thisPage`. Its Message Path
+runs Element, Palette, Project. Scripts open and close a Palette's window
+with `show mixer` and `hide mixer`; `tell pages to show mixer` is an error,
+since a Palette is never the showing Page. While browsing, the Window menu
+lists each Palette, checked when open, and its close box closes it. Its
+Scripts keep running while it is closed. Each window keeps where it was
+dragged across sessions.
+
+Palette Elements take clicks and pointer enter and leave; their text is not
+reader-editable and they don't report held presses. Record Test leaves a
+comment for Palette input instead of recording it. In a `.folio` file,
+Palettes are a `palettes` list after `pages` (format 11), each a Page with
+`title`, `width` and `openOnPlay`. In memory they follow the Pages in the
+Project's `pages`, so a Page's index counts Pages only.
+
+The `palettes` browser suite covers the strip, Info, Browse and Present
+windows, the Window menu, `show` and kept positions.
+
 ## Page size
 
 Click empty space on the Page or desk, or press Escape, to select the Page.

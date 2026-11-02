@@ -78,6 +78,8 @@ export type PlayRequest =
       target?: string;
     }
   | { kind: 'frame'; session: number }
+  /** The reader opens or closes a Palette's window (#1903). */
+  | { kind: 'palette'; name: string; open: boolean; session: number }
   | { epoch: number; kind: 'performance'; session: number }
   | {
       /** The mirror's count of reader edits, which views echo back. */
@@ -184,6 +186,23 @@ export type DrawingView = {
 };
 
 /**
+ * A Palette as the page draws it in its window (#1903): every Element,
+ * sent whole whenever any of it changes, since Palettes are small.
+ */
+export type PaletteView = {
+  background: string;
+  elements: { element: Element; shown: boolean }[];
+  height: number;
+  name: string;
+  /** Whether its window is open. */
+  open: boolean;
+  /** Its place in the Project's `pages`, as reader input names it. */
+  pageIndex: number;
+  title: string;
+  width: number;
+};
+
+/**
  * Play State for the page to draw. `full` views carry every Element of the
  * showing Page; others carry only the Elements that changed, and `order`
  * drops the ones that went. Groups arrive without their members, which have
@@ -216,6 +235,8 @@ export type PlayView = {
   /** Whether the Page's Message Path handles each key message. */
   pageHandles: { keyDown: boolean; keyUp: boolean };
   pageIndex: number;
+  /** The Palettes that changed since the last view; all of them when full. */
+  palettes?: PaletteView[];
   /** Whether the session is paused: no time passes and reader input is dropped. */
   paused: boolean;
   problems: ProblemView[];

@@ -8,6 +8,7 @@ import {
 import {
   createElement,
   createPage,
+  createPalette,
   createProject,
   richTextFromPlainText,
   textOf,
@@ -124,6 +125,73 @@ test('the page gets a full view, then only the Elements that changed', async () 
   // The mirror keeps one object per Element across updates.
   expect(element('go')).toBe(go);
   expect(mirror.isVisible(go)).toBe(true);
+});
+
+test('Palettes reach the page whole, take input on any Page and open on request', async () => {
+  const project = fixture();
+  project.pages.push(createPage('page2'));
+  const palette = createPalette('mixer');
+  palette.palette.openOnPlay = false;
+  const tap = createElement('button', 'tap');
+  tap.script = [
+    'on click',
+    ' set the label of me to "Tapped"',
+    ' tell pages to show page2',
+    'end click',
+    'on keyDown k',
+    'end keyDown',
+  ].join('\n');
+  palette.elements.push(tap);
+  project.pages.push(palette);
+  const { mirror, request, views } = hosted(project);
+  expect(views[0]!.palettes).toMatchObject([
+    { name: 'mixer', title: 'mixer', open: false, pageIndex: 2 },
+  ]);
+  const shown = () => mirror.palettes.get('mixer')!;
+  request({ kind: 'palette', session: 1, name: 'mixer', open: true });
+  await until(() => shown().open);
+  const label = () => {
+    const button = shown().elements[0]!;
+    return button.kind === 'button' ? button.label : undefined;
+  };
+  const tapIt = () =>
+    request({
+      kind: 'send',
+      session: 1,
+      pageIndex: 2,
+      target: 'tap',
+      message: 'click',
+    });
+  tapIt();
+  await until(() => label() === 'Tapped' && mirror.page.name === 'page2');
+  // A view that changes nothing of a Palette leaves it out.
+  expect(views.at(-1)!.palettes).toBeUndefined();
+  request({ kind: 'palette', session: 1, name: 'mixer', open: false });
+  await until(() => !shown().open);
+});
+
+test('a closed Palette takes no reader input', async () => {
+  const project = fixture();
+  const palette = createPalette('mixer');
+  palette.palette.openOnPlay = false;
+  const tap = createElement('button', 'tap');
+  tap.script = 'on click\n set the label of me to "Tapped"\nend click';
+  palette.elements.push(tap);
+  project.pages.push(palette);
+  const { mirror, request, element } = hosted(project);
+  for (const [pageIndex, target] of [
+    [1, 'tap'],
+    [0, 'go'],
+  ] as const) {
+    request({ kind: 'send', session: 1, pageIndex, target, message: 'click' });
+  }
+  // Input is handled in order, so once go has its click, tap's was dropped.
+  const go = element('go');
+  await until(() => go.kind === 'button' && go.label === 'Clicked');
+  expect(mirror.palettes.get('mixer')!.elements[0]).toHaveProperty(
+    'label',
+    'Button',
+  );
 });
 
 test('a reader edit keeps its history when the worker echoes it', async () => {

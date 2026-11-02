@@ -13,6 +13,7 @@ import { type StackEditor } from './editing';
 import { type Element, type RichText, type TextElement } from './model';
 import { ownerById, ownerId, type ScriptOwner } from './script-manifest';
 import {
+  type PaletteView,
   type PlayView,
   type PromptView,
   type StoppedRun,
@@ -20,6 +21,12 @@ import {
 import { type ReaderTextPlay } from './play-text';
 
 export type MirrorPage = PlayView['page'] & { index: number };
+
+/** A Palette as the worker last sent it (#1903), drawn in its own window. */
+export type MirrorPalette = Omit<PaletteView, 'elements'> & {
+  elements: Element[];
+  shown: ReadonlySet<Element>;
+};
 
 export class PlayMirror implements ReaderTextPlay {
   /** Replaced whenever the worker shows another Page. */
@@ -35,6 +42,8 @@ export class PlayMirror implements ReaderTextPlay {
   prompt: PromptView | undefined;
   pageHandles = { keyDown: false, keyUp: false };
   heldElements = new Set<string>();
+  /** Each Palette, by name, in the Project's order. */
+  palettes = new Map<string, MirrorPalette>();
   #shown = new Set<Element>();
   #order: Element[] = [];
 
@@ -128,6 +137,25 @@ export class PlayMirror implements ReaderTextPlay {
         this.#shown.delete(mirrored);
       }
     }
+    for (const { elements, ...palette } of view.palettes ?? []) {
+      const shown = new Set<Element>();
+      const mirrored = elements.map(({ element, shown: visible }) => {
+        if (element.kind === 'canvas') {
+          element.drawing =
+            this.#drawings.get(`${palette.pageIndex}/${element.name}`)
+              ?.commands ?? [];
+        }
+        if (visible) {
+          shown.add(element);
+        }
+        return element;
+      });
+      this.palettes.set(palette.name, {
+        ...palette,
+        elements: mirrored,
+        shown,
+      });
+    }
     for (const drawing of view.drawings) {
       const key = `${drawing.pageIndex}/${drawing.name}`;
       let received = this.#drawings.get(key);
@@ -146,6 +174,14 @@ export class PlayMirror implements ReaderTextPlay {
           : undefined;
       if (mirrored?.kind === 'canvas') {
         mirrored.drawing = commands;
+      }
+      for (const palette of this.palettes.values()) {
+        if (palette.pageIndex === drawing.pageIndex) {
+          const canvas = palette.elements.find(e => e.name === drawing.name);
+          if (canvas?.kind === 'canvas') {
+            canvas.drawing = commands;
+          }
+        }
       }
     }
     if (view.order) {

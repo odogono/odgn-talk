@@ -25,6 +25,7 @@ import {
 import {
   type BreakpointView,
   type DrawingView,
+  type PaletteView,
   type PlayRequest,
   type PlayResponse,
   type PlayView,
@@ -117,6 +118,24 @@ const heldElements = (play: PlaySession): string[] =>
     .filter(element => play.handles(element, 'pointerHeld'))
     .map(element => element.name);
 
+/** A Palette's view: its window and every Element in it. */
+const paletteView = (
+  play: PlaySession,
+  palette: DeepReadonly<Page>,
+): PaletteView => ({
+  name: palette.name,
+  title: palette.palette!.title ?? palette.name,
+  width: palette.palette!.width,
+  height: palette.height,
+  background: palette.background,
+  open: play.openPalettes.has(palette.name),
+  pageIndex: play.project.pages.indexOf(palette),
+  elements: play.elementsOf(palette).map(element => ({
+    element: withoutMembers(element),
+    shown: play.isVisible(element),
+  })),
+});
+
 export const firstView = (
   project: Project,
   pageIndex: number,
@@ -131,7 +150,7 @@ export const firstView = (
     session,
     full: true,
     drawings: drawingViews(play, canvasesOf(play.elementsOf()), new Map()),
-    pageIndex,
+    pageIndex: play.pageIndex,
     page: {
       name: play.page.name,
       height: play.page.height,
@@ -141,6 +160,7 @@ export const firstView = (
     designWidth: play.project.designWidth,
     order: elements.map(({ element }) => element.name),
     elements,
+    palettes: play.palettes.map(palette => paletteView(play, palette)),
     pageHandles: {
       keyDown: play.handles(play.page, 'keyDown'),
       keyUp: play.handles(play.page, 'keyUp'),
@@ -198,6 +218,8 @@ export class PlayHost {
   #sent = new Map<string, string>();
   #sentDrawings = new Map<DeepReadonly<CanvasElement>, DrawingMark>();
   #sentPage: PlaySession['page'] | undefined;
+  // What the page last received of each Palette, as JSON, by name.
+  #sentPalettes = new Map<string, string>();
   #sentState = '';
   #sentTargets = '';
   #pageHandles = { keyDown: false, keyUp: false };
@@ -276,9 +298,12 @@ export class PlayHost {
         return;
       }
       case 'control': {
+        // A control on an open Palette works whichever Page shows.
+        const named = session.project.pages[request.pageIndex];
         const page =
-          request.pageIndex === session.pageIndex
-            ? session.project.pages[request.pageIndex]
+          request.pageIndex === session.pageIndex ||
+          (named?.palette && session.openPalettes.has(named.name))
+            ? named
             : undefined;
         const target =
           page && session.elementsOf(page).find(e => e.name === request.target);
@@ -287,16 +312,24 @@ export class PlayHost {
         }
         break;
       }
+      case 'palette': {
+        session.setPaletteOpen(request.name, request.open);
+        break;
+      }
       case 'send': {
         // Reader input while paused is dropped, not queued.
         if (this.#play.paused) {
           break;
         }
         // Only a release can name a Page left since its press; its Message
-        // Path still leads to any surviving Project Handler.
+        // Path still leads to any surviving Project Handler. An open
+        // Palette takes input whichever Page shows.
+        const named = session.project.pages[request.pageIndex];
         const page =
-          request.pageIndex === session.pageIndex || request.message === 'keyUp'
-            ? session.project.pages[request.pageIndex]
+          request.pageIndex === session.pageIndex ||
+          request.message === 'keyUp' ||
+          (named?.palette && session.openPalettes.has(named.name))
+            ? named
             : undefined;
         const target =
           page &&
@@ -509,6 +542,7 @@ export class PlayHost {
     );
     this.#sent.clear();
     this.#sentDrawings.clear();
+    this.#sentPalettes.clear();
     this.#sentPage = undefined;
     this.#sentState = '';
     this.#sentTargets = '';
@@ -990,13 +1024,28 @@ export class PlayHost {
         }
       }
     }
+    const palettes: PaletteView[] = [];
+    if (full || session.changed) {
+      for (const palette of session.palettes) {
+        const view = paletteView(session, palette);
+        const json = JSON.stringify(view);
+        if (this.#sentPalettes.get(palette.name) !== json) {
+          this.#sentPalettes.set(palette.name, json);
+          palettes.push(view);
+        }
+      }
+    }
     // Every changed Drawing goes, off-Page ones too, so the page can commit
-    // them on return to Edit; a new Page also sends its Canvases' Drawings.
+    // them on return to Edit; a new Page also sends its Canvases' Drawings,
+    // and a Palette sent anew its own.
     const drawings = drawingViews(
       session,
       new Set([
         ...session.takeDrawingChanges(),
         ...(full ? canvasesOf(session.elementsOf()) : []),
+        ...palettes.flatMap(view =>
+          canvasesOf(session.elementsOf(session.project.pages[view.pageIndex])),
+        ),
       ]),
       this.#sentDrawings,
     );
@@ -1048,6 +1097,7 @@ export class PlayHost {
       !targetsChanged &&
       !orderChanged &&
       !drawings.length &&
+      !palettes.length &&
       state === this.#sentState &&
       !notices.length &&
       !problems.length
@@ -1072,6 +1122,7 @@ export class PlayHost {
         designWidth: session.project.designWidth,
         ...(orderChanged ? { order } : {}),
         elements,
+        ...(palettes.length ? { palettes } : {}),
         pageHandles: this.#pageHandles,
         heldElements: this.#heldElements,
         navigating: session.navigating,

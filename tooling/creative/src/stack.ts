@@ -28,6 +28,8 @@ import {
   type Project,
   type TextElement,
   textOf,
+  pageCount,
+  pageWidth,
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { CREATABLE_KINDS, kindOf } from './elements/registry';
@@ -303,9 +305,10 @@ export const mountStack = (
       desk.clientWidth -
       Number.parseFloat(style.paddingLeft) -
       Number.parseFloat(style.paddingRight);
-    scale = Math.min(1, Math.max(0.1, room / editor.project.designWidth));
+    const width = pageWidth(editor.project, editor.page);
+    scale = Math.min(1, Math.max(0.1, room / width));
     pageNode.style.transform = `scale(${scale})`;
-    stage.style.width = `${editor.project.designWidth * scale}px`;
+    stage.style.width = `${width * scale}px`;
     byId('caption').style.width = stage.style.width;
     stage.style.height = `${editor.page.height * scale}px`;
     desk.style.setProperty('--scale', String(scale));
@@ -315,7 +318,7 @@ export const mountStack = (
     const selected = editor.selected;
     renderPage(
       editor.page,
-      editor.project.designWidth,
+      pageWidth(editor.project, editor.page),
       pageNode,
       editor.project.assets,
       images,
@@ -324,23 +327,26 @@ export const mountStack = (
     pageNode.querySelector(':scope > .handles')?.remove();
     stage.querySelector('.page-handles')?.remove();
     if (!selected.length && !editor.scope.length && !editor.readOnly) {
+      const noun = editor.page.palette ? 'Palette' : 'Page';
       stage.append(
         h(
           'div',
           { class: 'page-handles' },
           ...PAGE_HANDLES.map(handle => {
+            // A Palette's width is its own; a Page's is every Page's.
+            const across = editor.page.palette ? 'width' : 'width (all Pages)';
             const dimension =
               handle === 's'
                 ? 'height'
                 : handle.length === 1
-                  ? 'width (all Pages)'
-                  : 'width (all Pages) and height';
+                  ? across
+                  : `${across} and height`;
             return h('button', {
               type: 'button',
               class: `handle ${handle}`,
               'data-page-handle': handle,
-              'aria-label': `Resize Page ${dimension}`,
-              title: `Resize Page ${dimension}. Arrow keys resize; Shift for 10 pixels.`,
+              'aria-label': `Resize ${noun} ${dimension}`,
+              title: `Resize ${noun} ${dimension}. Arrow keys resize; Shift for 10 pixels.`,
             });
           }),
         ),
@@ -375,15 +381,20 @@ export const mountStack = (
         id => allElements(editor.page.elements).find(e => e.id === id)?.name,
       ),
     ].join(' › ');
-    byId('page-number').textContent =
-      `${editor.pageIndex + 1} / ${editor.project.pages.length}`;
+    const pages = pageCount(editor.project);
+    byId('page-number').textContent = editor.page.palette
+      ? 'Palette'
+      : `${editor.pageIndex + 1} / ${pages}`;
     fit();
   };
 
   const drawNavigation = () => {
+    // While a Palette shows, these step through the Palettes.
+    const pages = pageCount(editor.project);
     (byId('previous-page') as HTMLButtonElement).disabled =
-      editor.pageIndex === 0;
+      editor.pageIndex === 0 || editor.pageIndex === pages;
     (byId('next-page') as HTMLButtonElement).disabled =
+      editor.pageIndex === pages - 1 ||
       editor.pageIndex === editor.project.pages.length - 1;
   };
 
@@ -421,6 +432,7 @@ export const mountStack = (
     }
     pageNode.classList.toggle('edit', !editor.readOnly);
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
+    (byId('add-palette') as HTMLButtonElement).disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
       button.disabled = editor.readOnly;
     }
@@ -515,6 +527,14 @@ export const mountStack = (
             'height',
             Math.max(MIN_PAGE_HEIGHT, value as number),
           );
+        } else if (key === 'paletteWidth') {
+          draft.tree.setProperty(
+            page,
+            'paletteWidth',
+            Math.max(MIN_PAGE_WIDTH, value as number),
+          );
+        } else if (key === 'paletteTitle' || key === 'openOnPlay') {
+          draft.tree.setProperty(page, key, value as string | boolean);
         } else if (key === 'alignX' || key === 'alignY') {
           draft.tree.setProperty(page, key, String(value));
         } else if (key === 'background') {
@@ -1114,6 +1134,9 @@ export const mountStack = (
   );
   byId('add-page').addEventListener('click', () =>
     edit(() => editor.addPage()),
+  );
+  byId('add-palette').addEventListener('click', () =>
+    edit(() => editor.addPalette()),
   );
   thumbnails.addEventListener('click', event => {
     const index = pageIndexOf(event);

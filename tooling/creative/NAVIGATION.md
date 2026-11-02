@@ -8,7 +8,7 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 Read only your section, e.g.
 `sed -n '/^## Mini-Notation/,/^## /p' tooling/creative/NAVIGATION.md`.
-Sections: Running and testing; Play Session and reader input; Project model and Project files; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; Punch In; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
+Sections: Running and testing; Play Session and reader input; Project model and Project files; Palettes; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; Punch In; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
 
 Music work belongs to map #1887; its task list shows which children have
 landed, and the Issue graph job ticks it as they close.
@@ -163,6 +163,32 @@ landed, and the Issue graph job ticks it as they close.
   [project-file.test.ts](tests/project-file.test.ts),
   [zip.test.ts](tests/zip.test.ts).
 - First check: `bun test tooling/creative/tests/model.test.ts tooling/creative/tests/project-file.test.ts`.
+
+## Palettes
+
+- Model (#1903): a Palette is a `Page` with `palette` settings, kept after
+  the Pages in `Project.pages`; [model.ts](src/model.ts) has `pagesOf`,
+  `palettesOf`, `pageCount` and `pageWidth`. Page indices therefore count
+  Pages only, and every Page-wide rule covers Palettes. The file form is a
+  separate `palettes` list in [project-file.ts](src/project-file.ts).
+- Edit: `addPalette` and the Pages-or-Palettes rules for moving, stepping
+  and deleting in [editing.ts](src/editing.ts) and
+  [tree/project-tree.ts](src/tree/project-tree.ts); the `paletteTitle`,
+  `paletteWidth` and `openOnPlay` properties in
+  [tree/properties.ts](src/tree/properties.ts); Info in
+  [info-panel.tsx](src/info-panel.tsx); the strip in
+  [page-strip.tsx](src/page-strip.tsx).
+- Play: [play.ts](src/play.ts) loads Palette Scripts at start, keeps
+  `openPalettes`, and routes `show`/`hide` of a Palette there
+  ([grants/folio.ts](src/grants/folio.ts)). [play-host.ts](src/play-host.ts)
+  sends each changed Palette whole as a `PaletteView`;
+  [play-mirror.ts](src/play-mirror.ts) keeps them; and
+  [palette-windows.ts](src/palette-windows.ts) draws the windows and Window
+  menu items for [play-view.ts](src/play-view.ts).
+- Tests: [palettes.test.ts](tests/palettes.test.ts), Palette cases in
+  [play-host.test.ts](tests/play-host.test.ts), and the `palettes` browser
+  suite.
+- First check: `bun test tooling/creative/tests/palettes.test.ts`.
 
 ## Group Elements
 

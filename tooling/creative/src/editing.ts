@@ -20,6 +20,8 @@ import {
 import {
   freshName,
   isIdentifierName,
+  pageCount,
+  pageWidth,
   suggestName,
   type Asset,
   type CanvasElement,
@@ -869,7 +871,7 @@ export class StackEditor {
       return undefined;
     }
     const page = this.page;
-    const width = this.project.designWidth;
+    const width = pageWidth(this.project, page);
     const height = page.height;
     const edit = this.#startEdit();
     return {
@@ -878,9 +880,10 @@ export class StackEditor {
         edit.change(draft => {
           if (handle.includes('e') || handle.includes('w')) {
             const change = handle.includes('w') ? -dx : dx;
+            // A Palette's width is its own; a Page's is the Project's.
             draft.tree.setProperty(
-              draft.project,
-              'designWidth',
+              page.palette ? pageOf(draft) : draft.project,
+              page.palette ? 'paletteWidth' : 'designWidth',
               Math.max(MIN_PAGE_WIDTH, Math.round(width + change * 2)),
             );
           }
@@ -937,23 +940,41 @@ export class StackEditor {
     });
   }
 
+  /** Shows the previous Page, or the previous Palette while one shows. */
   previousPage(): void {
-    this.goToPage(this.pageIndex - 1);
+    if (this.pageIndex !== pageCount(this.project)) {
+      this.goToPage(this.pageIndex - 1);
+    }
   }
 
+  /** Shows the next Page, or the next Palette while one shows. */
   nextPage(): void {
-    this.goToPage(this.pageIndex + 1);
+    if (this.pageIndex !== pageCount(this.project) - 1) {
+      this.goToPage(this.pageIndex + 1);
+    }
   }
 
-  /** Adds a Page after the showing one, and shows it. */
+  /** Adds a Page after the showing one, or after the last Page, and shows it. */
   addPage(): DeepReadonly<Page> {
     return this.edit(edit => {
       const page = edit.tree.addPage(edit.pageIndex);
-      edit.pageIndex++;
+      edit.pageIndex = edit.project.pages.indexOf(page);
       edit.scope = [];
       edit.selection = [];
       edit.pageSelected = false;
       return page;
+    });
+  }
+
+  /** Adds a Palette after the others, and shows it (#1903). */
+  addPalette(): DeepReadonly<Page> {
+    return this.edit(edit => {
+      const palette = edit.tree.addPalette();
+      edit.pageIndex = edit.project.pages.indexOf(palette);
+      edit.scope = [];
+      edit.selection = [];
+      edit.pageSelected = false;
+      return palette;
     });
   }
   /** Empties a Canvas's Drawing, back to the default style (ADR 0116). */
@@ -962,7 +983,15 @@ export class StackEditor {
   }
   movePage(from: number, to: number): void {
     const pages = this.project.pages;
-    if (from < 0 || from >= pages.length || to < 0 || to >= pages.length) {
+    const count = pageCount(this.project);
+    // Pages move among Pages and Palettes among Palettes.
+    if (
+      from < 0 ||
+      from >= pages.length ||
+      to < 0 ||
+      to >= pages.length ||
+      from < count !== to < count
+    ) {
       return;
     }
     this.edit(edit => {
@@ -990,7 +1019,8 @@ export class StackEditor {
   get canDelete(): boolean {
     return (
       this.selection.length > 0 ||
-      (this.state.value.pageSelected && this.project.pages.length > 1)
+      (this.state.value.pageSelected &&
+        (!!this.page.palette || pageCount(this.project) > 1))
     );
   }
 
@@ -1009,6 +1039,7 @@ export class StackEditor {
       } else {
         edit.scope = [];
         edit.tree.removePage(pageOf(edit));
+        // A deleted Palette shows the one before it, or the last Page.
         edit.pageIndex = Math.min(
           edit.pageIndex,
           edit.project.pages.length - 1,

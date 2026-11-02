@@ -1,20 +1,29 @@
 // Folio's Host Commands (ADR 0094): `hide x` is an Operation call in the
 // caller's Run, so a bad argument fails at the calling line.
-import { defineCapability, type Value } from '@northtalk/ts';
-import { elementShape, grantAll, type GrantDefinition } from './grant';
+import { defineCapability, shape, type Value } from '@northtalk/ts';
+import {
+  elementShape,
+  grantAll,
+  pageShape,
+  type GrantDefinition,
+} from './grant';
 
 export type FolioState = {
-  setVisible(element: Value, visible: boolean): void;
+  /** Shows or hides an Element, or opens or closes a Palette's window. */
+  setVisible(target: Value, visible: boolean): void;
 };
+
+// An Element, or a Palette, which Scripts see as a Page (#1903).
+const target = shape.oneOf(elementShape, pageShape);
 
 const command = (verb: 'Hides' | 'Shows', visible: boolean, name: string) =>
   ({
     mode: 'fire-and-forget',
     command: true,
-    args: [elementShape],
+    args: [target],
     cost: { fuel: 1 },
-    description: `${verb} an Element: sets its visible to ${visible}. A Host Command, so any Script can call it by name; a Script's own \`on ${name}\` takes its calls instead.`,
-    examples: [`${name} welcomeText`],
+    description: `${verb} an Element, setting its visible to ${visible}, or ${visible ? 'opens' : 'closes'} a Palette's window. A Host Command, so any Script can call it by name; a Script's own \`on ${name}\` takes its calls instead.`,
+    examples: [`${name} welcomeText`, `${name} mixer`],
   }) as const;
 
 /** Operations of the `folio` Grant that any Script calls by name alone. */
