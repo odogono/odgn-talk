@@ -1389,7 +1389,7 @@ describe('Whose Clauses', () => {
       'on t xs\n return the first item of xs whose it > 1 and region is "EU"\nend t',
     );
     expect(result.diagnostics.map(d => d.message)).toEqual([
-      "unknown name: region; a key of the chunk is `it's region`",
+      "unknown name: region; only a Whose condition's first name is a key, so write `it's region`",
     ]);
     expect(
       checkSource('on t\n return region\nend t').diagnostics[0]!.message,

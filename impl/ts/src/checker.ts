@@ -1186,7 +1186,7 @@ const checkParsed = (
         'unknown name',
         site.token,
         inWhoseCondition(site.token)
-          ? `unknown name: ${site.token.v}; a key of the chunk is \`it's ${site.token.v}\``
+          ? `unknown name: ${site.token.v}; only a Whose condition's first name is a key, so write \`it's ${site.token.v}\``
           : undefined,
       );
     } else {
