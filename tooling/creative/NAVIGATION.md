@@ -320,6 +320,8 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   [instruments/preview.ts](src/instruments/preview.ts): Edit's preview of
   `play`. [pattern-checks.ts](src/pattern-checks.ts)'s
   `needsInstrumentAudio` decides whether Browse starts the audio.
+- Recipes: **Loop a pattern** (`loopPattern` in [recipes.ts](src/recipes.ts));
+  [examples/first-sounds.ts](src/examples/first-sounds.ts) teaches patterns.
 - Tests: [sound-patterns.test.ts](tests/sound-patterns.test.ts),
   [sound-migration.test.ts](tests/sound-migration.test.ts), Message Box
   cases in [message.test.ts](tests/message.test.ts).
@@ -593,6 +595,10 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
   [examples/sonar.ts](src/examples/sonar.ts) builds Sonar, one Canvas
   driven by `frame`, `click`'s map and `pointerHeld`, played through in
   [sonar.test.ts](tests/sonar.test.ts).
+  [examples/first-sounds.ts](src/examples/first-sounds.ts) builds First
+  Sounds, one Page per `LESSONS` entry with a generated Page Script, played
+  through in [first-sounds.test.ts](tests/first-sounds.test.ts) with the
+  harness's `advance` and `notes`; browser suite `first-sounds`.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
   [project-title.browser.ts](tests/project-title.browser.ts),
   [info-panel.browser.ts](tests/info-panel.browser.ts),

@@ -2,6 +2,10 @@
 // an editable copy and learn from. Each is built in code with its assets,
 // so it needs no files and reopens offline exactly as exported.
 import { type Project } from '../model';
+import {
+  createFirstSoundsProject,
+  FIRST_SOUNDS_PROJECT_NAME,
+} from './first-sounds';
 import { createLighthouseProject, LIGHTHOUSE_PROJECT_NAME } from './lighthouse';
 import { createSonarProject, SONAR_PROJECT_NAME } from './sonar';
 import { createTetrisProject, TETRIS_PROJECT_NAME } from './tetris';
@@ -55,6 +59,13 @@ export const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     description:
       'Sweep a sea for mines on one canvas: a sonar sweep on `frame`, pings that ripple from where you click, right-click or a long press for buoys.',
     create: createSonarProject,
+  },
+  {
+    name: FIRST_SOUNDS_PROJECT_NAME,
+    slug: 'first-sounds',
+    description:
+      'Learn Sound Patterns in Mini-Notation with the built-in kits, a Page per idea: a sound, sequences and rests, subdivision, alternation, layers, tempo and Instruments.',
+    create: createFirstSoundsProject,
   },
 ];
 

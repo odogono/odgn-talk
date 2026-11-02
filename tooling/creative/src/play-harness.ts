@@ -2,11 +2,14 @@ import { text, type Value } from '@northtalk/ts';
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { textOf, type Element, type Project } from './model';
 import { PlaySession, type PlayMessage } from './play';
+import type { InstrumentMessage } from './instruments/session';
 import { harnessClick, pointerValue } from './pointer';
 import { thaw, type DeepReadonly } from './readonly';
 
 /** How many Pump turns `settle` allows before it calls the session stuck. */
 const SETTLE_TURNS = 2000;
+/** How many Pumps `advance` allows before it calls the session stuck. */
+const ADVANCE_TURNS = 100_000;
 
 export type PlayHarnessOptions = {
   /**
@@ -27,7 +30,11 @@ export class PlayHarness {
   /** The virtual clock, in microseconds, as `pump` and `frame` take it. */
   clock = 0n;
 
-  private constructor(readonly play: PlaySession) {}
+  private constructor(
+    readonly play: PlaySession,
+    /** Every message Play sent its Instruments, in order. */
+    readonly sent: readonly InstrumentMessage[],
+  ) {}
 
   static async start(
     project: DeepReadonly<Project>,
@@ -39,8 +46,13 @@ export class PlayHarness {
       copy.pages[0]!.script += options.extend;
       start = copy;
     }
+    const sent: InstrumentMessage[] = [];
     const harness = new PlayHarness(
-      new PlaySession(start, 0, { seed: options.seed ?? 0n }),
+      new PlaySession(start, 0, {
+        seed: options.seed ?? 0n,
+        instrumentBackend: message => sent.push(message),
+      }),
+      sent,
     );
     await harness.settle();
     return harness;
@@ -64,6 +76,41 @@ export class PlayHarness {
     this.clock += BigInt(ms) * 1000n;
     this.play.frame(this.clock);
     await this.settle();
+  }
+
+  /**
+   * Moves the clock `ms` on, pumping at every deadline on the way, as the
+   * Play worker does, so Sound Patterns send their steps in time.
+   */
+  async advance(ms: number): Promise<void> {
+    const until = this.clock + BigInt(ms) * 1000n;
+    for (let i = 0; i < ADVANCE_TURNS; i++) {
+      const next = this.play.pump(this.clock).nextDeadline;
+      await Promise.resolve();
+      if (next === undefined || next > until) {
+        this.clock = until;
+        await this.settle();
+        return;
+      }
+      this.clock = next > this.clock ? next : this.clock + 1n;
+    }
+    throw new Error('Too many Pumps');
+  }
+
+  /**
+   * Each note sent since `from` (an index into `sent`), as
+   * `seconds instrument sound-or-note`.
+   */
+  notes(from = 0): string[] {
+    return this.sent
+      .slice(from)
+      .flatMap(m =>
+        m.commands.flatMap(c =>
+          c.kind === 'note'
+            ? [`${m.at} ${m.instrument} ${c.sound ?? c.note}`]
+            : [],
+        ),
+      );
   }
 
   /** Sends `keyDown` then `keyUp` to the Page, then lets 1 ms of frames pass. */

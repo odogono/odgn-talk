@@ -21,7 +21,8 @@ export type RecipeKind =
   | 'text'
   | 'playSound'
   | 'loopSound'
-  | 'stopSound';
+  | 'stopSound'
+  | 'loopPattern';
 export const SOUND_RECIPE_KINDS: readonly RecipeKind[] = [
   'playSound',
   'loopSound',
@@ -42,6 +43,13 @@ export const recipeTargets = (
       name: page.name,
       reference: page.name,
     }));
+  }
+  if (kind === 'loopPattern') {
+    // The empty reference loops on the default kit, without `on`.
+    return [
+      { name: 'Default kit', reference: '' },
+      ...project.instruments.map(i => ({ name: i.name, reference: i.name })),
+    ];
   }
   if (SOUND_RECIPE_KINDS.includes(kind)) {
     const sounds = project.assets
@@ -97,6 +105,14 @@ export const recipeSource = (
   if (kind === 'playSound' || kind === 'loopSound') {
     // A whole sound repeats end to end; `loop` plays a Sound Pattern (ADR 0159).
     return `tell sound to play ${recipeText(target.reference)}${kind === 'loopSound' ? ' with {repeat: true}' : ''}`;
+  }
+  if (kind === 'loopPattern') {
+    // A Sound Pattern from the next bar; a later one on the same Instrument
+    // replaces it on the bar after (ADR 0159).
+    if (!value.trim()) {
+      throw new Error('Write a pattern in Mini-Notation, such as bd hh sd hh.');
+    }
+    return `loop ${recipeText(value.trim())}${target.reference ? ` on ${target.reference}` : ''}`;
   }
   if (kind === 'stopSound') {
     return target.reference
