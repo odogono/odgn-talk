@@ -192,3 +192,35 @@ func TestRefusedAndUnexposedNames(t *testing.T) {
 	w.settle(w.shop, w.billing)
 	w.expect(w.shop, "got", `["bad address", "not exposed", ["send failed", "not exposed"]]`)
 }
+
+// A `peer` Grant trimmed to what a Script uses keeps `post` and `call` with
+// `reach`, so a send to the Peer it reached still works (chapter 7).
+func TestGrantsAsUsedKeepsRemoteSends(t *testing.T) {
+	core := talk.New()
+	router := New(core)
+	costs := talk.Costs{}
+	for _, name := range []string{"expose", "unexpose", "reach", "post", "call", "caller"} {
+		costs[name] = talk.Cost{Fuel: 3}
+	}
+	def, err := core.PeerCapability(router, costs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &world{t: t, clock: time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)}
+	w.billing = core.NewGroup(talk.GroupOptions{})
+	w.shop = core.NewGroup(talk.GroupOptions{})
+	router.Attach(w.billing, talk.Nothing)
+	router.Attach(w.shop, talk.Nothing)
+	grants := func() map[string]*talk.Grant { return map[string]*talk.Grant{"peer": def.GrantAll(Binding{})} }
+	if w.b, err = w.billing.Load(talk.LoadOptions{Name: "billing", Source: billingSource, Grants: grants(), GrantsAsUsed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if w.s, err = w.shop.Load(talk.LoadOptions{Name: "shop", Source: "on start\n  ask peer to reach \"billing\" into b and wait\n  send charge with 1 to b and wait\nend start", Grants: grants(), GrantsAsUsed: true}); err != nil {
+		t.Fatal(err)
+	}
+	w.deliver(w.b, "start")
+	w.settle(w.billing)
+	w.deliver(w.s, "start")
+	w.settle(w.shop, w.billing)
+	w.expect(w.billing, "seen", `[[1, nothing]]`)
+}
