@@ -7471,28 +7471,28 @@ pub const Group = struct {
                             .value => |v| v,
                             else => return,
                         };
-                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(.@"const"))) return;
                         stack.appendAssumeCapacity(.{ .value = v.retain() });
                     },
                     .load => {
-                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(.load))) return;
                         stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
                     },
                     .store => {
-                        if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (len == 0 or stack.items[len - 1] != .value or !bounds.charge(run, costs.chargeUnmeasured(.store))) return;
                         const s: usize = @intCast(ops[0].int);
                         frame.locals[s].release();
                         frame.locals[s] = pop(frame);
                     },
                     .move => {
-                        if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (!bounds.charge(run, costs.chargeUnmeasured(.move))) return;
                         const from: usize = @intCast(ops[0].int);
                         const to: usize = @intCast(ops[1].int);
                         frame.locals[to].release();
                         frame.locals[to] = frame.locals[from].retain();
                     },
                     .jump => {
-                        if (!bounds.charge(run, costs.chargeUnmeasured(ins.op))) return;
+                        if (!bounds.charge(run, costs.chargeUnmeasured(.jump))) return;
                         frame.pc = @intCast(ops[0].int);
                         g.fastTick();
                         continue;
@@ -7625,10 +7625,12 @@ pub const Group = struct {
             model.arithmeticResult(g.gpa, op, pair[0], pair[1]) catch return false
         else
             model.decimal.calculate(g.gpa, op, pair[0].data.number, pair[1].data.number) catch return false;
-        var probe: Value = .{ .allocator = g.gpa, .data = if (quantity) result else .{ .number = result } };
         const before: ChargeState = .of(g, run);
         const cost = switch (ins.op) {
-            inline .add, .subtract, .multiply, .divide, .div, .mod => |o| costs.chargeStatic(o, &.{ .result = &probe }),
+            inline .add, .subtract, .multiply, .divide, .div, .mod => |o| if (quantity) blk: {
+                var probe: Value = .{ .allocator = g.gpa, .data = result };
+                break :blk costs.chargeStatic(o, &.{ .result = &probe });
+            } else costs.chargeNumber(o, &result),
             else => unreachable,
         };
         if (!bounds.charge(run, cost)) return false;
