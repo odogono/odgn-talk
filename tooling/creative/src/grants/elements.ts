@@ -5,7 +5,8 @@ import {
   type HostObject,
   type Value,
 } from '@northtalk/ts';
-import { ELEMENT_KINDS, type ElementKind } from '../model';
+import type { ElementKind } from '../model';
+import { CREATABLE_KINDS } from '../elements/registry';
 import {
   elementShape,
   grantAll,
@@ -61,7 +62,7 @@ const operations = {
 } as const;
 
 const creatable = (kind: string): kind is Exclude<ElementKind, 'group'> =>
-  ELEMENT_KINDS.includes(kind as ElementKind) && kind !== 'group';
+  CREATABLE_KINDS.includes(kind as ElementKind);
 
 export const elementsGrant: GrantDefinition<ElementsState> = {
   name: 'elements',

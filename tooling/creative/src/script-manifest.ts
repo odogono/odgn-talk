@@ -16,6 +16,7 @@ import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
+import { kindOf } from './elements/registry';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import type { InstrumentKind } from './instruments/kind';
 
@@ -85,7 +86,7 @@ const objectKinds = [
   ...ELEMENT_KINDS.map(name => ({
     name,
     props: props(name),
-    ...(name === 'group'
+    ...(kindOf(name).container
       ? {
           elements: {
             shape: elementShape,

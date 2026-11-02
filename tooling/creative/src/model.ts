@@ -28,7 +28,7 @@ export type Paragraph = { align?: Exclude<TextAlign, 'left'>; runs: TextRun[] };
  */
 export type RichText = Paragraph[];
 
-type ElementBase = {
+export type ElementBase = {
   height: number;
   /** Session-local editor identity; omitted from files and storage. */
   id?: number;
@@ -128,16 +128,8 @@ export type Element =
 
 export type ElementKind = Element['kind'];
 
-export const ELEMENT_KINDS: readonly ElementKind[] = [
-  'text',
-  'image',
-  'button',
-  'rectangle',
-  'ellipse',
-  'line',
-  'canvas',
-  'group',
-];
+// Each kind's defaults, drawing and checks live in its definition (#1900).
+export { createElement, ELEMENT_KINDS } from './elements/registry';
 
 /** Where Present places a Page narrower or shorter than the window. */
 export const PAGE_ALIGNS_X = ['left', 'center', 'right'] as const;
@@ -315,77 +307,6 @@ export const setTextAlign = (element: TextElement, align: TextAlign): void => {
     alignParagraph(next, align);
     return next;
   });
-};
-
-const base = (name: string): ElementBase => ({
-  name,
-  left: 40,
-  top: 40,
-  width: 200,
-  height: 100,
-  visible: true,
-});
-
-/** A new Element of `kind` with that kind's default properties. */
-/** True for shapes whose border has a writable `thickness`. */
-export const hasBorder = (element: {
-  kind: string;
-}): element is RectangleElement | EllipseElement =>
-  element.kind === 'rectangle' || element.kind === 'ellipse';
-
-export const createElement = (kind: ElementKind, name: string): Element => {
-  switch (kind) {
-    case 'group':
-      return { ...base(name), kind, members: [], width: 0, height: 0 };
-    case 'text':
-      return {
-        ...base(name),
-        kind,
-        richText: richTextFromPlainText('Text'),
-        textColor: '#1d1d1f',
-        textSize: 18,
-        font: 'sans-serif',
-        editable: false,
-      };
-    case 'image':
-      return { ...base(name), kind, image: '' };
-    case 'button':
-      return {
-        ...base(name),
-        kind,
-        height: 44,
-        label: 'Button',
-        fill: '#2f6fed',
-        ...BUTTON_DEFAULTS,
-        textColor: '#ffffff',
-      };
-    case 'rectangle':
-      return {
-        ...base(name),
-        kind,
-        fill: '#f0a020',
-        stroke: '#1d1d1f',
-        thickness: 2,
-      };
-    case 'ellipse':
-      return {
-        ...base(name),
-        kind,
-        fill: '#7ee08a',
-        stroke: '#1d1d1f',
-        thickness: 2,
-      };
-    case 'line':
-      return {
-        ...base(name),
-        kind,
-        height: 0,
-        stroke: '#1d1d1f',
-        thickness: 2,
-      };
-    case 'canvas':
-      return { ...base(name), kind, fill: '#ffffff', drawing: [] };
-  }
 };
 
 export const createPage = (name: string): Page => ({

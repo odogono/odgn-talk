@@ -11,6 +11,7 @@ import { ErrorsWindow } from './errors';
 import { PerformanceWindow } from './performance-window';
 import { mountMessageWindow } from './message-window';
 import { type Element, type Project, type TextElement } from './model';
+import { kindOf } from './elements/registry';
 import { firstView } from './play-host';
 import { commitDrawings, PlayMirror, type MirrorPage } from './play-mirror';
 import { mountPlayPrompts } from './play-prompts';
@@ -626,7 +627,8 @@ export const mountPlay = (shell: StackShell): void => {
       pageNode,
       play
         .elementsOf()
-        .filter(element => element.kind !== 'group')
+        // A container draws nothing of its own while playing.
+        .filter(element => !kindOf(element).container)
         .map(element => {
           if (
             activeText?.history.element === element &&
@@ -643,12 +645,7 @@ export const mountPlay = (shell: StackShell): void => {
             editing: activeText?.history.element === element,
             className:
               activeText?.history.element === element ? 'text-editing' : '',
-            imageUrl:
-              element.kind === 'image'
-                ? shell.images.url(
-                    playing!.assets.find(a => a.name === element.image),
-                  )
-                : undefined,
+            imageUrl: shell.images.elementUrl(element, playing!.assets),
             attributes: readerAttributes(play, element),
           });
         }),
@@ -685,16 +682,9 @@ export const mountPlay = (shell: StackShell): void => {
     const visible = play.isVisible(element);
     return {
       hidden: !visible,
-      ...(element.kind === 'text' && {
-        contentEditable:
-          element.editable && visible && allowed().takesInput
-            ? 'true'
-            : 'false',
-      }),
-      ...(element.kind === 'button' && {
-        tabIndex: visible ? 0 : -1,
-        role: 'button',
-        'aria-label': element.label || element.name,
+      ...kindOf(element).readerAttributes?.(element, {
+        visible,
+        takesInput: allowed().takesInput,
       }),
       onPointerEnter: event => {
         if (event.pointerType !== 'touch') {

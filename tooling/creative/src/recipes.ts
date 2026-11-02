@@ -1,4 +1,5 @@
 import type { DeepReadonly } from './readonly';
+import { kindOf } from './elements/registry';
 import { allElements } from './tree/rules';
 // Recipes produce ordinary source. Placement is derived from the Core's lossless
 // parse, never from a textual search for a handler or its closing `end`.
@@ -52,19 +53,15 @@ export const recipeTargets = (
       : sounds;
   }
   return allElements(scriptPage(project, owner)?.elements ?? [])
-    .filter(
-      element =>
-        kind !== 'text' || element.kind === 'button' || element.kind === 'text',
-    )
-    .map((element: DeepReadonly<Element>) => ({
-      name: element.name,
-      reference: element === owner ? 'me' : element.name,
-      ...(element.kind === 'button'
-        ? { property: 'label' as const }
-        : element.kind === 'text'
-          ? { property: 'text' as const }
-          : {}),
-    }));
+    .filter(element => kind !== 'text' || kindOf(element).textProperty)
+    .map((element: DeepReadonly<Element>) => {
+      const property = kindOf(element).textProperty;
+      return {
+        name: element.name,
+        reference: element === owner ? 'me' : element.name,
+        ...(property ? { property } : {}),
+      };
+    });
 };
 
 /** Ordinary literals have no escapes. Backticks safely encode every special character. */

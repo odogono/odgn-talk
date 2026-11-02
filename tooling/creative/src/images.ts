@@ -4,7 +4,8 @@ import { allElements } from './tree/rules';
 // authored edit; retain bytes for undo and failed-save exports (#753). The
 // bytes store is keyed by hash for every asset, so sound bytes (#822) live
 // here too; sound intake and playback are in sounds.ts.
-import type { Asset, Project } from './model';
+import type { Asset, Element, Project } from './model';
+import { kindOf } from './elements/registry';
 import { sha256Hex } from './project-file';
 import type { NewAsset } from './storage';
 
@@ -159,6 +160,17 @@ export class ImageAssets {
     return url;
   }
 
+  /** The URL of the asset `element` shows, if its kind shows one. */
+  elementUrl(
+    element: DeepReadonly<Element>,
+    assets: DeepReadonly<Asset[]>,
+  ): string | undefined {
+    const name = kindOf(element).asset?.(element);
+    return name === undefined
+      ? undefined
+      : this.url(assets.find(a => a.name === name));
+  }
+
   /** Only bytes named by this model enter its atomic storage transaction. */
   forStorage(project: DeepReadonly<Project>): Map<string, NewAsset> {
     const result = new Map<string, NewAsset>();
@@ -192,9 +204,7 @@ export const projectForExport = (project: DeepReadonly<Project>): Project => {
   if (!scripted) {
     const used = new Set(
       project.pages.flatMap(p =>
-        allElements(p.elements).flatMap(e =>
-          e.kind === 'image' ? [e.image] : [],
-        ),
+        allElements(p.elements).flatMap(e => kindOf(e).asset?.(e) ?? []),
       ),
     );
     copy.assets = copy.assets.filter(a => used.has(a.name));

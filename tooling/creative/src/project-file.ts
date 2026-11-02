@@ -3,35 +3,29 @@
 // `format` version, and one stored `assets/<sha256>.<ext>` per asset.
 // Files hold the authored Project only, never Play State (ADR 0041).
 import type { DeepReadonly } from './readonly';
-import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './tree/rules';
-
 import {
-  alignParagraph,
-  ELEMENT_KINDS,
-  BUTTON_DEFAULTS,
-  BUTTON_STYLES_PROSE,
-  isButtonStyle,
-  isIdentifierName,
   isPageAlignX,
   isPageAlignY,
-  isTextAlign,
   projectWithoutIds,
   type Asset,
-  type CanvasElement,
   type Element,
-  type ElementKind,
+  type ElementBase,
   type Instrument,
   type Page,
-  type Paragraph,
   type Project,
-  type RichText,
-  type TextRun,
 } from './model';
+import {
+  Checker,
+  isObj,
+  setDefined,
+  type Obj,
+  type ValidationIssue,
+} from './elements/checker';
+import { isElementKind, kindOf } from './elements/registry';
 import { migrateClicks } from './click-migration';
 import { migrateSounds } from './sound-migration';
 import { defaultParameters } from './instruments/kind';
 import { INSTRUMENT_KINDS, instrumentProblems } from './instruments/registry';
-import { drawingProblem } from './drawing';
 import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
@@ -39,7 +33,7 @@ export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
 export const CURRENT_FORMAT = 7;
 const APP = 'northtalk-creative';
 
-export type ValidationIssue = { message: string; path: string };
+export type { ValidationIssue } from './elements/checker';
 
 /** Any failure to read or write a Project file. Never a half-read Project. */
 export class ProjectFileError extends Error {
@@ -90,149 +84,8 @@ export const assetEntryName = (asset: Asset): string => {
 
 // --- Validation: unknown JSON in, a Project or every problem out -----------
 
-type Obj = Record<string, unknown>;
-
-const isObj = (v: unknown): v is Obj =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
-/** Copies an optional field onto `target` only when it is present. */
-const setDefined = <T extends object, K extends keyof T>(
-  target: T,
-  key: K,
-  value: T[K] | undefined,
-): void => {
-  if (value !== undefined) {
-    target[key] = value;
-  }
-};
-
-class Checker {
-  readonly elements = new Set<object>();
-  readonly names = new Set<string>();
-  readonly issues: ValidationIssue[] = [];
-
-  fail(path: string, message: string): void {
-    this.issues.push({ path, message });
-  }
-
-  obj(value: unknown, path: string): Obj | undefined {
-    if (!isObj(value)) {
-      this.fail(path, 'expected an object');
-      return undefined;
-    }
-    return value;
-  }
-
-  arr(value: unknown, path: string): unknown[] | undefined {
-    if (!Array.isArray(value)) {
-      this.fail(path, 'expected a list');
-      return undefined;
-    }
-    return value;
-  }
-
-  str(value: unknown, path: string): string | undefined {
-    if (typeof value !== 'string') {
-      this.fail(path, 'expected text');
-      return undefined;
-    }
-    return value;
-  }
-
-  optStr(value: unknown, path: string): string | undefined {
-    return value === undefined ? undefined : this.str(value, path);
-  }
-
-  bool(value: unknown, path: string): boolean | undefined {
-    if (typeof value !== 'boolean') {
-      this.fail(path, 'expected true or false');
-      return undefined;
-    }
-    return value;
-  }
-
-  optBool(value: unknown, path: string): boolean | undefined {
-    return value === undefined ? undefined : this.bool(value, path);
-  }
-
-  num(
-    value: unknown,
-    path: string,
-    rule: 'finite' | 'nonNegative' | 'positive',
-  ): number | undefined {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      this.fail(path, 'expected a number');
-      return undefined;
-    }
-    if (rule === 'positive' && value <= 0) {
-      this.fail(path, 'expected a number above zero');
-      return undefined;
-    }
-    if (rule === 'nonNegative' && value < 0) {
-      this.fail(path, 'expected zero or above');
-      return undefined;
-    }
-    return value;
-  }
-
-  /** Reports every item whose `name` repeats an earlier one in its list. */
-  unique(
-    items: readonly { name: string }[],
-    pathOf: (i: number) => string,
-    noun: string,
-  ): void {
-    const seen = new Set<string>();
-    items.forEach(({ name }, i) => {
-      if (seen.has(name)) {
-        this.fail(
-          `${pathOf(i)}.name`,
-          `another ${noun} is also named "${name}"`,
-        );
-      }
-      seen.add(name);
-    });
-  }
-
-  name(value: unknown, path: string): string | undefined {
-    const name = this.str(value, path);
-    if (name !== undefined && !isIdentifierName(name)) {
-      this.fail(path, `"${name}" is not an identifier name`);
-      return undefined;
-    }
-    return name;
-  }
-}
-
 // The builders below run even after a failure, so one read reports every
 // problem. Their placeholder values are discarded whenever issues exist.
-
-const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
-  const paragraphs = c.arr(value, path) ?? [];
-  return paragraphs.map((raw, i) => {
-    const p = c.obj(raw, `${path}[${i}]`) ?? {};
-    const runs = c.arr(p.runs, `${path}[${i}].runs`) ?? [];
-    const align = c.optStr(p.align, `${path}[${i}].align`);
-    if (align !== undefined && !isTextAlign(align)) {
-      c.fail(`${path}[${i}].align`, 'expected left, center, right or justify');
-    }
-    const paragraph: Paragraph = {
-      runs: runs.map((rawRun, j) => {
-        const at = `${path}[${i}].runs[${j}]`;
-        const r = c.obj(rawRun, at) ?? {};
-        const run: TextRun = {
-          text: c.str(r.text, `${at}.text`) ?? '',
-        };
-        for (const key of ['bold', 'italic', 'underline'] as const) {
-          setDefined(run, key, c.optBool(r[key], `${at}.${key}`));
-        }
-        setDefined(run, 'color', c.optStr(r.color, `${at}.color`));
-        return run;
-      }),
-    };
-    alignParagraph(paragraph, isTextAlign(align) ? align : undefined);
-    return paragraph;
-  });
-};
 
 const checkElement = (
   c: Checker,
@@ -254,142 +107,28 @@ const checkElement = (
     c.fail(`${path}.name`, 'another Element on this Page has this name');
   }
   c.names.add(name);
-  if (e.kind === 'group') {
-    if (depth >= MAX_GROUP_DEPTH) {
-      c.fail(path, `groups may nest at most ${MAX_GROUP_DEPTH} levels`);
-      return undefined;
-    }
-    const members = (c.arr(e.members, `${path}.members`) ?? []).flatMap(
-      (raw, i) => {
-        const member = checkElement(c, raw, `${path}.members[${i}]`, depth + 1);
-        return member ? [member] : [];
-      },
-    );
-    const anchor = members.length
-      ? undefined
-      : c.obj(
-          e.emptyPosition ??
-            (typeof e.left === 'number'
-              ? { left: e.left, top: e.top }
-              : undefined),
-          `${path}.emptyPosition`,
-        );
-    if (members.length && e.emptyPosition !== undefined) {
-      c.fail(
-        `${path}.emptyPosition`,
-        'only empty groups have a saved position',
-      );
-    }
-    const group: Element = {
-      kind: 'group',
-      name,
-      members,
-      visible: c.bool(e.visible, `${path}.visible`) ?? true,
-      left: anchor
-        ? (c.num(anchor.left, `${path}.emptyPosition.left`, 'finite') ?? 0)
-        : 0,
-      top: anchor
-        ? (c.num(anchor.top, `${path}.emptyPosition.top`, 'finite') ?? 0)
-        : 0,
-      width: 0,
-      height: 0,
-    };
-    setDefined(group, 'script', c.optStr(e.script, `${path}.script`));
-    try {
-      checkHierarchy([group]);
-      refreshBounds([group]);
-    } catch (error) {
-      c.fail(path, error instanceof Error ? error.message : String(error));
-    }
-    return group;
-  }
-  const k = e.kind as ElementKind;
-  if (!ELEMENT_KINDS.includes(k)) {
+  const k = e.kind;
+  if (!isElementKind(k)) {
     c.fail(`${path}.kind`, `unknown Element kind ${JSON.stringify(e.kind)}`);
     return undefined;
   }
-  const base: Omit<Element, 'kind'> = {
+  return kindOf(k).check(c, e, path, {
     name,
-    left: c.num(e.left, `${path}.left`, 'finite') ?? 0,
-    top: c.num(e.top, `${path}.top`, 'finite') ?? 0,
-    width: c.num(e.width, `${path}.width`, 'nonNegative') ?? 0,
-    height: c.num(e.height, `${path}.height`, 'nonNegative') ?? 0,
-    visible: c.bool(e.visible, `${path}.visible`) ?? true,
-  };
-  setDefined(base, 'script', c.optStr(e.script, `${path}.script`));
-  switch (k) {
-    case 'text':
-      return {
-        ...base,
-        kind: k,
-        richText: checkRichText(c, e.richText, `${path}.richText`),
-        textColor: c.str(e.textColor, `${path}.textColor`) ?? '',
-        textSize: c.num(e.textSize, `${path}.textSize`, 'positive') ?? 1,
-        font: c.str(e.font, `${path}.font`) ?? '',
-        editable: c.bool(e.editable, `${path}.editable`) ?? false,
+    depth,
+    member: (raw, at) => checkElement(c, raw, at, depth + 1),
+    base: () => {
+      const base: ElementBase = {
+        name,
+        left: c.num(e.left, `${path}.left`, 'finite') ?? 0,
+        top: c.num(e.top, `${path}.top`, 'finite') ?? 0,
+        width: c.num(e.width, `${path}.width`, 'nonNegative') ?? 0,
+        height: c.num(e.height, `${path}.height`, 'nonNegative') ?? 0,
+        visible: c.bool(e.visible, `${path}.visible`) ?? true,
       };
-    case 'image':
-      return { ...base, kind: k, image: c.str(e.image, `${path}.image`) ?? '' };
-    case 'button': {
-      const style = e.style === undefined ? BUTTON_DEFAULTS.style : e.style;
-      const validStyle = isButtonStyle(style);
-      if (!validStyle) {
-        c.fail(`${path}.style`, `expected ${BUTTON_STYLES_PROSE}`);
-      }
-      return {
-        ...base,
-        kind: k,
-        label: c.str(e.label, `${path}.label`) ?? '',
-        fill: c.str(e.fill, `${path}.fill`) ?? '',
-        textColor: c.str(e.textColor, `${path}.textColor`) ?? '',
-        // Projects authored before button typography and styles keep their look.
-        font:
-          c.str(
-            e.font === undefined ? BUTTON_DEFAULTS.font : e.font,
-            `${path}.font`,
-          ) ?? '',
-        textSize:
-          c.num(
-            e.textSize === undefined ? BUTTON_DEFAULTS.textSize : e.textSize,
-            `${path}.textSize`,
-            'positive',
-          ) ?? BUTTON_DEFAULTS.textSize,
-        style: validStyle ? style : BUTTON_DEFAULTS.style,
-      };
-    }
-    case 'rectangle':
-    case 'ellipse':
-      return {
-        ...base,
-        kind: k,
-        fill: c.str(e.fill, `${path}.fill`) ?? '',
-        stroke: c.str(e.stroke, `${path}.stroke`) ?? '',
-        // Older format-1 Projects used a fixed 2px border.
-        thickness:
-          e.thickness === undefined
-            ? 2
-            : (c.num(e.thickness, `${path}.thickness`, 'nonNegative') ?? 2),
-      };
-    case 'line':
-      return {
-        ...base,
-        kind: k,
-        stroke: c.str(e.stroke, `${path}.stroke`) ?? '',
-        thickness: c.num(e.thickness, `${path}.thickness`, 'positive') ?? 1,
-      };
-    case 'canvas': {
-      const problem = drawingProblem(e.drawing);
-      if (problem) {
-        c.fail(`${path}.drawing`, problem);
-      }
-      return {
-        ...base,
-        kind: k,
-        fill: c.str(e.fill, `${path}.fill`) ?? '',
-        drawing: problem ? [] : (e.drawing as CanvasElement['drawing']),
-      };
-    }
-  }
+      setDefined(base, 'script', c.optStr(e.script, `${path}.script`));
+      return base;
+    },
+  });
 };
 
 const checkPage = (c: Checker, value: unknown, path: string): Page => {
@@ -548,21 +287,8 @@ export const validateProject = (
  * The parsed-JSON form of a Project file's `project.json`. The model is
  * plain JSON data, so this is an independent copy plus the format header.
  */
-const savedElement = (element: Element): Obj => {
-  if (element.kind !== 'group') {
-    return { ...element };
-  }
-  return {
-    kind: 'group',
-    name: element.name,
-    visible: element.visible,
-    ...(element.script === undefined ? {} : { script: element.script }),
-    members: element.members.map(savedElement),
-    ...(element.members.length
-      ? {}
-      : { emptyPosition: { left: element.left, top: element.top } }),
-  };
-};
+const savedElement = (element: Element): Obj =>
+  kindOf(element).save?.(element, savedElement) ?? { ...element };
 export const serializeProject = (project: DeepReadonly<Project>): Obj => {
   const copy = projectWithoutIds(project);
   return {
