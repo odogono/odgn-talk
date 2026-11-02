@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import {
@@ -8,13 +8,8 @@ import {
   MUSIC_BASE_VERSION,
 } from '../src/base-projects';
 import { EXAMPLE_BUDGET_BYTES, EXAMPLE_PROJECTS } from '../src/examples';
-import {
-  KIT_BUDGET_BYTES,
-  KIT_FILES,
-  KIT_SAMPLE_NAMES,
-  kitSampleKey,
-  renderKitFiles,
-} from '../src/kits/kits';
+import { KIT_SOUND_KEYS, renderKitSound } from '../src/kits/kits';
+import { soundKey } from '../src/sounds';
 import { parseMiniNotation } from '../src/mini-notation';
 import { patternTexts } from '../src/pattern-checks';
 import { readProjectFile, serializeProject } from '../src/project-file';
@@ -22,8 +17,6 @@ import {
   build,
   dist,
   examplePrecacheFiles,
-  KIT_NOTICE,
-  kitPrecacheFiles,
   precacheFiles,
   shellFile,
 } from '../tools/build';
@@ -93,11 +86,7 @@ test('the build writes everything offline use and installation need', async () =
   expect(worker).not.toContain('__FOLIO_VERSION__');
   // Every precached file exists, so installing the worker cannot fail
   // on a missing shell file.
-  for (const entry of [
-    ...precacheFiles,
-    ...kitPrecacheFiles,
-    ...examplePrecacheFiles,
-  ]) {
+  for (const entry of [...precacheFiles, ...examplePrecacheFiles]) {
     expect(existsSync(resolve(dist, shellFile(entry))), entry).toBe(true);
     expect(worker).toContain(JSON.stringify(entry));
   }
@@ -156,19 +145,17 @@ test('First Sounds carries every kit sound its patterns play (ADR 0161)', async 
         continue;
       }
       for (const word of parsed.pattern.words()) {
-        if (KIT_SAMPLE_NAMES.has(word.value.name)) {
-          played.add(kitSampleKey(word.value.name, word.value.index));
+        if (KIT_SOUND_KEYS.includes(soundKey(word.value))) {
+          played.add(soundKey(word.value));
         }
       }
     }
   }
   expect(played.size).toBeGreaterThan(0);
-  const rendered = renderKitFiles();
   for (const key of played) {
     const asset = project.assets.find(a => a.name === key);
     expect(asset, key).toBeDefined();
-    const path = KIT_FILES.find(file => file.key === key)!.path;
-    expect(assets.get(asset!.hash), key).toEqual(rendered.get(path)!);
+    expect(assets.get(asset!.hash), key).toEqual(renderKitSound(key));
   }
 }, 60_000);
 
@@ -186,13 +173,12 @@ test('the Music Base Project carries every kit sound, fetched on demand (ADR 016
   expect(worker).not.toContain(baseFilePath('music'));
   const { assets, project } = await readProjectFile(readFileSync(path));
   expect(project.base).toEqual({ name: 'music', version: MUSIC_BASE_VERSION });
-  const rendered = renderKitFiles();
   expect(project.assets.map(a => a.name).sort()).toEqual(
-    KIT_FILES.map(file => file.key).sort(),
+    [...KIT_SOUND_KEYS].sort(),
   );
-  for (const file of KIT_FILES) {
-    const asset = project.assets.find(a => a.name === file.key)!;
-    expect(assets.get(asset.hash), file.key).toEqual(rendered.get(file.path)!);
+  for (const key of KIT_SOUND_KEYS) {
+    const asset = project.assets.find(a => a.name === key)!;
+    expect(assets.get(asset.hash), key).toEqual(renderKitSound(key));
   }
   const fingerprint = createHash('sha256')
     .update(JSON.stringify(serializeProject(project)))
@@ -201,17 +187,13 @@ test('the Music Base Project carries every kit sound, fetched on demand (ADR 016
   expect(fingerprint).toBe(MUSIC_FINGERPRINTS[MUSIC_BASE_VERSION]!);
 }, 60_000);
 
-test('the built-in kits are built, precached with their licence and within budget', async () => {
+test('the build writes no kit sounds outside Project files (ADR 0161)', async () => {
   await build({ minify: false });
+  expect(existsSync(resolve(dist, 'kits'))).toBe(false);
+  const wavs = readdirSync(dist, { recursive: true })
+    .map(String)
+    .filter(path => path.endsWith('.wav'));
+  expect(wavs).toEqual([]);
   const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
-  let total = 0;
-  for (const file of KIT_FILES) {
-    expect(worker, file.path).toContain(JSON.stringify(`./${file.path}`));
-    total += statSync(resolve(dist, file.path)).size;
-  }
-  expect(total).toBeLessThanOrEqual(KIT_BUDGET_BYTES);
-  expect(worker).toContain(JSON.stringify(`./${KIT_NOTICE}`));
-  expect(readFileSync(resolve(dist, KIT_NOTICE), 'utf8')).toContain(
-    'Licence: CC0 1.0',
-  );
+  expect(worker).not.toContain('.wav');
 }, 60_000);

@@ -3,13 +3,12 @@
 // Play worker has no audio, so it sends each InstrumentMessage, timed on
 // this context's clock, straight to the worklet over a port this hands it,
 // and its Play clock follows the readings this sends it (ADR 0156). The
-// built-in kits (#1895) are fetched from the app, which the service worker
-// keeps for offline use, and a sampler for the default kit always plays.
+// samplers play only the Project's own sounds (ADR 0161), and a default
+// sampler always plays for patterns without `on`.
 import type { AudioReading } from '../audio-clock';
 import type { Asset, Project } from '../model';
 import type { DeepReadonly } from '../readonly';
-import { DEFAULT_KIT_INSTRUMENT, KIT_FILES } from '../kits/kits';
-import { isSoundAsset } from '../sounds';
+import { DEFAULT_SAMPLER, isSoundAsset } from '../sounds';
 import type { SampleBuffer } from './kind';
 import { samplerEngine } from './sampler';
 import {
@@ -23,15 +22,6 @@ const WORKLET_URL = './instruments.worklet.js';
 
 /** How often the Play worker hears the audio clock while it runs. */
 const READING_MS = 250;
-
-/** A built-in kit's sound, from the app (offline, from the service worker). */
-const kitBytes = async (path: string): Promise<ArrayBuffer> => {
-  const response = await fetch(`./${path}`);
-  if (!response.ok) {
-    throw new Error(`${path} answered ${response.status}`);
-  }
-  return response.arrayBuffer();
-};
 
 export type InstrumentAudio = {
   /** Stops the audio for good. */
@@ -115,13 +105,11 @@ export const startInstrumentAudio = (
 
   void (async () => {
     try {
-      // Kits come first, so a Project sound with a kit sample's name wins.
-      const decoding = Promise.all([
-        ...KIT_FILES.map(file => decode(file.key, () => kitBytes(file.path))),
-        ...project.assets
+      const decoding = Promise.all(
+        project.assets
           .filter(isSoundAsset)
           .map(asset => decode(asset.name, () => soundBytes(asset))),
-      ]);
+      );
       const [samples] = await Promise.all([
         decoding,
         context.audioWorklet.addModule(WORKLET_URL),
@@ -139,7 +127,7 @@ export const startInstrumentAudio = (
           })),
           {
             kind: samplerEngine.name,
-            name: DEFAULT_KIT_INSTRUMENT,
+            name: DEFAULT_SAMPLER,
             parameters: {},
             voices: samplerEngine.voices,
           },

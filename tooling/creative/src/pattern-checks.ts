@@ -4,12 +4,16 @@
 // when they play.
 import { parseSource } from '@northtalk/ts';
 import { rangeAt, type LspDiagnostic } from '@northtalk/tooling/lsp';
-import { KIT_SAMPLE_NAMES, kitSampleKey } from './kits/kits';
 import { parseMiniNotation } from './mini-notation';
 import type { DeepReadonly } from './readonly';
 import type { Project } from './model';
 import { scriptOwners } from './script-manifest';
-import { isSoundAsset } from './sounds';
+import {
+  isSoundAsset,
+  missingSoundMessage,
+  MUSIC_SOUNDS,
+  soundKey,
+} from './sounds';
 
 type Node = {
   children?: readonly Node[];
@@ -46,10 +50,7 @@ export const projectPatternNames = (
   instruments: new Map(
     project.instruments.map(i => [i.name, i.kind === 'sampler']),
   ),
-  sounds: new Set([
-    ...KIT_SAMPLE_NAMES,
-    ...project.assets.filter(isSoundAsset).map(a => a.name),
-  ]),
+  sounds: new Set(project.assets.filter(isSoundAsset).map(a => a.name)),
 });
 
 const PATTERN_OPERATIONS = new Set(['play', 'loop']);
@@ -160,17 +161,17 @@ export const patternProblems = (
       .words()
       .filter(word =>
         sampler
-          ? !names.sounds.has(word.value.name)
+          ? !names.sounds.has(soundKey(word.value))
           : word.value.note === undefined,
       )
       .map(word =>
-        at(
-          word.from,
-          word.from + word.value.name.length,
-          sampler
-            ? `No sound or sample is named “${word.value.name}”.`
-            : `“${word.value.name}” is not a note ${on} can play.`,
-        ),
+        sampler
+          ? at(word.from, word.to, missingSoundMessage(soundKey(word.value)))
+          : at(
+              word.from,
+              word.from + word.value.name.length,
+              `“${word.value.name}” is not a note ${on} can play.`,
+            ),
       );
   });
 
@@ -190,7 +191,7 @@ export const patternDiagnostics = (
 /**
  * Whether a Play Session of the Project needs the Instruments' audio: it has
  * Instruments, or a Script or Library may play a Sound Pattern on the
- * default kit. A word check is enough, since starting audio for a Script
+ * default sampler. A word check is enough, since starting audio for a Script
  * that never plays one only costs an idle AudioContext.
  */
 export const needsInstrumentAudio = (project: DeepReadonly<Project>): boolean =>
@@ -201,11 +202,12 @@ export const needsInstrumentAudio = (project: DeepReadonly<Project>): boolean =>
   ].some(source => /\b(?:play|loop)\b/u.test(source));
 
 /**
- * The sampler keys of the kit sounds a Project's Scripts play in pattern
- * texts written as literals, such as `bd` and `bd:1`. Names built at run
- * time are not seen.
+ * The Music sounds a Project's Scripts play in pattern texts written as
+ * literals, such as `bd` and `bd:1`. Names built at run time are not seen.
  */
-export const projectKitKeys = (project: DeepReadonly<Project>): Set<string> => {
+export const projectMusicSounds = (
+  project: DeepReadonly<Project>,
+): Set<string> => {
   const samplers = new Set(
     project.instruments.filter(i => i.kind === 'sampler').map(i => i.name),
   );
@@ -217,8 +219,8 @@ export const projectKitKeys = (project: DeepReadonly<Project>): Set<string> => {
         continue;
       }
       for (const { value } of parsed.pattern.words()) {
-        if (KIT_SAMPLE_NAMES.has(value.name)) {
-          keys.add(kitSampleKey(value.name, value.index));
+        if (MUSIC_SOUNDS.has(soundKey(value))) {
+          keys.add(soundKey(value));
         }
       }
     }

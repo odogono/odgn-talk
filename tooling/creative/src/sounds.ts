@@ -2,6 +2,7 @@
 // from their bytes and trial-decoded before any authored edit, with the asset
 // size limits from #739. Playback ownership follows #735: a sound belongs to
 // the Script that started it, so stopping that Script stops its sounds.
+import { KIT_SOUND_KEYS } from './kits/kits';
 import type { Asset } from './model';
 import { sha256Hex } from './project-file';
 
@@ -264,3 +265,23 @@ export class SoundBoard {
     return [...this.#voices.values()].map(voice => voice.sound);
   }
 }
+
+/**
+ * The Instrument name of the sampler a Sound Pattern without `on` plays
+ * on. A Script can't write it as a name, so it never clashes with an
+ * authored Instrument. It plays only the Project's own sounds (ADR 0161).
+ */
+export const DEFAULT_SAMPLER = '#sounds';
+
+/** The Project sound a pattern word plays: `name`, or `name:n` for n > 0. */
+export const soundKey = (value: { index?: number; name: string }): string =>
+  value.index ? `${value.name}:${value.index}` : value.name;
+
+/** The sound names the Music Base Project brings. */
+export const MUSIC_SOUNDS: ReadonlySet<string> = new Set(KIT_SOUND_KEYS);
+
+/** Why a pattern word's sound can't play, and where to get it if Music has it. */
+export const missingSoundMessage = (key: string): string =>
+  MUSIC_SOUNDS.has(key)
+    ? `No sound is named “${key}”. Add it from Music with Add Music Sound… in Info.`
+    : `No sound is named “${key}”.`;

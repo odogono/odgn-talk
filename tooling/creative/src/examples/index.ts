@@ -64,7 +64,7 @@ export const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     name: FIRST_SOUNDS_PROJECT_NAME,
     slug: 'first-sounds',
     description:
-      'Learn Sound Patterns in Mini-Notation with the built-in kits, a Page per idea: a sound, sequences and rests, subdivision, alternation, layers, tempo and Instruments.',
+      'Learn Sound Patterns in Mini-Notation with the drum sounds it carries, a Page per idea: a sound, sequences and rests, subdivision, alternation, layers, tempo and Instruments.',
     create: createFirstSoundsProject,
   },
 ];

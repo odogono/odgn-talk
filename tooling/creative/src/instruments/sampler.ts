@@ -1,5 +1,5 @@
-// The sampler Instrument kind (#1894): plays the Project's sounds and the
-// built-in kits at a pitch or speed, gain and pan. A Script names the sound;
+// The sampler Instrument kind (#1894): plays the Project's sounds at a
+// pitch or speed, gain and pan (ADR 0161). A Script names the sound;
 // a note other than middle C plays it higher or lower.
 import type { Chip } from '../audio/chip-host';
 import {
@@ -171,8 +171,7 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
 
 export const samplerEngine: InstrumentEngine = {
   name: 'sampler',
-  description:
-    "A sampler: plays the Project's sounds and the built-in kits, at a pitch or speed.",
+  description: "A sampler: plays the Project's sounds at a pitch or speed.",
   maxVoices: 32,
   voices: 16,
   parameters,

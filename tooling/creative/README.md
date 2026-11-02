@@ -191,18 +191,20 @@ error. A Page or Element can't share an Instrument's name. A Script that stops
 releases the notes it started, and stopping Play stops every Instrument. The
 Instruments play through one AudioWorklet, which starts with Play.
 
-Folio ships two built-in sample kits, which every sampler can play as well as
-the Project's sounds: `drums`, the default kit (`bd`, `sd`, `hh`, `oh`, `cp`,
-`rim`, `lt`, `mt`, `ht`, `cb` and `cr`, with `bd:1` and `sd:1` as variants),
-and `shots` (`blip`, `zap`, `pluck`, `bell`, `sub` and `noise`; the pitched
-ones sound at middle C). So `tell drums to play "bd"` works before anything is
-imported, and a Project sound with a kit sample's name plays instead of it.
-Every kit sound is synthesised by
-[src/kits/kits.ts](src/kits/kits.ts) rather than recorded, and dedicated to the
-public domain under CC0 1.0. The build writes them to `kits/`, with the
-licence in `kits/LICENSE.txt`, and the service worker keeps them for offline
-use. `tests/build.test.ts` holds them to a 512 KiB budget; they take about
-340 KiB.
+A sampler plays only the Project's own sounds
+([ADR 0161](../../docs/adr/0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)).
+A pattern word `name:n` plays the sound named `name:n`, and `name:0` is
+`name`. **New Music Project** starts from the Music Base Project, whose
+sounds are `bd`, `sd`, `hh`, `oh`, `cp`, `rim`, `lt`, `mt`, `ht`, `cb` and
+`cr`, with `bd:1` and `sd:1` as variants, plus `blip`, `zap`, `pluck`,
+`bell`, `sub` and `noise` (the pitched ones sound at middle C). Any of
+them can be added to another Project with **Add Music Sound…** in Info,
+and a pattern naming one the Project lacks says so. Every Music sound is
+synthesised by [src/kits/kits.ts](src/kits/kits.ts) rather than recorded,
+and dedicated to the public domain under CC0 1.0. Without `on`, `play`
+and `loop` use the default sampler, so even `play "bell"` is timed by the
+Transport; only `play` `with {repeat: true}` plays a whole sound outside
+it.
 
 Each Play Session has one Transport, which starts at 120 bpm in 4/4 when Play
 starts (ADR 0158). A Script that handles `beat` gets every beat's bar and beat,
@@ -421,7 +423,7 @@ Page; change-text targets are buttons (`label`) and text Elements (`text`).
 The owning Element is the default target and is written as `me`. Sound
 actions offer the Project's sounds by the name Scripts use; **Stop a sound**
 also offers all sounds the Script started. **Loop a pattern** takes
-Mini-Notation and offers the default kit and the Project's Instruments,
+Mini-Notation and offers the default sampler and the Project's Instruments,
 writing `loop "bd hh sd hh"` or `loop "c2 e2" on bass`; inserted in a click
 handler, it changes the groove on the next bar. Project Scripts offer
 navigation, sounds and patterns. Page and Project handlers receive clicks
@@ -710,7 +712,7 @@ Transport, one cycle per bar, so no Run or Fuel is spent per note (ADR 0159,
 #1896):
 
 ```talk
-loop "bd [hh hh] sd hh"                    -- the default kit, from the next bar
+loop "bd [hh hh] sd hh"                    -- the default sampler, from the next bar
 loop "hh*8, - cp" on drums with {gain: 0.8}
 loop "<c3 e3 g3>*4" on bass
 play "c3 e3 g3" on bass                    -- once, spread over one bar from now
@@ -1617,7 +1619,7 @@ across a second Browse.
 ### First Sounds
 
 **Projects → Open First Sounds**, or <https://northtalk.org/folio/first-sounds>,
-teaches Sound Patterns and Mini-Notation with the built-in kits, after
+teaches Sound Patterns and Mini-Notation with the Music sounds it carries, after
 Strudel's First Sounds workshop
 ([#1898](https://github.com/odogono/odgn-talk/issues/1898)). Its six Pages
 each cover one idea: a sound, sequences and rests, subdivision, alternation,

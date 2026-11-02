@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { KIT_SAMPLE_NAMES } from '../src/kits/kits';
 import { createElement, createProject } from '../src/model';
 import {
   needsInstrumentAudio,
@@ -10,7 +9,7 @@ import {
 } from '../src/pattern-checks';
 import { PlaySession } from '../src/play';
 
-const names = { sounds: new Set(['bd', 'hh', 'sd', 'Door Creak']) };
+const names = { sounds: new Set(['bd', 'hh', 'sd', 'sd:2', 'Door Creak']) };
 
 test('pattern texts are literals given to play or loop on sound', () => {
   const source = `on click
@@ -40,9 +39,10 @@ test('unknown names are reported against the line and the word', () => {
   expect(patternProblems(source, names)).toEqual([
     {
       from: source.indexOf('cp'),
-      to: source.indexOf('cp') + 2,
+      to: source.indexOf('cp') + 4,
       line: 2,
-      message: 'No sound or sample is named “cp”.',
+      // Music has only one cp, so it can't offer cp:2.
+      message: 'No sound is named “cp:2”.',
     },
   ]);
 });
@@ -64,7 +64,7 @@ test('the editor underlines the same problems', () => {
   expect(patternDiagnostics(source, names)).toEqual([
     {
       code: 'mini-notation',
-      message: 'No sound or sample is named “zz”.',
+      message: 'No sound is named “zz”.',
       range: {
         start: { line: 1, character: 11 },
         end: { line: 1, character: 13 },
@@ -84,10 +84,8 @@ test('a Script’s pattern problems are reported when it loads, and it still loa
     mediaType: 'audio/wav',
     size: 3,
   });
-  // The Project's sounds join the built-in kits' samples.
-  const sounds = projectPatternNames(project).sounds;
-  expect(sounds).toEqual(new Set([...KIT_SAMPLE_NAMES, 'bd']));
-  expect(sounds.has('oh')).toBe(true);
+  // Only the Project's own sounds (ADR 0161).
+  expect(projectPatternNames(project).sounds).toEqual(new Set(['bd']));
   const button = createElement('button', 'button1');
   button.script = 'on click\n  loop "bd [zz"\nend click\non hello\nend hello';
   project.pages[0]!.elements.push(button);
@@ -111,10 +109,10 @@ test('a pattern `on` an Instrument is checked as its kind plays', () => {
     ),
   ).toEqual([
     '2 “zz” is not a note bass can play.',
-    '3 No sound or sample is named “zz”.',
+    '3 No sound is named “zz”.',
     // A whole Project sound's name plays only without `on`.
-    '5 No sound or sample is named “Door”.',
-    '5 No sound or sample is named “Creak”.',
+    '5 No sound is named “Door”.',
+    '5 No sound is named “Creak”.',
   ]);
 });
 
@@ -123,4 +121,36 @@ test('a Project needs Instrument audio for Instruments or a pattern word', () =>
   expect(needsInstrumentAudio(p)).toBe(false);
   p.pages[0]!.script = 'on openPage\n  loop "bd hh"\nend openPage';
   expect(needsInstrumentAudio(p)).toBe(true);
+});
+
+test('a Project knows only its own sounds, and a Music name says where to get it (ADR 0161)', () => {
+  const project = createProject('Blank');
+  expect(projectPatternNames(project).sounds).toEqual(new Set());
+  const source = 'on click\n  loop "bd bd:1 zz"\nend click';
+  expect(
+    patternProblems(source, projectPatternNames(project)).map(p => [
+      source.slice(p.from, p.to),
+      p.message,
+    ]),
+  ).toEqual([
+    [
+      'bd',
+      'No sound is named “bd”. Add it from Music with Add Music Sound… in Info.',
+    ],
+    [
+      'bd:1',
+      'No sound is named “bd:1”. Add it from Music with Add Music Sound… in Info.',
+    ],
+    ['zz', 'No sound is named “zz”.'],
+  ]);
+  for (const name of ['bd', 'bd:1', 'zz']) {
+    project.assets.push({
+      name,
+      fileName: `${name}.wav`,
+      hash: name.padEnd(64, '0'),
+      mediaType: 'audio/wav',
+      size: 3,
+    });
+  }
+  expect(patternProblems(source, projectPatternNames(project))).toEqual([]);
 });

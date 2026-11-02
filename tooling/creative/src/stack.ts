@@ -1,3 +1,4 @@
+import { kitSoundAsset } from './base-projects';
 import type { DeepReadonly } from './readonly';
 import { allElements, elementVisibility } from './tree/rules';
 // The Stack editor shell (#749), in the layout the UI prototype chose for
@@ -584,6 +585,14 @@ export const mountStack = (
   });
   info.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
+    if (target.hasAttribute('data-add-music-sound')) {
+      const key = target.value;
+      target.value = '';
+      if (key) {
+        void addMusicSound(key);
+      }
+      return;
+    }
     if (writeInstrument(target)) {
       return;
     }
@@ -929,6 +938,27 @@ export const mountStack = (
     }
     if (messages.length) {
       imageNotice(messages.join(' '));
+    }
+  };
+  /** Copies one of Music's sounds into the Project (ADR 0161). */
+  const addMusicSound = async (key: string) => {
+    if (editor.readOnly) {
+      return;
+    }
+    const generation = editor.generation;
+    try {
+      const { asset, bytes } = await kitSoundAsset(key);
+      const imported = await importSound(
+        new File([bytes as Uint8Array<ArrayBuffer>], asset.fileName),
+      );
+      if (editor.readOnly || editor.generation !== generation) {
+        return;
+      }
+      imported.asset.name = key;
+      images.add(imported);
+      edit(() => editor.addSound(imported.asset));
+    } catch (error) {
+      imageNotice(String(error));
     }
   };
   const chooseSound = () => {

@@ -39,7 +39,7 @@ export const PATTERN_OPTIONS = shape.map({
 const target = shape.optional(shape.value);
 const LABELS = ['on', 'with'] as const;
 const ON_WITH =
-  ' `on` names an Instrument, by itself or its name; without it the default kit plays. `with` takes `gain` (0 to 1), `pan` (-1 to 1) and `speed` (a sampler’s, 2 is an octave up).';
+  ' `on` names an Instrument, by itself or its name; without it the default sampler plays the Project’s sounds. `with` takes `gain` (0 to 1), `pan` (-1 to 1) and `speed` (a sampler’s, 2 is an octave up).';
 
 const operations = {
   play: {

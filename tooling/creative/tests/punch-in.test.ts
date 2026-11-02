@@ -2,6 +2,7 @@
 // 4/4 a bar is 2 s, and the Transport starting at the first Pump puts bar 1
 // at 0.1 s, so bar n+1 begins at 0.1 + 2n s and its Punch In applies a lead
 // earlier, at 2n s.
+import { withMusicSounds } from './music-sounds';
 import { expect, test } from 'bun:test';
 import {
   createElement,
@@ -16,10 +17,10 @@ import type { PlayRequest, PlayResponse } from '../src/play-protocol';
 import { scriptOwners } from '../src/script-manifest';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
-import { DEFAULT_KIT_INSTRUMENT } from '../src/kits/kits';
+import { DEFAULT_SAMPLER } from '../src/sounds';
 
 const ms = (n: number) => BigInt(n) * 1000n;
-const kit = DEFAULT_KIT_INSTRUMENT;
+const kit = DEFAULT_SAMPLER;
 
 const session = (p: Project) => {
   const sent: InstrumentMessage[] = [];
@@ -72,7 +73,7 @@ on openScript
 end openScript`;
 
 const project = (pageScript: string) => {
-  const p = createProject('Live');
+  const p = withMusicSounds(createProject('Live'));
   p.instruments.push(createInstrument('sampler', 'drums'));
   p.pages[0]!.script = pageScript;
   p.pages[0]!.elements.push(createElement('button', 'count'));

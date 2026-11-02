@@ -1,3 +1,4 @@
+import { withMusicSounds } from './music-sounds';
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
 import {
@@ -15,7 +16,7 @@ import {
 import { PlaySession } from '../src/play';
 
 const fixture = () => {
-  const project = createProject('Story');
+  const project = withMusicSounds(createProject('Story'));
   project.pages[0]!.elements.push(createElement('button', 'button1'));
   project.pages.push(createPage('page2'));
   return project;
@@ -514,8 +515,8 @@ test('in Edit, `play` is only a preview and a loop waits for Browse', async () =
   expect(played.text).toBeUndefined();
   expect(played.preview?.map(m => [m.at, m.instrument, m.commands[0]])).toEqual(
     [
-      [0, '#kit', { kind: 'note', note: 60, sound: 'bd', velocity: 1 }],
-      [1, '#kit', { kind: 'note', note: 60, sound: 'hh', velocity: 1 }],
+      [0, '#sounds', { kind: 'note', note: 60, sound: 'bd', velocity: 1 }],
+      [1, '#sounds', { kind: 'note', note: 60, sound: 'hh', velocity: 1 }],
     ],
   );
   expect(await runInEdit(editor, 'loop "bd hh"')).toEqual({
@@ -535,6 +536,6 @@ test('during Play a Message Box pattern belongs to the targeted Script', async (
   }
   const owner = [...play.group.scriptNames()].find(n => n.includes('button1'))!;
   expect(play.patterns.loops(owner)).toEqual([
-    { instrument: '#kit', text: 'bd' },
+    { instrument: '#sounds', text: 'bd' },
   ]);
 });

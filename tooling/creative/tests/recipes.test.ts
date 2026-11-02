@@ -1,3 +1,4 @@
+import { withMusicSounds } from './music-sounds';
 import { thaw } from '../src/readonly';
 import { expect, test } from 'bun:test';
 import { parseSource } from '@northtalk/ts';
@@ -280,12 +281,13 @@ test('sound Recipes offer only audio assets and play through the Play Host', () 
   expect(play.sounds.playing()).toEqual([]);
 });
 
-test('Loop a pattern loops Mini-Notation on the default kit or an Instrument', () => {
+test('Loop a pattern loops Mini-Notation on the default sampler or an Instrument', () => {
   const { project, button } = fixture();
+  withMusicSounds(project);
   project.instruments.push(createInstrument('synth', 'bass'));
   const targets = recipeTargets(project, button, 'loopPattern');
   expect(targets).toEqual([
-    { name: 'Default kit', reference: '' },
+    { name: 'Default sampler', reference: '' },
     { name: 'bass', reference: 'bass' },
   ]);
   expect(recipeSource('loopPattern', targets[0]!, ' bd hh sd hh ')).toBe(

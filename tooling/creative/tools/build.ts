@@ -7,8 +7,7 @@
 // keeps the installed worker, and a changed shell offers an update. Each
 // Example Project gets a `.folio` file and a copy of the page at
 // `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141); the
-// service worker keeps a `.folio` file when first fetched (ADR 0161). The
-// built-in kits are rendered to `kits/` and precached too (#1895).
+// service worker keeps a `.folio` file when first fetched (ADR 0161).
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -24,7 +23,6 @@ import {
   exampleFilePath,
 } from '../src/examples';
 import { baseFilePath, createMusicBase } from '../src/base-projects';
-import { KIT_FILES, kitNotice, renderKitFiles } from '../src/kits/kits';
 import { writeProjectFile } from '../src/project-file';
 import { iconPng, iconSvg } from './icons';
 
@@ -63,22 +61,6 @@ export const examplePrecacheFiles = EXAMPLE_PROJECTS.map(
 
 /** URL prefixes the service worker keeps when first fetched (ADR 0161). */
 export const onDemandPrefixes = ['./projects/'];
-
-/** The built-in kits' sounds and licence notice, precached for offline Play (#1895). */
-export const KIT_NOTICE = 'kits/LICENSE.txt';
-export const kitPrecacheFiles = [
-  ...KIT_FILES.map(file => `./${file.path}`),
-  `./${KIT_NOTICE}`,
-];
-
-const writeKits = (): void => {
-  for (const [path, bytes] of renderKitFiles()) {
-    const file = resolve(dist, path);
-    mkdirSync(resolve(file, '..'), { recursive: true });
-    writeFileSync(file, bytes);
-  }
-  writeFileSync(resolve(dist, KIT_NOTICE), kitNotice());
-};
 
 /** The file in `dist/` behind a precached URL. */
 export const shellFile = (entry: string): string =>
@@ -153,14 +135,9 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     iconPng(512, { maskable: true }),
   );
   writeFileSync(resolve(dist, 'apple-touch-icon.png'), iconPng(180));
-  writeKits();
   await writeExamples();
 
-  const precache = [
-    ...precacheFiles,
-    ...kitPrecacheFiles,
-    ...examplePrecacheFiles,
-  ];
+  const precache = [...precacheFiles, ...examplePrecacheFiles];
   const hash = createHash('sha256');
   for (const entry of precache) {
     hash.update(entry);

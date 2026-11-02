@@ -50,6 +50,9 @@ const wavFile = (): File => {
   return new File([bytes], 'waves.wav', { type: 'audio/wav' });
 };
 
+const picker = () =>
+  document.querySelector<HTMLSelectElement>('#info [data-add-music-sound]')!;
+
 const pickSound = (file: File) => {
   const nativePicker = HTMLInputElement.prototype.click;
   HTMLInputElement.prototype.click = function () {
@@ -112,6 +115,29 @@ export const runBrowserTests = async () => {
     shell.editor.redo();
     shell.redraw();
     assert(shell.editor.project.assets.length === 1, 'Redo restores the sound');
+  });
+
+  await test('Add Music Sound adds a named Music sound as one undoable edit (ADR 0161)', async () => {
+    assert(
+      [...picker().options].some(o => o.value === 'bd:1'),
+      'Music offers bd:1',
+    );
+    const before = shell.editor.project.assets.length;
+    picker().value = 'bd:1';
+    picker().dispatchEvent(new Event('change', { bubbles: true }));
+    await until(() => shell.editor.project.assets.some(a => a.name === 'bd:1'));
+    shell.redraw();
+    assert(picker().value === '', 'The picker resets');
+    assert(
+      ![...picker().options].some(o => o.value === 'bd:1'),
+      'A sound the Project has is no longer offered',
+    );
+    shell.editor.undo();
+    shell.redraw();
+    assert(
+      shell.editor.project.assets.length === before,
+      'Undo removes the Music sound',
+    );
   });
 
   await test('a Script loops the sound in Play and Stop silences it', () => {

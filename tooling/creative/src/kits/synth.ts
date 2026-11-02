@@ -1,4 +1,4 @@
-// The building blocks the built-in kits are synthesised from (#1895):
+// The building blocks the Music sounds are synthesised from (#1895):
 // oscillators, seeded noise, envelopes and one-pole filters. Every sound
 // is computed from code, so the same build always writes the same bytes
 // and no third-party recording is involved.
