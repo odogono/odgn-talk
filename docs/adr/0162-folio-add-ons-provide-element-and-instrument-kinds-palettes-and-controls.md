@@ -30,7 +30,9 @@ Instrument kinds use the same mechanism. An Instrument kind's code may come from
 
 ## Trust
 
-A Project Add-on runs in the page with Folio's privileges, so Folio asks before running one. When a Project with Project Add-ons opens, Folio names them and asks the reader to trust them. Folio remembers the answer by content hash, so a changed Add-on asks again. `.folio` files served from northtalk.org are trusted without asking, as are built-in Add-ons and Project Add-ons copied from a Base Project that ships with Folio.
+A Project Add-on runs in the page with Folio's privileges, so Folio asks before running one. When a Project with Project Add-ons opens, Folio names them and asks the reader to trust them. Folio remembers the answer by content hash, so a changed Add-on asks again.
+
+A Project Add-on may carry a signature over its content hash. Folio ships one NorthTalk public key, an Ed25519 key that it checks with WebCrypto, and runs an Add-on whose signature verifies against that key without asking, wherever the file came from. Our release tooling signs the Project Add-ons in the Base Projects and Example Projects we publish. Built-in Add-ons are part of Folio and are always trusted. If the NorthTalk key leaks, a new Folio release ships a new key, and the old signatures stop verifying.
 
 When an Add-on is not trusted or can't load, the Project still opens: its Elements show as placeholders that cannot be edited, their data is saved back unchanged, and a Script that uses one gets a clear error during Play. Trusting it later loads it without reopening the Project.
 
@@ -46,6 +48,8 @@ A control is an Element kind with a `value` property that sends `change value` w
 
 - **First-party Add-ons only.** Rejected because every new kind would have to ship with Folio, and an author could not share a Project that brings its own kinds.
 - **Kinds defined in NorthTalk and drawn through the canvas Grant.** Rejected because drawing and pointer handling through the worker are too limited and too slow for controls, though it needs no new trust.
+- **Trust `.folio` files served from northtalk.org.** Rejected because the trust is lost once the file is saved and reopened from disk, and anything served from that origin, by mistake or by an attacker, would run without asking. A signature travels with the file.
+- **Let any author sign Add-ons.** Deferred, because it needs key registration, a way to show who signed, and revocation. Until then, an Add-on signed by anyone else gets the trust prompt.
 - **Run Project Add-ons in a sandboxed cross-origin iframe.** Deferred, because it needs a message protocol, sizing, focus and theming across the boundary, and an audio-side binding API. It can later replace the trust prompt for untrusted origins.
 - **Keep every kind in the main bundle.** Rejected because the bundle and precache would grow with every music kind, which ADR 0161 avoided for sounds.
 - **Separate definitions for built-in and Add-on kinds.** Rejected because two definitions would drift, and moving a kind into or out of an Add-on would change its behaviour.
@@ -53,4 +57,4 @@ A control is an Element kind with a `value` property that sends `change value` w
 
 ## Consequences
 
-A trusted Project Add-on can do anything Folio can, including reading other Projects in browser storage, so the prompt must say so plainly, and northtalk.org must only serve `.folio` files we have reviewed. Built-in kinds move onto the shared Element kind definition. The `.folio` format gains an Add-on list holding references and embedded code, and placeholders must round-trip unknown Element data byte for byte. Shared Links stay asset-free, so a Project with Project Add-ons is shared as a `.folio` file. A Project opened offline that uses a built-in Add-on never fetched online shows that Add-on's Elements as placeholders until Folio is online again.
+A trusted Project Add-on can do anything Folio can, including reading other Projects in browser storage, so the prompt must say so plainly, and we sign only Add-ons we have reviewed. The NorthTalk private key lives in the release secrets, and the release tooling gains a signing step. Built-in kinds move onto the shared Element kind definition. The `.folio` format gains an Add-on list holding references and embedded code with optional signatures, and placeholders must round-trip unknown Element data byte for byte. Shared Links stay asset-free, so a Project with Project Add-ons is shared as a `.folio` file. A Project opened offline that uses a built-in Add-on never fetched online shows that Add-on's Elements as placeholders until Folio is online again.
