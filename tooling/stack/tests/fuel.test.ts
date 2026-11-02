@@ -4,8 +4,11 @@ import {
   list,
   loadScript,
   newGroup,
+  nothing,
   num,
   parseInstant,
+  peerCapability,
+  peerKind,
   type Value,
 } from '@northtalk/ts';
 import {
@@ -135,4 +138,64 @@ test('the hover counts a recurring term; full lists each one', () => {
   expect(fuelText(sum!, { full: true })).toContain(
     'arithmetic (line 2), arithmetic (line 3), arithmetic (line 4), arithmetic (line 5)',
   );
+});
+
+// The `peer` Grant's `call` declares 50 Fuel.
+const peerDeclared = (grant: string, op: string) =>
+  grant === 'peer' && op === 'call' ? 50 : undefined;
+
+test('a send to a Peer is charged at the capability rate, and its estimate covers it', () => {
+  const source = `on pay p\n  send charge with 12 to p and wait\n  return it\nend pay`;
+  const code = loadScript(
+    compileSource(source, { name: 's' }).unit!,
+    {},
+    new Map(),
+  );
+  const [estimate] = estimateFuel(code, peerDeclared, 'peer');
+  const [bound] = boundFuel(
+    code,
+    defaultFuelCaps,
+    peerDeclared,
+    () => null,
+    'peer',
+  );
+  // Without the Grant, the send's own rate is all an estimate counts.
+  const [plain] = estimateFuel(code, peerDeclared);
+  expect(estimate!.max).toBeGreaterThan(plain!.max);
+  expect(estimate!.terms.some(t => t.key === 'capability')).toBe(true);
+
+  const g = newGroup({ name: 't' });
+  const call = { fuel: 50 };
+  const peer = peerCapability(
+    {
+      expose: () => {},
+      unexpose: () => {},
+      reach: () => {},
+      post: () => {},
+      call: c => c.answer(num(13)),
+      caller: () => nothing,
+    },
+    {
+      expose: call,
+      unexpose: call,
+      reach: call,
+      post: call,
+      call,
+      caller: call,
+    },
+  );
+  const s = g.load({
+    name: 's',
+    source,
+    grants: { peer: peer.grant('all', null) },
+  });
+  const billing = g.object(peerKind, 'billing', null);
+  s.request({ name: 'pay', args: [billing.value] });
+  const now = parseInstant('2026-09-30T09:00:00Z');
+  const fuel = g.pump(now).fuelUsed + g.pump(now + 1000n).fuelUsed;
+  expect(fuel).toBeGreaterThan(50);
+  // The capability rate's 10, and the call's peerDeclared 50.
+  expect(estimate!.max).toBeGreaterThanOrEqual(60);
+  expect(bound!.kind).toBe('bounded');
+  expect(bound!.kind === 'bounded' && bound!.fuel).toBeGreaterThanOrEqual(fuel);
 });

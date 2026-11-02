@@ -906,13 +906,23 @@ const fuelAt = (
   if (cached?.manifest !== manifest || cached.caps !== caps) {
     const declared = (grant: string, op: string) =>
       manifest?.grants.get(grant)?.get(op)?.cost?.fuel;
+    // A `send` may be a Remote Send through the Script's `peer` Grant.
+    const peer = [...(manifest?.capabilities ?? [])].find(
+      ([, capability]) => capability === 'peer',
+    )?.[0];
     cached = {
-      bounds: boundFuel(loaded, caps, declared, (grant, op) => {
-        const operation = manifest?.grants.get(grant)?.get(op);
-        return operation && (operation.result ?? null);
-      }),
+      bounds: boundFuel(
+        loaded,
+        caps,
+        declared,
+        (grant, op) => {
+          const operation = manifest?.grants.get(grant)?.get(op);
+          return operation && (operation.result ?? null);
+        },
+        peer,
+      ),
       caps,
-      estimates: estimateFuel(loaded, declared),
+      estimates: estimateFuel(loaded, declared, peer),
       manifest,
     };
     fuelEstimates.set(loaded, cached);

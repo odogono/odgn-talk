@@ -68,7 +68,11 @@ const sends = new Set([
   'send-spread-wait',
   'join-send-spread',
 ]);
-const capabilityFuel = fuelRates.find(r => r.key === 'capability')!.fixed;
+const capabilityRate = fuelRates.find(r => r.key === 'capability')!;
+const capabilityFuel = capabilityRate.fixed;
+// A send that waits is the `peer` Grant's `call`; a plain one its `post`.
+const remoteOperation = (op: string) =>
+  op.endsWith('-wait') || op.startsWith('join-') ? 'call' : 'post';
 
 type Unit = CodeUnit;
 type Body = Unit['bodies'][number];
@@ -118,8 +122,10 @@ const graphOf = (unit: Unit, body: Body) => {
 export const estimateFuel = (
   code: FuelCode,
   declared: DeclaredFuel = () => undefined,
+  /** The Script's `peer` Grant, whose `send`s may be Remote Sends. */
+  peer?: string,
 ): FuelEstimate[] => {
-  const estimator = new Estimator(declared);
+  const estimator = new Estimator(declared, undefined, undefined, peer);
   return code.unit.bodies
     .filter(body => body.kind !== 'init')
     .map(body => estimator.body(code, body));
@@ -201,8 +207,10 @@ export const boundFuel = (
   caps: FuelCaps = defaultFuelCaps,
   declared: DeclaredFuel = () => undefined,
   results: DeclaredResult = () => undefined,
+  /** The Script's `peer` Grant, whose `send`s may be Remote Sends. */
+  peer?: string,
 ): FuelBound[] => {
-  const estimator = new Estimator(declared, caps, results);
+  const estimator = new Estimator(declared, caps, results, peer);
   const bodies = code.unit.bodies;
   return bodies
     .filter(body => body.kind !== 'init')
@@ -235,7 +243,31 @@ class Estimator {
     private readonly declared: DeclaredFuel,
     private readonly caps: FuelCaps = defaultFuelCaps,
     private readonly results: DeclaredResult = () => undefined,
+    private readonly peer?: string,
   ) {}
+
+  /**
+   * A `send` that may be a Remote Send, as its Grant's `post` or `call` at
+   * the `capability` rate (chapter 5): its known Fuel, and the terms that
+   * leave it open. Undefined when the Script holds no `peer` Grant.
+   */
+  private remote(
+    op: string,
+  ): { fuel: number; open: { cost?: number; term: string }[] } | undefined {
+    if (this.peer === undefined || !sends.has(op)) {
+      return undefined;
+    }
+    const operation = remoteOperation(op);
+    const open = capabilityRate.open
+      // A `post` gives no result to convert.
+      .filter(term => operation === 'call' || !term.includes('result'))
+      .map(term =>
+        term === 'declared'
+          ? { cost: this.declared(this.peer!, operation), term }
+          : { term },
+      );
+    return { fuel: capabilityFuel, open };
+  }
 
   bound(code: FuelCode, body: Body): FuelBound {
     const known = this.bounds.get(body);
@@ -332,7 +364,7 @@ class Estimator {
     for (let pc = body.start; pc < body.end; pc++) {
       const { op, operands, rate } = unit.code[pc]!;
       const { fixed, key, open } = fuelRates[rate]!;
-      let fuel = fixed;
+      let fuel: number = fixed;
       for (const term of open) {
         // A declared result Shape caps a Capability result's size further.
         const result = capabilityCalls.has(op)
@@ -391,6 +423,22 @@ class Estimator {
         reasons.push({ at: at(pc), key, term: 'its event tests' });
       } else if (op === 'choose-offer') {
         reasons.push({ at: at(pc), key, term: 'the chosen action' });
+      }
+      // A Remote Send costs the dearer of the two rates.
+      const remote = this.remote(op);
+      if (remote) {
+        let most = remote.fuel;
+        for (const { cost, term } of remote.open) {
+          const capped =
+            cost ??
+            (term === 'declared' ? undefined : this.capped('capability', term));
+          if (capped === undefined) {
+            reasons.push({ at: at(pc), key: 'capability', term });
+          } else {
+            most += capped;
+          }
+        }
+        fuel = Math.max(fuel, most);
       }
       weight.push(fuel);
     }
@@ -577,6 +625,18 @@ class Estimator {
       }
       if (sends.has(op)) {
         min = Math.min(min, capabilityFuel);
+      }
+      const remote = this.remote(op);
+      if (remote) {
+        let most = remote.fuel;
+        for (const { cost, term } of remote.open) {
+          if (cost === undefined) {
+            terms.push({ at: at(pc), key: 'capability', term });
+          } else {
+            most += cost;
+          }
+        }
+        max = Math.max(max, most);
       }
       // Work the lowering doesn't show: another body's event tests and an
       // offer action reached by transfer.

@@ -96,14 +96,32 @@ const estimatesOf = (dir: string, spec: Case) => {
     try {
       const unit = lowerTree(checked.tree, { name: s.name });
       const code = loadScript(unit, {}, linksOf(imports)) as never;
+      // A `send` may be a Remote Send through the Script's `peer` Grant,
+      // whose Operations cost what the case's [[standard]] table says.
+      const peerCosts = spec.standard?.find(
+        t => t.capability === 'peer',
+      )?.costs;
+      const peer = peerCosts
+        ? Object.entries(s.grants ?? {}).find(
+            ([grant, g]) => (g.capability ?? grant) === 'peer',
+          )?.[0]
+        : undefined;
       const declared = (grant: string, op: string) =>
-        granted.get(grant)?.find(o => o.name === op)?.cost?.fuel;
+        grant === peer
+          ? peerCosts?.[op]?.fuel
+          : granted.get(grant)?.find(o => o.name === op)?.cost?.fuel;
       out.set(s.name, {
-        bounds: boundFuel(code, undefined, declared, (grant, op) => {
-          const found = granted.get(grant)?.find(o => o.name === op);
-          return found && (found.result ? shapeOf(found.result) : null);
-        }),
-        estimates: estimateFuel(code, declared),
+        bounds: boundFuel(
+          code,
+          undefined,
+          declared,
+          (grant, op) => {
+            const found = granted.get(grant)?.find(o => o.name === op);
+            return found && (found.result ? shapeOf(found.result) : null);
+          },
+          peer,
+        ),
+        estimates: estimateFuel(code, declared, peer),
       });
     } catch {
       continue;
