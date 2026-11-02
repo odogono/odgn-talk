@@ -5,7 +5,7 @@ import {
   type HostObject,
   type Value,
 } from '@northtalk/ts';
-import type { ElementKind } from '../model';
+import type { BuiltInKind } from '../model';
 import { CREATABLE_KINDS } from '../elements/registry';
 import {
   elementShape,
@@ -25,7 +25,7 @@ export type ElementsState = {
   /** The new Element's Object. */
   clone(element: Value, charge: Charge): Value;
   create(
-    kind: Exclude<ElementKind, 'group'>,
+    kind: Exclude<BuiltInKind, 'group'>,
     page: HostObject,
     name: string | undefined,
     charge: Charge,
@@ -61,8 +61,8 @@ const operations = {
   },
 } as const;
 
-const creatable = (kind: string): kind is Exclude<ElementKind, 'group'> =>
-  CREATABLE_KINDS.includes(kind as ElementKind);
+const creatable = (kind: string): kind is Exclude<BuiltInKind, 'group'> =>
+  CREATABLE_KINDS.includes(kind as BuiltInKind);
 
 export const elementsGrant: GrantDefinition<ElementsState> = {
   name: 'elements',

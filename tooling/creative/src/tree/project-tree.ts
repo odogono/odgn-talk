@@ -10,7 +10,7 @@ import {
   type Asset,
   type CanvasElement,
   type Element,
-  type ElementKind,
+  type BuiltInKind,
   type GroupElement,
   type Instrument,
   type InstrumentParameterValue,
@@ -1112,7 +1112,7 @@ export class ProjectTree {
     return element;
   }
   create(
-    kind: ElementKind,
+    kind: BuiltInKind,
     parent: TreeParent,
     name?: string,
     hooks: TreeHooks = {},

@@ -22,7 +22,7 @@ import {
 import {
   type Asset,
   isTextAlign,
-  type ElementKind,
+  type BuiltInKind,
   type Page,
   type Project,
   type TextElement,
@@ -1050,7 +1050,7 @@ export const mountStack = (
   );
   byId('tools').addEventListener('click', event => {
     const kind = (event.target as HTMLElement).closest('button')?.dataset
-      .kind as ElementKind | undefined;
+      .kind as BuiltInKind | undefined;
     if (kind && kindOf(kind).asset) {
       // An Element that shows an asset starts by choosing one.
       chooseImage();

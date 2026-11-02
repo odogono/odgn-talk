@@ -10,7 +10,7 @@ import {
   type JSX,
 } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { kindOf } from './elements/registry';
+import { kindOf, scriptKindOf } from './elements/registry';
 import { viewOf } from './elements/views';
 import type { Element } from './model';
 import type { DeepReadonly } from './readonly';
@@ -67,7 +67,7 @@ export const ElementView = ({
   return (
     <div
       {...attributes}
-      className={`el ${element.kind}${hidden ? ' hidden' : ''}${kind.className?.(element) ?? ''}${className ? ` ${className}` : ''}`}
+      className={`el ${scriptKindOf(element.kind)}${hidden ? ' hidden' : ''}${kind.className?.(element) ?? ''}${className ? ` ${className}` : ''}`}
       data-element={element.name}
       onContextMenu={
         kind.asset && imageUrl

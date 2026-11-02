@@ -8,6 +8,7 @@ import {
   isPageAlignY,
   projectWithoutIds,
   BASE_PROJECT_NAMES,
+  type AddOnRef,
   type Asset,
   type BaseProjectName,
   type Element,
@@ -23,6 +24,7 @@ import {
   type Obj,
   type ValidationIssue,
 } from './elements/checker';
+import { addOnIdProblem } from './elements/add-on';
 import { isElementKind, kindOf } from './elements/registry';
 import { migrateClicks } from './click-migration';
 import { migrateSounds } from './sound-migration';
@@ -32,7 +34,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 8;
+export const CURRENT_FORMAT = 9;
 const APP = 'northtalk-creative';
 
 export type { ValidationIssue } from './elements/checker';
@@ -115,6 +117,7 @@ const checkElement = (
     return undefined;
   }
   return kindOf(k).check(c, e, path, {
+    addOns: c.addOns,
     name,
     depth,
     member: (raw, at) => checkElement(c, raw, at, depth + 1),
@@ -215,6 +218,34 @@ const checkInstrument = (
   };
 };
 
+const VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/u;
+
+/** One `addOns` entry: a URL, a version, and a Project Add-on's code. */
+const checkAddOn = (c: Checker, raw: unknown, path: string): AddOnRef => {
+  const a = c.obj(raw, path) ?? {};
+  const id = c.str(a.id, `${path}.id`) ?? '';
+  const idProblem = typeof a.id === 'string' ? addOnIdProblem(id) : undefined;
+  if (idProblem) {
+    c.fail(`${path}.id`, idProblem);
+  }
+  const version = c.str(a.version, `${path}.version`) ?? '';
+  if (typeof a.version === 'string' && !VERSION.test(version)) {
+    c.fail(`${path}.version`, 'expected a version such as 1.2.0');
+  }
+  const ref: AddOnRef = { id, version };
+  const code = c.optStr(a.code, `${path}.code`);
+  const hash = c.optStr(a.hash, `${path}.hash`);
+  if ((code === undefined) !== (hash === undefined)) {
+    c.fail(path, 'a Project Add-on needs both code and hash');
+  }
+  if (hash !== undefined && !/^[0-9a-f]{64}$/u.test(hash)) {
+    c.fail(`${path}.hash`, 'expected a lowercase hex SHA-256');
+  }
+  setDefined(ref, 'code', code);
+  setDefined(ref, 'hash', hash);
+  return ref;
+};
+
 /**
  * Checks parsed `project.json` data (already migrated to the current
  * format). Returns the Project, or every problem found, each with the
@@ -225,6 +256,19 @@ export const validateProjectJson = (
 ): { project: Project } | { issues: ValidationIssue[] } => {
   const c = new Checker();
   const root = c.obj(data, 'project.json') ?? {};
+  // Read first: an Element of an Add-on's kind must name a listed Add-on.
+  const addOns =
+    root.addOns === undefined
+      ? []
+      : (c.arr(root.addOns, 'addOns') ?? []).map((raw, i) =>
+          checkAddOn(c, raw, `addOns[${i}]`),
+        );
+  for (const [i, a] of addOns.entries()) {
+    if (c.addOns.has(a.id)) {
+      c.fail(`addOns[${i}].id`, 'another Add-on has this URL');
+    }
+    c.addOns.add(a.id);
+  }
   const pages = (c.arr(root.pages, 'pages') ?? []).map((raw, i) =>
     checkPage(c, raw, `pages[${i}]`),
   );
@@ -269,6 +313,9 @@ export const validateProjectJson = (
     libraries,
     testScripts,
   };
+  if (addOns.length) {
+    project.addOns = addOns;
+  }
   if (root.base !== undefined) {
     const base = c.obj(root.base, 'base') ?? {};
     const name = c.str(base.name, 'base.name');
@@ -294,7 +341,7 @@ export const validateProjectJson = (
 export const validateProject = (
   project: DeepReadonly<Project>,
 ): ValidationIssue[] => {
-  const result = validateProjectJson(project);
+  const result = validateProjectJson(serializeProject(project));
   return 'issues' in result ? result.issues : [];
 };
 
@@ -343,6 +390,8 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   6: migrateSounds,
   // Format 8 adds the optional `base`; older Projects have none.
   7: data => ({ ...data }),
+  // Format 9 adds the optional `addOns` (ADR 0162); older Projects use none.
+  8: data => ({ ...data }),
 };
 
 /**
@@ -404,7 +453,7 @@ export const writeProjectFile = async (
   assetBytes: ReadonlyMap<string, Uint8Array>,
   { allowMissing = false }: { allowMissing?: boolean } = {},
 ): Promise<Uint8Array> => {
-  const result = validateProjectJson(project);
+  const result = validateProjectJson(serializeProject(project));
   if ('issues' in result) {
     throw new ProjectFileError(
       `This Project cannot be written: ${result.issues.map(i => `${i.path}: ${i.message}`).join('; ')}.`,
@@ -504,6 +553,16 @@ export const readProjectFile = async (
     throw damaged(result.issues);
   }
   const { project } = result;
+  for (const addOn of project.addOns ?? []) {
+    if (
+      addOn.code !== undefined &&
+      (await sha256Hex(new TextEncoder().encode(addOn.code))) !== addOn.hash
+    ) {
+      throw new ProjectFileError(
+        `The code for the Add-on ${addOn.id} does not match its hash.`,
+      );
+    }
+  }
   const filesByHash = new Map<string, Uint8Array>();
   for (const [name, data] of entries) {
     const hash = ASSET_ENTRY.exec(name)?.[1];

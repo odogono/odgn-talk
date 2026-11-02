@@ -28,13 +28,19 @@ One Element kind definition serves built-in kinds and both forms of Add-on. It d
 
 Instrument kinds use the same mechanism. An Instrument kind's code may come from an Add-on, but the sounds it plays are the Project's own (ADR 0161). A new Project copies its Base Project's Project Add-ons and Palettes along with its sounds, so it never depends on the Base Project.
 
+## Naming
+
+An Add-on is named by a URL, such as `https://northtalk.org/add-ons/music-controls`, whose page describes the Add-on, its versions and its kinds. An Element kind from it is that URL, `#` and the kind's name, such as `…/music-controls#knob`, so each Element names its Add-on, a placeholder can link to the page, and two Add-ons' kinds can't clash. The version is kept once, in the `.folio` file's Add-on list, not in the URL.
+
+The URL is an identity, never a download location: Folio never fetches code from it, and it grants no trust. An unsigned Project Add-on that claims a `northtalk.org` URL still gets the trust prompt.
+
 ## Trust
 
 A Project Add-on runs in the page with Folio's privileges, so Folio asks before running one. When a Project with Project Add-ons opens, Folio names them and asks the reader to trust them. Folio remembers the answer by content hash, so a changed Add-on asks again.
 
 A Project Add-on may carry a signature over its content hash. Folio ships one NorthTalk public key, an Ed25519 key that it checks with WebCrypto, and runs an Add-on whose signature verifies against that key without asking, wherever the file came from. Our release tooling signs the Project Add-ons in the Base Projects and Example Projects we publish. Built-in Add-ons are part of Folio and are always trusted. If the NorthTalk key leaks, a new Folio release ships a new key, and the old signatures stop verifying.
 
-When an Add-on is not trusted or can't load, the Project still opens: its Elements show as placeholders that cannot be edited, their data is saved back unchanged, and a Script that uses one gets a clear error during Play. Trusting it later loads it without reopening the Project.
+When an Add-on is not trusted or can't load, the Project still opens: its Elements show as placeholders whose box, name and Owning Script can still be edited, the rest of their data is saved back unchanged, and the Errors window names the missing Add-on during Play, where a Script that uses one fails. Trusting it later loads it without reopening the Project.
 
 ## Palettes
 

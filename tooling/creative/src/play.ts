@@ -15,6 +15,8 @@ import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
+import { isAddOnKind, missingAddOn } from './elements/add-on';
+import { scriptKindOf } from './elements/registry';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import { LEAD_US, Transport } from './transport';
@@ -428,7 +430,7 @@ export class PlaySession {
       owner: TreeParent,
     ): void => {
       const object = this.group.object(
-        this.#kinds.get(member.kind)!,
+        this.#kinds.get(scriptKindOf(member.kind))!,
         `dynamic:${this.#nextObject++}`,
         member,
       );
@@ -876,6 +878,12 @@ export class PlaySession {
                     ? shape.bool
                     : shape.text,
               get: ({ native }) => {
+                if ('kind' in native && isAddOnKind(native.kind)) {
+                  throw new ScriptError(
+                    'out of domain',
+                    missingAddOn(native.name, native.kind),
+                  );
+                }
                 const value = descriptor.get(native);
                 return typeof value === 'number'
                   ? num(value)
@@ -889,6 +897,12 @@ export class PlaySession {
                       { native }: HostObject<ScriptOwner>,
                       value: Value,
                     ) => {
+                      if ('kind' in native && isAddOnKind(native.kind)) {
+                        throw new ScriptError(
+                          'out of domain',
+                          missingAddOn(native.name, native.kind),
+                        );
+                      }
                       const next =
                         value.kind === 'number'
                           ? value.asDecimal()!.toNumberLossy()
@@ -922,7 +936,7 @@ export class PlaySession {
       }
       const kind =
         'kind' in owner
-          ? owner.kind
+          ? scriptKindOf(owner.kind)
           : owner === this.project
             ? 'project'
             : 'page';
@@ -1215,6 +1229,15 @@ export class PlaySession {
     };
     const patternNames = projectPatternNames(this.project);
     for (const owner of owners) {
+      // Scripts see a placeholder's reads fail only as a Host error, so the
+      // Errors window says which Add-on it needs (ADR 0162).
+      if ('kind' in owner && isAddOnKind(owner.kind)) {
+        this.problems.push({
+          owner,
+          line: 1,
+          message: missingAddOn(owner.name, owner.kind),
+        });
+      }
       if (!owner.script?.trim()) {
         continue;
       }

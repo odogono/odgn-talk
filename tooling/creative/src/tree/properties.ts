@@ -6,6 +6,7 @@ import {
   type PropertyDescriptor,
   type PropertyOwner,
 } from '../elements/definition';
+import { placeholderKind, PLACEHOLDER_OBJECT_KIND } from '../elements/add-on';
 import { ELEMENT_KINDS, kindOf } from '../elements/registry';
 
 /** Authoring-only Page placement; absent reads as center. */
@@ -39,6 +40,7 @@ const fields: Record<string, Readonly<Record<string, PropertyDescriptor>>> = {
   ...Object.fromEntries(
     ELEMENT_KINDS.map(kind => [kind, kindOf(kind).properties]),
   ),
+  [PLACEHOLDER_OBJECT_KIND]: placeholderKind.properties,
 };
 
 const byKind = new Map(
@@ -51,7 +53,8 @@ const byKind = new Map(
 /** Shared by tree mutation, Play reads and the Script manifest. */
 export const propertiesForKind = (
   kind: string,
-): ReadonlyMap<string, PropertyDescriptor> => byKind.get(kind)!;
+): ReadonlyMap<string, PropertyDescriptor> =>
+  byKind.get(kind) ?? byKind.get(PLACEHOLDER_OBJECT_KIND)!;
 export const propertiesOf = (
   owner: PropertyOwner,
 ): ReadonlyMap<string, PropertyDescriptor> =>

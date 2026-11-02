@@ -16,7 +16,8 @@ import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
 import type { WorkspaceConfiguration } from '@northtalk/tooling/lsp';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
-import { kindOf } from './elements/registry';
+import { kindOf, scriptKindOf } from './elements/registry';
+import { PLACEHOLDER_OBJECT_KIND } from './elements/add-on';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import type { InstrumentKind } from './instruments/kind';
 
@@ -67,7 +68,11 @@ const props = (kind: string): ManifestProperty[] =>
       ...(descriptor.setCost ? { setCost: descriptor.setCost } : {}),
     }));
 // Any Element, as a Page or Group's members are.
-const elementShape = { oneOf: ELEMENT_KINDS.map(kind => ({ object: kind })) };
+const elementShape = {
+  oneOf: [...ELEMENT_KINDS, PLACEHOLDER_OBJECT_KIND].map(kind => ({
+    object: kind,
+  })),
+};
 
 // Shared by every Script's manifest.
 const objectKinds = [
@@ -97,6 +102,8 @@ const objectKinds = [
         }
       : {}),
   })),
+  // An Element whose Add-on isn't loaded (ADR 0162); Play refuses its reads.
+  { name: PLACEHOLDER_OBJECT_KIND, props: props(PLACEHOLDER_OBJECT_KIND) },
 ];
 // Each Instrument kind's parameters, as its objects' properties (ADR 0158).
 const instrumentObjectKinds = [...INSTRUMENT_KINDS.values()].map(kind => ({
@@ -211,7 +218,12 @@ export const scriptManifest = (
   }
   const instruments = instrumentEntries(project);
   return {
-    kind: 'kind' in owner ? owner.kind : owner === project ? 'project' : 'page',
+    kind:
+      'kind' in owner
+        ? scriptKindOf(owner.kind)
+        : owner === project
+          ? 'project'
+          : 'page',
     version: '1',
     language: coreVersions.language,
     libraries: project.libraries.map(({ name, source }) => ({ name, source })),
@@ -222,7 +234,7 @@ export const scriptManifest = (
         ? [
             ...allElements(page.elements).map(element => ({
               name: element.name,
-              kind: element.kind,
+              kind: scriptKindOf(element.kind),
             })),
             { name: 'thisPage', kind: 'page' },
             { name: 'project', kind: 'project' },

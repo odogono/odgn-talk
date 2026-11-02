@@ -160,9 +160,10 @@ test('First Sounds carries every kit sound its patterns play (ADR 0161)', async 
 }, 60_000);
 
 // Music's content at each version. Changing what Music holds without
-// bumping MUSIC_BASE_VERSION fails here; bump both together.
+// bumping MUSIC_BASE_VERSION fails here; bump both together. The file
+// format's number is left out, so a format change alone keeps the version.
 const MUSIC_FINGERPRINTS: Record<number, string> = {
-  1: 'b30574a18706a79a',
+  1: 'baec8a15f77e0622',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {
@@ -180,8 +181,9 @@ test('the Music Base Project carries every kit sound, fetched on demand (ADR 016
     const asset = project.assets.find(a => a.name === key)!;
     expect(assets.get(asset.hash), key).toEqual(renderKitSound(key));
   }
+  const { format: _format, ...content } = serializeProject(project);
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify(serializeProject(project)))
+    .update(JSON.stringify(content))
     .digest('hex')
     .slice(0, 16);
   expect(fingerprint).toBe(MUSIC_FINGERPRINTS[MUSIC_BASE_VERSION]!);

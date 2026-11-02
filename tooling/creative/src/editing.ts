@@ -24,7 +24,7 @@ import {
   type Asset,
   type CanvasElement,
   type Element,
-  type ElementKind,
+  type BuiltInKind,
   type GroupElement,
   type Page,
   type Project,
@@ -757,7 +757,7 @@ export class StackEditor {
   }
 
   /** Adds an Element of `kind` named like `button1`, and selects it. */
-  addElement(kind: ElementKind): DeepReadonly<Element> {
+  addElement(kind: BuiltInKind): DeepReadonly<Element> {
     return this.edit(edit => {
       const page = pageOf(edit);
       const step = (page.elements.length % 10) * CASCADE;

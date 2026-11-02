@@ -22,6 +22,8 @@ export const setDefined = <T extends object, K extends keyof T>(
 };
 
 export class Checker {
+  /** The URLs of the Add-ons the Project lists, read before its Pages. */
+  readonly addOns = new Set<string>();
   readonly elements = new Set<object>();
   readonly names = new Set<string>();
   readonly issues: ValidationIssue[] = [];
