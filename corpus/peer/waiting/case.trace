@@ -1,4 +1,4 @@
-# Unblessed: waiting on a Remote Send's call (#1971); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-11-02 for #1971: waiting on a Remote Send's call.
 > load s identity=a26165f95d8844232ae5ec9e6d7eab8841e643d3706139b84d19baf8559fa44d
 > deliver d1 to=s message=slow args=[<object peer "billing">]
 > deliver d2 to=s message=bounded args=[<object peer "billing">]

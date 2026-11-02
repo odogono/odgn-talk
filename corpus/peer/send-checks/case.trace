@@ -1,4 +1,4 @@
-# Unblessed: the checks of a send to a Peer (#1971); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-11-02 for #1971: the checks of a send to a Peer.
 > load s identity=c0c84bb4ea5b392c6f9201bf1419a9313aec8b7398828ce5e017f091e534b0b5
 > load plain identity=3f686093d5454d46194129ae3450b325e0b236ff24ae8c2df1b9312a919ca296
 > stub peer.post

@@ -1,4 +1,4 @@
-# Unblessed: saving a pending Remote Send and an Exposed Script's Run (#1971); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-11-02 for #1971: saving a pending Remote Send and an Exposed Script's Run.
 > load s identity=23afd3a6982094124ddcd061f7f4062b3998a930499b1e1dc6533bf8022394de
 > deliver d1 to=s message=pay args=[<object peer "billing">] caller={principal: "alice"}
 > request d2 to=s message=whoami caller={principal: "alice"}
