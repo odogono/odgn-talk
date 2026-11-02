@@ -99,6 +99,43 @@ defmodule NorthTalk do
   def define_capability(owner, capability), do: GenServer.call(owner, {:define_capability, capability})
 
   @doc """
+  Defines an Object Kind, a `NorthTalk.ObjectKind`, for this owner. Every
+  Group of the owner can then make Host Objects of it. Defining the same Kind
+  again is `:ok`; another Kind under its name is `invalid value`, as is a
+  collection when the reactor lacks `object-elements-v1`. `object/5` defines
+  its Kind if needed, but a restore can resolve only Objects of Kinds already
+  defined.
+  """
+  def define_object_kind(owner, %NorthTalk.ObjectKind{} = kind),
+    do: GenServer.call(owner, {:define_object_kind, kind})
+
+  @doc """
+  Makes a Host Object of `kind` in a Group, with an `id` unique for its Kind
+  in that Group, and returns its `NorthTalk.Object` handle. `native` is any
+  term, given to the Kind's callbacks; the owner keeps it until the Group
+  closes. `parent:` sets the Object's parent, another Object of the Group, on
+  its Message Path. A reused id, even of a disposed Object, is `duplicate
+  object id`.
+  """
+  def object(%Group{owner: owner} = group, %NorthTalk.ObjectKind{} = kind, id, native, opts \\ [])
+      when is_binary(id),
+      do: GenServer.call(owner, {:object, group, kind, id, native, opts})
+
+  @doc "The handle of a Group's Host Object by its Kind's name and id, or `:error`."
+  def object_by_id(%Group{owner: owner} = group, kind, id), do: GenServer.call(owner, {:object_by_id, group, kind, id})
+
+  @doc "Sets a Host Object's parent on its Message Path, or clears it with `nil`."
+  def set_parent(%Group{owner: owner} = group, %NorthTalk.Object{} = object, parent),
+    do: GenServer.call(owner, {:set_parent, group, object, parent})
+
+  @doc """
+  Disposes of a Host Object. Sending to it, or reading or setting a
+  property of it, then raises `object gone`, and its Owning Script stops.
+  """
+  def dispose(%Group{owner: owner} = group, %NorthTalk.Object{} = object),
+    do: GenServer.call(owner, {:dispose, group, object, nil})
+
+  @doc """
   Grants some of a defined Capability's Operations. Returns a
   `NorthTalk.Grant` to pass to `load/4`.
 
@@ -128,7 +165,9 @@ defmodule NorthTalk do
   @doc """
   Loads a Script into a Group. Returns its name, or a `NorthTalk.LoadError`.
   `grants:` maps each name the Script uses to a `NorthTalk.Grant`, and
-  `limits:` overrides the owner's `:limits` for this Script.
+  `limits:` overrides the owner's `:limits` for this Script. `owner:` makes the
+  Script the Owning Script of a Host Object of the Group, its `me`, and `objects:` maps names
+  the Script uses to Host Objects of the Group.
   """
   def load(%Group{owner: owner} = group, name, source, opts \\ []),
     do: GenServer.call(owner, {:load, group, name, source, opts})
@@ -313,7 +352,10 @@ defmodule NorthTalk do
       instead of failing. Ignored by other restores.
     * `:trace` - records the new Group's Trace.
 
-  Host Objects don't resolve yet, so each restores disposed.
+    * `:resolve_object` - a function of a saved Host Object's Kind name and
+      id, returning `{:ok, native}` to restore it live or `:error` to restore
+      it disposed. Its Kind must be defined already. Without it, every Host
+      Object restores disposed.
 
   An automatic owner doesn't Pump the Group until every pending call is
   settled with `settle/3`, since its first Pump fails each call still
@@ -338,6 +380,11 @@ defmodule NorthTalk do
 
   for {name, arity} <- [
         define_capability: 2,
+        define_object_kind: 2,
+        object: 4,
+        object: 5,
+        set_parent: 3,
+        dispose: 2,
         grant: 2,
         grant: 3,
         new_group: 3,

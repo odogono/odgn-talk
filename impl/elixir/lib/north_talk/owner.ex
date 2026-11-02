@@ -17,6 +17,8 @@ defmodule NorthTalk.Owner do
     HostError,
     Library,
     LoadError,
+    Object,
+    ObjectKind,
     Release,
     Restored,
     Result,
@@ -27,6 +29,7 @@ defmodule NorthTalk.Owner do
 
   @protocol 1
   @paused_inputs "paused-inputs-v1"
+  @elements "object-elements-v1"
   @default_fuel_slice 10_000
 
   defstruct [
@@ -63,7 +66,15 @@ defmodule NorthTalk.Owner do
     monitors: %{},
     deferred: %{},
     # While a restore asks for Grants: how the caller rebinds them.
-    restoring: nil
+    restoring: nil,
+    # While a restore asks for Host Objects: how the caller resolves them.
+    resolving: nil,
+    # Whether the Session negotiated object-elements-v1.
+    elements: false,
+    # Object Kinds by name, and each Group's Host Objects by
+    # {group, kind, id}: their native term and whether they are disposed.
+    kinds: %{},
+    objects: %{}
   ]
 
   def start_link(opts) do
@@ -115,17 +126,19 @@ defmodule NorthTalk.Owner do
     pump? = Binary.feature() in offered
     callbacks? = want_callbacks? and Binary.callbacks_feature() in offered
     paused? = @paused_inputs in offered
+    elements? = @elements in offered
 
     features =
       if(pump?, do: [Binary.feature()], else: []) ++
-        if(callbacks?, do: [Binary.callbacks_feature()], else: []) ++ if(paused?, do: [@paused_inputs], else: [])
+        if(callbacks?, do: [Binary.callbacks_feature()], else: []) ++
+        if(paused?, do: [@paused_inputs], else: []) ++ if(elements?, do: [@elements], else: [])
 
     if features == [] do
       {:ok, state}
     else
       case exchange(state, "hello", %{"protocol" => @protocol, "features" => features}) do
         {{:ok, _}, state} ->
-          {:ok, %{state | request_pump: pump?, callbacks: callbacks?, paused_inputs: paused?}}
+          {:ok, %{state | request_pump: pump?, callbacks: callbacks?, paused_inputs: paused?, elements: elements?}}
 
         other ->
           other
@@ -235,6 +248,7 @@ defmodule NorthTalk.Owner do
       {group, groups} ->
         if group.timer, do: Process.cancel_timer(group.timer)
         :ets.match_delete(state.functions, {:_, g, :_})
+        state = %{state | objects: Map.reject(state.objects, &match?({{^g, _, _}, _}, &1))}
         closed = %HostError{code: "group closed", detail: g}
         state = fail_group_waiters(state, g, closed)
         {mine, handles} = Map.split_with(state.handles, fn {_, h} -> h.group == g end)
@@ -258,6 +272,74 @@ defmodule NorthTalk.Owner do
 
   def handle_call({:pumped, _, %Group{name: g}, _, _}, _from, state) when not is_map_key(state.groups, g),
     do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({m, %Group{name: g}, _, _}, _from, state)
+      when m in [:object_by_id, :set_parent, :dispose] and not is_map_key(state.groups, g),
+      do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:object, %Group{name: g}, _, _, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:define_object_kind, %ObjectKind{} = kind}, _from, state) do
+    {reply, state} = define_kind(state, kind)
+    {:reply, reply, state}
+  end
+
+  def handle_call({:object, %Group{name: g}, %ObjectKind{} = kind, id, native, opts}, _from, state) do
+    parent = opts[:parent]
+
+    with {:ok, state} <- ok_kind(define_kind(state, kind)),
+         :ok <- fresh(state, g, kind.name, id),
+         {:ok, fields} <- parent_field(state, g, parent, %{"group" => g, "kind" => kind.name, "id" => id}) do
+      fields = if Map.has_key?(fields, "parent"), do: fields, else: Map.delete(fields, "parent")
+
+      case exchange(state, "object", fields) do
+        {{:ok, _}, state} ->
+          state = put_in(state.objects[{g, kind.name, id}], %{native: native, disposed: false})
+          {:reply, {:ok, %Object{kind: kind.name, id: id, group: g}}, state}
+
+        {error, state} ->
+          {:reply, error, state}
+      end
+    else
+      {:error, _} = error -> {:reply, error, state}
+      {error, state} -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:object_by_id, %Group{name: g}, kind, id}, _from, state) do
+    reply =
+      if Map.has_key?(state.objects, {g, kind, id}), do: {:ok, %Object{kind: kind, id: id, group: g}}, else: :error
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({:set_parent, %Group{name: g}, object, parent}, _from, state) do
+    with {:ok, held} <- held(state, g, object),
+         {:ok, fields} <- parent_field(state, g, parent, %{"group" => g, "object" => held}) do
+      {reply, state} = exchange(state, "set-parent", Map.put_new(fields, "parent", nil))
+      {:reply, done(reply), schedule_pump(state, g)}
+    else
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:dispose, %Group{name: g}, object, _}, _from, state) do
+    case held(state, g, object) do
+      {:ok, held} ->
+        {reply, state} = exchange(state, "dispose", %{"group" => g, "object" => held})
+
+        state =
+          if match?({:ok, _}, reply),
+            do: update_in(state.objects[{g, object.kind, object.id}], &%{&1 | disposed: true}),
+            else: state
+
+        {:reply, done(reply), schedule_pump(state, g)}
+
+      error ->
+        {:reply, error, state}
+    end
+  end
 
   def handle_call({:new_group, name, opts}, _from, state) do
     fields = %{"group" => name, "name" => name, "trace" => Keyword.get(opts, :trace, false)}
@@ -312,6 +394,13 @@ defmodule NorthTalk.Owner do
         "grants" => Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end),
         "limits" => Map.merge(state.limits, limits)
       }
+
+      fields = if o = opts[:owner], do: Map.put(fields, "owner", object_ref(state, g, o)), else: fields
+
+      fields =
+        if objects = opts[:objects],
+          do: Map.put(fields, "objects", Map.new(objects, fn {k, o} -> {to_string(k), object_ref(state, g, o)} end)),
+          else: fields
 
       case exchange(state, "load", fields) do
         {{:ok, ok}, state} ->
@@ -415,9 +504,9 @@ defmodule NorthTalk.Owner do
       "trace" => Keyword.get(opts, :trace, false)
     }
 
-    state = %{state | restoring: Keyword.get(opts, :grants, %{})}
+    state = %{state | restoring: Keyword.get(opts, :grants, %{}), resolving: opts[:resolve_object]}
     {reply, state} = exchange(state, "restore", fields)
-    state = %{state | restoring: nil}
+    state = %{state | restoring: nil, resolving: nil}
 
     case reply do
       {:ok, ok} ->
@@ -440,8 +529,13 @@ defmodule NorthTalk.Owner do
         {:reply, {:ok, restored}, release_held(state, name)}
 
       error ->
-        # Bindings the resolve recorded belong to no Group.
-        {:reply, error, %{state | bindings: Map.reject(state.bindings, &match?({{^name, _, _}, _}, &1))}}
+        # Bindings and Host Objects the resolve recorded belong to no Group.
+        {:reply, error,
+         %{
+           state
+           | bindings: Map.reject(state.bindings, &match?({{^name, _, _}, _}, &1)),
+             objects: Map.reject(state.objects, &match?({{^name, _, _}, _}, &1))
+         }}
     end
   end
 
@@ -480,7 +574,12 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:send, kind, %Group{name: g}, to, name, args}, from, state) do
-    fields = %{"group" => g, "to" => target(to), "message" => %{"name" => name, "args" => encode(state, g, args)}}
+    fields = %{
+      "group" => g,
+      "to" => target(state, g, to),
+      "message" => %{"name" => name, "args" => encode(state, g, args)}
+    }
+
     queue(state, kind, g, fields, from)
   rescue
     error in HostError -> {:reply, {:error, error}, state}
@@ -505,7 +604,7 @@ defmodule NorthTalk.Owner do
     fields =
       case input do
         {to, name, args} ->
-          %{"to" => target(to), "message" => %{"name" => name, "args" => encode(state, g, args)}}
+          %{"to" => target(state, g, to), "message" => %{"name" => name, "args" => encode(state, g, args)}}
 
         {fun, args} ->
           %{"fn" => encode(state, g, fun), "args" => encode(state, g, args)}
@@ -992,20 +1091,22 @@ defmodule NorthTalk.Owner do
     grants = Enum.map(need["grants"] || [], fn [script, name] -> {script, name, rebind(state, script, name)} end)
     bindings = for {script, name, %Grant{} = grant} <- grants, into: %{}, do: {{g, script, name}, grant}
 
-    # Host Objects come in a later slice of #963, so none resolves.
+    objects = Enum.map(need["objects"] || [], fn [kind, id] -> {kind, id, resolve_object(state, kind, id)} end)
+    live = for {kind, id, {:ok, native}} <- objects, into: %{}, do: {{g, kind, id}, %{native: native, disposed: false}}
+
     answer = %{
       "m" => "resolve-result",
       "grants" => Enum.map(grants, fn {_, _, grant} -> grant && grant.handle end),
-      "objects" => Enum.map(need["objects"] || [], fn _ -> false end)
+      "objects" => Enum.map(objects, &match?({_, _, {:ok, _}}, &1))
     }
 
-    {answer, %{state | bindings: Map.merge(state.bindings, bindings)}}
+    {answer, %{state | bindings: Map.merge(state.bindings, bindings), objects: Map.merge(state.objects, live)}}
   end
 
-  # Host Objects come in a later slice of #963; until then a property is
-  # refused safely.
-  defp answer(state, _g, %{"m" => "prop"}, _args),
-    do: {%{"m" => "prop-result", "hostError" => %{"detail" => "no Host Objects"}}, state}
+  defp answer(state, g, %{"m" => "prop"} = need, _args) do
+    {result, state} = property(state, g, need)
+    {Map.put(result, "m", "prop-result"), state}
+  end
 
   defp answer(state, _g, need, _args), do: {%{"m" => "#{need["m"]}-result"}, state}
 
@@ -1320,8 +1421,158 @@ defmodule NorthTalk.Owner do
   defp ok({:ok, ok}, fun), do: {:ok, fun.(ok)}
   defp ok(error, _), do: error
 
-  defp target({:script, name}), do: %{"script" => name}
-  defp target(name) when is_binary(name), do: %{"script" => name}
+  defp target(_state, _g, {:script, name}), do: %{"script" => name}
+  defp target(_state, _g, name) when is_binary(name), do: %{"script" => name}
+
+  defp target(state, g, %Object{} = o) do
+    case held(state, g, o) do
+      {:ok, held} -> %{"object" => held}
+      {:error, error} -> raise error
+    end
+  end
+
+  # An Object Kind is declared once; another Kind under its name is refused.
+  defp define_kind(state, %ObjectKind{name: name} = kind) do
+    case state.kinds[name] do
+      ^kind ->
+        {:ok, state}
+
+      nil ->
+        if kind.elements && not state.elements do
+          {{:error, %HostError{code: "invalid value", detail: "talk.wasm lacks #{@elements} for #{name}'s collection"}},
+           state}
+        else
+          case exchange(state, "define-object-kind", ObjectKind.declaration(kind)) do
+            {{:ok, _}, state} -> {:ok, put_in(state.kinds[name], kind)}
+            {error, state} -> {error, state}
+          end
+        end
+
+      _ ->
+        {{:error, %HostError{code: "invalid value", detail: "another Object Kind is named #{name}"}}, state}
+    end
+  end
+
+  defp ok_kind({:ok, state}), do: {:ok, state}
+  defp ok_kind({error, state}), do: {error, state}
+
+  defp fresh(state, g, kind, id) do
+    if Map.has_key?(state.objects, {g, kind, id}),
+      do: {:error, %HostError{code: "duplicate object id", detail: "#{kind} #{id}"}},
+      else: :ok
+  end
+
+  defp parent_field(_state, _g, nil, fields), do: {:ok, fields}
+
+  defp parent_field(state, g, parent, fields) do
+    with {:ok, held} <- held(state, g, parent), do: {:ok, Map.put(fields, "parent", held)}
+  end
+
+  # A handle this Group made; another Group's is refused.
+  defp held(state, g, %Object{kind: kind, id: id, group: og}) when og == g or og == nil do
+    if Map.has_key?(state.objects, {g, kind, id}),
+      do: {:ok, %{"$object" => [kind, id]}},
+      else: {:error, %HostError{code: "wrong group", detail: "#{kind} #{id} isn't Group #{g}'s"}}
+  end
+
+  defp held(_state, g, %Object{kind: kind, id: id}),
+    do: {:error, %HostError{code: "wrong group", detail: "#{kind} #{id} isn't Group #{g}'s"}}
+
+  defp held(_state, _g, other),
+    do: {:error, %HostError{code: "invalid value", detail: "#{inspect(other)} is not a Host Object"}}
+
+  # A load's `owner` or `objects`: one this Group doesn't hold is sent as an
+  # unknown handle, which the Core refuses.
+  defp object_ref(state, g, o) do
+    case held(state, g, o) do
+      {:ok, held} -> held
+      _ -> %{"$object" => ["", ""]}
+    end
+  end
+
+  defp resolve_object(state, kind, id) do
+    with fun when is_function(fun, 2) <- state.resolving,
+         true <- Map.has_key?(state.kinds, kind),
+         {:ok, native} <- fun.(kind, id) do
+      {:ok, native}
+    else
+      _ -> :error
+    end
+  end
+
+  # A property need: a get, a set when it carries `value`, or an Object
+  # Collection callback when it carries `op`. Each runs in a Task, as an
+  # immediate Operation's callback does.
+  defp property(state, g, need) do
+    [kind_name, id] = need["object"]["$object"]
+    name = need["prop"]
+
+    with %{native: native, disposed: false} <- state.objects[{g, kind_name, id}],
+         %ObjectKind{} = kind <- state.kinds[kind_name],
+         {:ok, fun, args, mode} <- property_call(state, g, kind, name, need, native) do
+      task = Task.Supervisor.async_nolink(state.tasks, ObjectKind, :invoke, [fun, args])
+      {outcome, state} = await_callback(state, g, task, kind.timeout)
+
+      result =
+        try do
+          case {mode, outcome} do
+            {:set, {:ok, :ok}} -> %{"ok" => true}
+            {:get, {:ok, {:ok, value}}} -> %{"value" => encode(state, g, live!(state, g, value))}
+            {_, {:ok, {:error, failure}}} -> %{"fail" => failure(failure)}
+            {_, {:ok, other}} -> host_error("unexpected result #{inspect(other)}")
+            {_, {:exit, reason}} -> host_error(Exception.format_exit(reason))
+            {_, nil} -> host_error("timed out after #{kind.timeout} ms")
+          end
+        rescue
+          error in HostError -> host_error(error.detail)
+        end
+
+      {result, state}
+    else
+      {:error, detail} -> {host_error(detail), state}
+      _ -> {host_error("no property #{name} on #{kind_name} #{id}"), state}
+    end
+  end
+
+  defp property_call(_state, _g, %ObjectKind{elements: nil} = kind, _name, %{"op" => _}, _native),
+    do: {:error, "no collection on #{kind.name}"}
+
+  defp property_call(state, g, %ObjectKind{elements: e}, _name, %{"op" => op} = need, native) do
+    selector = if Map.has_key?(need, "selector"), do: decode(state, g, need["selector"])
+
+    case {op, selector} do
+      {"count", _} -> {:ok, e.count, [native], :get}
+      {"at", i} when is_integer(i) -> {:ok, e.at, [native, i], :get}
+      {"find", n} when is_binary(n) -> {:ok, e.find, [native, n], :get}
+      _ -> {:error, "malformed collection need #{op}"}
+    end
+  end
+
+  defp property_call(state, g, %ObjectKind{} = kind, name, need, native) do
+    case kind.props[name] do
+      nil ->
+        {:error, "no property #{name} on #{kind.name}"}
+
+      %{set: set} when is_map_key(need, "value") ->
+        if set,
+          do: {:ok, set, [native, decode(state, g, need["value"])], :set},
+          else: {:error, "#{name} is read-only"}
+
+      %{get: get} ->
+        {:ok, get, [native], :get}
+    end
+  end
+
+  # A callback may only give live Host Objects of its own Group.
+  defp live!(state, g, %Object{kind: kind, id: id} = o) do
+    case state.objects[{g, kind, id}] do
+      %{disposed: false} when o.group in [g, nil] -> o
+      %{disposed: true} -> raise HostError, code: "invalid value", detail: "#{kind} #{id} is disposed"
+      _ -> raise HostError, code: "wrong group", detail: "#{kind} #{id} isn't Group #{g}'s"
+    end
+  end
+
+  defp live!(_state, _g, value), do: value
 
   defp identity(%Library{identity: id}), do: %{"$bytes" => id}
 
