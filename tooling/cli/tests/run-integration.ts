@@ -184,8 +184,10 @@ const shop = [
 ].join('\n');
 
 /** A listening Runner, until `stop` signals it, and the lines it says. */
-const listener = async (runtime: string, args: string[]) => {
-  const child = spawn(runtime, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+const listener = async (command: readonly string[], args: string[]) => {
+  const child = spawn(command[0]!, [...command.slice(1), ...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   let stdout = '';
   let stderr = '';
   child.stdout.setEncoding('utf8').on('data', chunk => {
@@ -233,7 +235,12 @@ const said = (who: string) =>
  * over plain TCP on loopback nobody is vouched for, and any other host is
  * refused.
  */
-export const verifyRunnerPeers = async (runtime: string, entry: string) => {
+export const verifyRunnerPeers = async (
+  /** The listening Runner's command, such as `[bun, main.ts]` or `[northtalk]`. */
+  listenWith: readonly string[],
+  /** The dialling Runner's command. */
+  dialWith: readonly string[] = listenWith,
+) => {
   const directory = mkdtempSync(join(tmpdir(), 'northtalk-peers-'));
   const at = (name: string) => join(directory, name);
   writeFileSync(at('billing.talk'), billing);
@@ -246,20 +253,18 @@ export const verifyRunnerPeers = async (runtime: string, entry: string) => {
     )![0],
   );
   const run = (args: string[]) =>
-    spawnSync(runtime, [entry, ...args, at('shop.talk')], {
+    spawnSync(dialWith[0]!, [...dialWith.slice(1), ...args, at('shop.talk')], {
       encoding: 'utf8',
       timeout: 20_000,
     });
-  const tls = await listener(runtime, [
-    entry,
+  const tls = await listener(listenWith, [
     '--listen',
     '127.0.0.1:0',
     '--peer',
     `shop=tls://127.0.0.1:1#${shopPrint}`,
     at('billing.talk'),
   ]);
-  const tcp = await listener(runtime, [
-    entry,
+  const tcp = await listener(listenWith, [
     '--listen',
     'tcp://127.0.0.1:0',
     at('billing.talk'),

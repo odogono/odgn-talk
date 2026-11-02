@@ -17,7 +17,7 @@ import (
 	"northtalk.org/go/session"
 )
 
-const usage = "usage: northtalk [-port n] file.talk [args...]\n       northtalk [-transcript file] [-trace file] [-replay file]"
+const usage = "usage: northtalk [-port n] [-listen addr] [-peer name=addr]... [-peer-key file] file.talk [args...]\n       northtalk [-transcript file] [-trace file] [-replay file]"
 
 // usageError exits 2, as a bad command line does.
 type usageError struct{ message string }
@@ -57,8 +57,22 @@ func portOf(value string) (int, error) {
 }
 
 // runFile runs a Script file with the Runner, after the flags are parsed.
-func runFile(portFlag string, portSet bool, file string, args []string) (int, error) {
-	o := runOptions{file: file, args: args}
+func runFile(portFlag string, portSet bool, peer peerFlags, file string, args []string) (int, error) {
+	o := runOptions{file: file, args: args, remotes: map[string]peerRemote{}, peerKey: peer.key}
+	if peer.listen != "" {
+		at, err := parseListen(peer.listen)
+		if err != nil {
+			return 2, usageError{err.Error()}
+		}
+		o.listen = &at
+	}
+	for _, given := range peer.remotes {
+		name, remote, err := parsePeerFlag(given)
+		if err != nil {
+			return 2, usageError{err.Error()}
+		}
+		o.remotes[name] = remote
+	}
 	value, set := portFlag, portSet
 	if !set {
 		value, set = os.Getenv("PORT"), os.Getenv("PORT") != ""
@@ -90,6 +104,13 @@ func run() (int, error) {
 	tracePath := flag.String("trace", "", "write the Group Trace")
 	replay := flag.String("replay", "", "replay a Session Transcript, checking its recorded output")
 	port := flag.String("port", "", "run a Script file with every serve on this port (default: PORT)")
+	var peer peerFlags
+	flag.StringVar(&peer.listen, "listen", "", "accept Remote Sends: [tls://|tcp://]HOST:PORT")
+	flag.Func("peer", "name a Runner: NAME=tls://HOST:PORT#KEY or NAME=tcp://HOST:PORT (repeatable)", func(v string) error {
+		peer.remotes = append(peer.remotes, v)
+		return nil
+	})
+	flag.StringVar(&peer.key, "peer-key", "", "a PEM file with this Runner's ECDSA P-256 key and certificate")
 	flag.Usage = func() { fmt.Fprintln(flag.CommandLine.Output(), usage); flag.PrintDefaults() }
 	flag.Parse()
 	set := map[string]bool{}
@@ -98,9 +119,9 @@ func run() (int, error) {
 		if set["transcript"] || set["trace"] || set["replay"] {
 			return 2, usageError{"-transcript, -trace and -replay are for the REPL, not a Script file"}
 		}
-		return runFile(*port, set["port"], flag.Arg(0), flag.Args()[1:])
+		return runFile(*port, set["port"], peer, flag.Arg(0), flag.Args()[1:])
 	}
-	if flag.NArg() > 0 || set["port"] {
+	if flag.NArg() > 0 || set["port"] || set["listen"] || set["peer"] || set["peer-key"] {
 		return 2, usageError{usage}
 	}
 	return 0, repl(*transcript, *tracePath, *replay)
@@ -189,4 +210,10 @@ func repl(transcriptPath, tracePath, replayPath string) error {
 		return err
 	}
 	return ioErr
+}
+
+// peerFlags are the Runner's `peer` flags, read before the file.
+type peerFlags struct {
+	listen, key string
+	remotes     []string
 }

@@ -113,7 +113,7 @@ await verifyHttpExample(
   fileURLToPath(new URL('../../../examples/http/hello.talk', import.meta.url)),
 );
 process.stdout.write('Node CLI run: HTTP example served until SIGINT\n');
-await verifyRunnerPeers(process.execPath, main);
+await verifyRunnerPeers([process.execPath, main]);
 process.stdout.write(
   'Node CLI run: Runners carried Remote Sends over TLS and loopback TCP\n',
 );
