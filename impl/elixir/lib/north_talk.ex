@@ -184,7 +184,7 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:add_library, group, library})
 
   @doc """
-  Delivers a message to a Script and returns once it is accepted, with its
+  Delivers a message to a Script or a Host Object and returns once it is accepted, with its
   delivery id. Its Run ends later, in a Pump; `:reports_to` receives the
   report.
   """
@@ -192,9 +192,18 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:send, "deliver", group, to, name, args})
 
   @doc """
-  Sends a message to a Script and waits until its Run ends. Returns its
+  Broadcasts a message to every Script in the Group that currently wants it,
+  through a Handler for it or a pending `wait for`, and returns once it is
+  accepted, with its delivery id. A Broadcast never climbs a Message Path.
+  """
+  def broadcast(%Group{owner: owner} = group, name, args \\ []),
+    do: GenServer.call(owner, {:send, "broadcast", group, nil, name, args})
+
+  @doc """
+  Sends a message to a Script or a Host Object and waits until the Run that
+  answers it ends, after it climbs any Message Path. Returns its
   `NorthTalk.Result`, or a `NorthTalk.ScriptError` when the Run didn't
-  complete. `timeout` bounds the wait, 5 s by default; a timeout exits the
+  complete, of outcome `"unhandled"` when no Handler took it. `timeout` bounds the wait, 5 s by default; a timeout exits the
   caller, and the Run carries on.
   """
   def request(%Group{owner: owner} = group, to, name, args \\ [], timeout \\ 5_000),
@@ -392,6 +401,7 @@ defmodule NorthTalk do
         compile_library: 5,
         add_library: 2,
         deliver: 4,
+        broadcast: 3,
         request: 5,
         pump: 2,
         stop: 3,
