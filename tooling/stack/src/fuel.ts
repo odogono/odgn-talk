@@ -55,6 +55,20 @@ const jumps = new Set<string>(jumping);
 const ends = new Set<string>(ending);
 const clauseFuel = fuelRates.find(r => r.key === 'clause')!.fixed;
 const capabilityCalls = new Set(['ask', 'ask-wait', 'tell', 'join-ask']);
+// A send whose receiver may be a Peer: a Remote Send is charged at the
+// `capability` rate instead, which may cost less (chapter 5, Remote Sends).
+const sends = new Set([
+  'send',
+  'send-wait',
+  'join-send',
+  'send-named',
+  'send-named-wait',
+  'join-send-named',
+  'send-spread',
+  'send-spread-wait',
+  'join-send-spread',
+]);
+const capabilityFuel = fuelRates.find(r => r.key === 'capability')!.fixed;
 
 type Unit = CodeUnit;
 type Body = Unit['bodies'][number];
@@ -522,8 +536,8 @@ class Estimator {
     for (let pc = body.start; pc < body.end; pc++) {
       const { op, operands, rate } = unit.code[pc]!;
       const { fixed, key, open } = fuelRates[rate]!;
-      let min = fixed;
-      let max = fixed;
+      let min: number = fixed;
+      let max: number = fixed;
       for (const term of open) {
         const cost = this.known(op, operands, term);
         if (cost === undefined) {
@@ -560,6 +574,9 @@ class Estimator {
               : (found.bodies[0]?.[1].name ?? 'a function');
           terms.push({ at: at(pc), key: 'call', term: `the call to ${name}` });
         }
+      }
+      if (sends.has(op)) {
+        min = Math.min(min, capabilityFuel);
       }
       // Work the lowering doesn't show: another body's event tests and an
       // offer action reached by transfer.
