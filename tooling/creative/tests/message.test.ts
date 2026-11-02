@@ -507,3 +507,34 @@ test(':fuel is refused in Edit', async () => {
     error: ':fuel works only while browsing.',
   });
 });
+
+test('in Edit, `play` is only a preview and a loop waits for Browse', async () => {
+  const editor = new StackEditor(fixture());
+  const played = await runInEdit(editor, 'play "bd hh"');
+  expect(played.text).toBeUndefined();
+  expect(played.preview?.map(m => [m.at, m.instrument, m.commands[0]])).toEqual(
+    [
+      [0, '#kit', { kind: 'note', note: 60, sound: 'bd', velocity: 1 }],
+      [1, '#kit', { kind: 'note', note: 60, sound: 'hh', velocity: 1 }],
+    ],
+  );
+  expect(await runInEdit(editor, 'loop "bd hh"')).toEqual({
+    text: 'A loop starts when you Browse.',
+  });
+});
+
+test('during Play a Message Box pattern belongs to the targeted Script', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = 'on click\nend click';
+  const play = new PlaySession(project);
+  const target = play.messageTargets.find(t => t.label.includes('button1'))!;
+  const started = play.runMessage('loop "bd"', target.id);
+  expect(started.ok).toBe(true);
+  if (started.ok) {
+    await settle(play, started.result, () => play.pump(0n));
+  }
+  const owner = [...play.group.scriptNames()].find(n => n.includes('button1'))!;
+  expect(play.patterns.loops(owner)).toEqual([
+    { instrument: '#kit', text: 'bd' },
+  ]);
+});

@@ -98,7 +98,8 @@ export const recipeSource = (
     return `tell pages to show ${target.reference}`;
   }
   if (kind === 'playSound' || kind === 'loopSound') {
-    return `tell sound to ${kind === 'playSound' ? 'play' : 'loop'} ${recipeText(target.reference)}`;
+    // A whole sound repeats end to end; `loop` plays a Sound Pattern (ADR 0159).
+    return `tell sound to play ${recipeText(target.reference)}${kind === 'loopSound' ? ' with {repeat: true}' : ''}`;
   }
   if (kind === 'stopSound') {
     return target.reference

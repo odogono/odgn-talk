@@ -14,9 +14,18 @@ import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import { Transport } from './transport';
+import { DEFAULT_KIT_INSTRUMENT } from './kits/kits';
+import { parseMiniNotation } from './mini-notation';
+import {
+  SoundPatterns,
+  type PatternOptions,
+  type PatternTarget,
+} from './sound-patterns';
+import type { SoundCall } from './grants/sound';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import {
   InstrumentSession,
+  silentInstrumentBackend,
   type InstrumentBackend,
 } from './instruments/session';
 import {
@@ -409,6 +418,8 @@ export class PlaySession {
   #grants!: ReturnType<typeof grantsFor> & Record<string, Grant<unknown>>;
   /** The session's Instruments, reached by name as Grants and objects. */
   readonly instruments: InstrumentSession;
+  /** The Sound Patterns Scripts play and loop (ADR 0159). */
+  readonly patterns: SoundPatterns;
   /** Each Instrument's object, by name. */
   #instrumentObjects: Record<string, HostObject> = {};
   #grantStates(): GrantStates {
@@ -464,7 +475,7 @@ export class PlaySession {
           for (const member of removed) {
             const name = this.#scripts.get(member);
             if (name) {
-              this.sounds.stopOwner(name);
+              this.#stopOwnerSounds(name);
               this.#frames.delete(name);
               this.#beats.delete(name);
               this.group.script(name)?.stop('Element deleted');
@@ -483,8 +494,12 @@ export class PlaySession {
         },
       },
       sound: {
-        sounds: this.sounds,
-        play: (owner, name, loop) => this.#playSound(owner, name, loop),
+        play: (call, text, on, options) =>
+          this.#soundPattern('play', call, text, on, options),
+        loop: (call, text, on, options) =>
+          this.#soundPattern('loop', call, text, on, options),
+        stop: (call, target) => this.#stopSounds(call.scriptName, target),
+        stopOwner: owner => this.#stopOwnerSounds(owner),
       },
       user: {
         ask: (call, prompt) => this.#ask(call, prompt),
@@ -571,6 +586,158 @@ export class PlaySession {
     call.signal.addEventListener('abort', remove);
   }
 
+  /** Ends every sound and Sound Pattern a Script started. */
+  #stopOwnerSounds(owner: string): void {
+    this.sounds.stopOwner(owner);
+    this.patterns.stop(owner);
+  }
+
+  /**
+   * `stop`: everything the Script started, the Sound Pattern on one
+   * Instrument, or a Project sound by its name.
+   */
+  #stopSounds(owner: string, target: Value | null | undefined): void {
+    if (target === null || target === undefined) {
+      this.#stopOwnerSounds(owner);
+      return;
+    }
+    const name = target.kind === 'text' ? target.asText()! : undefined;
+    if (name !== undefined && !this.instruments.names.includes(name)) {
+      this.sounds.stop(owner, name);
+      return;
+    }
+    this.patterns.stop(owner, this.#patternTarget(target).instrument);
+  }
+
+  /** The Instrument `on` names, or the default kit without one. */
+  #patternTarget(on: Value | null | undefined): PatternTarget {
+    if (on === null || on === undefined) {
+      return { instrument: DEFAULT_KIT_INSTRUMENT, sampler: true };
+    }
+    const native = on.asObject()?.native;
+    const name =
+      on.kind === 'text'
+        ? on.asText()!
+        : typeof native === 'string'
+          ? native
+          : undefined;
+    const instrument = this.project.instruments.find(i => i.name === name);
+    if (!instrument) {
+      throw new ScriptError(
+        'out of domain',
+        name === undefined
+          ? 'A Sound Pattern plays on an Instrument'
+          : `No Instrument is named “${name}”`,
+      );
+    }
+    return {
+      instrument: instrument.name,
+      sampler: instrument.kind === 'sampler',
+    };
+  }
+
+  /** `with`'s options, checked against the sampler's ranges. */
+  #patternOptions(
+    options: Value | null | undefined,
+  ): PatternOptions & { repeat?: boolean } {
+    const found: { -readonly [K in keyof PatternOptions]: number } & {
+      repeat?: boolean;
+    } = {};
+    if (options?.kind !== 'map') {
+      return found;
+    }
+    const field = (key: string) =>
+      options.hasKey(key) ? options.get(key) : undefined;
+    const ranges = {
+      gain: [0, 1],
+      pan: [-1, 1],
+      speed: [0.0625, 16],
+    } as const;
+    for (const key of ['gain', 'pan', 'speed'] as const) {
+      const value = field(key)?.asDecimal()?.toNumberLossy();
+      if (value === undefined) {
+        continue;
+      }
+      const [min, max] = ranges[key];
+      if (!(value >= min && value <= max)) {
+        throw new ScriptError(
+          'out of domain',
+          `A pattern’s ${key} is from ${min} to ${max}`,
+        );
+      }
+      found[key] = value;
+    }
+    const repeat = field('repeat')?.asBool();
+    if (repeat !== undefined && repeat !== null) {
+      found.repeat = repeat;
+    }
+    return found;
+  }
+
+  /**
+   * `play` and `loop` (ADR 0159). Without `on`, a text that names a whole
+   * Project sound plays it as `play` always has, and `with {repeat: true}`
+   * repeats it. Any other text is Mini-Notation, checked here since a text
+   * built at run time has no load-time check.
+   */
+  #soundPattern(
+    verb: 'loop' | 'play',
+    call: SoundCall,
+    source: string,
+    on: Value | null | undefined,
+    options: Value | null | undefined,
+  ): void {
+    const { repeat, ...given } = this.#patternOptions(options);
+    const target = this.#patternTarget(on);
+    const owner = call.scriptName;
+    if (
+      verb === 'play' &&
+      (on === null || on === undefined) &&
+      this.project.assets.some(a => a.name === source && isSoundAsset(a))
+    ) {
+      this.#playSound(owner, source, repeat ?? false);
+      return;
+    }
+    if (repeat !== undefined) {
+      throw new ScriptError(
+        'out of domain',
+        verb === 'loop'
+          ? 'A loop repeats every bar; `repeat` is for playing a whole Project sound'
+          : `No Project sound is named “${source}” to repeat`,
+      );
+    }
+    const parsed = parseMiniNotation(source);
+    if (!parsed.ok) {
+      throw new ScriptError(
+        'out of domain',
+        `Pattern “${source}”: ${parsed.error.message}`,
+      );
+    }
+    const sounds = projectPatternNames(this.project).sounds;
+    for (const word of parsed.pattern.words()) {
+      const { name, note } = word.value;
+      if (target.sampler ? !sounds.has(name) : note === undefined) {
+        throw new ScriptError(
+          'out of domain',
+          target.sampler
+            ? `No sound or sample is named “${name}”`
+            : `“${name}” is not a note ${target.instrument} can play`,
+        );
+      }
+    }
+    const sound = { pattern: parsed.pattern, text: source, options: given };
+    if (verb === 'loop') {
+      this.patterns.loop(owner, target, sound, call.now);
+    } else {
+      this.patterns.play(
+        owner,
+        target,
+        sound,
+        this.beatTimeOf(call.delivery) ?? call.now,
+      );
+    }
+  }
+
   #playSound(owner: string, name: string, loop: boolean): void {
     const asset = this.project.assets.find(a => a.name === name);
     if (!asset || !isSoundAsset(asset)) {
@@ -628,6 +795,12 @@ export class PlaySession {
       project.instruments,
       options.instrumentBackend,
       delivery => this.beatTimeOf(delivery),
+    );
+    // A session without events is Edit's, where a loop waits for Browse.
+    this.patterns = new SoundPatterns(
+      this.transport,
+      options.instrumentBackend ?? silentInstrumentBackend,
+      { loopsPlay: options.events !== false },
     );
     this.#grants = {
       ...grantsFor(this.#grantStates()),
@@ -1093,7 +1266,7 @@ export class PlaySession {
     closing.cancel.abort();
     for (const [name, owner] of this.#owners) {
       if (scriptPage(this.project, owner) === this.page) {
-        this.sounds.stopOwner(name);
+        this.#stopOwnerSounds(name);
         this.#frames.delete(name);
         this.#beats.delete(name);
         this.group.script(name)?.stop('Left Page');
@@ -1248,12 +1421,23 @@ export class PlaySession {
       this.#deliverBeats(now);
     }
     const result = this.#pump(now, outOfBand, advance);
-    const beat = this.#nextBeatDelivery();
-    return beat !== undefined &&
-      !this.debugPaused &&
-      (result.nextDeadline === undefined || beat < result.nextDeadline)
-      ? { ...result, nextDeadline: beat }
-      : result;
+    if (this.debugPaused || this.ended) {
+      return result;
+    }
+    // Steps go out after the Runs that started or replaced their patterns.
+    this.patterns.schedule(now);
+    let next = result.nextDeadline;
+    for (const due of [
+      this.#nextBeatDelivery(),
+      this.patterns.nextDeadline(),
+    ]) {
+      if (due !== undefined && (next === undefined || due < next)) {
+        next = due;
+      }
+    }
+    return next === result.nextDeadline
+      ? result
+      : { ...result, nextDeadline: next };
   }
 
   /** The session's one Transport (ADR 0158). */
@@ -1459,6 +1643,7 @@ export class PlaySession {
       // Run is abandoned with the session rather than asked to stop.
       this.ended = true;
       this.sounds.stopAll();
+      this.patterns.stopAll();
       this.instruments.stopAll();
       this.notices.length = 0;
       return;
@@ -1467,6 +1652,7 @@ export class PlaySession {
     // Stop silences every sound at once, before Scripts are asked to stop
     // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();
+    this.patterns.stopAll();
     this.instruments.stopAll();
     this.notices.length = 0;
     this.#closing?.cancel.abort();

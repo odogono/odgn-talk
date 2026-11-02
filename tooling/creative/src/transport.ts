@@ -61,6 +61,14 @@ export class Transport {
     return this.#origin + this.duration(count - this.#originCount);
   }
 
+  /**
+   * The beat count, fractional, that falls at Play-clock `time` at the
+   * current tempo; before the grid's origin it is below the origin's count.
+   */
+  countAt(time: bigint): number {
+    return this.#originCount + Number(time - this.#origin) / this.beatLength();
+  }
+
   /** Where beat `count` falls in the bar. */
   position(count: number): BeatPosition {
     return {

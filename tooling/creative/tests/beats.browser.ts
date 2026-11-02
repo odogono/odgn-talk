@@ -155,5 +155,57 @@ end beat
     }
   });
 
+  await test('a looped Sound Pattern sounds each step on its sample (#1896)', async () => {
+    // At 240 bpm a bar is 1 s, so `c4*8` steps every 125 ms.
+    const onsets = await playBeats(
+      '',
+      2600,
+      'on startPlay\n  tell transport to setTempo 240\n  loop "c4*8" on lead\nend startPlay\n',
+    );
+    assert(onsets.length >= 12, `Enough steps sounded: ${onsets.length}`);
+    onGrid(onsets, 0.125);
+  });
+
+  await test('a loop on the default kit plays its samples on the bar (#1896)', async () => {
+    const onsets = await playBeats(
+      '',
+      2600,
+      'on startPlay\n  tell transport to setTempo 240\n  loop "bd hh"\nend startPlay\n',
+    );
+    const kit = onsets.filter(o => o.instrument === '#kit');
+    assert(kit.length >= 4, `Enough kit steps sounded: ${kit.length}`);
+    onGrid(kit, 0.5);
+  });
+
+  await test('a second loop replaces the first on the next bar (#1896)', async () => {
+    // One Script owns both loops. The second is made in bar 2, so a later
+    // bar is the first to change.
+    const onsets = await playBeats(
+      `on openPage
+  loop "c4*4" on lead
+end openPage
+
+on beat bar, beat, count
+  if count = 5 then
+    loop "e4*2" on lead
+  end if
+end beat
+`,
+      3600,
+      FAST,
+    );
+    const notes = onsets.map(o => o.note);
+    const first = notes.indexOf(64);
+    assert(first > 0, `The new loop played: ${notes.join()}`);
+    assert(
+      notes.slice(0, first).every(n => n === 60) &&
+        notes.slice(first).every(n => n === 64) &&
+        first % 4 === 0,
+      `The old loop played whole bars, then the new one: ${notes.join()}`,
+    );
+    const bar = onsets[first]!.time - onsets[first - 4]!.time;
+    assert(Math.abs(bar - 1) < 2 / 44_100, `A bar later: ${bar} s`);
+  });
+
   return results;
 };

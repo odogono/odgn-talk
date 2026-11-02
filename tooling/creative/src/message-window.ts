@@ -29,6 +29,7 @@ import {
   messageHandler,
   type LoadedMessageTarget,
 } from './message-script';
+import { previewInstruments } from './instruments/preview';
 import { runInEdit, sessionCommand, type MessageReply } from './message';
 import { type VariableValue } from './variables';
 import { renderValueRows } from './variables-window';
@@ -294,6 +295,22 @@ export const mountMessageWindow = (
     if (context.session === undefined) {
       const reply = await runInEdit(shell.editor, text, context.id);
       shell.redraw();
+      if (reply.preview) {
+        const project = shell.editor.project;
+        previewInstruments(
+          project,
+          async asset => {
+            const url = shell.images.url(asset);
+            if (url === undefined) {
+              throw new Error('its bytes are missing');
+            }
+            return (await fetch(url)).arrayBuffer();
+          },
+          reply.preview,
+          // A preview that can't sound has no Script to report against.
+          () => {},
+        );
+      }
       return reply;
     }
     return target.run(text, context.session, context.id);
