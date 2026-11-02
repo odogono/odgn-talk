@@ -137,6 +137,7 @@ import {
   listValues,
   map,
   nothing,
+  num,
   requireArgs,
   requireValue,
   text,
@@ -7032,7 +7033,69 @@ const messageFields = (m: Message): [string, string | null][] => {
   ];
 };
 
-export const newGroup = (o: TsGroupOptions): TsGroup => new TsGroup(o);
+// One Run through every case of `Run.fastSteps`, and the ways each leaves it
+// for the general step, once per process. JavaScriptCore compiles `fastSteps`
+// from the cases it has seen run; a case first reached later sends its compiled
+// code back to the slowest tier, where a long-running Host can then stay
+// (#1939). The Run is the Core's own: no Host sees it.
+const fastStepsPrimer = `function weigh v
+  if v > 2 then return v * 2
+  return v
+end weigh
+
+on tick state
+  if state's x < 100 then
+    put state's x + 1 into state's x
+  end if
+  return state
+end tick
+
+on run n
+  put {x: 0} into state
+  put [] into items
+  put "" into word
+  put 0 into j
+  repeat for each i in 1..n
+    put tick(state) into state
+    put i after items
+    put "x" after word
+    put weigh(i) into state's y
+    put i - 1 into j
+    put i = 2 into flag
+    if flag then add 1 to j
+  end repeat
+  repeat for each v in items
+    add weigh(v) * 3 to j
+  end repeat
+  add 0.5 to j
+  put 9007199254740990 * 9007199254740990 into big
+  return [state, word, j, big]
+end run`;
+let fastStepsPrimed = false;
+const onJavaScriptCore =
+  typeof (globalThis as { process?: { versions?: { bun?: string } } }).process
+    ?.versions?.bun === 'string' ||
+  (typeof navigator === 'object' &&
+    /AppleWebKit/.test(navigator.userAgent) &&
+    !/Chrome|Chromium|Edg\//.test(navigator.userAgent));
+const primeFastSteps = () => {
+  // V8 gains nothing from it, and its mixed profile slows V8's simplest loops.
+  if (fastStepsPrimed || !onJavaScriptCore) {
+    return;
+  }
+  fastStepsPrimed = true;
+  const group = new TsGroup({ name: 'fast-steps-primer' });
+  group.load({ name: 'primer', source: fastStepsPrimer });
+  group.script('primer')!.deliver({ args: [num(4)], name: 'run' });
+  for (let i = 0; i < 100 && group.pump(0n, {}).state !== 'idle'; i++) {
+    // Pump to idle.
+  }
+};
+
+export const newGroup = (o: TsGroupOptions): TsGroup => {
+  primeFastSteps();
+  return new TsGroup(o);
+};
 
 const messageSize = (d: Delivery) =>
   partSize(
@@ -7041,5 +7104,7 @@ const messageSize = (d: Delivery) =>
     d.args.reduce((sum, v) => sum + sizeOf(v), 0) + (d.fn ? sizeOf(d.fn) : 0),
   );
 
-export const restore = (bytes: Uint8Array, options: TsRestoreOptions) =>
-  TsGroup.restore(bytes, options);
+export const restore = (bytes: Uint8Array, options: TsRestoreOptions) => {
+  primeFastSteps();
+  return TsGroup.restore(bytes, options);
+};
