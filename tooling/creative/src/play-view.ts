@@ -281,6 +281,22 @@ export const mountPlay = (shell: StackShell): void => {
     }
   };
   shell.breakpoints.onChange(sendBreakpoints);
+  // Perform's toolbar (#2002): Hush silences and keeps playing; Revert puts
+  // the shown Script back as Play last loaded it.
+  const hush = () => {
+    if (mode === 'perform' && allowed().live) {
+      post({ kind: 'hush', session: sessionId });
+    }
+  };
+  const revert = () => {
+    const text = loadedSource(shell.code.selected);
+    if (mode === 'perform' && text !== undefined) {
+      shell.code.replace(text);
+      shell.punchIn.show('Reverted to the Script Play loaded.');
+    }
+  };
+  performLayout.hushButton.addEventListener('click', hush);
+  performLayout.revertButton.addEventListener('click', revert);
   // Punch In (ADR 0157): the Code Browser's source, already saved as an
   // authored edit, also goes to the browsing session.
   shell.punchIn.onRequest((source, text) => {
@@ -861,6 +877,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const play = session;
     paletteWindows.draw(play.palettes);
+    if (mode === 'perform') {
+      performLayout.showTransport(play.transport);
+    }
     if (drawnPage !== play.page) {
       // Old Page Scripts have stopped; release to any surviving Project
       // Handler and require a fresh press on the new Page.
@@ -1444,6 +1463,17 @@ export const mountPlay = (shell: StackShell): void => {
       if (!event.repeat) {
         toggle.click();
       }
+      return;
+    }
+    // ⌘⇧. Hushes while performing, even from the code.
+    if (
+      mode === 'perform' &&
+      (event.metaKey || event.ctrlKey) &&
+      event.shiftKey &&
+      event.code === 'Period'
+    ) {
+      event.preventDefault();
+      hush();
       return;
     }
     if (isPerformKey(event) && !prompts.contains(event.target as Node)) {

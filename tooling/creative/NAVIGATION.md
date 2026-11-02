@@ -215,8 +215,14 @@ landed, and the Issue graph job ticks it as they close.
 - Docked Palettes (#2001): `PaletteSettings.float` (file `float`, Info
   `floatInPerform`); [palette-windows.ts](src/palette-windows.ts) docks a
   window in the layout's `palettes` column through its `dock` option.
+- Toolbar (#2002): `PlaySession.hush` in [play.ts](src/play.ts) behind the
+  `hush` request; [play-host.ts](src/play-host.ts) sends a `TransportView`
+  anchor that `clockText` in perform-layout.ts counts on from; Revert uses
+  `shell.code.replace` with play-view.ts's loaded source.
 - Tests: [perform-layout.test.ts](tests/perform-layout.test.ts) and the
-  `perform`, `perform-code` and `perform-palettes` browser suites.
+  `perform`, `perform-code`, `perform-palettes` and `perform-toolbar`
+  browser suites, and the Hush case in
+  [sound-patterns.test.ts](tests/sound-patterns.test.ts).
 - First check: `bun test tooling/creative/tests/perform-layout.test.ts`.
 
 ## Group Elements

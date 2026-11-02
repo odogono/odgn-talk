@@ -506,6 +506,24 @@ export class CodeBrowser {
     this.#shown = listener;
   }
 
+  /** The source the browser shows. */
+  get selected(): CodeSelection {
+    return this.#selected;
+  }
+
+  /**
+   * Replaces the shown source's text, as an edit like any other, so undo
+   * takes it back; Perform's Revert (#2002) puts back what Play loaded.
+   */
+  replace(text: string): void {
+    const view = this.#window?.view;
+    if (view && view.state.doc.toString() !== text && !this.editor.readOnly) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+      });
+    }
+  }
+
   /** Shows a source, as a Perform tab does. */
   show(source: CodeSelection): void {
     this.#show(source);

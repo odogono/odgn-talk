@@ -32,6 +32,7 @@ import {
   type PromptView,
   type SourcePlace,
   type StoppedRun,
+  type TransportView,
 } from './play-protocol';
 import {
   runLine,
@@ -317,6 +318,10 @@ export class PlayHost {
       }
       case 'palette': {
         session.setPaletteOpen(request.name, request.open);
+        break;
+      }
+      case 'hush': {
+        session.hush();
         break;
       }
       case 'send': {
@@ -1086,7 +1091,13 @@ export class PlayHost {
     const targetsChanged = full || targetKey !== this.#sentTargets;
     this.#sentTargets = targetKey;
     const stoppedRun = this.#stoppedRun(session);
+    const transport = this.#transport(session);
+    // The count moves on by itself, so only a change of tempo, signature or
+    // running sends a view; any view sent re-anchors the count.
     const state = JSON.stringify([
+      transport.tempo,
+      transport.beatsPerBar,
+      transport.count === undefined,
       stoppedRun,
       this.#play.paused,
       session.navigating,
@@ -1136,7 +1147,20 @@ export class PlayHost {
         prompt,
         notices,
         problems,
+        transport,
       },
     });
+  }
+
+  /** The tempo and signature, and the beat count now while it runs. */
+  #transport(session: PlaySession): TransportView {
+    const { beatsPerBar, running, tempo } = session.transport;
+    return running
+      ? {
+          tempo,
+          beatsPerBar,
+          count: Math.max(0, session.transport.countAt(this.#clock())),
+        }
+      : { tempo, beatsPerBar };
   }
 }

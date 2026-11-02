@@ -2,6 +2,7 @@
 // range and remembered for each Project.
 import { expect, test } from 'bun:test';
 import {
+  clockText,
   DEFAULT_PERFORM,
   loadPerform,
   normalPerform,
@@ -70,4 +71,16 @@ test('the code pane keeps recent Scripts as tabs, in place, up to the limit', ()
   state = recentTabs(state.tabs, tab(3), 2);
   expect(state.tabs.map(t => t.source.id)).toEqual([2, 3]);
   expect(state.current).toBe(1);
+});
+
+test('the toolbar counts the bar on from the worker’s anchor by the tempo', () => {
+  expect(clockText(undefined, 0)).toBe('');
+  expect(clockText({ at: 0, beatsPerBar: 4, tempo: 120 }, 5000)).toBe(
+    '120 BPM',
+  );
+  const anchor = { at: 1000, beatsPerBar: 4, count: 5.5, tempo: 120 };
+  expect(clockText(anchor, 1000)).toBe('120 BPM · bar 2.2');
+  // Two beats a second at 120 BPM.
+  expect(clockText(anchor, 2000)).toBe('120 BPM · bar 2.4');
+  expect(clockText(anchor, 2500)).toBe('120 BPM · bar 3.1');
 });

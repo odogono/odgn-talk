@@ -1144,7 +1144,12 @@ compile keeps the last good version playing, a runtime error stops only its
 Handler, and the latest error shows over the code until a good Punch In
 clears it. Open Palettes dock in a column under the code; tick **Float over
 the stage in Perform** in a Palette's Info to keep its window floating
-instead. The Window menu still opens and closes them. Each session uses a fresh Core
+instead. The Window menu still opens and closes them. A toolbar over the
+code has **Hush** (⌘⇧.), which silences every sound and Instrument and stops
+every pattern while Play, its Scripts and the Transport go on (⌘. is still
+Pause); **Revert**, which puts the shown Script back as Play last loaded it,
+as an edit Undo takes back; and the tempo and bar, such as `120 BPM · bar
+3.2`. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
