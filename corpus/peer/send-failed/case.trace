@@ -1,4 +1,4 @@
-# Unblessed: send failed from a Remote Send's call (#1971); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-11-02 for #1971: send failed from a Remote Send's call.
 > load s identity=7a14580fb486084eb30a5876b0bf9fbdde1c7609643821ff4e6873bfab9d4d35
 > deliver d1 to=s message=try1 args=[<object peer "billing">]
 > deliver d2 to=s message=try1 args=[<object peer "billing">]
