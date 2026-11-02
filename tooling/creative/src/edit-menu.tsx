@@ -62,6 +62,15 @@ const EditMenu = (props: EditMenuProps) => {
       {command('undo', 'Undo', '⌘Z')}
       {command('redo', 'Redo', '⇧⌘Z')}
       <hr />
+      <button
+        data-punch-in
+        disabled={props.editor.readOnly || props.playing.value !== 'browse'}
+        title="Load the Code Browser’s Script into Play at the next bar"
+        type="button"
+      >
+        Punch In <kbd>⌘↩</kbd>
+      </button>
+      <hr />
       {command('duplicate', 'Duplicate', '⌘D')}
       {command('delete', 'Delete', '⌫')}
       <hr />

@@ -209,6 +209,11 @@ export type StackShell = {
   openLibrary(id: number, line?: number): void;
   openScript(owner: ScriptOwner, line?: number): void;
   openTestScript(id: number, line?: number): void;
+  /** Punch In from the Code Browser's ⌘↩ and Edit → Punch In (ADR 0157). */
+  punchIn: {
+    onRequest(listener: (source: CodeSelection, text: string) => boolean): void;
+    show(message: string | undefined): void;
+  };
   readOnly: boolean;
   redraw(): void;
   /**
@@ -1101,6 +1106,11 @@ export const mountStack = (
     byId('edit-menu').removeAttribute('open');
   };
   byId('edit-menu').addEventListener('click', event => {
+    if ((event.target as HTMLElement).closest('[data-punch-in]')) {
+      byId('edit-menu').removeAttribute('open');
+      scripts.punchIn();
+      return;
+    }
     const command = (event.target as HTMLElement).closest<HTMLButtonElement>(
       '[data-command]',
     )?.dataset.command as EditingCommand | undefined;
@@ -1167,6 +1177,10 @@ export const mountStack = (
     },
     editor,
     images,
+    punchIn: {
+      onRequest: listener => scripts.onPunchIn(listener),
+      show: message => scripts.showPunch(message),
+    },
     get readOnly() {
       return editor.readOnly;
     },

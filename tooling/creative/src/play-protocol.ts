@@ -15,7 +15,12 @@ import {
   type RichText,
 } from './model';
 import { type AudioReading } from './audio-clock';
-import { type PlayMessage, type UserNotice, type UserPrompt } from './play';
+import {
+  type PlayMessage,
+  type PunchReply,
+  type UserNotice,
+  type UserPrompt,
+} from './play';
 import {
   type VariableScript,
   type VariableValue,
@@ -107,7 +112,12 @@ export type PlayRequest =
    * Resume also continues a Run stopped at a Breakpoint; Step is refused
    * while one is stopped.
    */
-  | { kind: 'pause' | 'resume' | 'step'; session: number };
+  | { kind: 'pause' | 'resume' | 'step'; session: number }
+  /**
+   * Punches In the authored source of the Script or Library at `place`
+   * (ADR 0157); answered with a `punchIn` reply.
+   */
+  | { kind: 'punchIn'; place: SourcePlace; session: number; source: string };
 
 /** A prompt as the page shows it; its answer names the prompt's id. */
 export type PromptView = UserPrompt & { id: number };
@@ -233,5 +243,7 @@ export type PlayResponse =
       results: WatchResult[];
       session: number;
     }
+  /** How a Punch In was taken; `notLoaded` when Play has stopped. */
+  | { kind: 'punchIn'; reply: PunchReply }
   /** What every pending request gets when the worker is ended. */
   | { kind: 'ended' };

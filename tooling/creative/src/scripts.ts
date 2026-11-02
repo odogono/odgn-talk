@@ -92,6 +92,7 @@ type BrowserWindow = {
   outline: HTMLElement;
   path: HTMLElement;
   problems: HTMLElement;
+  punchNote: HTMLElement;
   recipes: HTMLElement;
   server: LanguageServer;
   sourceTitle: HTMLElement;
@@ -112,6 +113,9 @@ export class CodeBrowser {
   #loaded: LoadedSource | undefined;
   #stopped: { line: number; source: CodeSelection } | undefined;
   #breakpointsChanged = () => {};
+  // Punch In (ADR 0157): who loads the shown source into a browsing
+  // session; it answers false when no session is browsing.
+  #punchIn: (source: CodeSelection, text: string) => boolean = () => false;
   readonly dictionary = new DictionaryWindow();
 
   constructor(
@@ -254,6 +258,7 @@ export class CodeBrowser {
             { key: 'Mod-z', run: () => this.#history() },
             { key: 'Mod-Shift-z', run: () => this.#history(true) },
             { key: 'Mod-y', run: () => this.#history(true) },
+            { key: 'Mod-Enter', run: () => this.punchIn() },
           ],
         ),
       ],
@@ -316,6 +321,11 @@ export class CodeBrowser {
       role: 'status',
       hidden: true,
     });
+    const punchNote = h('div', {
+      class: 'punch-note',
+      role: 'status',
+      hidden: true,
+    });
     body.append(
       sourceTitle,
       h(
@@ -328,6 +338,7 @@ export class CodeBrowser {
       ),
       recipes,
       stoppedNote,
+      punchNote,
       parent,
       problems,
     );
@@ -346,6 +357,7 @@ export class CodeBrowser {
       recipes,
       problems,
       server,
+      punchNote,
       stoppedNote,
       view,
     };
@@ -445,6 +457,31 @@ export class CodeBrowser {
       : '';
   }
 
+  onPunchIn(listener: (source: CodeSelection, text: string) => boolean): void {
+    this.#punchIn = listener;
+  }
+
+  /**
+   * Punches In the shown Script or Library, as ⌘↩ and Edit → Punch In do:
+   * false, leaving the key to the editor, when Play isn't browsing.
+   */
+  punchIn(): boolean {
+    const win = this.#window;
+    if (!win || this.#selected.kind === 'test' || this.editor.readOnly) {
+      return false;
+    }
+    return this.#punchIn(this.#selected, win.view.state.doc.toString());
+  }
+
+  /** What the last Punch In did, or nothing to clear it. */
+  showPunch(message: string | undefined): void {
+    const win = this.#window;
+    if (win) {
+      win.punchNote.hidden = !message;
+      win.punchNote.textContent = message ?? '';
+    }
+  }
+
   // Fades each Breakpoint set in source edited since the session loaded it.
   #markBreakpoints(): void {
     for (const [key, saved] of this.#states) {
@@ -515,6 +552,7 @@ export class CodeBrowser {
       });
       win.server.lsp.close(this.#uri());
       this.#selected = source;
+      this.showPunch(undefined);
       const saved = this.#states.get(sourceKey(source));
       win.view.setState(saved?.state ?? this.#state(win.server));
       if (saved && line === undefined) {

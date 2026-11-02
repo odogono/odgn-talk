@@ -52,6 +52,10 @@ import {
 } from './recorder';
 import { readerView, type ReaderView } from './test-runner';
 
+/** What Punch In says of a Script Play hasn't loaded, such as another Page's. */
+const NOT_LOADED =
+  'Saved. This isn’t loaded in Play now, so the edit plays from the next Play.';
+
 /** How often the Variables window reads a browsing session, in ms. */
 const VARIABLES_REFRESH = 100;
 
@@ -249,6 +253,46 @@ export const mountPlay = (shell: StackShell): void => {
     }
   };
   shell.breakpoints.onChange(sendBreakpoints);
+  // Punch In (ADR 0157): the Code Browser's source, already saved as an
+  // authored edit, also goes to the browsing session.
+  shell.punchIn.onRequest((source, text) => {
+    if (!allowed().browsing) {
+      return false;
+    }
+    const place = placeOf(source);
+    if (!place) {
+      shell.punchIn.show(NOT_LOADED);
+      return true;
+    }
+    const asked = sessionId;
+    void supervisor
+      .call({ kind: 'punchIn', session: asked, place, source: text })
+      .then(response => {
+        if (asked !== sessionId || response.kind !== 'punchIn') {
+          return;
+        }
+        const { reply } = response;
+        if (reply.kind === 'now' || reply.kind === 'bar') {
+          if (place.kind === 'library') {
+            loadedLibraries[place.index] = text;
+          } else {
+            loadedScripts[place.owner] = text;
+          }
+          shell.breakpoints.setLoaded(loadedSource);
+          sendBreakpoints();
+        }
+        shell.punchIn.show(
+          reply.kind === 'now'
+            ? 'Punched In.'
+            : reply.kind === 'bar'
+              ? `Punching In at bar ${reply.bar}.`
+              : reply.kind === 'resumeFirst'
+                ? 'Resume first: Punching In would discard the stopped Run.'
+                : NOT_LOADED,
+        );
+      });
+    return true;
+  });
   // Like Breakpoints, an uncaught error stops a Run only while browsing.
   const sendPauseOnErrors = () => {
     if (allowed().browsing) {
@@ -830,6 +874,7 @@ export const mountPlay = (shell: StackShell): void => {
     variables.end();
     shell.breakpoints.setLoaded(undefined);
     shell.breakpoints.showStopped(undefined);
+    shell.punchIn.show(undefined);
     void supervisor.supervise({ kind: 'stop', session: sessionId });
   };
   const drawModes = () => {

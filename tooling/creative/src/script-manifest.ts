@@ -148,6 +148,7 @@ const messages = [
   'startPlay',
   'textChanged',
   'beat',
+  'openScript',
 ].map(name => ({
   name,
   args:

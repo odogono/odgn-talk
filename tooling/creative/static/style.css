@@ -916,6 +916,12 @@ button:disabled {
   font-size: 0.8rem;
 }
 
+.punch-note {
+  border-bottom: 1px solid var(--line);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+
 /* Header menus stay above the desk and floating windows. */
 .menu {
   position: relative;
