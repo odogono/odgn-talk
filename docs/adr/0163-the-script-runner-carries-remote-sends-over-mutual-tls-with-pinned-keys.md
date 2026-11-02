@@ -17,11 +17,12 @@ northtalk --peer billing=tls://127.0.0.1:7400#3f9c…e1 shop.talk
 - **Names come from flags:** `--peer NAME=tls://HOST:PORT#FINGERPRINT` lets `reach NAME` ask that Host for its exposure named `NAME`. A Script may `expose` any name, and every connected Runner may `reach` it.
 - **Peers name their Host:** a Peer's id is `<fingerprint>/<secret>`, with 128 random bits of secret, and it crosses as the Value Encoding's `{"$object": ["peer", "<fingerprint>/<secret>"]}`. A Runner sends to a Peer of another Host only if a `--peer` gives that Host's address; to any other it fails `unreachable`.
 - **Frames:** each message is a 4-byte big-endian length and a UTF-8 JSON object: `reach` and `reached`, `post`, and `call` and `replied`, with arguments and replies in the Value Encoding.
+- **Plain TCP on loopback, too:** `--listen tcp://127.0.0.1:PORT` and `--peer NAME=tcp://127.0.0.1:PORT` carry the same frames without TLS, for debugging and for Runners that don't have TLS yet. Nothing checks either end, so the Runner refuses any host but `127.0.0.1`, `::1` and `localhost`. Each end starts with a `hello` frame claiming its key, so Peer ids still name their Host, and what arrives has no Caller Identity. This is a local convenience that ADR 0155's key rule doesn't cover.
 - **Same in every Runner:** chapter 12 fixes the flags and the wire, so the TS, Go and native Zig Runners can talk to each other. The TS Runner implements it first; until the others do, they don't offer `peer`.
 
 ## Considered Options
 
-- **Plain TCP on loopback:** simplest, with the exposure secrets as the only protection. It would carry no Host key, so nothing could pin a destination or vouch for a caller, and it couldn't leave one machine safely.
+- **Plain TCP as the only transport:** simplest, with the exposure secrets as the only protection. It carries no Host key, so nothing can pin a destination or vouch for a caller, and it can't leave one machine safely. It is kept only as the loopback option above.
 - **A WebSocket on the Runner's `http` server:** it reuses one listener and suits browsers, but ties `peer` to `http`'s port override and needs a token scheme for identity. A browser Host can still choose it; it isn't the Runner's.
 - **Certificate authorities:** familiar, but a CA is configuration a local program shouldn't need, and pinning the key is what ADR 0155 asks.
 

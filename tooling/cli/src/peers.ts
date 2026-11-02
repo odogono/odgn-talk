@@ -1,6 +1,7 @@
 // The Script Runner's `peer` transport (chapter 12, Runner peers; ADR 0163):
 // Remote Sends between Runners over mutual TLS, each end pinned by its key's
-// fingerprint, as length-prefixed frames in the Value Encoding.
+// fingerprint, or over plain TCP on loopback, as length-prefixed frames in
+// the Value Encoding.
 // Runtime-neutral: node:* APIs only.
 import {
   createHash,
@@ -12,7 +13,13 @@ import {
   type KeyObject,
 } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { connect, createServer, type Server, type TLSSocket } from 'node:tls';
+import {
+  connect as connectTcp,
+  createServer as createTcpServer,
+  type Server,
+  type Socket,
+} from 'node:net';
+import { connect, createServer, type TLSSocket } from 'node:tls';
 import {
   decodeValue,
   encodeValue,
@@ -36,32 +43,55 @@ const MAX_FRAME = 16 * 1024 * 1024;
 export type PeerOptions = {
   /** `--peer-key`: a PEM file with an Ed25519 key and its certificate. */
   keyFile?: string;
-  /** `--listen HOST:PORT`. */
-  listen?: { host: string; port: number };
+  /** `--listen [tls://|tcp://]HOST:PORT`. */
+  listen?: Address;
   log: (line: string) => void;
-  /** `--peer NAME=tls://HOST:PORT#FINGERPRINT`, by name. */
+  /** `--peer NAME=tls://HOST:PORT#FINGERPRINT` or `NAME=tcp://HOST:PORT`. */
   remotes: ReadonlyMap<string, Remote>;
 };
 
-export type Remote = { fingerprint: string; host: string; port: number };
+/** Where a Runner listens or dials: `plain` is TCP without TLS. */
+export type Address = { host: string; plain: boolean; port: number };
+/** A `--peer`: plain ones pin no key. */
+export type Remote = Address & { fingerprint?: string };
 
-/** Reads one `--peer` value, `NAME=tls://HOST:PORT#FINGERPRINT`. */
-export const parsePeerFlag = (given: string): [string, Remote] => {
-  const m = /^([^=]+)=tls:\/\/(.+):(\d+)#([\da-f]{64})$/.exec(given);
-  if (!m) {
-    throw new Error(`--peer wants NAME=tls://HOST:PORT#FINGERPRINT: ${given}`);
+// Plain TCP carries no key to check, so it stays on this machine.
+const loopback = new Set(['127.0.0.1', '::1', 'localhost']);
+
+const address = (scheme: string | undefined, host: string, port: string) => {
+  const bare = host.replace(/^\[(.*)]$/, '$1');
+  const plain = scheme === 'tcp';
+  if (plain && !loopback.has(bare)) {
+    throw new Error(`tcp:// is only for loopback, not ${host}`);
   }
-  const host = m[2]!.replace(/^\[(.*)]$/, '$1');
-  return [m[1]!, { fingerprint: m[4]!, host, port: Number(m[3]) }];
+  return { host: bare, plain, port: Number(port) };
 };
 
-/** Reads `--listen HOST:PORT`. */
-export const parseListen = (given: string): { host: string; port: number } => {
-  const m = /^(.+):(\d+)$/.exec(given);
-  if (!m) {
-    throw new Error(`--listen wants HOST:PORT: ${given}`);
+/** Reads one `--peer` value. */
+export const parsePeerFlag = (given: string): [string, Remote] => {
+  const tls = /^([^=]+)=tls:\/\/(.+):(\d+)#([\da-f]{64})$/.exec(given);
+  if (tls) {
+    return [
+      tls[1]!,
+      { ...address('tls', tls[2]!, tls[3]!), fingerprint: tls[4]! },
+    ];
   }
-  return { host: m[1]!.replace(/^\[(.*)]$/, '$1'), port: Number(m[2]) };
+  const tcp = /^([^=]+)=tcp:\/\/(.+):(\d+)$/.exec(given);
+  if (tcp) {
+    return [tcp[1]!, address('tcp', tcp[2]!, tcp[3]!)];
+  }
+  throw new Error(
+    `--peer wants NAME=tls://HOST:PORT#FINGERPRINT or NAME=tcp://HOST:PORT: ${given}`,
+  );
+};
+
+/** Reads `--listen`: `HOST:PORT` or `tls://HOST:PORT` for TLS, `tcp://HOST:PORT` for plain. */
+export const parseListen = (given: string): Address => {
+  const m = /^(?:(tls|tcp):\/\/)?(.+):(\d+)$/.exec(given);
+  if (!m) {
+    throw new Error(`--listen wants [tls://|tcp://]HOST:PORT: ${given}`);
+  }
+  return address(m[1], m[2]!, m[3]!);
 };
 
 // ---------------------------------------------------------------- keys
@@ -171,7 +201,7 @@ const identity = (keyFile?: string): Identity => {
 
 // ---------------------------------------------------------------- frames
 
-/** One TLS connection to another Runner, either way round. */
+/** One connection to another Runner, either way round. */
 class Link {
   private buffer = Buffer.alloc(0);
   private next = 1;
@@ -179,8 +209,10 @@ class Link {
   closed = false;
 
   constructor(
-    readonly socket: TLSSocket,
-    readonly fingerprint: string,
+    readonly socket: Socket,
+    /** The other end's key: checked over TLS, as it claims over plain TCP. */
+    public fingerprint: string,
+    readonly plain: boolean,
     private readonly decode: (text: string) => Value,
     private readonly onFrame: (link: Link, frame: Value) => void,
     private readonly onClose: (link: Link) => void,
@@ -306,7 +338,9 @@ export class RunnerPeers {
     this.tls = identity(o.keyFile);
     this.fingerprint = this.tls.fingerprint;
     for (const [name, r] of o.remotes) {
-      this.byKey.set(r.fingerprint, name);
+      if (r.fingerprint) {
+        this.byKey.set(r.fingerprint, name);
+      }
     }
   }
 
@@ -325,22 +359,24 @@ export class RunnerPeers {
     if (!at) {
       return;
     }
-    const server = createServer(
-      {
-        cert: this.tls.cert,
-        key: this.tls.key,
-        minVersion: 'TLSv1.3',
-        rejectUnauthorized: false,
-        requestCert: true,
-      },
-      socket => {
-        const key = this.peerKey(socket);
-        if (!key) {
-          return socket.destroy();
-        }
-        this.adopt(socket, key);
-      },
-    );
+    const server = at.plain
+      ? createTcpServer(socket => void this.greet(socket))
+      : createServer(
+          {
+            cert: this.tls.cert,
+            key: this.tls.key,
+            minVersion: 'TLSv1.3',
+            rejectUnauthorized: false,
+            requestCert: true,
+          },
+          socket => {
+            const key = this.peerKey(socket);
+            if (!key) {
+              return socket.destroy();
+            }
+            this.adopt(socket, key, false);
+          },
+        );
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(at.port, at.host, () => resolve());
@@ -350,7 +386,11 @@ export class RunnerPeers {
     const port =
       typeof address === 'object' && address ? address.port : at.port;
     const host = at.host.includes(':') ? `[${at.host}]` : at.host;
-    this.o.log(`peer: listening on tls://${host}:${port}#${this.fingerprint}`);
+    this.o.log(
+      at.plain
+        ? `peer: listening on tcp://${host}:${port}`
+        : `peer: listening on tls://${host}:${port}#${this.fingerprint}`,
+    );
   }
 
   /** Stops accepting connections. */
@@ -379,10 +419,11 @@ export class RunnerPeers {
     }
   }
 
-  private adopt(socket: TLSSocket, key: string): Link {
+  private adopt(socket: Socket, key: string, plain: boolean): Link {
     const link = new Link(
       socket,
       key,
+      plain,
       body =>
         decodeValue(body, (kind, id) =>
           kind === 'peer' ? this.peerFor(id) : undefined,
@@ -395,9 +436,25 @@ export class RunnerPeers {
       },
     );
     // The newest link to a key carries what this Runner sends there.
-    this.links.set(key, link);
+    if (key) {
+      this.links.set(key, link);
+    }
     return link;
   }
+
+  /**
+   * A plain connection: each end first says which key it is, with nothing
+   * to check it by. Resolves with the link once the other end has said.
+   */
+  private greet(socket: Socket): Promise<Link | undefined> {
+    const link = this.adopt(socket, '', true);
+    link.send(map([['hello', text(this.fingerprint)]]));
+    return new Promise(resolve => {
+      this.greeting.set(link, resolve);
+      socket.once('close', () => resolve(undefined));
+    });
+  }
+  private readonly greeting = new Map<Link, (link: Link) => void>();
 
   /** A link to the Host with this key, dialled if a `--peer` gives it. */
   private linkTo(key: string): Promise<Link | undefined> {
@@ -406,35 +463,63 @@ export class RunnerPeers {
       return Promise.resolve(open);
     }
     const name = this.byKey.get(key);
-    const remote = name === undefined ? undefined : this.o.remotes.get(name);
-    if (!remote) {
-      return Promise.resolve(undefined);
+    return name === undefined ? Promise.resolve(undefined) : this.dial(name);
+  }
+
+  /** A link to the Runner a `--peer` names, dialled the first time. */
+  private dial(name: string): Promise<Link | undefined> {
+    const remote = this.o.remotes.get(name)!;
+    const open = remote.fingerprint && this.links.get(remote.fingerprint);
+    if (open && !open.closed) {
+      return Promise.resolve(open);
     }
-    let dialled = this.dialling.get(key);
+    let dialled = this.dialling.get(name);
     if (!dialled) {
-      dialled = new Promise<Link | undefined>(resolve => {
-        const socket = connect({
-          cert: this.tls.cert,
-          host: remote.host,
-          key: this.tls.key,
-          minVersion: 'TLSv1.3',
-          port: remote.port,
-          rejectUnauthorized: false,
-          servername: undefined,
-        });
-        socket.once('secureConnect', () => {
-          if (this.peerKey(socket) !== key) {
-            this.o.log(`peer: ${name} has the wrong key`);
-            socket.destroy();
-            return resolve(undefined);
-          }
-          resolve(this.adopt(socket, key));
-        });
-        socket.once('error', () => resolve(undefined));
-      }).finally(() => this.dialling.delete(key));
-      this.dialling.set(key, dialled);
+      dialled = (
+        remote.plain ? this.dialPlain(name, remote) : this.dialTls(name, remote)
+      ).finally(() => this.dialling.delete(name));
+      this.dialling.set(name, dialled);
     }
     return dialled;
+  }
+
+  private dialPlain(name: string, remote: Remote): Promise<Link | undefined> {
+    return new Promise<Socket | undefined>(resolve => {
+      const socket = connectTcp({ host: remote.host, port: remote.port });
+      socket.once('connect', () => resolve(socket));
+      socket.once('error', () => resolve(undefined));
+    }).then(async socket => {
+      const link = socket && (await this.greet(socket));
+      if (link) {
+        // What it claimed is all a plain link has to go on.
+        this.byKey.set(link.fingerprint, name);
+      }
+      return link;
+    });
+  }
+
+  private dialTls(name: string, remote: Remote): Promise<Link | undefined> {
+    const key = remote.fingerprint!;
+    return new Promise<Link | undefined>(resolve => {
+      const socket = connect({
+        cert: this.tls.cert,
+        host: remote.host,
+        key: this.tls.key,
+        minVersion: 'TLSv1.3',
+        port: remote.port,
+        rejectUnauthorized: false,
+        servername: undefined,
+      });
+      socket.once('secureConnect', () => {
+        if (this.peerKey(socket) !== key) {
+          this.o.log(`peer: ${name} has the wrong key`);
+          socket.destroy();
+          return resolve(undefined);
+        }
+        resolve(this.adopt(socket, key, false));
+      });
+      socket.once('error', () => resolve(undefined));
+    });
   }
 
   /** This Group's one Peer for an exposure id. */
@@ -452,7 +537,11 @@ export class RunnerPeers {
     return m ? [m[1]!, m[2]!] : undefined;
   }
 
-  private identityOf(key: string): Value {
+  // A plain link authenticates nobody, so it vouches for nobody.
+  private identityOf(link: Link | undefined, key: string): Value {
+    if (link?.plain) {
+      return nothing;
+    }
     const name = this.byKey.get(key);
     return map([
       ['key', text(key)],
@@ -463,6 +552,7 @@ export class RunnerPeers {
   // A Remote Send arriving here: a Delivery or Request to the exposure's
   // Script, vouched for as the sending Runner's key.
   private local(
+    link: Link | undefined,
     key: string,
     secret: string,
     message: string,
@@ -478,12 +568,12 @@ export class RunnerPeers {
       if (!waits) {
         this.callers.set(
           script.deliver({ name: message, args }),
-          this.identityOf(key),
+          this.identityOf(link, key),
         );
         return undefined;
       }
       const requested = script.request({ name: message, args });
-      this.callers.set(requested.id, this.identityOf(key));
+      this.callers.set(requested.id, this.identityOf(link, key));
       return requested.result;
     } catch (error) {
       if ((error as Error).name === 'MailboxFull') {
@@ -494,6 +584,18 @@ export class RunnerPeers {
   }
 
   private arrive(link: Link, frame: Value) {
+    const hello = field(frame, 'hello')?.asText();
+    if (link.plain && !link.fingerprint) {
+      // A plain link's first frame says which key the other end is.
+      if (!hello || !/^[\da-f]{64}$/.test(hello)) {
+        return link.close();
+      }
+      link.fingerprint = hello;
+      this.links.set(hello, link);
+      this.greeting.get(link)?.(link);
+      this.greeting.delete(link);
+      return;
+    }
     const reach = whole(field(frame, 'reach'));
     const call = whole(field(frame, 'call'));
     const post = field(frame, 'post')?.asText();
@@ -519,7 +621,7 @@ export class RunnerPeers {
     const mine = parts && parts[0] === this.fingerprint ? parts[1] : undefined;
     if (post !== undefined) {
       if (mine) {
-        this.local(link.fingerprint, mine, message, args, false);
+        this.local(link, link.fingerprint, mine, message, args, false);
       }
       return;
     }
@@ -537,7 +639,7 @@ export class RunnerPeers {
         ]),
       ]);
     const result = mine
-      ? this.local(link.fingerprint, mine, message, args, true)
+      ? this.local(link, link.fingerprint, mine, message, args, true)
       : 'not exposed';
     if (typeof result === 'string' || result === undefined) {
       return void failed(result ?? 'not exposed');
@@ -617,13 +719,13 @@ export class RunnerPeers {
     if (!remote) {
       return call.fail(failure('bad address'));
     }
-    void this.linkTo(remote.fingerprint).then(link => {
+    void this.dial(address).then(link => {
       if (!link) {
         return call.fail(failure('bad address'));
       }
       link.ask('reach', [['name', text(address)]], frame => {
         const id = frame && field(frame, 'peer')?.asText();
-        if (id && this.split(id)?.[0] === remote.fingerprint) {
+        if (id && this.split(id)?.[0] === link.fingerprint) {
           call.answer(this.peerFor(id));
         } else {
           call.fail(failure(frame ? 'not exposed' : 'bad address'));
@@ -646,7 +748,7 @@ export class RunnerPeers {
     const [key, secret] = parts;
     if (key === this.fingerprint) {
       // A Peer of this Runner's own exposure: still a Remote Send.
-      const result = this.local(key, secret, message, args, waits);
+      const result = this.local(undefined, key, secret, message, args, waits);
       if (!waits) {
         return;
       }

@@ -20,6 +20,6 @@ test('Bun serves the HTTP example until SIGINT', async () => {
   );
 }, 30_000);
 
-test('Bun Runners carry Remote Sends over mutual TLS', async () => {
+test('Bun Runners carry Remote Sends over TLS and loopback TCP', async () => {
   await verifyRunnerPeers(process.execPath, main);
 }, 60_000);

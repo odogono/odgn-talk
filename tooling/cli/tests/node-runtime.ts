@@ -115,5 +115,5 @@ await verifyHttpExample(
 process.stdout.write('Node CLI run: HTTP example served until SIGINT\n');
 await verifyRunnerPeers(process.execPath, main);
 process.stdout.write(
-  'Node CLI run: Runners carried Remote Sends over mutual TLS\n',
+  'Node CLI run: Runners carried Remote Sends over TLS and loopback TCP\n',
 );
