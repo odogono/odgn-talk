@@ -39,8 +39,13 @@ class InstrumentProcessor extends AudioWorkletProcessor {
       sampleRate,
       report ? onset => this.port.postMessage(onset) : undefined,
     );
-    // The page hands over the channel the Play worker sends commands on.
+    // The page hands over the channel the Play worker sends commands on,
+    // and then sounds it decoded after start-up (#1958).
     this.port.onmessage = ({ data }) => {
+      if ('sample' in data) {
+        this.#rack.addSample(data.name, data.sample);
+        return;
+      }
       data.port.onmessage = (event: MessageEvent<InstrumentMessage>) =>
         this.#rack.receive(event.data);
     };

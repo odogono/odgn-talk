@@ -6,6 +6,7 @@ import {
   patternProblems,
   patternTexts,
   projectPatternNames,
+  soundDecodeOrder,
 } from '../src/pattern-checks';
 import { PlaySession } from '../src/play';
 
@@ -153,4 +154,34 @@ test('a Project knows only its own sounds, and a Music name says where to get it
     });
   }
   expect(patternProblems(source, projectPatternNames(project))).toEqual([]);
+});
+
+test('sounds named in literal patterns decode first, then the rest; never images (#1958)', () => {
+  const project = createProject('Order');
+  for (const [name, mediaType] of [
+    ['zap', 'audio/wav'],
+    ['bd', 'audio/wav'],
+    ['Door Creak', 'audio/wav'],
+    ['lamp', 'image/png'],
+    ['hh', 'audio/wav'],
+    ['bd:1', 'audio/wav'],
+  ] as const) {
+    project.assets.push({
+      name,
+      fileName: `${name}.x`,
+      hash: name.padEnd(64, '0'),
+      mediaType,
+      size: 3,
+    });
+  }
+  project.pages[0]!.script =
+    'on openPage\n  loop "bd:1 [hh hh]"\n  play "Door Creak"\nend openPage';
+  project.libraries.push({
+    name: 'beats',
+    source: 'on fill\n  play "zap"\nend fill',
+  });
+  expect(soundDecodeOrder(project)).toEqual({
+    named: ['bd:1', 'hh', 'Door Creak', 'zap'],
+    later: ['bd'],
+  });
 });

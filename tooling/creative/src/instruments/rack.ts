@@ -10,8 +10,12 @@ import type { InstrumentMessage } from './session';
 /** The worklet processor's registered name. */
 export const INSTRUMENT_PROCESSOR = 'folio-instruments';
 
-/** What the page posts the worklet: the port the Play worker sends on. */
-export type InstrumentChannel = { port: MessagePort };
+/**
+ * What the page posts the worklet: the port the Play worker sends on, or
+ * a sound decoded after the rack started (#1958).
+ */
+export type InstrumentChannel =
+  { port: MessagePort } | { name: string; sample: SampleBuffer };
 
 /** What a rack is built from; plain data, so it crosses to the worklet. */
 export type RackSetup = {
@@ -32,6 +36,8 @@ export type NoteOnset = {
 
 export class InstrumentRack {
   readonly #hosts = new Map<string, ChipHost<InstrumentCommand>>();
+  /** Shared with every sampler, so a sound added later plays at once. */
+  readonly #samples: Map<string, SampleBuffer>;
 
   constructor(
     setup: RackSetup,
@@ -39,6 +45,7 @@ export class InstrumentRack {
     onNote?: (onset: NoteOnset) => void,
   ) {
     const samples = new Map(setup.samples);
+    this.#samples = samples;
     for (const instrument of setup.instruments) {
       const kind = INSTRUMENT_ENGINES.get(instrument.kind);
       if (!kind) {
@@ -69,6 +76,11 @@ export class InstrumentRack {
         ),
       );
     }
+  }
+
+  /** Adds a decoded sound for samplers to play from the next note on. */
+  addSample(name: string, sample: SampleBuffer): void {
+    this.#samples.set(name, sample);
   }
 
   /** Commands play at `at` on the audio clock, or at the next sample. */
