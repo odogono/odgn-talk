@@ -7,6 +7,7 @@ import {
   type Requested,
 } from '../src/index';
 import { createCore as createWasmCore } from '../src/wasm/index';
+import type { ScriptError } from '../src/errors';
 import { artifact } from './reactor-artifact';
 
 const module = existsSync(artifact)
@@ -162,9 +163,13 @@ for (const backend of ['ts', 'wasm', 'wasm JSON callbacks'] as const) {
             r => r.kind === 'run end' && r.outcome === 'errored',
           ),
         ).toBe(true);
-        await expect(admitted(arity).result).rejects.toMatchObject({
-          code: 'send failed',
-        });
+        const arityError = (await admitted(arity).result.catch(
+          (error: unknown) => error,
+        )) as ScriptError;
+        expect(arityError.code).toBe('send failed');
+        expect(arityError.data.get('error').get('code').asText()).toBe(
+          'wrong arity',
+        );
         s.reload(source, 'reset variables');
         const stale = g.callPump(fn, [num(1)], 13n);
         pumped(stale);

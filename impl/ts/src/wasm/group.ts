@@ -137,6 +137,10 @@ const scriptError = (error: Value): ScriptError => {
   );
 };
 
+// A `run end` report's error map as the Core gave it, for a Request's
+// `send failed` rejection.
+const errorMaps = new WeakMap<object, Value>();
+
 /** A handle for calls addressed to one Script. */
 export class WasmScript implements Script {
   constructor(
@@ -777,7 +781,9 @@ export class WasmGroup implements Group {
           r.result = value('result');
         }
         if (has(j, 'error')) {
-          r.error = scriptError(value('error'));
+          const error = value('error');
+          errorMaps.set(r, error);
+          r.error = scriptError(error);
         }
         const effect = r.effect as EffectFailure | undefined;
         if (effect) {
@@ -885,7 +891,14 @@ export class WasmGroup implements Group {
           } else if (r.outcome === 'completed') {
             this.#settle(r.delivery, r.result ?? nothing);
           } else {
-            this.#settle(r.delivery, undefined, sendFailed(r.outcome));
+            this.#settle(
+              r.delivery,
+              undefined,
+              sendFailed(
+                r.outcome,
+                r.outcome === 'errored' ? errorMaps.get(r) : null,
+              ),
+            );
           }
           break;
         }

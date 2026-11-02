@@ -5416,7 +5416,12 @@ export class TsGroup implements Group {
       if (outcome.kind === 'completed') {
         delivery.request.resolve(outcome.result);
       } else {
-        delivery.request.reject(sendFailed(outcome.kind));
+        delivery.request.reject(
+          sendFailed(
+            outcome.kind,
+            outcome.kind === 'errored' ? outcome.error : null,
+          ),
+        );
       }
     }
   }

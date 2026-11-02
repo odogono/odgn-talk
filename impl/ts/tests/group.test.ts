@@ -264,6 +264,19 @@ describe('Deliveries and Pumps', () => {
     });
   });
 
+  test("an errored Request's `send failed` carries the Run's error", async () => {
+    const { g } = group();
+    const s = g.load({
+      name: 's',
+      source: 'on boom\n  throw {code: "too much"}\nend boom',
+    });
+    const r = s.request({ name: 'boom' });
+    g.pump(clock);
+    const e = (await r.result.catch((error: unknown) => error)) as ScriptError;
+    expect(e.reason).toBe('errored');
+    expect(e.data.get('error').get('code').asText()).toBe('too much');
+  });
+
   test('only a `send failed` ScriptError has a reason', () => {
     expect(new ScriptError('timeout', 'late').reason).toBeUndefined();
     expect(

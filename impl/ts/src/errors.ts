@@ -87,12 +87,21 @@ export class ScriptError extends Error {
   }
 }
 
-/** The rejection of a Request whose receiver's Run ended without answering. */
-export const sendFailed = (reason: SendFailedReason): ScriptError =>
+/**
+ * The rejection of a Request whose receiver's Run ended without answering.
+ * An `errored` Run's error map rides as `error` (chapter 6).
+ */
+export const sendFailed = (
+  reason: SendFailedReason,
+  error?: Value | null,
+): ScriptError =>
   new ScriptError(
     'send failed',
     `No answer came: the receiver's Run ended ${reason}`,
-    map([['reason', text(reason)]]),
+    map([
+      ['reason', text(reason)],
+      ...(error ? [['error', error] as [string, Value]] : []),
+    ]),
   );
 
 // What the Host did wrong, for a `call failed` report's detail. Its wording

@@ -175,7 +175,7 @@ const shop = [
   '  try',
   '    send charge with 500 to billing and wait',
   '  catch e',
-  '    say the code of e & " " & the reason of e',
+  '    say the code of e & " " & the reason of e & " " & the code of the error of e',
   '  end try',
   '  send note with "hi" to billing',
   '  send charge with 1 to billing and wait',
@@ -277,7 +277,7 @@ export const verifyRunnerPeers = async (
       `billing=${tls.address}`,
     ]);
     assert.equal(shopRun.status, 0, shopRun.stderr);
-    assert.equal(shopRun.stdout, 'total 13\nsend failed errored\n');
+    assert.equal(shopRun.stdout, 'total 13\nsend failed errored too much\n');
     assert.equal(shopRun.stderr, `peer: key ${shopPrint}\n`);
     assert.equal(await tls.said(said('shop')), said('shop'));
     // A listener whose key isn't the pinned one is never reached.
@@ -291,7 +291,7 @@ export const verifyRunnerPeers = async (
     assert.match(tcp.address, /^tcp:\/\/127\.0\.0\.1:\d+$/u);
     const plain = run(['--peer', `billing=${tcp.address}`]);
     assert.equal(plain.status, 0, plain.stderr);
-    assert.equal(plain.stdout, 'total 13\nsend failed errored\n');
+    assert.equal(plain.stdout, 'total 13\nsend failed errored too much\n');
     assert.equal(await tcp.said(said('nobody')), said('nobody'));
     // Plain TCP carries no key, so it stays on loopback.
     const away = run(['--peer', 'billing=tcp://192.0.2.1:7400']);
