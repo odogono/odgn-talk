@@ -16,7 +16,7 @@ on click
 end click
 ```
 
-The `on` and `with` clauses aren't in the grammar yet, so this block is marked as text. Adding them is a language change that [#1896](https://github.com/odogono/odgn-talk/issues/1896) makes.
+`on` and `with` are Argument Labels, and either may be left out ([ADR 0160](0160-a-labelled-operation-call-may-skip-an-optional-argument.md), [#1896](https://github.com/odogono/odgn-talk/issues/1896)).
 
 - **Folio schedules every step** of a Sound Pattern on the Transport itself. No Run is started and no Fuel is spent per note.
 - **One cycle is one bar.**
@@ -26,7 +26,7 @@ The `on` and `with` clauses aren't in the grammar yet, so this block is marked a
 - **Checked at load:** a pattern text written in a Script is checked when the Script loads. Syntax errors and unknown sample or Instrument names are reported against the Script and line, and underlined in the editor.
 - **The Message Box:** during Play, a pattern belongs to the targeted Script. In Edit, `play` is only a preview, and `loop` says that it starts in Browse.
 
-**`tell sound to loop` changes meaning.** Its text is now Mini-Notation. Format 6 rewrites every older `loop "name"` of a Project sound to `play "name" with {repeat: true}`, which repeats the whole sound end to end, free of the bar, as `loop` used to.
+**`tell sound to loop` changes meaning.** Its text is now Mini-Notation. Format 7 rewrites every older `loop "name"` of a Project sound to `play "name" with {repeat: true}`, which repeats the whole sound end to end, free of the bar, as `loop` used to.
 
 ## Considered Options
 

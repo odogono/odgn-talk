@@ -6,6 +6,7 @@ import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
 import { runLine } from './message-line';
+import type { InstrumentMessage } from './instruments/session';
 import { PlaySession } from './play';
 import { scriptOwners } from './script-manifest';
 import { valueEncoder, type VariableValue } from './variables';
@@ -17,6 +18,11 @@ import { valueEncoder, type VariableValue } from './variables';
  */
 export type MessageReply = {
   error?: string;
+  /**
+   * In Edit, the Instrument commands a `play` would send, timed in seconds
+   * from now, for the page to preview (ADR 0159).
+   */
+  preview?: InstrumentMessage[];
   source?: string;
   text?: string;
   value?: VariableValue;
@@ -125,8 +131,10 @@ const editRun = async (
   }
   editor.finishPendingEdit();
   const expected = editor.stamp();
+  const sent: InstrumentMessage[] = [];
   const play = new PlaySession(editor.project, editor.pageIndex, {
     events: false,
+    instrumentBackend: message => sent.push(message),
   });
   const loadedTarget =
     target === undefined ? undefined : play.messageTargetForOwner(target);
@@ -152,9 +160,20 @@ const editRun = async (
       )
     : undefined;
   const reply = await settle(play, started.result, () => play.pump(0n), encode);
+  // In Edit, `play` is only a preview and a loop waits for Browse.
+  const looped = play.patterns.looping;
+  play.patterns.flush();
   play.stop(0n);
   if (reply.error) {
     return reply;
+  }
+  if (sent.length) {
+    reply.preview = sent;
+  }
+  if (looped) {
+    reply.text = [reply.text, 'A loop starts when you Browse.']
+      .filter(Boolean)
+      .join('\n');
   }
   if (!editor.isCurrent(expected)) {
     return {

@@ -102,11 +102,19 @@ test("each Script's Manifest lists every Grant as it is declared", () => {
 });
 
 test('the sound Grant plays for the calling Script and stops on release', () => {
-  const played: [string, string, boolean][] = [];
-  const sounds = new SoundBoard(undefined, () => {});
+  const calls: string[] = [];
   const grant = soundGrant.grant({
-    sounds,
-    play: (owner, name, loop) => played.push([owner, name, loop]),
+    play: (call, name, on, options) =>
+      calls.push(
+        `play ${call.scriptName} ${name} ${on ?? '-'} ${options ?? '-'}`,
+      ),
+    loop: (call, name, on, options) =>
+      calls.push(
+        `loop ${call.scriptName} ${name} ${on ?? '-'} ${options ?? '-'}`,
+      ),
+    stop: (call, target) =>
+      calls.push(`stop ${call.scriptName} ${target ?? '-'}`),
+    stopOwner: owner => calls.push(`stopOwner ${owner}`),
   });
   const op = (name: string) => grant.capability.operations.get(name)!;
   const fire = (name: string, ...args: Value[]) => {
@@ -117,10 +125,12 @@ test('the sound Grant plays for the calling Script and stops on release', () => 
     operation.fire(call('script:2'), ...args);
   };
   fire('play', text('chime'));
-  fire('loop', text('rain'));
-  expect(played).toEqual([
-    ['script:2', 'chime', false],
-    ['script:2', 'rain', true],
+  fire('loop', text('bd hh'));
+  fire('stop');
+  expect(calls).toEqual([
+    'play script:2 chime - -',
+    'loop script:2 bd hh - -',
+    'stop script:2 -',
   ]);
 });
 

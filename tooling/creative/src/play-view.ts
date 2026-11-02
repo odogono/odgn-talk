@@ -43,6 +43,7 @@ import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { isPlayKey } from './shortcuts';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
+import { needsInstrumentAudio } from './pattern-checks';
 import {
   addRecordedTest,
   RECORDED_SCRIPT,
@@ -911,7 +912,7 @@ export const mountPlay = (shell: StackShell): void => {
     shell.setPlaying(mode);
     generation = shell.editor.generation;
     playing = shell.editor.project as Project;
-    if (playing.instruments.length) {
+    if (needsInstrumentAudio(playing)) {
       const project = playing;
       instrumentAudio = startInstrumentAudio(
         project,

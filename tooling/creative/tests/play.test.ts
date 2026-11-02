@@ -624,7 +624,7 @@ test('the sound Grant plays and loops for the owning Script; stop is owner-scope
   project.assets.push(soundAsset('waves'), soundAsset('rain'));
   project.pages[0]!.elements[0]!.script = `on click
  tell sound to play "waves"
- tell sound to loop "rain"
+ tell sound to play "rain" with {repeat: true}
 end click
 on pointerLeave
  tell sound to stop "waves"
@@ -674,10 +674,10 @@ test('leaving a Page stops its Scripts’ sounds while a Project sound continues
   project.assets.push(soundAsset('waves'), soundAsset('rain'));
   project.pages.push(createPage('page2'));
   project.script = `on startPlay
- tell sound to loop "rain"
+ tell sound to play "rain" with {repeat: true}
 end startPlay`;
   project.pages[0]!.script = `on openPage
- tell sound to loop "waves"
+ tell sound to play "waves" with {repeat: true}
 end openPage`;
   project.pages[0]!.elements[0]!.script = `on click
  tell pages to show page2
@@ -706,7 +706,7 @@ test('deleting an Element stops its sounds; its Script cannot restart them', () 
   const project = fixture();
   project.assets.push(soundAsset('waves'));
   project.pages[0]!.elements[0]!.script = `on click
- tell sound to loop "waves"
+ tell sound to play "waves" with {repeat: true}
 end click`;
   project.pages[0]!.script = `on pointerEnter
  tell elements to delete button1

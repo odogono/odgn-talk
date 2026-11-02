@@ -287,6 +287,30 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   [pattern-checks.test.ts](tests/pattern-checks.test.ts).
 - First check: `bun test tooling/creative/tests/mini-notation.test.ts tooling/creative/tests/pattern-checks.test.ts`.
 
+## Sound Patterns
+
+`play`, `loop` and `stop` (ADR 0159, #1896).
+
+- [sound-patterns.ts](src/sound-patterns.ts): `SoundPatterns` keeps each
+  Script's loops, one per Instrument, and `play`'s one-shot steps, and sends
+  each step one lead ahead on the Transport; `schedule` and `nextDeadline`
+  run from `PlaySession.pump`.
+- [grants/sound.ts](src/grants/sound.ts): the Host Commands, with `on` and
+  `with` as Argument Labels (ADR 0160). [play.ts](src/play.ts) resolves the
+  Instrument and options, checks texts built at run time, plays a whole
+  Project sound, and stops an owner's patterns with its sounds.
+- [sound-migration.ts](src/sound-migration.ts): format 7's rewrite of
+  `tell sound to loop` to `play … with {repeat: true}`.
+- [message.ts](src/message.ts) and
+  [instruments/preview.ts](src/instruments/preview.ts): Edit's preview of
+  `play`. [pattern-checks.ts](src/pattern-checks.ts)'s
+  `needsInstrumentAudio` decides whether Browse starts the audio.
+- Tests: [sound-patterns.test.ts](tests/sound-patterns.test.ts),
+  [sound-migration.test.ts](tests/sound-migration.test.ts), Message Box
+  cases in [message.test.ts](tests/message.test.ts).
+- First check: `bun test tooling/creative/tests/sound-patterns.test.ts`.
+- Browser: `beats` suite on `/beats-test.html`.
+
 ## The folio Grant and hide/show
 
 - [grants/folio.ts](src/grants/folio.ts): the `hide` and `show` Operations,

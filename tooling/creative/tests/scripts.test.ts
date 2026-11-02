@@ -360,7 +360,7 @@ test('the declared Grants accept the settled call forms', () => {
     'tell elements to delete button1',
     'ask elements to find "button1", thisPage',
     'tell sound to play "waves"',
-    'tell sound to loop "rain"',
+    'tell sound to play "rain" with {repeat: true}',
     'tell sound to stop "rain"',
     'tell sound to stop',
   ];

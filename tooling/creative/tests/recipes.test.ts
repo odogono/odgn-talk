@@ -259,7 +259,7 @@ test('sound Recipes offer only audio assets and play through the Play Host', () 
     'tell sound to play "waves"',
   );
   expect(recipeSource('loopSound', targets[0]!)).toBe(
-    'tell sound to loop "waves"',
+    'tell sound to play "waves" with {repeat: true}',
   );
   const stops = recipeTargets(project, button, 'stopSound');
   expect(recipeSource('stopSound', stops[0]!)).toBe('tell sound to stop');

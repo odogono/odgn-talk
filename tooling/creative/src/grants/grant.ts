@@ -17,6 +17,8 @@ export type OperationDeclaration = {
   readonly description?: string;
   readonly errors?: { readonly code: string }[];
   readonly examples?: readonly string[];
+  /** Argument Labels, one for each argument after the first (ADR 0115). */
+  readonly labels?: readonly string[];
   readonly maxPendingMs?: number;
   readonly mode: 'fire-and-forget' | 'immediate' | 'suspending';
   readonly result?: Shape;
@@ -82,6 +84,7 @@ export const manifestGrant = (definition: GrantDefinition<never>) => ({
   operations: Object.entries(definition.operations).map(([name, op]) => ({
     name,
     args: (op.args ?? []).map(shapeData),
+    ...(op.labels?.length ? { labels: [...op.labels] } : {}),
     mode: op.mode,
     ...(op.cost
       ? { cost: { fuel: op.cost.fuel, alloc: op.cost.alloc ?? 0 } }
@@ -105,6 +108,7 @@ export const libraryDeclarations = (definition: GrantDefinition<never>) =>
       {
         mode: op.mode,
         args: op.args ?? [],
+        ...(op.labels?.length ? { labels: op.labels } : {}),
         ...(op.command ? { command: true } : {}),
       },
     ]),

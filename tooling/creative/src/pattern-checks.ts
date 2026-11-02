@@ -8,6 +8,7 @@ import { KIT_SAMPLE_NAMES } from './kits/kits';
 import { parseMiniNotation } from './mini-notation';
 import type { DeepReadonly } from './readonly';
 import type { Project } from './model';
+import { scriptOwners } from './script-manifest';
 import { isSoundAsset } from './sounds';
 
 type Node = {
@@ -21,6 +22,11 @@ type Node = {
 
 /** The names a pattern may play. */
 export type PatternNames = {
+  /**
+   * Each Instrument's name, and whether it is a sampler. A pattern `on` a
+   * sampler plays sounds; on any other kind it plays notes (ADR 0159).
+   */
+  instruments?: ReadonlyMap<string, boolean>;
   /** Project sounds and kit samples. */
   sounds: ReadonlySet<string>;
 };
@@ -37,6 +43,9 @@ export type PatternProblem = {
 export const projectPatternNames = (
   project: DeepReadonly<Project>,
 ): PatternNames => ({
+  instruments: new Map(
+    project.instruments.map(i => [i.name, i.kind === 'sampler']),
+  ),
   sounds: new Set([
     ...KIT_SAMPLE_NAMES,
     ...project.assets.filter(isSoundAsset).map(a => a.name),
@@ -65,10 +74,23 @@ const literal = (source: string, expression: Node | undefined) => {
     : undefined;
 };
 
+/** A pattern text written as a literal, and the name `on` gives, if any. */
+export type PatternText = { offset: number; on?: string; text: string };
+
+/** The bare name an `on` label gives, as `loop "c3" on bass` does. */
+const onName = (list: Node | undefined): string | undefined => {
+  const children = list?.children ?? [];
+  const label = children.findIndex(
+    c => c.rule === 'Label' && tokens(c)[0]?.v === 'on',
+  );
+  const found = label < 0 ? [] : tokens(children[label + 1]!);
+  return found.length === 1 && found[0]!.kind === 'token'
+    ? found[0]!.v
+    : undefined;
+};
+
 /** Every pattern text written as a literal in a Script. */
-export const patternTexts = (
-  source: string,
-): { offset: number; text: string }[] => {
+export const patternTexts = (source: string): PatternText[] => {
   let tree: Node | null;
   try {
     const parsed = parseSource(source);
@@ -76,7 +98,7 @@ export const patternTexts = (
   } catch {
     return [];
   }
-  const found: { offset: number; text: string }[] = [];
+  const found: PatternText[] = [];
   const visit = (node: Node) => {
     const [head, second, , operation] = node.children ?? [];
     const command =
@@ -90,12 +112,11 @@ export const patternTexts = (
           ? operation?.v
           : undefined;
     if (command && PATTERN_OPERATIONS.has(command)) {
-      const text = literal(
-        source,
-        first(first(node, 'ExpressionList'), 'Expression'),
-      );
+      const list = first(node, 'ExpressionList');
+      const text = literal(source, first(list, 'Expression'));
       if (text) {
-        found.push(text);
+        const on = onName(list);
+        found.push(on === undefined ? text : { ...text, on });
       }
     }
     node.children?.forEach(visit);
@@ -114,11 +135,13 @@ export const patternProblems = (
   source: string,
   names: PatternNames,
 ): PatternProblem[] =>
-  patternTexts(source).flatMap(({ text, offset }) => {
+  patternTexts(source).flatMap(({ text, offset, on }) => {
     // A Project sound's own name plays the whole sound, spaces and all.
-    if (names.sounds.has(text)) {
+    if (on === undefined && names.sounds.has(text)) {
       return [];
     }
+    // A name that isn't an Instrument's is left to the call to check.
+    const sampler = on === undefined ? true : names.instruments?.get(on);
     const at = (from: number, to: number, message: string) => ({
       from: offset + from,
       to: offset + to,
@@ -130,14 +153,23 @@ export const patternProblems = (
       const { from, to, message } = parsed.error;
       return [at(from, to, message)];
     }
+    if (sampler === undefined) {
+      return [];
+    }
     return parsed.pattern
       .words()
-      .filter(word => !names.sounds.has(word.value.name))
+      .filter(word =>
+        sampler
+          ? !names.sounds.has(word.value.name)
+          : word.value.note === undefined,
+      )
       .map(word =>
         at(
           word.from,
           word.from + word.value.name.length,
-          `No sound or sample is named “${word.value.name}”.`,
+          sampler
+            ? `No sound or sample is named “${word.value.name}”.`
+            : `“${word.value.name}” is not a note ${on} can play.`,
         ),
       );
   });
@@ -154,3 +186,16 @@ export const patternDiagnostics = (
     severity: 1,
     source: 'folio',
   }));
+
+/**
+ * Whether a Play Session of the Project needs the Instruments' audio: it has
+ * Instruments, or a Script or Library may play a Sound Pattern on the
+ * default kit. A word check is enough, since starting audio for a Script
+ * that never plays one only costs an idle AudioContext.
+ */
+export const needsInstrumentAudio = (project: DeepReadonly<Project>): boolean =>
+  project.instruments.length > 0 ||
+  [
+    ...scriptOwners(project).map(owner => owner.script ?? ''),
+    ...project.libraries.map(library => library.source),
+  ].some(source => /\b(?:play|loop)\b/u.test(source));
