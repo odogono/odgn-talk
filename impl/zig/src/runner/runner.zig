@@ -14,6 +14,7 @@ const c = @import("talk-c");
 const session = @import("session");
 const router_mod = @import("router.zig");
 const Fetcher = @import("fetch.zig").Fetcher;
+const peers_mod = @import("peers.zig");
 
 const sys = std.c;
 const posix = std.posix;
@@ -30,6 +31,10 @@ pub const Options = struct {
     args: []const []const u8,
     /// Overrides every `serve`'s port: `--port` or PORT.
     port: ?u16 = null,
+    /// `--listen tcp://HOST:PORT` and each `--peer NAME=tcp://HOST:PORT`
+    /// (chapter 12, Runner peers).
+    listen: ?peers_mod.Address = null,
+    remotes: []const peers_mod.Remote = &.{},
 };
 
 const Instant = struct {
@@ -118,6 +123,7 @@ pub const Runner = struct {
     fetcher: Fetcher = undefined,
     notify: *c.talk_router,
     stores: Stores,
+    peers: peers_mod.Peers = undefined,
     /// Whether a Host Input waits for a Pump.
     dirty: bool = false,
     admitted: bool = false,
@@ -335,6 +341,11 @@ pub const Runner = struct {
         }
         r.later.clearRetainingCapacity();
         r.http.answerStarted();
+        r.peers.answerStarted();
+        if (r.peers.dirty) {
+            r.peers.dirty = false;
+            r.dirty = true;
+        }
     }
 
     fn userAsk(r: *Runner, call: ?*c.talk_call, p: Prompt, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
@@ -571,6 +582,7 @@ pub const Runner = struct {
 
         try out.append(r.a(), .{ .name = "store", .name_len = 5, .grant = try r.grantOf(try r.stores.capability(r.core)) });
         try out.append(r.a(), .{ .name = "http", .name_len = 4, .grant = try r.grantOf(try r.http.capability(r.core)) });
+        try out.append(r.a(), .{ .name = "peer", .name_len = 4, .grant = try r.grantOf(try r.peers.capability()) });
 
         if (r.tty) {
             const user_costs = free(&.{ "confirm", "choose", "enter", "notify" });
@@ -733,6 +745,7 @@ pub const Runner = struct {
             const n = c.talk_reports_items(result.reports, &items);
             const reports = if (n == 0) &[_]c.talk_report{} else items[0..n];
             r.http.pumped(reports);
+            r.peers.pumped(reports);
             _ = c.talk_router_pumped(r.notify, r.group);
             for (reports) |*report| if (r.reportProblem(report)) {
                 r.failed = true;
@@ -749,7 +762,7 @@ pub const Runner = struct {
     /// Serve Registrations or open HTTP Exchanges. A pending `console.read`
     /// or `user` prompt keeps its Run alive.
     fn done(r: *Runner) bool {
-        if (r.signalled != null or r.dirty or r.http.queued or r.timers.items.len > 0 or r.http.registrationCount() > 0 or r.http.open > 0) return false;
+        if (r.signalled != null or r.dirty or r.http.queued or r.peers.listening() or r.timers.items.len > 0 or r.http.registrationCount() > 0 or r.http.open > 0) return false;
         var inspection: ?*c.talk_inspection = null;
         if (c.talk_inspect(r.group, &inspection) != c.TALK_OK) return false;
         defer c.talk_inspection_release(inspection);
@@ -775,6 +788,7 @@ pub const Runner = struct {
         }
         r.signalled = signalCode(sig);
         r.http.stopAccepting();
+        r.peers.stopListening();
         // A Script without a `stop` Handler ends that Run `unhandled`.
         const m: c.talk_message = .{ .name = "stop", .name_len = 4, .args = null, .args_len = 0, .limits = null };
         _ = c.talk_script_deliver(r.script, &m, null);
@@ -819,6 +833,8 @@ pub const Runner = struct {
             if (fetching) |fd| fds.append(r.gpa, fd) catch return 1;
             const http_slot = fds.items.len;
             r.http.collect(&fds) catch return 1;
+            const peer_slot = fds.items.len;
+            r.peers.collect(&fds) catch return 1;
             _ = posix.poll(fds.items, r.timeout()) catch return 1;
 
             if (fds.items[0].revents != 0) {
@@ -829,7 +845,12 @@ pub const Runner = struct {
             if (reading and fds.items[stdin_slot].revents != 0) r.readStdin();
             if (fetching != null and fds.items[fetch_slot].revents != 0) r.fetcher.drainWake();
             if (r.fetcher.settle()) r.dirty = true;
-            r.http.ready(fds.items[http_slot..]);
+            r.http.ready(fds.items[http_slot..peer_slot]);
+            r.peers.ready(fds.items[peer_slot..]);
+            if (r.peers.dirty) {
+                r.peers.dirty = false;
+                r.dirty = true;
+            }
             if (r.http.queued) r.dirty = true;
             r.fireTimers();
             if (r.next_deadline) |d| if (d.us() <= Instant.now().us()) {
@@ -850,12 +871,17 @@ pub const Runner = struct {
             c.talk_group_release(g);
         }
         r.http.deinit();
+        r.peers.deinit();
         c.talk_router_free(r.notify);
         r.stores.deinit();
         c.talk_core_release(r.core);
         r.arena.deinit();
     }
 };
+
+fn logPeer(text: []const u8) void {
+    line(stderr, "{s}", .{text});
+}
 
 /// The file's basename without its extension, or `main`.
 pub fn scriptName(file: []const u8) []const u8 {
@@ -907,6 +933,7 @@ pub fn run(gpa: Allocator, io: std.Io, options: Options) u8 {
     r.stores = .init(gpa, r.notify);
     r.http = Router.init(gpa, r.core, .{ .port_override = options.port, .log = Runner.logHttp, .log_context = &r }) catch return 1;
     r.fetcher = Fetcher.init(gpa, io) catch return 1;
+    r.peers = peers_mod.Peers.init(gpa, r.core, io, options.listen, options.remotes, logPeer);
     r.http.fetcher = &r.fetcher;
     defer r.deinit();
 
@@ -934,6 +961,10 @@ pub fn run(gpa: Allocator, io: std.Io, options: Options) u8 {
         return 1;
     }
     r.script = script;
+    r.peers.start(group) catch {
+        line(stderr, "{s}: can't listen for peers", .{options.file});
+        return 1;
+    };
 
     var values: std.ArrayList(?*c.talk_value) = .empty;
     defer {

@@ -1,11 +1,12 @@
 import { test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   verifyHttpExample,
   verifyRunnerPeers,
+  verifyTcpRunnerPeers,
   verifyScriptRunner,
 } from './run-integration';
 
@@ -51,6 +52,22 @@ test.skipIf(!goRunner)(
   async () => {
     await verifyRunnerPeers([goRunner!], [process.execPath, main]);
     await verifyRunnerPeers([process.execPath, main], [goRunner!]);
+  },
+  120_000,
+);
+
+// The native Zig Runner, when it has been built, over loopback TCP: it has
+// no TLS yet (#1997).
+const zigRunner = resolve(
+  import.meta.dir,
+  '../../../impl/zig/zig-out/bin/northtalk',
+);
+
+test.skipIf(!existsSync(zigRunner))(
+  'a TS and a native Runner carry Remote Sends over TCP',
+  async () => {
+    await verifyTcpRunnerPeers([zigRunner], [process.execPath, main]);
+    await verifyTcpRunnerPeers([process.execPath, main], [zigRunner]);
   },
   120_000,
 );

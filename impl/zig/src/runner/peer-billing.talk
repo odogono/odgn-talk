@@ -1,0 +1,14 @@
+on start args
+  ask peer to expose "billing" and wait
+end start
+on charge amount
+  ask peer to caller
+  say "charge " & amount & " from " & it
+  if amount > 100 then
+    throw {code: "too much"}
+  end if
+  return amount + 1
+end charge
+on note line
+  say "note " & line
+end note

@@ -1,0 +1,12 @@
+on start args
+  ask peer to reach "billing" into billing and wait
+  send charge with 12 to billing into total and wait
+  say "total " & total
+  try
+    send charge with 500 to billing and wait
+  catch e
+    say the code of e & " " & the reason of e
+  end try
+  send note with "hi" to billing
+  send charge with 1 to billing and wait
+end start

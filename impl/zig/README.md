@@ -681,8 +681,8 @@ Group's Trace.
 ([chapter 12](../../spec/12-sessions-and-tooling.md#the-script-runner),
 [ADR 0126](../../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)),
 as the TS and Go `northtalk` commands do. A first argument that ends in `.talk`,
-or names an existing file and isn't a flag, is the file; `--port <n>` may come
-before it.
+or names an existing file and isn't a flag, is the file; `--port <n>`,
+`--listen` and `--peer` may come before it.
 
 ```sh
 cd impl/zig
@@ -692,8 +692,12 @@ zig build repl -- --port 0 ../../examples/http/hello.talk
 
 [`src/runner/`](src/runner/) loads the file as one Script, named for the file,
 in one Group, granted under `GrantsAsUsed` `console`, `clock`, `timer`, an
-in-memory `store` (the Session Store's), `http` and, when standard input is a
-terminal, `user`. It has no time-zone or Locale data, so it offers no
+in-memory `store` (the Session Store's), `http`, `peer` and, when standard
+input is a terminal, `user`. `peer` carries Remote Sends to other Runners
+([Runner peers](../../spec/12-sessions-and-tooling.md#runner-peers)) over
+plain TCP on loopback only: `--listen tcp://127.0.0.1:<port>` and `--peer
+<name>=tcp://127.0.0.1:<port>`. Zig's standard library has no TLS server, so
+it refuses the TLS forms and `--peer-key`, and `caller` gives Nothing. It has no time-zone or Locale data, so it offers no
 `calendar` or `locale`. It Delivers `start` with the list of the arguments
 after the file, and exits 0 once nothing can happen again, or 1 when a Run
 ended with an uncaught error, a limit fault or a failed effect, which it
