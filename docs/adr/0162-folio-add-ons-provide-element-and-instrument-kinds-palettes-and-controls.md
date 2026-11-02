@@ -50,7 +50,7 @@ A **Palette** is authored like a Page and shown in its own floating window durin
 
 ## Controls
 
-A control is an Element kind with a `value` property that sends `change value` when the reader changes it. In Info, a control can bind its value straight to an Instrument parameter or to the tempo. The binding is applied on the audio side, so it needs no Script and does not wait on the worker.
+A control is an Element kind with a `value` property that sends `change` with its new value when the reader changes it, which a Script handles as `on change value`; an XY pad has an `x` and a `y` and sends both. While the reader drags, the page draws the control at once and sends at most one change at a time, the latest replacing any still waiting, so a drag never runs a Script per frame. In Info, a control can bind its value straight to an Instrument parameter or to the tempo. The binding is applied on the audio side, so it needs no Script and does not wait on the worker.
 
 ## Considered Options
 

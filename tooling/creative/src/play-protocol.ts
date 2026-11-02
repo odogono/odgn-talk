@@ -61,6 +61,14 @@ export type PlayRequest =
       trustedAddOns?: string[];
     }
   | {
+      /** A control's new field values (#1902). */
+      fields: Record<string, number | boolean>;
+      kind: 'control';
+      pageIndex: number;
+      session: number;
+      target: string;
+    }
+  | {
       args?: ReaderArg[];
       kind: 'send';
       message: ReaderMessage;

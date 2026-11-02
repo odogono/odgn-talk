@@ -19,6 +19,18 @@ export type CatalogueEntry = {
 
 export const BUILT_IN_ADD_ONS: readonly CatalogueEntry[] = [
   {
+    id: 'https://northtalk.org/add-ons/controls',
+    kinds: [
+      { name: 'slider', label: 'Slider', icon: '▭' },
+      { name: 'knob', label: 'Knob', icon: '◔' },
+      { name: 'toggle', label: 'Toggle', icon: '◐' },
+      { name: 'xy', label: 'XY pad', icon: '⌖' },
+      { name: 'meter', label: 'Level meter', icon: '▮' },
+    ],
+    slug: 'controls',
+    version: '1.0.0',
+  },
+  {
     id: INSTRUMENTS_ADD_ON,
     kinds: [],
     instruments: [

@@ -35,6 +35,12 @@ export type InfoContext = { controls: InfoControls; disabled: boolean };
 export type ElementKindView<K extends ElementKind = ElementKind> = {
   /** What it draws inside its box. */
   Contents?(props: {
+    /**
+     * During Play, when the reader may act: sets a control's fields and
+     * sends `change` with them (#1902). Calls while one is on its way are
+     * merged, so dragging never queues a Run per frame.
+     */
+    change?: (fields: Record<string, number | boolean>) => void;
     element: Of<K>;
     imageUrl?: string;
     reader: boolean;
