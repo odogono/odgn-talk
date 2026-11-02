@@ -43,6 +43,7 @@
     "bench:compare": "bun bench/ts/src/compare.ts",
     "bench:html": "bun bench/ts/src/render-html.ts",
     "bench:profile": "bun bench/ts/src/profile.ts",
+    "bench:profile:zig": "bun bench/ts/src/profile-zig.ts",
     "fuzz": "bun tooling/fuzz/src/cli.ts",
     "northtalk": "bun tooling/cli/src/main.ts",
     "creative": "bun run --cwd tooling/creative dev",

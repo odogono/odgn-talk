@@ -278,6 +278,14 @@ node bench/ts/dist/measure-load.js lifecycle/load
 The [#1599 scope report](../docs/research/ts-load-front-end-scope-1599.md)
 records the Load gap, profiles and frontend options.
 
+For the native Zig Core on macOS, sample the C Host running one Benchmark:
+
+```sh
+bun run bench:profile:zig core/loop [--base origin/main] [--seconds 6] [--top 25]
+```
+
+It builds `impl/zig` and links [`bench/zig/host.c`](zig/host.c) with symbols, runs the Benchmark past the sampling window, and prints `sample`'s top-of-stack frames by self time. `--base` builds that revision in a detached worktree at `.cache/bench-base` and prints its profile after the branch's. Full reports stay in `.cache/prof/`. Take timings from `bun run bench --only zig`, alternating branch and base, since a profile runs at a different count. For the Zig Core as WebAssembly under wazero, Go's `pprof` sees only `runtime._ExternalCode`; build the Go test binary with `-tags perfmap` and `sample` that instead.
+
 The Go runner is an ordinary `testing.B` benchmark, so the Go tools work on it directly:
 
 ```sh

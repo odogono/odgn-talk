@@ -7,3 +7,13 @@ if git diff --cached --name-only -- GLOSSARY.md spec | grep -q .; then
 		exit 1
 	}
 fi
+
+# Prettier on the staged TypeScript, so formatting fails here rather than at
+# pre-push, where the only fix is an extra commit.
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.tsx')
+if [ -n "$files" ]; then
+	echo "$files" | xargs bunx --bun prettier --check --log-level warn || {
+		echo 'pre-commit: run `bunx prettier --write` on those files and stage them' >&2
+		exit 1
+	}
+fi

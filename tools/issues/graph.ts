@@ -220,3 +220,32 @@ ${lines.join('\n')}
 ${rows.join('\n')}
 `;
 };
+
+// A map's task list (`- [ ] #N …`) goes stale when children close without
+// anyone ticking it, and agents then re-check every child by hand. Returns
+// each open map's body with every listed child's box matching its state.
+export const tickMaps = (
+  issues: ReadonlyMap<number, Issue>,
+): Map<number, string> => {
+  const edits = new Map<number, string>();
+  for (const map of issues.values()) {
+    if (map.state !== 'OPEN' || !map.labels.includes('wayfinder:map')) {
+      continue;
+    }
+    const body = map.body.replaceAll(
+      /^(\s*[*-] )\[([ Xx])] #(\d+)\b/gm,
+      (line, lead: string, box: string, n: string) => {
+        const child = issues.get(Number(n));
+        if (!child) {
+          return line;
+        }
+        const want = child.state === 'CLOSED' ? 'x' : ' ';
+        return box.toLowerCase() === want ? line : `${lead}[${want}] #${n}`;
+      },
+    );
+    if (body !== map.body) {
+      edits.set(map.number, body);
+    }
+  }
+  return edits;
+};
