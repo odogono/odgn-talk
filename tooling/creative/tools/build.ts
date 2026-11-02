@@ -6,7 +6,8 @@
 // version hashed from their contents, so a rebuild with no shell change
 // keeps the installed worker, and a changed shell offers an update. Each
 // Example Project gets a `.folio` file and a copy of the page at
-// `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141).
+// `<slug>/`, so `/folio/<slug>` is a static file too (ADR 0141). The
+// built-in kits are rendered to `kits/` and precached too (#1895).
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -21,6 +22,7 @@ import {
   EXAMPLE_PROJECTS,
   exampleFilePath,
 } from '../src/examples';
+import { KIT_FILES, kitNotice, renderKitFiles } from '../src/kits/kits';
 import { writeProjectFile } from '../src/project-file';
 import { iconPng, iconSvg } from './icons';
 
@@ -54,6 +56,22 @@ export const examplePrecacheFiles = EXAMPLE_PROJECTS.flatMap(example => [
   `./${example.slug}/`,
   `./${exampleFilePath(example.slug)}`,
 ]);
+
+/** The built-in kits' sounds and licence notice, precached for offline Play (#1895). */
+export const KIT_NOTICE = 'kits/LICENSE.txt';
+export const kitPrecacheFiles = [
+  ...KIT_FILES.map(file => `./${file.path}`),
+  `./${KIT_NOTICE}`,
+];
+
+const writeKits = (): void => {
+  for (const [path, bytes] of renderKitFiles()) {
+    const file = resolve(dist, path);
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    writeFileSync(file, bytes);
+  }
+  writeFileSync(resolve(dist, KIT_NOTICE), kitNotice());
+};
 
 /** The file in `dist/` behind a precached URL. */
 export const shellFile = (entry: string): string =>
@@ -123,9 +141,14 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
     iconPng(512, { maskable: true }),
   );
   writeFileSync(resolve(dist, 'apple-touch-icon.png'), iconPng(180));
+  writeKits();
   await writeExamples();
 
-  const precache = [...precacheFiles, ...examplePrecacheFiles];
+  const precache = [
+    ...precacheFiles,
+    ...kitPrecacheFiles,
+    ...examplePrecacheFiles,
+  ];
   const hash = createHash('sha256');
   for (const entry of precache) {
     hash.update(entry);

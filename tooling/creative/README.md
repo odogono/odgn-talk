@@ -191,6 +191,19 @@ error. A Page or Element can't share an Instrument's name. A Script that stops
 releases the notes it started, and stopping Play stops every Instrument. The
 Instruments play through one AudioWorklet, which starts with Play.
 
+Folio ships two built-in sample kits, which every sampler can play as well as
+the Project's sounds: `drums`, the default kit (`bd`, `sd`, `hh`, `oh`, `cp`,
+`rim`, `lt`, `mt`, `ht`, `cb` and `cr`, with `bd:1` and `sd:1` as variants),
+and `shots` (`blip`, `zap`, `pluck`, `bell`, `sub` and `noise`; the pitched
+ones sound at middle C). So `tell drums to play "bd"` works before anything is
+imported, and a Project sound with a kit sample's name plays instead of it.
+Every kit sound is synthesised by
+[src/kits/kits.ts](src/kits/kits.ts) rather than recorded, and dedicated to the
+public domain under CC0 1.0. The build writes them to `kits/`, with the
+licence in `kits/LICENSE.txt`, and the service worker keeps them for offline
+use. `tests/build.test.ts` holds them to a 512 KiB budget; they take about
+340 KiB.
+
 Each Play Session has one Transport, which starts at 120 bpm in 4/4 when Play
 starts (ADR 0158). A Script that handles `beat` gets every beat's bar and beat,
 counted from 1, and a running count from 0:

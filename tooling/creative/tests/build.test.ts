@@ -1,12 +1,15 @@
 import { expect, test } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { EXAMPLE_PROJECTS } from '../src/examples';
+import { KIT_BUDGET_BYTES, KIT_FILES } from '../src/kits/kits';
 import { readProjectFile } from '../src/project-file';
 import {
   build,
   dist,
   examplePrecacheFiles,
+  KIT_NOTICE,
+  kitPrecacheFiles,
   precacheFiles,
   shellFile,
 } from '../tools/build';
@@ -76,7 +79,11 @@ test('the build writes everything offline use and installation need', async () =
   expect(worker).not.toContain('__FOLIO_VERSION__');
   // Every precached file exists, so installing the worker cannot fail
   // on a missing shell file.
-  for (const entry of [...precacheFiles, ...examplePrecacheFiles]) {
+  for (const entry of [
+    ...precacheFiles,
+    ...kitPrecacheFiles,
+    ...examplePrecacheFiles,
+  ]) {
     expect(existsSync(resolve(dist, shellFile(entry))), entry).toBe(true);
     expect(worker).toContain(JSON.stringify(entry));
   }
@@ -104,4 +111,19 @@ test('each Example Project has a static page and a .folio file', async () => {
     expect(loaded.project.name).toBe(example.name);
     expect(loaded.missingAssets).toEqual([]);
   }
+}, 60_000);
+
+test('the built-in kits are built, precached with their licence and within budget', async () => {
+  await build({ minify: false });
+  const worker = readFileSync(resolve(dist, 'sw.js'), 'utf8');
+  let total = 0;
+  for (const file of KIT_FILES) {
+    expect(worker, file.path).toContain(JSON.stringify(`./${file.path}`));
+    total += statSync(resolve(dist, file.path)).size;
+  }
+  expect(total).toBeLessThanOrEqual(KIT_BUDGET_BYTES);
+  expect(worker).toContain(JSON.stringify(`./${KIT_NOTICE}`));
+  expect(readFileSync(resolve(dist, KIT_NOTICE), 'utf8')).toContain(
+    'Licence: CC0 1.0',
+  );
 }, 60_000);
