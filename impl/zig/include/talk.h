@@ -647,6 +647,20 @@ typedef struct talk_http_impl {
     talk_operation_fn serve, unserve, respond, fetch;
 } talk_http_impl;
 
+/* peer: expose, reach and call are suspending; unexpose and caller are
+ * immediate and post fire-and-forget. expose receives its name, or nothing
+ * for an unnamed exposure, and is answered with the exposure's Peer, made
+ * with talk_peer_kind; reach receives the address and is answered with a
+ * Peer. unexpose receives a name or a Peer. post and call receive the Peer,
+ * the Selector as text and the arguments as a list, which may hold Peers;
+ * answer call with the receiver's reply, or fail it with send failed
+ * {reason, error}. caller gives the Caller Identity recorded for the call's
+ * delivery, or Nothing. */
+typedef struct talk_peer_impl {
+    void *context;
+    talk_operation_fn expose, unexpose, reach, post, call, caller;
+} talk_peer_impl;
+
 /* console: write receives the value to show. read is suspending, and
  * suspending calls aren't made yet. */
 typedef struct talk_console_impl {
@@ -692,6 +706,12 @@ talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *im
  * response, invalid request and fetch's out of domain before calling the
  * Host function. */
 talk_host_error_code talk_http_capability(talk_core *c, const talk_http_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* peer is optional (chapter 7, ADRs 0153 to 0155). The binding is the
+ * Host's; the Core never reads it. A send to a Peer is the sending Script's
+ * Grant's post, or call with `and wait`; Load refuses a Script given two
+ * peer Grants as invalid value. The Core raises out of domain, wrong kind,
+ * bad message name and not encodable before calling the Host function. */
+talk_host_error_code talk_peer_capability(talk_core *c, const talk_peer_impl *impl, const talk_costs *costs, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);
@@ -836,6 +856,9 @@ typedef struct talk_object_kind_def {
 } talk_object_kind_def;
 /* Defines an Object Kind, once per process. It lives as long as the Core. */
 talk_host_error_code talk_define_object_kind(talk_core *c, const talk_object_kind_def *k, talk_object_kind **out);
+/* The Core-fixed Object Kind peer, with no properties, which the Host makes
+ * each Peer with. Borrowed from the Core; NULL when it can't allocate. */
+const talk_object_kind *talk_peer_kind(talk_core *c);
 /* The Shape of an object of kind k. */
 talk_host_error_code talk_object_shape(const talk_object_kind *k, talk_shape **out);
 

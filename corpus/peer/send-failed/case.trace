@@ -1,4 +1,5 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: send failed from a Remote Send's call.
+# Re-blessed for #1973: a Remote Send is charged at the capability rate, not send's; the new Fuel figures await review.
 > load s identity=7a14580fb486084eb30a5876b0bf9fbdde1c7609643821ff4e6873bfab9d4d35
 > deliver d1 to=s message=try1 args=[<object peer "billing">]
 > deliver d2 to=s message=try1 args=[<object peer "billing">]
@@ -7,16 +8,16 @@
 > deliver d5 to=s message=try1 args=[<object peer "billing">]
 > pump clock=2026-11-02T12:00:00Z
 call s/r1.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r1 start delivery=d1 handler=try1 clause=1 fuel=26 alloc=0 state=520 end=ask-wait
+seg s/r1 start delivery=d1 handler=try1 clause=1 fuel=22 alloc=0 state=520 end=ask-wait
 call s/r2.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r2 start delivery=d2 handler=try1 clause=1 fuel=26 alloc=0 state=784 end=ask-wait
+seg s/r2 start delivery=d2 handler=try1 clause=1 fuel=22 alloc=0 state=784 end=ask-wait
 call s/r3.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r3 start delivery=d3 handler=try1 clause=1 fuel=26 alloc=0 state=1048 end=ask-wait
+seg s/r3 start delivery=d3 handler=try1 clause=1 fuel=22 alloc=0 state=1048 end=ask-wait
 call s/r4.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r4 start delivery=d4 handler=try1 clause=1 fuel=26 alloc=0 state=1312 end=ask-wait
+seg s/r4 start delivery=d4 handler=try1 clause=1 fuel=22 alloc=0 state=1312 end=ask-wait
 call s/r5.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r5 start delivery=d5 handler=try1 clause=1 fuel=26 alloc=0 state=1576 end=ask-wait
-pumped state=idle fuel=130 next=2026-11-02T12:00:30Z
+seg s/r5 start delivery=d5 handler=try1 clause=1 fuel=22 alloc=0 state=1576 end=ask-wait
+pumped state=idle fuel=110 next=2026-11-02T12:00:30Z
 > fail s/r1.c1 error={code: "send failed", reason: "unreachable"}
 > fail s/r2.c1 error={code: "send failed", reason: "mailbox full"}
 > fail s/r3.c1 error={code: "send failed", reason: "not exposed"}
@@ -24,31 +25,31 @@ pumped state=idle fuel=130 next=2026-11-02T12:00:30Z
 > answer s/r5.c1 value={ok: true} fuel=7
 > pump clock=2026-11-02T12:00:01Z
 raise s/r1 code="send failed" at=s:6 pos=5:5
-seg s/r1 resume fuel=18 alloc=471 state=1966 end=return
-run s/r1 outcome=completed delivery=d1 handler=try1 fuel=44 alloc=471
+seg s/r1 resume fuel=21 alloc=544 state=1966 end=return
+run s/r1 outcome=completed delivery=d1 handler=try1 fuel=43 alloc=544
 raise s/r2 code="send failed" at=s:6 pos=5:5
-seg s/r2 resume fuel=18 alloc=472 state=2100 end=return
-run s/r2 outcome=completed delivery=d2 handler=try1 fuel=44 alloc=472
+seg s/r2 resume fuel=21 alloc=546 state=2100 end=return
+run s/r2 outcome=completed delivery=d2 handler=try1 fuel=43 alloc=546
 raise s/r3 code="send failed" at=s:6 pos=5:5
-seg s/r3 resume fuel=18 alloc=471 state=2234 end=return
-run s/r3 outcome=completed delivery=d3 handler=try1 fuel=44 alloc=471
+seg s/r3 resume fuel=21 alloc=544 state=2234 end=return
+run s/r3 outcome=completed delivery=d3 handler=try1 fuel=43 alloc=544
 raise s/r4 code="send failed" at=s:6 pos=5:5
-seg s/r4 resume fuel=18 alloc=624 state=2368 end=return
-run s/r4 outcome=completed delivery=d4 handler=try1 fuel=44 alloc=624
-seg s/r5 resume fuel=21 alloc=58 state=2112 end=return
-run s/r5 outcome=completed delivery=d5 handler=try1 fuel=47 alloc=58
-pumped state=idle fuel=93
+seg s/r4 resume fuel=26 alloc=850 state=2368 end=return
+run s/r4 outcome=completed delivery=d4 handler=try1 fuel=48 alloc=850
+seg s/r5 resume fuel=23 alloc=108 state=2112 end=return
+run s/r5 outcome=completed delivery=d5 handler=try1 fuel=45 alloc=108
+pumped state=idle fuel=112
 > deliver d6 to=s message=both args=[<object peer "billing">]
 > pump clock=2026-11-02T12:00:02Z
 call s/r6.c1 op=peer.call args=[<object peer "billing">, "price", ["a"]]
 call s/r6.c2 op=peer.call args=[<object peer "billing">, "price", ["b"]]
-seg s/r6 start delivery=d6 handler=both clause=1 fuel=68 alloc=0 state=2456 end=join-end
-pumped state=idle fuel=68 next=2026-11-02T12:00:32Z
+seg s/r6 start delivery=d6 handler=both clause=1 fuel=60 alloc=0 state=2456 end=join-end
+pumped state=idle fuel=60 next=2026-11-02T12:00:32Z
 > answer s/r6.c2 value=20
 > answer s/r6.c1 value=10
 > pump clock=2026-11-02T12:00:03Z
-seg s/r6 resume fuel=21 alloc=200 state=2184 end=return
-run s/r6 outcome=completed delivery=d6 handler=both fuel=89 alloc=200
-pumped state=idle fuel=21
+seg s/r6 resume fuel=23 alloc=232 state=2184 end=return
+run s/r6 outcome=completed delivery=d6 handler=both fuel=83 alloc=232
+pumped state=idle fuel=23
 > vars
 vars s seen=[{code: "send failed", reason: "unreachable", capability: "peer", operation: "call", at: {unit: "s", handler: "try1", line: 5, column: 5}}, {code: "send failed", reason: "mailbox full", capability: "peer", operation: "call", at: {unit: "s", handler: "try1", line: 5, column: 5}}, {code: "send failed", reason: "not exposed", capability: "peer", operation: "call", at: {unit: "s", handler: "try1", line: 5, column: 5}}, {code: "send failed", reason: "errored", error: {code: "no money", message: "Card declined"}, capability: "peer", operation: "call", at: {unit: "s", handler: "try1", line: 5, column: 5}}, {ok: true}, [10, 20]]

@@ -1,4 +1,5 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: the checks of a send to a Peer.
+# Re-blessed for #1973: a Remote Send is charged at the capability rate, not send's; the new Fuel figures await review.
 > load s identity=c0c84bb4ea5b392c6f9201bf1419a9313aec8b7398828ce5e017f091e534b0b5
 > load plain identity=3f686093d5454d46194129ae3450b325e0b236ff24ae8c2df1b9312a919ca296
 > stub peer.post
@@ -14,12 +15,12 @@ raise s/r1 code="not encodable" at=s:82 pos=26:5
 raise s/r1 code="wrong kind" at=s:101 pos=31:5
 raise s/r1 code="out of domain" at=s:118 pos=36:5
 call s/r1.c1 op=peer.post args=[<object peer "billing">, "forward", [{to: [<object peer "billing">]}, "a"]]
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=253 alloc=4102 state=3825 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=253 alloc=4102
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=246 alloc=4102 state=3825 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=246 alloc=4102
 raise plain/r1 code="out of domain" at=plain:6 pos=5:5
 seg plain/r1 start delivery=d2 handler=go clause=1 fuel=44 alloc=510 state=526 end=return
 run plain/r1 outcome=completed delivery=d2 handler=go fuel=44 alloc=510
-pumped state=idle fuel=297
+pumped state=idle fuel=290
 > vars
 vars s seen=[{code: "bad message name", name: "not a name", arguments: 1, at: {unit: "s", handler: "go", line: 6, column: 5}}, {code: "bad message name", name: "charge:", arguments: 2, at: {unit: "s", handler: "go", line: 11, column: 5}}, {code: "object gone", object: <object peer "gone">, at: {unit: "s", handler: "go", line: 16, column: 5}}, {code: "not encodable", kind: "object", path: [3, 1, "pay", 1], at: {unit: "s", handler: "go", line: 21, column: 5}}, {code: "not encodable", kind: "function", path: [3, 1], at: {unit: "s", handler: "go", line: 26, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 5, capability: "peer", operation: "call", argument: 2, at: {unit: "s", handler: "go", line: 31, column: 5}}, {code: "out of domain", function: "wait for", value: <object peer "billing">, at: {unit: "s", handler: "go", line: 36, column: 5}}, "sent"]
 vars plain seen=[{code: "out of domain", function: "send", value: <object peer "billing">, at: {unit: "plain", handler: "go", line: 5, column: 5}}]

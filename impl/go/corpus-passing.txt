@@ -317,6 +317,12 @@ objects/queued-parent-refusals
 objects/sends
 objects/unowned-sends
 objects/wait-target
+peer/exposed
+peer/save-restore
+peer/send-checks
+peer/send-failed
+peer/sender
+peer/waiting
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding

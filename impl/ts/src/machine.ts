@@ -6169,7 +6169,8 @@ export class Run {
           const opArgs = [peer, text(message), listValues(args)];
           drop(frame.stack, spread ? 3 : n + 1 + (named ? 1 : 0));
           frame.stack.push(...opArgs);
-          this.capability(grantName, opName, opArgs, rate, join);
+          // Charged as the call it is, at the `capability` rate, not `send`'s.
+          this.capability(grantName, opName, opArgs, CAPABILITY, join);
           if (waitsHere && !join) {
             // Suspended; the call consumed its operands.
             return;

@@ -27,7 +27,9 @@ import {
 // subset: Load, Deliver and Request to a Script, Pump with Fuel Slices and a
 // Fuel cap, and Inspect, writing chapter 11's Trace as it goes. Turns follow
 // chapter 5's scheduler.
-import { sizeOf, partSize } from './costs';
+import { partSize, rateOf, sizeOf } from './costs';
+
+const CAPABILITY_RATE = rateOf('capability');
 import { invoke, type Group, type Script } from './embedding';
 import {
   HostError,
@@ -1906,14 +1908,12 @@ export class TsGroup implements Group {
       }
       const grant = s.grants.get(c.grant) ?? invalidSave();
       const op = grant.capability.operations.get(operation) ?? invalidSave();
-      const unit =
-        [...s.loaded.units].find(u => u.name === c.atUnit) ??
-        this.libraryCode(s, c.atUnit);
-      const ins = unit?.unit.code[c.atPc];
       ctx = {
         id: c.id,
         op,
-        rate: ins?.rate ?? -1,
+        // Every call converts at the `capability` rate, a Remote Send's
+        // included, whose instruction is a `send` (chapter 5).
+        rate: CAPABILITY_RATE,
         named: [
           ['capability', text(c.grant)],
           ['operation', text(operation)],
@@ -2645,16 +2645,6 @@ export class TsGroup implements Group {
       }
     }
     return known;
-  }
-
-  /** A Library's code a Script imports, by its unit name. */
-  private libraryCode(s: ScriptState, name: string): Code | undefined {
-    for (const code of this.knownCode()) {
-      if ((code as Code).name === name && s.loaded.units.length >= 0) {
-        return code as Code;
-      }
-    }
-    return undefined;
   }
 
   private discardedDecisions: Decision[] = [];

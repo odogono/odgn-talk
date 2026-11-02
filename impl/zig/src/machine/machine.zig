@@ -11,6 +11,7 @@ const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const display = @import("../display.zig");
 const lower = @import("../lower/lower.zig");
+const standard = @import("standard.zig");
 const check = @import("../check/check.zig");
 const parser = @import("../syntax/parser.zig");
 const lexer = @import("../syntax/lexer.zig");
@@ -5325,6 +5326,14 @@ pub const Group = struct {
             }
             name = v.data.text;
         }
+        // A Remote Send: the `post`, or with `and wait` the `call`, of the
+        // Script's one `peer` Grant, never a mailbox of this Group (chapter
+        // 5, Remote Sends).
+        if (!up and receiver.data == .object and std.mem.eql(u8, receiver.data.object.kind, standard.peer_kind)) {
+            const o = g.objectOf(receiver) orelse return g.raise("object gone", &.{.{ .key = "object", .value = receiver }});
+            if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = receiver }});
+            return g.remoteSend(run, frame, ins, m, receiver, name, name_value, args.items, waits, member);
+        }
         if (waits and !member) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
             m.uncharged = true;
             return g.raiseDeadline(b, null);
@@ -5424,6 +5433,41 @@ pub const Group = struct {
         return .suspended;
     }
 
+    /// A `send` to a Peer, made as its Grant's Operation with the Peer, the
+    /// Selector as text and the arguments as a list. A crossing that defers
+    /// pushes back the send's own operands, so the send is made again.
+    fn remoteSend(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures, peer: *Value, name: []const u8, name_value: ?*Value, sent: []const *Value, waits: bool, member: bool) !Step {
+        const gpa = g.gpa;
+        const a = g.scratch.allocator();
+        const op_name = if (waits) "call" else "post";
+        const granted = for (run.script.grants) |*sg| {
+            if (std.mem.eql(u8, sg.grant.capability.name, "peer")) break sg;
+        } else null;
+        if (granted == null or granted.?.grant.capability.find(op_name) == null) {
+            const function = try model.text(gpa, "send");
+            defer function.release();
+            return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = peer } });
+        }
+        const message = try model.text(gpa, name);
+        defer message.release();
+        const list = try model.list(gpa, @constCast(sent));
+        defer list.release();
+        const args = [_]*Value{ peer, message, list };
+        // The send's operands as it popped them: a spread's list, a
+        // computed name, the arguments, then the receiver.
+        var again: std.ArrayList(*Value) = .empty;
+        if (name_value) |v| try again.append(a, v);
+        switch (ins.op) {
+            .send_spread, .send_spread_wait, .join_send_spread => try again.append(a, list),
+            else => try again.appendSlice(a, sent),
+        }
+        try again.append(a, peer);
+        const as: Opcode = if (member) .join_ask else if (waits) .ask_wait else .tell;
+        // Charged as the call it is, at the `capability` rate, not `send`'s.
+        m.rate = "capability";
+        return g.callOperation(run, frame, ins, m, granted.?.name, op_name, &args, as, again.items);
+    }
+
     /// Settles the wait of the sender of `d`, if it still waits; otherwise
     /// the reply is dropped.
     fn reply(g: *Group, d: Delivery, with: Resume) !void {
@@ -5490,6 +5534,12 @@ pub const Group = struct {
             .when => |w| {
                 if (w.from) {
                     if (popped[at].data != .text and popped[at].data != .object) return g.wrongKind("object", popped[at]);
+                    // No message ever comes from a Peer (chapter 5, `from x`).
+                    if (popped[at].data == .object and std.mem.eql(u8, popped[at].data.object.kind, standard.peer_kind)) {
+                        const function = try model.text(g.gpa, "wait for");
+                        defer function.release();
+                        return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = popped[at] } });
+                    }
                 }
                 at += @as(usize, @intFromBool(w.from)) + w.captures;
             },
@@ -10581,11 +10631,8 @@ pub const Group = struct {
     /// first, and a mismatch is charged nothing. The declared cost is
     /// charged before the Host function runs, and the call is recorded.
     fn operation(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
-        const gpa = g.gpa;
         const a = g.scratch.allocator();
         const ops = ins.operands;
-        const grant_name = ops[0].text;
-        const op_name = ops[1].text;
         const n: usize = @intCast(ops[2].int);
         const args = try a.alloc(*Value, n);
         var i = n;
@@ -10594,6 +10641,17 @@ pub const Group = struct {
             args[i] = pop(frame);
         }
         defer for (args) |v| v.release();
+        return g.callOperation(run, frame, ins, m, ops[0].text, ops[1].text, args, ins.op, args);
+    }
+
+    /// One Capability call: `as` is `.tell`, `.ask`, `.ask_wait` or
+    /// `.join_ask`, how the call is made, and `again` the operands the
+    /// instruction pushes back when a crossing defers it. A Remote Send
+    /// makes its Grant's `post` or `call` through here (chapter 5).
+    fn callOperation(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures, grant_name: []const u8, op_name: []const u8, args: []const *Value, as: Opcode, again: []const *Value) !Step {
+        const gpa = g.gpa;
+        const a = g.scratch.allocator();
+        const n = args.len;
         const granted = run.script.grant(grant_name) orelse return g.raise("not implemented", &.{});
         const index = granted.grant.capability.find(op_name) orelse return g.raise("not implemented", &.{});
         const decl = granted.grant.capability.operations[index];
@@ -10620,7 +10678,7 @@ pub const Group = struct {
             return g.raiseMismatch(bad, position, try where.pairs());
         }
 
-        if (ins.op == .ask_wait) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
+        if (as == .ask_wait) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
             m.uncharged = true;
             return g.raiseDeadline(b, try where.pairs());
         };
@@ -10653,6 +10711,11 @@ pub const Group = struct {
                     defer field.release();
                     return g.raise(x.code, &.{.{ .key = "field", .value = field }});
                 },
+                .bad_message_name => |x| {
+                    const count = try chunks.numberValue(gpa, @intCast(x.arguments));
+                    defer count.release();
+                    return g.raise("bad message name", &.{ .{ .key = "name", .value = x.name }, .{ .key = "arguments", .value = count } });
+                },
             }
         };
         // The scope checks, charged nothing either.
@@ -10684,7 +10747,7 @@ pub const Group = struct {
             g.enroll(run, granted, try where.pairs()) catch |err| {
                 if (err != error.Deferred) return err;
                 // The instruction is made again once the Host answers.
-                for (args) |v| try g.push(frame, v.retain());
+                for (again) |v| try g.push(frame, v.retain());
                 return .crossing;
             };
         }
@@ -10758,7 +10821,7 @@ pub const Group = struct {
             // already answer or request a charge against its issued id.
             run.calls -= 1;
             if (suspending) g.waits.starting_call = call;
-            for (args) |v| try g.push(frame, v.retain());
+            for (again) |v| try g.push(frame, v.retain());
             return .crossing;
         }
         call.starting = false;
@@ -10833,7 +10896,7 @@ pub const Group = struct {
             if (pending) {
                 const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
                 const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
-                if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
+                if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
         if (returned != null) g.answering_crossing = false;
@@ -10844,14 +10907,14 @@ pub const Group = struct {
             owned = false;
             run.calls -= 1;
             if (suspending) g.waits.starting_call = call;
-            for (args) |v| try g.push(frame, v.retain());
+            for (again) |v| try g.push(frame, v.retain());
             return .crossing;
         };
         if (interrupted) {
             if (outcome == .limited and run.landed.? == .cancel) run.crossing_charge_refused = true;
             return error.Landed;
         }
-        if (pending) return if (ins.op == .join_ask) .next else .suspended;
+        if (pending) return if (as == .join_ask) .next else .suspended;
         if (!valid) return g.hostError(id, grant_name, op_name, try where.pairs());
         switch (outcome) {
             .value => |v| {
@@ -11463,7 +11526,7 @@ pub const Group = struct {
                 return g.raise("wrong kind", fields.items);
             },
             .not_encodable => |e| {
-                const kind = model.text(gpa, "function") catch return error.OutOfMemory;
+                const kind = model.text(gpa, e.kind) catch return error.OutOfMemory;
                 defer kind.release();
                 const items = gpa.alloc(*Value, e.path.len + 1) catch return error.OutOfMemory;
                 defer gpa.free(items);

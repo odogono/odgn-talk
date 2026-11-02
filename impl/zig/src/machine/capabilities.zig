@@ -185,7 +185,7 @@ pub const Mismatch = union(enum) {
     /// `wrong kind`: what was expected, what the node is, and its path.
     wrong_kind: struct { expected: []const u8, got: []const u8, value: *Value, path: []const *Value },
     /// `not encodable`: a Function Value found by an `any` or open-map data scan.
-    not_encodable: struct { path: []const *Value },
+    not_encodable: struct { path: []const *Value, kind: []const u8 = "function" },
 };
 
 const Checker = struct {
@@ -548,6 +548,9 @@ pub const Problem = union(enum) {
     /// A Core-raised error whose one field, `field`, names what is wrong:
     /// `invalid watch`, `invalid serve` or `invalid response`.
     invalid_field: struct { code: []const u8, field: []const u8 },
+    /// `bad message name`: a Remote Send's message isn't a Selector a
+    /// computed `send` could use with that many arguments.
+    bad_message_name: struct { name: *Value, arguments: usize },
 };
 
 /// A Segment Coordinator's hooks (embedding/scoped-effects.md).

@@ -1,21 +1,22 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: waiting on a Remote Send's call.
+# Re-blessed for #1973: a Remote Send is charged at the capability rate, not send's; the new Fuel figures await review.
 > load s identity=a26165f95d8844232ae5ec9e6d7eab8841e643d3706139b84d19baf8559fa44d
 > deliver d1 to=s message=slow args=[<object peer "billing">]
 > deliver d2 to=s message=bounded args=[<object peer "billing">]
 > deliver d3 to=s message=forgotten args=[<object peer "billing">]
 > pump clock=2026-11-02T12:00:00Z
 call s/r1.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r1 start delivery=d1 handler=slow clause=1 fuel=26 alloc=0 state=424 end=ask-wait
+seg s/r1 start delivery=d1 handler=slow clause=1 fuel=22 alloc=0 state=424 end=ask-wait
 call s/r2.c1 op=peer.call args=[<object peer "billing">, "charge", [2]]
-seg s/r2 start delivery=d2 handler=bounded clause=1 fuel=29 alloc=40 state=728 end=ask-wait until=2026-11-02T12:00:02Z
+seg s/r2 start delivery=d2 handler=bounded clause=1 fuel=25 alloc=40 state=728 end=ask-wait until=2026-11-02T12:00:02Z
 call s/r3.c1 op=peer.call args=[<object peer "billing">, "charge", [3]]
-seg s/r3 start delivery=d3 handler=forgotten clause=1 fuel=26 alloc=0 state=944 end=ask-wait
-pumped state=idle fuel=81 next=2026-11-02T12:00:02Z
+seg s/r3 start delivery=d3 handler=forgotten clause=1 fuel=22 alloc=0 state=944 end=ask-wait
+pumped state=idle fuel=69 next=2026-11-02T12:00:02Z
 > pump clock=2026-11-02T12:00:02Z
 raise s/r2 code="timeout" at=s:38 pos=15:7
 abandon s/r2.c1
 seg s/r2 resume fuel=21 alloc=31 state=623 end=return
-run s/r2 outcome=completed delivery=d2 handler=bounded fuel=50 alloc=71
+run s/r2 outcome=completed delivery=d2 handler=bounded fuel=46 alloc=71
 pumped state=idle fuel=21 next=2026-11-02T12:00:05Z
 > answer s/r2.c1 value=2
 > pump clock=2026-11-02T12:00:03Z
@@ -25,19 +26,19 @@ pumped state=idle fuel=0 next=2026-11-02T12:00:05Z
 > pump clock=2026-11-02T12:00:04Z
 seg s/r3 resume fuel=0 alloc=0 state=359 end=cancel
 abandon s/r3.c1
-run s/r3 outcome=cancelled delivery=d3 handler=forgotten fuel=26 alloc=0
+run s/r3 outcome=cancelled delivery=d3 handler=forgotten fuel=22 alloc=0
 pumped state=idle fuel=0 next=2026-11-02T12:00:05Z
 > pump clock=2026-11-02T12:00:05Z
 raise s/r1 code="timeout" at=s:6 pos=5:5
 abandon s/r1.c1
 seg s/r1 resume fuel=21 alloc=31 state=78 end=return
-run s/r1 outcome=completed delivery=d1 handler=slow fuel=47 alloc=31
+run s/r1 outcome=completed delivery=d1 handler=slow fuel=43 alloc=31
 pumped state=idle fuel=21
 > deliver d4 to=s message=forgotten args=[<object peer "billing">]
 > pump clock=2026-11-02T12:00:06Z
 call s/r4.c1 op=peer.call args=[<object peer "billing">, "charge", [3]]
-seg s/r4 start delivery=d4 handler=forgotten clause=1 fuel=26 alloc=0 state=342 end=ask-wait
-pumped state=idle fuel=26 next=2026-11-02T12:00:11Z
+seg s/r4 start delivery=d4 handler=forgotten clause=1 fuel=22 alloc=0 state=342 end=ask-wait
+pumped state=idle fuel=22 next=2026-11-02T12:00:11Z
 > stop s reason="done"
 > pump clock=2026-11-02T12:00:07Z
 stopped s reason="done" discarded=[s/r4] abandoned=[s/r4.c1]

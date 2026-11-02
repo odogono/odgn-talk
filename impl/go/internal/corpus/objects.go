@@ -76,6 +76,16 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *repla
 		}
 		kinds[def.Name] = kind
 	}
+	// A `peer` case's Peers take the Core's own kind (chapter 11, Stubs).
+	standards, _ := setup["standard"].([]any)
+	for _, raw := range standards {
+		if raw.(Setup)["capability"] == "peer" {
+			if _, defined := kinds["peer"]; defined {
+				return nil, fmt.Errorf("the Core defines the Object Kind peer")
+			}
+			kinds["peer"] = core.PeerKind()
+		}
+	}
 	objects := objectReplay{}
 	values.objects = objects
 	rows, _ = setup["objects"].([]any)

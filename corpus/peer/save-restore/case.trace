@@ -1,22 +1,23 @@
 # First blessing approved by the maintainer on 2026-11-02 for #1971: saving a pending Remote Send and an Exposed Script's Run.
+# Re-blessed for #1973: a Remote Send is charged at the capability rate, not send's; the new Fuel figures await review.
 > load s identity=23afd3a6982094124ddcd061f7f4062b3998a930499b1e1dc6533bf8022394de
 > deliver d1 to=s message=pay args=[<object peer "billing">] caller={principal: "alice"}
 > request d2 to=s message=whoami caller={principal: "alice"}
 > pump clock=2026-11-02T12:00:00Z
 call s/r1.c1 op=peer.call args=[<object peer "billing">, "charge", [1]]
-seg s/r1 start delivery=d1 handler=pay clause=1 fuel=26 alloc=0 state=360 end=ask-wait
+seg s/r1 start delivery=d1 handler=pay clause=1 fuel=22 alloc=0 state=360 end=ask-wait
 seg s/r2 start delivery=d2 handler=whoami clause=1 fuel=15 alloc=0 state=520 end=wait until=2026-11-02T12:00:01Z
-pumped state=idle fuel=41 next=2026-11-02T12:00:01Z
+pumped state=idle fuel=37 next=2026-11-02T12:00:01Z
 > save s1
 > restore from=s1 fingerprint=a3446cd596e55e270c881929a731f0f2d61fbb22413d2a8cc9a2a95da532a75d mode=full pending=[s/r1.c1]
 > settle s/r1.c1 how=fail error={code: "send failed", reason: "unreachable"}
 > pump clock=2026-11-02T12:00:01Z
 raise s/r1 code="send failed" at=s:6 pos=5:5
-seg s/r1 resume fuel=18 alloc=470 state=678 end=return
-run s/r1 outcome=completed delivery=d1 handler=pay fuel=44 alloc=470
+seg s/r1 resume fuel=21 alloc=543 state=678 end=return
+run s/r1 outcome=completed delivery=d1 handler=pay fuel=43 alloc=543
 call s/r2.c1 op=peer.caller args=[] result={principal: "alice"}
 seg s/r2 resume fuel=27 alloc=148 state=564 end=return
 run s/r2 outcome=completed delivery=d2 handler=whoami value={principal: "alice"} fuel=42 alloc=148
-pumped state=idle fuel=45
+pumped state=idle fuel=48
 > vars
 vars s got=[{code: "send failed", reason: "unreachable", capability: "peer", operation: "call", at: {unit: "s", handler: "pay", line: 5, column: 5}}, {principal: "alice"}]
