@@ -9,7 +9,7 @@ import { lsp } from './lsp';
 import { replay } from './replay';
 
 const usage = `Usage:
-  northtalk [--port <n>] <file.talk> [args…]
+  northtalk [--port <n>] [--listen <host:port>] [--peer <name=tls://host:port#key>]… [--peer-key <file>] <file.talk> [args…]
                                           run a Script: Deliver start args
   northtalk debug <script> [--trace <file>] live debugger in a Bun Host
   northtalk debug --trace <file> [--setup <file>]
@@ -58,16 +58,38 @@ const portOf = (value: string | undefined): number => {
   return port;
 };
 
+// The Runner's flags, each with a value, before the file (chapter 12).
+const runnerFlags = new Set(['--port', '--listen', '--peer', '--peer-key']);
+
 const main = async (args: string[]): Promise<number> => {
-  const runs = args[0] === '--port' ? 2 : 0;
+  let runs = 0;
+  while (runnerFlags.has(args[runs] ?? '') && runs + 1 < args.length) {
+    runs += 2;
+  }
   if (isScriptFile(args[runs])) {
+    const flags = (name: string) =>
+      args
+        .slice(0, runs)
+        .flatMap((arg, i) =>
+          i % 2 === 0 && arg === name ? [args[i + 1]!] : [],
+        );
     const env = process.env['PORT'];
-    const port = runs > 0 ? portOf(args[1]) : env ? portOf(env) : undefined;
+    const given = flags('--port').at(-1);
+    const port =
+      given !== undefined ? portOf(given) : env ? portOf(env) : undefined;
     const { runScript } = await import('./run');
+    const { parseListen, parsePeerFlag } = await import('./peers');
+    const listen = flags('--listen').at(-1);
+    const key = flags('--peer-key').at(-1);
     return runScript({
       file: args[runs]!,
       args: args.slice(runs + 1),
       ...(port === undefined ? {} : { port }),
+      peers: {
+        remotes: new Map(flags('--peer').map(parsePeerFlag)),
+        ...(listen === undefined ? {} : { listen: parseListen(listen) }),
+        ...(key === undefined ? {} : { keyFile: key }),
+      },
     });
   }
   const [command = 'repl', ...rest] = args[0]?.startsWith('--')

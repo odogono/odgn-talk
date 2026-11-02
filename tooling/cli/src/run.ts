@@ -16,6 +16,7 @@ import {
   LoadError,
   localeCapability,
   map,
+  peerCapability,
   ScriptError,
   sqliteCapability,
   storeCapability,
@@ -37,12 +38,15 @@ import { createHttpHost } from '@northtalk/ts/http';
 import type { UserPrompt } from '@northtalk/ts/session';
 import { memoryStores, sessionQuotas } from '@northtalk/ts/store';
 import { calendar, locale } from '@northtalk/tooling/builtins';
+import { RunnerPeers, type PeerOptions } from './peers';
 import { promptAnswer, promptLines } from './prompts';
 
 export type RunOptions = {
   /** The arguments after the file, given to `start`. */
   args: readonly string[];
   file: string;
+  /** `--listen`, `--peer` and `--peer-key` (chapter 12, Runner peers). */
+  peers?: Omit<PeerOptions, 'log'>;
   /** Overrides every `serve`'s port; `--port` or `PORT`. */
   port?: number;
 };
@@ -87,6 +91,11 @@ export const runScript = async (o: RunOptions): Promise<number> => {
     await import('@northtalk/ts/sqlite').catch(() => undefined),
   );
   const stores = memoryStores(sessionQuotas);
+  const peers = new RunnerPeers({
+    remotes: new Map(),
+    ...o.peers,
+    log: message => process.stderr.write(`${message}\n`),
+  });
   let failed = false;
   let finish!: (code: number) => void;
   const finished = new Promise<number>(resolve => {
@@ -117,6 +126,7 @@ export const runScript = async (o: RunOptions): Promise<number> => {
     if (
       stopping ||
       timers.size ||
+      peers.listening ||
       httpHost.registrations ||
       httpHost.openExchanges ||
       group
@@ -173,6 +183,7 @@ export const runScript = async (o: RunOptions): Promise<number> => {
     locale: localeCapability(locale, free) as CapabilityDef<unknown>,
     store: storeCapability(stores, free) as CapabilityDef<unknown>,
     http: httpCapability(httpHost.impl, free),
+    peer: peerCapability(peers.impl, free),
     ...(sqlite
       ? {
           sqlite: sqliteCapability(
@@ -217,6 +228,7 @@ export const runScript = async (o: RunOptions): Promise<number> => {
       process.stderr.write(`${errorText(error)}\n`);
     }
     await httpHost.close();
+    peers.close();
     lines.close();
     sqlite?.close();
     finish(code);
@@ -230,6 +242,7 @@ export const runScript = async (o: RunOptions): Promise<number> => {
     signalled = code;
     stopping = true;
     httpHost.stopAccepting();
+    peers.stopListening();
     // A Script without a `stop` Handler ends that Run `unhandled`.
     group.script(name)?.deliver({ name: 'stop' });
     // Let the `stop` Run go as far as it can before the Group stops.
@@ -262,6 +275,7 @@ export const runScript = async (o: RunOptions): Promise<number> => {
     drive.stop();
     return 1;
   }
+  await peers.start(group);
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
   group.script(name)!.deliver({

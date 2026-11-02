@@ -640,6 +640,20 @@ const keepOperations = (
       kept.add(op.scope.abandon);
     }
   }
+  // A `send` is known to be remote only when it runs, so a `peer` Grant
+  // that can `reach` or `expose` keeps `post` and `call`, and one that can
+  // `expose` keeps `caller` (chapter 7, `peer`).
+  if (grant.capability.name === 'peer') {
+    const also = [
+      ...(kept.has('reach') || kept.has('expose') ? ['post', 'call'] : []),
+      ...(kept.has('expose') ? ['caller'] : []),
+    ];
+    for (const name of also) {
+      if (grant.ops.has(name)) {
+        kept.add(name);
+      }
+    }
+  }
   return { ...grant, ops: kept };
 };
 

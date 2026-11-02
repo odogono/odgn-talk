@@ -11654,6 +11654,25 @@ fn keptGrants(a: Allocator, named: []const NamedGrant, unit: *const lower.Unit, 
             for (ops, 0..) |op, i| if (kept[i] and op.scope == .opens) {
                 kept[n.grant.capability.find(op.scope.opens.abandon).?] = true;
             };
+            // A `send` is known to be remote only when it runs, so a `peer`
+            // Grant that can `reach` or `expose` keeps `post` and `call`,
+            // and one that can `expose` keeps `caller` (chapter 7).
+            const c = n.grant.capability;
+            if (std.mem.eql(u8, c.name, "peer")) {
+                const on = struct {
+                    fn f(cap: *const capabilities.Capability, flags: []const bool, name: []const u8) bool {
+                        const i = cap.find(name) orelse return false;
+                        return flags[i];
+                    }
+                }.f;
+                const exposing = on(c, kept, "expose");
+                const reaching = exposing or on(c, kept, "reach");
+                for ([_][]const u8{ "post", "call", "caller" }) |name| {
+                    const wanted = if (std.mem.eql(u8, name, "caller")) exposing else reaching;
+                    if (!wanted) continue;
+                    if (c.find(name)) |i| kept[i] = kept[i] or n.grant.operations[i];
+                }
+            }
             if (std.mem.indexOfScalar(bool, kept, true) == null) continue;
         }
         try out.append(a, .{ .name = try a.dupe(u8, n.name), .grant = n.grant, .kept = kept });

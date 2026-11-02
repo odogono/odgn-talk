@@ -313,11 +313,29 @@ The LSP, the formatter, the debugger and the Lint engine are one TypeScript tool
 `northtalk app.talk [args…]` runs a Script file ([ADR 0126](../docs/adr/0126-a-northtalk-command-given-a-file-runs-it-as-a-script-runner.md)). Every `northtalk` command does the same: the TS one under Bun or Node, the Go one and the native Zig one. A first argument that ends in `.talk`, or that names an existing file and isn't a subcommand, is the file. With no arguments the command opens the REPL.
 
 - **Loading:** the file is one Script in one Group, with the stdlib Libraries. It is granted, under `GrantsAsUsed`, each Standard Capability the Runner offers, under its own name: `console`, `clock`, `timer`, `calendar`, `locale`, an in-memory `store`, `sqlite` where the runtime has it, `http`, and `user` when standard input is a terminal. The native Zig Runner offers no `calendar` or `locale`. A load error is printed and the command exits 1.
-- **`peer`:** the Runner doesn't offer it yet, so a Script that uses it fails to load.
+- **`peer`:** the Runner offers `peer`, carrying Remote Sends to other Runners over mutual TLS ([ADR 0163](../docs/adr/0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)). The native Zig Runner and the Go one don't offer it yet, so a Script that uses it fails to load there. [Runner peers](#runner-peers) gives the flags and the wire.
 - **Starting:** the Runner Delivers `start` with one argument, the list of the arguments after the file, as texts. A Script without a `start` Handler simply ends that Run as `unhandled`.
 - **`http`:** the binding allows any address to listen on and any origin to fetch from, localhost and private networks included, since the Runner runs a trusted local program. Its header and body bounds are chapter 7's defaults. `--port` before the file, or the `PORT` environment variable, overrides every `serve`'s port.
 - **Exit:** the command exits when the Group has no live Runs, no pending timers, no Serve Registrations and no open HTTP Exchanges. It exits 0, or 1 if any Run ended with an uncaught error, which it writes to standard error.
 - **Signals:** the first SIGINT or SIGTERM stops accepting connections and Delivers `stop`, with no arguments, if the Script has a Handler for it. The Runner waits up to 5 seconds for open HTTP Exchanges, answers any still open with 503, Stops the Group, and exits 130 or 143. A second signal exits at once.
+
+#### Runner peers
+
+The flags come before the file, as `--port` does. Each Runner has a key: an ECDSA P-256 key read from the PEM file `--peer-key FILE`, which holds the key and a certificate for it, or one made at start. Its **key fingerprint** is the lowercase hexadecimal SHA-256 of the key's DER SubjectPublicKeyInfo, and when any of these flags is given the Runner writes it to standard error as `peer: key <fingerprint>`.
+
+- **`--listen HOST:PORT`**, or `tls://HOST:PORT`, accepts Remote Sends from other Runners, over TLS 1.3 with both ends presenting a certificate for their key. It accepts any key. Port 0 picks a free port, and the Runner writes `peer: listening on tls://<host>:<port>#<fingerprint>` to standard error once it listens. A Runner that listens doesn't exit for want of work until it stops listening.
+- **`--listen tcp://HOST:PORT`** accepts them over plain TCP instead, writing `peer: listening on tcp://<host>:<port>`. `HOST` must be `127.0.0.1`, `::1` or `localhost`, since nothing checks a plain connection's ends.
+- **`--peer NAME=tls://HOST:PORT#FINGERPRINT`**, which may be repeated, names the Host that holds the exposure `NAME`. The Runner dials it when it first needs to, and refuses the connection unless the listener's key has that fingerprint. Dialling and listening Runners exchange the same frames over the connection, in both directions.
+- **`--peer NAME=tcp://HOST:PORT`** names one reached over plain TCP, on a loopback `HOST` as for `--listen`. On a plain connection each end's first frame is `{"hello": "<fingerprint>"}`, its own key's, which nothing checks.
+- **The binding:** `reach` allows the names `--peer` gives, and refuses any other with `bad address`. `expose` allows any name.
+- **Peers:** an exposure's id is `<fingerprint>/<secret>`: the holding Runner's key fingerprint, then 32 lowercase hexadecimal digits of random secret. Each Group has one Peer per id, of kind `peer` with that id, and a Peer crosses in the Value Encoding as `{"$object": ["peer", "<id>"]}`. A Runner sends to a Peer of its own key's exposures locally, and to another Host's only when a `--peer` gives that fingerprint's address; otherwise the send fails `unreachable`.
+- **Frames:** each is a 4-byte big-endian length, at most 16 MiB, then that many bytes of a UTF-8 JSON object, whose values are in the Value Encoding:
+  - `{"reach": n, "name": NAME}` asks for a named exposure, answered `{"reached": n, "peer": id}` or `{"reached": n, "error": "not exposed"}`.
+  - `{"post": id, "message": SELECTOR, "args": [ … ]}` is a `post`, with no answer.
+  - `{"call": n, "to": id, "message": SELECTOR, "args": [ … ]}` is a `call`, answered `{"replied": n, "value": V}` or `{"replied": n, "failed": {"reason": R}}`, with `error` beside `reason` when the receiving Request gave one.
+  - `n` is a whole number the asking end chooses, unique among its open questions on the connection.
+- **Arrival:** a `post` is a Delivery to the exposure's Script, and a `call` a Request, whose result is the reply. One to a withdrawn or unknown exposure is dropped, or answered `failed` with `not exposed`, and one the mailbox refuses with `mailbox full`. The Caller Identity of what arrives over TLS is `{key: "<fingerprint>"}`, the dialler's or listener's, with `name: NAME` added when a `--peer` names that key. What arrives over plain TCP has none, so `caller` gives Nothing.
+- **At most once:** a Runner never sends a frame again. A `call` whose connection closes, or can't be made, before its reply fails with `unreachable`, and so does one whose reply can't be decoded against the receiving Group.
 
 ### The normative line
 

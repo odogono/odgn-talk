@@ -11,7 +11,11 @@ import {
 import { coreVersions } from '@northtalk/ts';
 import { writeProjectFile } from '@northtalk/creative/project-file';
 import { createTetrisProject } from '../../creative/src/examples/tetris';
-import { verifyHttpExample, verifyScriptRunner } from './run-integration';
+import {
+  verifyHttpExample,
+  verifyRunnerPeers,
+  verifyScriptRunner,
+} from './run-integration';
 
 // Node 22/24 warn about the bundled node:sqlite import. Child processes
 // still check CLI stderr and retain runtime warnings of other types.
@@ -109,3 +113,7 @@ await verifyHttpExample(
   fileURLToPath(new URL('../../../examples/http/hello.talk', import.meta.url)),
 );
 process.stdout.write('Node CLI run: HTTP example served until SIGINT\n');
+await verifyRunnerPeers(process.execPath, main);
+process.stdout.write(
+  'Node CLI run: Runners carried Remote Sends over TLS and loopback TCP\n',
+);

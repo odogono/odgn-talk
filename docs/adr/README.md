@@ -157,3 +157,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0160: A labelled Operation call may skip an Optional argument, and `on` and `with` may be labels](0160-a-labelled-operation-call-may-skip-an-optional-argument.md)
 - [0161: Folio Projects carry their own sounds and start from a Base Project](0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)
 - [0162: Folio Add-ons provide Element and Instrument kinds, shown in Palettes and driven by controls](0162-folio-add-ons-provide-element-and-instrument-kinds-palettes-and-controls.md)
+- [0163: The Script Runner carries Remote Sends over mutual TLS with pinned keys](0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)
