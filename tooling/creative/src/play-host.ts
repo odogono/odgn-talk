@@ -275,6 +275,18 @@ export class PlayHost {
         reply({ kind: 'done' });
         return;
       }
+      case 'control': {
+        const page =
+          request.pageIndex === session.pageIndex
+            ? session.project.pages[request.pageIndex]
+            : undefined;
+        const target =
+          page && session.elementsOf(page).find(e => e.name === request.target);
+        if (target && !this.#play.paused) {
+          session.control(target, request.fields);
+        }
+        break;
+      }
       case 'send': {
         // Reader input while paused is dropped, not queued.
         if (this.#play.paused) {

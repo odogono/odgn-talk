@@ -130,6 +130,13 @@ landed, and the Issue graph job ticks it as they close.
   Kind (`scriptKindOf`), and Play reports it in the Errors window. In-memory
   Projects are checked in their saved form. Tests:
   [add-ons.test.ts](tests/add-ons.test.ts).
+- The controls Add-on (#1902): [add-ons/controls/](src/add-ons/controls/index.ts)
+  has the slider, knob, toggle, XY pad and level meter. A view's `change`
+  prop ([views.tsx](src/elements/views.tsx)) reaches
+  [play-view.ts](src/play-view.ts)'s `control`, which merges a drag's
+  changes into one `control` request at a time; the worker's
+  `PlaySession.control` sets the fields and sends `change`. Tests:
+  [controls.test.ts](tests/controls.test.ts) and the `controls` browser suite.
 - Loading Add-ons (#1901): an Add-on module ([add-ons/api.ts](src/add-ons/api.ts))
   imports nothing from Folio; Folio passes its kinds' data and view factories
   their helpers and Preact. [catalogue.ts](src/add-ons/catalogue.ts) lists the

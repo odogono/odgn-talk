@@ -62,6 +62,9 @@ const NOT_LOADED =
 const VARIABLES_REFRESH = 100;
 
 /** Shown when the worker was ended because Stop got no answer in time. */
+/** A control's fields as the reader set them (#1902). */
+type ControlFields = Record<string, number | boolean>;
+
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 export const mountPlay = (shell: StackShell): void => {
@@ -440,6 +443,41 @@ export const mountPlay = (shell: StackShell): void => {
     },
   });
   const post = (request: PlayRequest) => void supervisor.call(request);
+  // A control's changes (#1902): one at a time per control, the latest
+  // replacing any still waiting, so a drag never queues a Run per frame.
+  const pendingControls = new Map<string, { waiting?: ControlFields }>();
+  const control = (element: Element, fields: ControlFields) => {
+    const index = session?.page.index;
+    if (!allowed().takesInput || index === undefined) {
+      return;
+    }
+    const busy = pendingControls.get(element.name);
+    if (busy) {
+      busy.waiting = { ...busy.waiting, ...fields };
+      return;
+    }
+    const state: { waiting?: ControlFields } = {};
+    pendingControls.set(element.name, state);
+    const deliver = (next: ControlFields) =>
+      void supervisor
+        .call({
+          kind: 'control',
+          session: sessionId,
+          pageIndex: index,
+          target: element.name,
+          fields: next,
+        })
+        .finally(() => {
+          const waiting = state.waiting;
+          state.waiting = undefined;
+          if (waiting) {
+            deliver(waiting);
+          } else {
+            pendingControls.delete(element.name);
+          }
+        });
+    deliver(fields);
+  };
   /** `pageIndex` names the Page `target` is on, if it isn't the showing one. */
   const sendTo = (
     target: MirrorPage | Element,
@@ -692,6 +730,9 @@ export const mountPlay = (shell: StackShell): void => {
               activeText?.history.element === element ? 'text-editing' : '',
             imageUrl: shell.images.elementUrl(element, playing!.assets),
             attributes: readerAttributes(play, element),
+            ...(allowed().takesInput
+              ? { change: (fields: ControlFields) => control(element, fields) }
+              : {}),
           });
         }),
     );

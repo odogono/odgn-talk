@@ -19,6 +19,8 @@ import { renderRichText } from './rich-text-dom';
 type ElementViewProps = {
   /** Attributes and listeners the caller adds, such as Play's. */
   attributes?: HTMLAttributes<HTMLDivElement>;
+  /** Play's way for a control to report the reader's change (#1902). */
+  change?: (fields: Record<string, number | boolean>) => void;
   /** Extra classes, such as `selected` or `text-editing`. */
   className?: string;
   /** True while an in-place editor owns a text Element's children. */
@@ -46,6 +48,7 @@ export const ElementView = ({
   reader = false,
   imageUrl,
   attributes,
+  change,
 }: ElementViewProps) => {
   const node = useRef<HTMLDivElement>(null);
   const kind = kindOf(element);
@@ -79,7 +82,12 @@ export const ElementView = ({
       title={kind.container ? element.name : undefined}
     >
       {Contents && (
-        <Contents element={element} imageUrl={imageUrl} reader={reader} />
+        <Contents
+          change={change}
+          element={element}
+          imageUrl={imageUrl}
+          reader={reader}
+        />
       )}
     </div>
   );

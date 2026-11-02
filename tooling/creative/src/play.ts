@@ -16,7 +16,7 @@ import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
 import { propertiesForKind } from './tree/properties';
 import { missingAddOn } from './elements/add-on';
-import { isPlaceholderKind, scriptKindOf } from './elements/registry';
+import { isPlaceholderKind, kindOf, scriptKindOf } from './elements/registry';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import { LEAD_US, Transport } from './transport';
@@ -128,7 +128,8 @@ export type PlayMessage =
   | 'keyUp'
   | 'textChanged'
   | 'frame'
-  | 'openScript';
+  | 'openScript'
+  | 'change';
 
 /** What a Punch In loads: one authored Script, or a Library by name. */
 export type PunchTarget =
@@ -1697,6 +1698,38 @@ export class PlaySession {
         line: 1,
         message: 'Too many pending messages',
       });
+    }
+  }
+
+  /**
+   * A reader moved a control (#1902): its fields take their new values in
+   * Play State, as a Script's writes do but without Fuel, and it sends
+   * `change` with them up its Message Path. A field the kind can't set, or
+   * a value it refuses, is skipped.
+   */
+  control(
+    element: DeepReadonly<Element>,
+    fields: Readonly<Record<string, number | boolean>>,
+  ): void {
+    const properties = kindOf(element).properties;
+    const args: Value[] = [];
+    for (const [field, value] of Object.entries(fields)) {
+      const descriptor = properties[field];
+      if (!descriptor?.set || descriptor.validate?.(element, value)) {
+        continue;
+      }
+      try {
+        this.#tree.setProperty(element, field, value);
+      } catch (error) {
+        if (error instanceof TreeError) {
+          continue;
+        }
+        throw error;
+      }
+      args.push(typeof value === 'number' ? num(value) : bool(value));
+    }
+    if (args.length) {
+      this.send(element, 'change', args);
     }
   }
 
