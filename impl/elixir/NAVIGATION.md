@@ -50,6 +50,13 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Copy from: [`function_test.exs`](test/function_test.exs). A Lambda is written `given x: x + n`, and a Function Value is called as `f(x)`.
 - Check: `mix test test/function_test.exs`
 
+## Host Objects, properties and Object Collections
+
+- Files: [`object_kind.ex`](lib/north_talk/object_kind.ex), and `define_kind`, `property` and `held` in [`owner.ex`](lib/north_talk/owner.ex)
+- Rules: [Host Objects](../../spec/09-embedding.md#host-objects), [the object element contract](../../spec/embedding/object-elements.md), [Shapes](../../spec/09-embedding.md#shapes)
+- Copy from: [`object_test.exs`](test/object_test.exs). A Shape is a kind name such as `"boolean"`, or `%{"object" => kind}`; a collection's Object Shape must name a Kind defined first.
+- Check: `mix test test/object_test.exs`
+
 ## Capabilities, Operation declarations and callbacks
 
 - Files: [`capability.ex`](lib/north_talk/capability.ex). Its moduledoc lists every `operation` option.

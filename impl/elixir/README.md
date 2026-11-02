@@ -67,15 +67,28 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 
 - **Callbacks** run in monitored Tasks, never in the owner. The owner waits up to the Capability's `:timeout`, 5 s by default, for an immediate or fire-and-forget callback, so one must not call its own owner. A suspending callback runs while the owner carries on; it returns `{:ok, value}` or `{:error, failure}`, or `{:defer, ref}` to settle later. Its call has no timeout of its own: it ends when settled, or when the Core abandons it at its `max_pending`, the Script's wait limit or the end of its Run, which kills its Task or forgets its ref. A suspending callback may call the owner, but must not wait for a Run that needs its own call settled. A raise, an exit, a timeout or an unexpected result is a Host failure: the Script raises `host error`.
 - **Lifecycle hooks:** an Operation may open or close a Capability Scope (`scope:`) or be Segment-bound (`segment_bound: true`). A Capability with Segment-bound Operations defines `effect/2`, its Segment participant's `begin`, `commit` and `rollback` hooks, returning `:ok`, `:failed` or `:unknown`. Anything else, a raise or a timeout is `unknown`, which stops the Group with `effect state unknown`. `release/1`, the Grant release hook, runs when a Script's Grant stops being effective, with reason `:stop`, `:reload`, `:revoke` or `:disable`; what it returns is ignored. Hooks run in Tasks, like callbacks, and the Core's order holds: a scope left open is abandoned by an automatic call (`call.automatic`), then the participant commits or rolls back, then Grants are released, all before the reply or report that follows.
+- **Host Objects:** a `NorthTalk.ObjectKind` declares properties, each a Shape, a `get` and optionally a `set`, with their costs, and optionally an Object Collection (`count`, `at`, `find`) that Scripts read as `element s of o`. `define_object_kind/2` gives it to an owner, once; `object/5` makes a Host Object of it in a Group, with an id unique for its Kind there and a `native` term the owner passes to every callback, and returns its `NorthTalk.Object` handle. `object_by_id/3`, `set_parent/3` and `dispose/2` act on a Group's Objects. A handle is the `to` of `deliver/4` or `request/5`, and `load/4` takes `owner:`, making the Script the Object's Owning Script, and `objects:`. Callbacks run in Tasks under the Kind's `:timeout`, as an immediate Operation's do; since Elixir terms don't change in place, `native` usually names where the state lives, such as an Agent or an entity id. The owner asks for `object-elements-v1` when the reactor offers it. Objects belong to their Group, so another Group's handle is `wrong group`.
+
+  ```elixir
+  door =
+    NorthTalk.ObjectKind.new("door",
+      props: %{"isLocked" => [shape: "boolean", get: &MyApp.Doors.locked?/1, set: &MyApp.Doors.set_locked/2]}
+    )
+
+  :ok = NorthTalk.define_object_kind!(MyApp.Talk, door)
+  front = NorthTalk.object!(group, door, "front", entity_id)
+  NorthTalk.load!(group, "front-door", source, owner: front)
+  {:ok, _} = NorthTalk.request(group, front, "knock", [])
+  ```
+
 - **Changing code:** `reload/4` stops and reloads a Script, carrying its Script Variables over unless `variables: :reset`; `replace_library/3` does so for every Script importing a Library, all or nothing; `extend/3` adds names without stopping anything. `stop/3` stops a Script. A Run discarded by any of them fails its waiting request with a `NorthTalk.ScriptError` of outcome `"discarded"`.
-- **Save and restore:** `save/1` returns a Group's bytes, refused with `effects pending` while a scope or participant is live. `restore/4` makes a new Group from them in this or another owner, rebinding each Script's Grants through `grants:`; a Grant not given restores revoked. Each pending call in the `NorthTalk.Restored` is settled with `settle/3`: an answer, a failure, `:reissue`, which calls its callback again, or `{:adopt, ref}`, settled later by `answer/3` or `fail/3`. An automatic owner first Pumps a restored Group once every pending call is settled; any still unsettled at the first Pump fails with `call lost`. Saves are per Core: only a Zig Core reads one. Grant bindings, callbacks and waiting requests are not saved, so `:reports_to` gets the outcome of a Run that was waited on.
+- **Save and restore:** `save/1` returns a Group's bytes, refused with `effects pending` while a scope or participant is live. `restore/4` makes a new Group from them in this or another owner, rebinding each Script's Grants through `grants:`; a Grant not given restores revoked, and `resolve_object:` restores each saved Host Object live from its Kind and id, or disposed. Each pending call in the `NorthTalk.Restored` is settled with `settle/3`: an answer, a failure, `:reissue`, which calls its callback again, or `{:adopt, ref}`, settled later by `answer/3` or `fail/3`. An automatic owner first Pumps a restored Group once every pending call is settled; any still unsettled at the first Pump fails with `call lost`. Saves are per Core: only a Zig Core reads one. Grant bindings, callbacks and waiting requests are not saved, so `:reports_to` gets the outcome of a Run that was waited on.
 - **Lost instances:** if the reactor is lost other than by a trap or a timeout ([Limits and faults](#limits-and-faults)), such as by a malformed reply, the owner fails every waiting request with `instance lost` and stops, so its supervisor can restart it.
 
 ## Not offered
 
 This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the-message-layer):
 
-- **Host Objects** are not supported yet: a property need is refused, an Object Collection's `prop` need (`op` `count`, `at` or `find`) included, and every saved Host Object restores disposed. Without Object Kind declarations this Host has no collections to declare, and doesn't ask for `object-elements-v1`.
 - **Function Values** come with the full value set in [#993](https://github.com/odogono/odgn-talk/issues/993). They hold only a token, so nothing about them is durable on the Host's side.
 - **Standard Capabilities** are not offered. The `sqlite` factory isn't offered through the Message Layer by any Host.
 - **Revoke, cancellation, Broadcasts, Decisions, inspection, Fingerprints, Store Notification checkpoints, metering and the Host Manifest** have no Elixir API yet.
@@ -127,6 +140,7 @@ Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process hea
 | [`examples/shop/`](examples/shop/) | The OTP example and getting-started guide. |
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
+| [`lib/north_talk/object_kind.ex`](lib/north_talk/object_kind.ex) | Object Kinds: properties, Object Collections and their declarations. |
 | [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s, and a combined call's `NorthTalk.Pumped` and `NorthTalk.Pending`. |
 | [`lib/north_talk/binary.ex`](lib/north_talk/binary.ex) | The Request/Pump, settlement and callback binary fields envelopes, converted to and from the JSON form the owner reads. Tags and fields come from the generated envelope catalogue; reshaping stays in the codec. |
 | [`lib/north_talk/generated/envelope.ex`](lib/north_talk/generated/envelope.ex) | Envelope tags, ordered field kinds, Reports and feature names generated from `spec/data/envelope.toml`. |
