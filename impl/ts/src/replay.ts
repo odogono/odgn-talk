@@ -17,6 +17,8 @@ import type { DebugPause } from './debug';
 import type { PumpResult } from './group';
 import corpus from '../../../spec/data/corpus.toml';
 import type { HttpImpl } from './http-capability';
+import type { ObjectKind } from './objects';
+import { PEER_KIND } from './peer-capability';
 import { defineValueCapability, type ValueOperation } from './capabilities';
 import {
   clockCapability,
@@ -28,6 +30,8 @@ import {
   timerCapability,
   userCapability,
   httpCapability,
+  peerCapability,
+  peerKind,
   type HostObject,
   ScriptError,
   type Call,
@@ -239,6 +243,7 @@ const capabilitiesOf = (
   ) => EffectResult,
   coordinator: () => SegmentCoordinator,
   called: (key: string) => void,
+  callers: ReadonlyMap<string, Value> = new Map(),
 ): Map<string, ReturnType<typeof defineValueCapability>> => {
   // A Capability one of whose Grants names a coordinator maps every binding
   // to one; the others keep a plain lifecycle (ADR 0069).
@@ -711,6 +716,65 @@ const capabilitiesOf = (
           costs,
         ),
       );
+    } else if (capability === 'peer') {
+      // The runner plays the other side of one Remote Send per case
+      // (chapter 11, Stubs): `expose`, `reach` and `call` wait for `answer`
+      // and `fail` lines, `post` takes fire-and-forget Stubs, `unexpose` a
+      // Stub that gives Nothing, and `caller` the Caller Identity of the
+      // line whose Delivery started the Run.
+      const waiting = (operation: string) => (call: Call<unknown>) => {
+        called(`peer.${operation}`);
+        startStub(
+          stubs,
+          `peer.${operation}`,
+          call,
+          calls,
+          crossing,
+          recordedCall(call),
+        );
+      };
+      out.set(
+        capability,
+        peerCapability(
+          {
+            expose: waiting('expose'),
+            reach: waiting('reach'),
+            call: waiting('call'),
+            post: call =>
+              fireStub(stubs, 'peer.post', call, crossing, recordedCall(call)),
+            unexpose: call => {
+              try {
+                const given = stubs.take(
+                  'peer.unexpose',
+                  call,
+                  true,
+                  recordedCall(call),
+                );
+                if (given.kind !== 'nothing') {
+                  throw new Error('A peer.unexpose Stub must give nothing');
+                }
+              } finally {
+                crossing(call.id);
+              }
+            },
+            caller: call => {
+              try {
+                const recorded = recordedCall(call)?.value;
+                return (
+                  recorded ??
+                  (call.delivery === undefined
+                    ? undefined
+                    : callers.get(call.delivery)) ??
+                  nothing
+                );
+              } finally {
+                crossing(call.id);
+              }
+            },
+          },
+          costs,
+        ),
+      );
     } else {
       throw new DeferredCaseError(`the Standard Capability ${capability}`);
     }
@@ -831,7 +895,16 @@ const driveReplay = function* (
   const adopted = new Set<string>();
   const saveNames = new Map<string, string>();
   let visibleSaves = 0;
+  // Each Remote Send's Caller Identity, by the delivery id its line made.
+  const callers = new Map<string, Value>();
   const writeTrace = (line: string) => {
+    if (line.startsWith('> deliver ') || line.startsWith('> request ')) {
+      // The Core never sees a Caller Identity; the runner writes it.
+      const caller = callers.get(line.split(' ', 3)[2]!);
+      if (caller) {
+        line = `${line} caller=${traceValue(caller)}`;
+      }
+    }
     if (hidden) {
       hiddenTrace.push(line);
       return;
@@ -1016,7 +1089,7 @@ const driveReplay = function* (
     }
     return live(members.get(`${o.kind.name} ${o.id}`) ?? []);
   };
-  const kinds = new Map(
+  const kinds = new Map<string, ObjectKind<null>>(
     (setup.objectKinds ?? []).map(k => [
       k.name,
       core.defineObjectKind<null>({
@@ -1091,6 +1164,13 @@ const driveReplay = function* (
       }),
     ]),
   );
+  // A `peer` case's Peers take the Core's own kind (chapter 11, Stubs).
+  if (setup.standard?.some(s => s.capability === 'peer')) {
+    if (kinds.has(PEER_KIND)) {
+      throw new Error('The Core defines the Object Kind peer');
+    }
+    kinds.set(PEER_KIND, peerKind as ObjectKind<null>);
+  }
   const messageOf = (r: Parsed) => ({
     name: r.fields.get('message')!,
     args: r.fields.has('args') ? valuesOf(value(r.fields.get('args')!)) : [],
@@ -1213,6 +1293,7 @@ const driveReplay = function* (
         madeProps(o);
       }
     },
+    callers,
   );
   const port = sessionObjects?.port();
   const built = buildSetupGroup(setup, capabilities, {
@@ -1421,23 +1502,36 @@ const driveReplay = function* (
           const message = messageOf(r);
           const controller = new AbortController();
           const options = { signal: controller.signal };
+          const caller = r.fields.has('caller')
+            ? value(r.fields.get('caller')!)
+            : undefined;
+          if (caller && r.name === 'decide') {
+            throw new Error('A Decision is never a Remote Send');
+          }
+          const vouch = (id: string) => {
+            if (caller) {
+              callers.set(id, caller);
+            }
+          };
           if (object) {
             if (r.name === 'deliver') {
-              group.deliver(object, message);
+              vouch(group.deliver(object, message));
             } else if (r.name === 'decide') {
               const decision = group.decide(object, message, options);
               cancellations.set(decision.id, controller);
             } else {
               const request = group.request(object, message, options);
+              vouch(request.id);
               cancellations.set(request.id, controller);
             }
           } else if (r.name === 'deliver') {
-            to!.deliver(message);
+            vouch(to!.deliver(message));
           } else if (r.name === 'decide') {
             const decision = to!.decide(message, options);
             cancellations.set(decision.id, controller);
           } else {
             const request = to!.request(message, options);
+            vouch(request.id);
             cancellations.set(request.id, controller);
           }
           break;
@@ -1874,6 +1968,12 @@ const driveReplay = function* (
             setup.standard?.some(s => s.capability === 'clock')
           ) {
             throw new Error('clock.now uses the Pump Clock, not a Stub');
+          }
+          if (
+            op === 'peer.caller' &&
+            setup.standard?.some(s => s.capability === 'peer')
+          ) {
+            throw new Error("peer.caller gives the line's caller, not a Stub");
           }
           const refused = r.fields.has('charge-refused');
           if (refused && (r.fields.has('value') || r.fields.has('error'))) {

@@ -256,6 +256,12 @@ var Corpus = CorpusTable{
 					Is:       "its limit override, a map from each limit's `ts` name to its value",
 					Optional: true,
 				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "caller",
+					Type:     "value",
+					Is:       "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)",
+					Optional: true,
+				},
 			},
 		},
 		CorpusTableRecordEntry{
@@ -286,6 +292,12 @@ var Corpus = CorpusTable{
 					Key:      "limits",
 					Type:     "value",
 					Is:       "its limit override, a map from each limit's `ts` name to its value",
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "caller",
+					Type:     "value",
+					Is:       "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)",
 					Optional: true,
 				},
 			},

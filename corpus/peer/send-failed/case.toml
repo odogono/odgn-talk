@@ -1,0 +1,21 @@
+# peer/send-failed: the Host fails a Remote Send's `call` with `send
+# failed`, its `reason` `unreachable`, `mailbox full` or `not exposed`, or
+# the receiving Run's `errored` with its `error`; `send` raises it as any
+# `send … and wait` that gets no reply would. A late cost on an answer is
+# charged when the Run resumes, and a Join's members may be Remote Sends
+# (chapter 5, Remote Sends; chapter 7, `call`'s failures).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objects]]
+kind = "peer"
+id = "billing"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { peer = { ops = "all" } }

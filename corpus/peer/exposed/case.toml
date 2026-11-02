@@ -1,0 +1,33 @@
+# peer/exposed: one side of Remote Sends, at the Exposed Script. `expose`
+# with a name and without one waits for the Host's Peer; an empty name or
+# address is `out of domain` before the call is charged, and the Host fails
+# `expose` with `bad address` or `name in use`, and `reach` with `bad
+# address` or `not exposed`. A `request` line plays an arriving `call`, and
+# a `deliver` line a `post`; `caller` gives the Caller Identity the Host
+# vouched for only to the Run such a line started, and Nothing to a Run a
+# `send` in the Group started. A Peer that arrives as an argument is sent
+# to through this Script's own Grant. `unexpose` takes a name or a Peer
+# (chapter 7, Exposed Scripts; ADRs 0154 and 0155).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[standard]]
+capability = "peer"
+costs = { expose = { fuel = 5 }, unexpose = { fuel = 2 }, reach = { fuel = 4 }, post = { fuel = 3 }, call = { fuel = 6 }, caller = { fuel = 1 } }
+[[objects]]
+kind = "peer"
+id = "chat"
+madeBy = "peer.expose"
+[[objects]]
+kind = "peer"
+id = "inbox-1"
+madeBy = "peer.expose"
+[[objects]]
+kind = "peer"
+id = "browser"
+[[scripts]]
+name = "server"
+source = "server.talk"
+grants = { peer = { ops = "all" } }

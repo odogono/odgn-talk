@@ -1,0 +1,10 @@
+script variable got = []
+on checkout amount
+  ask peer to reach "billing" into billing and wait
+  send charged with amount to billing
+  send charge with amount to billing into total and wait
+  put total after got
+  send receiptsFor with "today" to billing and wait
+  put it after got
+  put it is billing after got
+end checkout

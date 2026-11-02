@@ -1,0 +1,25 @@
+# Unblessed: the peer Standard Capability's sending side (#1971); first blessing awaits human review.
+> load shop identity=63020a6bbbc410806a78105a21bcbddbe241c65991dc440a09574e5b4ed9fb69
+> deliver d1 to=shop message=checkout args=[12]
+> pump clock=2026-11-02T12:00:00Z
+call shop/r1.c1 op=peer.reach args=["billing"]
+seg shop/r1 start delivery=d1 handler=checkout clause=1 fuel=19 alloc=0 state=312 end=ask-wait
+pumped state=idle fuel=19 next=2026-11-02T12:00:30Z
+> answer shop/r1.c1 value=<object peer "billing">
+> pump clock=2026-11-02T12:00:01Z
+call shop/r1.c2 op=peer.post args=[<object peer "billing">, "charged", [12]]
+call shop/r1.c3 op=peer.call args=[<object peer "billing">, "charge", [12]]
+seg shop/r1 resume fuel=47 alloc=16 state=328 end=ask-wait
+pumped state=idle fuel=47 next=2026-11-02T12:00:31Z
+> answer shop/r1.c3 value=13
+> pump clock=2026-11-02T12:00:02Z
+call shop/r1.c4 op=peer.call args=[<object peer "billing">, "receiptsFor", ["today"]]
+seg shop/r1 resume fuel=33 alloc=24 state=368 end=ask-wait
+pumped state=idle fuel=33 next=2026-11-02T12:00:32Z
+> answer shop/r1.c4 value=<object peer "receipts">
+> pump clock=2026-11-02T12:00:03Z
+seg shop/r1 resume fuel=25 alloc=40 state=80 end=return
+run shop/r1 outcome=completed delivery=d1 handler=checkout fuel=124 alloc=80
+pumped state=idle fuel=25
+> vars
+vars shop got=[13, <object peer "receipts">, false]

@@ -255,6 +255,12 @@ pub const corpus: CorpusTable = .{
                     .is = "its limit override, a map from each limit's `ts` name to its value",
                     .optional = true,
                 },
+                .{
+                    .key = "caller",
+                    .type = "value",
+                    .is = "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)",
+                    .optional = true,
+                },
             },
         },
         .{
@@ -285,6 +291,12 @@ pub const corpus: CorpusTable = .{
                     .key = "limits",
                     .type = "value",
                     .is = "its limit override, a map from each limit's `ts` name to its value",
+                    .optional = true,
+                },
+                .{
+                    .key = "caller",
+                    .type = "value",
+                    .is = "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)",
                     .optional = true,
                 },
             },

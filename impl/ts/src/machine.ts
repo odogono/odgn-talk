@@ -87,6 +87,7 @@ import {
 } from './operations';
 import { readDisplay } from './readers';
 import { validComputedMessageName } from './selectors';
+import { PEER_CALL, PEER_KIND, PEER_POST } from './peer-capability';
 import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
@@ -6010,6 +6011,13 @@ export class Run {
               if (x.kind !== 'object') {
                 throw wrongKind('object', x);
               }
+              if (x.asObjectRef()?.kind === PEER_KIND) {
+                // No message ever comes from a Peer (chapter 5, `from x`).
+                throw new ScriptError('out of domain', [
+                  ['function', text('wait for')],
+                  ['value', x],
+                ]);
+              }
               from = x;
             } else if (x.k === 'receiver') {
               from = x.name;
@@ -6133,6 +6141,42 @@ export class Run {
             this.frame.stack.length - n - (up ? 0 : 1),
             up ? undefined : -1,
           ) as Value[]);
+        const waitsHere =
+          ins.opcode !== Op.Send &&
+          ins.opcode !== Op.SendNamed &&
+          ins.opcode !== Op.SendSpread &&
+          ins.opcode !== Op.SendUp;
+        if (
+          typeof target === 'object' &&
+          target?.handle.kind.name === PEER_KIND
+        ) {
+          // A Remote Send: the `post` or `call` of the Script's one `peer`
+          // Grant, never a mailbox of this Group (chapter 5, Remote Sends).
+          const peer = target.handle.value;
+          const opName = waitsHere ? PEER_CALL : PEER_POST;
+          const grantName = [...this.host!.grants].find(
+            ([, g]) => g.capability.name === 'peer',
+          )?.[0];
+          if (
+            grantName === undefined ||
+            !this.host!.grants.get(grantName)!.ops.has(opName)
+          ) {
+            throw new ScriptError('out of domain', [
+              ['function', text('send')],
+              ['value', peer],
+            ]);
+          }
+          const opArgs = [peer, text(message), listValues(args)];
+          drop(frame.stack, spread ? 3 : n + 1 + (named ? 1 : 0));
+          frame.stack.push(...opArgs);
+          this.capability(grantName, opName, opArgs, rate, join);
+          if (waitsHere && !join) {
+            // Suspended; the call consumed its operands.
+            return;
+          }
+          drop(frame.stack, opArgs.length);
+          return next(frame);
+        }
         const size = partSize(
           'message',
           0,

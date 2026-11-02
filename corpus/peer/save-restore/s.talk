@@ -1,0 +1,17 @@
+script variable got = []
+
+on pay p
+  try
+    send charge with 1 to p and wait
+    put it after got
+  catch e
+    put e after got
+  end try
+end pay
+
+on whoami
+  wait 1 s
+  ask peer to caller
+  put it after got
+  return it
+end whoami

@@ -248,6 +248,7 @@ export {
   type HttpImpl,
   type HttpServerImpl,
 } from './http-capability';
+export { peerCapability, peerKind, type PeerImpl } from './peer-capability';
 
 /** Spec data for browser-safe tooling; these tables add no execution behavior. */
 export { builtins, grammar, units } from './generated/syntax';

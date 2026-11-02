@@ -49,6 +49,8 @@ TraceLine      ::= ( '> ' )? Record | '#' [^#xA]* | ''
 Record         ::= RecordName ( ' ' Id )* ( ' ' Field )*
 /* offer-chosen and offer-entered use the ordinary record grammar;
    their ordered attempt/name/at/target/args keys are in corpus.toml. */
+/* deliver and request carry an optional caller key, a Remote Send's Caller
+   Identity (ADR 0154), as a Value; its place among the keys is in corpus.toml. */
 RecordName     ::= [a-z] [a-z-]*
 Id             ::= [A-Za-z0-9_] [A-Za-z0-9_./:+-]*
 Field          ::= Key '=' FieldValue

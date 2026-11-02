@@ -198,6 +198,12 @@ type = "value"
 optional = true
 is = "its limit override, a map from each limit's `ts` name to its value"
 
+
+[[record.key]]
+key = "caller"
+type = "value"
+optional = true
+is = "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)"
 [[record]]
 name = "request"
 input = true
@@ -226,6 +232,12 @@ type = "value"
 optional = true
 is = "its limit override, a map from each limit's `ts` name to its value"
 
+
+[[record.key]]
+key = "caller"
+type = "value"
+optional = true
+is = "for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154)"
 [[record]]
 name = "broadcast"
 input = true

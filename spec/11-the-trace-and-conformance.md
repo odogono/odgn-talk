@@ -157,6 +157,8 @@ TraceLine      ::= ( '> ' )? Record | '#' [^#xA]* | ''
 Record         ::= RecordName ( ' ' Id )* ( ' ' Field )*
 /* offer-chosen and offer-entered use the ordinary record grammar;
    their ordered attempt/name/at/target/args keys are in corpus.toml. */
+/* deliver and request carry an optional caller key, a Remote Send's Caller
+   Identity (ADR 0154), as a Value; its place among the keys is in corpus.toml. */
 RecordName     ::= [a-z] [a-z-]*
 Id             ::= [A-Za-z0-9_] [A-Za-z0-9_./:+-]*
 Field          ::= Key '=' FieldValue
@@ -212,8 +214,8 @@ A record is written when what it records happens, so a Trace is in the order the
 | `add-library` | `library` | `identity`\* | adds the Library that case.toml names |
 | `replace-library` | `library` | `carry`, `mailbox`?, `source`, `identity`\* | replaces the Library with the source given |
 | `pump` |  | `clock`, `fuel-slice`?, `fuel-cap`? | a Pump, with its one Clock reading |
-| `deliver` | `delivery` | `to`, `message`, `args`?, `limits`? | a Delivery |
-| `request` | `delivery` | `to`, `message`, `args`?, `limits`? | a Request: a Delivery whose result the Host waits for |
+| `deliver` | `delivery` | `to`, `message`, `args`?, `limits`?, `caller`? | a Delivery |
+| `request` | `delivery` | `to`, `message`, `args`?, `limits`?, `caller`? | a Request: a Delivery whose result the Host waits for |
 | `broadcast` | `broadcast` | `message`, `args`?, `limits`?, `recipients`\* | a Broadcast |
 | `call-value` | `delivery` | `fn`, `args`?, `limits`? | a Host call of a Function Value |
 | `decide` | `delivery` | `to`, `message`, `args`?, `limits`? | a Decision |
@@ -261,10 +263,12 @@ A record is written when what it records happens, so a Trace is in the order the
 | `deliver` | `message` | `id` | the message's name |
 | `deliver` | `args` | `value` | its arguments, a list |
 | `deliver` | `limits` | `value` | its limit override, a map from each limit's `ts` name to its value |
+| `deliver` | `caller` | `value` | for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154) |
 | `request` | `to` | `target` | the object or Script it is addressed to |
 | `request` | `message` | `id` | the message's name |
 | `request` | `args` | `value` | its arguments, a list |
 | `request` | `limits` | `value` | its limit override, a map from each limit's `ts` name to its value |
+| `request` | `caller` | `value` | for a Remote Send arriving at an Exposed Script, the Caller Identity the receiving Host vouches for, which `peer`'s `caller` gives the Run it starts (ADR 0154) |
 | `broadcast` | `message` | `id` | the message's name |
 | `broadcast` | `args` | `value` | its arguments, a list |
 | `broadcast` | `limits` | `value` | its limit override, a map from each limit's `ts` name to its value |
@@ -568,6 +572,10 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
   - **SQL values:** Nothing stands for `NULL`. A number stands for an `INTEGER` if its canonical text has no fraction digits and it fits a signed 64-bit integer, and for a `REAL`, the nearest double, otherwise, as `params` bind. Text stands for `TEXT` and Bytes for a `BLOB`. A map `{real: t}` stands for the `REAL` that `t` names: `"NaN"`, `"Infinity"`, `"-Infinity"`, or decimal text the nearest double reads from, such as `"1e34"`. Any other value, at any place in the map, stands for a value of a type the implementation must not give, so the Core ends the call as `host error`.
   - **`begin`, `commit` and `rollback`:** a Stub gives Nothing, or fails.
 - **Standard `user` calls:** `confirm`, `choose` and `enter` are suspending calls, so a case answers each with an `answer` or `fail` line, and writes a Host's `user busy` as a Stub's `error`. `notify` takes fire-and-forget Stubs.
+- **Standard `peer` calls** play the other side of a Remote Send, one Group per case ([ADR 0153](../docs/adr/0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md)). The runner keeps no router.
+  - **The sending side:** `expose`, `reach` and `call` are suspending calls, answered by `answer` and `fail` lines, so `call`'s `send failed` is a `fail` line's error. `post` takes fire-and-forget Stubs, and `unexpose` an immediate Stub that gives Nothing.
+  - **Peers:** a Peer is a `[[objects]]` entry of kind `peer`, which needs no `[[objectKinds]]` entry, since the Core defines the kind. One that `reach` or `expose` gives is made by that Operation, with `madeBy`; one that arrives in a Remote Send is made before the first Host Input.
+  - **The exposed side:** a `deliver` or `request` line plays an arriving `post` or `call`, and its `caller` key is the Caller Identity the receiving Host vouches for ([ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)). `caller` gives the `caller` of the line whose Delivery started the calling Run, or Nothing when that line has none or no Delivery started it, so the runner refuses a Stub for it.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
 - **`charge`** is drawn with `Charge` during the Host callback. The [metering extension](embedding/metered-operations.md#trace-and-message-layer) adds `charge-refused` to represent an accepted prefix followed by refusal; a suspending call takes a Stub for its synchronous charge, refusal or error only. Later charge requests are separate Host Inputs.
 - **Suspending calls** are answered by later `answer` and `fail` lines, unless a Stub's `error` fails one as it starts, as a Host that refuses a call at once does. The runner's Host functions do nothing else.
