@@ -411,6 +411,10 @@ _Avoid_: pattern (unqualified), loop, sequence, riff
 The compact text form of a Sound Pattern, e.g. `"bd [hh hh] sd, - cp"`, in which spaces divide a cycle into steps, brackets subdivide a step and commas layer figures.
 _Avoid_: pattern string, step string
 
+**Base Project**:
+A Project that ships with Folio and that a new Project starts as a copy of, bringing its sounds, Palettes and Add-ons, such as Blank or Music. The copy remembers which Base Project and version it came from but never depends on it, carrying every sound it plays.
+_Avoid_: template, starter, kit (for the sounds a Base Project brings)
+
 **Group Element**:
 A named composite Element whose members are Elements on the same Page, including other Group Elements. Its members retain their Page-wide names.
 _Avoid_: Script Group (for a visual composite), folder, component
