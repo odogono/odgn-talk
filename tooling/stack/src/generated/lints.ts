@@ -241,6 +241,30 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "suggest-every-of",
+    "flags": "`put [] into acc` then a `repeat for each x in xs`, over a known list, whose body is only `if c then put x after acc`, where c would be a valid Whose Clause condition",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `put every item of … whose … into {name}`, which keeps the items for which the condition holds.",
+    "status": "implemented"
+  },
+  {
+    "id": "suggest-range-loop",
+    "flags": "`put a into i` then `repeat while i <= n` ending `add 1 to i`, where a is an integer literal and n one or `the length of xs`, and the declaration reads i nowhere else",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `repeat for each {name} in {from}..…`, which counts {name} for you.",
+    "status": "implemented"
+  },
+  {
+    "id": "suggest-word-operator",
+    "flags": "a comparison by `>=`, `<=` or `<>`",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider `{words}`, which reads the same as `{operator}`.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-whose",
     "flags": "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition",
     "beginner": "hint",

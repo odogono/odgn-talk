@@ -616,7 +616,7 @@ const lineRange = (line: number) => ({
 describe('language server', () => {
   test('offers the idiom rewrites as quick fixes', () => {
     const { request } = setup(
-      'on demo c\nput c * 2 into c\nif c = 1 or c = 2 or c = 3 then say c\nend demo',
+      'on demo c\nput c * 2 into c\nif c = 1 or c = 2 or c = 3 then say c\nif c >= 4 then say c\nend demo',
     );
     expect(request('textDocument/codeAction', lineRange(1))).toMatchObject([
       {
@@ -628,6 +628,42 @@ describe('language server', () => {
       {
         title: 'Rewrite as is in',
         edit: { changes: { [uri]: [{ newText: 'c is in [1, 2, 3]' }] } },
+      },
+    ]);
+    expect(request('textDocument/codeAction', lineRange(3))).toMatchObject([
+      {
+        title: 'Rewrite in words',
+        edit: { changes: { [uri]: [{ newText: 'is at least' }] } },
+      },
+    ]);
+  });
+  test('offers the suggest-every-of rewrite as a quick fix', () => {
+    const { request } = setup(
+      'on demo\nput [1, 2] into xs\nput [] into big\nrepeat for each x in xs\nif x > 1 then put x after big\nend repeat\nsay big\nend demo',
+    );
+    expect(request('textDocument/codeAction', lineRange(2))).toMatchObject([
+      {
+        title: 'Rewrite with every … whose',
+        edit: {
+          changes: {
+            [uri]: [{ newText: 'put every item of xs whose it > 1 into big' }],
+          },
+        },
+      },
+    ]);
+  });
+  test('offers the suggest-range-loop rewrite as a quick fix', () => {
+    const { request } = setup(
+      'on demo\nput 1 into i\nrepeat while i <= 3\nsay i\nadd 1 to i\nend repeat\nend demo',
+    );
+    expect(request('textDocument/codeAction', lineRange(1))).toMatchObject([
+      {
+        title: 'Rewrite as repeat for each',
+        edit: {
+          changes: {
+            [uri]: [{ newText: 'repeat for each i in 1..3\nsay i\n' }],
+          },
+        },
       },
     ]);
   });

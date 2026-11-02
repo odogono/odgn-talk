@@ -1378,9 +1378,12 @@ const idiomTitles = {
   'if-then-return-bool': 'Return the condition',
   'kindof-comparison': 'Rewrite as is a',
   'suggest-arithmetic-command': 'Rewrite as a command',
+  'suggest-every-of': 'Rewrite with every … whose',
   'suggest-is-in': 'Rewrite as is in',
   'suggest-match': 'Rewrite as match',
   'suggest-otherwise': 'Rewrite with otherwise',
+  'suggest-range-loop': 'Rewrite as repeat for each',
+  'suggest-word-operator': 'Rewrite in words',
 } as const;
 const idiomActions = (analysis: Analysis, requested: Range) =>
   analysis.lints

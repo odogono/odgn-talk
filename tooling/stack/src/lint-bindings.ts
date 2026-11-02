@@ -813,6 +813,124 @@ const lintWhose = (
   }
 };
 
+// `put [] into acc`, then `repeat for each x in xs` whose body is only `if c
+// then put x after acc`, is `put every item of xs whose c into acc` with `x`
+// read as `it` (ADR 0074), when xs is known to be a list: `repeat for each`
+// raises on anything else, where `every item of` would walk text's items. The
+// condition must be one a Whose Clause allows that doesn't read acc or `it`,
+// `x` must not be read after the loop, and no `try` may see a partial acc.
+const everyOf = (
+  init: SemanticNode,
+  loop: SemanticNode,
+  isList: (expression: SemanticNode) => boolean,
+  parents: Map<SemanticElement, SemanticNode>,
+  declaration: SemanticNode | undefined,
+) => {
+  const value = child(init, 'Expression');
+  const list = value && unwrap(value);
+  const container = child(init, 'Container');
+  const acc = container && unwrap(container);
+  if (
+    leaves(init)
+      .map(t => t.text)
+      .join(' ') !== 'put into' ||
+    list?.kind !== 'node' ||
+    list.rule !== 'List' ||
+    nodes(list).length ||
+    acc?.kind !== 'name' ||
+    acc.binding?.kind !== 'local' ||
+    leaves(loop)
+      .slice(0, 3)
+      .map(t => t.text)
+      .join(' ') !== 'repeat for each' ||
+    child(loop, 'Collecting')
+  ) {
+    return undefined;
+  }
+  const pattern = child(loop, 'Pattern');
+  const primary =
+    pattern?.children.length === 1 ? pattern.children[0] : undefined;
+  const x =
+    primary?.kind === 'node' &&
+    primary.rule === 'PatternPrimary' &&
+    primary.children.length === 1 &&
+    primary.children[0]!.kind === 'name'
+      ? primary.children[0]
+      : undefined;
+  const source = child(loop, 'Expression');
+  const body = child(loop, 'Block');
+  const statements = body ? nodes(body) : [];
+  const branch =
+    statements.length === 1 ? child(statements[0]!, 'If') : undefined;
+  if (
+    x?.kind !== 'name' ||
+    !x.binding ||
+    !source ||
+    !isList(source) ||
+    !branch ||
+    leaves(branch).some(t => t.text === 'else')
+  ) {
+    return undefined;
+  }
+  const condition = child(branch, 'Expression');
+  let put = child(branch, 'SimpleStatement');
+  const block = child(branch, 'Block');
+  if (!put && block && nodes(block).length === 1) {
+    put = child(nodes(block)[0]!, 'SimpleStatement');
+  }
+  const putValue = put && child(put, 'Expression');
+  const appended = putValue && unwrap(putValue);
+  const target = put && child(put, 'Container');
+  const into = target && unwrap(target);
+  if (
+    !condition ||
+    !put ||
+    leaves(put)
+      .map(t => t.text)
+      .join(' ') !== 'put after' ||
+    appended?.kind !== 'name' ||
+    appended.binding?.id !== x.binding.id ||
+    into?.kind !== 'name' ||
+    into.binding?.id !== acc.binding.id
+  ) {
+    return undefined;
+  }
+  const accId = acc.binding.id;
+  const xId = x.binding.id;
+  if (
+    elements(condition, true).some(
+      e =>
+        (e.kind === 'node' &&
+          (e.rule === 'Lambda' ||
+            e.rule === 'Error' ||
+            (e.rule === 'Call' &&
+              (first(e) as SemanticName | undefined)?.binding?.kind !==
+                'builtin function'))) ||
+        (e.kind === 'name' && (e.text === 'it' || e.binding?.id === accId)),
+    ) ||
+    elements(source, true).some(
+      e => e.kind === 'name' && e.binding?.id === accId,
+    )
+  ) {
+    return undefined;
+  }
+  const inLoop = new Set(elements(loop, true));
+  const outside = declaration
+    ? elements(declaration, true).filter(
+        e => e.kind === 'name' && e.binding?.id === xId && !inLoop.has(e),
+      )
+    : [];
+  for (let up = parents.get(loop); up; up = parents.get(up)) {
+    if (up.rule === 'Try') {
+      return undefined;
+    }
+    if (boundary(up)) {
+      break;
+    }
+  }
+  return outside.length ? undefined : acc;
+};
+
 // List nesting is valid, so this is optional beginner advice, not a bug claim.
 // Track only straight-line local values. Each body starts afresh; branches,
 // recovery and loop back edges do not inherit facts from another body.
@@ -921,8 +1039,29 @@ const lintListAppend = (
     if (collection !== undefined) {
       known.add(collection);
     }
+    let declaration: SemanticNode | undefined = block;
+    while (declaration && declaration.rule !== 'Declaration') {
+      declaration = parents.get(declaration);
+    }
+    let previous: SemanticNode | undefined;
     for (const statement of nodes(block)) {
       const simple = child(statement, 'SimpleStatement');
+      const loop = child(statement, 'Repeat');
+      const init = previous;
+      previous = simple;
+      const filtered =
+        loop &&
+        init &&
+        everyOf(
+          init,
+          loop,
+          expression => isList(expression, known),
+          parents,
+          declaration,
+        );
+      if (filtered) {
+        emit('suggest-every-of', first(init)!.span, { name: filtered.text });
+      }
       if (!simple) {
         known = new Set(constants);
         const target = collectingTarget(child(statement, 'Repeat'));
