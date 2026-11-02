@@ -570,7 +570,17 @@ export const lintSyntax = (
   const bindings = bindingTree(tree, options);
   if (idioms.length) {
     const names = semanticNames(bindings.root);
-    for (const { id, at, subject, subjectIs, params } of idioms) {
+    for (const { id, at, subject, subjectIs, params, locals } of idioms) {
+      // Names a Run's other code can't write: its locals and parameters.
+      if (
+        locals &&
+        !locals.every(local => {
+          const bound = names.get(local.pos)?.binding?.kind;
+          return bound === 'local' || bound === 'parameter';
+        })
+      ) {
+        continue;
+      }
       // A Constant or Built-in never changes, so a rewrite for one is
       // unusual; advise only on names whose value the Script holds. A
       // Built-in call is advice only if the Script hasn't shadowed it.

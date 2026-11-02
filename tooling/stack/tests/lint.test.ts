@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   checkSource,
   coreVersions,
+  list,
   newGroup,
   num,
   parseInstant,
@@ -41,10 +42,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships thirty-five implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(35);
+test('ships thirty-nine implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(39);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(35);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(39);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -1366,4 +1367,282 @@ test('return advice needs a boolean condition choosing between true and false', 
       'if-then-return-bool',
     ),
   ).toBeUndefined();
+});
+
+test('word operator advice spells >=, <= and <> in words', async () => {
+  const source = pickHandler('if c >= 3 then return "big"\nreturn "small"');
+  expect(lint(source).lints.map(l => l.id)).not.toContain(
+    'suggest-word-operator',
+  );
+  expect(idiomLints(source, 'suggest-word-operator')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 2, col: 6 },
+      message: 'Consider `is at least`, which reads the same as `>=`.',
+    },
+  ]);
+  const args = [num(2), num(3), num(4), text('3')];
+  for (const [from, to] of [
+    ['c >= 3', 'c is at least 3'],
+    ['c <= 3', 'c is at most 3'],
+    ['c <> 3', 'c is not 3'],
+    ['c <> "A" ignoring case', 'c is not "A" ignoring case'],
+  ] as const) {
+    expect(
+      await answersMatch(
+        source.replace('c >= 3', from),
+        'suggest-word-operator',
+        from.startsWith('c >=') || from.startsWith('c <=')
+          ? args.slice(0, 3)
+          : [...args, text('a')],
+      ),
+    ).toBe(source.replace('c >= 3', to));
+  }
+  for (const negative of [
+    source.replace('c >= 3', 'c > 3'),
+    source.replace('c >= 3', 'c is at least 3'),
+    source.replace('c >= 3', 'c <> empty'),
+    pickHandler('put 1 into a\nif c <> a then return "big"\nreturn "small"'),
+    source.replace('if c', '-- lint: ignore suggest-word-operator\nif c'),
+  ]) {
+    expect(idiomLints(negative, 'suggest-word-operator')).toEqual([]);
+  }
+});
+
+test('range loop advice needs a counted while loop that nothing else reads', async () => {
+  const source = [
+    'on pick c',
+    '  put [] into out',
+    '  put 1 into i',
+    '  repeat while i <= the length of c',
+    '    put item i of c after out',
+    '    add 1 to i',
+    '  end repeat',
+    '  return out',
+    'end pick',
+  ].join('\n');
+  expect(lint(source).lints.map(l => l.id)).not.toContain('suggest-range-loop');
+  expect(idiomLints(source, 'suggest-range-loop')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 3, col: 3 },
+      message: 'Consider `repeat for each i in 1..…`, which counts i for you.',
+    },
+  ]);
+  const lists = [list(), list(num(5)), list(num(1), text('b'), num(3))];
+  expect(await answersMatch(source, 'suggest-range-loop', lists)).toBe(
+    [
+      'on pick c',
+      '  put [] into out',
+      '  repeat for each i in 1..the length of c',
+      '    put item i of c after out',
+      '  end repeat',
+      '  return out',
+      'end pick',
+    ].join('\n'),
+  );
+  const literal = source
+    .replace('the length of c', '3')
+    .replace('put 1 into i', 'put 2 into i')
+    .replace('item i of c', 'i * 2');
+  expect(
+    await answersMatch(
+      literal.replace('<=', 'is at most'),
+      'suggest-range-loop',
+      [num(0)],
+    ),
+  ).toContain('repeat for each i in 2..3\n');
+  for (const negative of [
+    source.replace('put 1 into i', 'put 1.5 into i'),
+    source.replace('<=', '<'),
+    source.replace('the length of c', 'c'),
+    source.replace('add 1 to i', 'add 2 to i'),
+    source.replace(
+      '    put item i of c',
+      '    put 0 into c\n    put item i of c',
+    ),
+    source.replace(
+      '    put item i of c',
+      '    add 1 to i\n    put item i of c',
+    ),
+    source.replace(
+      '    put item i of c',
+      '    if i = 2 then next repeat\n    put item i of c',
+    ),
+    source.replace('return out', 'return i'),
+    source.replace('  put 1 into i', '  put 1 into i\n  say i'),
+    `${source.replace('the length of c', 'the length of xs')}\nput [] into xs`,
+    source.replace(
+      '  put 1 into i',
+      '  -- lint: ignore suggest-range-loop\n  put 1 into i',
+    ),
+  ]) {
+    expect(idiomLints(negative, 'suggest-range-loop')).toEqual([]);
+  }
+  // A comment on the removed line withholds the fix.
+  expect(
+    rewrite(
+      source.replace('add 1 to i', 'add 1 to i -- step'),
+      'suggest-range-loop',
+    ),
+  ).toBeUndefined();
+});
+
+test('every-of advice needs a loop over a known list that only filters', async () => {
+  const source = [
+    'on pick c',
+    '  put [c, 8, 1, 12] into xs',
+    '  put [] into big',
+    '  repeat for each x in xs',
+    '    if x > 5 then put x after big',
+    '  end repeat',
+    '  return big',
+    'end pick',
+  ].join('\n');
+  expect(lint(source).lints.map(l => l.id)).not.toContain('suggest-every-of');
+  expect(idiomLints(source, 'suggest-every-of')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 3, col: 3 },
+      message:
+        'Consider `put every item of … whose … into big`, which keeps the items for which the condition holds.',
+    },
+  ]);
+  const args = [num(0), num(9), num(5)];
+  expect(await answersMatch(source, 'suggest-every-of', args)).toBe(
+    [
+      'on pick c',
+      '  put [c, 8, 1, 12] into xs',
+      '  put every item of xs whose it > 5 into big',
+      '  return big',
+      'end pick',
+    ].join('\n'),
+  );
+  // A condition led by another name is bracketed, so it isn't a Whose Key;
+  // a block `if` and a list literal rewrite too.
+  const led = source
+    .replace(
+      'x > 5 then put x after big',
+      'c < x then\n      put x after big\n    end if',
+    )
+    .replace('for each x in xs', 'for each x in [c, 8, 1, 12]');
+  expect(await answersMatch(led, 'suggest-every-of', args)).toContain(
+    'put every item of [c, 8, 1, 12] whose (c < it) into big',
+  );
+  for (const negative of [
+    source.replace('put [c, 8, 1, 12] into xs', 'put "a,b" into xs'),
+    source
+      .replace('  put [c, 8, 1, 12] into xs\n', '')
+      .replace('pick c', 'pick xs'),
+    source.replace('put [] into big', 'put [0] into big'),
+    source.replace(
+      'x > 5 then put x after big',
+      'x > 5 then put x * 2 after big',
+    ),
+    source.replace('x > 5', 'x > the length of big'),
+    source.replace('x > 5', 'it > 5'),
+    source.replace('x > 5', 'pick(x) > 5'),
+    source.replace('put x after big', 'put x after big else put x before big'),
+    source.replace('return big', 'return x'),
+    source.replace('    if x > 5', '    say x\n    if x > 5'),
+    source.replace('each x in xs', 'each x in xs collecting x into all'),
+    source.replace(
+      '  put [] into big',
+      '  -- lint: ignore suggest-every-of\n  put [] into big',
+    ),
+  ]) {
+    expect(idiomLints(negative, 'suggest-every-of')).toEqual([]);
+  }
+});
+
+test('redundant guard advice finds tests the pattern already makes', async () => {
+  const source = [
+    'on pick c',
+    '  match c',
+    '    when [a, b] where c is a list and a > 0 then return "pair"',
+    '    when {name: n} as m where m is not empty then return n',
+    '    when 5 kg where c = 5 kg then return "five"',
+    '    when [_, ...] where the length of c = 1 then return "long"',
+    '  end match',
+    '  return "other"',
+    'end pick',
+  ].join('\n');
+  expect(
+    lint(source, { profile: 'standard' })
+      .lints.filter(l => l.id === 'redundant-guard')
+      .map(l => [l.span.line, l.message]),
+  ).toEqual([
+    [
+      3,
+      'The pattern already ensures this value is a list, so this test is always true.',
+    ],
+    [
+      4,
+      'The pattern already ensures this value is not empty, so this test is always true.',
+    ],
+    [
+      5,
+      'The pattern already ensures this value = 5 kg, so this test is always true.',
+    ],
+  ]);
+  const args = [
+    list(num(1), num(2)),
+    list(num(-1), num(2)),
+    list(num(3)),
+    num(5000),
+    text('x'),
+  ];
+  // Each fix keeps the answers, and the last removes the whole Guard.
+  let fixed = source;
+  for (let i = 0; i < 2; i++) {
+    fixed = rewrite(fixed, 'redundant-guard')!;
+  }
+  fixed = await answersMatch(fixed, 'redundant-guard', args);
+  for (const arg of args) {
+    expect(await answer(fixed, arg)).toBe(await answer(source, arg));
+  }
+  expect(fixed).toContain('when [a, b] where a > 0 then');
+  expect(fixed).toContain('when {name: n} as m then return n');
+  const lines = (each: string) =>
+    idiomLints(each, 'redundant-guard').map(l => l.span.line);
+  // A list pattern without a rest fixes the length.
+  expect(
+    lines(
+      source.replace(
+        '[_, ...] where the length of c = 1',
+        '[_, _] where 2 is the length of c',
+      ),
+    ),
+  ).toEqual([3, 4, 5, 6]);
+  for (const [line, negative] of [
+    [3, source.replace('c is a list', 'c is a map')],
+    [3, source.replace('match c', 'match c & ""')],
+    [3, source.replace('[a, b] where c', '[c, b] where c')],
+    [
+      6,
+      source.replace(
+        '[_, ...] where the length of c = 1',
+        '[_] where the length of c = 2',
+      ),
+    ],
+    [5, source.replace('5 kg where c = 5 kg', '5 kg where c = 5')],
+    [
+      5,
+      source
+        .replace('match c', 'match c ignoring case')
+        .replace('5 kg where c = 5 kg', '"a" where c = "a"'),
+    ],
+    [4, source.replace('{name: n}', '{}')],
+  ] as const) {
+    expect(lines(negative)).not.toContain(line);
+  }
+  expect(
+    idiomLints(
+      source.replace(
+        '    when [a, b]',
+        '    -- lint: ignore redundant-guard\n    when [a, b]',
+      ),
+      'redundant-guard',
+    ),
+  ).toHaveLength(2);
 });

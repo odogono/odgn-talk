@@ -179,14 +179,19 @@ export type IdiomId =
   | 'if-then-return-bool'
   | 'impossible-kind'
   | 'kindof-comparison'
+  | 'redundant-guard'
   | 'suggest-arithmetic-command'
   | 'suggest-is-in'
   | 'suggest-match'
-  | 'suggest-otherwise';
+  | 'suggest-otherwise'
+  | 'suggest-range-loop'
+  | 'suggest-word-operator';
 /** Advice that holds only if `subject` names a variable, which needs bindings. */
 export type IdiomAdvice = {
   at: Token;
   id: IdiomId;
+  /** Names that must each bind a local or parameter for the advice to hold. */
+  locals?: Token[];
   params: Record<string, string>;
   /** Absent when the advice holds whatever the code's names bind to. */
   subject?: Token;
@@ -491,6 +496,379 @@ const returnedCondition = (node: SyntaxNode, next?: SyntaxNode) => {
 const returnText = (test: SyntaxNode, negated: boolean, text: string) =>
   negated ? `not ${test.rule === 'Comparison' ? text : `(${text})`}` : text;
 
+// `a >= b`, `a <= b` and `a <> b` are `a is at least b`, `a is at most b` and
+// `a is not b` (chapter 4). After `is not`, a right operand starting with one
+// of these words would read as another test, such as `is not empty`.
+const operatorWords = {
+  '>=': 'is at least',
+  '<=': 'is at most',
+  '<>': 'is not',
+};
+const isTestWords = new Set([
+  'a',
+  'an',
+  'in',
+  'empty',
+  'greater',
+  'less',
+  'at',
+]);
+const symbolComparison = (node: SyntaxNode) => {
+  const operators = tokens(node);
+  const operands = nodes(node).filter(child => child.rule === 'Concat');
+  const operator = operators[0];
+  if (
+    node.rule !== 'Comparison' ||
+    operators.length !== 1 ||
+    operands.length !== 2 ||
+    !operator ||
+    !(operator.v in operatorWords)
+  ) {
+    return undefined;
+  }
+  const next = tokensIn(operands[1]!)[0];
+  return operator.v === '<>' && next?.t === 'word' && isTestWords.has(next.v)
+    ? undefined
+    : {
+        operator,
+        words: operatorWords[operator.v as keyof typeof operatorWords],
+      };
+};
+
+// `put a into i`, then `repeat while i <= n` (or `i is at most n`) whose body
+// ends with `add 1 to i`, is `repeat for each i in a..n` when a is an integer
+// literal and n is one or `the length of xs`: both give integers, so the
+// range walks the same values. The body must not otherwise write i or xs, nor
+// `next repeat`, which in the while loop skips the `add`; and nothing else in
+// the declaration may name i, since the loops leave it holding different values.
+const intLiteral = (node: SyntaxNode | undefined) => {
+  const all = node ? tokensIn(node) : [];
+  return all.length === 1 && all[0]!.t === 'num' && /^\d+$/.test(all[0]!.v)
+    ? all[0]
+    : undefined;
+};
+const lengthOf = (node: SyntaxNode) => {
+  const words = tokensIn(node);
+  return words.length === 4 &&
+    words
+      .slice(0, 3)
+      .map(token => token.v)
+      .join(' ') === 'the length of' &&
+    words[3]!.t === 'word'
+    ? words[3]
+    : undefined;
+};
+const statementOf = (node: SyntaxNode | undefined) =>
+  node?.rule === 'Statement' ? core(node) : node;
+const addOne = (node: SyntaxNode | undefined, name: string) => {
+  const statement = statementOf(node);
+  const [by, container] = statement ? nodes(statement) : [];
+  return statement?.rule === 'SimpleStatement' &&
+    tokens(statement)
+      .map(token => token.v)
+      .join(' ') === 'add to' &&
+    nodes(statement).length === 2 &&
+    intLiteral(by)?.v === '1' &&
+    container?.rule === 'Container' &&
+    nameToken(container)?.v === name
+    ? statement
+    : undefined;
+};
+// Every Container root and pattern name under `node`: the names it writes.
+const written = (node: SyntaxNode) => {
+  const out = new Set<string>();
+  const work = [node];
+  while (work.length) {
+    const next = work.pop()!;
+    if (next.rule === 'Container') {
+      const root = tokensIn(next)[0];
+      if (root) {
+        out.add(root.v);
+      }
+    } else if (next.rule.includes('Pattern') || next.rule === 'Collecting') {
+      for (const token of tokensIn(next)) {
+        out.add(token.v);
+      }
+    }
+    work.push(...nodes(next));
+  }
+  return out;
+};
+const rangeLoop = (start: SyntaxNode, loop: SyntaxNode) => {
+  const put = putInto(start);
+  const from = put && intLiteral(put.value);
+  const children = loop.children.filter(
+    child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+  );
+  const [repeat, whileWord, condition] = children;
+  if (
+    !put ||
+    !from ||
+    loop.rule !== 'Repeat' ||
+    repeat?.kind !== 'token' ||
+    whileWord?.kind !== 'token' ||
+    whileWord.v !== 'while' ||
+    condition?.kind !== 'node'
+  ) {
+    return undefined;
+  }
+  const comparison = core(condition);
+  const operator = tokens(comparison)
+    .map(token => token.v)
+    .join(' ');
+  const operands = nodes(comparison).filter(child => child.rule === 'Concat');
+  const ignoring = nodes(comparison).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  const name = put.target;
+  if (
+    comparison.rule !== 'Comparison' ||
+    (operator !== '<=' && operator !== 'is at most') ||
+    operands.length !== 2 ||
+    ignoring ||
+    nameToken(operands[0]!)?.v !== name.v
+  ) {
+    return undefined;
+  }
+  const bound = operands[1]!;
+  const list = lengthOf(bound);
+  if (!intLiteral(bound) && !list) {
+    return undefined;
+  }
+  const body = nodes(loop).find(child => child.rule === 'Block');
+  const statements = body ? nodes(body) : [];
+  const step = addOne(statements.at(-1), name.v);
+  if (!body || !step) {
+    return undefined;
+  }
+  const others = statements.slice(0, -1);
+  const writes = new Set(others.flatMap(statement => [...written(statement)]));
+  if (
+    writes.has(name.v) ||
+    (list && writes.has(list.v)) ||
+    tokensIn(body).some(token => token.v === 'next')
+  ) {
+    return undefined;
+  }
+  return { put, from, name, bound, list, step, condition };
+};
+// Each `put` directly before a `repeat` in a declaration's Blocks.
+const rangeLoops = (declaration: SyntaxNode) => {
+  const out: (NonNullable<ReturnType<typeof rangeLoop>> & {
+    loop: SyntaxNode;
+    start: SyntaxNode;
+  })[] = [];
+  const work = [declaration];
+  while (work.length) {
+    const node = work.pop()!;
+    if (node.rule === 'Block') {
+      const statements = nodes(node).map(core);
+      for (const [i, start] of statements.entries()) {
+        const loop = statements[i + 1];
+        const found = loop && rangeLoop(start, loop);
+        if (found) {
+          out.push({ ...found, start, loop });
+        }
+      }
+    }
+    work.push(...nodes(node));
+  }
+  const all = tokensIn(declaration);
+  return out.filter(found => {
+    const inside = [...tokensIn(found.start), ...tokensIn(found.loop)];
+    const count = (list: Token[]) =>
+      list.filter(token => token.t === 'word' && token.v === found.name.v)
+        .length;
+    return count(all) === count(inside);
+  });
+};
+
+// What a pattern's match guarantees about the value it matched (chapter 4,
+// Destructuring): a list pattern a list, and without a rest its length; a map
+// pattern a map; a Text Pattern text; a literal a value `=` to it. A list or
+// map pattern with an entry also guarantees the value isn't empty.
+const patternFacts = (pattern: SyntaxNode, ignoringCase: boolean) => {
+  const [primary, ...rest] = pattern.children.filter(
+    child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+  );
+  const alias =
+    rest.length === 2 &&
+    rest[0]!.kind === 'token' &&
+    rest[0]!.v === 'as' &&
+    rest[1]!.kind === 'node'
+      ? nameToken(rest[1]!)
+      : undefined;
+  if (
+    primary?.kind !== 'node' ||
+    primary.rule !== 'PatternPrimary' ||
+    (rest.length && !alias)
+  ) {
+    return undefined;
+  }
+  const open = primary.children[0];
+  const inner = nodes(primary);
+  if (open?.kind === 'token' && open.v === '[') {
+    const elements = inner.filter(child => child.rule === 'Pattern');
+    const spread = tokens(primary).some(token => token.v.startsWith('...'));
+    return {
+      alias,
+      kind: 'list',
+      length: spread ? undefined : elements.length,
+      nonEmpty: elements.length > 0,
+    };
+  }
+  if (open?.kind === 'token' && open.v === '{') {
+    const keys = inner.filter(
+      child => child.rule === 'MapKey' || child.rule === 'Name',
+    );
+    return { alias, kind: 'map', nonEmpty: keys.length > 0 };
+  }
+  if (inner.length === 1 && inner[0]!.rule === 'TextPattern') {
+    return { alias, kind: 'text' };
+  }
+  const literal = tokensIn(primary);
+  return isLiteral(literal[0]) &&
+    literal.slice(1).every(token => token.t === 'unit') &&
+    !ignoringCase
+    ? { alias, literal }
+    : undefined;
+};
+const sameTokens = (a: Token[], b: Token[]) =>
+  a.length === b.length &&
+  a.every((token, i) => token.t === b[i]!.t && token.v === b[i]!.v);
+// The test a Guard's conjunct makes of `names`, if the facts guarantee it.
+const guaranteed = (
+  conjunct: SyntaxNode,
+  names: Set<string>,
+  facts: NonNullable<ReturnType<typeof patternFacts>>,
+) => {
+  const comparison = core(conjunct);
+  const operator = tokens(comparison)
+    .map(token => token.v)
+    .join(' ');
+  const operands = nodes(comparison).filter(
+    child => child.rule === 'Concat' || child.rule === 'Kind',
+  );
+  const ignoring = nodes(comparison).some(
+    child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+  );
+  const subject = (node: SyntaxNode | undefined) => {
+    const name = node && nameToken(node);
+    return name && names.has(name.v) ? name : undefined;
+  };
+  if (comparison.rule !== 'Comparison' || ignoring) {
+    return undefined;
+  }
+  if (
+    operator === 'is not empty' &&
+    operands.length === 1 &&
+    facts.nonEmpty &&
+    subject(operands[0])
+  ) {
+    return 'is not empty';
+  }
+  if (operands.length !== 2) {
+    return undefined;
+  }
+  const [left, right] = operands as [SyntaxNode, SyntaxNode];
+  if (
+    (operator === 'is a' || operator === 'is an') &&
+    subject(left) &&
+    right.rule === 'Kind' &&
+    tokensIn(right)
+      .map(token => token.v)
+      .join(' ') === facts.kind
+  ) {
+    return `is ${operator.slice(3)} ${facts.kind}`;
+  }
+  if (operator !== '=' && operator !== 'is') {
+    return undefined;
+  }
+  for (const [one, other] of [
+    [left, right],
+    [right, left],
+  ] as const) {
+    const counted = lengthOf(one);
+    const number = intLiteral(other);
+    if (
+      facts.length !== undefined &&
+      counted &&
+      names.has(counted.v) &&
+      number &&
+      Number(number.v) === facts.length
+    ) {
+      return `has length ${facts.length}`;
+    }
+    if (
+      facts.literal &&
+      subject(one) &&
+      sameTokens(tokensIn(other), facts.literal)
+    ) {
+      return `= ${facts.literal.map(token => token.raw).join(' ')}`;
+    }
+  }
+  return undefined;
+};
+// Each `where` Guard after a pattern, with the conjuncts its pattern makes
+// redundant: tests of the pattern's `as` name or a `match` subject's name.
+const redundantGuards = (node: SyntaxNode) => {
+  const children = node.children.filter(
+    child => child.kind === 'node' || (child.t !== 'nl' && child.t !== 'eof'),
+  );
+  let matchName: Token | undefined;
+  let ignoringCase = false;
+  if (node.rule === 'Match') {
+    const subject = children[1];
+    matchName = subject?.kind === 'node' ? nameToken(subject) : undefined;
+    ignoringCase = nodes(node).some(
+      child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
+    );
+  }
+  const out: { conjunct: SyntaxNode; guard: SyntaxNode; test: string }[] = [];
+  for (const [i, child] of children.entries()) {
+    const where = children[i + 1];
+    const guard = children[i + 2];
+    if (
+      child.kind !== 'node' ||
+      child.rule !== 'Pattern' ||
+      where?.kind !== 'token' ||
+      where.v !== 'where' ||
+      guard?.kind !== 'node'
+    ) {
+      continue;
+    }
+    const facts = patternFacts(child, ignoringCase);
+    if (!facts) {
+      continue;
+    }
+    // A name the pattern binds hides the subject's.
+    const bound = new Set(
+      tokensIn(child)
+        .filter(token => token.t === 'word')
+        .map(token => token.v),
+    );
+    const names = new Set<string>();
+    if (facts.alias) {
+      names.add(facts.alias.v);
+    }
+    if (matchName && !bound.has(matchName.v)) {
+      names.add(matchName.v);
+    }
+    const top = core(guard);
+    const conjuncts =
+      top.rule === 'And' && tokens(top).every(token => token.v === 'and')
+        ? nodes(top)
+        : [top];
+    for (const conjunct of conjuncts) {
+      const test = guaranteed(conjunct, names, facts);
+      if (test) {
+        out.push({ guard, conjunct, test });
+      }
+    }
+  }
+  return out;
+};
+
 /** Advice for one node of the tree, before its subjects' bindings are known. */
 export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
   const first = tokensIn(node)[0];
@@ -575,6 +953,31 @@ export const idiomAdvice = (node: SyntaxNode): IdiomAdvice[] => {
           },
     );
   }
+  if (node.rule === 'Declaration') {
+    for (const found of rangeLoops(node)) {
+      out.push({
+        id: 'suggest-range-loop',
+        at: found.put.at,
+        locals: found.list ? [found.name, found.list] : [found.name],
+        params: { name: found.name.v, from: found.from.v },
+      });
+    }
+  }
+  for (const redundant of redundantGuards(node)) {
+    out.push({
+      id: 'redundant-guard',
+      at: tokensIn(redundant.conjunct)[0]!,
+      params: { test: redundant.test },
+    });
+  }
+  const symbol = symbolComparison(node);
+  if (symbol) {
+    out.push({
+      id: 'suggest-word-operator',
+      at: symbol.operator,
+      params: { operator: symbol.operator.v, words: symbol.words },
+    });
+  }
   const member = membership(node);
   if (member) {
     out.push({
@@ -607,6 +1010,70 @@ const hasComment = (node: SyntaxNode) =>
     .some(token =>
       token.leadingTrivia.some(trivia => trivia.kind === 'comment'),
     );
+
+// The `suggest-every-of` rewrite, which the Lint reports only after checking
+// the loop's names: `put every item of xs whose c into acc`, with the loop
+// variable read as `it`. A condition starting with another name is bracketed,
+// since a Whose Clause would read that name as a key of `it`.
+const everyOfEdit = (
+  tree: SyntaxNode,
+  source: string,
+  start: number,
+): Edit | undefined => {
+  const block = find(
+    tree,
+    node =>
+      node.rule === 'Block' &&
+      nodes(node).some(statement => startsAt(statement, start)),
+  );
+  const statements = block ? nodes(block).map(core) : [];
+  const index = statements.findIndex(statement => startsAt(statement, start));
+  const init = statements[index];
+  const loop = statements[index + 1];
+  const put = init && putInto(init);
+  const [pattern, walked, body] = loop ? nodes(loop) : [];
+  const name = pattern && nameToken(pattern);
+  const branch = body && core(nodes(body)[0]!);
+  const condition = branch && nodes(branch)[0];
+  if (!put || !loop || !name || !walked || !condition || hasComment(loop)) {
+    return undefined;
+  }
+  // Each read of the loop variable, but not a key spelled the same.
+  const keys = new Set<Token>();
+  const work = [condition];
+  while (work.length) {
+    const node = work.pop()!;
+    if (node.rule === 'Key' || node.rule === 'MapKey') {
+      tokensIn(node).forEach(token => keys.add(token));
+    }
+    work.push(...nodes(node));
+  }
+  const reads = tokensIn(condition).filter(
+    token => token.t === 'word' && token.v === name.v && !keys.has(token),
+  );
+  const span = spanOf(condition);
+  let text = source.slice(span.start, span.end);
+  for (const token of [...reads].reverse()) {
+    text =
+      text.slice(0, token.pos - span.start) +
+      'it' +
+      text.slice(token.end - span.start);
+  }
+  const lead = tokensIn(condition)[0]!;
+  if (lead.t === 'word' && lead !== reads[0]) {
+    text = `(${text})`;
+  }
+  const list = tokensIn(walked);
+  const walk =
+    list.length === 1 || core(walked).rule === 'List'
+      ? sourceOf(source, walked)
+      : `(${sourceOf(source, walked)})`;
+  return {
+    start,
+    end: spanOf(loop).end,
+    newText: `put every item of ${walk} whose ${text} into ${put.target.raw}`,
+  };
+};
 
 /**
  * The rewrite the LSP offers for the idiom Lint `id` reported at `start`, or
@@ -711,6 +1178,106 @@ export const idiomEdit = (
           newText: `${member.subject.raw} is in [${member.literals
             .map(literal => literal.raw)
             .join(', ')}]`,
+        }
+      : undefined;
+  }
+  if (id === 'redundant-guard') {
+    let found: ReturnType<typeof redundantGuards>[number] | undefined;
+    find(tree, node => {
+      found = redundantGuards(node).find(
+        each => tokensIn(each.conjunct)[0]!.pos === start,
+      );
+      return !!found;
+    });
+    if (!found || hasComment(found.guard)) {
+      return undefined;
+    }
+    const { guard, conjunct } = found;
+    const top = core(guard);
+    const conjuncts = top.rule === 'And' ? nodes(top) : [top];
+    if (conjuncts.length === 1) {
+      // Remove ` where c`, back to the end of the pattern.
+      const end = spanOf(guard).end;
+      let from = spanOf(guard).start;
+      from = source.lastIndexOf('where', from);
+      while (from > 0 && /[\t ]/.test(source[from - 1]!)) {
+        from--;
+      }
+      return { start: from, end, newText: '' };
+    }
+    // Remove the conjunct and the `and` beside it.
+    const index = conjuncts.indexOf(conjunct);
+    const span = spanOf(conjunct);
+    return index === 0
+      ? { start: span.start, end: spanOf(conjuncts[1]!).start, newText: '' }
+      : {
+          start: spanOf(conjuncts[index - 1]!).end,
+          end: span.end,
+          newText: '',
+        };
+  }
+  if (id === 'suggest-every-of') {
+    return everyOfEdit(tree, source, start);
+  }
+  if (id === 'suggest-range-loop') {
+    const declaration = find(
+      tree,
+      node =>
+        node.rule === 'Declaration' &&
+        rangeLoops(node).some(found => found.put.at.pos === start),
+    );
+    const found =
+      declaration &&
+      rangeLoops(declaration).find(found => found.put.at.pos === start);
+    if (!found) {
+      return undefined;
+    }
+    // Replace the put through the condition, and remove the `add` line.
+    const head = { start, end: spanOf(found.condition).end };
+    const step = spanOf(found.step);
+    const lineStart = source.lastIndexOf('\n', step.start - 1) + 1;
+    const lineEnd = source.indexOf('\n', step.end);
+    const replaced = [
+      ...tokensIn(found.start, true),
+      ...tokensIn(found.loop, true),
+    ].filter(
+      token =>
+        (token.pos > head.start && token.pos <= head.end) ||
+        (token.pos > lineStart && token.pos <= lineEnd),
+    );
+    if (
+      lineEnd < 0 ||
+      source.slice(lineStart, step.start).trim() ||
+      source.slice(step.end, lineEnd).trim() ||
+      replaced.some(token =>
+        token.leadingTrivia.some(trivia => trivia.kind === 'comment'),
+      )
+    ) {
+      return undefined;
+    }
+    const between = source.slice(head.end, lineStart);
+    return {
+      start: head.start,
+      end: lineEnd + 1,
+      newText: `repeat for each ${found.name.raw} in ${found.from.raw}..${sourceOf(
+        source,
+        found.bound,
+      )}${between}`,
+    };
+  }
+  if (id === 'suggest-word-operator') {
+    const comparison = find(
+      tree,
+      node =>
+        node.rule === 'Comparison' &&
+        tokens(node).some(token => token.pos === start),
+    );
+    const symbol = comparison && symbolComparison(comparison);
+    return symbol
+      ? {
+          start: symbol.operator.pos,
+          end: symbol.operator.end,
+          newText: symbol.words,
         }
       : undefined;
   }
