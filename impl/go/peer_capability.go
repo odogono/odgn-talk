@@ -38,6 +38,12 @@ func (c *Core) PeerKind() *ObjectKind {
 	defer c.mu.Unlock()
 	if c.peerKind == nil {
 		c.peerKind = &ObjectKind{name: peerKindName, props: map[string]Prop{}}
+		// Known to every Group's guest before a Pump, so a Host function
+		// can make the first Peer.
+		if c.objectKinds == nil {
+			c.objectKinds = map[string]*ObjectKind{}
+		}
+		c.objectKinds[peerKindName] = c.peerKind
 	}
 	return c.peerKind
 }
@@ -50,6 +56,8 @@ func (c *Core) PeerCapability(impl PeerImpl, costs Costs) (*CapabilityDef, error
 	if standardImplementationMissing(impl) {
 		return nil, &HostError{InvalidValue, "missing peer implementation"}
 	}
+	// Its kind, declared to each guest before a Host function makes a Peer.
+	c.PeerKind()
 	names := []string{"call", "caller", "expose", "post", "reach", "unexpose"}
 	cost := map[string]Cost{}
 	for _, name := range names {
