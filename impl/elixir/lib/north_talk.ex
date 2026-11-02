@@ -279,7 +279,8 @@ defmodule NorthTalk do
   @doc """
   Replaces a Library in a Group with a newer compiled version, reloading
   every Script that imports it as `reload/4` does, all at once or not at
-  all. Takes `reload/4`'s `:variables` option, and returns the reports.
+  all. Takes `reload/4`'s `:variables` and `:keep_mailbox` options, and
+  returns the reports.
   """
   def replace_library(%Group{owner: owner} = group, %Library{} = library, opts \\ []),
     do: GenServer.call(owner, {:replace_library, group, library, opts})

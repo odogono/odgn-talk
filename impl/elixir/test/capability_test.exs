@@ -156,7 +156,7 @@ defmodule NorthTalk.CapabilityTest do
 
     refute Map.has_key?(hd(Capability.declarations(unlabelled)), "labels")
 
-    for labels <- [["to", "by"], ["from"], ["with"]] do
+    for labels <- [["to", "by"], ["from"], ["otherwise"]] do
       bad =
         Capability.from_functions("bad", %{
           "move" => {[args: ["text", "text"], labels: labels], fn _, _ -> {:ok, nil} end}

@@ -363,7 +363,13 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:replace_library, %Group{name: g}, %Library{} = library, opts}, _from, state) do
-    fields = %{"group" => g, "identity" => identity(library), "carry" => carry(opts)}
+    fields = %{
+      "group" => g,
+      "identity" => identity(library),
+      "carry" => carry(opts),
+      "keepMailbox" => Keyword.get(opts, :keep_mailbox, false)
+    }
+
     {reply, state} = work(state, g, exchange(state, "replace-library", fields))
     {:reply, reply, state}
   end

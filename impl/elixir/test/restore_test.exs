@@ -178,7 +178,7 @@ defmodule NorthTalk.RestoreTest do
     {:ok, _} = NorthTalk.deliver(group, "s", "go")
     {:ok, note} = NorthTalk.deliver(group, "s", "note", ["x"])
     {:ok, %{state: "sliced"}} = NorthTalk.pump(group, fuel_slice: 40)
-    {owner, new, note, NorthTalk.save!(group)}
+    {owner, new, note, NorthTalk.save!(group), group}
   end
 
   # What `peek` returns after Pumping `group`.
@@ -189,7 +189,7 @@ defmodule NorthTalk.RestoreTest do
   end
 
   test "reload changed rebuilds a changed Script and drops its mailbox" do
-    {owner, new, note, save} = saved_with_queued_note()
+    {owner, new, note, save, _group} = saved_with_queued_note()
 
     assert {:ok, %Restored{group: copy, variables_only: false, reloaded: ["s"], dropped_messages: [^note]}} =
              NorthTalk.restore(owner, "copy", save, libraries: [new], mismatch: :reload_changed)
@@ -198,7 +198,7 @@ defmodule NorthTalk.RestoreTest do
   end
 
   test "reload changed with keep_mailbox sends the queued message to the new code" do
-    {owner, new, _note, save} = saved_with_queued_note()
+    {owner, new, _note, save, _group} = saved_with_queued_note()
     opts = [libraries: [new], mismatch: :reload_changed, keep_mailbox: true]
 
     assert {:ok, %Restored{group: copy, variables_only: false, reloaded: ["s"], dropped_messages: []}} =
@@ -207,8 +207,20 @@ defmodule NorthTalk.RestoreTest do
     assert peek(copy) == "v2 x"
   end
 
+  test "replace_library with keep_mailbox sends the queued message to the new code" do
+    {_owner, new, _note, _save, group} = saved_with_queued_note()
+    assert {:ok, _reports} = NorthTalk.replace_library(group, new, variables: :carry, keep_mailbox: true)
+    assert peek(group) == "v2 x"
+  end
+
+  test "replace_library without keep_mailbox drops the queued message" do
+    {_owner, new, _note, _save, group} = saved_with_queued_note()
+    assert {:ok, _reports} = NorthTalk.replace_library(group, new, variables: :carry)
+    assert peek(group) == ""
+  end
+
   test "a changed Library is a save mismatch without reload changed" do
-    {owner, new, _note, save} = saved_with_queued_note()
+    {owner, new, _note, save, _group} = saved_with_queued_note()
     assert {:error, %HostError{code: "save mismatch"}} = NorthTalk.restore(owner, "copy", save, libraries: [new])
   end
 end
