@@ -51,6 +51,7 @@ import { controls } from './play-controls';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { isPerformKey, isPlayKey } from './shortcuts';
 import { PerformLayout } from './perform-layout';
+import { allElements } from './tree/rules';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
 import { needsInstrumentAudio } from './pattern-checks';
@@ -98,6 +99,7 @@ export const mountPlay = (shell: StackShell): void => {
     'Perform',
   );
   const performLayout = new PerformLayout();
+  shell.code.onShow((source, label) => performLayout.shown({ source, label }));
   const pauseButton = h(
     'button',
     {
@@ -282,7 +284,7 @@ export const mountPlay = (shell: StackShell): void => {
   // Punch In (ADR 0157): the Code Browser's source, already saved as an
   // authored edit, also goes to the browsing session.
   shell.punchIn.onRequest((source, text) => {
-    if (!allowed().browsing) {
+    if (!allowed().punching) {
       return false;
     }
     const place = placeOf(source);
@@ -299,6 +301,7 @@ export const mountPlay = (shell: StackShell): void => {
         }
         const { reply } = response;
         if (reply.kind === 'now' || reply.kind === 'bar') {
+          performLayout.problem(undefined);
           if (place.kind === 'library') {
             loadedLibraries[place.index] = text;
           } else {
@@ -389,6 +392,29 @@ export const mountPlay = (shell: StackShell): void => {
       event.preventDefault();
     }
   });
+  // ⌥-click in Perform opens an Element's Script instead of clicking it
+  // (#2000), so the performer can reach any Script from the stage.
+  pageNode.addEventListener(
+    'click',
+    event => {
+      const node = (event.target as HTMLElement).closest<HTMLElement>(
+        '[data-element]',
+      );
+      if (mode !== 'perform' || !event.altKey || !node || !session) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const page = shell.editor.project.pages.find(
+        p => p.name === session!.page.name,
+      );
+      const element =
+        page &&
+        allElements(page.elements).find(e => e.name === node.dataset.element);
+      shell.openScript(element ?? page ?? shell.editor.project);
+    },
+    { capture: true },
+  );
   // `user` prompts cover the Page, unscaled, and answering resumes Play.
   const prompts = mountPlayPrompts(scaler, (prompt, value) => {
     recorder?.unrecorded('a prompt answer');
@@ -677,6 +703,13 @@ export const mountPlay = (shell: StackShell): void => {
     }
     draw();
     prompts.draw(session.prompt, response.notices);
+    // Perform shows the latest error over the code; the music plays on.
+    const latest = response.problems.at(-1);
+    if (mode === 'perform' && latest) {
+      performLayout.problem(
+        latest.line ? `Line ${latest.line}: ${latest.message}` : latest.message,
+      );
+    }
     errors.add(
       response.problems.map(problem => ({
         line: problem.line,
@@ -1251,11 +1284,16 @@ export const mountPlay = (shell: StackShell): void => {
       document.body.append(toolbar, reader);
     }
     if (mode === 'perform') {
-      performLayout.mount(reader, playing.name, () => {
-        if (session) {
-          draw();
-        }
-      });
+      performLayout.mount(
+        reader,
+        playing.name,
+        () => {
+          if (session) {
+            draw();
+          }
+        },
+        source => shell.code.show(source),
+      );
     }
     reader.hidden = false;
     drawModes();

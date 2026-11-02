@@ -19,6 +19,7 @@ describe('controls', () => {
         running: false,
         takesInput: false,
         browsing: false,
+        punching: false,
         atStoppedRun: false,
         pauseLabel: 'Pause',
         frameStepEnabled: false,
@@ -37,6 +38,15 @@ describe('controls', () => {
       frameStepEnabled: false,
     });
     expect(controls(view(), 'browse').browsing).toBe(true);
+  });
+
+  test('Punch In loads edits while browsing or performing, not presenting', () => {
+    expect(controls(view(), 'browse').punching).toBe(true);
+    expect(controls(view(), 'perform')).toMatchObject({
+      browsing: false,
+      punching: true,
+    });
+    expect(controls(view(), 'present').punching).toBe(false);
   });
 
   test('between Pages, input waits but frames go on', () => {

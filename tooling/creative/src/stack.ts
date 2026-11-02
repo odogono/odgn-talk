@@ -191,6 +191,11 @@ export type StackShell = {
     setLoaded(loaded: LoadedSource | undefined): void;
     showStopped(at: { line: number; source: CodeSelection } | undefined): void;
   };
+  /** The Code Browser's shown source, for Perform's tabs (#2000). */
+  code: {
+    onShow(listener: (source: CodeSelection, label: string) => void): void;
+    show(source: CodeSelection): void;
+  };
   editor: StackEditor;
   images: ImageAssets;
   onRedraw(listener: () => void): void;
@@ -1274,6 +1279,10 @@ export const mountStack = (
       onChange: listener => scripts.onBreakpointsChanged(listener),
       setLoaded: loaded => scripts.setLoaded(loaded),
       showStopped: at => scripts.showStopped(at),
+    },
+    code: {
+      onShow: listener => scripts.onShow(listener),
+      show: source => scripts.show(source),
     },
     editor,
     images,
