@@ -12,6 +12,7 @@ export const COUNTER_KIND = `${COUNTER_ADD_ON}#counter` as const;
 export const COUNTER_ENTRY: CatalogueEntry = {
   id: COUNTER_ADD_ON,
   kinds: [{ name: 'counter', label: 'Counter', icon: '#' }],
+  label: 'Test counter',
   slug: 'test-counter',
   version: '1.1.0',
 };

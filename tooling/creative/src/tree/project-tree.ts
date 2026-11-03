@@ -1,5 +1,6 @@
 import type { DeepReadonly, Mutable } from '../readonly';
 import { compareVersions } from '../add-ons/versions';
+import { addOnRemovalProblem } from '../add-ons/offered';
 import { createAnyElement, scriptKindOf } from '../elements/registry';
 import {
   createElement,
@@ -1100,6 +1101,21 @@ export class ProjectTree {
           : [...current, ref],
       );
     });
+  }
+  /**
+   * Stops listing an Add-on (#2025): refused, with why, while an Element or
+   * Instrument uses it. Folio never removes one by itself.
+   */
+  stopUsingAddOn(id: string): string | undefined {
+    const problem = addOnRemovalProblem(this.#project, id);
+    if (problem) {
+      return problem;
+    }
+    this.transaction(() => {
+      const next = (this.#project.addOns ?? []).filter(a => a.id !== id);
+      this.#field(this.#project, 'addOns', next.length ? next : undefined);
+    });
+    return undefined;
   }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));

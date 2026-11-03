@@ -1,5 +1,5 @@
-// Dedicated page: the Tools window lists a built-in Add-on's kinds, and
-// adding one loads it, lists it in the Project and draws it (#1901).
+// Dedicated page: Project ▸ Add-ons… lists a built-in Add-on, the Tools
+// window then offers its kinds (#2025), and adding one draws it (#1901).
 import { blobImporter } from '../src/add-ons/loader';
 import { pageAddOnLoader, setPageAddOns } from '../src/add-ons/page';
 import {
@@ -43,6 +43,20 @@ setPageAddOns(
     },
   }),
 );
+const tool = () =>
+  document.querySelector<HTMLButtonElement>(
+    `#tools [data-kind="${COUNTER_KIND}"]`,
+  );
+const addOnsDialog = () =>
+  document.querySelector<HTMLDialogElement>('dialog.add-ons-dialog');
+const tick = () =>
+  addOnsDialog()!.querySelector<HTMLInputElement>(
+    `[data-add-on="${COUNTER_ADD_ON}"]`,
+  )!;
+const toggle = () => {
+  tick().click();
+};
+
 export const shell = mountStack(createProject('Add-on browser checks'));
 const { editor } = shell;
 
@@ -57,18 +71,24 @@ export const runBrowserTests = async () => {
     }
   };
 
-  await test('the Tools window lists an Add-on kind before it loads', () => {
-    const button = document.querySelector<HTMLButtonElement>(
-      `#tools [data-kind="${COUNTER_KIND}"]`,
-    );
-    assert(button?.textContent?.includes('Counter'), 'Counter is listed');
-    assert(imports === 0, 'nothing is fetched until it is used');
+  await test('a Project that lists no Add-ons offers none of their kinds', () => {
+    assert(!tool(), 'Counter is not offered');
+    assert(imports === 0, 'nothing is fetched');
   });
 
-  await test('adding one loads the Add-on, lists it and draws the kind', async () => {
-    document
-      .querySelector<HTMLButtonElement>(`#tools [data-kind="${COUNTER_KIND}"]`)!
-      .click();
+  await test('Project ▸ Add-ons… lists one, and Tools offers its kinds', async () => {
+    document.querySelector<HTMLButtonElement>('#show-add-ons')!.click();
+    assert(addOnsDialog()?.open, 'the dialog is open');
+    assert(!tick().checked, 'the Add-on starts unticked');
+    toggle();
+    await until(() => editor.project.addOns?.length === 1);
+    assert(imports === 1, `imported ${imports} times`);
+    await until(() => tool()?.textContent?.includes('Counter') === true);
+    assert(tick().checked, 'it is ticked');
+  });
+
+  await test('adding one draws the kind', async () => {
+    tool()!.click();
     await until(() => editor.project.pages[0]!.elements.length === 1);
     const element = editor.project.pages[0]!.elements[0] as AddOnElement & {
       count: number;
@@ -90,17 +110,26 @@ export const runBrowserTests = async () => {
     );
   });
 
-  await test('a second one reuses the loaded Add-on, and undo removes both', async () => {
-    document
-      .querySelector<HTMLButtonElement>(`#tools [data-kind="${COUNTER_KIND}"]`)!
-      .click();
-    await until(() => editor.project.pages[0]!.elements.length === 2);
-    assert(imports === 1, `imported ${imports} times`);
-    assert(editor.project.addOns?.length === 1, 'listed once');
+  await test('unticking is refused while an Element uses it', async () => {
+    toggle();
+    await until(() => tick().checked);
+    const status = addOnsDialog()!.querySelector('[role="status"]')!;
+    assert(
+      status.textContent!.includes('“counter1” uses it'),
+      `it says why: ${status.textContent}`,
+    );
+    assert(editor.project.addOns?.length === 1, 'still listed');
+  });
+
+  await test('once nothing uses it, unticking removes its kinds from Tools', async () => {
     editor.undo();
-    editor.undo();
-    assert(editor.project.pages[0]!.elements.length === 0, 'both undone');
-    assert(!editor.project.addOns?.length, 'the Add-on is unlisted again');
+    assert(!editor.project.pages[0]!.elements.length, 'the counter is undone');
+    assert(editor.project.addOns?.length === 1, 'undo leaves it listed');
+    toggle();
+    await until(() => !editor.project.addOns?.length);
+    await until(() => !tool());
+    addOnsDialog()!.querySelector<HTMLButtonElement>('button')!.click();
+    await until(() => !addOnsDialog());
   });
 
   await test('the trust prompt says what trusting means, and declining is the default', async () => {

@@ -159,7 +159,7 @@ landed, and the Issue graph job ticks it as they close.
   before opening it. [project.ts](src/add-ons/project.ts)'s
   `projectWithAddOns` reads a Project again once its Add-ons load, turning
   placeholders into their kinds; [projects.ts](src/projects.ts) calls it on
-  every open. The Tools window lists catalogue kinds and loads on first use.
+  every open. [offered.ts](src/add-ons/offered.ts) says which kinds the Tools window and Info's Instrument menu offer: only those of the Add-ons the Project lists (#2025), loaded on first use; Project ▸ Add-ons… ([add-ons-dialog.ts](src/add-ons/add-ons-dialog.ts)) ticks them, and the tree's `stopUsingAddOn` refuses one in use. Tests: [offered-add-ons.test.ts](tests/offered-add-ons.test.ts).
   Project Add-ons import from a `blob:` URL once [trust.ts](src/add-ons/trust.ts)
   holds their hash; [trust-prompt.ts](src/add-ons/trust-prompt.ts) asks on
   opening, Base Project copies are trusted, a placeholder's Info offers
@@ -504,9 +504,9 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
 
 ## Menus
 
-- [menus.ts](src/menus.ts): opening and closing the header's Folio, File
-  and Edit menus, and the About window; the Window menu is in
-  [windows.ts](src/windows.ts). The Folio and File menus are static HTML.
+- [menus.ts](src/menus.ts): opening and closing the header's Folio, File,
+  Edit and Project menus, and the About window; the Window menu is in
+  [windows.ts](src/windows.ts). The Folio, File and Project menus are static HTML; Project ▸ Add-ons… is wired in [stack.ts](src/stack.ts).
 - [edit-menu.tsx](src/edit-menu.tsx): the Preact Edit menu commands, enabled
   from the editor signals and the shell's `playing` signal. Clicks and
   shortcuts run through `runCommand` in [stack.ts](src/stack.ts).

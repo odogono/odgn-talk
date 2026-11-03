@@ -3,6 +3,7 @@
 // Music is written by the build to a `.folio` file that the service
 // worker keeps once fetched. Each carries every sound it plays, and a
 // copy records which Base Project and version it came from.
+import { CONTROLS_REF } from './add-ons/controls/ids';
 import { INSTRUMENTS_REF, synthInstrument } from './add-ons/instruments/ids';
 import { KIT_SOUND_KEYS, renderKitSound } from './kits/kits';
 import {
@@ -15,7 +16,7 @@ import { fetchKeptFile } from './open-url';
 import { readProjectFile, sha256Hex } from './project-file';
 
 /** Bumped whenever Music's content changes; build tests hold the two together. */
-export const MUSIC_BASE_VERSION = 2;
+export const MUSIC_BASE_VERSION = 3;
 export const BLANK_BASE_VERSION = 1;
 
 /** The most bytes a Base Project's `.folio` file may take. */
@@ -55,8 +56,9 @@ export const createMusicBase = async (): Promise<{
 }> => {
   const project = createProject('Music');
   project.base = { name: 'music', version: MUSIC_BASE_VERSION };
-  // Music's synth is the Instruments Add-on's (#1901).
-  project.addOns = [INSTRUMENTS_REF];
+  // Music's synth is the Instruments Add-on's (#1901), and it offers the
+  // controls, which a Project offers only when it lists them (#2025).
+  project.addOns = [INSTRUMENTS_REF, CONTROLS_REF];
   project.instruments.push(synthInstrument('bass'));
   project.script = MUSIC_SCRIPT;
   const assets = new Map<string, Uint8Array>();

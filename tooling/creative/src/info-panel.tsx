@@ -25,6 +25,7 @@ import { isSoundAsset } from './sounds';
 import type { ParameterDefinition } from './instruments/kind';
 import { INSTRUMENT_KINDS, instrumentKindNames } from './instruments/registry';
 import { pageAddOns } from './add-ons/page';
+import { offeredInstrumentKinds, showsInstruments } from './add-ons/offered';
 
 /** `envelopePeriod` as `Envelope period`. */
 const parameterLabel = (name: string): string => {
@@ -162,22 +163,14 @@ const InstrumentsSection = ({
           data-new-instrument=""
           disabled={disabled}
         >
-          {[
-            ...[...INSTRUMENT_KINDS.keys()].map(kind => ({
-              kind,
-              label: instrumentKindNames(kind).label,
-            })),
-            // A built-in Add-on's kinds load when one is added (#1901).
-            ...pageAddOns.catalogue.flatMap(entry =>
-              (entry.instruments ?? [])
-                .map(i => ({ kind: `${entry.id}#${i.name}`, label: i.label }))
-                .filter(({ kind }) => !INSTRUMENT_KINDS.has(kind)),
+          {/* A listed Add-on's kinds load when one is added (#1901). */}
+          {offeredInstrumentKinds(project.addOns, pageAddOns.catalogue).map(
+            ({ kind, label }) => (
+              <option key={kind} value={kind}>
+                {label}
+              </option>
             ),
-          ].map(({ kind, label }) => (
-            <option key={kind} value={kind}>
-              {label}
-            </option>
-          ))}
+          )}
         </select>
         <button data-add-instrument="" disabled={disabled} type="button">
           Add Instrument
@@ -563,7 +556,9 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
         Scripts play a sound by its name, like tell sound to play
         &quot;waves&quot;. Add action… can write that for you.
       </p>
-      <InstrumentsSection disabled={disabled} editor={editor} />
+      {showsInstruments(project, pageAddOns.catalogue) && (
+        <InstrumentsSection disabled={disabled} editor={editor} />
+      )}
       <p className="muted">
         Click an Element to select it; Shift-click selects several.
       </p>

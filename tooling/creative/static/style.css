@@ -1499,6 +1499,35 @@ body.playing #performance-window {
   gap: 8px;
 }
 
+.add-ons-dialog {
+  max-width: min(32rem, calc(100vw - 32px));
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+.add-ons-dialog h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+.add-ons-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.add-ons-list li p {
+  margin: 2px 0 10px 24px;
+}
+.add-ons-list code {
+  overflow-wrap: anywhere;
+  font-size: 0.85em;
+}
+.add-ons-status:empty {
+  display: none;
+}
+.add-ons-buttons {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Perform (#1999): the stage on the left, the code and docked Palettes on
    the right, with a draggable divider between them. */
 #perform {

@@ -8,9 +8,9 @@ import type { AddOnDataApi, AddOnKindData, AddOnViewApi } from '../api';
 import { defineAddOn } from '../api';
 import type { PropertyDescriptor } from '../../elements/definition';
 import type { AddOnElement } from '../../model';
+import { CONTROLS_ADD_ON, CONTROLS_VERSION } from './ids';
 
-export const CONTROLS_ADD_ON = 'https://northtalk.org/add-ons/controls';
-export const CONTROLS_VERSION = '1.0.0';
+export { CONTROLS_ADD_ON, CONTROLS_VERSION } from './ids';
 
 type Fields = Record<string, number | boolean>;
 type Ranged = AddOnElement & {

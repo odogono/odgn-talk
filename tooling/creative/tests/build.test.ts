@@ -170,6 +170,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   1: 'baec8a15f77e0622',
   // The synth moved into the Instruments Add-on (#1901).
   2: 'a926e5ae965e9fc8',
+  // Music lists the controls Add-on, which Tools then offers (#2025).
+  3: 'a5db6a146d357362',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

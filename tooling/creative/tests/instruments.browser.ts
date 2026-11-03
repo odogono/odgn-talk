@@ -4,7 +4,11 @@
 import { createProject } from '../src/model';
 import { INSTRUMENT_PROCESSOR } from '../src/instruments/rack';
 import { mountStack } from '../src/stack';
-import { SYNTH_KIND, YM2149_KIND } from '../src/add-ons/instruments/ids';
+import {
+  INSTRUMENTS_REF,
+  SYNTH_KIND,
+  YM2149_KIND,
+} from '../src/add-ons/instruments/ids';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -78,6 +82,28 @@ export const runBrowserTests = async () => {
   };
   shell = mountStack(createProject('Instrument browser check'));
   const instruments = () => shell.editor.project.instruments;
+
+  await test('Info has no Instruments section until the Project lists an Instrument Add-on (#2025)', async () => {
+    await settled();
+    assert(
+      !info().querySelector('[data-new-instrument]'),
+      'A Project listing no Add-ons offers no Instruments',
+    );
+    const project = createProject('Instrument browser check');
+    project.addOns = [INSTRUMENTS_REF];
+    shell.editor.replaceProject(project);
+    shell.redraw();
+    await settled();
+    const kinds = [
+      ...info().querySelectorAll<HTMLOptionElement>(
+        '[data-new-instrument] option',
+      ),
+    ].map(option => option.value);
+    assert(
+      kinds.join() === `sampler,${SYNTH_KIND},${YM2149_KIND}`,
+      `Info offers the sampler and the listed Add-on's kinds: ${kinds.join()}`,
+    );
+  });
 
   await test('Info adds an Instrument of each kind with its defaults', async () => {
     assert(
