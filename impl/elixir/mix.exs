@@ -13,5 +13,5 @@ defmodule NorthTalk.MixProject do
     ]
   end
 
-  def application, do: [extra_applications: [:logger, :crypto]]
+  def application, do: [extra_applications: [:logger, :crypto, :ssl, :public_key]]
 end

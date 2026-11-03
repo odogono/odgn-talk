@@ -106,7 +106,7 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the-message-layer):
 
 - **Function Values** come with the full value set in [#993](https://github.com/odogono/odgn-talk/issues/993). They hold only a token, so nothing about them is durable on the Host's side.
-- **Standard Capabilities** are not offered. The `sqlite` factory isn't offered through the Message Layer by any Host.
+- **Standard Capabilities** are not offered, except `http`'s `fetch` (`NorthTalk.HTTP`). `http`'s server Operations aren't offered. The `sqlite` factory isn't offered through the Message Layer by any Host.
 - **Revoke, cancellation, inspection, Fingerprints, Store Notification checkpoints, metering and the Host Manifest** have no Elixir API yet.
 
 ## The reactor
@@ -156,6 +156,7 @@ Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process hea
 | [`examples/shop/`](examples/shop/) | The OTP example and getting-started guide. |
 | [`lib/north_talk/groups.ex`](lib/north_talk/groups.ex) | Supervised groups: one owner per Script Group, a ready lookup by key, and a restart budget per group. |
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
+| [`lib/north_talk/http.ex`](lib/north_talk/http.ex) | The `http` Standard factory's `fetch`: the origin binding and a buffered HTTP/1.1 and HTTPS client. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
 | [`lib/north_talk/object_kind.ex`](lib/north_talk/object_kind.ex) | Object Kinds: properties, Object Collections and their declarations. |
 | [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, a Decision's `NorthTalk.Verdict`, a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s, and a combined call's `NorthTalk.Pumped` and `NorthTalk.Pending`. |

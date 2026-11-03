@@ -110,7 +110,7 @@ defmodule NorthTalk.Capability do
   """
 
   @enforce_keys [:name]
-  defstruct [:name, :effect, :coordinator, :release, timeout: 5_000, operations: %{}]
+  defstruct [:name, :effect, :coordinator, :release, :standard, timeout: 5_000, operations: %{}]
 
   @type failure :: String.t() | %{required(:code) => String.t(), optional(atom) => term}
   @type result :: {:ok, term} | {:error, failure} | :noreply | {:defer, term}
