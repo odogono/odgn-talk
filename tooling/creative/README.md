@@ -1160,8 +1160,7 @@ There are three ways to run a Project, all on the Page being edited
 ([ADR 0093](../../docs/adr/0093-folio-browses-in-place.md)). **Browse**, at
 the top of the Tools window, plays the Page in place on the desk with the
 Tools, Script and Errors windows still open (the Edit menu offers only Undo and Redo, for Script edits), as HyperCard's browse tool did.
-**Present**, in the header, plays it full-window with the editor hidden; an explicitly opened Performance window remains available. **Perform**, beside Present in the
-header (⌘⇧↩), is for live coding in front of an audience: one window with
+**Present** plays it full-window with the editor hidden; an explicitly opened Performance window remains available. **Perform** is for live coding in front of an audience. Each Project chooses one with **Project ▸ Play by Performing**, and the header's one button reads Play or Perform to match: ⌘↩ plays the Project's way and stops it, and ⌘⇧↩ plays the other way for that Play Session only. A new Blank Project presents and a new Music Project performs; a Project copied from Music before this choice existed performs too. Perform is one window with
 the stage on the left, scaled to fit, and the Code Browser docked on the
 right, so the audience sees the code being played. The Errors window stays
 hidden. Drag the divider (or focus it and use the arrow keys) to share the

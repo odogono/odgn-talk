@@ -51,14 +51,14 @@ export const menuButtonForKey = (event: Key): string | undefined => {
   return undefined;
 };
 
-/** ⌘⇧↩ starts and stops Perform (#1999). */
+/** ⌘⇧↩ plays the other way than the Project chooses, or stops (#2028). */
 export const isPerformKey = (event: Key): boolean =>
   (event.metaKey || event.ctrlKey) &&
   !event.altKey &&
   event.shiftKey &&
   event.key === 'Enter';
 
-/** Whether a key toggles Play's Present mode: ⌘↩ or Ctrl+Enter. */
+/** Whether a key starts Play the Project's way, or stops it: ⌘↩ or Ctrl+Enter. */
 export const isPlayKey = (event: Key): boolean =>
   (event.metaKey || event.ctrlKey) &&
   !event.altKey &&

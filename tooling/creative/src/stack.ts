@@ -446,6 +446,12 @@ export const mountStack = (
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     (byId('add-palette') as HTMLButtonElement).disabled = editor.readOnly;
     drawTools();
+    const performing = byId('play-by-performing') as HTMLButtonElement;
+    performing.setAttribute(
+      'aria-checked',
+      String(editor.project.play === 'perform'),
+    );
+    performing.disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
       button.disabled = editor.readOnly;
     }
@@ -1137,6 +1143,13 @@ export const mountStack = (
       ...offered.map(k => toolButton(k.kind, k.label, k.icon ?? '')),
     );
   };
+  // Project ▸ Play by Performing (#2028) chooses how Play runs the Project.
+  byId('play-by-performing').addEventListener('click', () => {
+    if (!editor.readOnly) {
+      const perform = editor.project.play !== 'perform';
+      edit(() => editor.edit(({ tree }) => tree.setPlayByPerforming(perform)));
+    }
+  });
   // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in.
   byId('add-music-sound').addEventListener('click', () =>
     showMusicSoundsDialog({

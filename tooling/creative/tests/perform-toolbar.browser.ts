@@ -40,6 +40,7 @@ Worker.prototype.postMessage = function (
 const original =
   'on click {button: 0}\n  set the label of me to "went"\nend click';
 const project = createProject('Perform toolbar');
+project.play = 'perform';
 const go = { ...createElement('button', 'go'), left: 20, top: 20 };
 go.script = original;
 project.pages[0]!.elements.push(go);
@@ -48,7 +49,7 @@ mountWindows();
 mountPlay(shell);
 
 const perform = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [data-perform]')!;
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const stage = (name: string) =>
   document.querySelector<HTMLElement>(
     `#perform #reader [data-element="${name}"]`,

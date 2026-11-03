@@ -30,6 +30,7 @@ import {
   splitAddOnKind,
 } from './elements/add-on';
 import { migrateInstrumentKinds } from './add-ons/instruments/migration';
+import { migratePlayAndControls } from './add-ons/controls/migration';
 import { isElementKind, isPlaceholderKind, kindOf } from './elements/registry';
 import { parseBinding } from './bindings';
 import { migrateClicks } from './click-migration';
@@ -40,7 +41,7 @@ import { testScriptNameProblem } from './script-names';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
 export const PROJECT_MIMETYPE = 'application/vnd.odgn.northtalk-project+zip';
-export const CURRENT_FORMAT = 11;
+export const CURRENT_FORMAT = 12;
 const APP = 'northtalk-creative';
 
 export type { ValidationIssue } from './elements/checker';
@@ -427,6 +428,13 @@ export const validateProjectJson = (
     }
     project.base = { name: name as BaseProjectName, version: version ?? 1 };
   }
+  if (root.play !== undefined) {
+    if (root.play === 'perform') {
+      project.play = 'perform';
+    } else {
+      c.fail('play', 'expected "perform"');
+    }
+  }
   if (project.name === '' && typeof root.name === 'string') {
     c.fail('name', 'the Project needs a name');
   }
@@ -510,6 +518,9 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   9: migrateInstrumentKinds,
   // Format 11 adds the optional `palettes` (#1903); older Projects have none.
   10: data => ({ ...data }),
+  // Format 12 adds the optional `play` (#2028): a Music Project performs,
+  // and one with controls lists the controls Add-on.
+  11: migratePlayAndControls,
 };
 
 /**

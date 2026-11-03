@@ -217,8 +217,13 @@ landed, and the Issue graph job ticks it as they close.
 - [perform-layout.ts](src/perform-layout.ts): the Perform layout (#1999):
   stage, divider and docked Code Browser, with the divider and code zoom
   kept per Project in browser storage. [play-view.ts](src/play-view.ts)
-  starts the `perform` Play mode, its header button and ⌘⇧↩, and ⌘+/⌘−;
-  [shortcuts.ts](src/shortcuts.ts) has `isPerformKey`.
+  starts the `perform` Play mode and ⌘+/⌘−. Its one header button plays the
+  Project's way, `Project.play` (#2028), which Project ▸ Play by Performing
+  sets; ⌘⇧↩ (`isPerformKey` in [shortcuts.ts](src/shortcuts.ts)) plays the
+  other way once. Format 12's
+  [controls/migration.ts](src/add-ons/controls/migration.ts) makes Music
+  copies perform and lists the controls Add-on where controls are used.
+  Tests: [play-by-performing.test.ts](tests/play-by-performing.test.ts).
 - Code pane (#2000): `recentTabs`, the tab bar and the error banner are in
   perform-layout.ts; [scripts.ts](src/scripts.ts) `onShow`/`show` feed the
   tabs through `shell.code`; play-view.ts handles ⌥-click and lets Punch In
