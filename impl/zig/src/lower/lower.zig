@@ -42,8 +42,9 @@ pub const Instruction = struct {
     /// What the `constant`, `local`, `variable` and `body` operands name.
     note: []const u8,
     /// Whether this starts `load; load | const; <arithmetic | comparison>;
-    /// store | branch`, or is a `jump` to `next; store`, which the Zig fast
-    /// path may run as one step (#1931).
+    /// store | branch` or `load; load; load; chunk-set item; store`, or is a
+    /// `jump` to `next; store`, which the Zig fast path may run as one step
+    /// (#1931, #2022).
     /// Derived from the opcodes alone; never shown or stored.
     fuse: bool = false,
 };
@@ -64,6 +65,12 @@ fn markFused(code: []Instruction) void {
             .add, .subtract, .multiply, .divide, .div, .mod => code[i + 3].op == .store,
             else => false,
         };
+        // `load index; load whole; load part; chunk-set item; store`, one
+        // level of a List write (#2022).
+        if (i + 4 < code.len and code[i + 1].op == .load and code[i + 2].op == .load and
+            code[i + 3].op == .chunk_set and code[i + 4].op == .store and
+            code[i + 3].operands.len == 1 and code[i + 3].operands[0] == .text and
+            std.mem.eql(u8, code[i + 3].operands[0].text, "item")) ins.fuse = true;
     }
 }
 
