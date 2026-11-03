@@ -26,6 +26,7 @@ const until = async (check: () => boolean, what: string) => {
 const labelled = (label: string) =>
   `script variable n = 0\non click {button: 0}\n  add 1 to n\n  set the label of me to "${label} " & n\nend click`;
 const project = createProject('Perform code');
+project.play = 'perform';
 const go = { ...createElement('button', 'go'), left: 20, top: 20 };
 go.script = labelled('old');
 const boom = { ...createElement('button', 'boom'), left: 20, top: 80 };
@@ -36,7 +37,7 @@ mountWindows();
 mountPlay(shell);
 
 const perform = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [data-perform]')!;
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const stage = (name: string) =>
   document.querySelector<HTMLElement>(
     `#perform #reader [data-element="${name}"]`,

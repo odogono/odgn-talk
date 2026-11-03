@@ -16,7 +16,7 @@ import { fetchKeptFile } from './open-url';
 import { readProjectFile, sha256Hex } from './project-file';
 
 /** Bumped whenever Music's content changes; build tests hold the two together. */
-export const MUSIC_BASE_VERSION = 3;
+export const MUSIC_BASE_VERSION = 4;
 export const BLANK_BASE_VERSION = 1;
 
 /** The most bytes a Base Project's `.folio` file may take. */
@@ -59,6 +59,8 @@ export const createMusicBase = async (): Promise<{
   // Music's synth is the Instruments Add-on's (#1901), and it offers the
   // controls, which a Project offers only when it lists them (#2025).
   project.addOns = [INSTRUMENTS_REF, CONTROLS_REF];
+  // Music is for live-coding, so Play performs it (#2028).
+  project.play = 'perform';
   project.instruments.push(synthInstrument('bass'));
   project.script = MUSIC_SCRIPT;
   const assets = new Map<string, Uint8Array>();

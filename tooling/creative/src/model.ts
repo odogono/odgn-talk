@@ -320,6 +320,8 @@ export type Project = {
   libraries: ProjectLibrary[];
   name: string;
   pages: Page[];
+  /** How Play runs it (#2028): absent presents, `perform` performs. */
+  play?: 'perform';
   /** The Project Script source. */
   script: string;
   testScripts: ProjectTestScript[];

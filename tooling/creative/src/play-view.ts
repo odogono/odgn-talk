@@ -77,27 +77,16 @@ type ControlFields = Record<string, number | boolean>;
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 export const mountPlay = (shell: StackShell): void => {
-  // Play presents the Project; Pause and Step act on any Play Session.
+  // Play presents or performs the Project, as it chooses (#2028); Pause
+  // and Step act on any Play Session.
   const toggle = h(
     'button',
-    {
-      type: 'button',
-      'aria-pressed': 'false',
-      title: 'Play: present the Project (⌘↩)',
-    },
+    { type: 'button', 'aria-pressed': 'false', 'data-play': '' },
     'Play',
   );
-  // Perform (#1999) plays the Project with the code and Palettes beside it.
-  const performButton = h(
-    'button',
-    {
-      type: 'button',
-      'aria-pressed': 'false',
-      title: 'Perform: play with the code beside the stage (⌘⇧↩)',
-      'data-perform': '',
-    },
-    'Perform',
-  );
+  /** The way Play runs this Project; ⌘⇧↩ runs the other way once. */
+  const chosen = (): 'perform' | 'present' =>
+    shell.editor.project.play === 'perform' ? 'perform' : 'present';
   const performLayout = new PerformLayout();
   shell.code.onShow((source, label) => performLayout.shown({ source, label }));
   const pauseButton = h(
@@ -144,7 +133,6 @@ export const mountPlay = (shell: StackShell): void => {
       pauseButton,
       stepButton,
       ...statementSteps,
-      performButton,
     ),
   );
   // Browse and Edit head the Tools window, as HyperCard's browse tool did.
@@ -1133,8 +1121,19 @@ export const mountPlay = (shell: StackShell): void => {
   };
   const drawModes = () => {
     const now = allowed();
-    toggle.textContent = mode === 'present' ? 'Stop' : 'Play';
-    toggle.setAttribute('aria-pressed', String(mode === 'present'));
+    const running = mode === 'present' || mode === 'perform';
+    const way = chosen();
+    toggle.textContent = running
+      ? 'Stop'
+      : way === 'perform'
+        ? 'Perform'
+        : 'Play';
+    toggle.setAttribute('aria-pressed', String(running));
+    toggle.title = running
+      ? 'Stop (⌘↩)'
+      : way === 'perform'
+        ? 'Perform: play with the code beside the stage (⌘↩; ⌘⇧↩ presents)'
+        : 'Play: present the Project (⌘↩; ⌘⇧↩ performs)';
     pauseButton.textContent = now.pauseLabel;
     pauseButton.setAttribute('aria-pressed', String(now.paused));
     pauseButton.disabled = !now.live;
@@ -1150,8 +1149,6 @@ export const mountPlay = (shell: StackShell): void => {
     );
     recordTool.setAttribute('aria-pressed', String(Boolean(recorder)));
     editTool.setAttribute('aria-pressed', String(mode === undefined));
-    performButton.textContent = mode === 'perform' ? 'Stop' : 'Perform';
-    performButton.setAttribute('aria-pressed', String(mode === 'perform'));
     // Perform hides the editor as Present does, keeping the code pane.
     document.body.classList.toggle(
       'playing',
@@ -1323,20 +1320,15 @@ export const mountPlay = (shell: StackShell): void => {
     draw();
     reader.focus();
   };
-  toggle.addEventListener('click', () => {
-    if (mode === 'present') {
+  /** Starts Play `way`, or stops a Present or Perform already running. */
+  const playOrStop = (way: 'perform' | 'present') => {
+    if (mode === 'present' || mode === 'perform') {
       leave();
     } else {
-      start('present');
+      start(way);
     }
-  });
-  performButton.addEventListener('click', () => {
-    if (mode === 'perform') {
-      leave();
-    } else {
-      start('perform');
-    }
-  });
+  };
+  toggle.addEventListener('click', () => playOrStop(chosen()));
   recordTool.addEventListener('click', () => {
     if (recorder) {
       leave();
@@ -1453,7 +1445,7 @@ export const mountPlay = (shell: StackShell): void => {
       }
       return;
     }
-    // ⌘↩ starts and stops Present, from Edit, Browse or Present.
+    // ⌘↩ plays the Project's way and stops, from Edit, Browse or Play.
     if (
       isPlayKey(event) &&
       !isTyping(event.target) &&
@@ -1478,8 +1470,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     if (isPerformKey(event) && !prompts.contains(event.target as Node)) {
       event.preventDefault();
+      // ⌘⇧↩ plays the other way, for this Play Session only.
       if (!event.repeat) {
-        performButton.click();
+        playOrStop(chosen() === 'perform' ? 'present' : 'perform');
       }
       return;
     }
@@ -1597,6 +1590,8 @@ export const mountPlay = (shell: StackShell): void => {
       captureEpoch = undefined;
       variables.clearWatches();
     }
+    // The button names the Project's way, which an edit may change.
+    drawModes();
     if (!session) {
       return;
     }

@@ -23,6 +23,7 @@ const until = async (check: () => boolean, what: string) => {
 };
 
 const project = createProject('Perform Palettes');
+project.play = 'perform';
 project.pages[0]!.elements.push(createElement('button', 'go'));
 const mixer = createPalette('mixer');
 const tap = { ...createElement('button', 'tap'), left: 10, top: 10 };
@@ -37,7 +38,7 @@ mountWindows();
 mountPlay(shell);
 
 const perform = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [data-perform]')!;
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const win = (name: string) => document.getElementById(paletteWindowId(name));
 // A floating window is fixed, so it has no offsetParent; a box shows it.
 const showing = (node: Element | null) =>

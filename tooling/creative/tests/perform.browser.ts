@@ -27,6 +27,7 @@ try {
   /* Optional. */
 }
 const project = createProject('Perform check');
+project.play = 'perform';
 const button = { ...createElement('button', 'go'), left: 20, top: 20 };
 button.script =
   'on click {button: 0}\n set the label of me to "went"\nend click';
@@ -36,9 +37,7 @@ mountWindows();
 mountPlay(shell);
 
 const perform = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [data-perform]')!;
-const present = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [aria-pressed]')!;
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const layout = () => document.getElementById('perform');
 const showing = (node: Element | null) =>
   !!node && (node as HTMLElement).offsetParent !== null;
@@ -101,13 +100,13 @@ export const runBrowserTests = async () => {
       code.style.fontSize === '120%',
       `the zoom is ${code.style.fontSize}`,
     );
-    key({ key: 'Enter', shiftKey: true });
+    key({ key: 'Enter' });
     await until(() => !layout(), 'Perform to end');
     assert(
       showing(document.getElementById('desk')),
       'the editor is back after Perform',
     );
-    key({ key: 'Enter', shiftKey: true });
+    key({ key: 'Enter' });
     await until(() => !!layout(), 'Perform again');
     assert(
       layout()!
@@ -121,8 +120,9 @@ export const runBrowserTests = async () => {
     await until(() => !layout(), 'Perform to stop');
   });
 
-  await test('Present is unchanged: full-window with the code hidden', async () => {
-    present().click();
+  await test('⌘⇧↩ presents a performing Project, once (#2028)', async () => {
+    assert(perform().textContent === 'Perform', 'the button reads Perform');
+    key({ key: 'Enter', shiftKey: true });
     await until(
       () => !!document.querySelector('#reader [data-element="go"]'),
       'Present',
@@ -132,7 +132,39 @@ export const runBrowserTests = async () => {
       !showing(document.getElementById('code-browser')),
       'no code while presenting',
     );
-    present().click();
+    assert(perform().textContent === 'Stop', 'the button stops it');
+    perform().click();
+    await until(() => perform().textContent === 'Perform', 'Present to stop');
+    assert(
+      shell.editor.project.play === 'perform',
+      'the Project still performs',
+    );
+  });
+
+  await test('Project ▸ Play by Performing switches the button to Play (#2028)', async () => {
+    const item = document.querySelector<HTMLButtonElement>(
+      '#play-by-performing',
+    )!;
+    assert(item.getAttribute('aria-checked') === 'true', 'it is ticked');
+    item.click();
+    await until(
+      () => perform().textContent === 'Play',
+      'the button to read Play',
+    );
+    assert(item.getAttribute('aria-checked') === 'false', 'it is unticked');
+    assert(shell.editor.project.play === undefined, 'the Project presents');
+    key({ key: 'Enter' });
+    await until(
+      () => !!document.querySelector('#reader [data-element="go"]'),
+      'Present',
+    );
+    assert(!layout(), '⌘↩ presents');
+    key({ key: 'Enter' });
+    await until(() => perform().textContent === 'Play', 'Present to stop');
+    assert(
+      !document.querySelector('#play-controls [data-perform]'),
+      'there is no separate Perform button',
+    );
   });
   return results;
 };

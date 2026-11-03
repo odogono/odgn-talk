@@ -1117,6 +1117,12 @@ export class ProjectTree {
     });
     return undefined;
   }
+  /** Sets whether Play performs the Project rather than presenting it (#2028). */
+  setPlayByPerforming(perform: boolean): void {
+    this.transaction(() =>
+      this.#field(this.#project, 'play', perform ? 'perform' : undefined),
+    );
+  }
   setProjectName(name: string): void {
     this.transaction(() => this.#field(this.#project, 'name', name));
   }
