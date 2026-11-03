@@ -2,13 +2,20 @@ on start args
   ask peer to expose "billing" and wait
 end start
 on charge amount
-  ask peer to caller
-  say "charge " & amount & " from " & it
+  say "charge " & amount & " from " & sender()
   if amount > 100 then
     throw {code: "too much"}
   end if
   return amount + 1
 end charge
 on note line
-  say "note " & line
+  say "note " & line & " from " & sender()
 end note
+-- The Caller Identity's name, or nobody when the link vouched for none.
+function sender
+  ask peer to caller
+  if it = nothing then
+    return "nobody"
+  end if
+  return the name of it
+end sender

@@ -30,6 +30,7 @@ test {
     _ = router;
     _ = request;
     _ = peers;
+    _ = peers.tls;
 }
 
 test "a port is digits from 0 to 65535" {

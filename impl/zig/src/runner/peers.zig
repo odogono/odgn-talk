@@ -1,10 +1,10 @@
 //! The native Runner's `peer` transport (chapter 12, Runner peers; ADR
-//! 0163): Remote Sends to other Runners over plain TCP on loopback, as
-//! length-prefixed frames in the Value Encoding, on the Runner's one poll
-//! loop. Zig's standard library has no TLS server, so the `tls://` forms
-//! are refused for now (#1997).
+//! 0163): Remote Sends to other Runners as length-prefixed frames in the
+//! Value Encoding, on the Runner's one poll loop, over mutual TLS with
+//! pinned keys (ADR 0164) or plain TCP on loopback.
 const std = @import("std");
 const c = @import("talk-c");
+pub const tls = @import("tls/root.zig");
 
 const sys = std.c;
 const posix = std.posix;
@@ -13,7 +13,14 @@ const Allocator = std.mem.Allocator;
 /// The largest frame a Runner sends or reads.
 const max_frame = 16 * 1024 * 1024;
 
-pub const Address = struct { host: []const u8, port: u16 };
+pub const Address = struct {
+    host: []const u8,
+    port: u16,
+    /// Plain TCP, on loopback only, rather than TLS.
+    plain: bool = false,
+    /// The key a dialled TLS listener must have.
+    pin: ?tls.keys.Fingerprint = null,
+};
 pub const Remote = struct { name: []const u8, address: Address };
 
 /// Plain TCP carries no key to check, so it stays on this machine.
@@ -21,30 +28,40 @@ fn loopback(host: []const u8) bool {
     return std.mem.eql(u8, host, "127.0.0.1") or std.mem.eql(u8, host, "::1") or std.mem.eql(u8, host, "localhost");
 }
 
-pub const ParseError = error{ Malformed, NotLoopback, NoTls };
+pub const ParseError = error{ Malformed, NotLoopback };
 
-fn hostPort(given: []const u8) ParseError!Address {
+fn hostPort(given: []const u8, plain: bool) ParseError!Address {
     const colon = std.mem.lastIndexOfScalar(u8, given, ':') orelse return error.Malformed;
     var host = given[0..colon];
     if (host.len >= 2 and host[0] == '[' and host[host.len - 1] == ']') host = host[1 .. host.len - 1];
+    if (host.len == 0) return error.Malformed;
     const port = std.fmt.parseInt(u16, given[colon + 1 ..], 10) catch return error.Malformed;
-    if (!loopback(host)) return error.NotLoopback;
-    return .{ .host = host, .port = port };
+    if (plain and !loopback(host)) return error.NotLoopback;
+    return .{ .host = host, .port = port, .plain = plain };
 }
 
-/// `--listen tcp://HOST:PORT`; `HOST:PORT` and `tls://` want TLS.
+/// `--listen HOST:PORT` or `tls://HOST:PORT`, and `tcp://HOST:PORT` on loopback.
 pub fn parseListen(given: []const u8) ParseError!Address {
-    if (!std.mem.startsWith(u8, given, "tcp://")) return error.NoTls;
-    return hostPort(given["tcp://".len..]);
+    if (std.mem.startsWith(u8, given, "tcp://")) return hostPort(given["tcp://".len..], true);
+    if (std.mem.startsWith(u8, given, "tls://")) return hostPort(given["tls://".len..], false);
+    if (std.mem.indexOf(u8, given, "://") != null) return error.Malformed;
+    return hostPort(given, false);
 }
 
-/// `--peer NAME=tcp://HOST:PORT`; `tls://` wants TLS.
+/// `--peer NAME=tls://HOST:PORT#FINGERPRINT`, or `NAME=tcp://HOST:PORT`.
 pub fn parsePeer(given: []const u8) ParseError!Remote {
     const eq = std.mem.indexOfScalar(u8, given, '=') orelse return error.Malformed;
+    if (eq == 0) return error.Malformed;
     const rest = given[eq + 1 ..];
-    if (std.mem.startsWith(u8, rest, "tls://")) return error.NoTls;
-    if (!std.mem.startsWith(u8, rest, "tcp://")) return error.Malformed;
-    return .{ .name = given[0..eq], .address = try hostPort(rest["tcp://".len..]) };
+    if (std.mem.startsWith(u8, rest, "tcp://")) return .{ .name = given[0..eq], .address = try hostPort(rest["tcp://".len..], true) };
+    if (!std.mem.startsWith(u8, rest, "tls://")) return error.Malformed;
+    const hash = std.mem.lastIndexOfScalar(u8, rest, '#') orelse return error.Malformed;
+    const pin = rest[hash + 1 ..];
+    if (pin.len != 64) return error.Malformed;
+    for (pin) |ch| if (!std.ascii.isDigit(ch) and !(ch >= 'a' and ch <= 'f')) return error.Malformed;
+    var address = try hostPort(rest["tls://".len..hash], false);
+    address.pin = pin[0..64].*;
+    return .{ .name = given[0..eq], .address = address };
 }
 
 const Asked = union(enum) { reach: ?*c.talk_call, call: ?*c.talk_call };
@@ -52,6 +69,8 @@ const Asked = union(enum) { reach: ?*c.talk_call, call: ?*c.talk_call };
 /// One connection to another Runner, either way round.
 const Link = struct {
     fd: posix.fd_t,
+    /// The TLS session, for a link that isn't plain TCP.
+    tls: ?*tls.session.Session = null,
     /// The other end's key, as its `hello` claims; empty until it says.
     key: [64]u8 = undefined,
     known: bool = false,
@@ -77,7 +96,9 @@ pub const Peers = struct {
     core: *c.talk_core,
     group: ?*c.talk_group = null,
     log: *const fn ([]const u8) void,
-    /// A random key this Runner claims, since it has no TLS key to prove.
+    /// This Runner's key, when a `peer` flag was given; without one it
+    /// claims a random fingerprint, which nobody can reach.
+    identity: ?*const tls.keys.Identity,
     fingerprint: [64]u8,
     listener: ?posix.fd_t = null,
     listen_at: ?Address,
@@ -87,9 +108,9 @@ pub const Peers = struct {
     names: std.StringHashMapUnmanaged([]const u8) = .empty,
     /// This Group's one Peer for each exposure id, an owned value.
     peers: std.StringHashMapUnmanaged(*c.talk_value) = .empty,
-    /// Each Remote Send's Caller Identity, by delivery id: always Nothing
-    /// over plain TCP, which authenticates nobody.
-    remote_deliveries: std.StringHashMapUnmanaged(void) = .empty,
+    /// Each Remote Send's Caller Identity, by delivery id: the sending
+    /// key over TLS, and none over plain TCP, which authenticates nobody.
+    remote_deliveries: std.StringHashMapUnmanaged(?[64]u8) = .empty,
     incoming: std.StringHashMapUnmanaged(Incoming) = .empty,
     /// Answers for calls started in the Pump, given once it returns.
     later: std.ArrayList(struct { call: ?*c.talk_call, value: ?*c.talk_value, fail: ?[]const u8 = null, send: bool = false }) = .empty,
@@ -97,10 +118,14 @@ pub const Peers = struct {
     dirty: bool = false,
     polled: std.ArrayList(?*Link) = .empty,
 
-    pub fn init(gpa: Allocator, core: *c.talk_core, io: std.Io, listen_at: ?Address, remotes: []const Remote, log: *const fn ([]const u8) void) Peers {
-        var raw: [32]u8 = undefined;
-        io.random(&raw);
-        return .{ .gpa = gpa, .io = io, .core = core, .log = log, .fingerprint = std.fmt.bytesToHex(raw, .lower), .listen_at = listen_at, .remotes = remotes };
+    pub fn init(gpa: Allocator, core: *c.talk_core, io: std.Io, identity: ?*const tls.keys.Identity, listen_at: ?Address, remotes: []const Remote, log: *const fn ([]const u8) void) Peers {
+        var fingerprint: [64]u8 = undefined;
+        if (identity) |id| fingerprint = id.fingerprint else {
+            var raw: [32]u8 = undefined;
+            io.random(&raw);
+            fingerprint = std.fmt.bytesToHex(raw, .lower);
+        }
+        return .{ .gpa = gpa, .io = io, .core = core, .log = log, .identity = identity, .fingerprint = fingerprint, .listen_at = listen_at, .remotes = remotes };
     }
 
     pub fn deinit(p: *Peers) void {
@@ -132,6 +157,10 @@ pub const Peers = struct {
 
     fn freeLink(p: *Peers, l: *Link) void {
         _ = sys.close(l.fd);
+        if (l.tls) |s| {
+            s.deinit(p.gpa);
+            p.gpa.destroy(s);
+        }
         l.in.deinit(p.gpa);
         l.out.deinit(p.gpa);
         l.asked.deinit(p.gpa);
@@ -145,6 +174,8 @@ pub const Peers = struct {
 
     pub fn start(p: *Peers, group: ?*c.talk_group) !void {
         p.group = group;
+        var shown: [256]u8 = undefined;
+        if (p.identity != null) p.log(std.fmt.bufPrint(&shown, "peer: key {s}", .{&p.fingerprint}) catch unreachable);
         const at = p.listen_at orelse return;
         const port = try p.openListener(at);
         var buf: [128]u8 = undefined;
@@ -152,8 +183,11 @@ pub const Peers = struct {
             std.fmt.bufPrint(&buf, "[{s}]", .{at.host}) catch at.host
         else
             at.host;
-        var shown: [256]u8 = undefined;
-        p.log(std.fmt.bufPrint(&shown, "peer: listening on tcp://{s}:{d}", .{ host, port }) catch return);
+        if (at.plain) {
+            p.log(std.fmt.bufPrint(&shown, "peer: listening on tcp://{s}:{d}", .{ host, port }) catch return);
+        } else {
+            p.log(std.fmt.bufPrint(&shown, "peer: listening on tls://{s}:{d}#{s}", .{ host, port, &p.fingerprint }) catch return);
+        }
     }
 
     pub fn stopListening(p: *Peers) void {
@@ -165,7 +199,7 @@ pub const Peers = struct {
 
     fn sockaddrOf(at: Address, storage: *sys.sockaddr.storage, size: *sys.socklen_t) !c_uint {
         const literal = if (std.ascii.eqlIgnoreCase(at.host, "localhost")) "127.0.0.1" else at.host;
-        const address = std.Io.net.IpAddress.parse(literal, at.port) catch return error.BadAddress;
+        const address = std.Io.net.IpAddress.parse(literal, at.port) catch return resolve(at, storage, size);
         switch (address) {
             .ip4 => |a| {
                 const in: sys.sockaddr.in = .{ .port = std.mem.nativeToBig(u16, at.port), .addr = @bitCast(a.bytes) };
@@ -180,6 +214,27 @@ pub const Peers = struct {
                 return sys.AF.INET6;
             },
         }
+    }
+
+    /// A host name, looked up as the dial waits; a TLS address may name one.
+    fn resolve(at: Address, storage: *sys.sockaddr.storage, size: *sys.socklen_t) !c_uint {
+        if (at.plain or at.host.len >= 256) return error.BadAddress;
+        var name: [256:0]u8 = undefined;
+        @memcpy(name[0..at.host.len], at.host);
+        name[at.host.len] = 0;
+        var service_buf: [8:0]u8 = undefined;
+        const digits = std.fmt.bufPrint(&service_buf, "{d}", .{at.port}) catch return error.BadAddress;
+        service_buf[digits.len] = 0;
+        const service: [*:0]const u8 = &service_buf;
+        const hints: sys.addrinfo = .{ .flags = .{}, .family = sys.AF.UNSPEC, .socktype = sys.SOCK.STREAM, .protocol = 0, .addrlen = 0, .addr = null, .canonname = null, .next = null };
+        var found: ?*sys.addrinfo = null;
+        if (@backingInt(sys.getaddrinfo(&name, service, &hints, &found)) != 0) return error.BadAddress;
+        defer sys.freeaddrinfo(found.?);
+        const first = found orelse return error.BadAddress;
+        const addr = first.addr orelse return error.BadAddress;
+        @memcpy(std.mem.asBytes(storage)[0..first.addrlen], @as([*]const u8, @ptrCast(addr))[0..first.addrlen]);
+        size.* = first.addrlen;
+        return @intCast(first.family);
     }
 
     fn nonBlocking(fd: posix.fd_t) !void {
@@ -211,12 +266,30 @@ pub const Peers = struct {
         return port;
     }
 
-    /// A new link on a connected socket, which says hello first.
-    fn adopt(p: *Peers, fd: posix.fd_t, remote: ?[]const u8) !*Link {
+    /// A new link on a connected socket: a TLS one starts its handshake,
+    /// with the key pinned when it dialled, and a plain one says hello.
+    fn adopt(p: *Peers, fd: posix.fd_t, remote: ?[]const u8, plain: bool, pin: ?tls.keys.Fingerprint) !*Link {
         try nonBlocking(fd);
         const l = try p.gpa.create(Link);
+        errdefer p.gpa.destroy(l);
         l.* = .{ .fd = fd, .remote = remote };
+        if (!plain) {
+            const id = p.identity orelse return error.NoKey;
+            const s = try p.gpa.create(tls.session.Session);
+            errdefer p.gpa.destroy(s);
+            s.* = try tls.session.Session.init(p.gpa, p.io, if (pin != null) .client else .server, id, pin, &l.out);
+            l.tls = s;
+            // A dialled key is pinned: anything else fails the handshake.
+            if (pin) |k| {
+                l.key = k;
+                l.known = true;
+            }
+        }
         try p.links.append(p.gpa, l);
+        if (l.tls != null) {
+            p.flush(l);
+            return l;
+        }
         var key: ?*c.talk_value = null;
         _ = c.talk_text(&p.fingerprint, p.fingerprint.len, &key);
         defer c.talk_value_release(key);
@@ -225,12 +298,17 @@ pub const Peers = struct {
     }
 
     /// A link to the Runner a `--peer` names, dialled if none is open. The
-    /// connection is to loopback, so the Runner waits for it.
+    /// Runner waits for the connection, though not for a TLS handshake.
     fn dial(p: *Peers, name: []const u8) ?*Link {
         for (p.links.items) |l| if (!l.gone and l.remote != null and std.mem.eql(u8, l.remote.?, name)) return l;
         const remote = for (p.remotes) |r| {
             if (std.mem.eql(u8, r.name, name)) break r;
         } else return null;
+        return p.dialRemote(remote);
+    }
+
+    fn dialRemote(p: *Peers, remote: Remote) ?*Link {
+        const name = remote.name;
         var storage: sys.sockaddr.storage = undefined;
         var size: sys.socklen_t = 0;
         const family = sockaddrOf(remote.address, &storage, &size) catch return null;
@@ -242,16 +320,23 @@ pub const Peers = struct {
             p.log(std.fmt.bufPrint(&shown, "peer: {s}: can't connect", .{name}) catch "peer: can't connect");
             return null;
         }
-        return p.adopt(fd, name) catch {
+        return p.adopt(fd, name, remote.address.plain, remote.address.pin) catch {
             _ = sys.close(fd);
             return null;
         };
     }
 
-    /// A link to the Runner with this key: one open to it, or, once it has
-    /// said so, one a `--peer` dialled.
+    /// A link to the Runner with this key: one open to it, one a `--peer`
+    /// dialled once it has said so, or a new one to the `--peer` that pins it.
     fn linkTo(p: *Peers, key: []const u8) ?*Link {
         for (p.links.items) |l| if (!l.gone and l.known and std.mem.eql(u8, &l.key, key)) return l;
+        for (p.remotes) |r| if (r.address.pin) |pin| if (std.mem.eql(u8, &pin, key)) return p.dialRemote(r);
+        return null;
+    }
+
+    /// The name a `--peer` gives a TLS key, if one pins it.
+    fn nameOf(p: *const Peers, key: []const u8) ?[]const u8 {
+        for (p.remotes) |r| if (r.address.pin) |pin| if (std.mem.eql(u8, &pin, key)) return r.name;
         return null;
     }
 
@@ -289,7 +374,7 @@ pub const Peers = struct {
         while (true) {
             const fd = sys.accept(listener, null, null);
             if (fd < 0) return;
-            _ = p.adopt(fd, null) catch {
+            _ = p.adopt(fd, null, p.listen_at.?.plain, null) catch {
                 _ = sys.close(fd);
             };
         }
@@ -322,10 +407,29 @@ pub const Peers = struct {
                 if (sys.errno(n) != .AGAIN) l.gone = true;
                 break;
             }
-            l.in.appendSlice(p.gpa, buf[0..@intCast(n)]) catch {
+            const got = buf[0..@intCast(n)];
+            if (l.tls) |s| {
+                // Handshake replies go out; the frames it carries come in.
+                s.feed(p.gpa, got, &l.out, &l.in) catch {
+                    l.gone = true;
+                };
+                if (s.connected() and !l.known) {
+                    l.key = s.peer.?;
+                    l.known = true;
+                }
+                p.flush(l);
+                if (l.gone) return;
+            } else l.in.appendSlice(p.gpa, got) catch {
                 l.gone = true;
                 return;
             };
+        }
+        if (l.in.items.len > 0 and !l.known) {
+            // Only a plain link says hello, and frames over TLS wait for the handshake.
+            if (l.tls != null) {
+                l.gone = true;
+                return;
+            }
         }
         while (l.in.items.len >= 4) {
             const len = std.mem.readInt(u32, l.in.items[0..4], .big);
@@ -382,8 +486,13 @@ pub const Peers = struct {
         if (body.len > max_frame) return;
         var head: [4]u8 = undefined;
         std.mem.writeInt(u32, &head, @intCast(body.len), .big);
-        l.out.appendSlice(p.gpa, &head) catch return;
-        l.out.appendSlice(p.gpa, body.data[0..body.len]) catch return;
+        if (l.tls) |s| {
+            s.send(p.gpa, &head, &l.out) catch return;
+            s.send(p.gpa, body.data[0..body.len], &l.out) catch return;
+        } else {
+            l.out.appendSlice(p.gpa, &head) catch return;
+            l.out.appendSlice(p.gpa, body.data[0..body.len]) catch return;
+        }
         p.flush(l);
     }
 
@@ -516,7 +625,7 @@ pub const Peers = struct {
         if (get(frame, "post")) |to| {
             defer c.talk_value_release(to);
             const parts = splitId(textOf(to) orelse "") orelse return;
-            if (std.mem.eql(u8, parts.key, &p.fingerprint)) _ = p.local(parts.secret, message, args, null);
+            if (std.mem.eql(u8, parts.key, &p.fingerprint)) _ = p.local(parts.secret, message, args, null, l);
             return;
         }
         const n_value = get(frame, "call") orelse return;
@@ -526,7 +635,7 @@ pub const Peers = struct {
         defer if (to) |v| c.talk_value_release(v);
         const parts = splitId(if (to) |v| textOf(v) orelse "" else "") orelse return p.reply(l, n, "not exposed", null, null);
         if (!std.mem.eql(u8, parts.key, &p.fingerprint)) return p.reply(l, n, "not exposed", null, null);
-        if (p.local(parts.secret, message, args, .{ .link = l, .n = n })) |reason| p.reply(l, n, reason, null, null);
+        if (p.local(parts.secret, message, args, .{ .link = l, .n = n }, l)) |reason| p.reply(l, n, reason, null, null);
     }
 
     /// Answers a `call` that arrived: with its reply, or `failed`.
@@ -554,7 +663,10 @@ pub const Peers = struct {
     /// Gives a Remote Send to this Runner's exposure: a Delivery, or for a
     /// call that `waits` a Request answered when its Run ends. The reason
     /// when it can't go.
-    fn local(p: *Peers, secret: []const u8, message: []const u8, args: ?*c.talk_value, waits: ?Incoming) ?[]const u8 {
+    fn local(p: *Peers, secret: []const u8, message: []const u8, args: ?*c.talk_value, waits: ?Incoming, from: ?*Link) ?[]const u8 {
+        // Over TLS the sending key is known; over plain TCP, or from this
+        // Runner itself, nobody is vouched for.
+        const sender: ?[64]u8 = if (from) |l| if (l.tls != null) l.key else null else null;
         const held = p.exposures.get(secret) orelse return if (waits != null) "not exposed" else null;
         const script = c.talk_group_script(p.group, held.script.ptr, held.script.len) orelse return if (waits != null) "not exposed" else null;
         var values: std.ArrayList(?*c.talk_value) = .empty;
@@ -578,12 +690,12 @@ pub const Peers = struct {
             if (code != c.TALK_OK) return "unreachable";
             const key = p.gpa.dupe(u8, id.data[0..id.len]) catch return "unreachable";
             p.incoming.put(p.gpa, key, w) catch return "unreachable";
-            p.remote_deliveries.put(p.gpa, key, {}) catch {};
+            p.remote_deliveries.put(p.gpa, key, sender) catch {};
             return null;
         }
         if (c.talk_script_deliver(script, &m, &id) == c.TALK_OK and id.data != null) {
             const key = p.gpa.dupe(u8, id.data[0..id.len]) catch return null;
-            p.remote_deliveries.put(p.gpa, key, {}) catch {};
+            p.remote_deliveries.put(p.gpa, key, sender) catch {};
         }
         return null;
     }
@@ -814,10 +926,10 @@ pub const Peers = struct {
             // A Peer of this Runner's own exposure: still a Remote Send,
             // answered once the Pump returns and the Run ends.
             if (!waits) {
-                _ = p.local(parts.secret, message, args[2], null);
+                _ = p.local(parts.secret, message, args[2], null, null);
                 return c.TALK_CALL_ANSWERED;
             }
-            if (p.local(parts.secret, message, args[2], .{ .call = call })) |why| {
+            if (p.local(parts.secret, message, args[2], .{ .call = call }, null)) |why| {
                 p.later.append(p.gpa, .{ .call = call, .value = null, .fail = why, .send = true }) catch return c.TALK_CALL_BROKEN;
             }
             return c.TALK_CALL_STARTED;
@@ -851,14 +963,30 @@ pub const Peers = struct {
         return self(context).remoteSend(call, args, len, true);
     }
 
-    /// Plain TCP authenticates nobody, so `caller` gives Nothing.
+    /// The Caller Identity of a Remote Send that arrived over TLS:
+    /// `{key}`, with `name` when a `--peer` pins that key. Plain TCP
+    /// authenticates nobody, so `caller` gives Nothing for what came that way.
     fn caller(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        _ = context;
-        _ = call;
         _ = args;
         _ = len;
         _ = err;
-        _ = c.talk_nothing(result);
+        const p = self(context);
+        const delivery = callText(c.talk_call_delivery, call);
+        const sender = (p.remote_deliveries.get(delivery) orelse null) orelse {
+            _ = c.talk_nothing(result);
+            return c.TALK_CALL_ANSWERED;
+        };
+        const key = text(&sender);
+        defer c.talk_value_release(key);
+        const name = if (p.nameOf(&sender)) |n| text(n) else null;
+        defer if (name) |v| c.talk_value_release(v);
+        var pairs: [2]c.talk_pair = .{ .{ .key = "key", .key_len = 3, .value = key }, undefined };
+        var count: usize = 1;
+        if (name) |v| {
+            pairs[1] = .{ .key = "name", .key_len = 4, .value = v };
+            count = 2;
+        }
+        if (c.talk_map(&pairs, count, result) != c.TALK_OK) return c.TALK_CALL_BROKEN;
         return c.TALK_CALL_ANSWERED;
     }
 
@@ -875,12 +1003,21 @@ pub const Peers = struct {
     }
 };
 
-test "the native Runner takes tcp:// on loopback, and wants TLS for anything else" {
-    try std.testing.expectEqual(@as(u16, 7400), (try parseListen("tcp://127.0.0.1:7400")).port);
-    try std.testing.expectError(error.NoTls, parseListen("127.0.0.1:7400"));
+test "the native Runner listens and dials over TLS anywhere, and over tcp:// on loopback only" {
+    const listen = try parseListen("127.0.0.1:7400");
+    try std.testing.expectEqual(@as(u16, 7400), listen.port);
+    try std.testing.expect(!listen.plain);
+    try std.testing.expect(!(try parseListen("tls://192.0.2.1:7400")).plain);
+    try std.testing.expect((try parseListen("tcp://127.0.0.1:7400")).plain);
     try std.testing.expectError(error.NotLoopback, parseListen("tcp://192.0.2.1:7400"));
+    try std.testing.expectError(error.Malformed, parseListen("udp://127.0.0.1:7400"));
     const r = try parsePeer("billing=tcp://[::1]:7400");
     try std.testing.expectEqualStrings("billing", r.name);
     try std.testing.expectEqualStrings("::1", r.address.host);
-    try std.testing.expectError(error.NoTls, parsePeer("billing=tls://127.0.0.1:7400#0000000000000000000000000000000000000000000000000000000000000000"));
+    const pin = "3f9c" ++ @as([60]u8, @splat('0'));
+    const t = try parsePeer("billing=tls://192.0.2.1:7400#" ++ pin);
+    try std.testing.expectEqualStrings(pin, &t.address.pin.?);
+    try std.testing.expectEqualStrings("192.0.2.1", t.address.host);
+    try std.testing.expectError(error.Malformed, parsePeer("billing=tls://127.0.0.1:7400"));
+    try std.testing.expectError(error.Malformed, parsePeer("billing=tls://127.0.0.1:7400#3F9C" ++ @as([60]u8, @splat('0'))));
 }

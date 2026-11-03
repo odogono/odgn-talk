@@ -31,10 +31,13 @@ pub const Options = struct {
     args: []const []const u8,
     /// Overrides every `serve`'s port: `--port` or PORT.
     port: ?u16 = null,
-    /// `--listen tcp://HOST:PORT` and each `--peer NAME=tcp://HOST:PORT`
+    /// `--listen` and each `--peer`, over TLS or loopback TCP
     /// (chapter 12, Runner peers).
     listen: ?peers_mod.Address = null,
     remotes: []const peers_mod.Remote = &.{},
+    /// This Runner's peer key, from `--peer-key` or made at start, when a
+    /// `peer` flag was given.
+    peer_key: ?*const peers_mod.tls.keys.Identity = null,
 };
 
 const Instant = struct {
@@ -933,7 +936,7 @@ pub fn run(gpa: Allocator, io: std.Io, options: Options) u8 {
     r.stores = .init(gpa, r.notify);
     r.http = Router.init(gpa, r.core, .{ .port_override = options.port, .log = Runner.logHttp, .log_context = &r }) catch return 1;
     r.fetcher = Fetcher.init(gpa, io) catch return 1;
-    r.peers = peers_mod.Peers.init(gpa, r.core, io, options.listen, options.remotes, logPeer);
+    r.peers = peers_mod.Peers.init(gpa, r.core, io, options.peer_key, options.listen, options.remotes, logPeer);
     r.http.fetcher = &r.fetcher;
     defer r.deinit();
 
