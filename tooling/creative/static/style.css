@@ -462,6 +462,15 @@ button:disabled {
 #error-list button:hover:not(:disabled) .where {
   color: inherit;
 }
+#error-list button.error-fix {
+  display: inline-block;
+  width: auto;
+  margin: 0.25rem 0.2rem 0.35rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  color: var(--text);
+}
 #variables-window {
   width: 22rem;
 }

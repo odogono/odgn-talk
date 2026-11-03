@@ -47,6 +47,11 @@ The [Errors window](src/errors.tsx) is a Preact component too. It renders a
 signal holding the reported problems, each labelled with its owner and line
 when it was reported. New problems are appended without rebuilding the earlier
 ones, and a problem whose owner has left the Project is disabled when opened.
+A problem naming a sound the Project lacks but Music brings has an **Add
+“bd” from Music** button, the quick fix of
+[ADR 0161](../../docs/adr/0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)
+(#2033). It copies the sound in as one undoable edit, and it is gone once
+the Project has that sound.
 The notice, save, storage, read-only, orphan, update and offline banners stay
 direct DOM: each sets its text and toggles `hidden`, with nothing to rebuild.
 
