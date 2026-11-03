@@ -35,7 +35,9 @@ import {
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { CREATABLE_KINDS, kindOf } from './elements/registry';
 import { isAddOnKind, splitAddOnKind } from './elements/add-on';
-import { pageAddOns } from './add-ons/page';
+import { pageAddOns, pageTrust } from './add-ons/page';
+import { showAddOnsDialog } from './add-ons/add-ons-dialog';
+import { offeredElementKinds } from './add-ons/offered';
 import { instrumentKindNames } from './instruments/registry';
 import { importSound, SOUND_ACCEPT } from './sounds';
 import { type CodeSelection } from './code-browser-panel';
@@ -441,6 +443,7 @@ export const mountStack = (
     pageNode.classList.toggle('edit', !editor.readOnly);
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     (byId('add-palette') as HTMLButtonElement).disabled = editor.readOnly;
+    drawTools();
     for (const button of byId('tools').querySelectorAll('button')) {
       button.disabled = editor.readOnly;
     }
@@ -1118,18 +1121,51 @@ export const mountStack = (
     );
   };
 
-  // The Tools window adds Elements: built-in kinds, then each built-in
-  // Add-on's, which load the first time one is added (#1901).
-  byId('tools').replaceChildren(
-    ...CREATABLE_KINDS.map(kind => {
-      const { label, icon } = kindOf(kind);
-      return toolButton(kind, label, icon);
+  // The Tools window adds Elements: built-in kinds, then the kinds of the
+  // Add-ons the Project lists (#2025), which load the first time one is
+  // added (#1901). It is rebuilt only when what it offers changes.
+  let toolsOffered: string | undefined;
+  const drawTools = () => {
+    const offered = offeredElementKinds(
+      editor.project.addOns,
+      pageAddOns.catalogue,
+    );
+    const key = offered.map(k => k.kind).join(' ');
+    if (key === toolsOffered) {
+      return;
+    }
+    toolsOffered = key;
+    byId('tools').replaceChildren(
+      ...CREATABLE_KINDS.map(kind => {
+        const { label, icon } = kindOf(kind);
+        return toolButton(kind, label, icon);
+      }),
+      ...offered.map(k => toolButton(k.kind, k.label, k.icon ?? '')),
+    );
+  };
+  // Project ▸ Add-ons… (#2025) edits the Add-ons the Project lists.
+  byId('show-add-ons').addEventListener('click', () =>
+    showAddOnsDialog({
+      addOns: () => editor.project.addOns,
+      catalogue: pageAddOns.catalogue,
+      readOnly: () => editor.readOnly,
+      trusted: hash => pageTrust.has(hash),
+      add: async entry => {
+        const ref = { id: entry.id, version: entry.version };
+        const [problem] = await pageAddOns.load([ref]);
+        if (!problem) {
+          edit(() => editor.edit(({ tree }) => tree.useAddOn(ref)));
+        }
+        return problem?.message;
+      },
+      remove: id => {
+        let problem: string | undefined;
+        edit(() => {
+          problem = editor.edit(({ tree }) => tree.stopUsingAddOn(id));
+        });
+        return problem;
+      },
     }),
-    ...pageAddOns.catalogue.flatMap(entry =>
-      entry.kinds.map(k =>
-        toolButton(`${entry.id}#${k.name}`, k.label, k.icon),
-      ),
-    ),
   );
   const addAddOnElement = async (kind: AddOnKind): Promise<void> => {
     const { addOn } = splitAddOnKind(kind)!;

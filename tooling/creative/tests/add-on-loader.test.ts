@@ -155,7 +155,15 @@ test("an Add-on kind may not take a built-in kind's name", async () => {
     kinds: { button: counter.kinds.counter! },
   };
   const loader = new AddOnLoader({
-    catalogue: [{ id: clash.id, kinds: [], slug: 'clash', version: '1.0.0' }],
+    catalogue: [
+      {
+        id: clash.id,
+        kinds: [],
+        label: 'Clash',
+        slug: 'clash',
+        version: '1.0.0',
+      },
+    ],
     importer: () => Promise.resolve(clash),
   });
   expect(await loader.load([{ id: clash.id, version: '1.0.0' }])).toEqual([

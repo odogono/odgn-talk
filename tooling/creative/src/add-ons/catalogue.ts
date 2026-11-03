@@ -1,6 +1,7 @@
 // The Add-ons built with Folio (ADR 0162, #1901). Each is a separate chunk at
 // `add-ons/<slug>-<version>.js`, fetched the first time a Project or author
 // needs it and kept by the service worker.
+import { CONTROLS_ADD_ON } from './controls/ids';
 import { INSTRUMENTS_ADD_ON, INSTRUMENTS_VERSION } from './instruments/ids';
 
 export type CatalogueEntry = {
@@ -10,6 +11,8 @@ export type CatalogueEntry = {
   instruments?: readonly { label: string; name: string }[];
   /** Its kinds as the Tools window lists them before it loads. */
   kinds: readonly { icon: string; label: string; name: string }[];
+  /** Its name in Project ▸ Add-ons…. */
+  label: string;
   /** Its source under `src/add-ons/`, and its chunk's name. */
   slug: string;
   version: string;
@@ -19,7 +22,7 @@ export type CatalogueEntry = {
 
 export const BUILT_IN_ADD_ONS: readonly CatalogueEntry[] = [
   {
-    id: 'https://northtalk.org/add-ons/controls',
+    id: CONTROLS_ADD_ON,
     kinds: [
       { name: 'slider', label: 'Slider', icon: '▭' },
       { name: 'knob', label: 'Knob', icon: '◔' },
@@ -27,6 +30,7 @@ export const BUILT_IN_ADD_ONS: readonly CatalogueEntry[] = [
       { name: 'xy', label: 'XY pad', icon: '⌖' },
       { name: 'meter', label: 'Level meter', icon: '▮' },
     ],
+    label: 'Controls',
     slug: 'controls',
     version: '1.0.0',
   },
@@ -37,6 +41,7 @@ export const BUILT_IN_ADD_ONS: readonly CatalogueEntry[] = [
       { name: 'synth', label: 'Synth' },
       { name: 'ym2149', label: 'YM2149 sound chip' },
     ],
+    label: 'Instruments',
     slug: 'instruments',
     version: INSTRUMENTS_VERSION,
     worklet: true,
