@@ -7621,6 +7621,7 @@ pub const Group = struct {
                         frame.locals[to] = frame.locals[from].retain();
                     },
                     .jump => {
+                        if (ins.fuse and g.fastForEach(run, &bounds, unit, frame)) continue;
                         if (!bounds.charge(run, costs.chargeUnmeasured(.jump))) return;
                         frame.pc = @intCast(ops[0].int);
                         g.fastTick();
@@ -7868,6 +7869,66 @@ pub const Group = struct {
             },
             else => return false,
         }
+    }
+
+    /// `jump L; L: next; store s` over a List or Range as one step with one
+    /// charge, or `jump; next` alone when the subject is done, or false,
+    /// having changed nothing, for the parts to run one at a time. A Range's
+    /// item is written into the local in place when only the local holds it.
+    /// Not inlined, as `fastFused` isn't.
+    noinline fn fastForEach(g: *Group, run: *Run, bounds: *const FastBounds, unit: *const lower.Unit, frame: *Frame) bool {
+        const code = unit.code;
+        const head: u32 = @intCast(code[frame.pc].operands[0].int);
+        const exit: u32 = @intCast(code[head].operands[0].int);
+        const items = frame.stack.items;
+        if (items.len == 0 or items[items.len - 1] != .iterator or items.len == frame.stack.capacity) return false;
+        const it = items[items.len - 1].iterator;
+        const subject = it.subject orelse return false;
+        const jump_fuel = costs.chargeUnmeasured(.jump);
+        const next_fuel = costs.chargeUnmeasured(.next);
+        const store_fuel = costs.chargeUnmeasured(.store);
+        const two: costs.Charge = .{ .fuel = jump_fuel.fuel + next_fuel.fuel, .alloc = jump_fuel.alloc + next_fuel.alloc };
+        const three: costs.Charge = .{ .fuel = two.fuel + store_fuel.fuel, .alloc = two.alloc + store_fuel.alloc };
+        const s: usize = @intCast(code[head + 1].operands[0].int);
+        const old = frame.locals[s];
+        switch (subject.data) {
+            .list => |list| {
+                if (it.position >= list.len) {
+                    if (!bounds.chargeSteps(g, run, two, jump_fuel.fuel, 2)) return false;
+                    frame.pc = exit;
+                    return true;
+                }
+                if (!bounds.chargeSteps(g, run, three, two.fuel, 3)) return false;
+                frame.locals[s] = list[it.position].retain();
+                old.release();
+            },
+            .range => |r| {
+                const from = r.from.data.number.integer(i64) catch unreachable;
+                const to = r.to.data.number.integer(i64) catch unreachable;
+                const p = from + @as(i64, @intCast(it.position));
+                if (p > to) {
+                    if (!bounds.chargeSteps(g, run, two, jump_fuel.fuel, 2)) return false;
+                    frame.pc = exit;
+                    return true;
+                }
+                if (old.data == .number and old.references == 1) {
+                    if (!bounds.chargeSteps(g, run, three, two.fuel, 3)) return false;
+                    old.data.number = model.Decimal.fromInt(p);
+                } else {
+                    const item = chunks.numberValue(g.gpa, p) catch return false;
+                    if (!bounds.chargeSteps(g, run, three, two.fuel, 3)) {
+                        item.release();
+                        return false;
+                    }
+                    frame.locals[s] = item;
+                    old.release();
+                }
+            },
+            else => return false,
+        }
+        it.position += 1;
+        frame.pc = head + 2;
+        return true;
     }
 
     /// `call` of a body of the top frame's unit with its `n` arguments on
