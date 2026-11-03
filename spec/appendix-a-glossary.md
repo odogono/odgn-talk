@@ -487,6 +487,10 @@ _Avoid_: FPS counter, Errors window
 To run a Play Session full-window, with the authoring windows hidden except for explicitly opened performance diagnostics, as a reader would see it.
 _Avoid_: publish, preview, fullscreen
 
+**Perform**:
+To run a Play Session with the stage beside the code of the Scripts being changed and the Project's docked Palettes, for live-coding in front of an audience. Each Project chooses whether Play presents or performs.
+_Avoid_: live mode, music mode, jam
+
 ## Syntax
 
 **Reserved Word**:
