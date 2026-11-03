@@ -7802,6 +7802,7 @@ pub const Group = struct {
     /// inlined: in `fastSteps` it slows the instructions it doesn't fuse.
     noinline fn fastFused(g: *Group, run: *Run, bounds: *const FastBounds, unit: *const lower.Unit, frame: *Frame) bool {
         const code = unit.code;
+        if (code[frame.pc + 3].op == .chunk_set) return g.fastChunkSet(run, bounds, code, frame);
         const second = code[frame.pc + 1];
         const third = code[frame.pc + 2].op;
         const fourth = code[frame.pc + 3];
@@ -7869,6 +7870,50 @@ pub const Group = struct {
             },
             else => return false,
         }
+    }
+
+    /// `load i; load w; load p; chunk-set item; store d` writing one item of
+    /// a List as one step with one charge, or false, having changed nothing,
+    /// for the parts to run one at a time: an index that isn't an in-range
+    /// integer, a whole that isn't a List, or any part that would stop. The
+    /// result has the whole's items, so its charge is known before the
+    /// write. The whole is written in place only when `w` is `d` and holds it
+    /// alone; a lowering temp holding it keeps the old version (#2022).
+    noinline fn fastChunkSet(g: *Group, run: *Run, bounds: *const FastBounds, code: []const lower.Instruction, frame: *Frame) bool {
+        const pc = frame.pc;
+        if (frame.stack.items.len + 3 > frame.stack.capacity) return false;
+        const index = frame.locals[@intCast(code[pc].operands[0].int)];
+        const w: usize = @intCast(code[pc + 1].operands[0].int);
+        const whole = frame.locals[w];
+        const part = frame.locals[@intCast(code[pc + 2].operands[0].int)];
+        const d: usize = @intCast(code[pc + 4].operands[0].int);
+        if (index.data != .number or whole.data != .list) return false;
+        const len = whole.data.list.len;
+        const i = index.data.number.integer(i64) catch return false;
+        const p = if (i < 0) @as(i64, @intCast(len)) + 1 + i else i;
+        if (p < 1 or p > len) return false;
+        const loaded = costs.chargeUnmeasured(.load);
+        const c = costs.chargeStatic(.chunk_set, &.{ .input = part, .result = whole });
+        const last = costs.chargeUnmeasured(.store);
+        const head = 3 * loaded.fuel + c.fuel;
+        const total: costs.Charge = .{ .fuel = head + last.fuel, .alloc = 3 * loaded.alloc + c.alloc + last.alloc };
+        // Held only by the local it's stored back into: `listSet` may write
+        // it in place. Otherwise the copy leaves every other holder its own.
+        const alone = w == d and whole.references == 1;
+        const before: ChargeState = .of(g, run);
+        if (!bounds.chargeSteps(g, run, total, head, 5)) return false;
+        var root = if (alone) whole else whole.retain();
+        // `listSet` changes nothing it fails on.
+        model.listSet(g.gpa, &root, @intCast(p - 1), part) catch {
+            if (!alone) whole.release();
+            before.restore(g, run);
+            return false;
+        };
+        // On success it consumed the reference it was given.
+        if (!alone) frame.locals[d].release();
+        frame.locals[d] = root;
+        frame.pc = pc + 5;
+        return true;
     }
 
     /// `jump L; L: next; store s` over a List or Range as one step with one

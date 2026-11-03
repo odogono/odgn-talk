@@ -174,6 +174,28 @@ const loops =
     \\
 ;
 
+/// List item writes, which the fast path runs as one step (#2022): a shared
+/// original that must stay unchanged, negative and padding indexes, a
+/// nested write, an item of Text, and a List written into itself.
+const lists =
+    \\on run n
+    \\  put [1, 2, 3, 4] into values
+    \\  put values into original
+    \\  put [[0, 0], [0, 0]] into grid
+    \\  put "a,b" into csv
+    \\  repeat for each i in 1..n
+    \\    put i into item 1 of values
+    \\    put i * 2 into item -1 of values
+    \\    put i into item 2 of item 1 of grid
+    \\    put i into item 2 of csv
+    \\  end repeat
+    \\  put "x" into item 6 of values
+    \\  put values into item 2 of values
+    \\  return [values, original, grid, csv]
+    \\end run
+    \\
+;
+
 const Options = struct {
     fast: bool,
     limits: machine.Limits = .{},
@@ -262,6 +284,7 @@ test "the fast path's Runs match the general loop's to completion" {
     try expectSame(calls, 6, .{ .fast = true });
     try expectSame(maps, 6, .{ .fast = true });
     try expectSame(loops, 7, .{ .fast = true });
+    try expectSame(lists, 5, .{ .fast = true });
     // Shared locals keep their own values.
     const got = try trace(testing.allocator, mixed, 8, .{ .fast = true });
     defer testing.allocator.free(got);
@@ -275,6 +298,9 @@ test "the fast path's Runs match the general loop's to completion" {
     defer testing.allocator.free(looped);
     try testing.expect(std.mem.indexOf(u8, looped, "value=[88, 6, 7, 30, \"b\"]") != null);
     try testing.expect(std.mem.indexOf(u8, mapped, "value=[60, {x: 12, vx: 2, last: 12}, {x: 0, vx: 2}, nothing]") != null);
+    const listed = try trace(testing.allocator, lists, 5, .{ .fast = true });
+    defer testing.allocator.free(listed);
+    try testing.expect(std.mem.indexOf(u8, listed, "value=[[5, [5, 2, 3, 10, nothing, \"x\"], 3, 10, nothing, \"x\"], [1, 2, 3, 4], [[0, 5], [0, 0]], \"a,5\"]") != null);
 }
 
 test "the fast path faults where the general loop does on every Fuel and allocation limit" {
@@ -287,6 +313,7 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(maps, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(loops, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
+        try expectSame(lists, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
     }
     for (1..200) |alloc| {
         try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
@@ -295,6 +322,7 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(maps, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(loops, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+        try expectSame(lists, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
     }
     // Quantity results occupy 24 logical bytes. Reach the later arithmetic
     // and its stores too, checking immediately below and at each 8-byte
@@ -332,6 +360,7 @@ test "the fast path is preempted where the general loop is at every Fuel Slice" 
         try expectSame(calls, 4, .{ .fast = true, .slice = slice });
         try expectSame(maps, 4, .{ .fast = true, .slice = slice });
         try expectSame(loops, 4, .{ .fast = true, .slice = slice });
+        try expectSame(lists, 3, .{ .fast = true, .slice = slice });
     }
 }
 
@@ -350,7 +379,7 @@ test "the fast path recovers from a refused result node" {
     // something a Host compares. A refused Run must leak nothing, and any
     // Run that completes must match the unrefused one.
     const gpa = testing.allocator;
-    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 }, .{ quantities, 4 }, .{ loops, 7 } }) |case| {
+    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 }, .{ quantities, 4 }, .{ loops, 7 }, .{ lists, 5 } }) |case| {
         const want = try trace(gpa, case[0], case[1], .{ .fast = true });
         defer gpa.free(want);
         for (0..80) |k| {
