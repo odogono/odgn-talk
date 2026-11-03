@@ -7797,8 +7797,9 @@ pub const Group = struct {
     /// branch` on Numbers as one step with one charge, the sum of its
     /// parts', or false, having changed nothing, for the parts to run one
     /// at a time: any other sequence, any part that would stop or fail.
-    /// Starting at the first part, it can't skip a branch target.
-    inline fn fastFused(g: *Group, run: *Run, bounds: *const FastBounds, unit: *const lower.Unit, frame: *Frame) bool {
+    /// Starting at the first part, it can't skip a branch target. Not
+    /// inlined: in `fastSteps` it slows the instructions it doesn't fuse.
+    noinline fn fastFused(g: *Group, run: *Run, bounds: *const FastBounds, unit: *const lower.Unit, frame: *Frame) bool {
         const code = unit.code;
         const second = code[frame.pc + 1];
         const third = code[frame.pc + 2].op;
