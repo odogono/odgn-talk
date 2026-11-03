@@ -72,6 +72,14 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Gotcha: `args:` defaults to `[]`, so an Operation declared without it takes no arguments. Declare one Shape per argument, such as `args: ["text"]`, or `["any"]` for any data value.
 - Check: `mix test test/capability_test.exs`
 
+## The `http` factory and `fetch`
+
+- Files: [`http.ex`](lib/north_talk/http.ex); `standard` in [`capability.ex`](lib/north_talk/capability.ex) makes the owner's `define-capability` ask for the Core's own checks
+- Rules: [`http`](../../spec/07-libraries-and-the-standard-library.md#http), [the `http` factory](../../spec/09-embedding.md#the-http-factory), [ADR 0151](../../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
+- Copy from: [`http_test.exs`](test/http_test.exs), whose local servers write raw HTTP/1.1, and its TLS servers use the shared fixtures in [`impl/ts/tests/fixtures/http-tls`](../ts/tests/fixtures/http-tls/README.md)
+- Gotcha: the Core checks the arguments but hands the Host the Script's own; `NorthTalk.HTTP.url/2` normalizes the URL and adds `query`, as the Go embedding's `fetchURL` does.
+- Check: `mix test test/http_test.exs`
+
 ## Capability Scopes, Segment-bound effects and the Grant release hook
 
 - Files: [`capability.ex`](lib/north_talk/capability.ex) (`NorthTalk.Effect`, `NorthTalk.Release`), [`owner.ex`](lib/north_talk/owner.ex)

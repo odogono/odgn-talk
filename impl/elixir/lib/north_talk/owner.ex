@@ -372,6 +372,8 @@ defmodule NorthTalk.Owner do
       %{"name" => capability.name, "ops" => Capability.declarations(capability)}
       |> then(&if(capability.effect || capability.coordinator, do: Map.put(&1, "segmentLifecycle", true), else: &1))
       |> then(&if(capability.release, do: Map.put(&1, "release", true), else: &1))
+      # A Standard factory's Operations get the Core's own checks.
+      |> then(&if(capability.standard, do: Map.put(&1, "standard", capability.standard), else: &1))
 
     case exchange(state, "define-capability", fields) do
       {{:ok, _}, state} -> {:reply, :ok, put_in(state.capabilities[capability.name], capability)}
