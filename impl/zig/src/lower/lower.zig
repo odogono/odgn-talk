@@ -41,7 +41,25 @@ pub const Instruction = struct {
     position: Position,
     /// What the `constant`, `local`, `variable` and `body` operands name.
     note: []const u8,
+    /// Whether this starts `load; load | const; <arithmetic | comparison>;
+    /// store | branch`, which the Zig fast path may run as one step (#1931).
+    /// Derived from the opcodes alone; never shown or stored.
+    fuse: bool = false,
 };
+
+/// Marks each instruction that starts a sequence the fast path fuses.
+fn markFused(code: []Instruction) void {
+    if (code.len < 4) return;
+    for (code[0 .. code.len - 3], 0..) |*ins, i| {
+        if (ins.op != .load) continue;
+        if (code[i + 1].op != .load and code[i + 1].op != .@"const") continue;
+        ins.fuse = switch (code[i + 2].op) {
+            .less, .greater, .less_or_equal, .greater_or_equal => code[i + 3].op == .branch_false or code[i + 3].op == .branch_true,
+            .add, .subtract, .multiply, .divide, .div, .mod => code[i + 3].op == .store,
+            else => false,
+        };
+    }
+}
 
 pub const BodyKind = enum { init, function, handler, fallback, lambda, event };
 
@@ -628,6 +646,7 @@ const Lowerer = struct {
             u.target = seen;
             seen += 1;
         };
+        markFused(l.code.items);
         return .{
             .name = l.options.name,
             .library = l.options.context.library,

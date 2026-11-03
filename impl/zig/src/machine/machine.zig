@@ -1133,6 +1133,30 @@ const FastBounds = struct {
     /// Charges a fast-path instruction its `cost` as `execute` charges one,
     /// with any dispatch `clause` rate pending. False, charging nothing, when
     /// the Run can't cover it: the general loop then runs it and faults.
+    /// Charges `steps` consecutive instructions at once, `total` their
+    /// summed cost and `prefix` the Fuel of all but the last, exactly as
+    /// charging each in turn would leave the Run, or false, charging
+    /// nothing, when any of them would stop: a limit, preemption before a
+    /// later part, or a Host poll falling due between them (#1931).
+    inline fn chargeSteps(b: FastBounds, g: *const Group, run: *Run, total: costs.Charge, prefix: u64, comptime steps: u12) bool {
+        if (g.host_poll != null and g.host_poll_ticks > std.math.maxInt(u12) - steps) return false;
+        if (!b.charged) {
+            run.clause_fuel += run.called_clause;
+            run.called_clause = 0;
+            return true;
+        }
+        const pending = run.clause_fuel + run.called_clause;
+        const fuel = total.fuel + pending;
+        if (fuel > b.fuel_ceiling -| run.fuel or run.alloc + total.alloc > b.alloc_ceiling) return false;
+        if (run.fuel + pending + prefix >= b.preempt_at) return false;
+        run.called_clause = 0;
+        run.clause_fuel = 0;
+        run.fuel += fuel;
+        run.alloc += total.alloc;
+        if (g.host_poll != null) @constCast(g).host_poll_ticks += steps;
+        return true;
+    }
+
     inline fn charge(b: FastBounds, run: *Run, cost: costs.Charge) bool {
         run.clause_fuel += run.called_clause;
         run.called_clause = 0;
@@ -7579,6 +7603,7 @@ pub const Group = struct {
                         stack.appendAssumeCapacity(.{ .value = v.retain() });
                     },
                     .load => {
+                        if (ins.fuse and g.fastFused(run, &bounds, unit, frame)) continue;
                         if (len == stack.capacity or !bounds.charge(run, costs.chargeUnmeasured(.load))) return;
                         stack.appendAssumeCapacity(.{ .value = frame.locals[@intCast(ops[0].int)].retain() });
                     },
@@ -7766,6 +7791,82 @@ pub const Group = struct {
         replaceOperands(stack, r);
         frame.pc += 1;
         return true;
+    }
+
+    /// `load a; load b | const k; <arithmetic | comparison>; store c |
+    /// branch` on Numbers as one step with one charge, the sum of its
+    /// parts', or false, having changed nothing, for the parts to run one
+    /// at a time: any other sequence, any part that would stop or fail.
+    /// Starting at the first part, it can't skip a branch target.
+    inline fn fastFused(g: *Group, run: *Run, bounds: *const FastBounds, unit: *const lower.Unit, frame: *Frame) bool {
+        const code = unit.code;
+        const second = code[frame.pc + 1];
+        const third = code[frame.pc + 2].op;
+        const fourth = code[frame.pc + 3];
+        const x = frame.locals[@intCast(code[frame.pc].operands[0].int)];
+        if (x.data != .number) return false;
+        const y = switch (second.op) {
+            .load => frame.locals[@intCast(second.operands[0].int)],
+            .@"const" => switch (unit.values[@intCast(second.operands[0].int)]) {
+                .value => |v| v,
+                else => return false,
+            },
+            else => return false,
+        };
+        if (y.data != .number) return false;
+        // Both operands are pushed in the parts.
+        if (frame.stack.items.len + 2 > frame.stack.capacity) return false;
+        const head = costs.chargeUnmeasured(.load).fuel + costs.chargeUnmeasured(second.op).fuel;
+        const head_alloc = costs.chargeUnmeasured(.load).alloc + costs.chargeUnmeasured(second.op).alloc;
+        switch (third) {
+            .less, .greater, .less_or_equal, .greater_or_equal => {
+                if (fourth.op != .branch_false and fourth.op != .branch_true) return false;
+                const order = model.Decimal.order(x.data.number, y.data.number);
+                const b = switch (third) {
+                    .less => order == .lt,
+                    .greater => order == .gt,
+                    .less_or_equal => order != .gt,
+                    else => order != .lt,
+                };
+                const c = costs.chargeUnmeasured(third);
+                const last = costs.chargeUnmeasured(fourth.op);
+                if (!bounds.chargeSteps(g, run, .{ .fuel = head + c.fuel + last.fuel, .alloc = head_alloc + c.alloc + last.alloc }, head + c.fuel, 4)) return false;
+                frame.pc = if (b == (fourth.op == .branch_true)) @intCast(fourth.operands[0].int) else frame.pc + 4;
+                return true;
+            },
+            inline .add, .subtract, .multiply, .divide, .div, .mod => |o| {
+                if (fourth.op != .store) return false;
+                const op: model.decimal.Operator = switch (o) {
+                    .add => .add,
+                    .subtract => .subtract,
+                    .multiply => .multiply,
+                    .divide => .divide,
+                    .div => .div,
+                    else => .mod,
+                };
+                const result = model.decimal.calculate(g.gpa, op, x.data.number, y.data.number) catch return false;
+                const c = costs.chargeNumber(o, &result);
+                const last = costs.chargeUnmeasured(.store);
+                const s: usize = @intCast(fourth.operands[0].int);
+                const old = frame.locals[s];
+                // As the pair reuses it: held only by its local.
+                if (old.data == .number and old.references == 1) {
+                    if (!bounds.chargeSteps(g, run, .{ .fuel = head + c.fuel + last.fuel, .alloc = head_alloc + c.alloc + last.alloc }, head + c.fuel, 4)) return false;
+                    old.data.number = result;
+                } else {
+                    const r = model.scalar(g.gpa, .{ .number = result }) catch return false;
+                    if (!bounds.chargeSteps(g, run, .{ .fuel = head + c.fuel + last.fuel, .alloc = head_alloc + c.alloc + last.alloc }, head + c.fuel, 4)) {
+                        r.release();
+                        return false;
+                    }
+                    old.release();
+                    frame.locals[s] = r;
+                }
+                frame.pc += 4;
+                return true;
+            },
+            else => return false,
+        }
     }
 
     /// `call` of a body of the top frame's unit with its `n` arguments on
