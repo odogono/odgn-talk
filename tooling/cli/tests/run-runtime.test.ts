@@ -6,7 +6,6 @@ import { join, resolve } from 'node:path';
 import {
   verifyHttpExample,
   verifyRunnerPeers,
-  verifyTcpRunnerPeers,
   verifyScriptRunner,
 } from './run-integration';
 
@@ -56,18 +55,27 @@ test.skipIf(!goRunner)(
   120_000,
 );
 
-// The native Zig Runner, when it has been built, over loopback TCP: it has
-// no TLS yet (#1997).
+// The native Zig Runner, when it has been built, speaks the same wire
+// over its own TLS (ADR 0164): each listens for the TS and Go Runners.
 const zigRunner = resolve(
   import.meta.dir,
   '../../../impl/zig/zig-out/bin/northtalk',
 );
 
 test.skipIf(!existsSync(zigRunner))(
-  'a TS and a native Runner carry Remote Sends over TCP',
+  'a TS and a native Runner carry Remote Sends both ways',
   async () => {
-    await verifyTcpRunnerPeers([zigRunner], [process.execPath, main]);
-    await verifyTcpRunnerPeers([process.execPath, main], [zigRunner]);
+    await verifyRunnerPeers([zigRunner], [process.execPath, main]);
+    await verifyRunnerPeers([process.execPath, main], [zigRunner]);
+  },
+  120_000,
+);
+
+test.skipIf(!existsSync(zigRunner) || !goRunner)(
+  'a Go and a native Runner carry Remote Sends both ways',
+  async () => {
+    await verifyRunnerPeers([zigRunner], [goRunner!]);
+    await verifyRunnerPeers([goRunner!], [zigRunner]);
   },
   120_000,
 );

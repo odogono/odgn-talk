@@ -695,9 +695,11 @@ in one Group, granted under `GrantsAsUsed` `console`, `clock`, `timer`, an
 in-memory `store` (the Session Store's), `http`, `peer` and, when standard
 input is a terminal, `user`. `peer` carries Remote Sends to other Runners
 ([Runner peers](../../spec/12-sessions-and-tooling.md#runner-peers)) over
-plain TCP on loopback only: `--listen tcp://127.0.0.1:<port>` and `--peer
-<name>=tcp://127.0.0.1:<port>`. Zig's standard library has no TLS server, so
-it refuses the TLS forms and `--peer-key`, and `caller` gives Nothing. It has no time-zone or Locale data, so it offers no
+mutual TLS with pinned keys, or over `tcp://` on loopback. Zig's standard
+library has no TLS server, so [`src/runner/tls/`](src/runner/tls/) holds a
+minimal TLS 1.3 of its own ([ADR
+0164](../../docs/adr/0164-the-native-runner-speaks-a-minimal-tls-1-3-of-its-own.md)):
+one cipher suite, X25519 and ECDSA P-256, pinned keys, and no resumption. It has no time-zone or Locale data, so it offers no
 `calendar` or `locale`. It Delivers `start` with the list of the arguments
 after the file, and exits 0 once nothing can happen again, or 1 when a Run
 ended with an uncaught error, a limit fault or a failed effect, which it

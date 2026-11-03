@@ -158,3 +158,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0161: Folio Projects carry their own sounds and start from a Base Project](0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)
 - [0162: Folio Add-ons provide Element and Instrument kinds, shown in Palettes and driven by controls](0162-folio-add-ons-provide-element-and-instrument-kinds-palettes-and-controls.md)
 - [0163: The Script Runner carries Remote Sends over mutual TLS with pinned keys](0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)
+- [0164: The native Runner speaks a minimal TLS 1.3 of its own](0164-the-native-runner-speaks-a-minimal-tls-1-3-of-its-own.md)

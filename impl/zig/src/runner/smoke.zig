@@ -48,8 +48,8 @@ pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
     const a = init.arena.allocator();
     const args = try init.minimal.args.toSlice(a);
-    if (args.len != 6) {
-        std.debug.print("usage: runner-smoke <northtalk> <hello.talk> <fetch-smoke.talk> <peer-billing.talk> <peer-shop.talk>\n", .{});
+    if (args.len != 8) {
+        std.debug.print("usage: runner-smoke <northtalk> <hello.talk> <fetch-smoke.talk> <peer-billing.talk> <peer-shop.talk> <shop.pem> <shop-fingerprint.txt>\n", .{});
         return 2;
     }
     var child = try std.process.spawn(io, .{ .argv = &.{ args[1], "--port", "0", args[2] }, .stdin = .ignore, .stdout = .pipe, .stderr = .inherit });
@@ -102,7 +102,8 @@ pub fn main(init: std.process.Init) !u8 {
     try expect(fetched.term == .exited and fetched.term.exited == 0, "fetch-smoke ended {f}: {s}", .{ fetched.term, fetched.stderr });
     try expect(std.mem.eql(u8, fetched.stdout, want), "fetch-smoke said:\n{s}", .{fetched.stdout});
     std.debug.print("runner-test: fetch checks passed\n", .{});
-    try peers(a, io, args[1], args[4], args[5]);
+    const shop_print = try std.Io.Dir.cwd().readFileAlloc(io, args[7], a, .limited(256));
+    try peers(a, io, args[1], args[4], args[5], args[6], shop_print);
     return 0;
 }
 
@@ -128,35 +129,67 @@ const Lines = struct {
     }
 };
 
-/// Two native Runners carry Remote Sends over loopback TCP: a call and its
-/// reply, a Script error as `send failed`, a post, and `caller` Nothing;
-/// the TLS forms are refused.
-fn peers(a: std.mem.Allocator, io: std.Io, northtalk: []const u8, billing: []const u8, shop: []const u8) !void {
-    var listener = try std.process.spawn(io, .{ .argv = &.{ northtalk, "--listen", "tcp://127.0.0.1:0", billing }, .stdin = .ignore, .stdout = .pipe, .stderr = .pipe });
+/// Two native Runners carry Remote Sends (chapter 12, Runner peers): a
+/// call and its reply, a Script error as `send failed`, and a post. Over
+/// mutual TLS the listener's `--peer` names the caller and a wrong pinned
+/// key is refused; over loopback TCP nobody is vouched for, and any other
+/// host is refused.
+fn peers(a: std.mem.Allocator, io: std.Io, northtalk: []const u8, billing: []const u8, shop: []const u8, shop_key: []const u8, shop_print: []const u8) !void {
+    const print = std.mem.trim(u8, shop_print, " \n");
+    const named = try std.fmt.allocPrint(a, "shop=tls://127.0.0.1:1#{s}", .{print});
+    const tls_address = try exchange(a, io, northtalk, &.{ "--listen", "127.0.0.1:0", "--peer", named, billing }, &.{ "--peer-key", shop_key }, shop, "shop");
+    try expect(std.mem.startsWith(u8, tls_address, "tls://127.0.0.1:"), "listening on {s}", .{tls_address});
+    _ = try exchange(a, io, northtalk, &.{ "--listen", "tcp://127.0.0.1:0", billing }, &.{}, shop, "nobody");
+
+    // A listener whose key isn't the pinned one is never reached.
+    var listener = try std.process.spawn(io, .{ .argv = &.{ northtalk, "--listen", "127.0.0.1:0", billing }, .stdin = .ignore, .stdout = .pipe, .stderr = .pipe });
     errdefer listener.kill(io);
     var errs: Lines = .{ .fd = listener.stderr.?.handle };
     const listening = try errs.with(a, "peer: listening on ");
     const address = listening["peer: listening on ".len..];
-    try expect(std.mem.startsWith(u8, address, "tcp://127.0.0.1:"), "listening on {s}", .{address});
+    const hash = std.mem.lastIndexOfScalar(u8, address, '#').?;
+    const wrong = try std.fmt.allocPrint(a, "billing={s}#{s}", .{ address[0..hash], &@as([64]u8, @splat('0')) });
+    const refused = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--peer", wrong, shop } });
+    try expect(refused.term == .exited and refused.term.exited == 1 and std.mem.indexOf(u8, refused.stderr, "bad address") != null, "a wrongly pinned peer gave {f}: {s}", .{ refused.term, refused.stderr });
+    try posix.kill(listener.id.?, .INT);
+    _ = try listener.wait(io);
 
-    const peer = try std.fmt.allocPrint(a, "billing={s}", .{address});
-    const dialled = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--peer", peer, shop } });
+    const away = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--listen", "tcp://192.0.2.1:7400", billing } });
+    try expect(away.term == .exited and away.term.exited == 2 and std.mem.indexOf(u8, away.stderr, "only for loopback") != null, "a non-loopback listen gave {f}: {s}", .{ away.term, away.stderr });
+    const bad_key = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--peer-key", billing, shop } });
+    try expect(bad_key.term == .exited and bad_key.term.exited == 2, "a --peer-key that isn't one gave {f}: {s}", .{ bad_key.term, bad_key.stderr });
+    std.debug.print("runner-test: peer checks passed\n", .{});
+}
+
+/// A listener started with `listen`, a dialling Runner run with `dial`
+/// and a `--peer` to it, and what each says; the listener's address.
+fn exchange(a: std.mem.Allocator, io: std.Io, northtalk: []const u8, listen: []const []const u8, dial: []const []const u8, shop: []const u8, who: []const u8) ![]const u8 {
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(a, northtalk);
+    try argv.appendSlice(a, listen);
+    var listener = try std.process.spawn(io, .{ .argv = argv.items, .stdin = .ignore, .stdout = .pipe, .stderr = .pipe });
+    errdefer listener.kill(io);
+    var errs: Lines = .{ .fd = listener.stderr.?.handle };
+    const listening = try errs.with(a, "peer: listening on ");
+    const address = listening["peer: listening on ".len..];
+
+    argv.clearRetainingCapacity();
+    try argv.append(a, northtalk);
+    try argv.appendSlice(a, dial);
+    try argv.appendSlice(a, &.{ "--peer", try std.fmt.allocPrint(a, "billing={s}", .{address}), shop });
+    const dialled = try std.process.run(a, io, .{ .argv = argv.items });
     try expect(dialled.term == .exited and dialled.term.exited == 0, "the dialling Runner ended {f}: {s}", .{ dialled.term, dialled.stderr });
     try expect(std.mem.eql(u8, dialled.stdout, "total 13\nsend failed errored\n"), "the dialling Runner said:\n{s}", .{dialled.stdout});
+    try expect(std.mem.startsWith(u8, dialled.stderr, "peer: key "), "the dialling Runner wrote:\n{s}", .{dialled.stderr});
     var out: Lines = .{ .fd = listener.stdout.?.handle };
-    const want = [_][]const u8{ "charge 12 from nothing", "charge 500 from nothing", "note hi", "charge 1 from nothing" };
+    const want = [_][]const u8{ "charge 12 from ", "charge 500 from ", "note hi from ", "charge 1 from " };
     for (want) |w| {
         const got = try out.with(a, "");
-        try expect(std.mem.eql(u8, got, w), "the listener said {s}, not {s}", .{ got, w });
+        const line = try std.fmt.allocPrint(a, "{s}{s}", .{ w, who });
+        try expect(std.mem.eql(u8, got, line), "the listener said {s}, not {s}", .{ got, line });
     }
     try posix.kill(listener.id.?, .INT);
     const term = try listener.wait(io);
     try expect(term == .exited and term.exited == 130, "SIGINT ended the listener with {f}", .{term});
-
-    // TLS isn't the native Runner's yet, and plain TCP stays on loopback.
-    const tls = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--peer", "billing=tls://127.0.0.1:1#0000000000000000000000000000000000000000000000000000000000000000", shop } });
-    try expect(tls.term == .exited and tls.term.exited == 2 and std.mem.indexOf(u8, tls.stderr, "no TLS yet") != null, "a tls:// peer gave {f}: {s}", .{ tls.term, tls.stderr });
-    const away = try std.process.run(a, io, .{ .argv = &.{ northtalk, "--listen", "tcp://192.0.2.1:7400", billing } });
-    try expect(away.term == .exited and away.term.exited == 2 and std.mem.indexOf(u8, away.stderr, "only for loopback") != null, "a non-loopback listen gave {f}: {s}", .{ away.term, away.stderr });
-    std.debug.print("runner-test: peer checks passed\n", .{});
+    return address;
 }

@@ -146,6 +146,8 @@ pub fn build(b: *std.Build) void {
     run_smoke.addFileArg(b.path("src/runner/fetch-smoke.talk"));
     run_smoke.addFileArg(b.path("src/runner/peer-billing.talk"));
     run_smoke.addFileArg(b.path("src/runner/peer-shop.talk"));
+    run_smoke.addFileArg(b.path("src/runner/tls/testdata/sec1.pem"));
+    run_smoke.addFileArg(b.path("src/runner/tls/testdata/fingerprint.txt"));
     run_smoke.has_side_effects = true;
     b.step("runner-test", "Run northtalk on examples/http/hello.talk and a fetching Script, and check their answers").dependOn(&run_smoke.step);
 
