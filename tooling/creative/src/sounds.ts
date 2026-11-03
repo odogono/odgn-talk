@@ -283,5 +283,5 @@ export const MUSIC_SOUNDS: ReadonlySet<string> = new Set(KIT_SOUND_KEYS);
 /** Why a pattern word's sound can't play, and where to get it if Music has it. */
 export const missingSoundMessage = (key: string): string =>
   MUSIC_SOUNDS.has(key)
-    ? `No sound is named “${key}”. Add it from Music with Add Music Sound… in Info.`
+    ? `No sound is named “${key}”. Add it with Project ▸ Add Sound from Music….`
     : `No sound is named “${key}”.`;

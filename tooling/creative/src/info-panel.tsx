@@ -1,4 +1,3 @@
-import { KIT_SOUND_KEYS } from './kits/kits';
 import type { ReadonlySignal } from '@preact/signals';
 import { Fragment, render } from 'preact';
 import { useState } from 'preact/hooks';
@@ -537,21 +536,6 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
       <button data-add-sound="" disabled={disabled} type="button">
         Add sound…
       </button>
-      <select
-        aria-label="Add Music Sound"
-        data-add-music-sound=""
-        disabled={disabled}
-        value=""
-      >
-        <option value="">Add Music Sound…</option>
-        {KIT_SOUND_KEYS.filter(
-          key => !project.assets.some(a => a.name === key),
-        ).map(key => (
-          <option key={key} value={key}>
-            {key}
-          </option>
-        ))}
-      </select>
       <p className="muted">
         Scripts play a sound by its name, like tell sound to play
         &quot;waves&quot;. Add action… can write that for you.
