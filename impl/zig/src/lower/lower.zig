@@ -42,13 +42,19 @@ pub const Instruction = struct {
     /// What the `constant`, `local`, `variable` and `body` operands name.
     note: []const u8,
     /// Whether this starts `load; load | const; <arithmetic | comparison>;
-    /// store | branch`, which the Zig fast path may run as one step (#1931).
+    /// store | branch`, or is a `jump` to `next; store`, which the Zig fast
+    /// path may run as one step (#1931).
     /// Derived from the opcodes alone; never shown or stored.
     fuse: bool = false,
 };
 
 /// Marks each instruction that starts a sequence the fast path fuses.
 fn markFused(code: []Instruction) void {
+    // `jump L` where `L: next; store`, a for-each loop's turn.
+    for (code) |*ins| if (ins.op == .jump and ins.operands.len == 1 and ins.operands[0] == .int) {
+        const t: usize = @intCast(ins.operands[0].int);
+        ins.fuse = t + 1 < code.len and code[t].op == .next and code[t + 1].op == .store;
+    };
     if (code.len < 4) return;
     for (code[0 .. code.len - 3], 0..) |*ins, i| {
         if (ins.op != .load) continue;

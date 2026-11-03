@@ -150,6 +150,30 @@ const maps =
     \\
 ;
 
+/// For-each loops, which the fast path turns as one step: over a Range
+/// whose item another local still holds, so it can't be written in place,
+/// over a List of Numbers and of Text, and over an empty Range.
+const loops =
+    \\on run n
+    \\  put 0 into total
+    \\  repeat for each i in 1..n
+    \\    add i to total
+    \\    if i mod 3 = 0 then put i into held
+    \\  end repeat
+    \\  repeat for each v in [10, 20, 30]
+    \\    add v to total
+    \\  end repeat
+    \\  repeat for each t in ["a", "b"]
+    \\    put t into last
+    \\  end repeat
+    \\  repeat for each i in 1..0
+    \\    add 1000 to total
+    \\  end repeat
+    \\  return [total, held, i, v, last]
+    \\end run
+    \\
+;
+
 const Options = struct {
     fast: bool,
     limits: machine.Limits = .{},
@@ -237,6 +261,7 @@ test "the fast path's Runs match the general loop's to completion" {
     try expectSame(quantities, 4, .{ .fast = true });
     try expectSame(calls, 6, .{ .fast = true });
     try expectSame(maps, 6, .{ .fast = true });
+    try expectSame(loops, 7, .{ .fast = true });
     // Shared locals keep their own values.
     const got = try trace(testing.allocator, mixed, 8, .{ .fast = true });
     defer testing.allocator.free(got);
@@ -246,6 +271,9 @@ test "the fast path's Runs match the general loop's to completion" {
     try testing.expect(std.mem.indexOf(u8, called, "value=[209, 6]") != null);
     const mapped = try trace(testing.allocator, maps, 6, .{ .fast = true });
     defer testing.allocator.free(mapped);
+    const looped = try trace(testing.allocator, loops, 7, .{ .fast = true });
+    defer testing.allocator.free(looped);
+    try testing.expect(std.mem.indexOf(u8, looped, "value=[88, 6, 7, 30, \"b\"]") != null);
     try testing.expect(std.mem.indexOf(u8, mapped, "value=[60, {x: 12, vx: 2, last: 12}, {x: 0, vx: 2}, nothing]") != null);
 }
 
@@ -258,6 +286,7 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
         try expectSame(maps, 3, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
+        try expectSame(loops, 4, .{ .fast = true, .limits = .{ .fuel_per_run = fuel } });
     }
     for (1..200) |alloc| {
         try expectSame(quantities, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
@@ -265,6 +294,7 @@ test "the fast path faults where the general loop does on every Fuel and allocat
         try expectSame(mixed, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(calls, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
         try expectSame(maps, 3, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
+        try expectSame(loops, 4, .{ .fast = true, .limits = .{ .alloc_per_run = alloc } });
     }
     // Quantity results occupy 24 logical bytes. Reach the later arithmetic
     // and its stores too, checking immediately below and at each 8-byte
@@ -301,6 +331,7 @@ test "the fast path is preempted where the general loop is at every Fuel Slice" 
         try expectSame(mixed, 4, .{ .fast = true, .slice = slice });
         try expectSame(calls, 4, .{ .fast = true, .slice = slice });
         try expectSame(maps, 4, .{ .fast = true, .slice = slice });
+        try expectSame(loops, 4, .{ .fast = true, .slice = slice });
     }
 }
 
@@ -319,7 +350,7 @@ test "the fast path recovers from a refused result node" {
     // something a Host compares. A refused Run must leak nothing, and any
     // Run that completes must match the unrefused one.
     const gpa = testing.allocator;
-    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 }, .{ quantities, 4 } }) |case| {
+    for ([_]struct { []const u8, i64 }{ .{ loop, 20 }, .{ mixed, 4 }, .{ quantities, 4 }, .{ loops, 7 } }) |case| {
         const want = try trace(gpa, case[0], case[1], .{ .fast = true });
         defer gpa.free(want);
         for (0..80) |k| {
