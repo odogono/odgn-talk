@@ -237,6 +237,22 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   if (deps.initial.notice) {
     notice(deps.initial.notice);
   }
+  // The Project the page opens with is read before its Add-ons load, so
+  // load them now, as opening one does, or its Instruments stay unknown.
+  if (deps.initial.project.addOns?.length) {
+    void (async () => {
+      const before = editor.stamp();
+      const project = await addOnsFor(editor.snapshot());
+      if (editor.isCurrent(before)) {
+        const safe = editor.contentState === safeContent;
+        editor.replaceProject(project);
+        if (safe) {
+          safeContent = editor.contentState;
+        }
+        shell.redraw();
+      }
+    })();
+  }
 
   const drawReadonly = (): void => {
     byId('readonly-banner').hidden = lock.editing || orphaned.value;
