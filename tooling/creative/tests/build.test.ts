@@ -174,6 +174,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   3: 'a5db6a146d357362',
   // Music performs when played (#2028).
   4: 'f3964152ed124aba',
+  // Its starter Script loops from openScript, so Punch In keeps it (#2042).
+  5: 'e78a6130985b087b',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

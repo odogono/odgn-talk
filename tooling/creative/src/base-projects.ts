@@ -16,7 +16,7 @@ import { fetchKeptFile } from './open-url';
 import { readProjectFile, sha256Hex } from './project-file';
 
 /** Bumped whenever Music's content changes; build tests hold the two together. */
-export const MUSIC_BASE_VERSION = 4;
+export const MUSIC_BASE_VERSION = 5;
 export const BLANK_BASE_VERSION = 1;
 
 /** The most bytes a Base Project's `.folio` file may take. */
@@ -43,10 +43,11 @@ export const kitSoundAsset = async (
 };
 
 const MUSIC_SCRIPT = `-- Every kit sound is this Project's own: bd, sd, hh, oh, cp and more.
--- Remove the dashes below to hear a beat when Play starts.
--- on startPlay
+-- Remove the dashes below to hear a beat when Play starts. While it
+-- plays, edit the pattern and press ⌘↩ to hear it change on the next bar.
+-- on openScript
 --   loop "bd hh sd hh"
--- end startPlay
+-- end openScript
 `;
 
 /** Builds the Music Base Project and its asset bytes. */
