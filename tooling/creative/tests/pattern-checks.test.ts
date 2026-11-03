@@ -136,11 +136,11 @@ test('a Project knows only its own sounds, and a Music name says where to get it
   ).toEqual([
     [
       'bd',
-      'No sound is named “bd”. Add it from Music with Add Music Sound… in Info.',
+      'No sound is named “bd”. Add it with Project ▸ Add Sound from Music….',
     ],
     [
       'bd:1',
-      'No sound is named “bd:1”. Add it from Music with Add Music Sound… in Info.',
+      'No sound is named “bd:1”. Add it with Project ▸ Add Sound from Music….',
     ],
     ['zz', 'No sound is named “zz”.'],
   ]);

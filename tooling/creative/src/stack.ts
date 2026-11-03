@@ -1,5 +1,6 @@
 import { bindingRange } from './bindings';
 import { kitSoundAsset } from './base-projects';
+import { KIT_SOUND_KEYS } from './kits/kits';
 import type { DeepReadonly } from './readonly';
 import { allElements, elementVisibility } from './tree/rules';
 // The Stack editor shell (#749), in the layout the UI prototype chose for
@@ -37,6 +38,7 @@ import { CREATABLE_KINDS, kindOf } from './elements/registry';
 import { isAddOnKind, splitAddOnKind } from './elements/add-on';
 import { pageAddOns, pageTrust } from './add-ons/page';
 import { showAddOnsDialog } from './add-ons/add-ons-dialog';
+import { showMusicSoundsDialog } from './music-sounds-dialog';
 import { offeredElementKinds } from './add-ons/offered';
 import { instrumentKindNames } from './instruments/registry';
 import { importSound, SOUND_ACCEPT } from './sounds';
@@ -633,14 +635,6 @@ export const mountStack = (
   });
   info.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
-    if (target.hasAttribute('data-add-music-sound')) {
-      const key = target.value;
-      target.value = '';
-      if (key) {
-        void addMusicSound(key);
-      }
-      return;
-    }
     if (writeInstrument(target)) {
       return;
     }
@@ -1143,6 +1137,17 @@ export const mountStack = (
       ...offered.map(k => toolButton(k.kind, k.label, k.icon ?? '')),
     );
   };
+  // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in.
+  byId('add-music-sound').addEventListener('click', () =>
+    showMusicSoundsDialog({
+      add: addMusicSound,
+      missing: () =>
+        KIT_SOUND_KEYS.filter(
+          key => !editor.project.assets.some(a => a.name === key),
+        ),
+      readOnly: () => editor.readOnly,
+    }),
+  );
   // Project ▸ Add-ons… (#2025) edits the Add-ons the Project lists.
   byId('show-add-ons').addEventListener('click', () =>
     showAddOnsDialog({

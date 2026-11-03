@@ -506,7 +506,7 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
 
 - [menus.ts](src/menus.ts): opening and closing the header's Folio, File,
   Edit and Project menus, and the About window; the Window menu is in
-  [windows.ts](src/windows.ts). The Folio, File and Project menus are static HTML; Project ▸ Add-ons… is wired in [stack.ts](src/stack.ts).
+  [windows.ts](src/windows.ts). The Folio, File and Project menus are static HTML; Project ▸ Add-ons… and Add Sound from Music… ([music-sounds-dialog.ts](src/music-sounds-dialog.ts), #2027) are wired in [stack.ts](src/stack.ts).
 - [edit-menu.tsx](src/edit-menu.tsx): the Preact Edit menu commands, enabled
   from the editor signals and the shell's `playing` signal. Clicks and
   shortcuts run through `runCommand` in [stack.ts](src/stack.ts).

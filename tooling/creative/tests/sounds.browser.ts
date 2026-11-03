@@ -50,8 +50,14 @@ const wavFile = (): File => {
   return new File([bytes], 'waves.wav', { type: 'audio/wav' });
 };
 
-const picker = () =>
-  document.querySelector<HTMLSelectElement>('#info [data-add-music-sound]')!;
+const musicDialog = () =>
+  document.querySelector<HTMLDialogElement>('dialog.music-sounds-dialog');
+const musicSounds = () =>
+  [
+    ...musicDialog()!.querySelectorAll<HTMLOptionElement>(
+      '[data-music-sounds] option',
+    ),
+  ].map(option => option.value);
 
 const pickSound = (file: File) => {
   const nativePicker = HTMLInputElement.prototype.click;
@@ -117,21 +123,26 @@ export const runBrowserTests = async () => {
     assert(shell.editor.project.assets.length === 1, 'Redo restores the sound');
   });
 
-  await test('Add Music Sound adds a named Music sound as one undoable edit (ADR 0161)', async () => {
+  await test('Project ▸ Add Sound from Music… adds a named Music sound as one undoable edit (#2027)', async () => {
     assert(
-      [...picker().options].some(o => o.value === 'bd:1'),
-      'Music offers bd:1',
+      !document.querySelector('#info [data-add-music-sound]'),
+      'Info has no Music picker',
     );
+    document.querySelector<HTMLButtonElement>('#add-music-sound')!.click();
+    assert(musicDialog()?.open, 'The dialog is open');
+    assert(musicSounds().includes('bd:1'), 'Music offers bd:1');
     const before = shell.editor.project.assets.length;
-    picker().value = 'bd:1';
-    picker().dispatchEvent(new Event('change', { bubbles: true }));
+    musicDialog()!.querySelector<HTMLSelectElement>(
+      '[data-music-sounds]',
+    )!.value = 'bd:1';
+    musicDialog()!
+      .querySelector<HTMLButtonElement>('[data-add-music-sound]')!
+      .click();
     await until(() => shell.editor.project.assets.some(a => a.name === 'bd:1'));
-    shell.redraw();
-    assert(picker().value === '', 'The picker resets');
-    assert(
-      ![...picker().options].some(o => o.value === 'bd:1'),
-      'A sound the Project has is no longer offered',
-    );
+    await until(() => !musicSounds().includes('bd:1'));
+    assert(musicDialog()?.open, 'The dialog stays open for more');
+    musicDialog()!.querySelector<HTMLButtonElement>('button.default')!.click();
+    await until(() => !musicDialog());
     shell.editor.undo();
     shell.redraw();
     assert(

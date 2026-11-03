@@ -1499,6 +1499,24 @@ body.playing #performance-window {
   gap: 8px;
 }
 
+.music-sounds-dialog {
+  max-width: min(24rem, calc(100vw - 32px));
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+.music-sounds-dialog h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+.music-sounds-dialog select {
+  width: 100%;
+}
+.music-sounds-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
 .add-ons-dialog {
   max-width: min(32rem, calc(100vw - 32px));
   border: 1px solid var(--muted);
