@@ -14,10 +14,12 @@ pub const methods = [_][]const u8{ "GET", "HEAD", "POST", "PUT", "PATCH", "DELET
 pub const host_headers = [_][]const u8{ "host", "content-length", "transfer-encoding", "connection", "keep-alive", "proxy-connection", "te", "trailer", "upgrade" };
 
 /// A URL in chapter 7's strict profile, split and normalized. Its texts
-/// borrow from the URL, except `host`, which `buf` holds lowercased.
+/// borrow from the URL, except the host, which `buf` holds lowercased. The
+/// host is a length, not a slice of `buf`, since a Url is returned by value
+/// and a slice would point into the copy it came from (#1907).
 pub const Url = struct {
     https: bool,
-    host: []const u8,
+    host_len: usize,
     /// The effective port: the scheme's default when the URL omits it.
     port: u16,
     /// The path as written, empty for `/`.
@@ -26,6 +28,10 @@ pub const Url = struct {
     query: ?[]const u8,
     buf: [256]u8 = undefined,
 
+    pub fn host(u: *const Url) []const u8 {
+        return u.buf[0..u.host_len];
+    }
+
     pub fn defaultPort(u: *const Url) u16 {
         return if (u.https) 443 else 80;
     }
@@ -33,7 +39,7 @@ pub const Url = struct {
     /// The normalized URL, without the query: no default port, no
     /// fragment, `/` for an empty path.
     pub fn writeBase(u: *const Url, w: anytype) !void {
-        try w.print("{s}://{s}", .{ if (u.https) "https" else "http", u.host });
+        try w.print("{s}://{s}", .{ if (u.https) "https" else "http", u.host() });
         if (u.port != u.defaultPort()) try w.print(":{d}", .{u.port});
         try w.writeAll(if (u.path.len == 0) "/" else u.path);
     }
@@ -125,7 +131,7 @@ pub fn parseUrl(url: []const u8) ?Url {
         if (ch <= 0x20 or ch >= 0x7f or ch == '\\') return null;
         if (ch == '%' and (i + 2 >= url.len or !std.ascii.isHex(url[i + 1]) or !std.ascii.isHex(url[i + 2]))) return null;
     }
-    var out: Url = .{ .https = false, .host = "", .port = 0, .path = "", .query = null };
+    var out: Url = .{ .https = false, .host_len = 0, .port = 0, .path = "", .query = null };
     var rest: []const u8 = undefined;
     if (std.ascii.startsWithIgnoreCase(url, "https://")) {
         out.https = true;
@@ -157,7 +163,7 @@ pub fn parseUrl(url: []const u8) ?Url {
         if (isDigits(last) and !ipv4(host)) return null;
     }
     if (host.len > out.buf.len) return null;
-    out.host = std.ascii.lowerString(out.buf[0..host.len], host);
+    out.host_len = std.ascii.lowerString(out.buf[0..host.len], host).len;
     out.port = out.defaultPort();
     if (port_text) |p| {
         if (!isDigits(p)) return null;
