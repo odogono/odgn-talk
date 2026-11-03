@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { InstrumentMessage } from '../src/instruments/session';
-import { DEFAULT_SAMPLER } from '../src/sounds';
+import { DEFAULT_SAMPLER, musicSoundIn } from '../src/sounds';
 import { text } from '@northtalk/ts';
 import { createElement, createPage, createProject, textOf } from '../src/model';
 import { definesHandler, PlaySession } from '../src/play';
@@ -692,6 +692,20 @@ for (const bad of ['missing', 'picture']) {
     expect(play.problems[1]?.owner).toBe(project.pages[0]!.elements[0]);
   });
 }
+
+// Playing it reports again, generically, so only the load report offers it.
+test('loading a missing Music sound offers its quick fix', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'on click\n tell sound to play "bd"\nend click';
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems.map(p => musicSoundIn(p.message))).toEqual([
+    'bd',
+    undefined,
+  ]);
+});
 
 test('leaving a Page stops its Scripts’ sounds while a Project sound continues', async () => {
   const project = fixture();

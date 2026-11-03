@@ -531,6 +531,9 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
   on errors option reaches the worker as `pauseOnErrors`, which
   [play-host.ts](src/play-host.ts) turns into the Core's
   `pauseOn({ uncaughtError })`; a stop is then a Breakpoint's.
+  A problem whose message `musicSoundIn` ([sounds.ts](src/sounds.ts)) reads
+  as a missing Music sound gets an Add from Music button calling the shell's
+  `addMusicSound` (#2033).
 - Tests: problem reporting in [play.test.ts](tests/play.test.ts); the window
   in [errors.browser.ts](tests/errors.browser.ts) (append, labels, opening,
   vanished owners, Clear and Close) and, during Play,

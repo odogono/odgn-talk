@@ -1,12 +1,14 @@
 import type { DeepReadonly } from './readonly';
 import { findElement } from './tree/rules';
 // The Errors window: Script problems from the last Play Session, kept after
-// it ends, each linking to its authored Script and line.
+// it ends, each linking to its authored Script and line. A sound the
+// Project lacks but Music brings offers a quick fix copying it in (ADR 0161).
 import { signal, type Signal } from '@preact/signals';
 import { render } from 'preact';
 import { byId } from './dom';
 import { type Page, type Project } from './model';
 import { ownerById, scriptPage, type ScriptOwner } from './script-manifest';
+import { musicSoundIn } from './sounds';
 import { bringWindowForward } from './windows';
 import { type StackShell } from './stack';
 import type { SourceTarget } from './play';
@@ -35,13 +37,25 @@ const isProject = (owner: ScriptOwner): owner is DeepReadonly<Project> =>
 const isPage = (owner: ScriptOwner): owner is DeepReadonly<Page> =>
   'elements' in owner;
 
+/** What the panel needs to offer a missing Music sound's quick fix. */
+type SoundFix = {
+  add: (key: string) => void;
+  /** Whether the Project has a sound by this name. */
+  has: (key: string) => boolean;
+  /** Bumped when the Project or its read-only state changes. */
+  project: Signal<number>;
+  readOnly: () => boolean;
+};
+
 const ErrorsPanel = ({
+  fix,
   pauseOnErrors,
   problems,
   onClear,
   onOpen,
   onPauseOnErrors,
 }: {
+  fix: SoundFix;
   onClear: () => void;
   onOpen: (problem: ReportedProblem) => void;
   onPauseOnErrors: (on: boolean) => void;
@@ -49,6 +63,7 @@ const ErrorsPanel = ({
   problems: Signal<readonly ReportedProblem[]>;
 }) => {
   const list = problems.value;
+  void fix.project.value;
   return (
     <>
       <label
@@ -66,23 +81,37 @@ const ErrorsPanel = ({
         No errors. Script errors from browsing or presenting appear here.
       </p>
       <ol id="error-list">
-        {list.map(problem => (
-          <li key={problem.key}>
-            <button
-              disabled={problem.vanished}
-              onClick={() => onOpen(problem)}
-              title={
-                problem.vanished
-                  ? 'This is no longer in the Project'
-                  : 'Open this source'
-              }
-              type="button"
-            >
-              <span className="where">{problem.label}</span>
-              <span>{problem.message}</span>
-            </button>
-          </li>
-        ))}
+        {list.map(problem => {
+          const sound = musicSoundIn(problem.message);
+          return (
+            <li key={problem.key}>
+              <button
+                disabled={problem.vanished}
+                onClick={() => onOpen(problem)}
+                title={
+                  problem.vanished
+                    ? 'This is no longer in the Project'
+                    : 'Open this source'
+                }
+                type="button"
+              >
+                <span className="where">{problem.label}</span>
+                <span>{problem.message}</span>
+              </button>
+              {sound !== undefined && !fix.has(sound) ? (
+                <button
+                  className="error-fix"
+                  data-add-music-sound-fix={sound}
+                  disabled={fix.readOnly()}
+                  onClick={() => fix.add(sound)}
+                  type="button"
+                >
+                  Add “{sound}” from Music
+                </button>
+              ) : undefined}
+            </li>
+          );
+        })}
       </ol>
       <button id="clear-errors" onClick={onClear} type="button">
         Clear
@@ -96,14 +125,30 @@ export class ErrorsWindow {
   readonly #problems = signal<readonly ReportedProblem[]>([]);
   /** Whether an uncaught error stops its Run while browsing; off at first. */
   readonly pauseOnErrors = signal(false);
+  /** Bumped on each redraw, so quick fixes follow the Project. */
+  readonly #projectVersion = signal(0);
   #nextKey = 0;
 
   constructor(readonly shell: StackShell) {
     byId('close-errors').addEventListener('click', () => {
       this.#window.hidden = true;
     });
+    shell.onRedraw(() => {
+      this.#projectVersion.value++;
+    });
+    const fix: SoundFix = {
+      add: key => {
+        void shell.addMusicSound(key).then(() => {
+          this.#projectVersion.value++;
+        });
+      },
+      has: key => shell.editor.project.assets.some(a => a.name === key),
+      project: this.#projectVersion,
+      readOnly: () => shell.readOnly,
+    };
     render(
       <ErrorsPanel
+        fix={fix}
         onClear={() => this.clear()}
         onOpen={problem => this.#open(problem)}
         onPauseOnErrors={on => {

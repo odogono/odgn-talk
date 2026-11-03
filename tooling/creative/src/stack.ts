@@ -188,6 +188,8 @@ export type PlayMode = 'browse' | 'perform' | 'present';
 
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
+  /** Copies one of Music's sounds into the Project (ADR 0161). */
+  addMusicSound(key: string): Promise<void>;
   /** The Code Browser's Breakpoints and paused line (ADR 0147). */
   breakpoints: {
     all(): SourceBreakpoints[];
@@ -1334,6 +1336,7 @@ export const mountStack = (
     untracked(drawNow);
   });
   return {
+    addMusicSound,
     breakpoints: {
       all: () => scripts.breakpoints(),
       onChange: listener => scripts.onBreakpointsChanged(listener),

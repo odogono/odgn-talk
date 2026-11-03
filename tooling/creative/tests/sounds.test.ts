@@ -5,6 +5,8 @@ import { createProject, type Asset } from '../src/model';
 import { readProjectFile, writeProjectFile } from '../src/project-file';
 import {
   importSound,
+  missingSoundMessage,
+  musicSoundIn,
   SoundBoard,
   SOUND_MAX_SIZE,
   SOUND_WARNING_SIZE,
@@ -205,4 +207,13 @@ test('sounds survive export and import, and unused sounds follow the Script rule
     await writeProjectFile(project, new Map(), { allowMissing: true }),
   );
   expect(missing.missingAssets).toEqual([sound.asset]);
+});
+
+test('the quick fix finds the Music sound a missing-sound message names', () => {
+  expect(musicSoundIn(missingSoundMessage('bd'))).toBe('bd');
+  expect(musicSoundIn(missingSoundMessage('bd:1').replace(/\.$/u, ''))).toBe(
+    'bd:1',
+  );
+  expect(musicSoundIn(missingSoundMessage('zz'))).toBeUndefined();
+  expect(musicSoundIn('Pattern “bd”: No sound is named “bd”.')).toBe(undefined);
 });

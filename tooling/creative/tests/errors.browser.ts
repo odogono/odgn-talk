@@ -23,6 +23,11 @@ const items = () => [...document.querySelectorAll('#error-list li')];
 const buttons = () => [
   ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
 ];
+const fixes = () => [
+  ...document.querySelectorAll<HTMLButtonElement>(
+    '#error-list [data-add-music-sound-fix]',
+  ),
+];
 
 const project = createProject('Errors window');
 project.pages[0]!.name = 'Home';
@@ -175,6 +180,34 @@ export const runBrowserTests = async () => {
       () => buttons()[0]!.disabled,
       'Deleted Library opened its replacement',
     );
+  });
+  await test('a missing Music sound offers a quick fix copying it in (ADR 0161)', async () => {
+    errors.clear();
+    errors.add([
+      { line: 1, message: 'No sound is named “bd”.', owner: owner('go') },
+      { line: 2, message: 'No sound is named “zz”.', owner: owner('go') },
+      { line: 3, message: 'No sound is named “bd”.', owner: owner('go') },
+    ]);
+    await until(() => fixes().length === 2, 'bd not offered on both lines');
+    assert(
+      fixes().every(fix => fix.dataset.addMusicSoundFix === 'bd'),
+      'A sound Music lacks was offered',
+    );
+    shell.setReadOnly(true);
+    await until(() => fixes()[0]!.disabled, 'Read-only left the fix enabled');
+    shell.setReadOnly(false);
+    await until(() => !fixes()[0]!.disabled, 'The fix stayed disabled');
+    fixes()[0]!.click();
+    await until(
+      () => shell.editor.project.assets.some(a => a.name === 'bd'),
+      'The fix did not add bd',
+    );
+    await until(() => !fixes().length, 'The fix stayed after adding bd');
+    assert(items().length === 3, 'The fix removed the problems');
+    shell.editor.undo();
+    shell.redraw();
+    await until(() => fixes().length === 2, 'Undo did not offer the fix again');
+    errors.clear();
   });
   return results;
 };

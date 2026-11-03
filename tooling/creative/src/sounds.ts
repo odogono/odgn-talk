@@ -285,3 +285,12 @@ export const missingSoundMessage = (key: string): string =>
   MUSIC_SOUNDS.has(key)
     ? `No sound is named “${key}”. Add it with Project ▸ Add Sound from Music….`
     : `No sound is named “${key}”.`;
+
+/**
+ * The Music sound a missing-sound message names, for the Errors window's
+ * quick fix (ADR 0161); undefined for any other message.
+ */
+export const musicSoundIn = (message: string): string | undefined => {
+  const key = /^No sound is named “(?<key>[^”]+)”/u.exec(message)?.groups?.key;
+  return key !== undefined && MUSIC_SOUNDS.has(key) ? key : undefined;
+};
