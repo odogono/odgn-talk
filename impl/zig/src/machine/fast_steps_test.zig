@@ -73,9 +73,10 @@ const quantities =
 ;
 
 /// Calls and returns: recursion, a call with no arguments (whose result
-/// needs room on an empty stack), a parameter default and a Lambda, which the
-/// general loop calls and the fast path may return from, and a call depth
-/// that grows with `n`.
+/// needs room on an empty stack), a parameter default, a Lambda passed
+/// every parameter, which the fast path calls with its captures, a named
+/// function's value left a default, which the general loop calls, and a call depth that grows
+/// with `n`.
 const calls =
     \\function fib n
     \\  if n < 2 then return n
@@ -97,6 +98,9 @@ const calls =
     \\
     \\on run n
     \\  put given x: x + seven() into bump
+    \\  put 3 into k
+    \\  put given acc, x: acc + x * k into step
+    \\  put scaled into twice
     \\  put 0 into total
     \\  repeat for each i in 1..n
     \\    add fib(i) to total
@@ -104,6 +108,9 @@ const calls =
     \\    add scaled(i) to total
     \\    add scaled(i, 2) to total
     \\    put bump(total) into total
+    \\    put step(total, i) into total
+    \\    add twice(i) to total
+    \\    add twice(i, 1) to total
     \\  end repeat
     \\  return [total, depth(n)]
     \\end run
@@ -291,7 +298,7 @@ test "the fast path's Runs match the general loop's to completion" {
     try testing.expect(std.mem.indexOf(u8, got, "value=[56.25, 8, 7, [2], \"34567\"]") != null);
     const called = try trace(testing.allocator, calls, 6, .{ .fast = true });
     defer testing.allocator.free(called);
-    try testing.expect(std.mem.indexOf(u8, called, "value=[209, 6]") != null);
+    try testing.expect(std.mem.indexOf(u8, called, "value=[356, 6]") != null);
     const mapped = try trace(testing.allocator, maps, 6, .{ .fast = true });
     defer testing.allocator.free(mapped);
     const looped = try trace(testing.allocator, loops, 7, .{ .fast = true });
