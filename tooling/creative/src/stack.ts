@@ -61,6 +61,7 @@ import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
 import { mountInfoPanel, type NameRefusal } from './info-panel';
 import { mountSoundsWindow } from './sounds-window';
+import { mountInstrumentsWindow } from './instruments-window';
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -262,6 +263,7 @@ export const mountStack = (
       unmountTitle();
       unmountInfo();
       unmountSounds();
+      unmountInstruments();
       unmountStrip();
       unmountEditMenu();
       images.dispose();
@@ -315,6 +317,13 @@ export const mountStack = (
     bytes: asset => images.bytes.get(asset.hash),
     previewName,
     redraw: redrawVersion,
+  });
+  const instrumentsPanel = byId('instruments-panel');
+  const selectedInstrument = signal<number | undefined>(undefined);
+  const unmountInstruments = mountInstrumentsWindow(instrumentsPanel, {
+    editor,
+    redraw: redrawVersion,
+    selected: selectedInstrument,
   });
   let fieldEdit: Edit | undefined;
   const finishFieldEdit = () => {
@@ -652,9 +661,6 @@ export const mountStack = (
   });
   info.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
-    if (writeInstrument(target)) {
-      return;
-    }
     // A control's binding (#1904): one undoable edit, taking the target's
     // range when it has one.
     const binding = target.dataset.binding;
@@ -704,14 +710,6 @@ export const mountStack = (
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {
       rename(button.dataset.rename);
-    } else if (button?.hasAttribute('data-add-instrument')) {
-      const kind = info.querySelector<HTMLSelectElement>(
-        '[data-new-instrument]',
-      )!.value;
-      void addInstrument(kind);
-    } else if (button?.dataset.removeInstrument) {
-      const id = Number(button.dataset.removeInstrument);
-      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
     } else if (button?.dataset.movePage) {
       const from = editor.pageIndex;
       edit(() => editor.movePage(from, from + Number(button.dataset.movePage)));
@@ -1127,6 +1125,27 @@ export const mountStack = (
       }),
     );
   };
+
+  // The Instruments window (#2049) lists, adds, removes and edits them.
+  instrumentsPanel.addEventListener('change', event => {
+    writeInstrument(event.target as HTMLInputElement);
+  });
+  instrumentsPanel.addEventListener('click', event => {
+    const target = event.target as HTMLElement;
+    const button = target.closest('button');
+    const row = target.closest<HTMLElement>('[data-select-instrument]');
+    if (row) {
+      selectedInstrument.value = Number(row.dataset.selectInstrument);
+    } else if (button?.hasAttribute('data-add-instrument')) {
+      const kind = instrumentsPanel.querySelector<HTMLSelectElement>(
+        '[data-new-instrument]',
+      )!.value;
+      void addInstrument(kind);
+    } else if (button?.dataset.removeInstrument) {
+      const id = Number(button.dataset.removeInstrument);
+      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
+    }
+  });
 
   // The Tools window adds Elements: built-in kinds, then the kinds of the
   // Add-ons the Project lists (#2025), which load the first time one is

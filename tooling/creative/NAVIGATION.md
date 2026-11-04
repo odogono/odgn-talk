@@ -332,7 +332,8 @@ path and commit it came from. No original game's sound assets are included.
 
 ## Instruments
 
-Instrument kinds, editing in Info and Play wiring (ADR 0158, #1894).
+Instrument kinds, editing in the Instruments window and Play wiring (ADR 0158,
+#1894, #2049).
 
 - The synth and YM2149 are the built-in Instruments Add-on (#1901):
   [add-ons/instruments/](src/add-ons/instruments/index.ts) registers their
@@ -372,8 +373,9 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   [rack.ts](src/instruments/rack.ts) mixes every Instrument's Chip.
 - Editing: [tree/project-tree.ts](src/tree/project-tree.ts)'s
   `addInstrument`, `changeInstrument` and `removeInstrument` check every
-  change; [info-panel.tsx](src/info-panel.tsx)'s Instruments section, under
-  Project, shows each one, and [stack.ts](src/stack.ts) commits its fields.
+  change; [instruments-window.tsx](src/instruments-window.tsx) lists them
+  and shows the selected one's fields, and [stack.ts](src/stack.ts) commits
+  them.
 - `Project.instruments` is in [model.ts](src/model.ts);
   [project-file.ts](src/project-file.ts) checks them and migrates format 5
   Projects to format 6.
@@ -699,8 +701,10 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
   component that draws an Element on the desk, in the Page strip and in Play
   (ADR 0146), and `renderElements`, which renders a Page's layer of them.
 - [info-panel.tsx](src/info-panel.tsx): the Preact Page, Element and
-  multi-selection Info panel, observing editor, name-refusal and sound-preview
-  signals; field and action events are handled by the shell.
+  multi-selection Info panel, observing editor and name-refusal signals;
+  field and action events are handled by the shell.
+- [instruments-window.tsx](src/instruments-window.tsx): the Instruments
+  window's list and the selected Instrument's fields (#2049).
 - [page-strip.tsx](src/page-strip.tsx): the Preact Pages strip, keyed by
   session-local Page ids, with memoised miniatures sharing the shell's direct
   DOM Page renderer.

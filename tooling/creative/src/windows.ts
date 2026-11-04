@@ -59,11 +59,17 @@ export const setWindowOpener = (id: string, open: () => void): void => {
 };
 
 // The windows an author closed stay closed across reloads, and those that
-// start closed, such as Sounds (#2048), stay open once opened.
+// start closed, such as Sounds (#2048) and Instruments (#2049), stay open
+// once opened.
 const CLOSED_KEY = 'northtalk-creative-closed-windows';
+const EDIT_ONLY = new Set([
+  'info-window',
+  'sounds-window',
+  'instruments-window',
+]);
 const OPENED_KEY = 'northtalk-creative-opened-windows';
 const remembered = new Set(['tools-window', 'info-window']);
-const rememberedOpen = new Set(['sounds-window']);
+const rememberedOpen = new Set(['sounds-window', 'instruments-window']);
 const rememberClosed = () => {
   try {
     localStorage.setItem(
@@ -146,10 +152,9 @@ export const mountWindows = (): void => {
     for (const item of items) {
       const id = item.dataset.window!;
       item.setAttribute('aria-checked', String(isShowing(id)));
-      // Info and Sounds are Edit only; browsing hides them.
+      // Info, Sounds and Instruments are Edit only; browsing hides them.
       item.disabled =
-        (id === 'info-window' || id === 'sounds-window') &&
-        document.body.classList.contains('browsing');
+        EDIT_ONLY.has(id) && document.body.classList.contains('browsing');
     }
   };
   menu.addEventListener('toggle', draw);

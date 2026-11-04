@@ -293,6 +293,55 @@ export const runBrowserTests = async () => {
       'Its closed state is remembered',
     );
   });
+  await test('Instruments live in their own window, available in a Project without any (#2049)', async () => {
+    shell.editor.selectPage();
+    await settle();
+    assert(
+      !document.querySelector('#info [data-new-instrument]') &&
+        !document.querySelector('#info')!.textContent!.includes('Instruments'),
+      'Info has no Instruments section',
+    );
+    const win = document.querySelector<HTMLElement>('#instruments-window')!;
+    assert(win.hidden, 'It starts closed');
+    const item = document.querySelector<HTMLButtonElement>(
+      '#window-menu [data-window="instruments-window"]',
+    )!;
+    item.click();
+    assert(!win.hidden, 'Window ▸ Instruments opens it');
+    const panel = document.querySelector<HTMLElement>('#instruments-panel')!;
+    assert(
+      panel.textContent!.includes('No Instruments yet.') &&
+        panel.querySelector('[data-add-instrument]') &&
+        panel.querySelector('[data-new-instrument] option[value="sampler"]'),
+      'A Project without Instruments shows the empty state and Add Instrument',
+    );
+    assert(
+      localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('instruments-window'),
+      'Its open state is remembered',
+    );
+    shell.editor.click('button');
+    await settle();
+    assert(
+      panel.querySelector('[data-add-instrument]'),
+      'It does not depend on selection',
+    );
+    document.body.classList.add('playing');
+    assert(
+      getComputedStyle(win).display === 'none',
+      'It is hidden during a Play Session',
+    );
+    document.body.classList.remove('playing');
+    item.click();
+    assert(win.hidden, 'Window ▸ Instruments closes it');
+    assert(
+      !localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('instruments-window'),
+      'Its closed state is remembered',
+    );
+  });
   await test('Read-only controls follow every selection and leave view-only actions enabled', async () => {
     shell.setReadOnly(true);
     const check = () => {

@@ -10,7 +10,7 @@ import type { CatalogueEntry } from './catalogue';
 
 type Listed = DeepReadonly<AddOnRef[]> | undefined;
 
-/** A kind the Tools window or Info's Instrument menu offers. */
+/** A kind the Tools window or the Instruments window offers. */
 export type OfferedKind = { icon?: string; kind: string; label: string };
 
 /** The built-in Add-ons a Project lists, in catalogue order. */
@@ -56,7 +56,7 @@ export const offeredElementKinds = (
 };
 
 /**
- * The Instrument kinds Info offers: Folio's own, such as the sampler, then
+ * The Instrument kinds the Instruments window offers: Folio's own, such as the sampler, then
  * each listed built-in Add-on's, never a loaded Add-on the Project doesn't
  * list.
  */
@@ -77,20 +77,6 @@ export const offeredInstrumentKinds = (
     ),
   ];
 };
-
-/**
- * Whether Info shows its Instruments section: the Project has an
- * Instrument, or lists an Add-on with Instrument kinds. The sampler alone,
- * in every Project, isn't reason enough.
- */
-export const showsInstruments = (
-  project: DeepReadonly<Project>,
-  catalogue: readonly CatalogueEntry[],
-): boolean =>
-  project.instruments.length > 0 ||
-  listedBuiltIns(project.addOns, catalogue).some(
-    entry => (entry.instruments ?? []).length > 0,
-  );
 
 /** What uses an Add-on: its Elements' and Instruments' names. */
 export const addOnUsers = (

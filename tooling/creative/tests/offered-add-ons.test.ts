@@ -12,7 +12,6 @@ import {
   addOnRemovalProblem,
   offeredElementKinds,
   offeredInstrumentKinds,
-  showsInstruments,
 } from '../src/add-ons/offered';
 import { createFromBase } from '../src/base-projects';
 import { StackEditor } from '../src/editing';
@@ -24,10 +23,9 @@ const knob = (name: string): AddOnElement =>
     kind: `${CONTROLS_ADD_ON}#knob`,
   }) as unknown as AddOnElement;
 
-test('a Blank Project offers no Add-on kinds and no Instruments section', async () => {
+test('a Blank Project offers no Add-on kinds, only the sampler', async () => {
   const { project } = await createFromBase('blank', 'Untitled');
   expect(offeredElementKinds(project.addOns, BUILT_IN_ADD_ONS)).toEqual([]);
-  expect(showsInstruments(project, BUILT_IN_ADD_ONS)).toBe(false);
   expect(
     offeredInstrumentKinds(project.addOns, BUILT_IN_ADD_ONS).map(k => k.kind),
   ).toEqual(['sampler']);
@@ -39,24 +37,11 @@ test('a listed Add-on offers its kinds, the others none', () => {
   expect(
     offeredElementKinds(project.addOns, BUILT_IN_ADD_ONS).map(k => k.label),
   ).toEqual(['Slider', 'Knob', 'Toggle', 'XY pad', 'Level meter']);
-  expect(showsInstruments(project, BUILT_IN_ADD_ONS)).toBe(false);
   project.addOns = [INSTRUMENTS_REF];
   expect(offeredElementKinds(project.addOns, BUILT_IN_ADD_ONS)).toEqual([]);
-  expect(showsInstruments(project, BUILT_IN_ADD_ONS)).toBe(true);
   expect(
     offeredInstrumentKinds(project.addOns, BUILT_IN_ADD_ONS).map(k => k.kind),
   ).toEqual(['sampler', SYNTH_KIND, YM2149_KIND]);
-});
-
-test('an Instrument shows the section even without an Instrument Add-on', () => {
-  const project = createProject('Drums');
-  project.instruments.push({
-    kind: 'sampler',
-    name: 'drums',
-    parameters: {},
-    voices: 8,
-  });
-  expect(showsInstruments(project, BUILT_IN_ADD_ONS)).toBe(true);
 });
 
 test('an Add-on in use is not removed, and says what uses it', () => {

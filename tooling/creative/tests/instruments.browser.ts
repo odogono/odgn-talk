@@ -1,5 +1,5 @@
 // Run on the dedicated test page described in README.md. Exercises editing
-// Instruments in Info (#1894) and the built Instrument worklet in a real
+// Instruments in the Instruments window (#1894, #2049) and the built Instrument worklet in a real
 // AudioWorklet.
 import { createProject } from '../src/model';
 import { INSTRUMENT_PROCESSOR } from '../src/instruments/rack';
@@ -16,20 +16,33 @@ const assert = (value: unknown, message: string) => {
   }
 };
 
-/** Waits for Info to catch up with the editor. */
+/** Waits for the window to catch up with the editor. */
 const settled = () => new Promise(resolve => setTimeout(resolve, 50));
 
-const info = () => document.querySelector<HTMLElement>('#info')!;
+const panel = () => document.querySelector<HTMLElement>('#instruments-panel')!;
 
-/** The Instrument's fieldset in Info, by name. */
-const fieldset = (name: string) =>
-  [
-    ...info().querySelectorAll<HTMLFieldSetElement>(
-      'fieldset[data-instrument]',
-    ),
-  ].find(set =>
-    set.querySelector('legend')!.textContent!.includes(`“${name}”`),
+/** The listed Instrument's row, by name. */
+const row = (name: string) =>
+  [...panel().querySelectorAll<HTMLElement>('[data-select-instrument]')].find(
+    item => item.querySelector('.instrument-name')!.textContent === name,
   );
+
+/** The detail of the selected Instrument, if it is the one named. */
+const detail = (name: string) => {
+  const set = panel().querySelector<HTMLFieldSetElement>(
+    'fieldset[data-instrument]',
+  );
+  return set?.querySelector('legend')!.textContent!.includes(`“${name}”`)
+    ? set
+    : undefined;
+};
+
+/** Selects an Instrument in the list, then returns its detail. */
+const fieldset = async (name: string) => {
+  row(name)?.click();
+  await settled();
+  return detail(name);
+};
 
 /** Sets a control as a person would, then commits it with `change`. */
 const commit = (
@@ -44,9 +57,9 @@ const commit = (
   control.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
-/** Every Instrument control in Info. */
+/** Every Instrument control in the window. */
 const controls = () => [
-  ...info().querySelectorAll<HTMLInputElement | HTMLButtonElement>(
+  ...panel().querySelectorAll<HTMLInputElement | HTMLButtonElement>(
     '[data-instrument] input, [data-instrument] select, [data-instrument] button, [data-new-instrument], [data-add-instrument]',
   ),
 ];
@@ -57,10 +70,10 @@ let shell: ReturnType<typeof mountStack>;
 const add = async (kind: string) => {
   const before = shell.editor.project.instruments.length;
   commit(
-    info().querySelector<HTMLSelectElement>('[data-new-instrument]')!,
+    panel().querySelector<HTMLSelectElement>('[data-new-instrument]')!,
     kind,
   );
-  info().querySelector<HTMLButtonElement>('[data-add-instrument]')!.click();
+  panel().querySelector<HTMLButtonElement>('[data-add-instrument]')!.click();
   for (let i = 0; i < 100; i++) {
     if (shell.editor.project.instruments.length > before) {
       return;
@@ -83,11 +96,20 @@ export const runBrowserTests = async () => {
   shell = mountStack(createProject('Instrument browser check'));
   const instruments = () => shell.editor.project.instruments;
 
-  await test('Info has no Instruments section until the Project lists an Instrument Add-on (#2025)', async () => {
+  await test('the window offers the sampler in any Project, and Info offers no Instruments (#2049)', async () => {
     await settled();
     assert(
-      !info().querySelector('[data-new-instrument]'),
-      'A Project listing no Add-ons offers no Instruments',
+      !document.querySelector('#info [data-new-instrument]'),
+      'Info has no Instruments section',
+    );
+    const offered = [
+      ...panel().querySelectorAll<HTMLOptionElement>(
+        '[data-new-instrument] option',
+      ),
+    ].map(option => option.value);
+    assert(
+      offered.join() === 'sampler',
+      `A Project listing no Add-ons offers the sampler: ${offered.join()}`,
     );
     const project = createProject('Instrument browser check');
     project.addOns = [INSTRUMENTS_REF];
@@ -95,19 +117,19 @@ export const runBrowserTests = async () => {
     shell.redraw();
     await settled();
     const kinds = [
-      ...info().querySelectorAll<HTMLOptionElement>(
+      ...panel().querySelectorAll<HTMLOptionElement>(
         '[data-new-instrument] option',
       ),
     ].map(option => option.value);
     assert(
       kinds.join() === `sampler,${SYNTH_KIND},${YM2149_KIND}`,
-      `Info offers the sampler and the listed Add-on's kinds: ${kinds.join()}`,
+      `The window offers the sampler and the listed Add-on's kinds: ${kinds.join()}`,
     );
   });
 
-  await test('Info adds an Instrument of each kind with its defaults', async () => {
+  await test('the window adds an Instrument of each kind with its defaults', async () => {
     assert(
-      info().textContent!.includes('No Instruments yet.'),
+      panel().textContent!.includes('No Instruments yet.'),
       'An empty Project says so',
     );
     await add(SYNTH_KIND);
@@ -122,10 +144,13 @@ export const runBrowserTests = async () => {
         .map(i => i.name)
         .join()}`,
     );
+    assert(row('synth') && row('chip') && row('drums'), 'The list shows each');
     assert(
-      fieldset('synth') && fieldset('chip') && fieldset('drums'),
-      'Info lists each',
+      panel().querySelectorAll('fieldset[data-instrument]').length === 1 &&
+        detail('synth'),
+      'Only the first Instrument’s detail shows',
     );
+    assert(await fieldset('drums'), 'Selecting one shows its detail');
     await add(SYNTH_KIND);
     assert(
       shell.editor.project.addOns?.length === 1,
@@ -138,11 +163,14 @@ export const runBrowserTests = async () => {
   });
 
   await test('parameters, voices and names commit as undoable edits', async () => {
-    const synth = fieldset('synth')!;
+    commit(
+      (await fieldset('chip'))!.querySelector('[data-parameter="noise"]')!,
+      true,
+    );
+    const synth = (await fieldset('synth'))!;
     commit(synth.querySelector('[data-parameter="cutoff"]')!, '800');
     commit(synth.querySelector('[data-parameter="waveform"]')!, 'square');
     commit(synth.querySelector('[data-instrument-field="voices"]')!, '4');
-    commit(fieldset('chip')!.querySelector('[data-parameter="noise"]')!, true);
     const [lead, chip] = instruments();
     assert(lead!.parameters.cutoff === 800, 'Cutoff set');
     assert(lead!.parameters.waveform === 'square', 'Waveform chosen');
@@ -151,7 +179,7 @@ export const runBrowserTests = async () => {
     commit(synth.querySelector('[data-instrument-field="name"]')!, 'bass');
     assert(instruments()[0]!.name === 'bass', 'Renamed');
     await settled();
-    assert(fieldset('bass'), 'Info shows the new name');
+    assert(detail('bass') && row('bass'), 'The window shows the new name');
     shell.editor.undo();
     shell.redraw();
     assert(instruments()[0]!.name === 'synth', 'Undo restores the name');
@@ -162,7 +190,7 @@ export const runBrowserTests = async () => {
   });
 
   await test('refused values leave the Instrument and its field unchanged', async () => {
-    const bass = fieldset('bass')!;
+    const bass = (await fieldset('bass'))!;
     const cutoff = bass.querySelector<HTMLInputElement>(
       '[data-parameter="cutoff"]',
     )!;
@@ -186,16 +214,18 @@ export const runBrowserTests = async () => {
   });
 
   await test('Remove takes an Instrument out, and undo puts it back', async () => {
-    fieldset('synth2')!
+    await fieldset('synth2');
+    panel()
       .querySelector<HTMLButtonElement>('[data-remove-instrument]')!
       .click();
     assert(instruments().length === 3, 'Removed');
     await settled();
-    assert(!fieldset('synth2'), 'Info no longer lists it');
+    assert(!row('synth2'), 'The list no longer shows it');
+    assert(detail('bass'), 'The first Instrument is selected instead');
     shell.editor.undo();
     shell.redraw();
     await settled();
-    assert(fieldset('synth2'), 'Undo restores it');
+    assert(row('synth2'), 'Undo restores it');
   });
 
   await test('a read-only Project disables every Instrument control', async () => {
