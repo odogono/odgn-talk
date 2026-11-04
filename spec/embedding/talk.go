@@ -859,7 +859,19 @@ type GroupOptions struct {
 	Seed uint64
 }
 
-func (c *Core) NewGroup(o GroupOptions) *Group
+func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group
+
+// GroupOption is a Group setting beyond GroupOptions, which NewGroup and
+// Restore both take.
+type GroupOption interface{ groupOption() }
+
+// WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
+// musical clock; ADR 0166): a Capability with one suspending Operation,
+// wait, of one argument and no MaxPending. Every Script is granted it under
+// the reserved name "musical clock", which LoadOptions.Grants can't use,
+// and a wait in a Musical Unit calls it. Without one, such a wait raises
+// `no musical time`.
+func WithMusicalClock(clock *CapabilityDef) GroupOption
 
 // TraceSink receives the Trace one canonical line at a time (ADR 0018).
 type TraceSink interface{ Record(line string) }
@@ -1391,7 +1403,7 @@ const (
 
 // Restore is safe from any goroutine; the Group it returns has not been
 // pumped. The first Pump reads a Clock at or after the saved reading.
-func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
+func (c *Core) Restore(save []byte, o RestoreOptions, options ...GroupOption) (*Group, RestoreResult, error)
 
 // StateFingerprint is a save's State Fingerprint: the live Group's that a
 // full restore of it would build. InvalidSave for bytes the Core can't read,
@@ -1451,6 +1463,7 @@ type ManifestSpec struct {
 	ObjectKinds []*ObjectKind
 	Objects     map[string]*ObjectKind // well-known names bound at load
 	OwnerKind   *ObjectKind            // the Owner Kind, one of ObjectKinds: the kind of me, for tooling; nil if unknown
+	MusicalTime bool                   // the Host supplies a musical clock: writes musicalTime: true
 }
 
 // MessageDecl is tooling-only: the Core never checks a Delivery against it.

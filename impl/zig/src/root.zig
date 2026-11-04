@@ -81,6 +81,7 @@ test {
     _ = @import("machine/nothing_defaults_test.zig");
     _ = @import("machine/restricted_test.zig");
     _ = @import("machine/metering_test.zig");
+    _ = @import("machine/musical_wait_test.zig");
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
     _ = @import("machine/clause_charge_test.zig");

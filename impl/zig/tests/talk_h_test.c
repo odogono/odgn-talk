@@ -615,7 +615,7 @@ static int host_command_test(void) {
     talk_library_source lib_src = {"shouts", 6, "1", 1, lib_text, strlen(lib_text)};
     talk_library *lib = NULL;
     bad |= talk_compile_library(core, &lib_src, NULL, 0, from_def, 1, &lib, NULL) != TALK_OK;
-    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &lib, 1, NULL, 0, NULL, 0, NULL, 0, NULL};
+    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &lib, 1, NULL, 0, NULL, 0, NULL, 0, NULL, false};
     talk_owned_bytes written = {0};
     bad |= talk_export_manifest(&spec, &written) != TALK_OK;
     const char *flagged = "\"cost\":{\"fuel\":7,\"alloc\":0},\"command\":true}";
@@ -706,7 +706,7 @@ static int labels_test(void) {
     talk_library_source other_src = {"other", 5, "1", 1, lib_text, strlen(lib_text)};
     talk_library *other = NULL;
     bad |= talk_compile_library(core, &other_src, NULL, 0, plain, 1, &other, NULL) != TALK_LOAD_REFUSED;
-    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &lib, 1, NULL, 0, NULL, 0, NULL, 0, NULL};
+    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &lib, 1, NULL, 0, NULL, 0, NULL, 0, NULL, false};
     talk_owned_bytes written = {0};
     bad |= talk_export_manifest(&spec, &written) != TALK_OK;
     bad |= !holds(&written, "\"args\":[\"text\",\"text\"],\"labels\":[\"to\"],\"result\":\"text\"");
@@ -2846,7 +2846,7 @@ static int manifest_test(void) {
     talk_message_decl messages[] = {{"ping", 4, NULL, 0, NULL, 0, "Checks the lamp.", 16, ping_examples, ping_examples_lens, 1}, {"move:to:", 8, move_args, 2, receivers, 1, NULL, 0, NULL, NULL, 0}};
     const talk_object_kind *kinds[] = {lamp};
     talk_manifest_object objects[] = {{"desk", 4, lamp}};
-    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &says, 1, messages, 2, kinds, 1, objects, 1, NULL};
+    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &says, 1, messages, 2, kinds, 1, objects, 1, NULL, false};
     talk_owned_bytes written = {0};
     bad |= talk_export_manifest(&spec, &written) != TALK_OK;
     talk_versions versions;
@@ -2886,6 +2886,13 @@ static int manifest_test(void) {
     const char owner[] = "],\"ownerKind\":\"lamp\"}";
     bad |= again.len != (size_t)n + sizeof owner - 3 || memcmp(again.data + again.len - (sizeof owner - 1), owner, sizeof owner - 1) != 0;
     talk_owned_bytes_release(&again);
+    /* A Host with a musical clock writes musicalTime after the arrays. */
+    spec.musical_time = true;
+    bad |= talk_export_manifest(&spec, &again) != TALK_OK;
+    const char musical[] = "],\"musicalTime\":true,\"ownerKind\":\"lamp\"}";
+    bad |= again.len != (size_t)n + sizeof musical - 3 || memcmp(again.data + again.len - (sizeof musical - 1), musical, sizeof musical - 1) != 0;
+    talk_owned_bytes_release(&again);
+    spec.musical_time = false;
     spec.object_kinds_len = 0;
     bad |= talk_export_manifest(&spec, &again) != TALK_INVALID_VALUE;
     talk_core_release(core);

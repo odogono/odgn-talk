@@ -29,8 +29,9 @@ func (b *zigGroup) fingerprint() [32]byte {
 
 // The guest alone reads its opaque save. Go rebuilds only Host bindings,
 // handles and Call contexts, before publishing the restore's Trace.
-func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result RestoreResult, err error) {
+func zigRestore(c *Core, save []byte, o RestoreOptions, options []GroupOption) (_ *Group, result RestoreResult, err error) {
 	g := &Group{core: c, options: GroupOptions{Name: o.Name, Trace: o.Trace, OnReady: o.OnReady}, libraries: map[string]*Library{}, objects: map[objectKey]*Object{}}
+	g.applyGroupOptions(options)
 	b := newZigBackend(g)
 	g.backend = b
 	b.restoreOptions = &o
@@ -85,7 +86,16 @@ func (b *zigGroup) restoreBindings(need *zigNeed) (map[string]any, error) {
 	for i, pair := range asked {
 		script, name := pair[0], pair[1]
 		var offered *Grant
-		if o.Grants != nil {
+		if name == musicalClockGrant {
+			// The musical clock is the Group's, never the Host's Grants.
+			if b.group.musicalClock != nil {
+				clock, err := b.group.musicalClockGrant()
+				if err != nil {
+					return nil, err
+				}
+				offered = clock
+			}
+		} else if o.Grants != nil {
 			offered = o.Grants(script, name)
 		}
 		if offered == nil || offered.definition == nil {

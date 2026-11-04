@@ -1502,6 +1502,11 @@ fn releaseDeclarations(declarations: ?[]const capabilities.GrantDecls) void {
 
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 
+/// The reserved Grant name of the Group's musical clock (chapter 9, The
+/// musical clock). A Host that keeps musical time grants it to every Script;
+/// no source can name it, so only `wait` in a Musical Unit calls its `wait`.
+pub const musical_clock = "musical clock";
+
 /// An Operation by the Grant name that calls it, laid out as talk.h's
 /// `talk_operation_ref`.
 pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
@@ -2112,6 +2117,7 @@ pub const Group = struct {
     /// initialiser. Writes the `load` record and any `diag` records.
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
         try g.checkCodeChange();
+        if (options.grants) |named| for (named) |n| if (std.mem.eql(u8, n.name, musical_clock) and !musicalClock(n.grant)) return error.InvalidValue;
         const s = try g.gpa.create(Script);
         s.* = .{ .name = undefined, .identity = undefined, .arena = .init(g.gpa), .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
         // Until it joins the Group, a refusal leaves nothing of it behind.
@@ -4394,6 +4400,9 @@ pub const Group = struct {
                 // The first revocation of a name the Script keeps releases
                 // it; any other does nothing.
                 const s = g.script(x.script) orelse return;
+                // No source can name the musical clock, so it can't be
+                // revoked either.
+                if (std.mem.eql(u8, x.grant, musical_clock)) return;
                 const sg = s.grant(x.grant) orelse return;
                 if (sg.revoked) return;
                 sg.revoked = true;
@@ -5288,6 +5297,12 @@ pub const Group = struct {
                 releaseAll(call.args, gpa);
                 call.args = &.{};
                 if (!ok) return try g.resumeRaise(run, pc, ins, g.hostErrorAt(waited));
+                // A musical `wait` pushes nothing, so only the answer's own
+                // cost is charged.
+                if (ins.op == .wait) {
+                    try g.payResumeConversion(run, x.fuel, 0);
+                    return null;
+                }
                 // Only the rate's terms over the result, and the answer's
                 // own cost.
                 const size = costs.size(x.value);
@@ -10001,6 +10016,7 @@ pub const Group = struct {
             .wait => {
                 const d = pop(frame);
                 defer d.release();
+                if (d.data == .quantity and d.data.quantity.unit.musical()) return g.musicalWait(run, frame, ins, m, d);
                 const ns = waitMicros(d) orelse {
                     if (d.data == .quantity) {
                         const e = try model.text(gpa, "s");
@@ -10938,6 +10954,21 @@ pub const Group = struct {
         };
     }
 
+    /// `wait q` in a Musical Unit (chapter 5, `wait` in Musical Units): a
+    /// whole count, 0 or more, that calls the musical clock's `wait`, which
+    /// ends when the Host answers. `wait 0 bars` calls nothing.
+    fn musicalWait(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures, q: *Value) !Step {
+        const count = q.data.quantity.number;
+        if (!wholeCount(count)) {
+            const function = try model.text(g.gpa, "wait");
+            defer function.release();
+            return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = q } });
+        }
+        if (run.script.grant(musical_clock) == null) return g.raise("no musical time", &.{});
+        if (count.coefficient == 0) return .next;
+        return g.callOperation(run, frame, ins, m, musical_clock, "wait", &.{q}, .ask_wait, &.{q});
+    }
+
     /// `ask` and `tell`: an immediate or fire-and-forget Capability call
     /// (chapter 9, Capabilities). Each argument is checked against its Shape
     /// first, and a mismatch is charged nothing. The declared cost is
@@ -11206,8 +11237,12 @@ pub const Group = struct {
             // Install a started Call before landing so interruption can
             // abandon it, without committing the Segment first.
             if (pending) {
-                const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
-                const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
+                // The musical clock waits for its line, however long: it
+                // has no `maxPending`, and `MaxWait` doesn't apply.
+                const unbounded = ins.op == .wait;
+                const after_ms = if (unbounded) 0 else if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
+                const deadline = if (unbounded) never else micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms;
+                const wait: Pending = .{ .run = run, .deadline = deadline, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
                 if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
@@ -11953,7 +11988,9 @@ fn keptGrants(a: Allocator, named: []const NamedGrant, unit: *const lower.Unit, 
     var out: std.ArrayList(ScriptGrant) = .empty;
     for (named) |n| {
         const kept = try a.dupe(bool, n.grant.operations);
-        if (as_used) {
+        // A `wait` may count any Quantity, so the musical clock is kept
+        // whole (chapter 9, The musical clock).
+        if (as_used and !std.mem.eql(u8, n.name, musical_clock)) {
             for (kept, n.grant.capability.operations) |*k, op| {
                 if (!k.*) continue;
                 k.* = for (unit.code) |ins| switch (ins.op) {
@@ -12153,6 +12190,29 @@ pub fn micros(t: model.dates.Instant) i128 {
 pub fn deadlineInstant(at: DeadlineTicks) ?model.dates.Instant {
     if (at < -62135596800 * @as(DeadlineTicks, std.time.us_per_s) or at >= 253402300800 * @as(DeadlineTicks, std.time.us_per_s)) return null;
     return .{ .seconds = @intCast(@divFloor(at, std.time.us_per_s)), .micros = @intCast(@mod(at, std.time.us_per_s)) };
+}
+
+/// Whether a Grant can be the musical clock: its Capability's one
+/// Operation, granted, is a suspending `wait` of one argument with no
+/// `maxPending` (chapter 9, The musical clock).
+fn musicalClock(grant: *const capabilities.Grant) bool {
+    const ops = grant.capability.operations;
+    if (ops.len != 1 or !grant.operations[0]) return false;
+    const op = ops[0];
+    return std.mem.eql(u8, op.name, "wait") and op.mode == .suspending and op.args.len == 1 and op.max_pending_ms == 0;
+}
+
+/// Whether a Musical Quantity's count is whole and 0 or more.
+fn wholeCount(d: model.decimal.Decimal) bool {
+    if (d.coefficient == 0) return true;
+    if (d.negative) return false;
+    var n = d.coefficient;
+    var e = d.exponent;
+    while (e < 0) : (e += 1) {
+        if (n % 10 != 0) return false;
+        n /= 10;
+    }
+    return true;
 }
 
 /// Exact duration microseconds. A base-unit Decimal has at most 34 digits
