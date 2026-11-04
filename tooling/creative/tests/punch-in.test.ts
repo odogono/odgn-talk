@@ -385,3 +385,22 @@ test('a Punch In of Music’s starter Script keeps its beat playing', async () =
   expect(bar('4.1 ')).toHaveLength(1);
   expect(play.problems).toEqual([]);
 });
+
+// Loops `sd`, then `last` from a function, both on the default sampler.
+const twice = (last: string) =>
+  `on openScript\n  loop "sd"\n  bassLoop()\nend openScript\n\nfunction bassLoop\n  loop "${last}"\nend`;
+
+test('a Punch In’s last loop on an Instrument wins from the punched bar, even in a late Pump (#2045)', () => {
+  const p = project(twice('bd'));
+  const { play, pumpAt, runTo, steps } = session(p);
+  runTo(ms(1500));
+  expect(
+    play.punchIn({ kind: 'script', owner: p.pages[0]! }, twice('cp'), ms(1500)),
+  ).toEqual({ kind: 'bar', bar: 2 });
+  // The Pump that applies it comes after bar 2 began, as a busy page's can.
+  pumpAt(ms(2150));
+  runTo(ms(4500), ms(2150));
+  // As on Perform, only the last loop plays: no bar of `sd` first.
+  expect(steps()).toEqual([`0.1 ${kit} bd`, `2.1 ${kit} cp`, `4.1 ${kit} cp`]);
+  expect(play.problems).toEqual([]);
+});
