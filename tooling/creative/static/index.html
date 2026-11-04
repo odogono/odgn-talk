@@ -106,6 +106,13 @@
             Info
           </button>
           <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="sounds-window"
+          >
+            Sounds
+          </button>
+          <button
             id="show-message"
             type="button"
             role="menuitemcheckbox"
@@ -432,6 +439,26 @@
         </p>
         <ul id="version-list"></ul>
       </div>
+    </section>
+    <section
+      id="sounds-window"
+      class="window resizable"
+      aria-labelledby="sounds-title"
+      data-right="260"
+      data-top="56"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Sounds"
+        ></button>
+        <span id="sounds-title">Sounds</span>
+      </div>
+      <!-- The sound list and its Add buttons: src/sounds-window.tsx -->
+      <div id="sounds-panel"></div>
     </section>
     <section
       id="performance-window"

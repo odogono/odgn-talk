@@ -60,6 +60,7 @@ import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
 import { mountInfoPanel, type NameRefusal } from './info-panel';
+import { mountSoundsWindow } from './sounds-window';
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -260,6 +261,7 @@ export const mountStack = (
     if (!event.persisted) {
       unmountTitle();
       unmountInfo();
+      unmountSounds();
       unmountStrip();
       unmountEditMenu();
       images.dispose();
@@ -306,7 +308,14 @@ export const mountStack = (
   };
   let scale = 1;
   const refusal = signal<NameRefusal | undefined>(undefined);
-  const unmountInfo = mountInfoPanel(info, { editor, refusal, previewName });
+  const unmountInfo = mountInfoPanel(info, { editor, refusal });
+  const soundsPanel = byId('sounds-panel');
+  const unmountSounds = mountSoundsWindow(soundsPanel, {
+    editor,
+    bytes: asset => images.bytes.get(asset.hash),
+    previewName,
+    redraw: redrawVersion,
+  });
   let fieldEdit: Edit | undefined;
   const finishFieldEdit = () => {
     fieldEdit?.finish();
@@ -686,10 +695,6 @@ export const mountStack = (
       }
     } else if (button?.dataset.replaceImage) {
       chooseImage(button.dataset.replaceImage);
-    } else if (button?.hasAttribute('data-add-sound')) {
-      chooseSound();
-    } else if (button?.dataset.previewSound) {
-      togglePreview(button.dataset.previewSound);
     } else if (button?.dataset.clearDrawing) {
       const [canvas] = editor.selected;
       if (canvas?.kind === 'canvas') {
@@ -1152,8 +1157,9 @@ export const mountStack = (
       edit(() => editor.edit(({ tree }) => tree.setPlayByPerforming(perform)));
     }
   });
-  // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in.
-  byId('add-music-sound').addEventListener('click', () =>
+  // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in; the
+  // Sounds window's Add from Music… opens the same dialog (#2048).
+  const showMusicSounds = () =>
     showMusicSoundsDialog({
       add: addMusicSound,
       missing: () =>
@@ -1161,8 +1167,18 @@ export const mountStack = (
           key => !editor.project.assets.some(a => a.name === key),
         ),
       readOnly: () => editor.readOnly,
-    }),
-  );
+    });
+  byId('add-music-sound').addEventListener('click', showMusicSounds);
+  soundsPanel.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest('button');
+    if (button?.hasAttribute('data-add-sound')) {
+      chooseSound();
+    } else if (button?.hasAttribute('data-add-music-sound-dialog')) {
+      showMusicSounds();
+    } else if (button?.dataset.previewSound) {
+      togglePreview(button.dataset.previewSound);
+    }
+  });
   // Project ▸ Add-ons… (#2025) edits the Add-ons the Project lists.
   byId('show-add-ons').addEventListener('click', () =>
     showAddOnsDialog({

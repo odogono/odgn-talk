@@ -69,7 +69,7 @@ const pickSound = (file: File) => {
   };
   try {
     document
-      .querySelector<HTMLButtonElement>('#info [data-add-sound]')!
+      .querySelector<HTMLButtonElement>('#sounds-panel [data-add-sound]')!
       .click();
   } finally {
     HTMLInputElement.prototype.click = nativePicker;
@@ -109,11 +109,21 @@ export const runBrowserTests = async () => {
       shell.editor.project.assets[0]!.name === 'waves',
       'Sound named for Scripts',
     );
+    await until(
+      () =>
+        !!document.querySelector(
+          '#sounds-panel [data-sound="waves"]:not([data-sound-problem])',
+        ),
+    );
     assert(
       document
-        .querySelector('#info')!
-        .textContent!.includes('waves (waves.wav)'),
-      'Info lists the sound',
+        .querySelector('#sounds-panel [data-sound="waves"]')!
+        .textContent!.includes('KB'),
+      'The Sounds window lists the sound with its size',
+    );
+    assert(
+      !document.querySelector('#info')!.textContent!.includes('waves'),
+      'Info no longer lists sounds',
     );
     shell.editor.undo();
     shell.redraw();
@@ -149,6 +159,49 @@ export const runBrowserTests = async () => {
       shell.editor.project.assets.length === before,
       'Undo removes the Music sound',
     );
+  });
+
+  await test('the Sounds window opens the Add from Music dialog and marks missing and undecodable sounds (#2048)', async () => {
+    document
+      .querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-add-music-sound-dialog]',
+      )!
+      .click();
+    assert(musicDialog()?.open, 'Add from Music… opens the dialog');
+    musicDialog()!.querySelector<HTMLButtonElement>('button.default')!.click();
+    await until(() => !musicDialog());
+    for (const [name, hash, size] of [
+      ['gone', 'f'.repeat(64), 10],
+      ['junk', 'e'.repeat(64), 9],
+    ] as const) {
+      shell.editor.addSound({
+        name,
+        fileName: `${name}.wav`,
+        hash,
+        mediaType: 'audio/wav',
+        size,
+      });
+    }
+    shell.images.bytes.set(
+      'e'.repeat(64),
+      new TextEncoder().encode('not audio'),
+    );
+    shell.redraw();
+    const problem = (name: string) =>
+      document
+        .querySelector<HTMLElement>(`#sounds-panel [data-sound="${name}"]`)
+        ?.getAttribute('data-sound-problem');
+    await until(() => problem('gone') === 'missing');
+    await until(() => problem('junk') === 'undecodable');
+    assert(
+      document.querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-preview-sound="gone"]',
+      )!.disabled,
+      'A missing sound has no Preview',
+    );
+    shell.editor.undo();
+    shell.editor.undo();
+    shell.redraw();
   });
 
   await test('a Script loops the sound in Play and Stop silences it', () => {

@@ -571,6 +571,45 @@ button:disabled {
   font-size: 0.8rem;
   overflow-y: auto;
 }
+#sounds-window {
+  width: 16rem;
+  min-width: 12rem;
+  min-height: 8rem;
+}
+#sounds-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  overflow-y: auto;
+}
+.sound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sound-list .sound {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sound-list .sound-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sound-list .placeholder .sound-name {
+  font-style: italic;
+  opacity: 0.6;
+}
 #info h2 {
   font-size: 0.85rem;
   margin: 0.2rem 0 0;
@@ -1160,6 +1199,7 @@ button:disabled {
 .playing #strip,
 .playing #tools-window,
 .playing #info-window,
+.playing #sounds-window,
 .playing #projects-window,
 .playing #versions-window,
 .playing #errors-window,
@@ -1189,7 +1229,8 @@ button:disabled {
 .browsing #caption,
 .browsing #stage,
 .browsing #strip,
-.browsing #info-window {
+.browsing #info-window,
+.browsing #sounds-window {
   display: none;
 }
 #desk #reader {
