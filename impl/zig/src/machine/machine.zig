@@ -1505,7 +1505,7 @@ pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 /// The reserved Grant name of the Group's musical clock (chapter 9, The
 /// musical clock). A Host that keeps musical time grants it to every Script;
 /// no source can name it, so only `wait` in a Musical Unit calls its `wait`.
-pub const musical_clock = "musical clock";
+pub const musical_clock = "musical-clock";
 
 /// An Operation by the Grant name that calls it, laid out as talk.h's
 /// `talk_operation_ref`.
@@ -12192,14 +12192,19 @@ pub fn deadlineInstant(at: DeadlineTicks) ?model.dates.Instant {
     return .{ .seconds = @intCast(@divFloor(at, std.time.us_per_s)), .micros = @intCast(@mod(at, std.time.us_per_s)) };
 }
 
-/// Whether a Grant can be the musical clock: its Capability's one
-/// Operation, granted, is a suspending `wait` of one argument with no
-/// `maxPending` (chapter 9, The musical clock).
+/// Whether a Capability can be the musical clock: its one Operation is a
+/// suspending `wait` of one argument with no `maxPending` (chapter 9, The
+/// musical clock).
+pub fn musicalClockCapability(c: *const capabilities.Capability) bool {
+    if (c.operations.len != 1) return false;
+    const op = c.operations[0];
+    return std.mem.eql(u8, op.name, "wait") and op.mode == .suspending and op.args.len == 1 and op.max_pending_ms == 0 and op.scope == .none and !op.segment_bound and op.metering == null;
+}
+
+/// Whether a Grant can be the musical clock: a musical clock's Capability,
+/// with its `wait` granted.
 fn musicalClock(grant: *const capabilities.Grant) bool {
-    const ops = grant.capability.operations;
-    if (ops.len != 1 or !grant.operations[0]) return false;
-    const op = ops[0];
-    return std.mem.eql(u8, op.name, "wait") and op.mode == .suspending and op.args.len == 1 and op.max_pending_ms == 0;
+    return musicalClockCapability(grant.capability) and grant.operations[0];
 }
 
 /// Whether a Musical Quantity's count is whole and 0 or more.

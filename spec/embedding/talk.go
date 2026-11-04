@@ -865,12 +865,17 @@ func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group
 // Restore both take.
 type GroupOption interface{ groupOption() }
 
+// DefineMusicalClock defines a musical clock: a Capability whose one
+// Operation, wait, is suspending, of one argument, with no MaxPending. The
+// Operation's Name may be left empty. DefineCapability refuses wait as an
+// Operation name; only a wait in a Musical Unit calls this one.
+func (c *Core) DefineMusicalClock(name string, wait Operation, options ...CapabilityOption) (*CapabilityDef, error)
+
 // WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
-// musical clock; ADR 0166): a Capability with one suspending Operation,
-// wait, of one argument and no MaxPending. Every Script is granted it under
-// the reserved name "musical clock", which LoadOptions.Grants can't use,
-// and a wait in a Musical Unit calls it. Without one, such a wait raises
-// `no musical time`.
+// musical clock; ADR 0166), which DefineMusicalClock makes. Every Script is
+// granted it under the reserved name "musical-clock", which
+// LoadOptions.Grants can't use, and a wait in a Musical Unit calls it.
+// Without one, such a wait raises `no musical time`.
 func WithMusicalClock(clock *CapabilityDef) GroupOption
 
 // TraceSink receives the Trace one canonical line at a time (ADR 0018).

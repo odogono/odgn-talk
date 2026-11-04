@@ -2279,6 +2279,52 @@ static talk_call_end start(void *context, talk_call *call, talk_value *const *ar
     return TALK_CALL_STARTED;
 }
 
+/* A musical clock comes only from talk_define_musical_clock, whose one
+ * Operation is the suspending wait; a wait in a Musical Unit calls it
+ * through the reserved musical-clock Grant (chapter 9, The musical clock). */
+static int musical_clock_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const talk_shape *args[] = {talk_any_shape()};
+    talk_operation wait = {"wait", 4, args, 1, NULL, {0, 0}, TALK_SUSPENDING, 0, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false, NULL, NULL, 0};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "plain", 5, &wait, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    talk_operation immediate = wait;
+    immediate.mode = TALK_IMMEDIATE;
+    bad |= talk_define_musical_clock(core, "clock", 5, &immediate, NULL, 0, &def) != TALK_INVALID_VALUE;
+    talk_operation pause = wait;
+    pause.name = "pause";
+    talk_capability_def *other = NULL;
+    bad |= talk_define_capability(core, "pausing", 7, &pause, 1, NULL, 0, &other) != TALK_OK;
+    bad |= talk_define_musical_clock(core, "clock", 5, &wait, NULL, 0, &def) != TALK_OK;
+    if (bad) return bad;
+    talk_grant *not_clock = NULL;
+    talk_grant *clock = NULL;
+    bad |= talk_capability_def_grant_all(other, NULL, &not_clock) != TALK_OK;
+    bad |= talk_capability_def_grant_all(def, NULL, &clock) != TALK_OK;
+    const char *source = "on go\n  wait 2 bars\n  return 1\nend go\n";
+    talk_load_grant wrong[] = {{"musical-clock", 13, not_clock}};
+    talk_load_options load = {"s", 1, source, strlen(source), wrong, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_INVALID_VALUE;
+    talk_load_grant grants[] = {{"musical-clock", 13, clock}};
+    load.grants = grants;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0, NULL};
+    started = NULL;
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= started == NULL || strstr(trace, "op=musical-clock.wait args=[2 bars]") == NULL;
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop cancels Calls before the first release hook, retaining their ids. */
 typedef struct stop_calls {
     talk_call *calls[2];
@@ -3480,6 +3526,7 @@ int main(void) {
     expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
     expect(library_constant_functions_test() == 0, "Library Constants and defaults bind Function Values to each caller and Group");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
+    expect(musical_clock_test() == 0, "a musical clock is defined only as one suspending wait, and a wait in bars calls it through the musical-clock Grant");
     expect(host_command_test() == 0, "a Host Command is called by its name, checked as its ask, refused on a Reserved Word, and declared to Libraries and the Host Manifest");
     expect(labels_test() == 0, "an Operation's Argument Labels are checked at load, leave the call positional, reach Library checks and the Host Manifest, and are refused when malformed");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");

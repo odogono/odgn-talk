@@ -864,7 +864,7 @@ talk_host_error_code talk_object_shape(const talk_object_kind *k, talk_shape **o
 
 /* C only: a Grant bound by the name the Script uses. A Host that keeps
  * musical time grants its musical clock to every Script under the reserved
- * name "musical clock": a Capability with one suspending wait Operation,
+ * name "musical-clock": a Capability with one suspending wait Operation,
  * which a wait in a Musical Unit calls (chapter 9, The musical clock).
  * Without it, such a wait raises `no musical time`. */
 typedef struct talk_load_grant {
@@ -1339,6 +1339,13 @@ void talk_name(const talk_group *g, const char **s, size_t *len);
  * orders by name, and its options. The definition lives as long as the
  * Core. */
 talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
+/* Defines a musical clock (chapter 9, The musical clock): a Capability whose
+ * one Operation, *wait, is the suspending "wait", of one argument, with no
+ * max_pending_ms, and nothing else: no scope, metering or command. Its name
+ * may be NULL. talk_define_capability refuses wait as an Operation name,
+ * since no source can call it; only a wait in a Musical Unit calls this
+ * one, through the reserved "musical-clock" Grant. */
+talk_host_error_code talk_define_musical_clock(talk_core *c, const char *name, size_t len, const talk_operation *wait, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 /* talk_define_capability with Segment-bound Operations. The first makes each
  * Grant its own Segment Coordinator, with lifecycle's hooks, which must
  * outlive the Core. The second maps each Grant's binding to one, so Grants
@@ -1732,7 +1739,7 @@ typedef struct talk_manifest_spec {
     /* The Owner Kind, one of object_kinds: the kind of this kind of
      * Script's me, for tooling only. NULL leaves me unknown. */
     const talk_object_kind *owner_kind;
-    /* Whether the Host supplies a musical clock: a `musical clock` Grant
+    /* Whether the Host supplies a musical clock: a `musical-clock` Grant
      * on every Script (chapter 9, The musical clock). The manifest then
      * writes musicalTime: true. */
     bool musical_time;

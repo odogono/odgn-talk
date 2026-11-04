@@ -1330,12 +1330,13 @@ fn releaseOp(a: Allocator, op: caps.Operation) void {
 /// One Operation from its declaration JSON, its Host function the
 /// layer's. The Core validates mode, metering, scope and Segment-bound
 /// combinations when the Capability is defined.
-fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error || Invalid)!caps.Operation {
+fn operationOf(s: *Session, capability: []const u8, j: Json, musical: bool) (Allocator.Error || Invalid)!caps.Operation {
     const a = s.core.gpa;
     if (j != .object) return error.InvalidValue;
     const name = asText(j.object.get("name")) orelse return error.InvalidValue;
     if (name.len == 0) return error.InvalidValue;
-    for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
+    // Only the musical clock's Operation is `wait`, which no source calls.
+    for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused) and !(musical and std.mem.eql(u8, name, "wait"))) return error.InvalidValue;
     const segment_bound = if (j.object.get("segmentBound")) |b| asBool(b) orelse return error.InvalidValue else false;
     const command = if (j.object.get("command")) |b| asBool(b) orelse return error.InvalidValue else false;
     const mode = try modeOf(j.object.get("mode"));
@@ -2559,7 +2560,7 @@ fn adapterStandardOperation(s: *Session, capability: []const u8, which: standard
     } else return error.InvalidValue;
     // Store includes the Core-only any-Quantity Shape. Other adapters retain
     // their public factory Shapes, including optional user option values.
-    var op = if (which == .store) try standard.declare(s.core.gpa, which, name) else try operationOf(s, capability, j);
+    var op = if (which == .store) try standard.declare(s.core.gpa, which, name) else try operationOf(s, capability, j, false);
     errdefer releaseOp(s.core.gpa, op);
     if (which != .store) {
         var template = try standard.declare(s.core.gpa, which, name);
@@ -2589,9 +2590,11 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     for (s.capability_handles.items) |h| if (std.mem.eql(u8, h.name, wire_handle)) return hostError(s.gpa, ref, .name_reused);
     const lifecycle = asBool(field(msg, "segmentLifecycle")) orelse false;
     const releasing = asBool(field(msg, "release")) orelse false;
+    const musical = asBool(field(msg, "musicalClock")) orelse false;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
     if (ops_j != .array) return hostError(s.gpa, ref, .invalid_value);
     const which: ?standard.Which = if (field(msg, "standard")) |v| std.meta.stringToEnum(standard.Which, asText(v) orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value) else null;
+    if (which != null and musical) return hostError(s.gpa, ref, .invalid_value);
     if (which) |w| {
         switch (w) {
             .calendar, .locale, .store, .sqlite, .user, .http, .peer => {},
@@ -2622,7 +2625,7 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const ops = a.alloc(caps.Operation, ops_j.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
     var made: usize = 0;
     for (ops_j.array.items, ops) |item, *slot| {
-        slot.* = (if (which) |w| adapterStandardOperation(s, wire_handle, w, item) else operationOf(s, wire_handle, item)) catch |e| {
+        slot.* = (if (which) |w| adapterStandardOperation(s, wire_handle, w, item) else operationOf(s, wire_handle, item, musical)) catch |e| {
             for (ops[0..made]) |op| releaseOp(a, op);
             a.free(ops);
             return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
@@ -2643,6 +2646,11 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
         coordinator_of = .{ .call = coordinatorOf, .context = own };
     }
     const release: ?caps.ReleaseHook = if (releasing) .{ .call = releaseHook, .context = s } else null;
+    if (musical and (lifecycle or !machine.musicalClockCapability(&.{ .name = name, .operations = ops }))) {
+        for (ops) |op| releaseOp(a, op);
+        a.free(ops);
+        return hostError(s.gpa, ref, .invalid_value);
+    }
     var def: ?*caps.Capability = null;
     const code = talk.defineCapabilityZigWith(s.core, wire_handle, ops, coordinator_of, release, &def);
     if (code != .ok) {

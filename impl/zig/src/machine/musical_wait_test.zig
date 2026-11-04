@@ -1,5 +1,5 @@
 //! `wait` in Musical Units (chapter 5) calls the Group's musical clock, the
-//! reserved `musical clock` Grant's suspending `wait` (chapter 9, ADR 0166).
+//! reserved `musical-clock` Grant's suspending `wait` (chapter 9, ADR 0166).
 const std = @import("std");
 const machine = @import("machine.zig");
 const caps = @import("capabilities.zig");
@@ -111,7 +111,7 @@ test "a musical wait calls the musical clock and resumes on its answer" {
     _ = try g.deliver("s", "go", &.{}, true);
     try g.pump(clock);
     try t.expectEqual(@as(usize, 1), h.calls.items.len);
-    try contains(&trace, "call s/r1.c1 op=musical clock.wait args=[8 bars]");
+    try contains(&trace, "call s/r1.c1 op=musical-clock.wait args=[8 bars]");
     // No `maxPending` and no `MaxWait`: the wait has no deadline.
     try t.expect(g.nextInstant() == null);
     try g.pump(.{ .seconds = 3600, .micros = 0 });
