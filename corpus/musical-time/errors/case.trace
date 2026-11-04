@@ -1,0 +1,44 @@
+# Unblessed: Musical Units and the musical clock (#2064); first blessing awaits human review.
+# errors: each Run errors at its `wait`, or at the arithmetic before it.
+
+> load bad identity=1f649a4a17289402a423d6248706177fa0d32bbafa18d40fec412c64e1845a6e
+> deliver d1 to=bad message=fraction
+> deliver d2 to=bad message=negative
+> deliver d3 to=bad message=mixed
+> deliver d4 to=bad message=timed
+> deliver d5 to=bad message=compound
+> deliver d6 to=bad message=converted
+> deliver d7 to=bad message=timeout
+> deliver d8 to=bad message=branch
+> deliver d9 to=bad message=block
+> pump clock=2026-09-30T09:00:00Z
+raise bad/r1 code="out of domain" at=bad:3 pos=5:3
+seg bad/r1 start delivery=d1 handler=fraction clause=1 fuel=19 alloc=0 state=256 end=error
+run bad/r1 outcome=errored delivery=d1 handler=fraction error={code: "out of domain", function: "wait", value: 1.5 bars, at: {unit: "bad", handler: "fraction", line: 5, column: 3}} fuel=19 alloc=0
+raise bad/r2 code="out of domain" at=bad:9 pos=9:3
+seg bad/r2 start delivery=d2 handler=negative clause=1 fuel=21 alloc=24 state=755 end=error
+run bad/r2 outcome=errored delivery=d2 handler=negative error={code: "out of domain", function: "wait", value: -1 beat, at: {unit: "bad", handler: "negative", line: 9, column: 3}} fuel=21 alloc=24
+raise bad/r3 code="incompatible units" at=bad:15 pos=13:14
+seg bad/r3 start delivery=d3 handler=mixed clause=1 fuel=13 alloc=0 state=1253 end=error
+run bad/r3 outcome=errored delivery=d3 handler=mixed error={code: "incompatible units", left: "bar", right: "beat", at: {unit: "bad", handler: "mixed", line: 13, column: 14}} fuel=13 alloc=0
+raise bad/r4 code="incompatible units" at=bad:22 pos=17:14
+seg bad/r4 start delivery=d4 handler=timed clause=1 fuel=13 alloc=0 state=1736 end=error
+run bad/r4 outcome=errored delivery=d4 handler=timed error={code: "incompatible units", left: "bar", right: "ms", at: {unit: "bad", handler: "timed", line: 17, column: 14}} fuel=13 alloc=0
+raise bad/r5 code="incompatible units" at=bad:29 pos=21:14
+seg bad/r5 start delivery=d5 handler=compound clause=1 fuel=13 alloc=0 state=2215 end=error
+run bad/r5 outcome=errored delivery=d5 handler=compound error={code: "incompatible units", left: "bar", right: "min", at: {unit: "bad", handler: "compound", line: 21, column: 14}} fuel=13 alloc=0
+raise bad/r6 code="can't convert" at=bad:35 pos=25:15
+seg bad/r6 start delivery=d6 handler=converted clause=1 fuel=13 alloc=0 state=2699 end=error
+run bad/r6 outcome=errored delivery=d6 handler=converted error={code: "can't convert", value: 8 bars, to: "s", at: {unit: "bad", handler: "converted", line: 25, column: 15}} fuel=13 alloc=0
+raise bad/r7 code="wrong kind" at=bad:41 pos=29:3
+seg bad/r7 start delivery=d7 handler=timeout clause=1 fuel=19 alloc=0 state=3177 end=error
+run bad/r7 outcome=errored delivery=d7 handler=timeout error={code: "wrong kind", expected: "s", got: "bar", value: 1 bar, at: {unit: "bad", handler: "timeout", line: 29, column: 3}} fuel=19 alloc=0
+raise bad/r8 code="wrong kind" at=bad:47 pos=33:3
+seg bad/r8 start delivery=d8 handler=branch clause=1 fuel=19 alloc=0 state=3709 end=error
+run bad/r8 outcome=errored delivery=d8 handler=branch error={code: "wrong kind", expected: "s", got: "beat", value: 2 beats, at: {unit: "bad", handler: "branch", line: 33, column: 3}} fuel=19 alloc=0
+raise bad/r9 code="wrong kind" at=bad:68 pos=40:3
+seg bad/r9 start delivery=d9 handler=block clause=1 fuel=11 alloc=40 state=4244 end=error
+run bad/r9 outcome=errored delivery=d9 handler=block error={code: "wrong kind", expected: "s", got: "bar", value: 1 bar, at: {unit: "bad", handler: "block", line: 40, column: 3}} fuel=11 alloc=40
+pumped state=idle fuel=141
+> vars
+vars bad

@@ -19,6 +19,7 @@ import {
   calendarCapability,
   clockCapability,
   consoleCapability,
+  musicalClockCapability,
   timerCapability,
 } from '../standard-capabilities';
 import { sqliteCapability } from '../sqlite-capability';
@@ -148,6 +149,7 @@ export class WasmCore implements Core {
   sqliteCapability = sqliteCapability;
   userCapability = userCapability;
   httpCapability = httpCapability;
+  musicalClockCapability = musicalClockCapability;
   peerCapability = peerCapability;
   // The Core-fixed kind, known to each Group's guest as a defined one is.
   readonly peerKind = this.#known(peerKind);

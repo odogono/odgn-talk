@@ -81,6 +81,8 @@ export type GroupCore = {
 };
 
 export type GroupOptions = {
+  /** Refused until the Zig reactor keeps a musical clock. */
+  musicalClock?: unknown;
   name: string;
   onReady?(): void;
   /** The `random` generator's seed, 0 to 2⁶⁴ − 1; 0 when omitted. */
@@ -250,6 +252,12 @@ export class WasmGroup implements Group {
     o: GroupOptions,
     restoring?: { options: RestoreOptions; save: Uint8Array },
   ) {
+    if (o.musicalClock !== undefined) {
+      throw new HostError(
+        'invalid value',
+        'The Zig reactor keeps no musical clock yet',
+      );
+    }
     this.#core = core;
     this.name = o.name;
     this.#trace = o.trace;

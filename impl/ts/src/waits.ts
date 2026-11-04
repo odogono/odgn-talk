@@ -122,7 +122,8 @@ export type Pending<R, S> = {
   join?: JoinWait<R, S>;
   running: R;
   s: S;
-  timer: Timer<R, S>;
+  /** Absent for the musical clock's call, which has no deadline of its own. */
+  timer?: Timer<R, S>;
 };
 
 /** A Run and its Script, as the Group lists them. */
@@ -170,11 +171,19 @@ export class Waits<R extends Owner, S> {
   }
 
   /** Waits on a call or reply, as a Run's own Wait or a Join Member's. */
-  add(id: string, s: S, running: R, timer: Timer<R, S>, join?: JoinWait<R, S>) {
-    this.pending.set(
-      id,
-      join ? { s, running, timer, join } : { s, running, timer },
-    );
+  add(
+    id: string,
+    s: S,
+    running: R,
+    timer?: Timer<R, S>,
+    join?: JoinWait<R, S>,
+  ) {
+    this.pending.set(id, {
+      s,
+      running,
+      ...(timer ? { timer } : {}),
+      ...(join ? { join } : {}),
+    });
   }
 
   has(id: string): boolean {
@@ -193,7 +202,10 @@ export class Waits<R extends Owner, S> {
   cut(members: readonly Member[], reason: AbandonReason): Member[] {
     const cut = this.pendingMembers(members);
     for (const m of cut) {
-      this.pending.get(m.id)!.timer.live = false;
+      const t = this.pending.get(m.id)!.timer;
+      if (t) {
+        t.live = false;
+      }
       this.pending.delete(m.id);
       abandon(m.abort, reason);
     }
@@ -220,7 +232,9 @@ export class Waits<R extends Owner, S> {
       return { k: 'late' };
     }
     this.pending.delete(id);
-    p.timer.live = false;
+    if (p.timer) {
+      p.timer.live = false;
+    }
     const { s, running } = p;
     if (!p.join) {
       return { k: 'ready', s, running, r };

@@ -299,6 +299,55 @@ identity. This Core has no Message Layer adapter; its release transport tests
 are deferred, while the [Go adapter](../go/README.md#message-layer) carries the
 exchange. The `store` factory forwards its implementation's release hook; see the router below.
 
+## Musical time
+
+A Host that keeps musical time, such as Folio with its Transport, gives the
+Group a musical clock, so a Script's `wait 8 bars` or `wait 2 beats` ends on
+the Host's bar or beat line rather than after a fixed duration
+([chapter 9](../../spec/09-embedding.md#the-musical-clock),
+[ADR 0166](../../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)):
+
+```ts
+const clock = core.musicalClockCapability(
+  {
+    // `count` is the Quantity the Script waits for: a whole number of bars
+    // or beats, 1 or more. Answer on that line, one lead early if you like.
+    wait: (call, count) => transport.onLine(count, () => call.answer(nothing)),
+  },
+  { wait: { fuel: 1 } },
+  ({ scriptName, reason }) => transport.forget(scriptName, reason), // optional
+);
+const group = core.newGroup({ name: 'song', musicalClock: clock });
+```
+
+- **Ending a wait:** answer the call with Nothing (`call.answer(nothing)`) when
+  the line is due, or `call.fail(...)` to raise in the Run. Stop, Reload,
+  cancellation and a Timeout Block abandon it, aborting `call.signal`; the
+  call has no `maxPending`, and `MaxWait` doesn't apply.
+- **The reserved Grant:** every Script holds the clock as the Grant
+  `musical-clock`, which no source can name. `Script.grants()` leaves it out,
+  `revoke` ignores it, `grantsAsUsed` keeps it, and a Host Grant of that name
+  is `invalid value`. Its calls appear in the Trace as
+  `op=musical-clock.wait`, the release hook gets its `stop` and `reload`
+  calls, and the Group Fingerprint includes its declaration.
+- **Only the Core makes one:** `wait` can't name a Host's Operation, so
+  `musicalClockCapability` is the only way to make the Capability the
+  `musicalClock` option takes.
+- **Saves:** a pending musical wait is a pending call. Pass `musicalClock` to
+  `restore` too, and settle the restored call as any other: `reissue` starts
+  it again on the new clock.
+- **Without one,** a `wait` in a Musical Unit raises `no musical time`;
+  `wait 0 bars` goes straight on either way. `exportManifest({ musicalTime:
+true, ... })` tells tooling the Host keeps musical time.
+- **The Zig reactor** doesn't keep a musical clock yet, so
+  `@northtalk/ts/wasm` refuses the option with `invalid value`
+  ([#2065](https://github.com/odogono/odgn-talk/issues/2065)).
+
+Trace Cases supply one through `[[standard]]` with `capability =
+"musical-clock"`, and end each wait with `answer` or `fail` inputs, as in
+[`corpus/musical-time/`](../../corpus/musical-time/). The
+[tests](tests/musical-wait.test.ts) cover the rest.
+
 ## The HTTP router
 
 `@northtalk/ts/http` supplies `createHttpHost(options)`, the

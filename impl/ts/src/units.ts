@@ -35,15 +35,21 @@ type Entry = {
   calendar: boolean;
   factor: readonly [Dec, Dec];
   kind: string;
+  /** A Musical Unit (`bar`, `beat`), counted on a Host's Transport (ADR 0166). */
+  musical: boolean;
   name: string;
   plural?: string;
 };
+const musicalKinds = new Set(
+  unitKindTable.flatMap(k => ('musical' in k && k.musical ? [k.name] : [])),
+);
 const entries = new Map<string, Entry>();
 for (const u of units) {
   const entry: Entry = {
     name: u.name,
     kind: u.kind,
     calendar: u.calendar,
+    musical: musicalKinds.has(u.kind),
     factor: [parseDec(u.factor[0]!), parseDec(u.factor[1]!)],
     ...('plural' in u && u.plural ? { plural: u.plural } : {}),
   };
@@ -73,6 +79,7 @@ export const parseUnit = (text: string): UnitSpec => {
   let sign = text.startsWith('1/') ? -1 : 1;
   const slots: Slot[] = [];
   let calendar = false;
+  let musical = false;
   const parts = body.split(/([*/])/);
   let slashes = sign < 0 ? 1 : 0;
   for (let i = 0; i < parts.length; i += 2) {
@@ -100,14 +107,18 @@ export const parseUnit = (text: string): UnitSpec => {
     } else {
       slots.push({ unit: entry.name, exponent });
     }
-    calendar ||=
-      entry.calendar && (parts.length > 1 || power !== undefined || sign < 0);
+    const compound = parts.length > 1 || power !== undefined || sign < 0;
+    calendar ||= entry.calendar && compound;
+    musical ||= entry.musical && compound;
   }
   if (slashes > 1) {
     throw new UnitError('a Compound Unit has at most one `/`');
   }
   if (calendar) {
     throw new UnitError("a Calendar Unit can't be part of a Compound Unit");
+  }
+  if (musical) {
+    throw new UnitError("a Musical Unit can't be part of a Compound Unit");
   }
   return ownUnit(ordered(slots));
 };
@@ -272,12 +283,26 @@ export const fromBase = (value: Dec, spec: UnitSpec): Dec => {
   return v;
 };
 
+// Calendar and Musical Units stand alone (chapter 3, Compound Units).
 const checkCalendar = (spec: UnitSpec) => {
-  const calendar = spec.find(slot => entryOf(slot).calendar);
-  if (calendar && (spec.length > 1 || calendar.exponent !== 1)) {
-    throw new UnitError('a Calendar Unit stands alone');
+  const alone = spec.find(slot => {
+    const entry = entryOf(slot);
+    return entry.calendar || entry.musical;
+  });
+  if (alone && (spec.length > 1 || alone.exponent !== 1)) {
+    throw new UnitError(
+      entryOf(alone).calendar
+        ? 'a Calendar Unit stands alone'
+        : 'a Musical Unit stands alone',
+    );
   }
   return spec;
+};
+
+/** The Musical Unit Kind a Unit is in, `bar` or `beat`, if it is one (ADR 0166). */
+export const musicalKind = (spec: UnitSpec): string | undefined => {
+  const entry = spec.length === 1 ? entryOf(spec[0]!) : undefined;
+  return entry?.musical && spec[0]!.exponent === 1 ? entry.kind : undefined;
 };
 
 /**

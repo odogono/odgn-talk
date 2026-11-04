@@ -22,6 +22,8 @@ export type ManifestSpec = {
   kind: string;
   libraries?: readonly Library[];
   messages?: readonly MessageDecl[];
+  /** Whether the Host supplies a musical clock (chapter 9, The musical clock). */
+  musicalTime?: boolean;
   objectKinds?: readonly ObjectKind[];
   objects?: Readonly<Record<string, ObjectKind>>;
   /** The Owner Kind: one of objectKinds, the kind of `me` for tooling. */
@@ -200,6 +202,7 @@ export const exportManifest = (m: ManifestSpec): string => {
     objects: Object.entries(m.objects ?? {})
       .sort(([a], [b]) => compareText(a, b))
       .map(([name, kind]) => ({ name, kind: kind.name })),
+    ...(m.musicalTime ? { musicalTime: true } : {}),
     ...(m.ownerKind ? { ownerKind: m.ownerKind.name } : {}),
   })}\n`;
 };

@@ -219,10 +219,11 @@ In TS, `defineCapability` takes an optional fourth `ReleaseHook` argument, indep
 
 A Host whose Scripts keep musical time, such as Folio with its Transport, supplies a **musical clock** when it makes the Group ([ADR 0166](../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)). It is a Capability with one suspending Operation, `wait`, whose one argument has the Shape `{"oneOf": [{"unitKind": "bar"}, {"unitKind": "beat"}]}` and which has no `maxPending`.
 
-- **The call:** a Script's `wait 8 bars` calls `wait` with `8 bars`, as an `ask … and wait` would, through a Grant every Script of the Group holds under the reserved name `musical clock`. No source can name that Grant, so `ask`, `tell`, `revoke` and `GrantsAsUsed` never see it. Everything else follows from its being a pending call: its `call` and answer records in the Trace, its place in a save, its abandonment on Stop, Reload and cancellation, and the release hook's `stop` and `reload` calls.
+- **The call:** a Script's `wait 8 bars` calls `wait` with `8 bars`, as an `ask … and wait` would, through a Grant every Script of the Group holds under the reserved name `musical-clock`. A `-` can't be part of a Name, so no source can name that Grant, so `ask`, `tell`, `revoke` and `GrantsAsUsed` never see it. Everything else follows from its being a pending call: its `call` and answer records in the Trace, its place in a save, its abandonment on Stop, Reload and cancellation, and the release hook's `stop` and `reload` calls.
 - **The answer:** the Host answers Nothing when the line is due. A failure raises in the Run as any Operation's failure does.
 - **Without one,** `wait` in a Musical Unit raises `no musical time` ([chapter 5](05-handlers-messages-and-scheduling.md#wait-in-musical-units)).
-- **In TS** the Group option is `musicalClock`, and in Go `WithMusicalClock(...)`, each taking the Capability. The Group Fingerprint includes its Operation Declaration; the Host Manifest writes `musicalTime: true` instead.
+- **Making one:** `DefineCapability` refuses `wait` as an Operation name, so the Core makes the musical clock from the Host's `wait` function, the Operation's cost and an optional release hook: in TS `musicalClockCapability(impl, costs, release?)`. Its Operation declares no error catalogue, so any failure the Host gives raises in the Run.
+- **In TS** the Group option is `musicalClock`, and in Go `WithMusicalClock(...)`, each taking the Capability. `Restore` takes it the same way. The Group Fingerprint includes its Operation Declaration; the Host Manifest writes `musicalTime: true` instead.
 
 ### The notification router
 
