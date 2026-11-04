@@ -118,6 +118,61 @@ pub const Iterator = struct {
     left: u64 = 0,
 };
 
+/// Empty frame buffers a Group keeps between calls. Each is held memory of
+/// the Group's allocator, so its physical cap still bounds them.
+pub const SpareFrames = struct {
+    const max = 16;
+    locals: [max][]*Value = undefined,
+    locals_len: u8 = 0,
+    stacks: [max][]Slot = undefined,
+    stacks_len: u8 = 0,
+
+    /// A buffer of `n` locals, uninitialised, or null to allocate one.
+    fn takeLocals(s: *SpareFrames, n: usize) ?[]*Value {
+        var i: usize = s.locals_len;
+        while (i > 0) {
+            i -= 1;
+            if (s.locals[i].len != n) continue;
+            const found = s.locals[i];
+            s.locals_len -= 1;
+            s.locals[i] = s.locals[s.locals_len];
+            return found;
+        }
+        return null;
+    }
+
+    /// An empty stack with some capacity, or an unallocated one.
+    fn takeStack(s: *SpareFrames) std.ArrayList(Slot) {
+        if (s.stacks_len == 0) return .empty;
+        s.stacks_len -= 1;
+        var stack: std.ArrayList(Slot) = .fromOwnedSlice(s.stacks[s.stacks_len]);
+        stack.items.len = 0;
+        return stack;
+    }
+
+    /// Keeps a popped frame's emptied buffers, or frees them.
+    fn give(s: *SpareFrames, gpa: Allocator, locals: []*Value, stack: []Slot) void {
+        if (locals.len > 0) {
+            if (s.locals_len < max) {
+                s.locals[s.locals_len] = locals;
+                s.locals_len += 1;
+            } else group_allocator.freeFrameBuffer(gpa, *Value, locals);
+        }
+        if (stack.len > 0) {
+            if (s.stacks_len < max) {
+                s.stacks[s.stacks_len] = stack;
+                s.stacks_len += 1;
+            } else group_allocator.freeFrameBuffer(gpa, Slot, stack);
+        }
+    }
+
+    fn deinit(s: *SpareFrames, gpa: Allocator) void {
+        for (s.locals[0..s.locals_len]) |b| group_allocator.freeFrameBuffer(gpa, *Value, b);
+        for (s.stacks[0..s.stacks_len]) |b| group_allocator.freeFrameBuffer(gpa, Slot, b);
+        s.* = .{};
+    }
+};
+
 pub const Frame = struct {
     restricted: bool = false,
     /// The Library whose code it runs, or null for its Script's.
@@ -1717,6 +1772,9 @@ pub const Group = struct {
     /// Whether `execute` runs simple instructions through `fastSteps`.
     /// Tests turn it off to compare with the general loop.
     fast_steps: bool = true,
+    /// Popped frames' empty buffers, which the next calls take instead of
+    /// allocating (#2023): locals by length, and stacks of any capacity.
+    spare: SpareFrames = .{},
     inline_admitting: bool = false,
     pump_finishing: bool = false,
     trace_pause: bool = false,
@@ -1869,6 +1927,8 @@ pub const Group = struct {
         g.ended.deinit(g.gpa);
         g.changed_roots.deinit(g.gpa);
         g.root_discards.deinit(g.gpa);
+        // Last: tearing the Runs down above pops their frames into it.
+        g.spare.deinit(g.gpa);
     }
 
     /// Adds a report. Reports are observations: one the Group can't keep is
@@ -7476,7 +7536,7 @@ pub const Group = struct {
         // A call that would pass the call depth faults at the call.
         if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return g.faultOn(.depth);
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
-        const locals = try g.gpa.alloc(*Value, b.locals);
+        const locals = g.spare.takeLocals(b.locals) orelse try g.gpa.alloc(*Value, b.locals);
         var made: usize = 0;
         // Unbound locals share this call's immutable Nothing. Each slot
         // still owns a reference; replacing one cannot change another.
@@ -7500,7 +7560,12 @@ pub const Group = struct {
             locals[slot] = during.retain();
         };
         const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
-        try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
+        var stack = g.spare.takeStack();
+        run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .stack = stack, .restricted = restricted }) catch |e| {
+            g.spare.give(g.gpa, &.{}, stack.allocatedSlice());
+            stack = .empty;
+            return e;
+        };
     }
 
     /// The failed frames the Run's dispatches and cleanups hold aside, which count toward
@@ -7517,9 +7582,8 @@ pub const Group = struct {
     fn popFrame(g: *Group, run: *Run) void {
         var f = run.frames.pop().?;
         for (f.locals) |v| v.release();
-        @import("group_allocator.zig").freeFrameBuffer(g.gpa, *Value, f.locals);
         for (f.stack.items) |slot| slot.release(g.gpa);
-        @import("group_allocator.zig").freeFrameBuffer(g.gpa, Slot, f.stack.allocatedSlice());
+        g.spare.give(g.gpa, f.locals, f.stack.allocatedSlice());
     }
 
     // ------------------------------------------------------------ running
@@ -7573,7 +7637,7 @@ pub const Group = struct {
         // are the same in every frame the fast path reaches.
         const unit = unitOf(run, top);
         switch (unit.code[top.pc].op) {
-            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return", .call_handler, .get_key, .set_key, .next => {},
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return", .call_handler, .call_value, .get_key, .set_key, .next => {},
             else => return,
         }
         for (unit.unwind) |e| if (e.kind == .finally) return;
@@ -7701,7 +7765,17 @@ pub const Group = struct {
                         for (stack.items[len - n ..]) |slot| if (slot != .value) return;
                         const handler = ins.op == .call_handler;
                         const body = if (handler) ownClause(unit, ops[0].text, n) orelse return else @as(u32, @intCast(ops[0].int));
-                        if (!g.fastCall(run, &bounds, body, n, handler)) return;
+                        if (!g.fastCall(run, &bounds, body, n, if (handler) .call_handler else .call, null)) return;
+                        g.fastTick();
+                        continue :frames;
+                    },
+                    .call_value => {
+                        const n: usize = @intCast(ops[0].int);
+                        if (len < n + 1) return;
+                        for (stack.items[len - n - 1 ..]) |slot| if (slot != .value) return;
+                        const fv = stack.items[len - n - 1].value;
+                        const body = g.ownLambda(run, frame, fv, n) orelse return;
+                        if (!g.fastCall(run, &bounds, body, n, .call_value, fv)) return;
                         g.fastTick();
                         continue :frames;
                     },
@@ -7981,7 +8055,27 @@ pub const Group = struct {
     /// nothing, for a call the general loop makes: one that leaves off
     /// parameters with defaults, binds `during`, passes the call depth or
     /// can't be allocated or charged.
-    fn fastCall(g: *Group, run: *Run, bounds: *const FastBounds, body: u32, n: usize, handler: bool) bool {
+    /// The body of the Function Value `fv` that `call-value` with `n`
+    /// arguments runs, when `callValue` would push it as `call` pushes a
+    /// body: one of this frame's unit, current, that can't suspend, given
+    /// every parameter. Otherwise null, for the general loop.
+    fn ownLambda(g: *Group, run: *Run, frame: *const Frame, fv: *const Value, n: usize) ?u32 {
+        if (fv.data != .function) return null;
+        const code = g.codeOf(fv) orelse return null;
+        if (code.library != frame.library or code.generation != run.script.generation or !std.mem.eql(u8, code.home, run.script.name)) return null;
+        const b = &unitOf(run, frame).bodies[code.body];
+        if (b.may_suspend or b.params.len != n) return null;
+        if (fv.data.function.captures.data.map.len > b.locals -| b.capture_slot) return null;
+        return code.body;
+    }
+
+    /// Pushes a frame for `body` of the top frame's unit, taking its `n`
+    /// arguments from the top of the caller's stack, for `call`,
+    /// `call-handler` or, with the Function Value under the arguments,
+    /// `call-value`. False, having changed nothing, if the general loop
+    /// must make the call.
+    fn fastCall(g: *Group, run: *Run, bounds: *const FastBounds, body: u32, n: usize, op: Opcode, function: ?*Value) bool {
+        const handler = op == .call_handler;
         const b = &unitOf(run, &run.frames.items[run.frames.items.len - 1]).bodies[body];
         if (n != b.params.len or b.during != null) return false;
         if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return false;
@@ -7989,18 +8083,17 @@ pub const Group = struct {
         // the frames can move them, so the caller is found after.
         run.frames.ensureUnusedCapacity(g.gpa, 1) catch return false;
         const caller = &run.frames.items[run.frames.items.len - 1];
-        const locals = g.gpa.alloc(*Value, b.locals) catch return false;
-        var stack: std.ArrayList(Slot) = .empty;
-        stack.ensureTotalCapacity(g.gpa, 8) catch {
-            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+        const locals = g.spare.takeLocals(b.locals) orelse g.gpa.alloc(*Value, b.locals) catch return false;
+        var stack = g.spare.takeStack();
+        if (stack.capacity == 0) stack.ensureTotalCapacity(g.gpa, 8) catch {
+            g.spare.give(g.gpa, locals, &.{});
             return false;
         };
         // Slot 0 and any slot past the arguments share one Nothing.
         const empty: ?*Value = if (b.locals > 0) nothing(g.gpa) catch null else null;
-        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(if (handler) .call_handler else .call))) {
+        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(op))) {
             if (empty) |v| v.release();
-            group_allocator.freeFrameBuffer(g.gpa, Slot, stack.allocatedSlice());
-            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+            g.spare.give(g.gpa, locals, stack.allocatedSlice());
             return false;
         }
         // The arguments move from the caller's stack to slots 1 to n.
@@ -8008,6 +8101,17 @@ pub const Group = struct {
         for (locals, 0..) |*l, i| l.* = if (i >= 1 and i <= n) args[i - 1].value else empty.?.retain();
         if (empty) |v| v.release();
         caller.stack.items.len -= n;
+        if (function) |fv| {
+            // A Lambda's captures fill the slots after its parameters, as
+            // `callValue` copies them; the stack's Function Value goes.
+            const captures = fv.data.function.captures.data.map;
+            for (0..captures.len, b.capture_slot..) |i, slot| {
+                locals[slot].release();
+                locals[slot] = captures.at(i).value.retain();
+            }
+            caller.stack.items.len -= 1;
+            fv.release();
+        }
         caller.pc += 1;
         // A Handler's clause is a Command Call's, as `nextClause` pushes
         // it: its `clause-fail` tries the next, and its rate is paid with
