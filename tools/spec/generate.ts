@@ -975,9 +975,11 @@ const VIEWS: Record<string, View> = {
         code(k.base),
         k.calendar
           ? 'none (Calendar Units)'
-          : k.factor
-            ? `${k.dimension}, with ${code(k.base)} = ${k.factor}`
-            : k.dimension,
+          : k.musical
+            ? 'none (a Musical Unit)'
+            : k.factor
+              ? `${k.dimension}, with ${code(k.base)} = ${k.factor}`
+              : k.dimension,
       ]),
     ),
 

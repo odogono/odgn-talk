@@ -240,6 +240,10 @@ The Unit Catalogue is [`units.toml`](data/units.toml). The language version pins
 | exact duration | `s` | time |
 | calendar duration | `month` | none (Calendar Units) |
 | temperature difference | `degC` | temperature |
+| frequency | `Hz` | time^-1 |
+| pitch interval | `cent` | pitch |
+| bar | `bar` | none (a Musical Unit) |
+| beat | `beat` | none (a Musical Unit) |
 | USD | `USD` | USD |
 | EUR | `EUR` | EUR |
 | GBP | `GBP` | GBP |
@@ -284,6 +288,13 @@ Its Units:
 | `year` | `years` | calendar duration | 12 |
 | `degC` |  | temperature difference | 1 |
 | `degF` |  | temperature difference | 5/9 |
+| `Hz` |  | frequency | 1 |
+| `kHz` |  | frequency | 1000 |
+| `cent` | `cents` | pitch interval | 1 |
+| `semitone` | `semitones` | pitch interval | 100 |
+| `octave` | `octaves` | pitch interval | 1200 |
+| `bar` | `bars` | bar | 1 |
+| `beat` | `beats` | beat | 1 |
 | `USD` |  | USD | 1 |
 | `EUR` |  | EUR | 1 |
 | `GBP` |  | GBP | 1 |
@@ -298,7 +309,9 @@ Its Units:
 <!-- end -->
 
 - **Spellings:** each Unit has one spelling. A word Unit also has a plural, and both forms are accepted everywhere. There are no synonyms, so there is no `h` or `sec`.
-- **Dimensions:** every Unit is an exact factor times a product of base dimensions: length, mass, time, temperature, and one for each currency. A volume is length³, and `L` is 0.001 m³. The Calendar Units, `month` and `year`, have a dimension of their own, outside the base dimensions. They convert only into each other, and never appear in a Compound Unit.
+- **Dimensions:** every Unit is an exact factor times a product of base dimensions: length, mass, time, temperature, pitch, and one for each currency. A volume is length³, and `L` is 0.001 m³. A frequency is time⁻¹, so `1 Hz = 1 1/s` is `true`. The Calendar Units, `month` and `year`, have a dimension of their own, outside the base dimensions. They convert only into each other, and never appear in a Compound Unit.
+- **Musical Units:** `bar` and `beat` are each a Unit Kind and a dimension of their own, outside the base dimensions ([ADR 0166](../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)). Their length is set by a Host's Transport, not by the catalogue, so they convert into nothing else, not even each other, and never appear in a Compound Unit. They take part in `+`, `-`, comparison, and `*` and `/` by a plain number, and a plain `wait` counts them on the Host's musical clock ([chapter 5](05-handlers-messages-and-scheduling.md#wait-in-musical-units)).
+- **Pitch intervals** are in `cent`, `semitone` (100 cents) and `octave` (1200 cents). A note isn't a Quantity, so an interval adds to nothing but another interval.
 - **Factors** are exact decimals, except `degF`, whose factor is the ratio 5/9.
 - **Currencies:** the ten currency Units are each a Unit Kind and a dimension of their own, and nothing converts between them. An exchange rate is a Quantity, such as `1.1 USD/EUR`. There is no rounding to a currency's minor unit, so `1.005 USD` stays exact.
 - **Temperatures** are differences only. The `units` Library converts absolute temperatures, as plain numbers ([chapter 7](07-libraries-and-the-standard-library.md)).
@@ -309,7 +322,7 @@ Its Units:
 - **Slots:** a Quantity's Unit has at most one Unit in each slot, with an exponent that is positive in the numerator and negative in the denominator. The slots are the Unit Kinds above. So `L` and `mL` share the volume slot, and `m` has the length slot, even though a volume is length³.
 - **Normal form:** a slot whose exponent comes to zero is dropped. Numerator factors print first, in Kind order, then a `/` and the denominator factors, in Kind order. An exponent of 1 isn't written, and a Unit with only a denominator is written `1/s`.
 - **No Unit left:** a result whose slots have all dropped is a plain number, so `4 yd / 2 ft` gives `6`.
-- **Calendar Units** stand alone. A result that would put a Calendar Unit beside another factor, or give it an exponent other than 1, raises `incompatible units`.
+- **Calendar and Musical Units** stand alone. A result that would put one beside another factor, or give it an exponent other than 1, raises `incompatible units`, as for `1 bar / 1 min`.
 
 ### Converting
 

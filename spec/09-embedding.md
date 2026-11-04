@@ -215,6 +215,15 @@ The hook receives the Group's identity, the Script's name, the named Grant, its 
 
 In TS, `defineCapability` takes an optional fourth `ReleaseHook` argument, independent of its Segment lifecycle argument. In Go, `DefineCapability`, `DefineSegmentCapability` and `DefineCoordinatedCapability` take Operation declarations and `WithReleaseHook(func(GrantContext))` as `CapabilityOption` values. The Host Manifest and Group Fingerprint include the Operation Declarations and exclude the hook.
 
+### The musical clock
+
+A Host whose Scripts keep musical time, such as Folio with its Transport, supplies a **musical clock** when it makes the Group ([ADR 0166](../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)). It is a Capability with one suspending Operation, `wait`, whose one argument has the Shape `{"oneOf": [{"unitKind": "bar"}, {"unitKind": "beat"}]}` and which has no `maxPending`.
+
+- **The call:** a Script's `wait 8 bars` calls `wait` with `8 bars`, as an `ask … and wait` would, through a Grant every Script of the Group holds under the reserved name `musical clock`. No source can name that Grant, so `ask`, `tell`, `revoke` and `GrantsAsUsed` never see it. Everything else follows from its being a pending call: its `call` and answer records in the Trace, its place in a save, its abandonment on Stop, Reload and cancellation, and the release hook's `stop` and `reload` calls.
+- **The answer:** the Host answers Nothing when the line is due. A failure raises in the Run as any Operation's failure does.
+- **Without one,** `wait` in a Musical Unit raises `no musical time` ([chapter 5](05-handlers-messages-and-scheduling.md#wait-in-musical-units)).
+- **In TS** the Group option is `musicalClock`, and in Go `WithMusicalClock(...)`, each taking the Capability. The Group Fingerprint includes its Operation Declaration; the Host Manifest writes `musicalTime: true` instead.
+
 ### The notification router
 
 Each Core supplies a router as a helper built only on this interface, at `@northtalk/ts/notify` in TS and `northtalk.org/go/notify` in Go. As with the drivers, its idiom is outside parity, but the [Store registration, routing and lifetime rules](07-libraries-and-the-standard-library.md#store-watch-operations), [watch limits](07-libraries-and-the-standard-library.md#store-watch-limits) and [checkpoint rules](10-save-and-restore.md#store-notification-checkpoints) apply to it. A Host with its own storage builds a `StoreImpl` around it:
@@ -559,6 +568,7 @@ A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load s
   - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds, with any documentation
   - `objectKinds`: name, properties and `parentKinds`, then its `elements` collection declaration when it has one
   - `objects`: well-known name and kind
+- **Musical time:** `musicalTime: true` follows the arrays, only when the Host supplies a [musical clock](#the-musical-clock), so tooling can flag a `wait` in a Musical Unit that would raise `no musical time`.
 - **The Owner Kind:** `ownerKind` comes last, only when present. It names one of `objectKinds`, and tooling treats the `me` of this kind of Script as an object of that kind. Without it, tooling leaves `me` unknown. `ExportManifest` refuses a kind that isn't in `objectKinds` as `invalid value`.
 - **One data model:** Operation Declarations and Shapes use the same data model as the corpus's `case.toml`, written as JSON here and as TOML there. A Constant value inside them uses the Value Encoding.
 - **Documentation:** an Operation writes its `description`, then its `examples`, after its other keys, each only when present. They are the only keys `case.toml` lacks, and the only ones the Group Fingerprint leaves out, so rewording them changes the manifest's bytes but not the Fingerprint.

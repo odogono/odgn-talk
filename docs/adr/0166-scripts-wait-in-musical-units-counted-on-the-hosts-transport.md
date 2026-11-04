@@ -6,7 +6,7 @@ status: proposed
 
 To arrange a song ([#2044](https://github.com/odogono/odgn-talk/issues/2044)), a Folio Script needs a wait that ends on a bar line, even when the tempo changes during it. So the Unit Catalogue gains two **Musical Units**, `bar` and `beat`. They are counted on the Host's Transport, and the Catalogue gives them no length.
 
-```text
+```talk
 on drumPart
   loop "bd [hh hh] sd hh" on drums       -- intro
   wait 8 bars
@@ -45,7 +45,7 @@ end drumPart
 - Operations that transpose accept a pitch interval.
 - A note and an interval don't add: `c3 + 7 semitones` stays out of scope.
 
-This amends ADR 0022: a Musical Unit is a Catalogue entry with no factor. Hosts and Scripts still can't add Units.
+This amends ADR 0022: a Musical Unit is a Catalogue entry outside the dimension system, whose factor of 1 is to itself, as `month`'s is. Hosts and Scripts still can't add Units.
 
 ## Considered Options
 

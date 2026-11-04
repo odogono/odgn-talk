@@ -1492,6 +1492,7 @@ export const errorMessages = {
   "not read-only": "A query must not change the database",
   "too many rows": "The statement gave more than {max} rows",
   "unrepresentable": "The value in {column} can't be represented",
+  "no musical time": "This Host keeps no musical time",
   "user busy": "Another prompt is waiting for an answer",
   "invalid serve": "A Serve Registration's {field} isn't valid",
   "address in use": "That address is already in use",

@@ -12,6 +12,7 @@ type UnitsTableKindEntry struct {
 	Dimension string
 	Factor    string
 	Calendar  bool
+	Musical   bool
 }
 
 type UnitsTableUnitEntry struct {
@@ -54,6 +55,26 @@ var Units = UnitsTable{
 			Name:      "temperature difference",
 			Base:      "degC",
 			Dimension: "temperature",
+		},
+		UnitsTableKindEntry{
+			Name:      "frequency",
+			Base:      "Hz",
+			Dimension: "time^-1",
+		},
+		UnitsTableKindEntry{
+			Name:      "pitch interval",
+			Base:      "cent",
+			Dimension: "pitch",
+		},
+		UnitsTableKindEntry{
+			Name:    "bar",
+			Base:    "bar",
+			Musical: true,
+		},
+		UnitsTableKindEntry{
+			Name:    "beat",
+			Base:    "beat",
+			Musical: true,
 		},
 		UnitsTableKindEntry{
 			Name:      "USD",
@@ -239,6 +260,46 @@ var Units = UnitsTable{
 				5,
 				9,
 			},
+		},
+		UnitsTableUnitEntry{
+			Name:   "Hz",
+			Kind:   "frequency",
+			Factor: "1",
+		},
+		UnitsTableUnitEntry{
+			Name:   "kHz",
+			Kind:   "frequency",
+			Factor: "1000",
+		},
+		UnitsTableUnitEntry{
+			Name:   "cent",
+			Kind:   "pitch interval",
+			Factor: "1",
+			Plural: "cents",
+		},
+		UnitsTableUnitEntry{
+			Name:   "semitone",
+			Kind:   "pitch interval",
+			Factor: "100",
+			Plural: "semitones",
+		},
+		UnitsTableUnitEntry{
+			Name:   "octave",
+			Kind:   "pitch interval",
+			Factor: "1200",
+			Plural: "octaves",
+		},
+		UnitsTableUnitEntry{
+			Name:   "bar",
+			Kind:   "bar",
+			Factor: "1",
+			Plural: "bars",
+		},
+		UnitsTableUnitEntry{
+			Name:   "beat",
+			Kind:   "beat",
+			Factor: "1",
+			Plural: "beats",
 		},
 		UnitsTableUnitEntry{
 			Name:   "USD",

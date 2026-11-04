@@ -461,6 +461,74 @@ export const units = [
     ]
   },
   {
+    "name": "Hz",
+    "kind": "frequency",
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
+  },
+  {
+    "name": "kHz",
+    "kind": "frequency",
+    "calendar": false,
+    "factor": [
+      "1000",
+      "1"
+    ]
+  },
+  {
+    "name": "cent",
+    "plural": "cents",
+    "kind": "pitch interval",
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
+  },
+  {
+    "name": "semitone",
+    "plural": "semitones",
+    "kind": "pitch interval",
+    "calendar": false,
+    "factor": [
+      "100",
+      "1"
+    ]
+  },
+  {
+    "name": "octave",
+    "plural": "octaves",
+    "kind": "pitch interval",
+    "calendar": false,
+    "factor": [
+      "1200",
+      "1"
+    ]
+  },
+  {
+    "name": "bar",
+    "plural": "bars",
+    "kind": "bar",
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
+  },
+  {
+    "name": "beat",
+    "plural": "beats",
+    "kind": "beat",
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
+  },
+  {
     "name": "USD",
     "kind": "USD",
     "calendar": false,
@@ -558,6 +626,10 @@ export const unitKinds = [
   "exact duration",
   "calendar duration",
   "temperature difference",
+  "frequency",
+  "pitch interval",
+  "bar",
+  "beat",
   "USD",
   "EUR",
   "GBP",
@@ -599,6 +671,28 @@ export const unitKindTable = [
     "name": "temperature difference",
     "dimension": "temperature",
     "factor": "1"
+  },
+  {
+    "name": "frequency",
+    "dimension": "time^-1",
+    "factor": "1"
+  },
+  {
+    "name": "pitch interval",
+    "dimension": "pitch",
+    "factor": "1"
+  },
+  {
+    "name": "bar",
+    "dimension": "bar",
+    "factor": "1",
+    "musical": true
+  },
+  {
+    "name": "beat",
+    "dimension": "beat",
+    "factor": "1",
+    "musical": true
   },
   {
     "name": "USD",

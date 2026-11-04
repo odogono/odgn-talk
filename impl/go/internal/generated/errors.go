@@ -726,6 +726,15 @@ var Errors = ErrorsTable{
 			Message: "The value in {column} can't be represented",
 		},
 		ErrorsTableErrorEntry{
+			Code:       "no musical time",
+			Fields:     []string{},
+			RaisedWhen: "A `wait` in a Musical Unit (`bar`, `beat`) runs in a Group whose Host supplies no musical clock",
+			Sources: []string{
+				"ADR 0166",
+			},
+			Message: "This Host keeps no musical time",
+		},
+		ErrorsTableErrorEntry{
 			Code:       "user busy",
 			Fields:     []string{},
 			RaisedWhen: "A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything",

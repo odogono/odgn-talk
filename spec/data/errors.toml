@@ -385,6 +385,13 @@ sources = ["ADR 0070", "#466"]
 message = "The value in {column} can't be represented"
 
 [[error]]
+code = "no musical time"
+fields = []
+raised_when = "A `wait` in a Musical Unit (`bar`, `beat`) runs in a Group whose Host supplies no musical clock"
+sources = ["ADR 0166"]
+message = "This Host keeps no musical time"
+
+[[error]]
 code = "user busy"
 fields = []
 raised_when = "A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything"

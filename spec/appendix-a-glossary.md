@@ -872,7 +872,7 @@ A Unit (`bar`, `beat`) counted on a Host's Transport rather than given a length 
 _Avoid_: musical time unit, tempo unit, cycle
 
 **Unit Catalogue**:
-The fixed table of every Unit, with its Unit Kind and exact conversion factor (none for a Musical Unit), that a language version pins. Neither Hosts nor Scripts can add to it.
+The fixed table of every Unit, with its Unit Kind and exact conversion factor to its Base Unit, that a language version pins. Neither Hosts nor Scripts can add to it.
 _Avoid_: unit registry, unit table, units list
 
 **Range**:

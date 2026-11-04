@@ -11,6 +11,7 @@ pub const UnitsTableKindEntry = struct {
     dimension: ?[]const u8 = null,
     factor: ?[]const u8 = null,
     calendar: ?bool = null,
+    musical: ?bool = null,
 };
 
 pub const UnitsTableUnitEntry = struct {
@@ -53,6 +54,26 @@ pub const units: UnitsTable = .{
             .name = "temperature difference",
             .base = "degC",
             .dimension = "temperature",
+        },
+        .{
+            .name = "frequency",
+            .base = "Hz",
+            .dimension = "time^-1",
+        },
+        .{
+            .name = "pitch interval",
+            .base = "cent",
+            .dimension = "pitch",
+        },
+        .{
+            .name = "bar",
+            .base = "bar",
+            .musical = true,
+        },
+        .{
+            .name = "beat",
+            .base = "beat",
+            .musical = true,
         },
         .{
             .name = "USD",
@@ -238,6 +259,46 @@ pub const units: UnitsTable = .{
                 5,
                 9,
             },
+        },
+        .{
+            .name = "Hz",
+            .kind = "frequency",
+            .factor = "1",
+        },
+        .{
+            .name = "kHz",
+            .kind = "frequency",
+            .factor = "1000",
+        },
+        .{
+            .name = "cent",
+            .kind = "pitch interval",
+            .factor = "1",
+            .plural = "cents",
+        },
+        .{
+            .name = "semitone",
+            .kind = "pitch interval",
+            .factor = "100",
+            .plural = "semitones",
+        },
+        .{
+            .name = "octave",
+            .kind = "pitch interval",
+            .factor = "1200",
+            .plural = "octaves",
+        },
+        .{
+            .name = "bar",
+            .kind = "bar",
+            .factor = "1",
+            .plural = "bars",
+        },
+        .{
+            .name = "beat",
+            .kind = "beat",
+            .factor = "1",
+            .plural = "beats",
         },
         .{
             .name = "USD",
