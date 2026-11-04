@@ -1,5 +1,6 @@
 // The Sounds window (#2048): every Project sound, whatever is selected, with
-// its Script name, size and Preview, and the ways to add one. Edit only.
+// its Script name, size and Preview, and the ways to add, rename (#2050)
+// and remove one. Edit only.
 import { signal, type ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
 import { useEffect } from 'preact/hooks';
@@ -97,6 +98,20 @@ const SoundsPanel = ({ bytes, editor, previewName, redraw }: SoundsProps) => {
                   type="button"
                 >
                   {preview === asset.name ? 'Stop' : 'Preview'}
+                </button>
+                <button
+                  data-rename-sound={asset.name}
+                  disabled={disabled}
+                  type="button"
+                >
+                  Rename…
+                </button>
+                <button
+                  data-remove-sound={asset.name}
+                  disabled={disabled}
+                  type="button"
+                >
+                  Remove…
                 </button>
               </li>
             );

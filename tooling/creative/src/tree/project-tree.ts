@@ -1525,6 +1525,37 @@ export class ProjectTree {
       return this.#project.assets.at(-1)!;
     });
   }
+  /** Renames an asset; its users are the caller's to rewrite (#2050). */
+  renameAsset(current: string, name: string): void {
+    this.transaction(() => {
+      const assets = this.#project.assets;
+      if (!assets.some(a => a.name === current)) {
+        throw new TreeError('Unknown asset');
+      }
+      if (name !== current && assets.some(a => a.name === name)) {
+        throw new TreeError('Name is unavailable');
+      }
+      this.#field(
+        this.#project,
+        'assets',
+        assets.map(a => (a.name === current ? { ...a, name } : a)),
+      );
+    });
+  }
+  /** Removes an asset from the Project; its bytes stay cached (#2050). */
+  removeAsset(name: string): void {
+    this.transaction(() => {
+      const assets = this.#project.assets;
+      if (!assets.some(a => a.name === name)) {
+        throw new TreeError('Unknown asset');
+      }
+      this.#field(
+        this.#project,
+        'assets',
+        assets.filter(a => a.name !== name),
+      );
+    });
+  }
   /** Adopt detached Play results by authored id; unchanged owners stay live. */
   adopt(project: DeepReadonly<Project>): void {
     checkHierarchy(project.pages.flatMap(page => page.elements));

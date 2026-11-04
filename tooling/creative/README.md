@@ -756,7 +756,15 @@ Project changes, with the same size limits as images: warn above 10 MB,
 refuse above 50 MB. WAV also warns that it is uncompressed. A sound's
 Script name is its file name without the extension, so `waves.mp3` is played
 as `"waves"`; identical bytes share one asset, and adding a sound is one
-undoable edit. Sounds autosave and export like images: one zip entry per
+undoable edit. Each listed sound has **Rename…** and **Remove…** (#2050).
+Renaming also rewrites the sound's name wherever a Script or Library writes
+it in a literal pattern text: a whole-name text like `play "waves"`, or a
+word in a pattern played without `on` or `on` a sampler, like `loop "bd sn"`.
+A name used as a pattern word must stay one word, like `bd` or `bd:1`.
+**Remove…** first lists those literal uses, which are then reported as
+missing-sound problems when the Project loads. Names built while playing
+aren't seen, so they fail only when they play. Either change is one undoable
+edit. Sounds autosave and export like images: one zip entry per
 SHA-256, kept on export whenever the Project has Scripts, which may choose a
 sound by name dynamically. A missing or undecodable sound stays in the asset
 table as a placeholder, marked **Missing** or **Can’t decode** in the Sounds
