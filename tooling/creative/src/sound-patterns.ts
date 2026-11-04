@@ -87,6 +87,12 @@ export class SoundPatterns {
    */
   readonly #punched = new Map<string, number>();
 
+  /**
+   * The loops a Punch In has made so far, so a later `loop` on the same
+   * Instrument replaces one from the punched bar, as it would on Perform.
+   */
+  readonly #punchedLoops = new Set<string>();
+
   /** Whether loops play; Edit holds them without playing (ADR 0159). */
   readonly #loopsPlay: boolean;
 
@@ -143,10 +149,12 @@ export class SoundPatterns {
     const punched = this.#transport.running
       ? this.#punched.get(owner)
       : undefined;
-    const from =
-      punched !== undefined && !existing
-        ? punched
-        : this.#nextBar(existing?.cursor, now);
+    const fromPunch =
+      punched !== undefined && (!existing || this.#punchedLoops.has(key));
+    const from = fromPunch ? punched : this.#nextBar(existing?.cursor, now);
+    if (fromPunch) {
+      this.#punchedLoops.add(key);
+    }
     if (!existing) {
       this.#loops.set(key, {
         owner,
@@ -197,6 +205,7 @@ export class SoundPatterns {
   /** Ends the Pump's Punch Ins: later loops start on the next bar. */
   settle(): void {
     this.#punched.clear();
+    this.#punchedLoops.clear();
   }
 
   /**
