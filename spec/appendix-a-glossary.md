@@ -867,8 +867,12 @@ _Avoid_: derived unit, unit expression
 A Unit of duration (month, year) whose length depends on the date it is added to, so it never converts to exact time and is never part of a Compound Unit.
 _Avoid_: nominal duration
 
+**Musical Unit**:
+A Unit (`bar`, `beat`) counted on a Host's Transport rather than given a length by the Unit Catalogue, so it never converts to exact time or to the other, and a wait in it ends on a bar or beat line.
+_Avoid_: musical time unit, tempo unit, cycle
+
 **Unit Catalogue**:
-The fixed table of every Unit, with its Unit Kind and exact conversion factor, that a language version pins. Neither Hosts nor Scripts can add to it.
+The fixed table of every Unit, with its Unit Kind and exact conversion factor (none for a Musical Unit), that a language version pins. Neither Hosts nor Scripts can add to it.
 _Avoid_: unit registry, unit table, units list
 
 **Range**:
