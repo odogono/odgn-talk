@@ -113,6 +113,13 @@
             Sounds
           </button>
           <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="instruments-window"
+          >
+            Instruments
+          </button>
+          <button
             id="show-message"
             type="button"
             role="menuitemcheckbox"
@@ -459,6 +466,26 @@
       </div>
       <!-- The sound list and its Add buttons: src/sounds-window.tsx -->
       <div id="sounds-panel"></div>
+    </section>
+    <section
+      id="instruments-window"
+      class="window resizable"
+      aria-labelledby="instruments-title"
+      data-right="280"
+      data-top="76"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Instruments"
+        ></button>
+        <span id="instruments-title">Instruments</span>
+      </div>
+      <!-- The Instrument list and selected detail: src/instruments-window.tsx -->
+      <div id="instruments-panel"></div>
     </section>
     <section
       id="performance-window"
