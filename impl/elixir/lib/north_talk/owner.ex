@@ -689,6 +689,23 @@ defmodule NorthTalk.Owner do
     end
   end
 
+  # A request sent for a handle waits as a `request_pump` one does, and its
+  # caller gets the `Pending` at once.
+  defp queue(state, :handle, g, fields, _from) do
+    case exchange(state, "request", fields) do
+      {{:ok, ok}, state} ->
+        delivery = ok["delivery"]
+        id = make_ref()
+        state = put_in(state.handles[id], %{group: g, delivery: delivery, result: nil, awaiters: %{}})
+        state = put_in(state.waiters[{g, delivery}], {:handle, id})
+        pending = %NorthTalk.Pending{owner: self(), group: g, delivery: delivery, id: id}
+        {:reply, {:ok, pending}, schedule_pump(state, g)}
+
+      {error, state} ->
+        {:reply, error, state}
+    end
+  end
+
   defp queue(state, kind, g, fields, from) do
     case exchange(state, kind, fields) do
       {{:ok, ok}, state} ->
