@@ -293,6 +293,55 @@ export const runBrowserTests = async () => {
       'Its closed state is remembered',
     );
   });
+  await test('The Sounds window renames and removes a sound, and Undo reverses each (#2050)', async () => {
+    const listed = (name: string) =>
+      document.querySelector(`#sounds-panel [data-sound="${name}"]`);
+    document
+      .querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-rename-sound="waves"]',
+      )!
+      .click();
+    const input = document.querySelector<HTMLInputElement>(
+      '.sound-dialog [data-sound-name-input]',
+    )!;
+    input.value = '';
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-rename]')!
+      .click();
+    await settle();
+    assert(
+      !document.querySelector<HTMLElement>('[data-sound-name-problem]')!
+        .hidden && listed('waves'),
+      'An empty name is refused in the dialog',
+    );
+    input.value = 'surf';
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-rename]')!
+      .click();
+    await settle();
+    assert(
+      !document.querySelector('.sound-dialog') &&
+        listed('surf') &&
+        !listed('waves'),
+      'Rename… renames the sound',
+    );
+    shell.editor.undo();
+    await settle();
+    assert(listed('waves'), 'Undo restores its name');
+    document
+      .querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-remove-sound="waves"]',
+      )!
+      .click();
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-remove]')!
+      .click();
+    await settle();
+    assert(!listed('waves'), 'Remove… removes the sound once confirmed');
+    shell.editor.undo();
+    await settle();
+    assert(listed('waves'), 'Undo brings it back');
+  });
   await test('Instruments live in their own window, available in a Project without any (#2049)', async () => {
     shell.editor.selectPage();
     await settle();

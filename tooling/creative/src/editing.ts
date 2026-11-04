@@ -35,6 +35,8 @@ import {
   type TextElement,
 } from './model';
 import { renormalizeRichText, type TextHistory } from './rich-text';
+import { renameSoundIn, soundNamed, soundNameProblem } from './sound-uses';
+import { scriptOwners } from './script-manifest';
 
 /** The outcome of checking a proposed Page or Element name. */
 export type NameCheck =
@@ -815,6 +817,52 @@ export class StackEditor {
       return imported.name;
     }
     return this.edit(edit => edit.tree.addAsset(imported).name);
+  }
+
+  /**
+   * Renames a sound and every literal use of it in Scripts and Libraries,
+   * as one undoable edit (#2050). Returns why it can't, if it can't.
+   */
+  renameSound(current: string, name: string): string | undefined {
+    if (this.readOnly || current === name) {
+      return undefined;
+    }
+    const project = this.project;
+    if (!soundNamed(project, current)) {
+      return `No sound is named “${current}”.`;
+    }
+    const problem = soundNameProblem(project, current, name);
+    if (problem) {
+      return problem;
+    }
+    const samplers = new Set(
+      project.instruments.filter(i => i.kind === 'sampler').map(i => i.name),
+    );
+    this.edit(({ tree }) => {
+      for (const owner of scriptOwners(tree.project)) {
+        const source = owner.script ?? '';
+        const next = renameSoundIn(source, current, name, samplers);
+        if (next !== source) {
+          tree.setScript(owner, next);
+        }
+      }
+      for (const library of tree.project.libraries) {
+        const next = renameSoundIn(library.source, current, name, samplers);
+        if (next !== library.source) {
+          tree.setLibrarySource(library.id!, next);
+        }
+      }
+      tree.renameAsset(current, name);
+    });
+    return undefined;
+  }
+
+  /** Removes a sound as one undoable edit; its uses are left to fail (#2050). */
+  removeSound(name: string): void {
+    if (this.readOnly || !soundNamed(this.project, name)) {
+      return;
+    }
+    this.edit(({ tree }) => tree.removeAsset(name));
   }
 
   /** Starts moving the selected Elements; offsets are in design pixels. */

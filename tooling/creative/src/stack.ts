@@ -61,6 +61,8 @@ import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
 import { mountInfoPanel, type NameRefusal } from './info-panel';
 import { mountSoundsWindow } from './sounds-window';
+import { showRemoveSoundDialog, showRenameSoundDialog } from './sound-dialogs';
+import { soundUses } from './sound-uses';
 import { mountInstrumentsWindow } from './instruments-window';
 
 /** A Page at design size, unscaled. */
@@ -1196,6 +1198,34 @@ export const mountStack = (
       showMusicSounds();
     } else if (button?.dataset.previewSound) {
       togglePreview(button.dataset.previewSound);
+    } else if (button?.dataset.renameSound !== undefined) {
+      const current = button.dataset.renameSound;
+      showRenameSoundDialog({
+        current,
+        uses: soundUses(editor.project, current),
+        rename: name => {
+          if (preview?.name === current) {
+            stopPreview();
+          }
+          let problem: string | undefined;
+          edit(() => {
+            problem = editor.renameSound(current, name);
+          });
+          return problem;
+        },
+      });
+    } else if (button?.dataset.removeSound !== undefined) {
+      const name = button.dataset.removeSound;
+      showRemoveSoundDialog({
+        name,
+        uses: soundUses(editor.project, name),
+        remove: () => {
+          if (preview?.name === name) {
+            stopPreview();
+          }
+          edit(() => editor.removeSound(name));
+        },
+      });
     }
   });
   // Project ▸ Add-ons… (#2025) edits the Add-ons the Project lists.

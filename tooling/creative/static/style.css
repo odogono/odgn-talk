@@ -1602,19 +1602,23 @@ body.playing #performance-window {
   gap: 8px;
 }
 
-.music-sounds-dialog {
+.music-sounds-dialog,
+.sound-dialog {
   max-width: min(24rem, calc(100vw - 32px));
   border: 1px solid var(--muted);
   border-radius: 8px;
 }
-.music-sounds-dialog h2 {
+.music-sounds-dialog h2,
+.sound-dialog h2 {
   margin-top: 0;
   font-size: 1.1rem;
 }
-.music-sounds-dialog select {
+.music-sounds-dialog select,
+.sound-dialog input {
   width: 100%;
 }
-.music-sounds-buttons {
+.music-sounds-buttons,
+.sound-dialog-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
