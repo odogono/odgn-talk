@@ -249,6 +249,50 @@ export const runBrowserTests = async () => {
       'Suggestion renames the Element',
     );
   });
+  await test('Sounds live in their own window, which starts closed and remembers being open (#2048)', async () => {
+    shell.editor.selectPage();
+    await settle();
+    assert(
+      !document.querySelector('#info')!.textContent!.includes('Sounds'),
+      'Info has no Sounds section',
+    );
+    const win = document.querySelector<HTMLElement>('#sounds-window')!;
+    const item = document.querySelector<HTMLButtonElement>(
+      '#window-menu [data-window="sounds-window"]',
+    )!;
+    item.click();
+    assert(!win.hidden, 'Window ▸ Sounds opens it');
+    assert(
+      document.querySelector('#sounds-panel [data-sound="waves"]'),
+      'It lists the Project sound with nothing selected',
+    );
+    assert(
+      localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('sounds-window'),
+      'Its open state is remembered',
+    );
+    shell.editor.click('button');
+    await settle();
+    assert(
+      document.querySelector('#sounds-panel [data-sound="waves"]'),
+      'It does not depend on selection',
+    );
+    document.body.classList.add('playing');
+    assert(
+      getComputedStyle(win).display === 'none',
+      'It is hidden during a Play Session',
+    );
+    document.body.classList.remove('playing');
+    item.click();
+    assert(win.hidden, 'Window ▸ Sounds closes it');
+    assert(
+      !localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('sounds-window'),
+      'Its closed state is remembered',
+    );
+  });
   await test('Read-only controls follow every selection and leave view-only actions enabled', async () => {
     shell.setReadOnly(true);
     const check = () => {
@@ -269,8 +313,17 @@ export const runBrowserTests = async () => {
     await settle();
     check();
     assert(
-      document.querySelector('#info [data-preview-sound="waves"]'),
-      'Sound preview remains available',
+      !document.querySelector('#info [data-preview-sound]') &&
+        document.querySelector(
+          '#sounds-panel [data-preview-sound="waves"]:not([disabled])',
+        ) === null,
+      'Info lists no sounds; the Sounds window marks bytes it lacks',
+    );
+    assert(
+      document.querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-add-sound]',
+      )!.disabled,
+      'Add sound… is disabled while read-only',
     );
     for (const element of shell.editor.page.elements) {
       shell.editor.click(element.name);

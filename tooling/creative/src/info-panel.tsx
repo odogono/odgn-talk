@@ -20,7 +20,6 @@ import { bindableFields, bindingChoices, bindingProblem } from './bindings';
 import { checkbox, color, field, input } from './elements/controls';
 import { kindOf } from './elements/registry';
 import { kindInfo } from './elements/views';
-import { isSoundAsset } from './sounds';
 import type { ParameterDefinition } from './instruments/kind';
 import { INSTRUMENT_KINDS, instrumentKindNames } from './instruments/registry';
 import { pageAddOns } from './add-ons/page';
@@ -192,7 +191,6 @@ export type NameRefusal = {
 
 type InfoProps = {
   editor: StackEditor;
-  previewName: ReadonlySignal<string | undefined>;
   refusal: ReadonlySignal<NameRefusal | undefined>;
 };
 
@@ -310,13 +308,12 @@ const BindingFields = ({
   );
 };
 
-const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
+const InfoPanel = ({ editor, refusal }: InfoProps) => {
   const { project, pageIndex } = editor.state.value;
   const page = editor.currentPage.value.page;
   const selected = editor.selectedElements.value;
   const disabled = editor.readOnly;
   const refused = refusal.value;
-  const preview = previewName.value;
   const scriptButtons = (
     owner: 'page' | 'project' | 'element',
     label: string,
@@ -383,7 +380,6 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
       </Fragment>
     );
   }
-  const sounds = project.assets.filter(isSoundAsset);
   if (page.palette) {
     const first = pageCount(project);
     return (
@@ -514,32 +510,6 @@ const InfoPanel = ({ editor, refusal, previewName }: InfoProps) => {
           min: MIN_PAGE_WIDTH,
         }),
       )}
-      <h2>Sounds</h2>
-      {sounds.length ? (
-        sounds.map(asset => (
-          <div className="row" key={asset.name}>
-            <span>
-              {asset.name} ({asset.fileName})
-            </span>
-            <button
-              data-preview-sound={asset.name}
-              data-view-only=""
-              type="button"
-            >
-              {preview === asset.name ? 'Stop' : 'Preview'}
-            </button>
-          </div>
-        ))
-      ) : (
-        <p className="muted">No sounds yet.</p>
-      )}
-      <button data-add-sound="" disabled={disabled} type="button">
-        Add sound…
-      </button>
-      <p className="muted">
-        Scripts play a sound by its name, like tell sound to play
-        &quot;waves&quot;. Add action… can write that for you.
-      </p>
       {showsInstruments(project, pageAddOns.catalogue) && (
         <InstrumentsSection disabled={disabled} editor={editor} />
       )}

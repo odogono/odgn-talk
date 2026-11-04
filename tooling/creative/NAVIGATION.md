@@ -274,10 +274,13 @@ landed, and the Issue graph job ticks it as they close.
   content-addressed bytes, which hold sound bytes too.
 - [sounds.ts](src/sounds.ts): sound intake, the `SoundBoard` and playback;
   [grants/sound.ts](src/grants/sound.ts) is the `sound` Grant.
+- [sounds-window.tsx](src/sounds-window.tsx): the Sounds window's list,
+  placeholders and Add buttons; [stack.ts](src/stack.ts) wires its clicks.
 - Tests: [images.test.ts](tests/images.test.ts),
   [sounds.test.ts](tests/sounds.test.ts),
   [images.browser.ts](tests/images.browser.ts),
-  [sounds.browser.ts](tests/sounds.browser.ts).
+  [sounds.browser.ts](tests/sounds.browser.ts),
+  [info-panel.browser.ts](tests/info-panel.browser.ts) (the Sounds window).
 - First check: `bun test tooling/creative/tests/images.test.ts tooling/creative/tests/sounds.test.ts`.
 
 ## Audio engines
