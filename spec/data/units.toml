@@ -2,9 +2,10 @@
 #
 # A language version pins it, and neither Hosts nor Scripts can add to it
 # (ADR 0022). Every Unit is an exact factor times a product of base dimensions:
-# length, mass, time, temperature, and one per currency. Calendar Units are a
-# Unit Kind of their own, outside the dimension system, and never appear in a
-# Compound Unit. The order of [[kind]] entries is the Kind order that a
+# length, mass, time, temperature, pitch, and one per currency. Calendar Units
+# are a Unit Kind of their own, outside the dimension system, and never appear
+# in a Compound Unit. So are the Musical Units, `bar` and `beat`, each its own
+# Kind, counted on a Host's Transport rather than converted (ADR 0166). The order of [[kind]] entries is the Kind order that a
 # Compound Unit's factors print in.
 #
 # Schema: schema/units.schema.json. Shown in chapter 3 (regions `units.kinds`
@@ -13,11 +14,12 @@
 # [[kind]]
 #   name       the Unit Kind's name
 #   base       its Base Unit
-#   dimension  its product of base dimensions, e.g. "length^3"; absent for
-#              calendar duration
+#   dimension  its product of base dimensions, e.g. "length^3" or "time^-1";
+#              absent for calendar duration and the Musical Units
 #   factor     optional: the Base Unit's exact factor to the Base Units of its
 #              dimension, when it isn't a single base dimension ("0.001" for L)
 #   calendar   optional: true for the Calendar Unit Kind
+#   musical    optional: true for a Musical Unit Kind
 #
 # [[unit]]
 #   name    its one canonical spelling
@@ -57,6 +59,26 @@ calendar = true
 name = "temperature difference"
 base = "degC"
 dimension = "temperature"
+
+[[kind]]
+name = "frequency"
+base = "Hz"
+dimension = "time^-1"
+
+[[kind]]
+name = "pitch interval"
+base = "cent"
+dimension = "pitch"
+
+[[kind]]
+name = "bar"
+base = "bar"
+musical = true
+
+[[kind]]
+name = "beat"
+base = "beat"
+musical = true
 
 [[kind]]
 name = "USD"
@@ -237,6 +259,46 @@ factor = "1"
 name = "degF"
 kind = "temperature difference"
 ratio = [5, 9]
+
+[[unit]]
+name = "Hz"
+kind = "frequency"
+factor = "1"
+
+[[unit]]
+name = "kHz"
+kind = "frequency"
+factor = "1000"
+
+[[unit]]
+name = "cent"
+plural = "cents"
+kind = "pitch interval"
+factor = "1"
+
+[[unit]]
+name = "semitone"
+plural = "semitones"
+kind = "pitch interval"
+factor = "100"
+
+[[unit]]
+name = "octave"
+plural = "octaves"
+kind = "pitch interval"
+factor = "1200"
+
+[[unit]]
+name = "bar"
+plural = "bars"
+kind = "bar"
+factor = "1"
+
+[[unit]]
+name = "beat"
+plural = "beats"
+kind = "beat"
+factor = "1"
 
 [[unit]]
 name = "USD"

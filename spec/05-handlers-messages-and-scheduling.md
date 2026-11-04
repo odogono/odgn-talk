@@ -167,7 +167,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 ### `wait` for a time
 
-- **`wait d`** suspends the Run for the exact duration `d`. Anything that isn't an exact duration Quantity raises `wrong kind`: a Quantity of another Unit Kind, or a calendar duration, with `expected` `"s"` and `got` its Unit, and anything else with `expected` `"quantity"`.
+- **`wait d`** suspends the Run for the exact duration `d`. A Musical Quantity waits [on the Transport](#wait-in-musical-units) instead. Anything else that isn't an exact duration Quantity raises `wrong kind`: a Quantity of another Unit Kind, or a calendar duration, with `expected` `"s"` and `got` its Unit, and anything else with `expected` `"quantity"`.
 - **Its deadline** is the Clock reading of the Pump in which the `wait` ran, plus `d`. It fires at the first later Pump whose Clock reading is at or past the deadline, so it never resumes in the Pump that started it, even for `wait 0 s`.
 - **Outside the Clock range:** a deadline is a mathematical count of microseconds, not construction or arithmetic of an Instant value. A valid exact duration still suspends and pays the instruction's charge when its deadline lies outside years 0001–9999. The full deadline is retained for timer ordering, cancellation, earlier Timeout Blocks and save/restore. One beyond the latest Clock reading cannot fire on a valid Clock; one before the earliest reading is already due, but still resumes only in a later Pump. Inspect and the Trace omit a deadline that cannot be represented as an Instant. The Pump's next deadline omits an unreachable future deadline; for an already-due deadline before the Clock range, it gives the current Pump's Clock reading, requesting another Pump at that reading.
 - **A computed duration:** `d` is any expression, so a duration may come from a Constant, a variable or arithmetic. The Unit belongs to the value, and a plain number takes one with `as`. A Unit word binds tighter than `/`, so `1/4 s` is `0.25 1/s`, and a quarter second is `1 s / 4`. The same holds for a `wait for` timeout and an `after` branch.
@@ -181,6 +181,22 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 >   put 1 into n
 >   wait n as s
 > end pace
+
+### `wait` in Musical Units
+
+- **`wait q`** with `q` in `bar` or `beat` suspends the Run until the Host's Transport reaches the `q`th bar or beat line after now ([ADR 0166](../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)). The Core doesn't turn it into a deadline. It calls the Group's [musical clock](09-embedding.md#the-musical-clock), and the Run resumes when the Host answers.
+- **Its count** is a whole number, 0 or more. `wait 0 bars` doesn't suspend and calls nothing. A fraction or a negative count raises `out of domain`, with `function` `"wait"` and `value` the Quantity.
+- **No musical clock:** in a Group whose Host supplies none, it raises `no musical time` before suspending.
+- **The line it ends on:** the Host counts lines, not seconds, so a tempo change during the wait stretches or shrinks what is left. A wait that starts exactly on a line doesn't count that line. The Host may answer a little before the line, as Folio answers one lead early.
+- **Elsewhere:** only a plain `wait` takes a Musical Quantity. A `wait for` timeout, an `after` branch, a Timeout Block and `MaxWait` still take exact durations, and a Musical Quantity there raises `wrong kind` with `expected` `"s"`.
+- **`it`** is left alone, as for any `wait`.
+- **Ending early:** Stop, Reload and cancellation abandon the pending call, as they do any other, and a Timeout Block's deadline ends it with `timeout`. The musical clock's Operation has no `maxPending`, and `MaxWait` doesn't apply.
+
+> on drumPart
+>   loop "bd [hh hh] sd hh" on drums
+>   wait 8 bars
+>   loop "bd hh sd hh, - - - cp" on drums
+> end drumPart
 
 ### `wait for` a message
 

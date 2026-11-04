@@ -1780,7 +1780,11 @@ test "List point writes recover exact measures after a saturated sum" {
     try std.testing.expectEqualSlices(*Value, &.{ large, large }, snapshot.data.list);
 }
 
-fn sharedMapAllocations(gpa: std.mem.Allocator) !void {
+/// `compare` runs the equality check, which only the plain run does: its work
+/// list grows by remapping in place when the allocator can, so how often it
+/// allocates depends on memory layout, which allocation-failure runs require
+/// to be fixed.
+fn sharedMapAllocations(gpa: std.mem.Allocator, compare: bool) !void {
     const item = try scalar(gpa, .nothing);
     defer item.release();
     var keys: [65][8]u8 = undefined;
@@ -1808,7 +1812,7 @@ fn sharedMapAllocations(gpa: std.mem.Allocator) !void {
     defer gpa.free(reconstructed);
     const fresh = try map(gpa, reconstructed);
     defer fresh.release();
-    try std.testing.expect(try root.equal(fresh));
+    if (compare) try std.testing.expect(try root.equal(fresh));
     try std.testing.expectEqual(logicalSize(fresh), logicalSize(root));
     // Delete through the representation transition; retained roots stay intact.
     var deleted = root.retain();
@@ -1823,8 +1827,8 @@ fn sharedMapAllocations(gpa: std.mem.Allocator) !void {
 }
 
 test "shared Map versions preserve ordered entries across promotion deletion and every refusal" {
-    try sharedMapAllocations(std.testing.allocator);
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, sharedMapAllocations, .{});
+    try sharedMapAllocations(std.testing.allocator, true);
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, sharedMapAllocations, .{false});
 }
 
 test "a Map's versions share their keys and free them with the last owner" {
