@@ -2786,17 +2786,43 @@ export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: 
     return defineCapability(c, name, len, ops, ops_len, options, options_len, null, false, out);
 }
 
-/// A musical clock: a Capability whose one Operation is the suspending
-/// `wait` (chapter 9, The musical clock).
-export fn talk_define_musical_clock(c: *Core, name: ?[*]const u8, len: usize, wait: ?*const Operation, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
+pub const MusicalClockImpl = extern struct { context: ?*anyopaque, wait: OperationFn };
+
+/// The musical clock (chapter 9, The musical clock): the Capability
+/// `musical-clock`, whose one Operation is the suspending `wait` of one bar
+/// or beat count, with no `maxPending`, result Nothing and no error
+/// catalogue. Its cost is `costs`'s `wait`.
+export fn talk_musical_clock_capability(c: *Core, impl: *const MusicalClockImpl, costs: ?*const Costs, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
-    var op = (wait orelse return .invalid_value).*;
-    if (op.name == null) {
-        op.name = "wait";
-        op.name_len = 4;
-    }
-    if (op.command) return .invalid_value;
-    return defineCapability(c, name, len, @ptrCast(&op), 1, options, options_len, null, true, out);
+    const call = impl.wait orelse return .invalid_value;
+    const given: []const NamedCost = if (costs) |cs| (if (cs.len == 0) &.{} else (cs.entries orelse return .invalid_value)[0..cs.len]) else &.{};
+    const cost = for (given) |e| {
+        if (std.mem.eql(u8, bytes(e.name, e.name_len) catch return .invalid_value, "wait")) break e.cost;
+    } else return .invalid_value;
+    if (cost.fuel < 0 or cost.alloc < 0 or cost.fuel > max_cost or cost.alloc > max_cost) return .invalid_value;
+    const gpa = c.gpa;
+    const bar = Shape.quantityKind(gpa, "bar") catch return .out_of_memory;
+    const beat = Shape.quantityKind(gpa, "beat") catch {
+        bar.release();
+        return .out_of_memory;
+    };
+    const kinds = gpa.alloc(*Shape, 2) catch {
+        bar.release();
+        beat.release();
+        return .out_of_memory;
+    };
+    kinds[0] = bar;
+    kinds[1] = beat;
+    const count = Shape.oneOf(gpa, kinds) catch {
+        bar.release();
+        beat.release();
+        gpa.free(kinds);
+        return .out_of_memory;
+    };
+    defer count.release();
+    const args = [_]*const Shape{count};
+    const wait: Operation = .{ .name = "wait", .name_len = 4, .args = &args, .args_len = 1, .result = kindShape(.nothing), .cost = cost, .mode = .suspending, .max_pending_ms = 0, .errors = null, .errors_len = 0, .@"fn" = call, .context = impl.context, .scope = null, .segment_bound = false };
+    return defineCapability(c, machine.musical_clock, machine.musical_clock.len, @ptrCast(&wait), 1, options, options_len, null, true, out);
 }
 
 export fn talk_define_segment_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, lifecycle: ?*const SegmentLifecycle, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {

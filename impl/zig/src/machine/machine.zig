@@ -5297,16 +5297,12 @@ pub const Group = struct {
                 releaseAll(call.args, gpa);
                 call.args = &.{};
                 if (!ok) return try g.resumeRaise(run, pc, ins, g.hostErrorAt(waited));
-                // A musical `wait` pushes nothing, so only the answer's own
-                // cost is charged.
-                if (ins.op == .wait) {
-                    try g.payResumeConversion(run, x.fuel, 0);
-                    return null;
-                }
                 // Only the rate's terms over the result, and the answer's
-                // own cost.
+                // own cost. A musical `wait` converts its answer as the
+                // `ask … and wait` it stands for, but pushes nothing.
                 const size = costs.size(x.value);
                 try g.payResumeConversion(run, (size + 31) / 32 + x.fuel, size);
+                if (ins.op == .wait) return null;
                 try g.push(frame, x.value.retain());
                 return null;
             },
@@ -10956,7 +10952,8 @@ pub const Group = struct {
 
     /// `wait q` in a Musical Unit (chapter 5, `wait` in Musical Units): a
     /// whole count, 0 or more, that calls the musical clock's `wait`, which
-    /// ends when the Host answers. `wait 0 bars` calls nothing.
+    /// ends when the Host answers. `wait 0 bars` calls nothing, and needs no
+    /// musical clock.
     fn musicalWait(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures, q: *Value) !Step {
         const count = q.data.quantity.number;
         if (!wholeCount(count)) {
@@ -10964,8 +10961,10 @@ pub const Group = struct {
             defer function.release();
             return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = q } });
         }
-        if (run.script.grant(musical_clock) == null) return g.raise("no musical time", &.{});
         if (count.coefficient == 0) return .next;
+        if (run.script.grant(musical_clock) == null) return g.raise("no musical time", &.{});
+        // Charged as the `ask … and wait` it stands for.
+        m.rate = "capability";
         return g.callOperation(run, frame, ins, m, musical_clock, "wait", &.{q}, .ask_wait, &.{q});
     }
 
@@ -11243,7 +11242,7 @@ pub const Group = struct {
                 const after_ms = if (unbounded) 0 else if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
                 const deadline = if (unbounded) never else micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms;
                 const wait: Pending = .{ .run = run, .deadline = deadline, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
-                if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
+                if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, if (unbounded) "wait" else "ask-wait", wait);
             }
         }
         if (returned != null) g.answering_crossing = false;
@@ -12192,11 +12191,11 @@ pub fn deadlineInstant(at: DeadlineTicks) ?model.dates.Instant {
     return .{ .seconds = @intCast(@divFloor(at, std.time.us_per_s)), .micros = @intCast(@mod(at, std.time.us_per_s)) };
 }
 
-/// Whether a Capability can be the musical clock: its one Operation is a
-/// suspending `wait` of one argument with no `maxPending` (chapter 9, The
-/// musical clock).
+/// Whether a Capability can be the musical clock: `musical-clock`, whose
+/// one Operation is a suspending `wait` of one argument with no
+/// `maxPending` (chapter 9, The musical clock).
 pub fn musicalClockCapability(c: *const capabilities.Capability) bool {
-    if (c.operations.len != 1) return false;
+    if (c.operations.len != 1 or !std.mem.eql(u8, c.name, musical_clock)) return false;
     const op = c.operations[0];
     return std.mem.eql(u8, op.name, "wait") and op.mode == .suspending and op.args.len == 1 and op.max_pending_ms == 0 and op.scope == .none and !op.segment_bound and op.metering == null;
 }

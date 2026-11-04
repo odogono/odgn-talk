@@ -531,6 +531,20 @@ type TimerImpl interface {
 
 func (c *Core) TimerCapability(impl TimerImpl, costs Costs) (*CapabilityDef, error)
 
+// musical clock: Wait starts a suspending call with the count a Script waits
+// for, a whole number of bars or beats, 1 or more. The Host answers Nothing
+// when that many lines have passed on its Transport, or fails it, and the
+// failure's code raises in the Run. The Capability is "musical-clock", its
+// one Operation wait takes {"oneOf": [{"unitKind": "bar"}, {"unitKind":
+// "beat"}]}, has no MaxPending, result Nothing and no error catalogue, and
+// costs gives its cost. DefineCapability refuses wait as an Operation name,
+// so only this factory makes it. options takes a release hook.
+type MusicalClockImpl interface {
+	Wait(c *Call, count Value) error
+}
+
+func (c *Core) MusicalClockCapability(impl MusicalClockImpl, costs Costs, options ...CapabilityOption) (*CapabilityDef, error)
+
 // console: Write shows the Value's text form. Read starts a suspending call
 // and answers with text, without its line break. Read has maxPending 2147483647 ms.
 type ConsoleImpl interface {
@@ -865,14 +879,8 @@ func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group
 // Restore both take.
 type GroupOption interface{ groupOption() }
 
-// DefineMusicalClock defines a musical clock: a Capability whose one
-// Operation, wait, is suspending, of one argument, with no MaxPending. The
-// Operation's Name may be left empty. DefineCapability refuses wait as an
-// Operation name; only a wait in a Musical Unit calls this one.
-func (c *Core) DefineMusicalClock(name string, wait Operation, options ...CapabilityOption) (*CapabilityDef, error)
-
 // WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
-// musical clock; ADR 0166), which DefineMusicalClock makes. Every Script is
+// musical clock; ADR 0166), which MusicalClockCapability makes. Every Script is
 // granted it under the reserved name "musical-clock", which
 // LoadOptions.Grants can't use, and a wait in a Musical Unit calls it.
 // Without one, such a wait raises `no musical time`.

@@ -12,25 +12,30 @@ type musicalClockOption struct{ clock *CapabilityDef }
 
 func (musicalClockOption) groupOption() {}
 
-// WithMusicalClock supplies the Group's musical clock (ADR 0166): a
-// Capability with one suspending Operation, wait, of one argument and no
-// MaxPending. Every Script is granted it under the reserved name "musical
+// WithMusicalClock supplies the Group's musical clock (ADR 0166), which
+// MusicalClockCapability makes. Every Script is granted it under the reserved name "musical
 // clock", which LoadOptions.Grants can't use, and a wait in a Musical Unit
 // calls it. Without one, such a wait raises `no musical time`. Load refuses
-// a Capability DefineMusicalClock didn't make as invalid value.
+// a Capability MusicalClockCapability didn't make as invalid value.
 func WithMusicalClock(clock *CapabilityDef) GroupOption { return musicalClockOption{clock} }
 
-// DefineMusicalClock defines a musical clock: a Capability whose one
-// Operation, wait, is suspending, of one argument, with no MaxPending. The
-// Operation's Name may be left empty. DefineCapability refuses wait as an
-// Operation name, since a source can't call it; only a wait in a Musical
-// Unit calls this one.
-func (c *Core) DefineMusicalClock(name string, wait Operation, options ...CapabilityOption) (*CapabilityDef, error) {
-	if wait.Name == "" {
-		wait.Name = "wait"
-	}
-	if wait.Name != "wait" || wait.Mode != Suspending || len(wait.Args) != 1 || wait.MaxPending != 0 || wait.Scope != nil || wait.SegmentBound || wait.Metering != "" || wait.Command {
-		return nil, &HostError{InvalidValue, "a musical clock has one suspending wait Operation of one argument, with no MaxPending"}
+// MusicalClockImpl ends a musical wait. Wait starts a suspending call with
+// the count a Script waits for, a whole number of bars or beats, 1 or more;
+// the Host answers Nothing when that many lines have passed on its
+// Transport, or fails the call, whose code then raises in the Run.
+type MusicalClockImpl interface {
+	Wait(c *Call, count Value) error
+}
+
+// MusicalClockCapability defines the musical clock WithMusicalClock takes
+// (09-embedding.md, The musical clock): the Capability "musical-clock", whose
+// one Operation, wait, is suspending, takes one bar or beat count, has no
+// MaxPending, result Nothing and no error catalogue. costs gives wait's cost.
+// DefineCapability refuses wait as an Operation name, since no source can
+// call it, so only the Core makes this one.
+func (c *Core) MusicalClockCapability(impl MusicalClockImpl, costs Costs, options ...CapabilityOption) (*CapabilityDef, error) {
+	if standardImplementationMissing(impl) {
+		return nil, &HostError{InvalidValue, "missing musical clock implementation"}
 	}
 	for _, option := range options {
 		if _, ok := option.(Operation); ok {
@@ -41,7 +46,14 @@ func (c *Core) DefineMusicalClock(name string, wait Operation, options ...Capabi
 	if err != nil {
 		return nil, err
 	}
-	d, err := c.defineCapabilityAs(name, nil, nil, true, wait)
+	cost, err := standardCost(costs, "wait")
+	if err != nil {
+		return nil, err
+	}
+	d, err := c.defineCapabilityAs(musicalClockGrant, nil, nil, true, Operation{
+		Name: "wait", Mode: Suspending, Args: []Shape{OneOf(QuantityKind("bar"), QuantityKind("beat"))}, Result: NothingShape, Cost: cost,
+		Start: func(call *Call, args []Value) error { return impl.Wait(call, args[0]) },
+	})
 	if d != nil {
 		d.release = release
 	}
@@ -80,7 +92,7 @@ func (g *Group) musicalGrants(given map[string]*Grant) (map[string]*Grant, error
 
 func (g *Group) musicalClockGrant() (*Grant, error) {
 	if !g.musicalClock.musical {
-		return nil, &HostError{InvalidValue, "a musical clock is made by DefineMusicalClock"}
+		return nil, &HostError{InvalidValue, "a musical clock is made by MusicalClockCapability"}
 	}
 	return g.musicalClock.Grant([]string{"wait"}, nil)
 }

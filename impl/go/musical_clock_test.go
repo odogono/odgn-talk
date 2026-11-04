@@ -7,12 +7,16 @@ import (
 
 // musicalClockForTest is a scripted musical clock: it keeps each call for
 // the test to answer.
+type scriptedClock struct{ calls *[]*Call }
+
+func (s scriptedClock) Wait(call *Call, _ Value) error {
+	*s.calls = append(*s.calls, call)
+	return nil
+}
+
 func musicalClockForTest(t *testing.T, c *Core, calls *[]*Call) *CapabilityDef {
 	t.Helper()
-	def, err := c.DefineMusicalClock("transport", Operation{Mode: Suspending, Args: []Shape{OneOf(QuantityKind("bar"), QuantityKind("beat"))}, Result: NothingShape, Start: func(call *Call, _ []Value) error {
-		*calls = append(*calls, call)
-		return nil
-	}})
+	def, err := c.MusicalClockCapability(scriptedClock{calls}, Costs{"wait": {Fuel: 3}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,8 +100,8 @@ func TestMusicalWaitRefusesFractionsAndAnInvalidClock(t *testing.T) {
 		t.Fatal(end)
 	}
 
-	if _, err := c.DefineMusicalClock("wrong", Operation{Mode: Immediate, Args: []Shape{AnyShape}, Result: NothingShape, Do: func(*Call, []Value) (Value, error) { return Value{}, nil }}); err == nil {
-		t.Fatal("DefineMusicalClock accepted an immediate wait")
+	if _, err := c.MusicalClockCapability(scriptedClock{&calls}, Costs{}); err == nil {
+		t.Fatal("MusicalClockCapability accepted no wait cost")
 	}
 	if _, err := c.DefineCapability("wrong", Operation{Name: "wait", Mode: Suspending, Args: []Shape{AnyShape}, Start: func(*Call, []Value) error { return nil }}); err == nil {
 		t.Fatal("DefineCapability accepted wait")
@@ -108,5 +112,22 @@ func TestMusicalWaitRefusesFractionsAndAnInvalidClock(t *testing.T) {
 	}
 	if _, err := c.NewGroup(GroupOptions{}, WithMusicalClock(plain)).Load(LoadOptions{Name: "s", Source: "on go\nend go\n"}); err == nil {
 		t.Fatal("Load accepted a Capability that isn't a musical clock")
+	}
+}
+
+func TestMusicalWaitFailureRaisesTheHostsCode(t *testing.T) {
+	c := New()
+	var calls []*Call
+	g := c.NewGroup(GroupOptions{}, WithMusicalClock(musicalClockForTest(t, c, &calls)))
+	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\n try\n  wait 1 bar\n catch e\n  return the code of e\n end try\nend go\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Deliver(Message{Name: "go"})
+	joinPump(t, g, 0, PumpOptions{})
+	calls[0].Fail(&ScriptError{Code: "transport stopped"})
+	end := joinEnd(t, joinPump(t, g, 1, PumpOptions{}), "s")
+	if end.Outcome != Completed || end.Result.String() != `"transport stopped"` {
+		t.Fatal(end)
 	}
 }

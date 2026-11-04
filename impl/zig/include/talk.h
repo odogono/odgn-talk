@@ -674,6 +674,19 @@ talk_host_error_code talk_clock_capability(talk_core *c, const talk_costs *costs
 talk_host_error_code talk_calendar_capability(talk_core *c, const talk_calendar_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_locale_capability(talk_core *c, const talk_locale_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_timer_capability(talk_core *c, const talk_timer_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* The musical clock (chapter 9, The musical clock): the Capability
+ * "musical-clock", whose one Operation, wait, is suspending, of one count of
+ * bars or beats, a whole number 1 or more, with no maxPending, result Nothing
+ * and no error catalogue; costs gives wait's cost, and options its release
+ * hook. talk_define_capability refuses wait as an Operation name, since no
+ * source can call it; a wait in a Musical Unit calls this one through the
+ * reserved "musical-clock" Grant. The Host answers Nothing when that many
+ * lines have passed on its Transport, or fails the call. */
+typedef struct talk_musical_clock_impl {
+    void *context;
+    talk_operation_fn wait;
+} talk_musical_clock_impl;
+talk_host_error_code talk_musical_clock_capability(talk_core *c, const talk_musical_clock_impl *impl, const talk_costs *costs, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 talk_host_error_code talk_console_capability(talk_core *c, const talk_console_impl *impl, const talk_costs *costs, talk_capability_def **out);
 /* store: the Grant's binding is the Store's name, as NUL-terminated text.
  * The Core has checked the Shapes, refused an empty key with invalid key and
@@ -1339,13 +1352,6 @@ void talk_name(const talk_group *g, const char **s, size_t *len);
  * orders by name, and its options. The definition lives as long as the
  * Core. */
 talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
-/* Defines a musical clock (chapter 9, The musical clock): a Capability whose
- * one Operation, *wait, is the suspending "wait", of one argument, with no
- * max_pending_ms, and nothing else: no scope, metering or command. Its name
- * may be NULL. talk_define_capability refuses wait as an Operation name,
- * since no source can call it; only a wait in a Musical Unit calls this
- * one, through the reserved "musical-clock" Grant. */
-talk_host_error_code talk_define_musical_clock(talk_core *c, const char *name, size_t len, const talk_operation *wait, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 /* talk_define_capability with Segment-bound Operations. The first makes each
  * Grant its own Segment Coordinator, with lifecycle's hooks, which must
  * outlive the Core. The second maps each Grant's binding to one, so Grants

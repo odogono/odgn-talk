@@ -22,7 +22,7 @@ const Host = struct {
     fn init(h: *Host) void {
         h.args = .{&h.shape};
         h.ops = .{.{ .name = "wait", .args = &h.args, .result = null, .mode = .suspending, .cost = .{}, .host = .{ .call = callback, .context = h } }};
-        h.capability = .{ .name = "transport", .operations = &h.ops };
+        h.capability = .{ .name = machine.musical_clock, .operations = &h.ops };
         h.grant = .{ .capability = &h.capability, .operations = &h.kept };
         h.named = .{.{ .name = machine.musical_clock, .grant = &h.grant }};
     }
