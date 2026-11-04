@@ -6,7 +6,7 @@ status: proposed
 
 To arrange a song ([#2044](https://github.com/odogono/odgn-talk/issues/2044)), a Folio Script needs a wait that ends on a bar line, even when the tempo changes during it. So the Unit Catalogue gains two **Musical Units**, `bar` and `beat`. They are counted on the Host's Transport, and the Catalogue gives them no length.
 
-```talk
+```text
 on drumPart
   loop "bd [hh hh] sd hh" on drums       -- intro
   wait 8 bars
