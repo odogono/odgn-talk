@@ -231,6 +231,17 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:send, "request", group, to, name, args}, timeout)
 
   @doc """
+  Sends a message as `request/5` does, but returns its `NorthTalk.Pending` as
+  soon as it is admitted, with its delivery id, before any Run starts.
+  `await/2` gives what `request/5` would. An automatic owner Pumps on its
+  own; under manual drive nothing runs until the caller Pumps. An admission
+  refusal is `{:error, exception}`, with no handle. Use it when the Host needs
+  the delivery id before the Run; otherwise `request_pump/5` saves an exchange.
+  """
+  def send_request(%Group{owner: owner} = group, to, name, args \\ []),
+    do: GenServer.call(owner, {:send, :handle, group, to, name, args})
+
+  @doc """
   Calls a Function Value a Script gave the Host, through its own Group, and
   waits until its Run ends, as `request/5` does. A handle of another Group,
   or one released, is a `NorthTalk.HostError`: `wrong group` or `function
@@ -426,6 +437,7 @@ defmodule NorthTalk do
         decide: 4,
         decide_broadcast: 3,
         request: 5,
+        send_request: 4,
         pump: 2,
         stop: 3,
         reload: 4,
