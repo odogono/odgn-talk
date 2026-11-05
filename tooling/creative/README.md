@@ -240,10 +240,11 @@ skips the beats it missed, except the latest. The `transport` Grant sets the
 tempo (`tell transport to setTempo 96`, from 20 to 400) and time signature
 (`tell transport to setTimeSignature 3, 4`), and stops and starts the
 Transport, which begins again from bar 1. A tempo change leaves the beat
-already due in place and spaces later ones at the new tempo. `ask transport to
-beats 2` gives an exact duration for `wait`, at the current tempo. Pause
+already due in place and spaces later ones at the new tempo. A time signature
+takes effect at the next bar line, and bars number on from there. Pause
 freezes the Transport with the Play clock, and the beats resume on the same
-grid. In a session with Instruments, the Play clock is the page's audio clock plus a
+grid. `wait 2 beats` and `wait 8 bars` wait on the Transport; see
+[Arranging a song](#arranging-a-song). In a session with Instruments, the Play clock is the page's audio clock plus a
 15 ms margin (ADR 0156). The page sends the Play worker a reading of the audio
 clock every 250 ms and whenever the audio starts, and the worker extrapolates
 between them. It never goes backwards, and it holds still until the audio is
@@ -856,6 +857,92 @@ sent to the audio one lead ahead of its time;
 [`tests/sound-patterns.test.ts`](tests/sound-patterns.test.ts) covers
 scheduling, replacement on the bar and ownership, and the `beats` browser
 suite proves that steps land on their samples.
+
+## Arranging a song
+
+`wait 8 bars` and `wait 2 beats` wait on the Transport, so a Script can play
+one pattern for a number of bars, then the next (ADR 0166, #2066). Write each
+part as its own Handler and start them side by side with `send`, which
+doesn't wait, so each runs as a Run of its own:
+
+```talk
+on openScript
+  send bassPart to me
+  send drumPart to me
+end openScript
+
+on bassPart
+  loop "<c3 e3 g3 a3>*4" on bass
+  wait 1 bar
+  loop "c3 e3 g3 e3 a2 c3 e3 c3" on bass
+end bassPart
+
+on drumPart
+  loop "bd [hh hh] sd hh" on drums       -- intro
+  wait 8 bars
+  loop "bd hh sd hh, - - - cp" on drums  -- verse, from bar 9
+  wait 16 bars
+  stop drums
+end drumPart
+```
+
+Or let one conductor Handler drive every part through its sections:
+
+```talk
+on openScript
+  intro()
+  wait 8 bars
+  verse()
+end openScript
+
+on intro
+  loop "<c3 e3 g3 a3>*4" on bass
+  loop "bd [hh hh] sd hh" on drums
+end intro
+
+on verse
+  loop "c3 e3 g3 e3 a2 c3 e3 c3" on bass
+  loop "bd hh sd hh, - - - cp" on drums
+end verse
+```
+
+The two mix, such as a conductor for the sections and a part Handler for a
+fill every 4 bars.
+
+- **Where it ends:** `wait N bars` ends on the Nth bar line after now, and a
+  wait that starts exactly on a bar line doesn't count it. `wait N beats`
+  counts beat lines the same way. `wait 0 bars` goes straight on. A wait in
+  bars or beats takes a whole number, and doesn't mix with seconds.
+- **On the bar:** the Run resumes one lead before the line, as `beat` does,
+  and carries the line as its musical time. A `loop` straight after starts
+  on that bar, `play` spreads its cycle over it, and an Instrument's sound
+  plays on it, even when the Pump runs late. A `wait` straight after counts
+  from that line.
+- **On the Transport:** bars are counted as they pass, so a tempo change
+  during a wait stretches or shrinks the bars still to come, and a time
+  signature change makes the bars after the next bar line longer or
+  shorter. The wait still ends on a bar line.
+- **From where:** when Play starts, bar 1 is when the Transport starts, so
+  `wait 8 bars` in `openScript` ends where bar 9 begins. A Punch In counts
+  from the bar it comes in on, so parts it starts together stay in
+  lockstep. Any other Run counts from a lead after now.
+- **Holding and ending:** Pause holds waits with the Transport. `tell
+  transport to stop` holds them with the bars they still have to come,
+  counted on from bar 1 when it starts. Hush, Stop and Punch In end them,
+  since they end the Runs waiting; leaving a Page ends its Scripts' waits.
+- **Two parts on one Instrument:** a Script still has one loop per
+  Instrument, whichever of its Runs started it, so the last `loop` on it
+  wins from its bar. A conductor can hand an Instrument from one section to
+  the next this way; two parts looping on one Instrument at once replace
+  each other.
+- The Host Manifest declares that Folio keeps musical time.
+
+[`src/transport.ts`](src/transport.ts) counts the bar and beat lines and
+holds the waits; [`src/play.ts`](src/play.ts) gives the Group its musical
+clock, ends each wait a lead early and keeps each Run's musical time.
+[`tests/musical-time.test.ts`](tests/musical-time.test.ts) plays both
+arrangements on Perform and Punch In, with late Pumps and tempo and time
+signature changes.
 
 ## Punch In
 

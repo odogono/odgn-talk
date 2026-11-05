@@ -19,7 +19,7 @@ import { missingAddOn } from './elements/add-on';
 import { isPlaceholderKind, kindOf, scriptKindOf } from './elements/registry';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
-import { LEAD_US, Transport } from './transport';
+import { LEAD_US, Transport, type MusicalWait } from './transport';
 import { parseMiniNotation, wholeSoundPattern } from './mini-notation';
 import {
   SoundPatterns,
@@ -44,6 +44,7 @@ import {
   list,
   LoadError,
   MailboxFull,
+  musicalClockCapability,
   newGroup,
   parseSource,
   nothing,
@@ -826,15 +827,11 @@ export class PlaySession {
       }
     }
     const sound = { pattern: parsed.pattern, text: source, options: given };
+    const at = this.musicalTimeOf(call);
     if (verb === 'loop') {
-      this.patterns.loop(owner, target, sound, call.now);
+      this.patterns.loop(owner, target, sound, call.now, at);
     } else {
-      this.patterns.play(
-        owner,
-        target,
-        sound,
-        this.beatTimeOf(call.delivery) ?? call.now,
-      );
+      this.patterns.play(owner, target, sound, at ?? call.now);
     }
   }
 
@@ -880,6 +877,10 @@ export class PlaySession {
     this.group = newGroup({
       name: 'play',
       trace: line => this.#trace(line),
+      musicalClock: musicalClockCapability(
+        { wait: (call, count) => this.#musicalWait(call, count) },
+        { wait: { fuel: 1 } },
+      ),
       ...(options.seed === undefined ? {} : { seed: options.seed }),
     });
     this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
@@ -911,7 +912,7 @@ export class PlaySession {
     this.instruments = new InstrumentSession(
       project.instruments,
       options.instrumentBackend,
-      delivery => this.beatTimeOf(delivery),
+      call => this.musicalTimeOf(call),
     );
     // A session without events is Edit's, where a loop waits for Browse.
     this.patterns = new SoundPatterns(
@@ -1501,10 +1502,10 @@ export class PlaySession {
     if (!this.transport.running) {
       return undefined;
     }
-    const perBar = this.transport.beatsPerBar;
-    const bars = this.transport.countAt(now + LEAD_US) / perBar;
-    // A millionth of a bar absorbs the grid's rounding to whole microseconds.
-    return Math.ceil(bars - 1e-6) * perBar;
+    const transport = this.transport;
+    return transport.countOfBar(
+      transport.barLineFrom(transport.countAt(now + LEAD_US)),
+    );
   }
 
   /** When the next waiting Punch In applies. */
@@ -1538,11 +1539,10 @@ export class PlaySession {
     for (const punch of due) {
       const names = this.#punched(punch.target);
       if (punch.count !== undefined && this.transport.running) {
+        const time = this.transport.timeOf(punch.count);
         for (const name of names) {
-          this.patterns.punchedAt(
-            name,
-            punch.count / this.transport.beatsPerBar,
-          );
+          this.patterns.punchedAt(name, this.transport.barAt(punch.count));
+          this.#punchedTimes.set(name, time);
         }
       }
       if (punch.target.kind === 'library') {
@@ -1899,6 +1899,9 @@ export class PlaySession {
     }
     if (!advance && !outOfBand) {
       this.#deliverBeats(now);
+      if (!this.debugPaused) {
+        this.#endWaits(now);
+      }
     }
     const result = this.#pump(now, outOfBand, advance);
     if (this.debugPaused || this.ended) {
@@ -1908,10 +1911,12 @@ export class PlaySession {
     this.patterns.schedule(now);
     if (result.state !== 'sliced') {
       this.patterns.settle();
+      this.#punchedTimes.clear();
     }
     let next = result.nextDeadline;
     for (const due of [
       this.#nextBeatDelivery(),
+      this.ended ? undefined : this.transport.nextWaitEnd(),
       this.patterns.nextDeadline(),
       this.ended ? undefined : this.#nextPunch(),
     ]) {
@@ -1968,9 +1973,76 @@ export class PlaySession {
     }
   }
 
-  /** The musical time of the `beat` that started a call's Run, if one did. */
-  beatTimeOf(delivery: string | undefined): bigint | undefined {
-    return delivery === undefined ? undefined : this.#beatTimes.get(delivery);
+  /**
+   * A call's musical time: the line its Run's last `wait` in bars or beats
+   * ended on, or else the time of the `beat` that started its Run.
+   */
+  musicalTimeOf(call: {
+    readonly delivery?: string;
+    readonly runId?: string;
+  }): bigint | undefined {
+    return (
+      (call.runId === undefined ? undefined : this.#runTimes.get(call.runId)) ??
+      (call.delivery === undefined
+        ? undefined
+        : this.#beatTimes.get(call.delivery))
+    );
+  }
+
+  /** Each Run's musical time, from the line its last musical Wait ended on. */
+  #runTimes = new Map<string, bigint>();
+  /** Each pending musical Wait's call, so Hush can end its Run. */
+  #musicalWaits = new Map<MusicalWait, Call<unknown>>();
+  /**
+   * The time of the bar each Punched In Script came in on, until the Pump
+   * that applied it ends, so its Waits count from that bar (ADR 0166).
+   */
+  #punchedTimes = new Map<string, bigint>();
+
+  /**
+   * The musical clock's `wait` (ADR 0166): `wait 8 bars` ends on the 8th bar
+   * line after the Run's musical time, a Punch In's bar, or a lead from now,
+   * whichever applies first. It is held while the Transport is stopped.
+   */
+  #musicalWait(call: Call<unknown>, count: Value): void {
+    const quantity = count.asQuantity()!;
+    const unit = quantity.unit.startsWith('bar') ? 'bar' : 'beat';
+    const transport = this.transport;
+    const from = transport.running
+      ? transport.countAt(
+          this.musicalTimeOf(call) ??
+            this.#punchedTimes.get(call.scriptName) ??
+            call.now + LEAD_US,
+        )
+      : undefined;
+    const wait = transport.wait(unit, Number(quantity.number.toString()), from);
+    this.#musicalWaits.set(wait, call);
+    call.signal.addEventListener(
+      'abort',
+      () => {
+        transport.cancel(wait);
+        this.#musicalWaits.delete(wait);
+      },
+      { once: true },
+    );
+  }
+
+  /**
+   * Ends each musical Wait due by `now`, one lead before its line, so the
+   * Run resumes in this Pump carrying the line as its musical time.
+   */
+  #endWaits(now: bigint): void {
+    if (this.ended || this.navigating) {
+      return;
+    }
+    for (const { time, wait } of this.transport.endedWaits(now)) {
+      const call = this.#musicalWaits.get(wait);
+      this.#musicalWaits.delete(wait);
+      if (call) {
+        this.#runTimes.set(call.runId, time);
+        call.answer(nothing);
+      }
+    }
   }
 
   #pump(now: bigint, outOfBand: boolean, advance?: () => PumpResult) {
@@ -2007,6 +2079,9 @@ export class PlaySession {
       );
     }
     for (const report of result.reports) {
+      if (report.kind === 'run end' && report.run !== undefined) {
+        this.#runTimes.delete(report.run);
+      }
       if (
         report.kind !== 'run end' ||
         (report.outcome !== 'errored' && report.outcome !== 'limit fault')
@@ -2124,11 +2199,18 @@ export class PlaySession {
   /**
    * Perform's Hush (#2002): every sound and Instrument note stops and every
    * pattern ends, but the session, its Scripts and the Transport go on.
+   * Runs waiting in bars or beats are cancelled, so an arrangement doesn't
+   * start its next section after the Hush (ADR 0166).
    */
   hush(): void {
     this.sounds.stopAll();
     this.patterns.stopAll();
     this.instruments.stopAll();
+    for (const [wait, call] of this.#musicalWaits) {
+      this.transport.cancel(wait);
+      this.group.script(call.scriptName)?.cancelRun(call.runId);
+    }
+    this.#musicalWaits.clear();
   }
 
   stop(now: bigint): void {

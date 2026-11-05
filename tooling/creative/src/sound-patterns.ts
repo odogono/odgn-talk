@@ -136,13 +136,16 @@ export class SoundPatterns {
 
   /**
    * Loops a pattern from the next bar no step has been sent for, replacing
-   * the owner's loop on the same Instrument from that bar.
+   * the owner's loop on the same Instrument from that bar. `at`, the
+   * calling Run's musical time, such as the bar line a `wait 8 bars` ended
+   * on, starts it on the bar at or after that time even in a late Pump.
    */
   loop(
     owner: string,
     target: PatternTarget,
     sound: SoundPattern,
     now: bigint,
+    at?: bigint,
   ): void {
     const key = `${owner}\u0000${target.instrument}`;
     const existing = this.#loops.get(key);
@@ -151,7 +154,9 @@ export class SoundPatterns {
       : undefined;
     const fromPunch =
       punched !== undefined && (!existing || this.#punchedLoops.has(key));
-    const from = fromPunch ? punched : this.#nextBar(existing?.cursor, now);
+    const from = fromPunch
+      ? punched
+      : this.#nextBar(existing?.cursor, at ?? now + LEAD_US);
     if (fromPunch) {
       this.#punchedLoops.add(key);
     }
@@ -179,7 +184,10 @@ export class SoundPatterns {
     sound: SoundPattern,
     start: bigint,
   ): void {
-    const bar = this.#transport.duration(this.#transport.beatsPerBar);
+    const transport = this.#transport;
+    const bar = transport.duration(
+      transport.meterAt(transport.countAt(start)).beatsPerBar,
+    );
     const at = (t: Time) =>
       start + BigInt(Math.round(t.valueOf() * Number(bar)));
     for (const event of sound.pattern.cycle(0)) {
@@ -271,20 +279,22 @@ export class SoundPatterns {
     return next === undefined ? undefined : next - LEAD_US;
   }
 
+  // Bars count on the Transport's Meters, so a time-signature change
+  // lengthens or shortens the bars after its bar line.
   #bars(time: bigint): number {
-    return this.#transport.countAt(time) / this.#transport.beatsPerBar;
+    return this.#transport.barAt(this.#transport.countAt(time));
   }
 
   #timeOf(bars: Time): bigint {
-    return this.#transport.timeOf(bars.valueOf() * this.#transport.beatsPerBar);
+    return this.#transport.timeOf(this.#transport.countOfBar(bars.valueOf()));
   }
 
-  /** The first bar after `cursor` and at or after a lead from `now`. */
-  #nextBar(cursor: Time | undefined, now: bigint): number | undefined {
+  /** The first bar after `cursor` and at or after `time`. */
+  #nextBar(cursor: Time | undefined, time: bigint): number | undefined {
     if (!this.#transport.running) {
       return undefined;
     }
-    const due = Math.ceil(this.#bars(now + LEAD_US) - 1e-9);
+    const due = Math.ceil(this.#bars(time) - 1e-6);
     return cursor === undefined ? due : Math.max(due, cursor.ceil());
   }
 
@@ -292,7 +302,7 @@ export class SoundPatterns {
   #scheduleLoop(loop: Loop, until: Time, now: bigint): void {
     if (loop.cursor === undefined) {
       // A loop made while the Transport was stopped starts once it runs.
-      const from = this.#nextBar(undefined, now)!;
+      const from = this.#nextBar(undefined, now + LEAD_US)!;
       for (const segment of loop.segments) {
         segment.from = from;
       }

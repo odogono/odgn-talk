@@ -228,6 +228,12 @@ const scriptMessages = (source: string) => {
   return [...declared.values()];
 };
 
+/**
+ * Play Scripts keep musical time on the Transport, so `wait 8 bars` works
+ * (ADR 0166); a Test Script's Manifest leaves it out.
+ */
+const musicalTime: { musicalTime?: true } = { musicalTime: true };
+
 /** Every Script binds all Pages and only its own Page's Elements. */
 export const scriptManifest = (
   project: DeepReadonly<Project>,
@@ -265,6 +271,7 @@ export const scriptManifest = (
     objectKinds: [...sharedObjectKinds(), ...instrumentObjectKinds()],
     grants: [...sharedGrants(), ...instruments.map(entry => entry.grant)],
     messages: scriptMessages(owner.script ?? ''),
+    ...musicalTime,
   };
 };
 

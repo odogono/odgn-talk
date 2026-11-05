@@ -41,12 +41,16 @@ export type InstrumentMessage = {
   readonly instrument: string;
 };
 
-/** The musical time of the `beat` Delivery that started a Run, if one did. */
-export type BeatTimes = (delivery: string | undefined) => bigint | undefined;
+/**
+ * A call's musical time: the line its Run's last musical Wait ended on, or
+ * the time of the `beat` Delivery that started the Run, if either applies.
+ */
+export type BeatTimes = (call: Caller) => bigint | undefined;
 
 type Caller = {
   readonly delivery?: string;
   readonly now: bigint;
+  readonly runId?: string;
   readonly scriptName: string;
 };
 type Duration = Value | null | undefined;
@@ -268,7 +272,7 @@ export class InstrumentSession {
         );
       }
     }
-    const beat = this.#beatTimes(call.delivery);
+    const beat = this.#beatTimes(call);
     if (beat !== undefined) {
       return beat + (offset ?? 0n);
     }
