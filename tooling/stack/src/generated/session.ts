@@ -81,6 +81,11 @@ export const sessionCommands = [
     "does": "Adds a user Library from a file, or replaces one, carrying Script Variables over"
   },
   {
+    "name": ":script",
+    "usage": ":script add <name> <path>",
+    "does": "Adds a Script from a file to the session's Group, reached by message"
+  },
+  {
     "name": ":store",
     "usage": ":store [<store>] | :store load <path> [<store>] | :store save <path> [<store>] | :store clear [<store>]",
     "does": "Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store; a load or a clear is a commit, routed to the Store's watches"
