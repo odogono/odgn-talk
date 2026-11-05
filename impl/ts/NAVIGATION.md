@@ -143,10 +143,10 @@ Files, grammar, or lowering.
 
 ## Peer router
 
-- Implementation: [`PeerRouter` and the `PeerLink` interface](src/peer.ts) (`@northtalk/ts/peer`, web-standard APIs only), the Runner's TLS and loopback TCP link in [peers.ts](../../tooling/cli/src/peers.ts)
+- Implementation: [`PeerRouter` and the `PeerLink` interface](src/peer.ts) (`@northtalk/ts/peer`, web-standard APIs only), [the MessagePort link](src/peer-message-port.ts) and `closeOnTerminate` in [the worker supervisor](../../tooling/stack/src/worker-supervisor.ts), the Runner's TLS and loopback TCP link in [peers.ts](../../tooling/cli/src/peers.ts)
 - Rules: [The peer router](../../spec/09-embedding.md#the-peer-router), chapter 12's Runner peers, [ADR 0165](../../docs/adr/0165-browser-hosts-carry-remote-sends-over-message-ports-and-websockets.md)
-- Tests and cases: [router over in-memory links](tests/peer-router-scenario.ts) (Bun and the CLI's Node check), [`peer` Capability tests](tests/peer-capability.test.ts), `verifyRunnerPeers` in [run-integration.ts](../../tooling/cli/tests/run-integration.ts)
-- First check: `bun test impl/ts/tests/peer-router.test.ts tooling/cli/tests/run-runtime.test.ts`
+- Tests and cases: [router over in-memory links](tests/peer-router-scenario.ts) (Bun and the CLI's Node check), [MessageChannel links](tests/peer-port-scenario.ts) (Bun and Node) and [a real Worker](tools/peer-port-browser.ts), [`peer` Capability tests](tests/peer-capability.test.ts), `verifyRunnerPeers` in [run-integration.ts](../../tooling/cli/tests/run-integration.ts)
+- First check: `bun test impl/ts/tests/peer-router.test.ts impl/ts/tests/peer-port.test.ts tooling/cli/tests/run-runtime.test.ts`
 
 ## Notification router
 

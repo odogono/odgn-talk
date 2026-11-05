@@ -124,3 +124,16 @@ test('the default deadline is 500 ms', async () => {
   await tick(150);
   expect(workers).toHaveLength(2);
 });
+
+test('ending a worker closes the links registered against it, once', async () => {
+  const { supervisor } = supervised();
+  let closed = 0;
+  let forgotten = 0;
+  supervisor.closeOnTerminate({ close: () => closed++ });
+  const forget = supervisor.closeOnTerminate({ close: () => forgotten++ });
+  forget();
+  await supervisor.supervise({ t: 'spin' }, { deadlineMs: 10 });
+  expect([closed, forgotten]).toEqual([1, 0]);
+  await supervisor.supervise({ t: 'spin' }, { deadlineMs: 10 });
+  expect(closed).toBe(1);
+});

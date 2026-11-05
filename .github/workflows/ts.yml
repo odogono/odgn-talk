@@ -45,6 +45,9 @@ jobs:
         working-directory: impl/ts
       - run: bun run build && bun run package:check
         working-directory: impl/ts
+      # Two peer routers over a real Web Worker (ADR 0165).
+      - run: bun tools/peer-port-browser.ts
+        working-directory: impl/ts
 
   corpus:
     runs-on: ubuntu-latest

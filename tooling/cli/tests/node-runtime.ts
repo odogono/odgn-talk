@@ -17,6 +17,7 @@ import {
   verifyScriptRunner,
 } from './run-integration';
 import { verifyPeerRouter } from '../../../impl/ts/tests/peer-router-scenario';
+import { verifyMessagePortLinks } from '../../../impl/ts/tests/peer-port-scenario';
 
 // Node 22/24 warn about the bundled node:sqlite import. Child processes
 // still check CLI stderr and retain runtime warnings of other types.
@@ -117,6 +118,10 @@ process.stdout.write('Node CLI run: HTTP example served until SIGINT\n');
 await verifyPeerRouter();
 process.stdout.write(
   'Node peer router: in-memory links carried Remote Sends\n',
+);
+await verifyMessagePortLinks();
+process.stdout.write(
+  'Node peer router: a MessageChannel carried Remote Sends\n',
 );
 await verifyRunnerPeers([process.execPath, main]);
 process.stdout.write(

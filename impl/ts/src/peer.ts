@@ -12,10 +12,14 @@ import { peerKind, type PeerImpl } from './peer-capability';
 import type { TsGroup } from './group';
 import { list, map, nothing, num, text, type Value } from './values';
 
-/** What a link tells the router: each whole frame it receives, and its close. */
+/**
+ * What a link tells the router: each whole frame it receives, its close, and
+ * when it has learned the other Host's key, for a link that starts without it.
+ */
 export type PeerLinkEvents = {
   close(): void;
   frame(text: string): void;
+  keyed(): void;
 };
 
 /**
@@ -24,6 +28,8 @@ export type PeerLinkEvents = {
  * router frames only once `open` gives it somewhere to put them.
  */
 export type PeerLink = {
+  /** The address `reach` names this link by, such as a port's name. */
+  readonly address?: string;
   close(): void;
   /** Whether the link has closed: it sends nothing more. */
   readonly closed: boolean;
@@ -32,9 +38,13 @@ export type PeerLink = {
    * vouches for about the other one, or Nothing when it vouches for nobody.
    */
   readonly identity: Value;
-  /** The other Host's key fingerprint. */
+  /**
+   * The other Host's key fingerprint, or empty until the link learns it and
+   * calls `keyed`. It hands the router no frame before then.
+   */
   readonly key: string;
-  open(events: PeerLinkEvents): void;
+  /** Starts the link; `own` is this Host's key, for a link that sends it. */
+  open(events: PeerLinkEvents, own: string): void;
   /** Sends one frame; false when it can't, as when closed or too large. */
   send(frame: string): boolean;
 };
@@ -186,27 +196,37 @@ export class PeerRouter {
     }
     const wire = new Wire(link);
     this.wires.set(link, wire);
-    this.byKey.set(link.key, wire);
-    link.open({
-      frame: body => {
-        let frame: Value;
-        try {
-          frame = decodeValue(body, (kind, id) =>
-            kind === 'peer' ? this.peerFor(id) : undefined,
-          );
-        } catch {
-          return link.close();
-        }
-        this.arrive(wire, frame);
+    if (link.key) {
+      this.byKey.set(link.key, wire);
+    }
+    link.open(
+      {
+        keyed: () => {
+          if (this.wires.get(link) === wire) {
+            this.byKey.set(link.key, wire);
+          }
+        },
+        frame: body => {
+          let frame: Value;
+          try {
+            frame = decodeValue(body, (kind, id) =>
+              kind === 'peer' ? this.peerFor(id) : undefined,
+            );
+          } catch {
+            return link.close();
+          }
+          this.arrive(wire, frame);
+        },
+        close: () => {
+          this.wires.delete(link);
+          if (this.byKey.get(link.key) === wire) {
+            this.byKey.delete(link.key);
+          }
+          wire.closed();
+        },
       },
-      close: () => {
-        this.wires.delete(link);
-        if (this.byKey.get(link.key) === wire) {
-          this.byKey.delete(link.key);
-        }
-        wire.closed();
-      },
-    });
+      this.key,
+    );
   }
 
   /** Closes every link. */
@@ -400,7 +420,13 @@ export class PeerRouter {
   }
 
   private reach(call: Call<unknown>, address: string) {
-    const dialled = this.o.dial?.(address);
+    let named: PeerLink | undefined;
+    for (const link of this.wires.keys()) {
+      if (link.address === address && !link.closed) {
+        named = link;
+      }
+    }
+    const dialled = named ? Promise.resolve(named) : this.o.dial?.(address);
     if (!dialled) {
       return call.fail(failure('bad address'));
     }
@@ -410,7 +436,7 @@ export class PeerRouter {
       }
       wire.ask('reach', [['name', text(address)]], frame => {
         const id = frame && field(frame, 'peer')?.asText();
-        if (id && split(id)?.[0] === wire.link.key) {
+        if (id && wire.link.key && split(id)?.[0] === wire.link.key) {
           call.answer(this.peerFor(id));
         } else {
           call.fail(failure(frame ? 'not exposed' : 'bad address'));
@@ -485,3 +511,9 @@ export class PeerRouter {
     });
   }
 }
+
+export {
+  messagePortLink,
+  type MessagePortLinkOptions,
+  type PortEndpoint,
+} from './peer-message-port';
