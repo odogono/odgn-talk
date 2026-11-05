@@ -1888,7 +1888,10 @@ const Parser = struct {
 
     /// A Name operand that is the condition's first token is a Whose Key.
     fn whoseCondition(p: *Parser) Error!*Expr {
-        p.whose_key_at = (try p.peek(.operand)).start;
+        const t = try p.peek(.operand);
+        // A Reserved Word that can't start an Expression would be the key (#2095).
+        if (t.kind == .word and !p.startsExpr(t)) return p.failName(t);
+        p.whose_key_at = t.start;
         return p.expr();
     }
 

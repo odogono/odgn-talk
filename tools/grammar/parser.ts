@@ -2088,7 +2088,12 @@ export class Parser {
   // A Name operand that is the condition's first token is a Whose Key, a key
   // or property of `it`: `whose amount > 100 GBP` (ADR 0074).
   whoseCondition(): Node {
-    this.whoseKeyAt = this.peek(0).pos;
+    const t = this.peek(0);
+    // A Reserved Word that can't start an Expression would be the key (#2095).
+    if (!this.startsExpr(t)) {
+      this.reservedName(t, 'a key');
+    }
+    this.whoseKeyAt = t.pos;
     return this.expr();
   }
 
