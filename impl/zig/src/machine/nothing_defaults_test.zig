@@ -209,53 +209,39 @@ const Counted = struct {
     }
 };
 
-test "optional reads reject Host Objects, live or disposed, with no Host crossing" {
+test "an optional read of a Host Object is its plain read" {
     const gpa = testing.allocator;
     var counted: Counted = .{};
     counted.init();
-    const sources = [_][]const u8{
-        "on go o\n return the optional id of o\nend go\n",
-        "on go o\n return the optional label of o\nend go\n",
-        "on go o\n return the optional id of the optional held of {held: o}\nend go\n",
-        "on go\n return the optional label of warehouse\nend go\n",
+    // Each source with what a live object gives, and the Host Gets it makes.
+    const cases = [_]struct { source: []const u8, live: []const u8, gets: usize }{
+        .{ .source = "on go o\n return the optional id of o\nend go\n", .live = "value=\"o1\"", .gets = 0 },
+        .{ .source = "on go o\n return the optional label of o\nend go\n", .live = "value=\"host\"", .gets = 1 },
+        .{ .source = "on go o\n return the optional (\"label\") of o\nend go\n", .live = "value=\"host\"", .gets = 1 },
+        .{ .source = "on go o\n return the optional missing of o otherwise \"none\"\nend go\n", .live = "value=\"none\"", .gets = 0 },
+        .{ .source = "on go o\n return the optional label of the optional held of {held: o}\nend go\n", .live = "value=\"host\"", .gets = 1 },
+        .{ .source = "on go\n return the optional label of warehouse\nend go\n", .live = "value=\"host\"", .gets = 1 },
     };
-    for ([_]bool{ false, true }) |disposed| for (sources) |source| {
+    for ([_]bool{ false, true }) |disposed| for (cases) |c| {
         var out: std.Io.Writer.Allocating = .init(gpa);
         defer out.deinit();
         var g: machine.Group = .init(gpa, &out.writer);
         defer g.deinit();
         const o = try g.object(&counted.kind, "o1", null);
         const named = [_]machine.NamedObject{.{ .name = "warehouse", .object = o }};
-        try testing.expect(try g.load("s", source, .{ .objects = &named }) == .loaded);
+        try testing.expect(try g.load("s", c.source, .{ .objects = &named }) == .loaded);
         if (disposed) try g.dispose(o);
         var args = [_]*Value{o.value.retain()};
-        _ = try g.deliver("s", "go", if (std.mem.startsWith(u8, source, "on go o")) &args else &.{}, true);
-        if (!std.mem.startsWith(u8, source, "on go o")) args[0].release();
+        const takes = std.mem.startsWith(u8, c.source, "on go o");
+        _ = try g.deliver("s", "go", if (takes) &args else &.{}, true);
+        if (!takes) args[0].release();
+        const before = counted.gets;
         try g.pump(clock);
-        try expectContains(out.written(), "error={code: \"wrong kind\", expected: \"map\", got: \"object\"");
+        // A disposed object is gone for every key but `id`.
+        const gone = disposed and !std.mem.eql(u8, c.live, "value=\"o1\"");
+        try expectContains(out.written(), if (gone) "error={code: \"object gone\"" else c.live);
+        try testing.expectEqual(if (disposed) 0 else c.gets, counted.gets - before);
     };
-    try testing.expectEqual(@as(usize, 0), counted.gets);
-
-    // The ordinary `id` read, a held object returned whole, and
-    // `otherwise` leaving an object unconverted.
-    const fine = [_][2][]const u8{
-        .{ "on go o\n return the id of o\nend go\n", "value=\"o1\"" },
-        .{ "on go o\n return the optional held of {held: o} is o\nend go\n", "value=true" },
-        .{ "on go o\n return (o otherwise nothing) is o\nend go\n", "value=true" },
-    };
-    for (fine) |c| {
-        var out: std.Io.Writer.Allocating = .init(gpa);
-        defer out.deinit();
-        var g: machine.Group = .init(gpa, &out.writer);
-        defer g.deinit();
-        const o = try g.object(&counted.kind, "o1", null);
-        try testing.expect(try g.load("s", c[0], .{}) == .loaded);
-        var args = [_]*Value{o.value.retain()};
-        _ = try g.deliver("s", "go", &args, true);
-        try g.pump(clock);
-        try expectContains(out.written(), c[1]);
-    }
-    try testing.expectEqual(@as(usize, 0), counted.gets);
 }
 
 fn argument(gpa: Allocator, spelling: []const u8) !*Value {

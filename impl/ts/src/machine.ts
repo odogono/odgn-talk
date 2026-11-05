@@ -5399,9 +5399,11 @@ export class Run {
         return true;
       case Op.GetKey:
       case Op.GetKeyComputed:
+      case Op.GetOptionalKey:
+      case Op.GetOptionalKeyComputed:
         return (
           this.peek().kind === 'object' &&
-          (ins.opcode === Op.GetKey
+          (ins.opcode === Op.GetKey || ins.opcode === Op.GetOptionalKey
             ? ins.operands[0] !== 'id'
             : this.peek(1).asText() !== 'id')
         );
@@ -5577,6 +5579,13 @@ export class Run {
         const computed = ins.opcode === Op.GetOptionalKeyComputed;
         const key = computed ? keyText(this.peek(1)) : (a as string);
         const receiver = this.peek();
+        if (receiver.kind === 'object') {
+          // The plain read of a Host Object (#2093).
+          m.result = this.getProperty(receiver, key, rate);
+          drop(frame.stack, computed ? 2 : 1);
+          frame.stack.push(m.result);
+          return next(frame);
+        }
         m.result =
           receiver.kind === 'nothing' ? receiver : getKey(receiver, key);
         return this.replace(computed ? 2 : 1, rate);

@@ -730,9 +730,10 @@ pub const machine: MachineTable = .{
             .pushes = .{ .int = 1 },
             .suspends = false,
             .cost = "get-key",
-            .does = "`the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind`",
+            .does = "`the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; on a Host Object it is `get-key`; any other receiver is `wrong kind`",
             .errors = &.{
                 "wrong kind",
+                "object gone",
             },
         },
         .{
@@ -746,6 +747,7 @@ pub const machine: MachineTable = .{
             .does = "`the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does",
             .errors = &.{
                 "wrong kind",
+                "object gone",
             },
         },
         .{

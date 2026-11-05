@@ -16,9 +16,9 @@ say the optional city of the optional address of customer otherwise "unknown"
 --> unknown
 ```
 
-An optional read takes only a map or Nothing. On a Host Object, such as an entity whose components are properties, it raises `wrong kind`. Read a Host Object's properties plainly instead: a property its Object Kind doesn't define already gives Nothing, so `the lockable of actor otherwise "none"` is safe. Use `optional` for the map fields inside that property: `the optional is_locked of the lockable of actor otherwise false`.
+An optional read works the same on a Host Object, such as an entity whose components are properties: `the optional lockable of actor otherwise "none"` gives `"none"` when its Object Kind doesn't define `lockable`. So one spelling reads a key whether the Host models a thing as a map or as an object.
 
-`otherwise` replaces only Nothing. False, `0` and `""` are kept. See [Nothing defaults](../spec/04-expressions-and-statements.md#nothing-defaults) and [optional map-key reads](../spec/04-expressions-and-statements.md#optional-map-key-reads).
+`otherwise` replaces only Nothing. False, `0` and `""` are kept. See [Nothing defaults](../spec/04-expressions-and-statements.md#nothing-defaults) and [optional key reads](../spec/04-expressions-and-statements.md#optional-key-reads).
 
 ## Write a computed key
 

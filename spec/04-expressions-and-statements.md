@@ -140,9 +140,9 @@ its clause under the ordinary rules.
 - **On a Host Object,** `id` gives its Core-held id. Outside Guards, any other key reads the Host's property ([chapter 9](09-embedding.md)); a key its Object Kind doesn't define gives Nothing, as a map's missing key does, and reading it on a disposed object raises `object gone`. [Guards](#guards) use the pure key rules below and never call the Host.
 - **On anything else,** Nothing included, reading an ordinary key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`. The `map` Library's `lookup(m, ["a", "b"], default)` gives `default` there instead ([chapter 7](07-libraries-and-the-standard-library.md#map)).
 
-### Optional map-key reads
+### Optional key reads
 
-`the optional k of x` reads a map key, even when `k` spells a Built-in property,
+`the optional k of x` reads a key, even when `k` spells a Built-in property,
 `target` or an ordinal such as `first`. The key is a Word, Text literal,
 `code points`, or a parenthesized expression. `the optional of m` retains
 its ordinary key read; write `the optional optional of m` for its optional
@@ -154,11 +154,14 @@ each, in source order. After both finish, require a text key; otherwise raise
 error therefore takes precedence over a previously computed invalid key.
 
 A Nothing receiver returns Nothing. A map returns its value, or Nothing for
-an absent key. All other receivers raise `wrong kind`, with `expected: "map"`
-and `value` the receiver. This includes every live or disposed Host Object,
-even for `id`, with no Host calls or conversions. A map may return a stored
-Host Object, but a subsequent optional read cannot step into it. Known Host
-Objects in Guards use this runtime rule, not the load-time Host-property rule.
+an absent key. On a Host Object, an optional read is the ordinary read of
+the same key ([above](#keys-and-properties)): `id` gives its Core-held id,
+any other key reads the Host's property, with the same Host call and Fuel,
+giving Nothing for a key its Object Kind doesn't define, and a disposed
+object raises `object gone`. In Guards it follows the same rules as an
+ordinary Host property read there. So one spelling reads a key whether a
+Host models a thing as a map or as an object. All other receivers raise
+`wrong kind`, with `expected: "map"` and `value` the receiver.
 
 Every nullable step must be explicit: `the optional b of the a of m` can
 still fail at the ordinary inner read. Computed keys in outer steps still

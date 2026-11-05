@@ -2221,19 +2221,14 @@ const Checker = struct {
                 try c.expr(s, cv.value, in);
                 if (cv.kind) |k| try c.conversionKind(e.pos, k);
             },
-            .key => |k| {
+            // An optional read of a known Object is its plain read (#2093).
+            inline .key, .optional_key => |k| {
                 if (k.computed) |x| try c.expr(s, x, in);
                 try c.expr(s, k.base, in);
                 if (in == .guard and c.knownObject(s, k.base)) {
                     const key = c.literalKey(k.key, k.computed);
                     if (key == null or !std.mem.eql(u8, key.?, "id")) try c.report(.not_in_a_guard, e.pos);
                 }
-            },
-            // A map-only read that never crosses to the Host, so it is no
-            // Host property access, even of a known Object.
-            .optional_key => |k| {
-                if (k.computed) |x| try c.expr(s, x, in);
-                try c.expr(s, k.base, in);
             },
             .property => |p| {
                 // `the elements of o` reads the Host too (#1627).
@@ -3106,10 +3101,10 @@ test "both sides of otherwise and an optional read's operands are checked" {
     // An unselected fallback's call is still `not in a guard`.
     try expectDiagnostics("function f x\nreturn x\nend\non t x where true otherwise f(x)\nend\n", .{}, "not in a guard at 4:29\n");
     try expectDiagnostics("function f x\nreturn x\nend\non t x where f(x) otherwise true\nend\n", .{}, "not in a guard at 4:14\n");
-    // An optional read of a known Host Object is no Host property access:
-    // it fails at runtime, and the ordinary `id` read stays allowed.
+    // An optional read of a known Host Object is its plain read (#2093):
+    // a Host property is no Guard's, and `id` stays allowed.
     const objects: []const Object = &.{.{ .name = "warehouse", .kind = "store" }};
-    try expectDiagnostics("on t where the optional label of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
+    try expectDiagnostics("on t where the optional label of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "not in a guard at 1:12\n");
     try expectDiagnostics("on t where the optional id of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
     try expectDiagnostics("on t where the id of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
     try expectDiagnostics("on t where the label of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "not in a guard at 1:12\n");

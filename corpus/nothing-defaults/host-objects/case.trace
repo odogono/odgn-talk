@@ -1,42 +1,40 @@
-> load h identity=e47b0c4a8c7b67eb2d1aa1b9640fa42098e546f0b9edb9fb9be739ef5808bcee
-> deliver d1 to=h message=known
-> deliver d2 to=h message=viaHandler
-> deliver d3 to=h message=inMap
-> deliver d4 to=h message=ordinary
+> load h identity=f2127610da8bd3f2dfded50c2a6bff65f13f1123e155a9807e67ba8d5f76a8d8
+> deliver d1 to=h message=defined args=[<object light "bulb-1">]
+> deliver d2 to=h message=absent args=[<object light "bulb-1">]
+> deliver d3 to=h message=identity args=[<object light "bulb-1">]
+> deliver d4 to=h message=computed args=[<object light "bulb-1">]
+> deliver d5 to=h message=nested args=[<object light "bulb-1">]
+> deliver d6 to=h message=guarded args=[<object light "bulb-1">]
 > pump clock=2026-10-13T09:00:00Z
-raise h/r1 code="wrong kind" at=h:5 pos=9:9
-raise h/r1 code="wrong kind" at=h:22 pos=14:9
-seg h/r1 start delivery=d1 handler=known clause=1 fuel=45 alloc=1112 state=1232 end=return
-run h/r1 outcome=completed delivery=d1 handler=known fuel=45 alloc=1112
-raise h/r2 code="wrong kind" at=h:43 pos=22:9
-raise h/r2 code="wrong kind" at=h:61 pos=27:9
-seg h/r2 start delivery=d2 handler=viaHandler clause=1 fuel=64 alloc=1116 state=2316 end=return
-run h/r2 outcome=completed delivery=d2 handler=viaHandler fuel=64 alloc=1116
-raise h/r3 code="wrong kind" at=h:94 pos=40:9
-seg h/r3 start delivery=d3 handler=inMap clause=1 fuel=41 alloc=616 state=2848 end=return
-run h/r3 outcome=completed delivery=d3 handler=inMap fuel=41 alloc=616
+prop h/r1 object=<object light "bulb-1"> name=label op=get value="on"
+prop h/r1 object=<object light "bulb-1"> name=label op=get value="on"
+seg h/r1 start delivery=d1 handler=defined clause=1 fuel=37 alloc=88 state=308 end=return
+run h/r1 outcome=completed delivery=d1 handler=defined fuel=37 alloc=88
+seg h/r2 start delivery=d2 handler=absent clause=1 fuel=37 alloc=56 state=316 end=return
+run h/r2 outcome=completed delivery=d2 handler=absent fuel=37 alloc=56
+seg h/r3 start delivery=d3 handler=identity clause=1 fuel=31 alloc=60 state=328 end=return
+run h/r3 outcome=completed delivery=d3 handler=identity fuel=31 alloc=60
 prop h/r4 object=<object light "bulb-1"> name=label op=get value="on"
-seg h/r4 start delivery=d4 handler=ordinary clause=1 fuel=22 alloc=44 state=2842 end=return
-run h/r4 outcome=completed delivery=d4 handler=ordinary fuel=22 alloc=44
-pumped state=idle fuel=172
+prop h/r4 object=<object light "bulb-1"> name=label op=get value="on"
+seg h/r4 start delivery=d4 handler=computed clause=1 fuel=39 alloc=88 state=332 end=return
+run h/r4 outcome=completed delivery=d4 handler=computed fuel=39 alloc=88
+prop h/r5 object=<object light "bulb-1"> name=lockable op=get value={is_locked: true}
+prop h/r5 object=<object light "bulb-1"> name=lockable op=get value={is_locked: true}
+seg h/r5 start delivery=d5 handler=nested clause=1 fuel=47 alloc=146 state=316 end=return
+run h/r5 outcome=completed delivery=d5 handler=nested fuel=47 alloc=146
+guard-skip h/r6 at=h:106 pos=31:20 code="wrong kind"
+seg h/r6 start delivery=d6 handler=guarded clause=2 fuel=26 alloc=37 state=305 end=return
+run h/r6 outcome=completed delivery=d6 handler=guarded fuel=26 alloc=37
+pumped state=idle fuel=217
 
 > dispose object=<object light "bulb-1">
-> deliver d5 to=h message=known
-> deliver d6 to=h message=viaHandler
-> deliver d7 to=h message=inMap
+> deliver d7 to=h message=gone args=[<object light "bulb-1">]
 > pump clock=2026-10-13T09:00:01Z
-raise h/r5 code="wrong kind" at=h:5 pos=9:9
-raise h/r5 code="wrong kind" at=h:22 pos=14:9
-seg h/r5 start delivery=d5 handler=known clause=1 fuel=45 alloc=1112 state=4018 end=return
-run h/r5 outcome=completed delivery=d5 handler=known fuel=45 alloc=1112
-raise h/r6 code="wrong kind" at=h:43 pos=22:9
-raise h/r6 code="wrong kind" at=h:61 pos=27:9
-seg h/r6 start delivery=d6 handler=viaHandler clause=1 fuel=64 alloc=1116 state=5102 end=return
-run h/r6 outcome=completed delivery=d6 handler=viaHandler fuel=64 alloc=1116
-raise h/r7 code="wrong kind" at=h:94 pos=40:9
-seg h/r7 start delivery=d7 handler=inMap clause=1 fuel=41 alloc=616 state=5626 end=return
-run h/r7 outcome=completed delivery=d7 handler=inMap fuel=41 alloc=616
-pumped state=idle fuel=150
+raise h/r7 code="object gone" at=h:129 pos=40:9
+raise h/r7 code="object gone" at=h:150 pos=45:9
+seg h/r7 start delivery=d7 handler=gone clause=1 fuel=57 alloc=912 state=1217 end=return
+run h/r7 outcome=completed delivery=d7 handler=gone fuel=57 alloc=912
+pumped state=idle fuel=57
 
 > vars
-vars h log=[{code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 9, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 14, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 22, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 27, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "inMap", line: 40, column: 9}}, "on", {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 9, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 14, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 22, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 27, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "inMap", line: 40, column: 9}}] stored=<object light "bulb-1">
+vars h log=["on", "on", "none", "none", "bulb-1", "bulb-1", "on", "on", true, true, "guard skipped", {code: "object gone", object: <object light "bulb-1">, at: {unit: "h", handler: "gone", line: 40, column: 9}}, {code: "object gone", object: <object light "bulb-1">, at: {unit: "h", handler: "gone", line: 45, column: 9}}, "bulb-1"]

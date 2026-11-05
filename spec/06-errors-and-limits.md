@@ -19,8 +19,9 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 - **Kind names** in fields such as `expected` and `got` are the kind names of [chapter 3](03-values.md).
 - **Not Errors:** a Limit Fault, a cancellation and Stop Script are not Errors. No `catch` sees them.
 
-Optional map-key reads use `wrong kind` with `expected` `"text"` for an
-invalid computed key, or `"map"` for a non-map, non-Nothing receiver, and
+Optional key reads use `wrong kind` with `expected` `"text"` for an
+invalid computed key, or `"map"` for a receiver that is not a map, Nothing
+or Host Object, and
 `value` the offending value. Their own errors point at `the`; evaluated
 operand errors retain their positions. They add no cumulative `path`.
 The stdlib attribution rule above applies to both read and operand errors.

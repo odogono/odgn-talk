@@ -10034,13 +10034,16 @@ pub const Group = struct {
                 try g.suspendRun(run, "wait", .{ .run = run, .deadline = micros(g.clock) + ns, .order = 0 });
                 return .suspended;
             },
-            .get_key, .get_key_computed => {
+            // An optional read is the plain read on a Host Object (#2093);
+            // it differs only in giving Nothing for a Nothing receiver.
+            .get_key, .get_key_computed, .get_optional_key, .get_optional_key_computed => {
                 const base = pop(frame);
                 defer base.release();
                 var key: []const u8 = undefined;
                 var key_value: ?*Value = null;
                 defer if (key_value) |k| k.release();
-                if (ins.op == .get_key) key = try keyOperand(a, ops[0].text) else {
+                const optional = ins.op == .get_optional_key or ins.op == .get_optional_key_computed;
+                if (ins.op == .get_key or ins.op == .get_optional_key) key = try keyOperand(a, ops[0].text) else {
                     key_value = pop(frame);
                     if (key_value.?.data != .text) return g.wrongKind("text", key_value.?);
                     key = key_value.?.data.text;
@@ -10061,6 +10064,10 @@ pub const Group = struct {
                         }
                         return step;
                     };
+                }
+                if (optional and base.data == .nothing) {
+                    try g.push(frame, base.retain());
+                    return .next;
                 }
                 if (base.data != .map) return g.wrongKind("map", base);
                 const v = base.get(key) orelse try nothing(gpa);
@@ -10100,25 +10107,6 @@ pub const Group = struct {
                 };
                 if (step == .crossing) try g.push(frame, receiver.retain());
                 return step;
-            },
-            // A map-only read: Nothing reads as Nothing, and every Host
-            // Object, even for `id`, is a wrong kind with no Host call.
-            .get_optional_key, .get_optional_key_computed => {
-                const base = pop(frame);
-                defer base.release();
-                var key: []const u8 = undefined;
-                var key_value: ?*Value = null;
-                defer if (key_value) |k| k.release();
-                if (ins.op == .get_optional_key) key = try keyOperand(a, ops[0].text) else {
-                    key_value = pop(frame);
-                    if (key_value.?.data != .text) return g.wrongKind("text", key_value.?);
-                    key = key_value.?.data.text;
-                }
-                switch (base.data) {
-                    .nothing => try g.push(frame, base.retain()),
-                    .map => try g.push(frame, if (base.get(key)) |found| found.retain() else try nothing(gpa)),
-                    else => return g.wrongKind("map", base),
-                }
             },
             .property, .property_delimited => {
                 var delimiter: []const u8 = ",";
@@ -11960,11 +11948,11 @@ fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
         .get_element, .count_elements, .list_elements => true,
         .load_var, .store_var, .store_definition, .load_object, .me, .target, .set_property, .set_property_computed, .ask, .ask_wait, .tell, .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .send_up, .send_up_wait, .wait, .wait_for, .wait_for_any, .join_start, .join_ask, .join_send, .join_send_named, .join_send_spread, .join_end, .timeout_start, .timeout_end, .call_value_wait, .call_handler_wait, .veto, .pass, .choose_offer => true,
         .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable") or std.mem.eql(u8, ins.operands[0].text, "random"),
-        .get_key, .get_key_computed => blk: {
+        .get_key, .get_key_computed, .get_optional_key, .get_optional_key_computed => blk: {
             const stack = frame.stack.items;
             if (stack[stack.len - 1].value.data != .object) break :blk false;
             // Literal key operands are canonical display text, including quotes.
-            if (ins.op == .get_key) break :blk !std.mem.eql(u8, ins.operands[0].text, "\"id\"");
+            if (ins.op == .get_key or ins.op == .get_optional_key) break :blk !std.mem.eql(u8, ins.operands[0].text, "\"id\"");
             const key = stack[stack.len - 2].value;
             break :blk key.data != .text or !std.mem.eql(u8, key.data.text, "id");
         },

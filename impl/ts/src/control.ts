@@ -271,12 +271,26 @@ const isElementRead = (node: SemanticNode): boolean => {
 const isOptionalRead = (node: SemanticNode): boolean =>
   node.rule === 'The' && word(node.children[1], 'optional');
 
+/** An optional read's key as its plain read spells it, or null when computed from anything but a Text literal. */
+const optionalKey = (node: SemanticNode): string | null =>
+  objectKey({
+    ...node,
+    children: node.children.filter((_, index) => index !== 1),
+  })?.key ?? null;
+
 /** A Guard may call only Built-ins, holds no Lambda and reads no Host property but `id`. */
 const checkGuard = (guard: SemanticNode, report: Report) => {
   const work = [guard];
   while (work.length) {
     const node = work.pop()!;
     const [head] = node.children;
+    if (isOptionalRead(node) && isHostObject(node.children.at(-1))) {
+      // An optional read of a known Object is its plain read (#2093), where
+      // every key but `id` reads the Host, Built-in property names included.
+      if (optionalKey(node) !== 'id') {
+        report('not in a guard', head as Leaf);
+      }
+    }
     if (node.rule === 'Lambda') {
       report('not in a guard', head as Leaf);
       continue;
