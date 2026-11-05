@@ -15,12 +15,16 @@ type Waveform = (typeof WAVEFORMS)[number];
 
 const parameters = {
   waveform: {
+    group: 'Oscillator',
     shape: 'text',
     choices: WAVEFORMS,
     default: 'saw',
     description: 'The oscillator: sine, triangle, saw or square.',
   },
   attack: {
+    group: 'Envelope',
+    unit: 's',
+    scale: 'log',
     shape: 'number',
     min: 0,
     max: 10,
@@ -28,6 +32,9 @@ const parameters = {
     description: 'Seconds the envelope takes to rise to full.',
   },
   decay: {
+    group: 'Envelope',
+    unit: 's',
+    scale: 'log',
     shape: 'number',
     min: 0,
     max: 10,
@@ -35,6 +42,7 @@ const parameters = {
     description: 'Seconds the envelope takes to fall to the sustain level.',
   },
   sustain: {
+    group: 'Envelope',
     shape: 'number',
     min: 0,
     max: 1,
@@ -42,6 +50,9 @@ const parameters = {
     description: 'The level a held note stays at, from 0 to 1.',
   },
   release: {
+    group: 'Envelope',
+    unit: 's',
+    scale: 'log',
     shape: 'number',
     min: 0,
     max: 10,
@@ -49,6 +60,8 @@ const parameters = {
     description: 'Seconds a released note takes to fade out.',
   },
   cutoff: {
+    group: 'Filter',
+    scale: 'log',
     shape: 'number',
     min: 20,
     max: 20_000,
@@ -57,6 +70,7 @@ const parameters = {
     description: "The low-pass filter's cutoff, in hertz.",
   },
   resonance: {
+    group: 'Filter',
     shape: 'number',
     min: 0,
     max: 1,
@@ -64,6 +78,7 @@ const parameters = {
     description: "The filter's resonance, from 0 to 1.",
   },
   gain: {
+    group: 'Output',
     shape: 'number',
     min: 0,
     max: 1,
@@ -71,6 +86,7 @@ const parameters = {
     description: 'Output level, from 0 to 1.',
   },
   pan: {
+    group: 'Output',
     shape: 'number',
     min: -1,
     max: 1,

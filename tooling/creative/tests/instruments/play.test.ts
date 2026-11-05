@@ -114,6 +114,31 @@ test('a frequency parameter refuses other Units and checks its range in Hz', asy
   expect(sent).toEqual([]);
 });
 
+test('envelope times take seconds and refuse other Unit Kinds', async () => {
+  const { play, run, sent } = session();
+  await run('set the attack of bass to 5 ms');
+  expect(await run('the attack of bass')).toMatchObject({ text: '0.005' });
+  await run('set the release of bass to 1.5 s');
+  await run('set the decay of bass to 0.25');
+  expect(play.problems).toEqual([]);
+  expect(sent.map(m => m.commands)).toEqual([
+    [{ kind: 'set', parameter: 'attack', value: 0.005 }],
+    [{ kind: 'set', parameter: 'release', value: 1.5 }],
+    [{ kind: 'set', parameter: 'decay', value: 0.25 }],
+  ]);
+  expect(await run('set the attack of bass to 1 kg')).toMatchObject({
+    error: expect.stringContaining('Expected "number or exact duration"'),
+  });
+  expect(sent).toHaveLength(3);
+});
+
+test('a Project saved with plain envelope numbers opens unchanged', async () => {
+  const project = band();
+  project.instruments[0]!.parameters.attack = 0.02;
+  const { run } = session(project);
+  expect(await run('the attack of bass')).toMatchObject({ text: '0.02' });
+});
+
 test('bad notes, velocities and parameter values are Script errors', async () => {
   const { run, sent } = session();
   for (const command of [

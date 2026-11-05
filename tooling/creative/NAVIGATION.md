@@ -380,6 +380,10 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   in `Hz`, takes any Quantity of that Unit's Kind (`2 kHz`) and keeps a plain
   number in its Unit (ADR 0166, #2067). Its Shape is the property's and the
   Manifest's.
+- [instruments/kind.ts](src/instruments/kind.ts): a parameter's `group`
+  names its collapsible section in the Instruments window, and a number
+  parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on
+  kinds set both; the Manifest does not describe them.
 - [instruments/audio.ts](src/instruments/audio.ts): the page's AudioContext,
   started by [play-view.ts](src/play-view.ts) when a session has Instruments.
   It decodes the Project's sounds for samplers and runs

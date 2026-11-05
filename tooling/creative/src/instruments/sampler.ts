@@ -20,6 +20,8 @@ const RELEASE_SECONDS = 0.01;
 
 const parameters = {
   speed: {
+    group: 'Playback',
+    scale: 'log',
     shape: 'number',
     min: 0.0625,
     max: 16,
@@ -28,6 +30,7 @@ const parameters = {
       'Playback speed, which also sets the pitch: 2 is an octave up, 0.5 an octave down.',
   },
   gain: {
+    group: 'Output',
     shape: 'number',
     min: 0,
     max: 1,
@@ -35,6 +38,7 @@ const parameters = {
     description: 'Output level, from 0 to 1.',
   },
   pan: {
+    group: 'Output',
     shape: 'number',
     min: -1,
     max: 1,
