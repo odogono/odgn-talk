@@ -1,11 +1,12 @@
-// Documentation Examples as diagnostics (ADR 0169, #2115): each failing
-// example of an open Library's exports is a warning on its first differing
-// line. Results are kept by the example and the Library sources it ran with,
+// Documentation Examples as diagnostics (ADR 0169, #2115; ADR 0170): each
+// failing example of an open Library's exports or a Script's Handlers is a
+// warning on its first differing line. Results are kept by the example and the Library sources it ran with,
 // so an edit replays only what it could change.
 import { stdlibSources } from '@northtalk/ts';
 import {
   docExamples,
   replayExample,
+  scriptExamples,
   type ExampleResult,
 } from '../doc-examples';
 import type { LspDiagnostic } from './protocol';
@@ -13,7 +14,7 @@ import type { Analysis } from './workspace';
 
 export type ExampleCache = Map<string, ExampleResult>;
 
-/** The failing Documentation Examples of one analysed Library document. */
+/** The failing Documentation Examples of one analysed document. */
 export const exampleDiagnostics = (
   analyses: ReadonlyMap<string, Analysis>,
   uri: string,
@@ -22,11 +23,16 @@ export const exampleDiagnostics = (
 ): LspDiagnostic[] => {
   const analysis = analyses.get(uri);
   const name = analysis?.document.library;
-  // A Library that doesn't load would fail every example the same way.
+  // A Script is named by its file stem, as `northtalk test` names it; a Test
+  // Script carries no examples.
+  const stem = /([^/]+)\.talk$/u.exec(uri)?.[1];
+  const script =
+    !name && stem && !stem.endsWith('.test') ? decodeURIComponent(stem) : null;
+  // A unit that doesn't load would fail every example the same way.
   if (
     !analysis ||
-    !name ||
-    Object.hasOwn(stdlibSources, name) ||
+    (!name && !script) ||
+    (name && Object.hasOwn(stdlibSources, name)) ||
     analysis.diagnostics.some(d => d.severity === 1)
   ) {
     return [];
@@ -41,8 +47,18 @@ export const exampleDiagnostics = (
     .sort()
     .join('\u0000');
   const lines = analysis.document.text.split('\n');
-  return docExamples(name, analysis.document.text).flatMap(example => {
-    const key = `${example.line}\u0000${example.transcript}\u0000${sources}`;
+  const examples = name
+    ? docExamples(name, analysis.document.text)
+    : scriptExamples(script!, analysis.document.text);
+  return examples.flatMap(example => {
+    // A Handler's example also runs the whole Script it documents.
+    const key = [
+      example.name,
+      example.line,
+      example.transcript,
+      example.script ?? '',
+      sources,
+    ].join('\u0000');
     const result =
       next.get(key) ?? previous.get(key) ?? replayExample(libraries, example);
     next.set(key, result);

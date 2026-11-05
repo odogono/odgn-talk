@@ -2105,6 +2105,67 @@ test('a failing Documentation Example is a warning on its first differing line',
   expect(published()).toEqual([]);
 });
 
+const counter = (expected: string) =>
+  [
+    'script variable count = 0',
+    '--| > on bump',
+    '--| |   send increment to counter and wait',
+    '--| |   say it',
+    '--| | end bump',
+    '--| > bump and wait',
+    `--| ${expected}`,
+    'on increment',
+    '  add 1 to count',
+    '  return count',
+    'end increment',
+    '',
+  ].join('\n');
+
+test('a failing example on a Script Handler is a warning, and a Test Script has none', () => {
+  const { server, sent } = setup('on demo\nend demo');
+  const published = (uri: string) =>
+    (
+      sent
+        .filter(
+          m =>
+            m.method === 'textDocument/publishDiagnostics' &&
+            (m.params as { uri: string }).uri === uri,
+        )
+        .at(-1)!.params as Published
+    ).diagnostics.filter(d => d.code === 'documentation example');
+  const open = (uri: string, text: string) =>
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text, version: 1 } },
+    });
+  const script = 'file:///workspace/counter.talk';
+  open(script, counter('2'));
+  expect(published(script)).toEqual([
+    {
+      range: {
+        start: { line: 6, character: 0 },
+        end: { line: 6, character: 5 },
+      },
+      code: 'documentation example',
+      source: 'northtalk',
+      severity: 2,
+      message:
+        'counter.increment example 1: the replay differs\nexpected: 2\nactual:   1',
+    },
+  ]);
+  server.handle({
+    method: 'textDocument/didChange',
+    params: {
+      textDocument: { uri: script, version: 2 },
+      contentChanges: [{ text: counter('1') }],
+    },
+  });
+  expect(published(script)).toEqual([]);
+  const test = 'file:///workspace/counter.test.talk';
+  open(test, counter('2'));
+  expect(published(test)).toEqual([]);
+});
+
 const labels = (text: string, line: number, character: number) =>
   setup(text)
     .request('textDocument/completion', at(line, character))
