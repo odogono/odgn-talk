@@ -162,3 +162,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0165: Browser Hosts carry Remote Sends over MessagePorts and WebSockets](0165-browser-hosts-carry-remote-sends-over-message-ports-and-websockets.md)
 - [0166: Scripts wait in Musical Units counted on the Host's Transport](0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)
 - [0167: Folio's Instruments window edits authored parameters live during Play](0167-folios-instruments-window-edits-authored-parameters-live-during-play.md)
+- [0169: Library exports carry Documentation Examples that `northtalk test` replays](0169-library-exports-carry-documentation-examples-that-northtalk-test-replays.md)

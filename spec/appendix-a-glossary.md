@@ -335,6 +335,10 @@ _Avoid_: recording, play-through, golden file
 The Library a Test Script imports its assertions from. It is supplied by the tooling that runs the test, and is not part of the Standard Library.
 _Avoid_: assert library, test framework
 
+**Documentation Example**:
+A Session Transcript written in a Library export's Declaration Documentation, starting at a `>` line and ending at a blank documentation line. Each one replays in a fresh session as one test, and must reproduce its written output exactly.
+_Avoid_: doctest, docstring example, example (alone)
+
 **Benchmark**:
 One named, measured workload, written once as a Script and run on each Core, and where it has a counterpart, in a Peer Language. It measures speed, not behaviour, and nothing it produces is normative.
 _Avoid_: perf test, operation (that word means a Capability's action)
