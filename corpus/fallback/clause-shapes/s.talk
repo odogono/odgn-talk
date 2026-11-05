@@ -1,0 +1,39 @@
+-- s.talk: picks clauses by Clause Shape, and logs what each call gave.
+
+shape Invoice is {type: text, amount: number, ...}
+
+script variable log = []
+
+on handle inv is an Invoice where the amount of inv > 100
+  return "big invoice"
+end handle
+
+on handle {amount: a} is an Invoice
+  return "invoice of " & a
+end handle
+
+on handle n is a number
+  return "number"
+end handle
+
+on move item is a text to place is a number
+  return item & " to " & place
+end move
+
+on local x is a number
+  return x
+end local
+
+on any message m is a map where the name of m is "handle"
+  return "fallback"
+end any message
+
+on go
+  local 3
+  put it after log
+  try
+    local "three"
+  catch e
+    put the code of e after log
+  end try
+end go

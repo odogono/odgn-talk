@@ -1,0 +1,6 @@
+# Unblessed: Clause Shape load diagnostics (#2136); first blessing awaits human review.
+> load negated identity=a8ef282d34de2e72c15a0de52ceb0df30dba1b95161412e1f0d8ba603a9bf41b
+diag negated code="negated shape" pos=1:16
+> load unknown identity=3d095c977e3ce2cb06433283fa300965e16b53d3a284e8bdbb7df9d0ca49f7da
+diag unknown code="unknown kind" pos=1:19
+> vars

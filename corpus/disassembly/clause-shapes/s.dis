@@ -1,0 +1,81 @@
+unit s script
+constants
+  0 "amount"
+  1 "number"
+  2 ["key", "shape"]
+  3 true
+  4 ["map", "open"]
+  5 nothing
+definitions
+  0 Invoice
+bodies
+  0 init initialiser () locals 1 0000..0008
+  1 handler first clause 1 (inv) locals 2 0009..0017
+  2 handler lone clause 1 (inv) locals 2 0018..0026
+  3 handler handle clause 1 (…, n) locals 4 0027..0047
+  4 handler move:to: clause 1 (item, place) locals 3 0048..0058
+code
+  0000 4:1 const 0 ; "amount"
+  0001 4:1 const 1 ; "number"
+  0002 4:1 map 2 2 ; ["key", "shape"]
+  0003 4:1 list 1
+  0004 4:1 const 3 ; true
+  0005 4:1 map 4 2 ; ["map", "open"]
+  0006 4:1 store-definition Invoice
+  0007 1:1 const 5 ; nothing
+  0008 1:1 return
+  0009 6:14 load 1 ; inv
+  0010 6:14 load-definition Invoice
+  0011 6:14 call-builtin conforms 2
+  0012 6:14 branch-false 0017
+  0013 7:10 load 1 ; inv
+  0014 7:3 return
+  0015 8:1 const 5 ; nothing
+  0016 8:1 return
+  0017 8:1 clause-fail
+  0018 10:19 load 1 ; inv
+  0019 10:23 load-definition Invoice
+  0020 10:23 call-builtin conforms 2
+  0021 10:19 branch-false 0026
+  0022 11:10 load 1 ; inv
+  0023 11:3 return
+  0024 12:1 const 5 ; nothing
+  0025 12:1 return
+  0026 12:1 clause-fail
+  0027 14:11 load 1 ; (1)
+  0028 14:11 test-map 0047
+  0029 14:11 load 1 ; (1)
+  0030 14:11 map-get "amount" 0047
+  0031 14:20 store 3 ; a
+  0032 14:23 load 1 ; (1)
+  0033 14:23 load-definition Invoice
+  0034 14:23 call-builtin conforms 2
+  0035 14:23 branch-false 0047
+  0036 14:40 load 2 ; n
+  0037 14:40 is-kind number
+  0038 14:40 branch-false 0047
+  0039 14:58 load 3 ; a
+  0040 14:62 load 2 ; n
+  0041 14:60 greater
+  0042 14:58 branch-false 0047
+  0043 15:10 load 3 ; a
+  0044 15:3 return
+  0045 16:1 const 5 ; nothing
+  0046 16:1 return
+  0047 16:1 clause-fail
+  0048 18:14 load 1 ; item
+  0049 18:14 is-kind text
+  0050 18:14 branch-false 0058
+  0051 18:33 load 2 ; place
+  0052 18:33 is-kind number
+  0053 18:33 branch-false 0058
+  0054 19:10 load 2 ; place
+  0055 19:3 return
+  0056 20:1 const 5 ; nothing
+  0057 20:1 return
+  0058 20:1 clause-fail
+unwind
+  0009..0012 guard -> 0017 depth 0
+  0018..0021 guard -> 0026 depth 0
+  0027..0042 guard -> 0047 depth 0
+  0048..0053 guard -> 0058 depth 0

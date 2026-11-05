@@ -305,6 +305,7 @@ export type Parameter = {
   name: SemanticName;
   pos: Pos;
 };
+export type ClauseShape = { kind: string; pos: Pos };
 export type Handler = {
   body: Stmt[];
   deciding: boolean;
@@ -322,6 +323,8 @@ export type Handler = {
   pos: Pos;
   private?: boolean;
   scope: number;
+  /** Each parameter's Clause Shape, `p is a S`, or null (ADR 0171). */
+  shapes: (ClauseShape | null)[];
 };
 export type Function = {
   /** The function's own binding, which calls and bare names resolve to. */
@@ -1219,6 +1222,7 @@ const handler = (node: SemanticNode, of: Of): Handler => {
   // `on any message m`: the Fallback Handler (ADR 0064).
   const fallback = isToken(children[1], 'any');
   const params: Pattern[] = [];
+  const shapes: (ClauseShape | null)[] = [];
   let guard: Guard | null = null;
   let during: SemanticName | null = null;
   let body: Stmt[] = [];
@@ -1230,6 +1234,15 @@ const handler = (node: SemanticNode, of: Of): Handler => {
     if (child.kind === 'node') {
       if (child.rule === 'Pattern') {
         params.push(of<Pattern>(child));
+        shapes.push(null);
+      } else if (child.rule === 'Kind') {
+        // The Clause Shape of the parameter before it; `is` is two or three
+        // leaves back, after any `not` (ADR 0171).
+        const is = isToken(children[i - 2], 'is') ? i - 2 : i - 3;
+        shapes[shapes.length - 1] = {
+          kind: of<string>(child),
+          pos: pos(children[is]!),
+        };
       } else if (child.rule === 'Block') {
         body = of<Stmt[]>(child);
       }
@@ -1263,6 +1276,7 @@ const handler = (node: SemanticNode, of: Of): Handler => {
     fallback,
     scope: node.scope,
     params,
+    shapes,
     guard,
     body,
     finally: fin,

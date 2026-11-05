@@ -1,0 +1,20 @@
+# clause-shapes: pins chapter 8's lowering of Clause Shapes (ADR 0171).
+# After every parameter pattern, each Clause Shape loads its argument's slot,
+# tests it as the expression `is a` does (`call-builtin conforms 2` after
+# loading a named Shape, or `is-kind`) and branches to `clause-fail`, at the
+# head's `is`, inside the clause's guard region. `first` and `lone` show
+# that a Clause Shape lowers to exactly what a Guard of only `where p is a S`
+# does, so both charge the same Fuel.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+
+[[disassembly]]
+unit = "s"
+expected = "s.dis"

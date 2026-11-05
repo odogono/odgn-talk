@@ -1,0 +1,20 @@
+-- s.talk: Clause Shapes on a name, on a pattern, before a label and beside
+-- a Guard, and the lone Guard each one equals.
+
+shape Invoice is {amount: number, ...}
+
+on first inv is an Invoice
+  return inv
+end first
+
+on lone inv where inv is an Invoice
+  return inv
+end lone
+
+on handle {amount: a} is an Invoice, n is a number where a > n
+  return a
+end handle
+
+on move item is a text to place is a number
+  return place
+end move

@@ -1056,15 +1056,15 @@ class Parser {
       const t = this.peek(0);
       const labels: string[] = [];
       if (fallback) {
-        params.push((yield this.pattern()) as Node);
+        params.push((yield this.headParam()) as Node);
       } else if (!(
         t.t === 'nl' ||
         t.t === 'eof' ||
         this.isWord(t, 'where') ||
         this.isOp(t, ',')
       )) {
-        params.push((yield this.pattern()) as Node);
-        yield this.labelled(() => this.pattern(), labels, params);
+        params.push((yield this.headParam()) as Node);
+        yield this.labelled(() => this.headParam(), labels, params);
       }
       // Parameters, then a Guard, then suffixes. After a comma, a suffix word
       // is always a suffix, so it can't be a parameter name there.
@@ -1099,7 +1099,7 @@ class Parser {
         } else if (inParams && labels.length) {
           this.fail(w, 'a suffix (no commas between labelled parameters)');
         } else if (inParams) {
-          params.push((yield this.pattern()) as Node);
+          params.push((yield this.headParam()) as Node);
         } else {
           this.fail(
             w,
@@ -1133,6 +1133,27 @@ class Parser {
     } finally {
       this.leave(frame);
     }
+  }
+
+  // A Handler parameter: a pattern, then an optional Clause Shape, `is a`
+  // and a kind or Shape name (ADR 0171). Its words are the Handler's own
+  // leaves after the Pattern. `is not a` parses; the loader refuses it.
+  private *headParam(): ParseTask<Node> {
+    const p = (yield this.pattern()) as Node;
+    if (!this.atOperatorWord('is')) {
+      return p;
+    }
+    this.next('operator');
+    if (this.atWord('not')) {
+      this.next();
+    }
+    const a = this.peek(0);
+    if (!this.isWord(a, 'a', 'an')) {
+      this.fail(a, '`a` or `an` and a kind or Shape name');
+    }
+    this.next();
+    yield this.kind();
+    return p;
   }
 
   private *parameter(): ParseTask<{ default: Node | null; name: string }> {
