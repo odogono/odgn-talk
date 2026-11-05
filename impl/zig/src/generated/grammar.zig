@@ -194,6 +194,7 @@ pub const grammar: GrammarTable = .{
             .word = "a",
             .positions = &.{
                 "after `is` or `is not`, before a kind",
+                "after `is` or `is not` following a Handler parameter (a Clause Shape)",
                 "after `can be`",
                 "before a kind in a Text Pattern (a Typed Element)",
                 "at the start of a Shape Term, before `quantity of`",

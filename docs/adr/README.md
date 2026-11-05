@@ -164,3 +164,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0167: Folio's Instruments window edits authored parameters live during Play](0167-folios-instruments-window-edits-authored-parameters-live-during-play.md)
 - [0169: Library exports carry Documentation Examples that `northtalk test` replays](0169-library-exports-carry-documentation-examples-that-northtalk-test-replays.md)
 - [0170: Sessions add Scripts, so Documentation Examples reach a Script's Handlers by message](0170-sessions-add-scripts-so-documentation-examples-reach-handlers-by-message.md)
+- [0171: A Handler Clause may require a Shape of its arguments](0171-a-handler-clause-may-require-a-shape-of-its-arguments.md)

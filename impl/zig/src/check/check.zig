@@ -30,6 +30,7 @@ pub const Code = enum {
     duplicate_key,
     unknown_kind,
     bad_shape,
+    negated_shape,
     no_conversion,
     bad_number,
     pattern_too_large,

@@ -45,7 +45,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 
 | Contextual keyword | Positions |
 | --- | --- |
-| `a` | after `is` or `is not`, before a kind; after `can be`; before a kind in a Text Pattern (a Typed Element); at the start of a Shape Term, before `quantity of` |
+| `a` | after `is` or `is not`, before a kind; after `is` or `is not` following a Handler parameter (a Clause Shape); after `can be`; before a kind in a Text Pattern (a Typed Element); at the start of a Shape Term, before `quantity of` |
 | `all` | straight after `wait for` (a Join) |
 | `an` | as `a` |
 | `any` | after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler) |
@@ -206,8 +206,12 @@ Handler        ::= 'on' ( 'any' 'message' FallbackHead | MessageName HandlerHead
                    ( 'finally' NL Block )? 'end' ( 'any' 'message' | Name )? NL
                    /* `any message` is the Fallback Handler, and closes only it; a Name
                       after `end`, if present, is the Handler's name */
-HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
-FallbackHead   ::= Pattern Guard? ( ',' Suffix )*
+HandlerHead    ::= ( Param ( ( ',' Param )* | ( Label Param )+ ) )? Guard? ( ',' Suffix )*
+FallbackHead   ::= Param Guard? ( ',' Suffix )*
+Param          ::= Pattern ClauseShape?
+ClauseShape    ::= 'is' 'not'? Article Kind
+                   /* whether the Kind is a kind or a named Shape is a load rule,
+                      and `is not` is a load error */
 Label          ::= Name | 'to'
                    /* an Argument Label: any Name but those grammar.toml's [labels]
                       excludes, or one of its Reserved Words; never the start of an
@@ -220,10 +224,11 @@ MessageName    ::= Name  /* not `all` */
 <!-- end -->
 
 - **Handler and message names** are one Name each (`beforeClose`), and so is each part of a Selector. `all` can't name a Handler, a message or an event, since `wait for all` starts a Join.
-- **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern. The parameters are a comma-separated list, or one parameter followed by [Argument Labels](#argument-labels), each with its parameter.
+- **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern, optionally followed by a Clause Shape. The parameters are a comma-separated list, or one parameter followed by [Argument Labels](#argument-labels), each with its parameter.
+- **Clause Shapes:** `is a` or `is an` and a kind or Shape name may follow a parameter's pattern, before the next comma or Argument Label: `on move item is a Thing to place is a Place`. `is` is reserved, so after a pattern it always starts one, and `a` or `an` must follow it, or `not` and then `a` or `an`. Which name is a kind or a Shape, and that `is not` is refused, are load rules ([chapter 5](05-handlers-messages-and-scheduling.md#handlers-and-dispatch), [ADR 0171](../docs/adr/0171-a-handler-clause-may-require-a-shape-of-its-arguments.md)).
 - **Suffixes:** after a comma in a head, `queued`, `dropping`, `replacing` and `deciding` are always suffixes, so none of them can be a parameter name there. `during` followed by a Name is the `during` suffix. Which suffixes may combine is a load rule ([chapter 5](05-handlers-messages-and-scheduling.md)).
 - **The end:** a Name after `end`, if present, must be the Handler's name, which for a labelled Handler is its first word (`end move`). If an inner `repeat` is still open, `end handlerName` is a syntax error at `handlerName`; it cannot close through the `repeat`.
-- **The Fallback Handler:** `on any message m` declares a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler). `any` followed by `message` is decided on two tokens, so `on any x` still declares a Handler named `any`. Its head is exactly one Destructuring pattern, with no labels, then the usual Guard and suffixes. It ends with `end any message` or a bare `end`, and `end any message` closes nothing else ([ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
+- **The Fallback Handler:** `on any message m` declares a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler). `any` followed by `message` is decided on two tokens, so `on any x` still declares a Handler named `any`. Its head is exactly one Destructuring pattern, with no labels, and an optional Clause Shape, then the usual Guard and suffixes. It ends with `end any message` or a bare `end`, and `end any message` closes nothing else ([ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
 - **`finally`** may end a Handler's body, as sugar for a `try` around it ([chapter 6](06-errors-and-limits.md)).
 
 > **Example.**
@@ -823,6 +828,7 @@ A local Handler may share a Script Variable's or Constant's name without a `name
 | `duplicate key` | A map literal names a key twice | the second key | [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `unknown kind` | A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, nor, after `is a`, a named Shape in scope, or a Text Pattern's `a` or `an` is followed by a kind other than `number` | the kind name | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `bad shape` | A Shape declaration names a Name that is no kind, Unit or named Shape in scope, a Unit that doesn't parse, or a Unit Kind or, with a Host Manifest, an Object Kind that doesn't exist, repeats a key in one Shape Map, reaches itself through named Shapes, or is named like a kind, `any`, `value`, a Unit or a Unit Kind (chapter 7) | the offending token: the Name, Unit or key, the first Name on a cycle in source order, or the declared name | [ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md), [#2055](https://github.com/odogono/odgn-talk/issues/2055) |
+| `negated shape` | A Handler parameter's Clause Shape is written `is not a`, which a Guard spells instead (chapter 5) | `not` | [ADR 0171](../docs/adr/0171-a-handler-clause-may-require-a-shape-of-its-arguments.md), [#2056](https://github.com/odogono/odgn-talk/issues/2056) |
 | `no conversion` | `as` names a kind that has no conversion, or a Text Pattern's `as number` follows an element that can match something other than ASCII digits or `a number` | `as` | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `bad number` | A number literal has more than 34 significant digits, a magnitude of 10^34 or more, or more than 6176 fraction digits | the literal | [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `pattern too large` | A Text Pattern with no splices compiles to a program over the Script's `patternSize`, counting every copy of a counted repetition | the pattern's opening `<` | [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [#92](https://github.com/odogono/odgn-talk/issues/92), [#115](https://github.com/odogono/odgn-talk/issues/115) |

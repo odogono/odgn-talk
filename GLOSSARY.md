@@ -565,6 +565,10 @@ _Avoid_: keyword (that means a Reserved Word or a contextual keyword), named arg
 A message's name together with its Argument Labels, written `move:to:`. Two Handlers with different Selectors handle different messages, and a message with no labels keeps its plain name.
 _Avoid_: signature, method name
 
+**Clause Shape**:
+`is a` or `is an` and a kind or named Shape after a Handler Clause's parameter, as in `on handle inv is an Invoice`. It is a Guard: an argument that doesn't fit skips the clause.
+_Avoid_: type annotation, parameter type
+
 **Handler Clause**:
 One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
 _Avoid_: overload

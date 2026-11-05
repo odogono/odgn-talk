@@ -2,3 +2,45 @@
 -- Only `bun tools/grammar/check.ts` reads this file, so the Cores' fixture
 -- tests don't fail on it. Each case moves into broken.talk, or its source
 -- into a sketch, when both Cores parse it.
+
+-- case: a Clause Shape after a parameter (ADR 0171)
+-- expect: parses
+on handle inv is an Invoice where the amount of inv > 1000
+  send review with inv to approvals
+end handle
+
+-- case: a Clause Shape before an Argument Label keeps the Selector
+-- expect: parses
+on move item is a Thing to place is a Place
+  return place
+end move
+
+-- case: Clause Shapes on comma-separated parameters, one a kind
+-- expect: parses
+on scale factor is a number, shape
+  return factor
+end scale
+
+-- case: a Clause Shape after a Destructuring pattern and its `as`
+-- expect: parses
+on handle {amount: a} as inv is an Invoice, queued
+  return a
+end handle
+
+-- case: a Clause Shape on a Fallback Handler
+-- expect: parses
+on any message {name: n} is a Request
+  pass any message
+end any message
+
+-- case: `is not a` in a head parses, and the loader refuses it
+-- expect: parses
+on handle inv is not an Invoice
+  return inv
+end handle
+
+-- case: a Clause Shape needs `a` or `an`
+-- expect: unexpected token at 1:18
+on handle inv is Invoice
+  return inv
+end handle

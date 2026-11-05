@@ -107,6 +107,15 @@ pub const diagnostics: DiagnosticsTable = .{
             },
         },
         .{
+            .code = "negated shape",
+            .raised_when = "A Handler parameter's Clause Shape is written `is not a`, which a Guard spells instead (chapter 5)",
+            .at = "`not`",
+            .sources = &.{
+                "ADR 0171",
+                "#2056",
+            },
+        },
+        .{
             .code = "no conversion",
             .raised_when = "`as` names a kind that has no conversion, or a Text Pattern's `as number` follows an element that can match something other than ASCII digits or `a number`",
             .at = "`as`",

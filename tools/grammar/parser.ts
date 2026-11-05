@@ -644,6 +644,28 @@ export class Parser {
     );
   }
 
+  // A Handler parameter: a Destructuring pattern, then an optional Clause
+  // Shape. `is` is reserved, so after a pattern it always starts one; that
+  // the Kind is a kind or a named Shape, and that `not` is refused, are load
+  // rules (ADR 0171).
+  param(): Node {
+    const pattern = this.pattern();
+    if (!this.atOperatorWord('is')) {
+      return pattern;
+    }
+    const is = this.next('operator');
+    let neg = false;
+    if (this.atWord('not')) {
+      this.next();
+      neg = true;
+    }
+    if (!this.atWord('a', 'an')) {
+      this.fail(this.peek(0), '`a` or `an` before a kind or Shape');
+    }
+    this.next();
+    return this.at(is, { k: 'Param', pattern, neg, shape: this.kind() });
+  }
+
   handler(): Node {
     const on = this.next();
     // `on any message m`: the Fallback Handler, with exactly one pattern.
@@ -662,15 +684,15 @@ export class Parser {
     const t = this.peek(0);
     const labels: string[] = [];
     if (fallback) {
-      params.push(this.pattern());
+      params.push(this.param());
     } else if (!(
       t.t === 'nl' ||
       t.t === 'eof' ||
       this.isWord(t, 'where') ||
       this.isOp(t, ',')
     )) {
-      params.push(this.pattern());
-      this.labelled(() => this.pattern(), labels, params);
+      params.push(this.param());
+      this.labelled(() => this.param(), labels, params);
     }
     // Parameters, then a Guard, then suffixes. After a comma, a suffix word
     // is always a suffix, so it can't be a parameter name there.
@@ -704,7 +726,7 @@ export class Parser {
       } else if (inParams && labels.length) {
         this.fail(w, 'a suffix (no commas between labelled parameters)');
       } else if (inParams) {
-        params.push(this.pattern());
+        params.push(this.param());
       } else {
         this.fail(
           w,

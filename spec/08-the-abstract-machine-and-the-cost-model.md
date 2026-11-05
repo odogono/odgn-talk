@@ -741,7 +741,7 @@ A Handler ending in `finally` is this with no catch clauses around its body.
 
 A Handler Clause's body lowers to:
 
-1. **A guard region:** each parameter pattern that isn't a plain name, tested against its argument's slot and bound directly, then the Guard with a failure going to F.
+1. **A guard region:** each parameter pattern that isn't a plain name, tested against its argument's slot and bound directly, then the Guard with a failure going to F. Clause Shapes join the Guard in front of it, from left to right, as `a is a S and …`, where `a` loads the argument's slot. A pattern leaves that slot unnamed, so a Shape after it tests the whole argument. So a clause lowers, and costs, as the same Guard written out ([ADR 0171](../docs/adr/0171-a-handler-clause-may-require-a-shape-of-its-arguments.md)).
 2. The body, or its `try` with its `finally` block.
 3. `const nothing` `return`, then F: `clause-fail`.
 

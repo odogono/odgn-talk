@@ -746,6 +746,30 @@ const boundNames = (stmts: Node[]): string[] => {
   return bc.locals.slice(1);
 };
 
+// A clause's Guard with its Clause Shapes in front: `p is a S and … and g`,
+// left to right, each testing its parameter's whole argument, so it costs
+// what the written Guard would (ADR 0171).
+const clauseGuard = (d: Node, argNames: string[]): Node | null => {
+  const tests: Node[] = d.params.flatMap((p: Node, i: number) =>
+    p.k === 'Param'
+      ? [
+          {
+            k: 'is a',
+            neg: p.neg,
+            kind: p.shape,
+            l: { k: 'Name', name: argNames[i], line: p.line, col: p.col },
+            line: p.line,
+            col: p.col,
+          },
+        ]
+      : [],
+  );
+  return [...tests, ...(d.guard ? [d.guard] : [])].reduce<Node | null>(
+    (l, r) => (l ? { k: 'and', l, r, line: r.line, col: r.col } : r),
+    null,
+  );
+};
+
 export class BodyCompiler {
   code: Instr[] = [];
   unwind: Unwind[] = [];
@@ -1227,21 +1251,21 @@ export class BodyCompiler {
     // Each parameter arrives in slots 1 to n. A name is its own slot, and any
     // other pattern tests the argument's slot and binds its names directly,
     // since a clause's frame is fresh (chapter 8).
-    const argSlots = d.params.map((p: Node) =>
-      p.k === 'Bind'
-        ? this.declare(p.name)
-        : this.declare(`(argument ${this.locals.length})`),
+    const pats: Node[] = d.params.map((p: Node) =>
+      p.k === 'Param' ? p.pattern : p,
     );
-    this.body.params = d.params.map((p: Node) =>
-      p.k === 'Bind' ? p.name : '…',
+    const argNames = pats.map((p: Node, i: number) =>
+      p.k === 'Bind' ? p.name : `(argument ${i + 1})`,
     );
-    d.params
+    const argSlots = argNames.map((n: string) => this.declare(n));
+    this.body.params = pats.map((p: Node) => (p.k === 'Bind' ? p.name : '…'));
+    pats
       .filter((p: Node) => p.k !== 'Bind')
       .flatMap(patternNames)
       .forEach((n: string) => this.declare(n));
     this.prescan(d.body);
     const failed = this.label();
-    this.params(d.params, argSlots, d.guard, failed, true);
+    this.params(pats, argSlots, clauseGuard(d, argNames), failed, true);
     if (d.finally) {
       this.tryBlock({
         k: 'Try',

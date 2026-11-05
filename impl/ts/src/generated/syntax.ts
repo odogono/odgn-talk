@@ -758,6 +758,7 @@ export const diagnosticCodes = [
   "duplicate key",
   "unknown kind",
   "bad shape",
+  "negated shape",
   "no conversion",
   "bad number",
   "pattern too large",

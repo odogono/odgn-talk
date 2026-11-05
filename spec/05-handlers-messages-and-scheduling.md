@@ -28,11 +28,12 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 ## Handlers and dispatch
 
 - **Clauses:** every `on m` Handler in a Script is a Handler Clause for the message `m`, and a message's clauses are tried in source order. A message is named by its Selector: `on move piece to square` is a clause for `move:to:`, never for `move` ([chapter 2](02-grammar.md#argument-labels)).
-- **Dispatch** tries each clause in turn. A clause matches when the message has as many arguments as the clause has parameters, each argument passes its parameter's Destructuring pattern, and then the Guard, if there is one, gives `true`. The first clause that matches runs, with its parameters bound.
+- **Dispatch** tries each clause in turn. A clause matches when the message has as many arguments as the clause has parameters, each argument passes its parameter's Destructuring pattern, then each argument with a Clause Shape fits it, from left to right, and then the Guard, if there is one, gives `true`. The first clause that matches runs, with its parameters bound.
 - **No match:** if no clause matches, the Script's [Fallback Handler](#the-fallback-handler), if it has one, gets the message next. If nothing matches there either, the Run ends as `unhandled`, and the message goes on along the [Message Path](#the-message-path).
 - **Charged to the Run:** dispatch is the Run's own code, so every clause it tries is charged to it by the Cost Model ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)), even when no clause matches.
 - **Never suspends:** dispatch, Guards and the walk along the Message Path never suspend.
 - **Guards** may call Built-ins, and nothing else: no Script or Library function and no Function Value. Of a Host Object's properties, a Guard may read only its id (`where the id of item is "object-slot-183"`), and it may call `isDisposed` and `objectKind`. The loader checks this.
+- **Clause Shapes:** `is a S` or `is an S` after a parameter requires that its argument fits `S`, a kind, `integer`, a Unit or a named Shape in scope, as `is a` does anywhere ([ADR 0171](../docs/adr/0171-a-handler-clause-may-require-a-shape-of-its-arguments.md)). It is a Guard: it lowers as `a is a S and …` in front of the written Guard, where `a` is the whole argument, even after a Destructuring pattern (`on handle {amount: a} is an Invoice`). So an argument that doesn't fit skips the clause, a plain call with no matching clause raises `no match`, and the clause costs what that Guard written out costs. Any other name is `unknown kind`, and `is not a` in a head is the load error `negated shape`: write it as a Guard. An error that blames the sender instead is left to [#2057](https://github.com/odogono/odgn-talk/issues/2057).
 - **An error in a Guard** skips the clause, and dispatch goes on to the next one. `try`, `on error` and the reports never see it. The Trace records the skip and the error's code.
 - **Imported Handlers are never entry points:** a message never runs a Handler a Script imported from a Library, and a Library never joins a Message Path ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 
@@ -49,6 +50,22 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 > ```
 >
 > An invoice for 2000 runs the first clause. One for 50 fails the first clause's Guard and runs the second.
+
+> **Example.**
+>
+> ```text
+> shape Invoice is {amount: GBP, ref: optional text}
+>
+> on handle inv is an Invoice where the amount of inv > 1000 GBP
+>   send review with inv to approvals
+> end handle
+>
+> on handle other
+>   pass handle
+> end handle
+> ```
+>
+> `{amount: 2000 GBP}` runs the first clause. `{amount: 2000}` doesn't fit `Invoice`, so it runs the second, which passes it up the Message Path.
 
 ### Calling a Handler by name
 
@@ -96,7 +113,7 @@ A Script's Fallback Handler, `on any message m`, takes the messages none of its 
 - **When it runs:** after dispatch has tried every clause for the message's Selector and none matched, including when the Script has no Handler for it, and before the message climbs. An explicit `pass m` in a named clause skips the Fallback and climbs at once.
 - **Which messages:** a message sent to an object or to a Script, by a `send`, a Host Delivery or Request, or a climb, may reach it, in each Script on its path. A [Broadcast](#broadcast), a [Decision](#decisions) and an `error` message never do, anywhere on their path: they dispatch as if the Script had no Fallback. Neither does a local Command Call, which still raises `no match`, nor a Function Value call, which has no clauses.
 - **The message:** `m` is bound to the map `{name, args}`, as `wait for`'s `it` gives it: the Selector as text, and the arguments as a list.
-- **Clauses:** a Fallback may have several clauses, each with one Destructuring pattern on the message map and an optional Guard, tried in source order after the named clauses, by the same rules. If none matches, the Run ends `unhandled`. Each clause may have a [Queueing Policy](#queueing-policies). `, deciding` and `, during` on a Fallback are load errors (`bad suffixes`), and so is a Fallback in a Library (`not in a library`).
+- **Clauses:** a Fallback may have several clauses, each with one Destructuring pattern on the message map, an optional [Clause Shape](#handlers-and-dispatch) on the whole map and an optional Guard, tried in source order after the named clauses, by the same rules. If none matches, the Run ends `unhandled`. Each clause may have a [Queueing Policy](#queueing-policies). `, deciding` and `, during` on a Fallback are load errors (`bad suffixes`), and so is a Fallback in a Library (`not in a library`).
 - **Ending the message:** a Fallback Run that doesn't pass ends the message, with the Run's outcome, and its result is the [reply](#replies). `pass any message` ends the Run as `completed` and sends the message on up the path unchanged, as `pass` does. In a Fallback, `pass` must name `any message`, and `pass any message` outside one is a load error (`wrong message`).
 - **Forwarding:** with a [computed name](#sending) and a spread, a Fallback can forward a message whose Selector and argument count it doesn't know.
 
@@ -207,7 +224,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **A timeout:** `wait for m or d` stops waiting after the exact duration `d`, with the same deadline rule as `wait`, and leaves Nothing in `it`. A `wait for` with no timeout can wait for ever. `MaxWait` doesn't apply to it.
 - **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after the closing `end` (optionally `end wait`). A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.
 - **A Guard:** `wait for m where g` matches only a message for which `g` holds, as a `when` branch's Guard does. It goes after any timeout: `wait for m or d where g` ([ADR 0109](../docs/adr/0109-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)).
-- **Guards** on a one-line `wait for` and on `when` branches follow the rules for Handler Guards. An error in one means the wait, or the branch, doesn't match.
+- **Guards** on a one-line `wait for` and on `when` branches follow the rules for Handler Guards. An event takes no Clause Shape, since its Guard can say `where m is an X` ([ADR 0171](../docs/adr/0171-a-handler-clause-may-require-a-shape-of-its-arguments.md)). An error in one means the wait, or the branch, doesn't match.
 - **Decisions:** a `wait for` that takes a Decision allows it at once ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **In Libraries:** a `wait for` in Library code observes the Script whose Run executes it, through any number of Library calls. A `from` there may not name a Script, since a Library is compiled apart from any Group (`not in a library`), but may take a Host Object as a value ([ADR 0113](../docs/adr/0113-library-code-may-wait-for-messages-to-the-calling-runs-script.md)).
 
