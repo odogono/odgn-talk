@@ -1,14 +1,16 @@
 // The Instruments window (#2049, #2079): every Project Instrument as a list
 // with a `+ ▾` menu to add or duplicate one and `−` to remove it, then the
 // selected one's name, voices and parameters in collapsible groups of
-// compact rows. Edit only, and independent of the Page's selection.
+// compact rows, with ▶ and the computer keyboard to audition it (#2080).
+// Edit only, and independent of the Page's selection.
 import type { ReadonlySignal, Signal } from '@preact/signals';
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { isTyping } from './dom';
 import type { DeepReadonly } from './readonly';
 import type { StackEditor } from './editing';
 import { field } from './elements/controls';
-import type { Instrument } from './model';
+import type { Instrument, Project } from './model';
 import type { InstrumentChange } from './tree/project-tree';
 import type { ParameterDefinition, ParameterValue } from './instruments/kind';
 import {
@@ -22,6 +24,24 @@ import {
 import { parameterTextNumber } from './instruments/parameter-units';
 import { INSTRUMENT_KINDS, instrumentKindNames } from './instruments/registry';
 import { samplerEngine } from './instruments/sampler';
+import {
+  auditionMessages,
+  auditionSound,
+  canAudition,
+  isSampler,
+  KEYBOARD_OCTAVE,
+  keyboardNote,
+  keyboardOctave,
+  noteOff,
+  noteOn,
+  projectSounds,
+} from './instruments/audition';
+import {
+  holdInstruments,
+  previewInstruments,
+  type HeldPreview,
+  type SoundBytes,
+} from './instruments/preview';
 import { pageAddOns } from './add-ons/page';
 import { offeredInstrumentKinds } from './add-ons/offered';
 
@@ -32,11 +52,15 @@ type InstrumentsProps = {
   change(id: number, change: InstrumentChange): void;
   duplicate(id: number): void;
   editor: StackEditor;
+  /** An audition that can't sound, such as a sound that won't decode. */
+  onError(message: string): void;
   /** Bumped by the shell's redraw, such as after undo or read-only. */
   redraw: ReadonlySignal<number>;
   remove(id: number): void;
   /** The selected Instrument's id; the first one when unset or gone. */
   selected: Signal<number | undefined>;
+  /** A sound asset's bytes, for a sampler's audition. */
+  soundBytes: SoundBytes;
 };
 
 /** `envelopePeriod` as `Envelope period`. */
@@ -89,6 +113,8 @@ type RowProps = {
   definition: ParameterDefinition;
   disabled: boolean;
   name: string;
+  /** After a slider is let go or a typed value committed. */
+  released(): void;
   /** Sets the parameter, or resets it to its default. */
   set(value: ParameterValue): void;
   value: ParameterValue;
@@ -99,7 +125,14 @@ type RowProps = {
  * ⇧ makes a drag or arrow key ten times finer, and a double-click or
  * ⌥-click resets it. It commits once, when the drag ends.
  */
-const Slider = ({ definition, disabled, name, set, value }: RowProps) => {
+const Slider = ({
+  definition,
+  disabled,
+  name,
+  released,
+  set,
+  value,
+}: RowProps) => {
   const number = definition as NumberParameter;
   // The drag under way: where the slider is and the pointer's last x.
   const [drag, setDrag] = useState<{ position: number; x: number } | undefined>(
@@ -195,6 +228,7 @@ const Slider = ({ definition, disabled, name, set, value }: RowProps) => {
         if (drag) {
           setDrag(undefined);
           set(sliderValue(number, drag.position));
+          released();
         }
       }}
       role="slider"
@@ -207,7 +241,14 @@ const Slider = ({ definition, disabled, name, set, value }: RowProps) => {
 };
 
 /** The typed value beside a slider, which takes a Quantity such as `5 ms`. */
-const ValueField = ({ definition, disabled, name, set, value }: RowProps) => {
+const ValueField = ({
+  definition,
+  disabled,
+  name,
+  released,
+  set,
+  value,
+}: RowProps) => {
   const number = definition as NumberParameter;
   const text = formatParameter(number, Number(value));
   return (
@@ -222,6 +263,7 @@ const ValueField = ({ definition, disabled, name, set, value }: RowProps) => {
         const typed = parameterTextNumber(number, input.value);
         if (typed !== undefined) {
           set(typed);
+          released();
         }
         // A refused or unreadable value goes back to what's stored.
         input.value = text;
@@ -434,7 +476,200 @@ const selectInstrument = (
   selected.value = id;
 };
 
-const InstrumentsPanel = (props: InstrumentsProps) => {
+type AuditionProps = {
+  /** The sound chosen for each sampler, by Instrument id. */
+  choose(sound: string): void;
+  chosen: ReadonlyMap<number, string>;
+  instrument: DeepReadonly<Instrument>;
+  keyboard: boolean;
+  play(): void;
+  project: DeepReadonly<Project>;
+  replay: boolean;
+  setKeyboard(on: boolean): void;
+  setReplay(on: boolean): void;
+};
+
+const NO_SOUNDS = 'The Project has no sounds for the sampler to play';
+
+/** ▶, a sampler's sound, the keyboard button and the replay toggle. */
+const Audition = (props: AuditionProps) => {
+  const { instrument, project } = props;
+  const sampler = isSampler(instrument);
+  const sounds = sampler ? projectSounds(project) : [];
+  const sound = auditionSound(project, props.chosen.get(instrument.id!));
+  const silent = sampler && sound === undefined;
+  return (
+    <div className="audition">
+      <button
+        aria-label="Play a test note"
+        data-audition=""
+        disabled={silent}
+        onClick={props.play}
+        title={silent ? NO_SOUNDS : 'Play a test note'}
+        type="button"
+      >
+        ▶
+      </button>
+      {sampler && sounds.length > 0 && (
+        <select
+          aria-label="Sound to play"
+          data-audition-sound=""
+          onChange={event => props.choose(event.currentTarget.value)}
+          value={sound}
+        >
+          {sounds.map(each => (
+            <option key={each} value={each}>
+              {each}
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        aria-label="Play from the computer keyboard"
+        aria-pressed={props.keyboard}
+        data-audition-keyboard=""
+        disabled={silent}
+        onClick={() => props.setKeyboard(!props.keyboard)}
+        title={
+          silent
+            ? NO_SOUNDS
+            : 'Play from the computer keyboard: A–K white keys, W E T Y U black keys, Z and X an octave down or up'
+        }
+        type="button"
+      >
+        ⌨
+      </button>
+      <label
+        className="check"
+        title="Play the note again when a slider is let go or a value typed"
+      >
+        <input
+          checked={props.replay}
+          data-audition-replay=""
+          onChange={event => props.setReplay(event.currentTarget.checked)}
+          type="checkbox"
+        />
+        Replay
+      </label>
+    </div>
+  );
+};
+
+/**
+ * While `on`, keys pressed in `root` play the Instrument `id` through audio
+ * held open for them. It turns off when `root` or the page loses focus.
+ */
+const usePianoKeyboard = (
+  on: boolean,
+  id: number | undefined,
+  options: {
+    chosen: ReadonlyMap<number, string>;
+    editor: StackEditor;
+    off(): void;
+    onError(message: string): void;
+    root: HTMLElement;
+    soundBytes: SoundBytes;
+  },
+) => {
+  // Keys read the latestRef options without starting over.
+  const latestRef = useRef(options);
+  useEffect(() => {
+    latestRef.current = options;
+  });
+  useEffect(() => {
+    if (!on || id === undefined) {
+      return;
+    }
+    const { editor, off, root } = latestRef.current;
+    let held: HeldPreview | undefined;
+    let heldProject: unknown;
+    let octave = KEYBOARD_OCTAVE;
+    // The note each key down is playing, by key code.
+    const down = new Map<string, number>();
+    const target = () => {
+      const { project } = editor;
+      const instrument = project.instruments.find(i => i.id === id);
+      return instrument && { instrument, project };
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isTyping(event.target)
+      ) {
+        return;
+      }
+      const nextOctave = keyboardOctave(event.code, octave);
+      const note = keyboardNote(event.code, octave);
+      if (nextOctave === undefined && note === undefined) {
+        return;
+      }
+      // The page's own shortcuts don't see a played key.
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat) {
+        return;
+      }
+      if (nextOctave !== undefined) {
+        octave = nextOctave;
+        return;
+      }
+      const now = target();
+      if (note === undefined || !now || down.has(event.code)) {
+        return;
+      }
+      const { chosen, onError, soundBytes } = latestRef.current;
+      const sound = auditionSound(now.project, chosen.get(id));
+      if (isSampler(now.instrument) && sound === undefined) {
+        return;
+      }
+      // An edit since the audio opened needs audio with its parameters.
+      if (!held?.open() || heldProject !== now.project) {
+        held?.close();
+        held = holdInstruments(
+          now.project,
+          soundBytes,
+          onError,
+          sound === undefined ? [] : [sound],
+        );
+        heldProject = now.project;
+      }
+      down.set(event.code, note);
+      held.send(noteOn(now.instrument, note, sound));
+    };
+    const keyup = (event: KeyboardEvent) => {
+      const note = down.get(event.code);
+      if (note === undefined) {
+        return;
+      }
+      down.delete(event.code);
+      event.stopPropagation();
+      const now = target();
+      if (now && held?.open()) {
+        held.send(noteOff(now.instrument, note));
+      }
+    };
+    const focusout = (event: FocusEvent) => {
+      if (!root.contains(event.relatedTarget as Node | null)) {
+        off();
+      }
+    };
+    root.addEventListener('keydown', keydown);
+    root.addEventListener('keyup', keyup);
+    root.addEventListener('focusout', focusout);
+    window.addEventListener('blur', off);
+    return () => {
+      root.removeEventListener('keydown', keydown);
+      root.removeEventListener('keyup', keyup);
+      root.removeEventListener('focusout', focusout);
+      window.removeEventListener('blur', off);
+      held?.close();
+    };
+  }, [on, id]);
+};
+
+const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
   const { editor, redraw, selected } = props;
   void redraw.value;
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -446,6 +681,41 @@ const InstrumentsPanel = (props: InstrumentsProps) => {
     instruments.find(i => i.id === selected.value) ?? instruments[0];
   const kind = instrument && INSTRUMENT_KINDS.get(instrument.kind);
   useEffect(() => setHovered(undefined), [instrument?.id]);
+  // The audition's own state, which the Project doesn't keep.
+  const [chosen, setChosen] = useState<ReadonlyMap<number, string>>(
+    () => new Map(),
+  );
+  const [auditioned, setAuditioned] = useState(false);
+  const [replay, setReplay] = useState(true);
+  const [keyboard, setKeyboard] = useState(false);
+  usePianoKeyboard(keyboard && canAudition(kind), instrument?.id, {
+    chosen,
+    editor,
+    off: () => setKeyboard(false),
+    onError: props.onError,
+    root: props.root,
+    soundBytes: props.soundBytes,
+  });
+  /** Plays the selected Instrument as the Project now has it. */
+  const audition = () => {
+    const now = editor.project;
+    const current = now.instruments.find(i => i.id === instrument?.id);
+    if (!current) {
+      return;
+    }
+    const sound = auditionSound(now, chosen.get(current.id!));
+    const messages = auditionMessages(current, sound);
+    if (messages.length) {
+      setAuditioned(true);
+      previewInstruments(
+        now,
+        props.soundBytes,
+        messages,
+        props.onError,
+        sound === undefined ? [] : [sound],
+      );
+    }
+  };
   const toggleGroup = (group: string, open: boolean) => {
     const next = new Set(collapsed);
     if (open) {
@@ -575,6 +845,21 @@ const InstrumentsPanel = (props: InstrumentsProps) => {
                 />,
               )}
           </div>
+          {canAudition(kind) && (
+            <Audition
+              choose={sound =>
+                setChosen(new Map(chosen).set(instrument.id!, sound))
+              }
+              chosen={chosen}
+              instrument={instrument}
+              keyboard={keyboard}
+              play={audition}
+              project={project}
+              replay={replay}
+              setKeyboard={setKeyboard}
+              setReplay={setReplay}
+            />
+          )}
           {kind &&
             grouped(kind.parameters).map(([group, entries]) => {
               const rows = entries.map(([name, definition]) => (
@@ -584,6 +869,7 @@ const InstrumentsPanel = (props: InstrumentsProps) => {
                   key={name}
                   name={name}
                   onHover={setHovered}
+                  released={() => auditioned && replay && audition()}
                   set={value =>
                     props.change(instrument.id!, { parameter: name, value })
                   }
@@ -621,6 +907,8 @@ export const mountInstrumentsWindow = (
   container: HTMLElement,
   props: InstrumentsProps,
 ): (() => void) => {
-  render(<InstrumentsPanel {...props} />, container);
+  // Keys anywhere in the window play the computer keyboard.
+  const root = container.closest<HTMLElement>('.window') ?? container;
+  render(<InstrumentsPanel {...props} root={root} />, container);
   return () => render(null, container);
 };

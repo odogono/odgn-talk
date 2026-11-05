@@ -87,12 +87,13 @@ const key = (target: HTMLElement, init: KeyboardEventInit) =>
 const hint = () =>
   panel().querySelector('[data-instrument-hint]')!.textContent!;
 
-/** Every Instrument control in the window. */
-const controls = () => [
-  ...panel().querySelectorAll<HTMLInputElement | HTMLButtonElement>(
-    '[data-instrument] input, [data-instrument] button, [data-add-menu], [data-remove-instrument]',
-  ),
-];
+/** Every control that edits an Instrument; auditioning edits nothing. */
+const controls = () =>
+  [
+    ...panel().querySelectorAll<HTMLInputElement | HTMLButtonElement>(
+      '[data-instrument] input, [data-instrument] button, [data-add-menu], [data-remove-instrument]',
+    ),
+  ].filter(control => !control.closest('.audition'));
 
 // An Add-on's kind loads its Add-on first, so adding one finishes later.
 let shell: ReturnType<typeof mountStack>;
@@ -468,6 +469,42 @@ export const runBrowserTests = async () => {
     );
     shell.editor.readOnly = false;
     shell.redraw();
+  });
+
+  await test('▶ and the computer keyboard audition the selected Instrument (#2080)', async () => {
+    const bass = (await fieldset('bass'))!;
+    const play = bass.querySelector<HTMLButtonElement>('[data-audition]')!;
+    const keys = bass.querySelector<HTMLButtonElement>(
+      '[data-audition-keyboard]',
+    )!;
+    assert(!play.disabled && !keys.disabled, 'The synth can audition');
+    assert(
+      !bass.querySelector('[data-audition-sound]'),
+      'Only a sampler picks a sound',
+    );
+    shell.editor.readOnly = true;
+    shell.redraw();
+    await settled();
+    assert(!play.disabled, 'Auditioning works while read-only');
+    shell.editor.readOnly = false;
+    shell.redraw();
+    await settled();
+    keys.click();
+    await settled();
+    assert(
+      keys.getAttribute('aria-pressed') === 'true',
+      'The keyboard turns on',
+    );
+    window.dispatchEvent(new Event('blur'));
+    await settled();
+    assert(
+      keys.getAttribute('aria-pressed') === 'false',
+      'Losing focus turns the keyboard off',
+    );
+    const drums = (await fieldset('drums'))!;
+    const silent = drums.querySelector<HTMLButtonElement>('[data-audition]')!;
+    assert(silent.disabled, 'A sampler without sounds can’t audition');
+    assert(silent.title.includes('no sounds'), 'Its tooltip says why');
   });
 
   await test('the built worklet plays every Instrument', async () => {

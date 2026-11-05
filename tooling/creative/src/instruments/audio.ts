@@ -68,6 +68,8 @@ export type InstrumentAudioOptions = {
   onNote?(onset: NoteOnset): void;
   /** A fresh audio-clock reading for the Play worker. */
   onReading(reading: AudioReading): void;
+  /** Sounds to decode before the audio starts, besides those Scripts name. */
+  sounds?: readonly string[];
 };
 
 /**
@@ -77,7 +79,7 @@ export type InstrumentAudioOptions = {
 export const startInstrumentAudio = (
   project: DeepReadonly<Project>,
   soundBytes: (asset: DeepReadonly<Asset>) => Promise<ArrayBuffer>,
-  { onError, onLevels, onNote, onReading }: InstrumentAudioOptions,
+  { onError, onLevels, onNote, onReading, sounds = [] }: InstrumentAudioOptions,
 ): InstrumentAudio => {
   const context = new AudioContext({ latencyHint: 'interactive' });
   let node: AudioWorkletNode | undefined;
@@ -135,7 +137,10 @@ export const startInstrumentAudio = (
     try {
       // Sounds the Scripts name decode before audio starts; the rest
       // follow in the background (#1958).
-      const { named, later } = soundDecodeOrder(project);
+      const order = soundDecodeOrder(project);
+      const first = sounds.filter(name => order.later.includes(name));
+      const named = [...order.named, ...first];
+      const later = order.later.filter(name => !first.includes(name));
       const decodeNamed = (name: string) =>
         decode(name, () => soundBytes(soundAsset(name)));
       const decoding = Promise.all(named.map(decodeNamed));
