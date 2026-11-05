@@ -1,0 +1,17 @@
+# NorthTalk
+
+> NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts. Scripts read like English, run in a sandbox, and reach the outside world only through the Capabilities a Host grants.
+
+If you're writing a Script, read the tour first, then keep the idioms page open while you write. The spec has the rules. Where the other pages disagree with it, the spec wins.
+
+## Writing Scripts
+
+- [Learn NorthTalk](https://northtalk.org/learn/tour/): a tour of the whole language
+- [Common idioms](https://northtalk.org/learn/idioms/): the shortest way to do everyday tasks, such as defaults, computed keys, template fills, open-ended ranges and keeping an answer
+- [How NorthTalk runs](https://northtalk.org/learn/concepts/): Hosts, Runs, Fuel and Capabilities
+
+## Reference
+
+- [Standard Library](https://northtalk.org/stdlib/): Built-ins, Libraries and Capabilities
+- [The Specification](https://northtalk.org/reference/spec/): the rules
+- [Glossary](https://northtalk.org/reference/glossary/): defined terms

@@ -37,7 +37,7 @@ export default defineConfig({
         },
       },
       sidebar: [
-        { label: 'Learn', items: ['learn/tour', 'learn/concepts'] },
+        { label: 'Learn', items: ['learn/tour', 'learn/idioms', 'learn/concepts'] },
         {
           label: 'Standard Library',
           items: [
