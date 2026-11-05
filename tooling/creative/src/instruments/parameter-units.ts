@@ -58,3 +58,28 @@ export const parameterNumber = (
     ),
   );
 };
+
+/**
+ * A number parameter's typed text, such as `5 ms` or `0.2`, as a plain
+ * number in its Unit (#2079); undefined when it isn't a number, or names a
+ * Unit of another Kind or a parameter without one.
+ */
+export const parameterTextNumber = (
+  definition: ParameterDefinition,
+  text: string,
+): number | undefined => {
+  const match =
+    /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*(\S+)?\s*$/iu.exec(text);
+  if (!match) {
+    return undefined;
+  }
+  const number = Number(match[1]);
+  if (match[2] === undefined) {
+    return number;
+  }
+  const from = UNITS.get(match[2]);
+  const to = parameterUnit(definition);
+  return from && to && from.kind === to.kind
+    ? Number(((number * from.factor) / to.factor).toPrecision(15))
+    : undefined;
+};

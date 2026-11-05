@@ -615,11 +615,144 @@ button:disabled {
   min-width: 13rem;
   min-height: 10rem;
 }
-#instruments-panel fieldset {
+#instruments-panel .instrument {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: 0;
+  gap: 0.35rem;
+}
+#instruments-panel .instrument > .row .field:last-child:not(:first-child) {
+  flex: 0 0 3.5rem;
+}
+.instrument-tools {
+  display: flex;
+  gap: 0.25rem;
+}
+.instrument-tools button {
+  min-width: 1.8rem;
+}
+.add-menu {
+  position: relative;
+}
+.add-menu .menu {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  padding: 0.2rem;
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+}
+.add-menu .menu button {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 0.2rem 0.4rem;
+}
+.add-menu .menu button:hover:not(:disabled) {
+  background: #2f6fed;
+  color: #fff;
+}
+.add-menu .menu hr {
+  width: 100%;
+  margin: 0.15rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.add-menu kbd {
+  float: right;
+  color: var(--muted);
+  font: inherit;
+}
+.parameter-group summary {
+  color: var(--muted);
+  font-weight: 600;
+  cursor: default;
+  margin-bottom: 0.1rem;
+}
+.parameter-row {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr 3.9rem;
+  gap: 0.35rem;
+  align-items: center;
+  min-height: 1.35rem;
+}
+.parameter-row.text,
+.parameter-row.boolean {
+  grid-template-columns: 4.6rem 1fr;
+}
+.parameter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slider {
+  position: relative;
+  height: 0.9rem;
+  border: 1.5px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: ew-resize;
+}
+.slider:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 1px;
+}
+.slider[aria-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+.slider-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #2f6fed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+#instruments-panel input.slider-value {
+  padding: 0 0.2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.segmented {
+  display: flex;
+}
+.segmented button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.05rem 0;
+  font-size: 0.7rem;
+  border: 1.5px solid var(--line);
+  background: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.segmented button + button {
+  border-left: 0;
+}
+.segmented button[aria-checked='true'] {
+  background: #2f6fed;
+  color: #fff;
+}
+.parameter-row .toggle {
+  justify-self: start;
+}
+.instrument-hint {
+  display: flex;
+  gap: 0.3rem;
+  align-items: flex-start;
+  margin-top: auto;
+}
+.instrument-hint code {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  color: var(--muted);
+  font-size: 0.72rem;
+  user-select: text;
 }
 #instruments-panel {
   display: flex;
@@ -1480,7 +1613,7 @@ button:disabled {
 }
 .performance-charts svg {
   width: 100%;
-  background: var(--paper, #fff);
+  background: var(--panel);
 }
 .performance-cap {
   stroke: currentColor;
