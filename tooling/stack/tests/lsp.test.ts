@@ -2043,3 +2043,64 @@ test('northtalk.fuelCaps changes the hover’s Fuel Bound and refuses a bad cap 
     'northtalk.fuelCaps.text must be a whole number',
   );
 });
+const paddedSource = (expected: string) =>
+  [
+    '--| `t` with `fill` added at the start',
+    '--|',
+    '--| > use padLeft from strings',
+    '--| > padLeft("7", 3, "0")',
+    `--| ${expected}`,
+    'function padLeft t, width, fill = " "',
+    '  repeat while the length of t < width',
+    '    put fill & t into t',
+    '  end repeat',
+    '  return t',
+    'end padLeft',
+    '',
+  ].join('\n');
+test('a failing Documentation Example is a warning on its first differing line', () => {
+  const library = 'file:///workspace/strings.talk';
+  const { server, sent } = setup('on demo\nend demo');
+  const published = () =>
+    (
+      sent
+        .filter(
+          m =>
+            m.method === 'textDocument/publishDiagnostics' &&
+            (m.params as { uri: string }).uri === library,
+        )
+        .at(-1)!.params as Published
+    ).diagnostics.filter(d => d.code === 'documentation example');
+  server.configure({
+    sources: [
+      { uri: library, library: 'strings', text: paddedSource('"007"') },
+    ],
+  });
+  server.handle({
+    method: 'textDocument/didOpen',
+    params: {
+      textDocument: { uri: library, text: paddedSource('"07"'), version: 1 },
+    },
+  });
+  expect(published()).toEqual([
+    {
+      range: {
+        start: { line: 4, character: 0 },
+        end: { line: 4, character: 8 },
+      },
+      code: 'documentation example',
+      source: 'northtalk',
+      severity: 2,
+      message:
+        'strings.padLeft example 1: the replay differs\nexpected: "07"\nactual:   "007"',
+    },
+  ]);
+  server.handle({
+    method: 'textDocument/didChange',
+    params: {
+      textDocument: { uri: library, version: 2 },
+      contentChanges: [{ text: paddedSource('"007"') }],
+    },
+  });
+  expect(published()).toEqual([]);
+});

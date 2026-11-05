@@ -40,6 +40,7 @@ import {
 } from '@northtalk/ts';
 import { sourceForm } from '@northtalk/ts/debug';
 import { calendar, locale } from '@northtalk/tooling/builtins';
+import { docExamples, replayExample } from '@northtalk/tooling/doc-examples';
 import { readManifest, type HostManifest } from '@northtalk/tooling/lint';
 import {
   errorAt,
@@ -52,7 +53,6 @@ import {
   readProjectFile,
 } from '@northtalk/creative/project-file';
 import { runProjectTests } from '@northtalk/creative/test-runner';
-import { docExamples, runExample } from './doc-examples';
 import { differs, replayFile } from './replay';
 
 const LIBRARY_VERSION = '1';
@@ -119,11 +119,19 @@ export const runTests = async (
       if (options.only && !example.name.includes(options.only)) {
         continue;
       }
-      const outcome = runExample(
-        options.manifest!,
-        manifest!.libraries,
-        example,
-      );
+      const where = `${options.manifest!}#${library.name}`;
+      const result = replayExample(manifest!.libraries, example);
+      const outcome = result.ok
+        ? { ok: true, lines: [`ok ${where} ${example.name}`] }
+        : {
+            ok: false,
+            lines: [
+              `FAIL ${where}:${result.line} ${example.name}`,
+              ...indent(
+                result.differs ? differs(where, result) : result.problems,
+              ),
+            ],
+          };
       report(outcome.ok, outcome.lines);
     }
   }

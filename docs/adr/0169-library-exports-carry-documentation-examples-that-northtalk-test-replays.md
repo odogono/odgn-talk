@@ -34,5 +34,5 @@ function padLeft t, width, fill = " "
 - **Session defaults:** an example's session has what any session has, `console`, plus whatever its own `:grant` and `:mock` lines add. The one exception is the Clock: the runner starts it virtual at a fixed instant, as ADR 0056's runner does, which adds no line to the transcript. An example may write `:clock virtual <instant>` to choose another.
 - **Blank output:** since `--|` and `--| ` both read as a blank line, an example can't show output containing an empty line. Such an export is tested in a Test Script or a `*.transcript` instead.
 - **Reporting:** each example is one test, named `<library>.<export> example <n>`, with n counting from 1 in source order. A manifest Library's source is inline, so a failure names the manifest path, the example, and the line within the Library's source, followed by the diff `northtalk replay` prints.
-- **Editors:** the LSP changes nothing yet. Hover shows the block verbatim, and only `northtalk test` checks examples.
+- **Editors:** the LSP replays an open Library's examples as `northtalk test` does and reports each failing one as a warning on its first differing line (#2115). Hover shows the block verbatim.
 - Narrows ADR 0056: `northtalk test` replays a third kind of test.
