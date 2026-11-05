@@ -33,6 +33,7 @@ type Group struct {
 	clock          time.Time
 	pumping        bool
 	runningPump    bool // refusals land at a crossing only during a Pump
+	musicalClock   *CapabilityDef
 }
 type Script struct {
 	source string
@@ -82,8 +83,9 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	p.err = e
 	close(p.done)
 }
-func (c *Core) NewGroup(o GroupOptions) *Group {
+func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group {
 	g := &Group{core: c, options: o, libraries: map[string]*Library{}}
+	g.applyGroupOptions(options)
 	g.backend = newZigGroup(g)
 	return g
 }

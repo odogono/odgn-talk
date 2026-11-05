@@ -66,6 +66,17 @@ const kind_dimensions = blk: {
     }
     break :blk result;
 };
+fn kindMask(comptime calendar: bool, comptime musical: bool) Mask {
+    var mask: Mask = 0;
+    for (table.kind, 0..) |kind, k| if ((calendar and (kind.calendar orelse false)) or (musical and (kind.musical orelse false))) {
+        mask |= bit(k);
+    };
+    return mask;
+}
+/// The Musical Unit Kinds, `bar` and `beat` (ADR 0166).
+const musical_kinds = kindMask(false, true);
+/// The Kinds that stand alone: the calendar and Musical Unit Kinds.
+const standalone_kinds = kindMask(true, true);
 /// A Unit in normal form: one slot per Unit Kind, in the catalogue's Kind
 /// order, with a zero exponent where the Kind is absent.
 pub const Unit = struct {
@@ -83,17 +94,15 @@ pub const Unit = struct {
     pub fn empty(self: *const Unit) bool {
         return self.active == 0;
     }
-    /// Refuses a calendar Unit raised to a power or in a Compound Unit.
+    /// Refuses a calendar or Musical Unit raised to a power or in a
+    /// Compound Unit: those Kinds stand alone.
     pub fn validate(self: *const Unit) Error!void {
-        const calendars = comptime blk: {
-            var mask: Mask = 0;
-            for (table.kind, 0..) |kind, k| if (kind.calendar orelse false) {
-                mask |= bit(k);
-            };
-            break :blk mask;
-        };
-        const calendar = self.active & calendars;
-        if (calendar != 0 and (@popCount(self.active) != 1 or self.slots[@ctz(calendar)].exponent != 1)) return error.IncompatibleUnits;
+        const alone = self.active & standalone_kinds;
+        if (alone != 0 and (@popCount(self.active) != 1 or self.slots[@ctz(alone)].exponent != 1)) return error.IncompatibleUnits;
+    }
+    /// Whether this is a lone Musical Unit, such as `bars`.
+    pub fn musical(self: *const Unit) bool {
+        return @popCount(self.active) == 1 and self.active & musical_kinds != 0 and self.slots[@ctz(self.active)].exponent == 1;
     }
     /// Reads canonical Unit text, refusing a slot spelt two ways.
     pub fn parse(input: []const u8) Error!Unit {
@@ -150,7 +159,7 @@ pub const Unit = struct {
         var pos: usize = 0;
         var denominator = false;
         var changed = false;
-        var calendar = false;
+        var alone = false;
         if (std.mem.startsWith(u8, input, "1/")) {
             pos = 2;
             denominator = true;
@@ -166,7 +175,7 @@ pub const Unit = struct {
                 slot.exponent = -slot.exponent;
             };
             for (term.slots, 0..) |slot, k| if (slot.exponent != 0) {
-                calendar = calendar or (table.kind[k].calendar orelse false);
+                alone = alone or standalone_kinds & bit(k) != 0;
                 const old = &result.slots[k];
                 if (old.exponent != 0 and old.unit != slot.unit) changed = true;
                 if (old.exponent == 0) old.unit = slot.unit;
@@ -181,7 +190,7 @@ pub const Unit = struct {
             pos += 1;
             if (pos == input.len) return error.InvalidValue;
         }
-        if (calendar and terms.items.len != 1) return error.IncompatibleUnits;
+        if (alone and terms.items.len != 1) return error.IncompatibleUnits;
         result.index();
         try result.validate();
         var value = n;
@@ -428,6 +437,25 @@ test "source units normalize repeated slots and reject calendar compounds" {
     try std.testing.expectError(error.IncompatibleUnits, Unit.parseQuantity(a, try Decimal.parse("1"), "month/month"));
 }
 
+test "Musical Units stand alone and convert into nothing" {
+    const a = std.testing.allocator;
+    const bar = try Unit.parse("bar");
+    const beats = try Unit.parse("beats");
+    const minute = try Unit.parse("min");
+    try std.testing.expect(bar.musical());
+    try std.testing.expect(beats.musical());
+    try std.testing.expect(!minute.musical());
+    try std.testing.expect(!(try Unit.parse("month")).musical());
+    try std.testing.expect(!bar.compatible(&beats));
+    try std.testing.expect(!bar.compatible(&minute));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.combine(&bar, &minute, true));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.combine(&bar, &bar, false));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.parse("bar/min"));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.parse("beat^2"));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.parseQuantity(a, try Decimal.parse("1"), "bar/bar"));
+    try std.testing.expect((try Unit.combine(&bar, &bar, true)).empty());
+}
+
 fn conversionAllocationTest(a: std.mem.Allocator, unit: Unit, n: Decimal) !void {
     _ = try unit.toBase(a, n);
     _ = try unit.fromBase(a, n);
@@ -578,7 +606,7 @@ test "sparse combinations preserve catalogue products quotients and calendar ref
             var invalid = false;
             for (reference.slots, table.kind) |slot, kind| if (slot.exponent != 0) {
                 present += 1;
-                if (kind.calendar orelse false) {
+                if ((kind.calendar orelse false) or (kind.musical orelse false)) {
                     calendar = true;
                     invalid = invalid or slot.exponent != 1;
                 }

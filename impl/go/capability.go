@@ -120,6 +120,8 @@ type CapabilityDef struct {
 	lifecycle *SegmentLifecycle
 	// coordinate maps a binding to its Segment Coordinator at Grant creation.
 	coordinate func(binding any) *SegmentLifecycle
+	// musical marks a musical clock, whose one Operation is wait.
+	musical bool
 }
 type Grant struct {
 	definition *CapabilityDef
@@ -182,10 +184,15 @@ func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding
 }
 
 func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordinate func(any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
-	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle, coordinate: coordinate}
+	return c.defineCapabilityAs(name, lifecycle, coordinate, false, ops...)
+}
+
+func (c *Core) defineCapabilityAs(name string, lifecycle *SegmentLifecycle, coordinate func(any) *SegmentLifecycle, musical bool, ops ...Operation) (*CapabilityDef, error) {
+	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle, coordinate: coordinate, musical: musical}
 	for _, op := range ops {
 		invalid := func(detail string) (*CapabilityDef, error) { return nil, &HostError{InvalidValue, detail} }
-		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op.Name) {
+		// Only a musical clock's Operation is wait, which no source calls.
+		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op.Name) && !(musical && op.Name == "wait") {
 			return invalid("invalid Operation name")
 		}
 		if _, ok := d.ops[op.Name]; ok {
