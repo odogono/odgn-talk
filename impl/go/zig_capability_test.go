@@ -22,6 +22,7 @@ import (
 // The native Go Core's observations, recorded from its last build before it
 // was removed (#1055), are the reference the Zig backend still matches.
 // The sqlite query's Fuel was updated when perStep replaced perRow (#1795).
+// The reserved-word diagnostics were updated when they were named (#2089).
 func TestZigBackendCapabilityParity(t *testing.T) {
 	dir := t.TempDir()
 	recorded, err := os.Open("testdata/native-bridge-observations.json.gz")
