@@ -141,6 +141,13 @@ Files, grammar, or lowering.
 - Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](tools/http-kit.ts), [kit tests](tests/http-kit.test.ts), [Node runs](tests/http-runtimes.test.ts) of the kit and of [the fetch checks](tools/http-fetch-runtime.ts), [lifecycle tests](tests/http-host.test.ts), [fetch tests](tests/http-fetch-host.test.ts) against local HTTP and [TLS fixtures](tests/fixtures/http-tls/)
 - First check: `bun test impl/ts/tests/http-kit.test.ts impl/ts/tests/http-host.test.ts impl/ts/tests/http-fetch-host.test.ts`
 
+## Peer router
+
+- Implementation: [`PeerRouter` and the `PeerLink` interface](src/peer.ts) (`@northtalk/ts/peer`, web-standard APIs only), the Runner's TLS and loopback TCP link in [peers.ts](../../tooling/cli/src/peers.ts)
+- Rules: [The peer router](../../spec/09-embedding.md#the-peer-router), chapter 12's Runner peers, [ADR 0165](../../docs/adr/0165-browser-hosts-carry-remote-sends-over-message-ports-and-websockets.md)
+- Tests and cases: [router over in-memory links](tests/peer-router-scenario.ts) (Bun and the CLI's Node check), [`peer` Capability tests](tests/peer-capability.test.ts), `verifyRunnerPeers` in [run-integration.ts](../../tooling/cli/tests/run-integration.ts)
+- First check: `bun test impl/ts/tests/peer-router.test.ts tooling/cli/tests/run-runtime.test.ts`
+
 ## Notification router
 
 - Implementation: [router](src/notify/router.ts), [`Group.scriptNames`](src/group.ts)

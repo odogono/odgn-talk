@@ -1,7 +1,8 @@
 // The Script Runner's `peer` transport (chapter 12, Runner peers; ADR 0163):
 // Remote Sends between Runners over mutual TLS, each end pinned by its key's
 // fingerprint, or over plain TCP on loopback, as length-prefixed frames in
-// the Value Encoding.
+// the Value Encoding. The peer router (ADR 0165) carries the frames; this is
+// its link.
 // Runtime-neutral: node:* APIs only.
 import {
   createHash,
@@ -23,19 +24,18 @@ import { connect, createServer, type TLSSocket } from 'node:tls';
 import {
   decodeValue,
   encodeValue,
-  list,
   map,
   nothing,
-  num,
-  peerKind,
-  ScriptError,
   text,
-  type Call,
-  type HostObject,
   type PeerImpl,
   type TsGroup,
   type Value,
 } from '@northtalk/ts';
+import {
+  PeerRouter,
+  type PeerLink,
+  type PeerLinkEvents,
+} from '@northtalk/ts/peer';
 
 /** The largest frame a Runner sends or reads. */
 const MAX_FRAME = 16 * 1024 * 1024;
@@ -205,27 +205,52 @@ const identity = (keyFile?: string): Identity => {
   };
 };
 
-// ---------------------------------------------------------------- frames
+// ---------------------------------------------------------------- the link
 
-/** One connection to another Runner, either way round. */
-class Link {
+/**
+ * One TLS or loopback TCP connection to another Runner, either way round,
+ * as a peer router link: 4-byte big-endian lengths before each frame.
+ */
+class SocketLink implements PeerLink {
   private buffer = Buffer.alloc(0);
-  private next = 1;
-  private readonly asked = new Map<number, (frame: Value | null) => void>();
+  private events: PeerLinkEvents | undefined;
+  private readonly held: string[] = [];
+  private greeted: ((link: SocketLink | undefined) => void) | undefined;
   closed = false;
 
   constructor(
     readonly socket: Socket,
     /** The other end's key: checked over TLS, as it claims over plain TCP. */
-    public fingerprint: string,
+    public key: string,
     readonly plain: boolean,
-    private readonly decode: (text: string) => Value,
-    private readonly onFrame: (link: Link, frame: Value) => void,
-    private readonly onClose: (link: Link) => void,
+    private readonly nameOf: (key: string) => string | undefined,
   ) {
     socket.on('data', chunk => this.read(Buffer.from(chunk)));
     socket.on('close', () => this.close());
     socket.on('error', () => this.close());
+  }
+
+  // A plain link authenticates nobody, so it vouches for nobody.
+  get identity(): Value {
+    if (this.plain) {
+      return nothing;
+    }
+    const name = this.nameOf(this.key);
+    return map([
+      ['key', text(this.key)],
+      ...(name === undefined ? [] : [['name', text(name)] as [string, Value]]),
+    ]);
+  }
+
+  /**
+   * A plain connection: each end first says which key it is, with nothing
+   * to check it by. Resolves with the link once the other end has said.
+   */
+  greet(own: string): Promise<SocketLink | undefined> {
+    this.send(encodeValue(map([['hello', text(own)]])));
+    return new Promise(resolve => {
+      this.greeted = resolve;
+    });
   }
 
   private read(chunk: Buffer) {
@@ -240,21 +265,49 @@ class Link {
       }
       const body = this.buffer.subarray(4, 4 + length).toString('utf8');
       this.buffer = this.buffer.subarray(4 + length);
-      let frame: Value;
-      try {
-        frame = this.decode(body);
-      } catch {
-        return this.socket.destroy();
+      if (this.plain && !this.key) {
+        this.hello(body);
+      } else if (this.events) {
+        this.events.frame(body);
+      } else {
+        this.held.push(body);
       }
-      this.onFrame(this, frame);
     }
   }
 
-  send(frame: Value): boolean {
+  // A plain link's first frame says which key the other end is.
+  private hello(body: string) {
+    let claim: string | undefined;
+    try {
+      const frame = decodeValue(body);
+      const v = frame.kind === 'map' ? frame.get('hello') : undefined;
+      claim = v?.kind === 'text' ? v.asText() : undefined;
+    } catch {
+      claim = undefined;
+    }
+    if (!claim || !/^[\da-f]{64}$/.test(claim)) {
+      return this.close();
+    }
+    this.key = claim;
+    this.greeted?.(this);
+    this.greeted = undefined;
+  }
+
+  open(events: PeerLinkEvents) {
+    this.events = events;
+    if (this.closed) {
+      return events.close();
+    }
+    for (const body of this.held.splice(0)) {
+      events.frame(body);
+    }
+  }
+
+  send(frame: string): boolean {
     if (this.closed) {
       return false;
     }
-    const body = Buffer.from(encodeValue(frame), 'utf8');
+    const body = Buffer.from(frame, 'utf8');
     if (body.length > MAX_FRAME) {
       return false;
     }
@@ -264,80 +317,31 @@ class Link {
     return true;
   }
 
-  /** Sends a question; `answer` hears its answer, or null when the link closes. */
-  ask(
-    kind: string,
-    rest: [string, Value][],
-    answer: (frame: Value | null) => void,
-  ) {
-    const n = this.next++;
-    this.asked.set(n, answer);
-    if (!this.send(map([[kind, num(n)], ...rest]))) {
-      this.asked.delete(n);
-      answer(null);
-    }
-  }
-
-  answered(n: number, frame: Value) {
-    const answer = this.asked.get(n);
-    this.asked.delete(n);
-    answer?.(frame);
-  }
-
   close() {
     if (this.closed) {
       return;
     }
     this.closed = true;
     this.socket.destroy();
-    for (const answer of this.asked.values()) {
-      answer(null);
-    }
-    this.asked.clear();
-    this.onClose(this);
+    this.greeted?.(undefined);
+    this.greeted = undefined;
+    this.events?.close();
   }
 }
 
-const field = (frame: Value, key: string): Value | undefined => {
-  const v = frame.kind === 'map' ? frame.get(key) : undefined;
-  return v && v.kind !== 'nothing' ? v : undefined;
-};
-const has = (frame: Value, key: string): boolean =>
-  frame.kind === 'map' && frame.entries().some(([k]) => k === key);
-const whole = (v: Value | undefined): number | undefined => {
-  const n =
-    v?.kind === 'number' ? Number(v.asDecimal()!.toString()) : Number.NaN;
-  return Number.isSafeInteger(n) ? n : undefined;
-};
-const items = (v: Value | undefined): Value[] =>
-  v?.kind === 'list'
-    ? Array.from({ length: v.length }, (_, i) => v.index(i + 1))
-    : [];
-
-const failure = (code: string, data: [string, Value][] = []) =>
-  new ScriptError(code, code, map(data));
-const sendFailed = (reason: string, error?: Value) =>
-  failure('send failed', [
-    ['reason', text(reason)],
-    ...(error ? [['error', error] as [string, Value]] : []),
-  ]);
-
 // ---------------------------------------------------------------- the Host
 
-type Exposure = { name?: string; script: string };
-
-/** The Runner's side of `peer`: its exposures, its links and its key. */
+/** The Runner's side of `peer`: its key, its listener and its dialling. */
 export class RunnerPeers {
   readonly fingerprint: string;
   private readonly tls: Identity;
-  private group!: TsGroup;
+  private readonly router: PeerRouter;
   private server: Server | undefined;
-  private readonly exposures = new Map<string, Exposure>();
-  private readonly names = new Map<string, string>();
-  private readonly peers = new Map<string, HostObject>();
-  private readonly links = new Map<string, Link>();
-  private readonly dialling = new Map<string, Promise<Link | undefined>>();
-  private readonly callers = new Map<string, Value>();
+  private readonly links = new Set<SocketLink>();
+  private readonly dialling = new Map<
+    string,
+    Promise<SocketLink | undefined>
+  >();
   private readonly byKey = new Map<string, string>();
 
   constructor(private readonly o: PeerOptions) {
@@ -348,6 +352,17 @@ export class RunnerPeers {
         this.byKey.set(r.fingerprint, name);
       }
     }
+    this.router = new PeerRouter({
+      key: this.fingerprint,
+      addressOf: key => this.byKey.get(key),
+      dial: name =>
+        this.o.remotes.has(name) ? this.dial(name) : Promise.resolve(undefined),
+    });
+  }
+
+  /** The `peerCapability` implementation. */
+  get impl(): PeerImpl {
+    return this.router.impl;
   }
 
   /** Whether the Runner listens, which keeps it running. */
@@ -357,7 +372,7 @@ export class RunnerPeers {
 
   /** Starts listening, once the Group exists. */
   async start(group: TsGroup): Promise<void> {
-    this.group = group;
+    this.router.bind(group);
     if (this.o.listen || this.o.remotes.size > 0 || this.o.keyFile) {
       this.o.log(`peer: key ${this.fingerprint}`);
     }
@@ -366,7 +381,11 @@ export class RunnerPeers {
       return;
     }
     const server = at.plain
-      ? createTcpServer(socket => void this.greet(socket))
+      ? createTcpServer(socket => {
+          void this.adopt(socket, '', true)
+            .greet(this.fingerprint)
+            .then(link => link && this.router.connect(link));
+        })
       : createServer(
           {
             cert: this.tls.cert,
@@ -380,7 +399,7 @@ export class RunnerPeers {
             if (!key) {
               return socket.destroy();
             }
-            this.adopt(socket, key, false);
+            this.router.connect(this.adopt(socket, key, false));
           },
         );
     await new Promise<void>((resolve, reject) => {
@@ -408,7 +427,7 @@ export class RunnerPeers {
   /** Closes every link. */
   close(): void {
     this.stopListening();
-    for (const link of this.links.values()) {
+    for (const link of this.links) {
       link.close();
     }
   }
@@ -425,58 +444,27 @@ export class RunnerPeers {
     }
   }
 
-  private adopt(socket: Socket, key: string, plain: boolean): Link {
-    const link = new Link(
-      socket,
-      key,
-      plain,
-      body =>
-        decodeValue(body, (kind, id) =>
-          kind === 'peer' ? this.peerFor(id) : undefined,
-        ),
-      (l, frame) => this.arrive(l, frame),
-      l => {
-        if (this.links.get(l.fingerprint) === l) {
-          this.links.delete(l.fingerprint);
-        }
-      },
-    );
-    // The newest link to a key carries what this Runner sends there.
-    if (key) {
-      this.links.set(key, link);
-    }
+  private adopt(socket: Socket, key: string, plain: boolean): SocketLink {
+    const link = new SocketLink(socket, key, plain, k => this.byKey.get(k));
+    this.links.add(link);
+    socket.once('close', () => this.links.delete(link));
     return link;
   }
 
-  /**
-   * A plain connection: each end first says which key it is, with nothing
-   * to check it by. Resolves with the link once the other end has said.
-   */
-  private greet(socket: Socket): Promise<Link | undefined> {
-    const link = this.adopt(socket, '', true);
-    link.send(map([['hello', text(this.fingerprint)]]));
-    return new Promise(resolve => {
-      this.greeting.set(link, resolve);
-      socket.once('close', () => resolve(undefined));
-    });
-  }
-  private readonly greeting = new Map<Link, (link: Link) => void>();
-
-  /** A link to the Host with this key, dialled if a `--peer` gives it. */
-  private linkTo(key: string): Promise<Link | undefined> {
-    const open = this.links.get(key);
-    if (open && !open.closed) {
-      return Promise.resolve(open);
-    }
-    const name = this.byKey.get(key);
-    return name === undefined ? Promise.resolve(undefined) : this.dial(name);
-  }
-
   /** A link to the Runner a `--peer` names, dialled the first time. */
-  private dial(name: string): Promise<Link | undefined> {
+  private dial(name: string): Promise<SocketLink | undefined> {
     const remote = this.o.remotes.get(name)!;
-    const open = remote.fingerprint && this.links.get(remote.fingerprint);
-    if (open && !open.closed) {
+    let open: SocketLink | undefined;
+    for (const link of this.links) {
+      if (
+        remote.fingerprint &&
+        link.key === remote.fingerprint &&
+        !link.closed
+      ) {
+        open = link;
+      }
+    }
+    if (open) {
       return Promise.resolve(open);
     }
     let dialled = this.dialling.get(name);
@@ -489,24 +477,31 @@ export class RunnerPeers {
     return dialled;
   }
 
-  private dialPlain(name: string, remote: Remote): Promise<Link | undefined> {
+  private dialPlain(
+    name: string,
+    remote: Remote,
+  ): Promise<SocketLink | undefined> {
     return new Promise<Socket | undefined>(resolve => {
       const socket = connectTcp({ host: remote.host, port: remote.port });
       socket.once('connect', () => resolve(socket));
       socket.once('error', () => resolve(undefined));
     }).then(async socket => {
-      const link = socket && (await this.greet(socket));
+      const link =
+        socket && (await this.adopt(socket, '', true).greet(this.fingerprint));
       if (link) {
         // What it claimed is all a plain link has to go on.
-        this.byKey.set(link.fingerprint, name);
+        this.byKey.set(link.key, name);
       }
       return link;
     });
   }
 
-  private dialTls(name: string, remote: Remote): Promise<Link | undefined> {
+  private dialTls(
+    name: string,
+    remote: Remote,
+  ): Promise<SocketLink | undefined> {
     const key = remote.fingerprint!;
-    return new Promise<Link | undefined>(resolve => {
+    return new Promise<SocketLink | undefined>(resolve => {
       const socket = connect({
         cert: this.tls.cert,
         host: remote.host,
@@ -527,283 +522,6 @@ export class RunnerPeers {
       socket.once('error', error => {
         this.o.log(`peer: ${name}: ${error.message}`);
         resolve(undefined);
-      });
-    });
-  }
-
-  /** This Group's one Peer for an exposure id. */
-  private peerFor(id: string): Value {
-    let peer = this.peers.get(id);
-    if (!peer) {
-      peer = this.group.object(peerKind, id, null);
-      this.peers.set(id, peer);
-    }
-    return peer.value;
-  }
-
-  private split(id: string): [string, string] | undefined {
-    const m = /^([\da-f]{64})\/([\da-f]{32})$/.exec(id);
-    return m ? [m[1]!, m[2]!] : undefined;
-  }
-
-  // A plain link authenticates nobody, so it vouches for nobody.
-  private identityOf(link: Link | undefined, key: string): Value {
-    if (link?.plain) {
-      return nothing;
-    }
-    const name = this.byKey.get(key);
-    return map([
-      ['key', text(key)],
-      ...(name === undefined ? [] : [['name', text(name)] as [string, Value]]),
-    ]);
-  }
-
-  // A Remote Send arriving here: a Delivery or Request to the exposure's
-  // Script, vouched for as the sending Runner's key.
-  private local(
-    link: Link | undefined,
-    key: string,
-    secret: string,
-    message: string,
-    args: Value[],
-    waits: boolean,
-  ): Promise<Value> | 'not exposed' | 'mailbox full' | undefined {
-    const held = this.exposures.get(secret);
-    const script = held && this.group.script(held.script);
-    if (!script) {
-      return waits ? 'not exposed' : undefined;
-    }
-    try {
-      if (!waits) {
-        this.callers.set(
-          script.deliver({ name: message, args }),
-          this.identityOf(link, key),
-        );
-        return undefined;
-      }
-      const requested = script.request({ name: message, args });
-      this.callers.set(requested.id, this.identityOf(link, key));
-      return requested.result;
-    } catch (error) {
-      if ((error as Error).name === 'MailboxFull') {
-        return waits ? 'mailbox full' : undefined;
-      }
-      throw error;
-    }
-  }
-
-  private arrive(link: Link, frame: Value) {
-    const hello = field(frame, 'hello')?.asText();
-    if (link.plain && !link.fingerprint) {
-      // A plain link's first frame says which key the other end is.
-      if (!hello || !/^[\da-f]{64}$/.test(hello)) {
-        return link.close();
-      }
-      link.fingerprint = hello;
-      this.links.set(hello, link);
-      this.greeting.get(link)?.(link);
-      this.greeting.delete(link);
-      return;
-    }
-    const reach = whole(field(frame, 'reach'));
-    const call = whole(field(frame, 'call'));
-    const post = field(frame, 'post')?.asText();
-    const answer = whole(field(frame, 'reached') ?? field(frame, 'replied'));
-    if (answer !== undefined) {
-      return link.answered(answer, frame);
-    }
-    if (reach !== undefined) {
-      const key = this.names.get(field(frame, 'name')?.asText() ?? '');
-      return void link.send(
-        map([
-          ['reached', num(reach)],
-          key === undefined
-            ? ['error', text('not exposed')]
-            : ['peer', text(`${this.fingerprint}/${key}`)],
-        ]),
-      );
-    }
-    const to = post ?? field(frame, 'to')?.asText() ?? '';
-    const parts = this.split(to);
-    const message = field(frame, 'message')?.asText() ?? '';
-    const args = items(field(frame, 'args'));
-    const mine = parts && parts[0] === this.fingerprint ? parts[1] : undefined;
-    if (post !== undefined) {
-      if (mine) {
-        this.local(link, link.fingerprint, mine, message, args, false);
-      }
-      return;
-    }
-    if (call === undefined) {
-      return;
-    }
-    const reply = (rest: [string, Value]) =>
-      link.send(map([['replied', num(call)], rest]));
-    const failed = (reason: string, error?: Value) =>
-      reply([
-        'failed',
-        map([
-          ['reason', text(reason)],
-          ...(error ? [['error', error] as [string, Value]] : []),
-        ]),
-      ]);
-    const result = mine
-      ? this.local(link, link.fingerprint, mine, message, args, true)
-      : 'not exposed';
-    if (typeof result === 'string' || result === undefined) {
-      return void failed(result ?? 'not exposed');
-    }
-    result
-      .then(
-        value => {
-          // A reply that can't be encoded, as one holding a Function
-          // Value, can't come back.
-          if (!reply(['value', value])) {
-            failed('unreachable');
-          }
-        },
-        (error: unknown) => {
-          const e = error as Partial<ScriptError>;
-          if (e.name === 'ScriptError' && e.code === 'send failed') {
-            const data = e.data;
-            failed(
-              data?.get('reason').asText() ?? 'errored',
-              data?.kind === 'map' && data.get('error').kind !== 'nothing'
-                ? data.get('error')
-                : undefined,
-            );
-          } else {
-            failed('unreachable');
-          }
-        },
-      )
-      .catch(() => failed('unreachable'));
-  }
-
-  /** The `peerCapability` implementation. */
-  readonly impl: PeerImpl = {
-    expose: (call, name) => this.expose(call, name),
-    unexpose: (call, exposure) => {
-      const key =
-        typeof exposure === 'string'
-          ? this.names.get(exposure)
-          : this.split(exposure.id)?.[1];
-      const held = key === undefined ? undefined : this.exposures.get(key);
-      if (held && held.script === call.scriptName) {
-        this.exposures.delete(key!);
-        if (held.name !== undefined) {
-          this.names.delete(held.name);
-        }
-      }
-    },
-    reach: (call, address) => this.reach(call, address),
-    post: (call, peer, message, args) =>
-      this.send(call, peer, message, args, false),
-    call: (call, peer, message, args) =>
-      this.send(call, peer, message, args, true),
-    caller: call =>
-      (call.delivery === undefined
-        ? undefined
-        : this.callers.get(call.delivery)) ?? nothing,
-  };
-
-  private expose(call: Call<unknown>, name?: string) {
-    if (name !== undefined && this.names.has(name)) {
-      const key = this.names.get(name)!;
-      if (this.exposures.get(key)!.script !== call.scriptName) {
-        return call.fail(failure('name in use'));
-      }
-      return call.answer(this.peerFor(`${this.fingerprint}/${key}`));
-    }
-    const key = randomBytes(16).toString('hex');
-    this.exposures.set(key, { name, script: call.scriptName });
-    if (name !== undefined) {
-      this.names.set(name, key);
-    }
-    call.answer(this.peerFor(`${this.fingerprint}/${key}`));
-  }
-
-  private reach(call: Call<unknown>, address: string) {
-    const remote = this.o.remotes.get(address);
-    if (!remote) {
-      return call.fail(failure('bad address'));
-    }
-    void this.dial(address).then(link => {
-      if (!link) {
-        return call.fail(failure('bad address'));
-      }
-      link.ask('reach', [['name', text(address)]], frame => {
-        const id = frame && field(frame, 'peer')?.asText();
-        if (id && this.split(id)?.[0] === link.fingerprint) {
-          call.answer(this.peerFor(id));
-        } else {
-          call.fail(failure(frame ? 'not exposed' : 'bad address'));
-        }
-      });
-    });
-  }
-
-  private send(
-    call: Call<unknown>,
-    peer: HostObject,
-    message: string,
-    args: Value[],
-    waits: boolean,
-  ) {
-    const parts = this.split(peer.id);
-    if (!parts) {
-      return waits ? call.fail(sendFailed('unreachable')) : undefined;
-    }
-    const [key, secret] = parts;
-    if (key === this.fingerprint) {
-      // A Peer of this Runner's own exposure: still a Remote Send.
-      const result = this.local(undefined, key, secret, message, args, waits);
-      if (!waits) {
-        return;
-      }
-      if (typeof result === 'string' || result === undefined) {
-        return call.fail(sendFailed(result ?? 'not exposed'));
-      }
-      return void result.then(
-        value => call.answer(value),
-        (error: unknown) => {
-          const e = error as Partial<ScriptError>;
-          call.fail(
-            e.name === 'ScriptError' && e.code === 'send failed'
-              ? failure(
-                  'send failed',
-                  e.data?.kind === 'map' ? [...e.data.entries()] : [],
-                )
-              : sendFailed('unreachable'),
-          );
-        },
-      );
-    }
-    void this.linkTo(key).then(link => {
-      const rest: [string, Value][] = [
-        ['message', text(message)],
-        ['args', list(...args)],
-      ];
-      if (!waits) {
-        link?.send(map([['post', text(peer.id)], ...rest]));
-        return;
-      }
-      if (!link) {
-        return call.fail(sendFailed('unreachable'));
-      }
-      link.ask('call', [['to', text(peer.id)], ...rest], frame => {
-        const failed = frame && field(frame, 'failed');
-        if (frame && has(frame, 'value')) {
-          call.answer(frame.get('value'));
-        } else if (failed) {
-          const reason = failed.get('reason').asText() ?? 'unreachable';
-          const error = failed.get('error');
-          call.fail(
-            sendFailed(reason, error.kind === 'nothing' ? undefined : error),
-          );
-        } else {
-          call.fail(sendFailed('unreachable'));
-        }
       });
     });
   }
