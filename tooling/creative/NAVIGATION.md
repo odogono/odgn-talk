@@ -312,12 +312,15 @@ path and commit it came from. No original game's sound assets are included.
 
 ## Transport and beat
 
-- [transport.ts](src/transport.ts): the Transport's tempo, time signature and
-  beat grid on the Play clock, the lead, and which beats are due.
+- [transport.ts](src/transport.ts): the Transport's tempo, beat grid on the
+  Play clock, Meters (a time signature from its bar line), the lead, which
+  beats are due, and Scripts' musical Waits (`wait 8 bars`, ADR 0166).
 - [play.ts](src/play.ts): `PlaySession.pump` delivers due beats to Scripts
-  that handle `beat`, remembers each Delivery's musical time for
-  `beatTimeOf`, and folds the next delivery into `nextDeadline`, so the Play
-  worker and the harness need no beat scheduling of their own.
+  that handle `beat`, ends musical Waits a lead before their line through the
+  Group's musical clock, remembers each `beat` Delivery's and resumed Run's
+  musical time for `musicalTimeOf`, and folds the next beat and Wait into
+  `nextDeadline`, so the Play worker and the harness need no beat scheduling
+  of their own. `hush` cancels the Runs waiting in bars or beats.
 - [grants/transport.ts](src/grants/transport.ts): the `transport` Grant.
   [instruments/session.ts](src/instruments/session.ts) times sounds from the
   call's beat Delivery and `at`.
@@ -328,9 +331,11 @@ path and commit it came from. No original game's sound assets are included.
   [instruments/audio.ts](src/instruments/audio.ts) sends the readings and
   suspends the AudioContext while paused.
 - Tests: [transport.test.ts](tests/transport.test.ts) covers the grid, tempo
-  changes, `beat` delivery, sound times, `beats` with `wait` and Pause;
-  [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
-- First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/audio-clock.test.ts`.
+  and time-signature changes, Waits, `beat` delivery, sound times,
+  `wait 2 beats` and Pause; [musical-time.test.ts](tests/musical-time.test.ts)
+  plays arrangements with `wait N bars` on Perform and Punch In, with Hush
+  and Stop; [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
+- First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/musical-time.test.ts tooling/creative/tests/audio-clock.test.ts`.
 - Browser: `beats` suite on `/beats-test.html` plays beats through the real
   worklet and checks each note's sample.
 

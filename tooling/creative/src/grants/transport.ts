@@ -1,14 +1,7 @@
 // The `transport` Grant (ADR 0158, #1892): every Script sets the session's
-// tempo and time signature, starts and stops its Transport, and turns beats
-// into an exact duration for `wait`.
-import {
-  defineCapability,
-  num,
-  quantity,
-  ScriptError,
-  shape,
-  type Value,
-} from '@northtalk/ts';
+// tempo and time signature and starts and stops its Transport. `wait 2 beats`
+// and `wait 8 bars` go to the musical clock instead (ADR 0166).
+import { defineCapability, num, ScriptError, shape } from '@northtalk/ts';
 import {
   BEAT_UNITS,
   MAX_BEATS_PER_BAR,
@@ -25,7 +18,7 @@ const operations = {
     mode: 'fire-and-forget',
     args: [shape.number],
     cost: { fuel: 1 },
-    description: `Sets the tempo in beats a minute, from ${MIN_TEMPO} to ${MAX_TEMPO}, from the next beat. Durations already converted keep their length.`,
+    description: `Sets the tempo in beats a minute, from ${MIN_TEMPO} to ${MAX_TEMPO}, from the next beat. A wait in bars or beats stretches or shrinks with it.`,
     examples: ['tell transport to setTempo 96'],
   },
   setTimeSignature: {
@@ -33,7 +26,7 @@ const operations = {
     args: [shape.number, shape.number],
     cost: { fuel: 1 },
     description:
-      'Sets the beats in a bar and the note that counts as one beat, such as 3, 4 for 3/4; bars count from the next beat.',
+      'Sets the beats in a bar and the note that counts as one beat, such as 3, 4 for 3/4, from the next bar line; bars number on from there.',
     examples: ['tell transport to setTimeSignature 3, 4'],
   },
   start: {
@@ -47,17 +40,8 @@ const operations = {
     mode: 'fire-and-forget',
     cost: { fuel: 1 },
     description:
-      'Stops the Transport: no more `beat` messages until it starts.',
+      'Stops the Transport: no more `beat` messages until it starts, and `wait` in bars or beats holds until then.',
     examples: ['tell transport to stop'],
-  },
-  beats: {
-    mode: 'immediate',
-    args: [shape.number],
-    result: shape.quantityKind('exact duration'),
-    cost: { fuel: 1 },
-    description:
-      'How long a number of beats lasts at the current tempo, as an exact duration for `wait`.',
-    examples: ['ask transport to beats 2', 'wait it'],
   },
   tempo: {
     mode: 'immediate',
@@ -79,9 +63,6 @@ const numberIn = (
   }
   return n;
 };
-
-const microseconds = (us: bigint): Value =>
-  quantity(num(Number(us) / 1000), 'ms');
 
 export const transportGrant: GrantDefinition<TransportState> = {
   name: 'transport',
@@ -129,22 +110,7 @@ export const transportGrant: GrantDefinition<TransportState> = {
         stop: {
           ...operations.stop,
           examples: [...operations.stop.examples],
-          fire: () => transport.stop(),
-        },
-        beats: {
-          ...operations.beats,
-          args: [...operations.beats.args],
-          examples: [...operations.beats.examples],
-          do: (_call, beats) =>
-            microseconds(
-              transport.duration(
-                numberIn(
-                  beats,
-                  n => n >= 0 && n <= 1_000_000,
-                  'A number of beats is from 0 to 1000000',
-                ),
-              ),
-            ),
+          fire: call => transport.stop(call.now),
         },
         tempo: {
           ...operations.tempo,

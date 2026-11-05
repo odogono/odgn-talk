@@ -14,6 +14,7 @@ import { grantAll, type GrantDefinition } from './grant';
 export type SoundCall = {
   readonly delivery?: string;
   readonly now: bigint;
+  readonly runId?: string;
   readonly scriptName: string;
 };
 

@@ -199,9 +199,11 @@ export type DrawingView = {
 /**
  * The Transport as Perform's toolbar shows it: the tempo and time signature,
  * and while it runs the fractional beat count when the view was made, from
- * which the page counts on by the tempo.
+ * which the page counts on by the tempo. The count is from the bar line the
+ * time signature took effect on, `bar` bars after bar 1 (ADR 0166).
  */
 export type TransportView = {
+  bar?: number;
   beatsPerBar: number;
   count?: number;
   tempo: number;
