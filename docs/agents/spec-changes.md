@@ -29,11 +29,17 @@ cross-Core corpus cases.
 
 A spec-only PR that introduces instructions or Advanced tags can fail Core or
 tooling coverage even when Spec checks pass. Decide the delivery boundary before
-editing those catalogues. [ADR 0057](../adr/0057-a-send-may-compute-its-message-name.md)
-records one staged delivery: prose and grammar landed first; instruction data,
-lowering and the Advanced tag landed with implementation. Temporary grammar
-cases were kept outside the sketches consumed by both Cores, then moved into
-the shared suite when both could parse them.
+editing those catalogues. The usual split is a spec PR, then one PR per Core
+(Musical Units: #2063, then #2064 and #2065; named Shapes: #2104, then #2105 and #2106):
+
+- **Spec PR:** prose, Data Files and generated tables. Grammar cases neither
+  Core parses yet go in [staged.talk](../../tools/grammar/staged.talk), which
+  only `bun tools/grammar/check.ts` reads. Corpus cases are listed in the
+  issue's acceptance, not added, since blessing needs a Core.
+- **First Core PR:** moves its staged grammar cases into `broken.talk` and adds
+  the corpus cases with the Unblessed header ([corpus guide](../../corpus/README.md#seed-blessing)).
+- **Later Core PRs:** pass the same cases; a human records the first blessing
+  afterwards (#2075).
 
 Record any such staging explicitly in the [implementation handoff](issue-tracker.md#specification-handoffs),
 including deferred files and cleanup. It is a delivery decision, not a reason

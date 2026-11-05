@@ -6,9 +6,9 @@ Behaviour and limitations are in the [Folio guide](README.md); domain terms in
 [ADR index](../../docs/adr/README.md). Commands run from the repository root.
 List files with `rg --files tooling/creative` before opening one by name.
 
-Read only your section, e.g.
+List the sections with `rg -n '^## ' tooling/creative/NAVIGATION.md`, then
+read only yours, e.g.
 `sed -n '/^## Mini-Notation/,/^## /p' tooling/creative/NAVIGATION.md`.
-Sections: Running and testing; Play Session and reader input; Project model and Project files; Palettes; Group Elements; Images, sounds and assets; Audio engines; Transport and beat; Instruments; Built-in kits; Mini-Notation; Sound Patterns; Punch In; The folio Grant and hide/show; Message Box; Windows and code windows; Menus; Errors window; Variables window; Breakpoints; Performance window; Canvas Elements and the canvas Grant; User prompts; Grants; Host Manifests, Code Browser and Libraries; Saving and browser storage; Offline, service worker and files on disk; Editor shell, Page and rich text.
 
 Music work belongs to map #1887; its task list shows which children have
 landed, and the Issue graph job ticks it as they close.
