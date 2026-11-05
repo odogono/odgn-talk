@@ -1,5 +1,6 @@
 // `northtalk test`: run each Test Handler in a Test Script against the Scripts
-// beside it, and replay each Session Transcript (ADR 0056). Tooling, so
+// beside it, and replay each Session Transcript (ADR 0056) and each
+// Documentation Example of the manifest's Libraries (ADR 0169). Tooling, so
 // nothing here is normative; it drives the Core only through its public API.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -51,6 +52,7 @@ import {
   readProjectFile,
 } from '@northtalk/creative/project-file';
 import { runProjectTests } from '@northtalk/creative/test-runner';
+import { docExamples, runExample } from './doc-examples';
 import { differs, replayFile } from './replay';
 
 const LIBRARY_VERSION = '1';
@@ -111,6 +113,20 @@ export const runTests = async (
       failed++;
     }
   };
+  // Each manifest Library's Documentation Examples (ADR 0169).
+  for (const library of manifest?.libraries ?? []) {
+    for (const example of docExamples(library.name, library.source)) {
+      if (options.only && !example.name.includes(options.only)) {
+        continue;
+      }
+      const outcome = runExample(
+        options.manifest!,
+        manifest!.libraries,
+        example,
+      );
+      report(outcome.ok, outcome.lines);
+    }
+  }
   for (const file of files) {
     if (file.endsWith('.folio')) {
       for (const outcome of await folioTests(file, options.only)) {

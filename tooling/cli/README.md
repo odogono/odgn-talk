@@ -84,9 +84,15 @@ bun run northtalk test --manifest host.talk-manifest.json examples/
 bun run northtalk test --only testIncrements counter.test.talk
 ```
 
-- **What runs:** each path is a file or a directory searched recursively, skipping dot directories and `node_modules`. The default is `.`. Two kinds of file are tests:
+- **What runs:** each path is a file or a directory searched recursively, skipping dot directories and `node_modules`. The default is `.`. Three kinds of file are tests, and a manifest adds a fourth kind of test:
   - A **Test Script** (`*.test.talk`): each parameterless Handler named `test` and then a capital, such as `on testIncrements`, is one test.
   - A **Session Transcript** (`*.transcript`): it is one test, replayed as `northtalk replay` replays it, with its own `:grant` and `:mock` lines.
+  - A **Documentation Example** in a `--manifest` Library ([ADR 0169](../../docs/adr/0169-library-exports-carry-documentation-examples-that-northtalk-test-replays.md)): a Session Transcript written in the `--|` block of a Library export. A `> ` line starts one, `| ` continues an Entry, the lines after it are its expected output, and a blank documentation line ends it. A block with no `>` line adds no test.
+    - Each example is one test, named `<library>.<export> example <n>` with n from 1 in source order, which `--only` matches. It replays in a fresh session through the same Session Host as `northtalk replay`, and passes only if it prints its written output exactly.
+    - The session starts under a virtual Clock at `2026-01-01T00:00:00Z`, and holds the example's own Library and those its `use` lines name. Nothing else is set up: the example writes its own `use`, `:grant`, `:mock` and `:stub`, so a Library calling a Capability is documented with the `:mock` its examples need.
+    - `:library`, `:fix`, `:export`, `:store load`, `:store save`, `:save`, `:restore` and `:quit` fail the example, naming the command.
+    - Lines read `ok <manifest>#<library> <test>`, or `FAIL <manifest>#<library>:<line> <test>` followed by `northtalk replay`'s diff, where `<line>` is the differing line within the Library's source.
+    - Since `--|` and `--| ` both read as a blank line, an example can't expect an empty output line; test such an export with a Test Script or a Transcript.
   - A **Folio Project** (`*.folio`): each Test Handler of its Test Scripts is one test, run as Folio's **Run Tests** runs it, against a fresh Play Session with the Folio Harness ([ADR 0133](../../docs/adr/0133-folio-tests-a-project-with-test-scripts-and-a-folio-harness.md)). The rest of this section is about `*.test.talk` files. `--manifest` doesn't apply, since Folio's Grants are fixed. Lines read `ok <file> <script> <test>`, or `FAIL <file>#<script>:<line>:<col> <test>` with each problem indented. A file Folio can't read fails once with its message, and a Project with no Test Scripts adds no tests.
 - **The Group:**
   - Every test gets a fresh Script Group.
