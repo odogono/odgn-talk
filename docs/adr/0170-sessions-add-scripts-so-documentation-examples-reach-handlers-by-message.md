@@ -5,11 +5,16 @@ A session may hold Scripts beside the Session Script. `:script add <name>` loads
 ```
 --| Adds 1 to the count, and gives the new count
 --|
---| > send increment to counter and wait
---| > it
+--| > on bump
+--| |   send increment to counter and wait
+--| |   say it
+--| | end bump
+--| > bump and wait
 --| 1
 on increment
 ```
+
+Each Entry is its own Run, and `it` is local to a Run, so an example shows a Handler's reply from inside a session Handler, as above, not with a later `> it` Entry.
 
 ## Considered Options
 
