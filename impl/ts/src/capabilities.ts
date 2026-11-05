@@ -1316,7 +1316,9 @@ export const defineValueCapability = <B = void>(
     }
     // A Command Call can't start with a Reserved Word (ADR 0094).
     if (op.command && RESERVED.has(opName)) {
-      invalidValue(`${opName} is a Reserved Word, so it can't be a command`);
+      invalidValue(
+        `\`${opName}\` is a Reserved Word, so it can't name a command`,
+      );
     }
     if (op.labels !== undefined) {
       if (

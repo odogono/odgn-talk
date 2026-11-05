@@ -256,7 +256,7 @@
     "source": "on t\nput 1 into offer\nend t",
     "syntaxError": true,
     "diagnostics": [],
-    "syntaxDiagnostic": ["unexpected token", 2, 12]
+    "syntaxDiagnostic": ["reserved word", 2, 12]
   },
   {
     "name": "reserved map key",

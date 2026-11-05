@@ -11,6 +11,7 @@ export type SyntaxErrorCode =
   | 'bad unit'
   | 'unit without number'
   | 'unexpected token'
+  | 'reserved word'
   | 'not a container';
 
 /** All offsets index the original TS string; line and col count Unicode scalars. */

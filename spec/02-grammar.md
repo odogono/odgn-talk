@@ -37,7 +37,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 - **`to`, `into`, `be`, `then` and `where`** aren't needed to parse valid source. They are reserved because they put first errors on the right token: `put 1 + into x` fails at `into`, not at `x`.
 - **Constants:** `true`, `false`, `nothing`, `it` and `me`.
 
-> **Note.** A Reserved Word can still be a map key, since a word followed by `:` in `{…}` is always a key (`{to: who}`), and it can be read back with `the to of m` or `m's to`. It can't be a variable, a parameter, a Capture or a Handler name.
+> **Note.** A Reserved Word can still be a map key, since a word followed by `:` in `{…}` is always a key (`{to: who}`), and it can be read back with `the to of m` or `m's to`. It can't be a variable, a parameter, a Capture or a Handler name, and one written where the grammar wants a Name is the syntax error `reserved word`, reported at the word ([#2089](https://github.com/odogono/odgn-talk/issues/2089)).
 
 ### Contextual keywords
 
@@ -767,6 +767,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
 | `unit without number` | A Unit word can't continue the parse and follows a Name or a closing bracket on its line; a Unit follows only a number literal, so write `x as s`, `x * 1 s`, or the Unit in the Constant; reported at the Unit word |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
+| `reserved word` | A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target or a Result Target; checked before `unexpected token` and `not a container`, and reported at the Reserved Word |
 | `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token |
 | `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |
 | `empty interpolation` | An interpolation hole contains no expression |
@@ -777,7 +778,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 <!-- end -->
 
 - **Only the first syntax error is normative:** its code and its position. The parse stops there.
-- **Its position** is the first token that can't continue the parse. A lexical error is reported where its token starts, and `not a container` at the Container's first token.
+- **Its position** is the first token that can't continue the parse. A lexical error is reported where its token starts, `reserved word` at the Reserved Word, and `not a container` at the Container's first token. Where a Name is wanted, one token decides whether the word is a Reserved Word, so `reserved word` comes before `unexpected token` and `not a container`: `put 1 into replace` reports `replace`, not the end of the line. Argument Labels aren't Name positions here, since a Reserved Word after a parameter can end a Handler head.
 - **Error order:** lexical and parse errors come first, then [load-time diagnostics](#load-time-diagnostics) in source order. Since the parse stops at the first syntax error, source with one has no other load-time diagnostics.
 
 > **Example.** In `put 5 into` followed by a comment, the error is at the end of the line, after the comment. In `if count > then say "x"`, it is at `then`. In `put <"a", bogus> into x`, it is at `bogus`.

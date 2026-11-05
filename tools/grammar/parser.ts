@@ -394,20 +394,32 @@ export class Parser {
     }
     return this.next(mode);
   }
-  name(what = 'a name', mode: Mode = 'operand'): string {
+  // A Reserved Word where the grammar wants a Name (#2089): `role` is what
+  // the Name would have been, as in "can't name a variable".
+  reservedName(t: Token, role: string) {
+    if (t.t === 'word' && RESERVED.has(t.v)) {
+      throw new SyntaxError(
+        t,
+        'reserved word',
+        `\`${t.v}\` is a Reserved Word, so it can't name ${role}`,
+      );
+    }
+  }
+  name(what = 'a name', mode: Mode = 'operand', role = 'a variable'): string {
     const t = this.peek(0, mode);
     if (!this.isName(t)) {
+      this.reservedName(t, role);
       this.fail(t, what);
     }
     return this.next(mode).v;
   }
   // A Handler, message or event name: any name but `all` (a Join).
-  messageName(what: string): string {
+  messageName(what: string, role = 'a message'): string {
     const t = this.peek(0);
     if (this.isWord(t, 'all')) {
       this.fail(t, `${what} (\`all\` can't name a message)`);
     }
-    return this.name(what);
+    return this.name(what, 'operand', role);
   }
   // The Selector `move:to:` for `move` with the label `to`. A message with no
   // labels keeps its plain name.
@@ -548,7 +560,9 @@ export class Parser {
       this.next();
       this.next();
     }
-    const name = fallback ? '' : this.messageName('a Handler name');
+    const name = fallback
+      ? ''
+      : this.messageName('a Handler name', 'a Handler');
     const params: Node[] = [];
     let guard: Node | null = null;
     const suffixes: string[] = [];
@@ -642,11 +656,11 @@ export class Parser {
 
   func(): Node {
     const fn = this.next();
-    const name = this.name('a function name');
+    const name = this.name('a function name', 'operand', 'a function');
     const params: { default: Node | null; name: string }[] = [];
     // A parameter is a name, then `=` and a default (ADR 0035).
     const param = () => {
-      const name = this.name('a parameter name');
+      const name = this.name('a parameter name', 'operand', 'a parameter');
       let dflt: Node | null = null;
       if (this.isOp(this.peek(0, 'operator'), '=')) {
         this.next('operator');
@@ -912,6 +926,10 @@ export class Parser {
   // Containers require a Name root; set may also read an implicit Object root.
   container(propertyTarget = false): Node {
     const t = this.peek(0);
+    // `the` starts a property path, and a Constant root is `not a container`.
+    if (!this.isWord(t, 'the', 'me', 'it', 'true', 'false', 'nothing')) {
+      this.reservedName(t, 'a variable');
+    }
     if (!this.startsExpr(t)) {
       this.fail(t, 'a Container');
     }
@@ -2335,6 +2353,7 @@ export class Parser {
       this.next();
       return { k: 'Bind', name: t.v };
     }
+    this.reservedName(t, 'a variable');
     this.fail(t, 'a pattern');
   }
 
@@ -2410,7 +2429,8 @@ export class Parser {
     const n = this.la2('capture', 'pattern');
     if (this.isOp(n, ':')) {
       if (!this.isName(t)) {
-        this.fail(t, "a Capture name (a Reserved Word can't name one)");
+        this.reservedName(t, 'a Capture');
+        this.fail(t, 'a Capture name');
       }
       this.next('pattern');
       this.next('pattern');
