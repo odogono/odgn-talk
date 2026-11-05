@@ -59,9 +59,21 @@ UnitName       ::= [A-Za-z]+  /* a Unit's name or plural in units.toml; a Calend
 /* ## source */
 
 Source         ::= NL* ( Declaration NL* )*
-Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable | Use
+Declaration    ::= 'private'? ( Handler | Function | Constant | ShapeDecl ) | ScriptVariable | Use
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
+ShapeDecl      ::= 'shape' Name 'is' ShapeExpr NL
+ShapeExpr      ::= ShapeTerm ( 'or' ShapeTerm )*
+ShapeTerm      ::= 'optional' ShapeTerm
+                 | ( 'list' | 'object' ) 'of' ShapeTerm
+                 | Article 'quantity' 'of' Name
+                 | '(' ShapeExpr ')'
+                 | ShapeMap
+                 | Kind | Unit
+                   /* `list` and `object` without `of` are kinds; after `object of`, only a Name;
+                      whether a Name is a kind, a Unit or a named Shape is a load rule */
+ShapeMap       ::= '{' ( ShapeField ( ',' ShapeField )* ( ',' '...' )? | '...' )? '}'
+ShapeField     ::= MapKey 'optional'? ShapeExpr
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
 Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name? NL
                    /* a Name after `end`, if present, is the function's name */

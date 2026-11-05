@@ -12,7 +12,7 @@ Recovery Offers let a caller choose an action declared inside retained Library f
 
 ### What a Library holds
 
-- **A Library** is a unit of source code that the Host registers on a Script Group. It holds Handlers, functions and Constants, and nothing else ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
+- **A Library** is a unit of source code that the Host registers on a Script Group. It holds Handlers, functions and Constants, named Shapes among them, and nothing else ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 - **It isn't a Script.** It has no Script Variables, no `me`, no mailbox, no Grants and no Owning Script role. It is never loaded, messaged or run on its own. A top-level `script variable` in a Library is a load error.
 - **Constants:** `constant name = expr` declares a Constant. Its initialiser may use only literals, other Constants and Built-ins other than `random`, so evaluating it has no effects. Scripts may declare Constants too. A Function Value in a Library Constant, including nested ones and captures, takes the importing or calling Script as its Home Script when the Constant is bound or read there; its code and display position still name the Library. This also applies to Library parameter defaults. The compiled Library does not bind these values to one Group.
 - **Exports:** every top-level definition of a Library is exported unless it starts with `private`. `private` in a Script is a load error.
@@ -293,6 +293,47 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 **Mismatches** keep the Host boundary's errors, without its context. A mismatch is `wrong kind` with `expected`, `got` and `value`, or `not encodable` with `kind` and `path`, for a Function Value where the Shape takes only data. Paths are relative to the checked value, with text map keys and 1-based list positions: `wrong kind` omits `path` when the value itself mismatches, as a Capability argument's does, and `not encodable` always carries it, empty at the root. No `capability`, `operation` or `argument` is added. List items are visited in position order, declared map fields in declaration order and then extra fields in the value's insertion order; the first mismatch in that order is `check`'s. A missing required field mismatches with `got` `"nothing"` and Nothing as its `value`, an extra field of a closed map with `expected` `"nothing"`, and an Optional Shape adds `" or nothing"` only to a mismatch at its own node. A failed `oneOf` mismatches at the union's node, its `expected` the alternatives' joined with `" or "`; in an `explain` report that record also carries `alternatives`, the list of each alternative's own mismatch list, in alternative order, its paths still relative to the checked value. A union some alternative fits contributes nothing, in either Built-in. The records `explain` returns are plain maps of the same fields, `code` included, but with no `message` and no `at`; an error `check` raises gets both in the usual way at the call.
 
 **Charging.** Shape checks are metered, unlike the Host boundary's uncharged check: each rate's `scanned` counts the definition work (every Shape node and every entry of a visited wrapper or field map, metadata entries included, plus the scalar values of each kind, Unit and Unit Kind text read) and the matching work (every value/Shape pair attempted, every value node a data scan under `any` or an open map's extra fields visits, a missing or extra field counting one pair). Failed validation, failed alternatives and work before a raised mismatch are charged; `conforms` and `check` stop at the first mismatch, and `explain` counts the whole traversal and allocates its report by logical size, repeated offending values included. Traversal is stack-safe at any depth the budgets allow, under the ordinary Fuel and Allocation Budgets, with no Shape-specific depth or report limit.
+
+### Shape declarations
+
+`shape Name is <Shape Expression>` declares a **named Shape**: a Constant whose value is the Shape's canonical data, in the ordering of [chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint) ([ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md)). It follows every Constant rule: it can't be put into, `private` keeps it in its Library, `use … from` imports it, and the clash rules of [Names and clashes](#names-and-clashes) apply. It is evaluated at load with the other Constants, and has no effect.
+
+```text
+shape Line is {sku: text, qty: number}
+shape Invoice is {type: text, amount: GBP, ref: optional text, lines: list of Line}
+```
+
+**Lowering.** Each Shape Term lowers to Shape data:
+
+| Written | Lowers to |
+| --- | --- |
+| a kind name, such as `text` or `civil date`, or `any` or `value` | that name as text |
+| a Unit, such as `GBP` or `m/s` | `{quantity: unit}`, with the Unit as written |
+| `a quantity of K` | `{unitKind: "K"}` |
+| `object of K` | `{object: "K"}` |
+| `list of S` | `{list: S}` |
+| `optional S` | `{optional: S}` |
+| `S or T …` | `{oneOf: [S, T, …]}`, in written order |
+| `{k: S, …}` | `{map: [{key: "k", shape: S}, …]}`, fields in written order; a field written `k: optional S` adds `optional: true` and lowers `S` alone; a trailing `...` adds `open: true` |
+| a named Shape | its data |
+
+Brackets add nothing. So `Invoice` above is `{map: [{key: "type", shape: "text"}, {key: "amount", shape: {quantity: "GBP"}}, {key: "ref", shape: "text", optional: true}, {key: "lines", shape: {list: {map: [{key: "sku", shape: "text"}, {key: "qty", shape: "number"}]}}}]}`.
+
+**Names in a Shape.** A Name in a Shape Term is read as a kind name, `any` or `value` first, then as a Unit, then as a named Shape in scope: one declared in the unit, above or below, or imported. A named Shape may name others, and the loader inlines their data. A Shape that reaches itself is an error, since Shape data can't be recursive.
+
+**Load errors.** A malformed declaration is the load diagnostic `bad shape`, at the offending token. It is a load diagnostic, not the run-time error `invalid shape` the Shape check Built-ins raise:
+
+- a Name that is no kind, Unit or named Shape in scope;
+- `a quantity of` a name that isn't a Unit Kind of the Unit Catalogue;
+- a Unit that doesn't parse with the Unit Catalogue;
+- two fields of one Shape Map with one key;
+- a Shape that reaches itself, at the first Name on the cycle in source order;
+- a Shape named like a kind, `any`, `value`, a Unit or a Unit Kind, at its name;
+- when the unit loads with a Host Manifest, `object of` a name that isn't one of its Object Kinds. A Library loads without one, so this isn't checked there, and an Object Kind is otherwise only a text label, as in Shape data.
+
+A declaration that loads always lowers to data that [Shape checks](#shape-checks) accept, so its value never raises `invalid shape` at run time.
+
+**`is a` with a named Shape.** After `is a` or `is an`, a Name is read as a kind or Unit first and then as a named Shape in scope; anything else is still `unknown kind`. Only a name declared with `shape`, directly or through `use`, is read this way: Shape data in a variable or in a plain Constant goes through `conforms`. `x is a S` is `conforms(x, S)`, with the same acceptance, errors and charge, and `x is not a S` is `not conforms(x, S)`. `is a` with a kind is unchanged. Literal-value Shapes ([#861](https://github.com/odogono/odgn-talk/issues/861)) aren't part of the spelling yet.
 
 ### Offer availability
 

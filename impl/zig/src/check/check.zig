@@ -28,6 +28,7 @@ pub const Code = enum {
     leaves_recovery_catch,
     duplicate_key,
     unknown_kind,
+    bad_shape,
     no_conversion,
     bad_number,
     pattern_too_large,

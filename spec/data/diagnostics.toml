@@ -66,9 +66,15 @@ sources = ["#115"]
 
 [[diagnostic]]
 code = "unknown kind"
-raised_when = "A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, or a Text Pattern's `a` or `an` is followed by a kind other than `number`"
+raised_when = "A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, nor, after `is a`, a named Shape in scope, or a Text Pattern's `a` or `an` is followed by a kind other than `number`"
 at = "the kind name"
-sources = ["ADR 0003", "ADR 0034", "#115"]
+sources = ["ADR 0003", "ADR 0034", "ADR 0168", "#115"]
+
+[[diagnostic]]
+code = "bad shape"
+raised_when = "A Shape declaration names a Name that is no kind, Unit or named Shape in scope, a Unit that doesn't parse, or a Unit Kind or, with a Host Manifest, an Object Kind that doesn't exist, repeats a key in one Shape Map, reaches itself through named Shapes, or is named like a kind, `any`, `value`, a Unit or a Unit Kind (chapter 7)"
+at = "the offending token: the Name, Unit or key, the first Name on a cycle in source order, or the declared name"
+sources = ["ADR 0168", "#2055"]
 
 [[diagnostic]]
 code = "no conversion"

@@ -795,6 +795,10 @@ _Avoid_: type
 A description of the values accepted at a boundary or by an explicit check, constraining their Kind, contents, Unit, Unit Kind or Object Kind. A Shape describes acceptance, without transforming the value.
 _Avoid_: schema (for a Shape), type (for a Shape)
 
+**Named Shape**:
+A Shape declared in a Script or Library with `shape Name is …`, in a readable spelling that lowers to Shape data. The name is a Constant holding that data, and `x is a Name` tests a value against it as `conforms` does.
+_Avoid_: type alias, schema
+
 **Mapping**:
 An ordered description of how selected input values are checked and transformed into a new map. Its rules combine Selection Paths, destination Value Paths and optional Shapes and transformation functions. The `map.transform` Library export executes a Mapping under [chapter 7](07-libraries-and-the-standard-library.md#checked-mappings), returning complete output or diagnostics; its callbacks use restricted execution.
 _Avoid_: transforming Shape, changeset

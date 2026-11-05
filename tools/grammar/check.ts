@@ -64,7 +64,8 @@ const mustParse = (src: string, where: string, lineOffset = 0) => {
 
 // A `talk` block is a whole source if it starts with a declaration, and
 // otherwise a Handler body.
-const DECLARATION = /^(on|function|private|use|constant|script\s+variable)\b/;
+const DECLARATION =
+  /^(on|function|private|use|constant|shape|script\s+variable)\b/;
 
 const codeBlocks = (file: string) => {
   const text = readFileSync(file, 'utf8');
@@ -92,10 +93,10 @@ const codeBlocks = (file: string) => {
   }
 };
 
-// broken.talk: cases separated by `-- case: <label>` lines, each followed by
+// broken.talk and staged.talk: cases separated by `-- case: <label>` lines, each followed by
 // `-- expect: <code> at <line>:<col>` or `-- expect: parses`. Lines count from
 // the line after the expectation.
-const broken = (file = join(import.meta.dir, 'broken.talk')) => {
+const cases = (file: string) => {
   const src = readFileSync(file, 'utf8');
   const parts = src.split(/^-- case: /m);
   let line = parts[0]!.split('\n').length;
@@ -235,7 +236,9 @@ for (const dir of ['docs', 'spec']) {
     codeBlocks(f);
   }
 }
-broken();
+cases(join(import.meta.dir, 'broken.talk'));
+// Staged cases: syntax only this parser reads until both Cores parse it.
+cases(join(import.meta.dir, 'staged.talk'));
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }
