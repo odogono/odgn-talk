@@ -324,6 +324,17 @@ export const mountStack = (
   const selectedInstrument = signal<number | undefined>(undefined);
   const unmountInstruments = mountInstrumentsWindow(instrumentsPanel, {
     editor,
+    onError: message => {
+      byId('notice-text').textContent = message;
+      byId('notice-banner').hidden = false;
+    },
+    soundBytes: async asset => {
+      const bytes = images.bytes.get(asset.hash);
+      if (bytes === undefined) {
+        throw new Error('its bytes are missing');
+      }
+      return bytes.slice().buffer;
+    },
     redraw: redrawVersion,
     selected: selectedInstrument,
     add: kind => void addInstrument(kind),

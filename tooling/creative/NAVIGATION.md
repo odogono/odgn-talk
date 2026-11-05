@@ -386,6 +386,11 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   for slider positions (linear or log), keyboard and drag steps, and value
   text. Typed values go through `parameterTextNumber` in
   `parameter-units.ts`.
+- Auditioning (#2080): [instruments/audition.ts](src/instruments/audition.ts)
+  builds the messages ▶ and the computer keyboard send, and picks a
+  sampler's sound; [instruments/preview.ts](src/instruments/preview.ts)
+  plays them in Edit, `previewInstruments` once and `holdInstruments` while
+  keys are held. Tests: [audition.test.ts](tests/instruments/audition.test.ts).
 - [instruments/kind.ts](src/instruments/kind.ts): a parameter's `group`
   names its collapsible section in the Instruments window, and a number
   parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on

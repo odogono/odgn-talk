@@ -623,6 +623,28 @@ button:disabled {
 #instruments-panel .instrument > .row .field:last-child:not(:first-child) {
   flex: 0 0 3.5rem;
 }
+#instruments-window:focus {
+  outline: none;
+}
+.audition {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.audition button {
+  min-width: 1.8rem;
+}
+.audition button[aria-pressed='true'] {
+  background: #2f6fed;
+  color: #fff;
+}
+#instruments-panel .audition select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.audition .check {
+  margin-left: auto;
+}
 .instrument-tools {
   display: flex;
   gap: 0.25rem;

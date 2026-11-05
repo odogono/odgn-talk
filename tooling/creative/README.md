@@ -201,6 +201,22 @@ out of range and too many voices, and says why. The hint at the bottom shows
 how a Script plays the selected Instrument and sets the hovered parameter,
 and copies them.
 
+▶ above the parameters auditions the selected Instrument
+([#2080](https://github.com/odogono/odgn-talk/issues/2080)), through its own
+audio as the Message Box preview does, and ends any audition still sounding.
+The synth and YM2149 play middle C for half a second. A sampler plays the
+sound chosen beside ▶, the Project's first until another is chosen; the
+choice lasts while the window is open and isn't saved, and with no sounds ▶
+is disabled. Once ▶ has played, letting go of a slider or typing a value
+plays it again with the change, unless **Replay** is unticked. ⌨ plays the
+Instrument from the computer keyboard: `A`–`K` are the white keys from
+middle C, `W E T Y U` the black keys, `Z` and `X` move an octave down or up,
+and a note sounds while its key is held. A sampler plays its sound at each
+note's pitch. The keyboard is off until ⌨ is pressed and turns off when the
+window loses focus. An Add-on kind auditions the same way when it declares a
+`play` Operation; otherwise ▶ is hidden. Auditioning works in a read-only
+Project, since it changes nothing.
+
 During Play, every Script reaches each Instrument by name. `tell bass to play
 "c3"` starts a note, a MIDI number or a name such as `f#4` with `c4` as
 middle C, at an optional velocity from 0 to 1. `release` ends a note and
