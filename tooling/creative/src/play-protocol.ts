@@ -9,6 +9,7 @@ import { type LoadedMessageTarget } from './message-script';
 import {
   type Asset,
   type Element,
+  type InstrumentParameterValue,
   type PageAlignX,
   type PageAlignY,
   type Project,
@@ -83,6 +84,19 @@ export type PlayRequest =
       target?: string;
     }
   | { kind: 'frame'; session: number }
+  /**
+   * An authored edit of an Instrument Parameter in the Instruments window
+   * during Play (#2081), recorded as a bound control's is; `applied` as for
+   * `control`.
+   */
+  | {
+      applied?: boolean;
+      instrument: string;
+      kind: 'instrumentParameter';
+      parameter: string;
+      session: number;
+      value: InstrumentParameterValue;
+    }
   /** Perform's Hush (#2002): silence every sound and stop every pattern. */
   | { kind: 'hush'; session: number }
   /** The reader opens or closes a Palette's window (#1903). */
@@ -241,6 +255,11 @@ export type PlayView = {
   full: boolean;
   /** Elements a held press reports to, each frame, with `pointerHeld`. */
   heldElements: string[];
+  /**
+   * Every Instrument's parameters as they play, by Instrument name, for the
+   * Instruments window (#2081); absent when unchanged since the last view.
+   */
+  instruments?: Record<string, Record<string, InstrumentParameterValue>>;
   /** Loaded Script contexts, sent only when their identities change. */
   messageTargets?: LoadedMessageTarget[];
   navigating: boolean;

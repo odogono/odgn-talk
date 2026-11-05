@@ -1,9 +1,10 @@
 // Run on the dedicated test page described in README.md. Exercises editing
-// Instruments in the Instruments window (#1894, #2049, #2079) and the built
+// Instruments in the Instruments window (#1894, #2049, #2079, #2081) and the built
 // Instrument worklet in a real AudioWorklet.
 import { createProject } from '../src/model';
 import { INSTRUMENT_PROCESSOR } from '../src/instruments/rack';
 import { mountStack } from '../src/stack';
+import { withPlaying } from '../src/instruments/live';
 import {
   INSTRUMENTS_REF,
   SYNTH_KIND,
@@ -505,6 +506,101 @@ export const runBrowserTests = async () => {
     const silent = drums.querySelector<HTMLButtonElement>('[data-audition]')!;
     assert(silent.disabled, 'A sampler without sounds can’t audition');
     assert(silent.title.includes('no sounds'), 'Its tooltip says why');
+  });
+
+  await test('while performing, a drag is heard live and committed once, and undo is heard too (#2081)', async () => {
+    const project = createProject('Perform check');
+    project.addOns = [INSTRUMENTS_REF];
+    shell.editor.replaceProject(project);
+    shell.redraw();
+    await settled();
+    await add(SYNTH_KIND);
+    const saved = synthParameters().cutoff as number;
+    const heard: { parameter: string; value: unknown }[] = [];
+    // As the page does, the playing value follows what the window sends.
+    shell.instruments.onLive(change => {
+      heard.push(change);
+      const shown = shell.instruments.playing.peek();
+      if (shown) {
+        shell.instruments.playing.value = withPlaying(shown, change);
+      }
+    });
+    shell.setPlaying('perform');
+    // A Script's set moved the playing value away from the saved one.
+    shell.instruments.playing.value = {
+      synth: { ...synthParameters(), cutoff: 400 },
+    };
+    await settled();
+    const set = detail('synth')!;
+    const cutoff = slider(set, 'cutoff');
+    assert(
+      cutoff.getAttribute('aria-valuenow') === '400',
+      `The thumb shows the playing value: ${cutoff.getAttribute('aria-valuenow')}`,
+    );
+    assert(
+      cutoff
+        .querySelector('.slider-saved')
+        ?.getAttribute('data-saved-value') === String(saved),
+      'A tick marks the saved value',
+    );
+    assert(
+      panel().querySelector<HTMLButtonElement>('[data-add-menu]')!.disabled &&
+        panel().querySelector<HTMLButtonElement>('[data-remove-instrument]')!
+          .disabled &&
+        set.querySelector<HTMLInputElement>('[data-instrument-field="name"]')!
+          .disabled &&
+        set.querySelector<HTMLInputElement>('[data-instrument-field="voices"]')!
+          .disabled,
+      'Adding, removing, renaming and Voices are off during Play',
+    );
+    const width = cutoff.getBoundingClientRect().width;
+    const undoable = shell.editor.canUndo;
+    pointer(cutoff, 'pointerdown', width * 0.2);
+    pointer(cutoff, 'pointermove', width * 0.5);
+    pointer(cutoff, 'pointermove', width * 0.8);
+    await settled();
+    assert(
+      heard.length >= 2 && heard.every(h => h.parameter === 'cutoff'),
+      `A drag is heard as it moves: ${JSON.stringify(heard)}`,
+    );
+    assert(
+      synthParameters().cutoff === saved,
+      'Nothing is committed until the drag is let go',
+    );
+    heard.length = 0;
+    pointer(cutoff, 'pointerup', width * 0.8);
+    await settled();
+    const dragged = synthParameters().cutoff as number;
+    assert(dragged !== saved, 'Letting go commits the drag');
+    assert(
+      heard.length === 1 && heard[0]!.value === dragged,
+      `The commit is heard once: ${JSON.stringify(heard)}`,
+    );
+    assert(
+      cutoff.getAttribute('aria-valuenow') === String(dragged) &&
+        !cutoff.querySelector('.slider-saved'),
+      'A drag sets both the playing and the saved value',
+    );
+    assert(shell.editor.canUndo || undoable, 'The drag is one undo step');
+    heard.length = 0;
+    key(cutoff, { key: 'z', metaKey: true });
+    await settled();
+    assert(
+      synthParameters().cutoff === saved,
+      `⌘Z in the window undoes the drag: ${synthParameters().cutoff}`,
+    );
+    assert(
+      heard.length === 1 && heard[0]!.value === saved,
+      `The running Instrument hears the undo: ${JSON.stringify(heard)}`,
+    );
+    shell.setPlaying(undefined);
+    await settled();
+    assert(
+      slider(detail('synth')!, 'cutoff').getAttribute('aria-valuenow') ===
+        String(saved) &&
+        !panel().querySelector<HTMLButtonElement>('[data-add-menu]')!.disabled,
+      'When Play stops, the thumb returns to the saved value',
+    );
   });
 
   await test('the built worklet plays every Instrument', async () => {

@@ -165,7 +165,7 @@ export const zoomed = (zoom: number, direction: 1 | -1): number =>
 export class PerformLayout {
   readonly node: HTMLElement;
   readonly code: HTMLElement;
-  /** Where #2001 docks Palettes. */
+  /** Where #2001 docks Palettes, and #2081 the Instruments window. */
   readonly palettes: HTMLElement;
   readonly divider: HTMLElement;
   /** Hush, Revert, and the tempo and bar (#2002). */
@@ -187,6 +187,8 @@ export class PerformLayout {
   #settings = DEFAULT_PERFORM;
   #reader: { node: HTMLElement; parent: ParentNode | null } | undefined;
   #browser: HTMLElement | undefined;
+  /** The Instruments window, docked with the Palettes (#2081). */
+  #instruments: HTMLElement | undefined;
   #onResize: () => void = () => {};
 
   constructor() {
@@ -294,6 +296,14 @@ export class PerformLayout {
       this.code.append(browser);
       this.#browser = browser;
     }
+    // Docked first, above the Palettes, open or closed as the author left it;
+    // the Window menu still opens and closes it.
+    const instruments = document.getElementById('instruments-window');
+    if (instruments) {
+      instruments.classList.add('docked');
+      this.palettes.prepend(instruments);
+      this.#instruments = instruments;
+    }
     this.#apply();
   }
 
@@ -307,8 +317,13 @@ export class PerformLayout {
       this.#browser.style.removeProperty('font-size');
       document.body.append(this.#browser);
     }
+    if (this.#instruments) {
+      this.#instruments.classList.remove('docked');
+      document.body.append(this.#instruments);
+    }
     this.#reader = undefined;
     this.#browser = undefined;
+    this.#instruments = undefined;
     clearInterval(this.#ticking);
     this.#ticking = undefined;
     this.#anchor = undefined;

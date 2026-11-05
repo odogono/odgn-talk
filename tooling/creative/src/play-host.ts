@@ -224,6 +224,8 @@ export class PlayHost {
   #sentPalettes = new Map<string, string>();
   #sentState = '';
   #sentTargets = '';
+  // The Instruments' parameters the page last received, as JSON (#2081).
+  #sentInstruments = '';
   #pageHandles = { keyDown: false, keyUp: false };
   #heldElements: string[] = [];
   #edits = new WeakMap<DeepReadonly<Element>, number>();
@@ -314,6 +316,16 @@ export class PlayHost {
             applied: request.applied === true,
           });
         }
+        break;
+      }
+      case 'instrumentParameter': {
+        session.instruments.setParameter(
+          request.instrument,
+          request.parameter,
+          request.value,
+          request.applied !== true,
+        );
+        this.#publish();
         break;
       }
       case 'palette': {
@@ -554,6 +566,7 @@ export class PlayHost {
     this.#sentPage = undefined;
     this.#sentState = '';
     this.#sentTargets = '';
+    this.#sentInstruments = '';
     this.#problems = 0;
     this.#variablesPumps = -1;
     this.#voices.clear();
@@ -1090,6 +1103,10 @@ export class PlayHost {
     const targetKey = targets.map(target => target.id).join(',');
     const targetsChanged = full || targetKey !== this.#sentTargets;
     this.#sentTargets = targetKey;
+    const parameters = session.instruments.parameters();
+    const parametersJson = JSON.stringify(parameters);
+    const instrumentsChanged = full || parametersJson !== this.#sentInstruments;
+    this.#sentInstruments = parametersJson;
     const stoppedRun = this.#stoppedRun(session);
     const transport = this.#transport(session);
     // The count moves on by itself, so only a change of tempo, signature or
@@ -1115,7 +1132,8 @@ export class PlayHost {
       !palettes.length &&
       state === this.#sentState &&
       !notices.length &&
-      !problems.length
+      !problems.length &&
+      !instrumentsChanged
     ) {
       return;
     }
@@ -1140,6 +1158,7 @@ export class PlayHost {
         ...(palettes.length ? { palettes } : {}),
         pageHandles: this.#pageHandles,
         heldElements: this.#heldElements,
+        ...(instrumentsChanged ? { instruments: parameters } : {}),
         navigating: session.navigating,
         paused: this.#play.paused,
         ...(stoppedRun ? { stoppedRun } : {}),

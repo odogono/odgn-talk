@@ -269,3 +269,29 @@ export const outputMeters = (
 /** Whether any meter shows an Instrument's output, so the audio reports levels. */
 export const hasOutputMeters = (project: DeepReadonly<Project>): boolean =>
   project.pages.some(page => outputMeters(allElements(page.elements)).size > 0);
+
+/**
+ * The controls bound to each of `instrument`'s parameters, by parameter, as
+ * the Instruments window marks them (#2081): every Page and Palette's.
+ */
+export const boundControls = (
+  project: DeepReadonly<Project>,
+  instrument: string,
+): Map<string, string[]> => {
+  const bound = new Map<string, string[]>();
+  for (const page of project.pages) {
+    for (const element of allElements(page.elements)) {
+      const { output } = bindableFields(element);
+      for (const text of Object.values(element.bindings ?? {})) {
+        const target = parseBinding(text, output);
+        if (target?.kind === 'parameter' && target.instrument === instrument) {
+          bound.set(target.parameter, [
+            ...(bound.get(target.parameter) ?? []),
+            element.name,
+          ]);
+        }
+      }
+    }
+  }
+  return bound;
+};
