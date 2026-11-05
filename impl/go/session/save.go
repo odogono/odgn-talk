@@ -103,6 +103,41 @@ func (h *Host) restore(name string) []string {
 	}
 	return append(out, h.notifiedPump()...)
 }
+
+// addScript is `:script add <name> <path>`, or as a Transcript records it,
+// the Script's source on the lines after `:script add <name>` (ADR 0170).
+// The Script joins the session's Group with the Session Script's Grants,
+// owning no Host Object, and Entries reach it only by message.
+func (h *Host) addScript(rest string) []string {
+	head, body, recorded := strings.Cut(rest, "\n")
+	words := strings.Fields(head)
+	if len(words) < 2 || words[0] != "add" || !nameText.MatchString(words[1]) || recorded && len(words) != 2 || !recorded && len(words) != 3 {
+		return refusal("bad arguments")
+	}
+	name := words[1]
+	source := body + "\n"
+	if !recorded {
+		if h.env.ReadFile == nil {
+			return refusal("bad arguments")
+		}
+		s, err := h.env.ReadFile(words[2])
+		if err != nil {
+			return refusal("bad arguments")
+		}
+		source = strings.TrimSuffix(s, "\n") + "\n"
+		// A Transcript records the Script's source in place of its path.
+		input := ":script add " + name + "\n" + strings.TrimSuffix(source, "\n")
+		h.recording = &input
+	}
+	if name == "session" || h.group.Script(name) != nil {
+		return refusal("name reused")
+	}
+	h.addedScripts = append(h.addedScripts, talk.LibrarySource{Name: name, Source: source})
+	if _, err := h.group.Load(talk.LoadOptions{Name: name, Source: source, Grants: h.grants, GrantsAsUsed: true, Objects: h.objectBindings}); err != nil {
+		return h.refused(err, placement{}, -1)
+	}
+	return h.pump()
+}
 func (h *Host) library(rest string) []string {
 	head, body, recorded := strings.Cut(rest, "\n")
 	words := strings.Fields(head)

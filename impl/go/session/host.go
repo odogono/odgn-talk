@@ -140,6 +140,7 @@ type Host struct {
 	stubs                        map[string][]stub
 	libraries                    map[string]library
 	libraryOrder                 []string
+	addedScripts                 []talk.LibrarySource // as `:script add` gave them, loaded or not
 	saves                        map[string]saved
 	limits                       map[string]int64
 	virtual, lastClock, deadline time.Time
@@ -755,6 +756,11 @@ func (h *Host) UserLibraries() []talk.LibrarySource {
 	}
 	return out
 }
+
+// AddedScripts gives each Script `:script add` tried to load, in order,
+// including one that did not load: the Trace's `load` replays it either way.
+// Its Version is unused.
+func (h *Host) AddedScripts() []talk.LibrarySource { return slices.Clone(h.addedScripts) }
 
 // GrantBinding is the recorded binding used for independent Session replay.
 func (h *Host) GrantBinding(name string) string { return h.bindings[name] }
