@@ -14,6 +14,7 @@ import {
   decodeBinaryValue,
 } from '@northtalk/ts/message-layer';
 import type { DebugController } from '@northtalk/ts/debug';
+import type { PeerRouter } from '@northtalk/ts/peer';
 import {
   newDrivenGroup,
   type autoDrive,
@@ -32,6 +33,7 @@ import {
 
 export type Modules = [
   DebugController,
+  PeerRouter,
   typeof autoDrive,
   typeof createRouter,
   typeof buildSetupGroup,

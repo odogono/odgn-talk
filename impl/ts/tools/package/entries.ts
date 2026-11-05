@@ -13,6 +13,7 @@ export const entries = {
   './stdlib/text': 'src/generated/stdlib/text.ts',
   './stdlib/units': 'src/generated/stdlib/units.ts',
   './message-layer': 'src/message-layer.ts',
+  './peer': 'src/peer.ts',
   './session': 'src/session/index.ts',
   './store': 'src/store/index.ts',
   './notify': 'src/notify/index.ts',
