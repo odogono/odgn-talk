@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Scripts wait in Musical Units counted on the Host's Transport
