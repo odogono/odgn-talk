@@ -200,7 +200,7 @@ func (c *Core) defineCapabilityAs(name string, lifecycle *SegmentLifecycle, coor
 		}
 		// A Command Call can't start with a Reserved Word (ADR 0094).
 		if op.Command && slices.Contains(generated.Grammar.Reserved, op.Name) {
-			return invalid(op.Name + " is a Reserved Word, so it can't be a command")
+			return invalid("`" + op.Name + "` is a Reserved Word, so it can't name a command")
 		}
 		// Labels are Argument Label words, one per argument after the first
 		// (ADR 0115). An empty list is the same as none.

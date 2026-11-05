@@ -106,6 +106,8 @@ fn wordSet(comptime lists: []const []const []const u8) type {
 }
 
 const reserved = wordSet(&.{grammar.reserved});
+/// The Reserved Words a Container may start with: `the` and the Constants.
+const container_words = wordSet(&.{&[_][]const u8{ "the", "me", "it", "true", "false", "nothing" }});
 const follow = wordSet(&.{grammar.follow});
 const ordinals = wordSet(&.{grammar.ordinals});
 const label_reserved = wordSet(&.{grammar.labels.reserved});
@@ -403,8 +405,16 @@ const Parser = struct {
         return p.next(mode);
     }
 
+    /// A Reserved Word where the grammar wants a Name is `reserved word`,
+    /// reported at the word (#2089).
+    fn failName(p: *Parser, t: Token) error{Syntax} {
+        if (t.kind == .word and reserved.has(p.word(t))) return p.failCode(.reserved_word, t.start);
+        return p.failAt(t);
+    }
+
     fn name(p: *Parser, mode: Mode) Error!Tok {
-        if (!p.isName(try p.peek(mode))) return p.fail(mode);
+        const t = try p.peek(mode);
+        if (!p.isName(t)) return p.failName(t);
         return p.next(mode);
     }
 
@@ -857,6 +867,8 @@ const Parser = struct {
     // set may read implicit Object roots without making them assignable Containers.
     fn containerPath(p: *Parser, property_target: bool) Error!*Expr {
         const t = try p.peek(.operand);
+        // `the` starts a property path, and a Constant root is `not a container`.
+        if (t.kind == .word and !p.isName(t) and !container_words.has(p.word(t))) return p.failName(t);
         if (!p.startsExpr(t)) return p.failAt(t);
         const e = try p.chunkLevel();
         // An implicit root needs a key level along the path.
@@ -2118,7 +2130,7 @@ const Parser = struct {
             },
             else => {},
         }
-        return p.failAt(t);
+        return p.failName(t);
     }
 
     // ------------------------------------------------------------ Text Patterns
@@ -2201,7 +2213,7 @@ const Parser = struct {
         }
         const n = try p.peek2("capture", .pattern);
         if (n.kind == .colon) {
-            if (!p.isName(t)) return p.failAt(t);
+            if (!p.isName(t)) return p.failName(t);
             const capture = try p.next(.pattern);
             _ = try p.next(.pattern);
             return p.element(capture, .{ .capture = .{ .name = capture, .alternation = try p.alternation() } });
@@ -2548,7 +2560,7 @@ test "an ask may name a Result Target, before and wait (ADR 0112)" {
     }
     try expectOutcome("on t x\n  ask g to op x into item 1 of xs\nend t\n", "unexpected token at 2:27");
     try expectOutcome("on t x\n  ask g to op x and wait into y\nend t\n", "unexpected token at 2:26");
-    try expectOutcome("on t x\n  ask g to op into it\nend t\n", "unexpected token at 2:20");
+    try expectOutcome("on t x\n  ask g to op into it\nend t\n", "reserved word at 2:20");
     try expectOutcome("on t x\n  tell g to op x into y\nend t\n", "unexpected token at 2:18");
 }
 
@@ -2892,7 +2904,7 @@ test "on and with are Argument Labels in calls and Handler heads (ADR 0160)" {
     try testing.expectEqual(@as(usize, 3), body[0].data.command.args.len);
     try testing.expectEqual(@as(usize, 1), body[1].data.command.labels.len);
     // `on` stays Reserved, so it can't start a Selector.
-    try expectOutcome("on on x to y\nend on\n", "unexpected token at 1:4");
+    try expectOutcome("on on x to y\nend on\n", "reserved word at 1:4");
 }
 
 test "object element references and counts (#1143)" {

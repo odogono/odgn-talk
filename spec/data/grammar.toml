@@ -656,6 +656,10 @@ code = "unexpected token"
 raised_when = "A token can't continue the parse, including the end of a line or of the source"
 
 [[syntax_error]]
+code = "reserved word"
+raised_when = "A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target or a Result Target; checked before `unexpected token` and `not a container`, and reported at the Reserved Word"
+
+[[syntax_error]]
 code = "not a container"
 raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token"
 

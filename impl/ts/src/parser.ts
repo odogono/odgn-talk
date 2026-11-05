@@ -656,11 +656,27 @@ class Parser {
     }
     return this.next(mode);
   }
-  *name(what = 'a name', mode: Mode = 'operand'): ParseTask<string> {
+  // A Reserved Word where the grammar wants a Name (#2089): `role` is what
+  // the Name would have been, as in "can't name a variable".
+  reservedName(t: Token, role: string) {
+    if (t.t === 'word' && RESERVED.has(t.v)) {
+      throw new ParseError(
+        t,
+        'reserved word',
+        `\`${t.v}\` is a Reserved Word, so it can't name ${role}`,
+      );
+    }
+  }
+  *name(
+    what = 'a name',
+    mode: Mode = 'operand',
+    role = 'a variable',
+  ): ParseTask<string> {
     const frame = this.enter('Name');
     try {
       const t = this.peek(0, mode);
       if (!this.isName(t)) {
+        this.reservedName(t, role);
         this.fail(t, what);
       }
       return this.next(mode).v;
@@ -669,14 +685,14 @@ class Parser {
     }
   }
   // A Handler, message or event name: any name but `all` (a Join).
-  *messageName(what: string): ParseTask<string> {
+  *messageName(what: string, role = 'a message'): ParseTask<string> {
     const frame = this.enter('MessageName');
     try {
       const t = this.peek(0);
       if (this.isWord(t, 'all')) {
         this.fail(t, `${what} (\`all\` can't name a message)`);
       }
-      return (yield this.name(what)) as string;
+      return (yield this.name(what, 'operand', role)) as string;
     } finally {
       this.leave(frame);
     }
@@ -900,7 +916,7 @@ class Parser {
       }
       const name = fallback
         ? FALLBACK
-        : ((yield this.messageName('a Handler name')) as string);
+        : ((yield this.messageName('a Handler name', 'a Handler')) as string);
       const params: Node[] = [];
       let guard: Node | null = null;
       const suffixes: string[] = [];
@@ -990,7 +1006,11 @@ class Parser {
   private *parameter(): ParseTask<{ default: Node | null; name: string }> {
     const frame = this.enter('Parameter');
     try {
-      const name = (yield this.name('a parameter name')) as string;
+      const name = (yield this.name(
+        'a parameter name',
+        'operand',
+        'a parameter',
+      )) as string;
       let dflt: Node | null = null;
       if (this.isOp(this.peek(0, 'operator'), '=')) {
         this.next('operator');
@@ -1006,7 +1026,11 @@ class Parser {
     const frame = this.enter('Function');
     try {
       const fn = this.next();
-      const name = (yield this.name('a function name')) as string;
+      const name = (yield this.name(
+        'a function name',
+        'operand',
+        'a function',
+      )) as string;
       const params: { default: Node | null; name: string }[] = [];
       if (!this.atEnd('operand')) {
         params.push(
@@ -1361,6 +1385,10 @@ class Parser {
     const frame = this.enter('Container');
     try {
       const t = this.peek(0);
+      // `the` starts a property path, and a Constant root is `not a container`.
+      if (!this.isWord(t, 'the', 'me', 'it', 'true', 'false', 'nothing')) {
+        this.reservedName(t, 'a variable');
+      }
       if (!this.startsExpr(t)) {
         this.fail(t, 'a Container');
       }
@@ -3308,6 +3336,7 @@ class Parser {
         this.next();
         return { k: 'Bind', name: t.v };
       }
+      this.reservedName(t, 'a variable');
       this.fail(t, 'a pattern');
     } finally {
       this.leave(frame);
@@ -3403,7 +3432,8 @@ class Parser {
       const n = this.la2('capture', 'pattern');
       if (this.isOp(n, ':')) {
         if (!this.isName(t)) {
-          this.fail(t, "a Capture name (a Reserved Word can't name one)");
+          this.reservedName(t, 'a Capture');
+          this.fail(t, 'a Capture name');
         }
         this.next('pattern');
         this.next('pattern');

@@ -48,7 +48,7 @@ on t
   put <"a", b: > into x
 end t
 -- case: a Capture named with a Reserved Word
--- expect: unexpected token at 2:13
+-- expect: reserved word at 2:13
 on t
   put <"a", end: word> into x
 end t
@@ -224,7 +224,7 @@ on t x
   set ((the ("length") of x)) to 1
 end t
 -- case: `send it`: the message name can't be a Reserved Word
--- expect: unexpected token at 2:8
+-- expect: reserved word at 2:8
 on t
   send it to approvals
 end t
@@ -349,7 +349,7 @@ on t
     return r
 end t
 -- case: a Lambda as a variable name
--- expect: unexpected token at 2:14
+-- expect: reserved word at 2:14
 on t
   put 1 into given
 end t
@@ -522,8 +522,8 @@ on t
   move knight to
     "e4"
 end t
--- case: a label-first head (`to` is reserved, so it can't be a parameter)
--- expect: unexpected token at 1:7
+-- case: a label-first head (`to` is a Reserved Word, so it can't be a parameter)
+-- expect: reserved word at 1:7
 on go to x
 end go
 -- case: a label-first head with an open label reads it as a parameter
@@ -1549,13 +1549,13 @@ on t
 end t
 
 -- case: misplaced or non-Name Result Target: h into it
--- expect: unexpected token at 2:10
+-- expect: reserved word at 2:10
 on t
   h into it
 end t
 
 -- case: misplaced or non-Name Result Target: h into me
--- expect: unexpected token at 2:10
+-- expect: reserved word at 2:10
 on t
   h into me
 end t
@@ -1585,7 +1585,7 @@ on t
 end t
 
 -- case: misplaced or non-Name Result Target: h into the key of xs
--- expect: unexpected token at 2:10
+-- expect: reserved word at 2:10
 on t
   h into the key of xs
 end t
@@ -1603,7 +1603,7 @@ on t x
 end t
 
 -- case: misplaced or non-Name Result Target: ask into it
--- expect: unexpected token at 2:20
+-- expect: reserved word at 2:20
 on t x
   ask g to op into it
 end t
@@ -1612,4 +1612,75 @@ end t
 -- expect: unexpected token at 2:18
 on t x
   tell g to op x into y
+end t
+
+-- case: a Reserved Word as a Container root is reported at the word, not at the end of the line (#2089)
+-- expect: reserved word at 2:14
+on t
+  put 1 into replace
+end t
+
+-- case: `wait` as a Container root (#2089)
+-- expect: reserved word at 2:14
+on t x
+  put x into wait
+end t
+
+-- case: `to` as a Container root (#2089)
+-- expect: reserved word at 2:14
+on t
+  put 1 into to
+end t
+
+-- case: a Reserved Word as a Handler parameter (#2089)
+-- expect: reserved word at 1:7
+on go end
+
+-- case: a Reserved Word as a `repeat for each` pattern (#2089)
+-- expect: reserved word at 2:19
+on t xs
+  repeat for each end in xs
+  end repeat
+end t
+
+-- case: a Reserved Word as a Handler name (#2089)
+-- expect: reserved word at 1:4
+on wait x
+end wait
+
+-- case: a Reserved Word as a function name (#2089)
+-- expect: reserved word at 1:10
+function replace x
+  return x
+end replace
+
+-- case: a Reserved Word as a function parameter (#2089)
+-- expect: reserved word at 1:15
+function f x, wait
+  return 1
+end f
+
+-- case: a Reserved Word as a `let` name (#2089)
+-- expect: reserved word at 2:7
+on t
+  let send be 1
+end t
+
+-- case: a Reserved Word in a Destructuring binding (#2089)
+-- expect: reserved word at 2:11
+on t xs
+  let [a, put] be xs
+end t
+
+-- case: a Reserved Word as a `collecting` target (#2089)
+-- expect: reserved word at 2:45
+on t xs
+  repeat for each x in xs collecting x into tell
+  end repeat
+end t
+
+-- case: parses: `the` still starts a property path in a Container (#2089)
+-- expect: parses
+on t piece
+  put 1 into the location of piece
 end t
