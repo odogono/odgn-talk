@@ -1,8 +1,8 @@
 {
-  "reactor": "0.21.0-16-g0203fee5",
-  "sourceCommit": "0203fee51fc98bd9ba18979d38bfbd5d757a2fea",
+  "reactor": "0.22.0-8-g6de95cf3",
+  "sourceCommit": "6de95cf3c0286a1620711a053b5b9204fbd6ecd0",
   "zig": "0.17.1",
   "target": "wasm32-wasi",
   "optimize": "safe",
-  "sha256": "24b3b81f4635dff952e933cc5b4438db21bf2a07466a984a2d197d41aae97e22"
+  "sha256": "8afdee459fc4c74fc568b249b1ad2bf170886e1ab58cb53cd18dd13ab96174ae"
 }
