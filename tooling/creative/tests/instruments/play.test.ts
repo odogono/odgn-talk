@@ -78,6 +78,42 @@ test('parameters are properties: a Script reads and sets them', async () => {
   expect(play.project.instruments[0]!.parameters.cutoff).toBe(800);
 });
 
+test('a frequency parameter takes Hz and kHz as well as a plain number', async () => {
+  const { play, run, sent } = session();
+  await run('set the cutoff of bass to 1200 Hz');
+  expect(await run('the cutoff of bass')).toMatchObject({ text: '1200' });
+  await run('set the cutoff of bass to 2 kHz');
+  await run('set the cutoff of bass to 1.1 kHz');
+  await run('set the cutoff of bass to 900');
+  expect(await run('the cutoff of bass')).toMatchObject({ text: '900' });
+  expect(play.problems).toEqual([]);
+  expect(sent.map(m => m.commands)).toEqual(
+    [1200, 2000, 1100, 900].map(value => [
+      { kind: 'set', parameter: 'cutoff', value },
+    ]),
+  );
+});
+
+test('a frequency parameter refuses other Units and checks its range in Hz', async () => {
+  const { run, sent } = session();
+  // Each is `wrong kind`.
+  expect(await run('set the cutoff of bass to 800 ms')).toMatchObject({
+    error: expect.stringContaining('Expected "number or frequency"'),
+  });
+  expect(await run('set the cutoff of bass to 7 semitones')).toMatchObject({
+    error: expect.stringContaining('Expected "number or frequency"'),
+  });
+  // Only a frequency parameter takes a Quantity.
+  expect(await run('set the resonance of bass to 1 Hz')).toMatchObject({
+    error: expect.stringContaining('Expected "number"'),
+  });
+  // 30 kHz is 30000 Hz, past the cutoff's range.
+  expect(await run('set the cutoff of bass to 30 kHz')).toMatchObject({
+    error: expect.stringContaining('failed while doing "cutoff"'),
+  });
+  expect(sent).toEqual([]);
+});
+
 test('bad notes, velocities and parameter values are Script errors', async () => {
   const { run, sent } = session();
   for (const command of [
@@ -135,8 +171,15 @@ test('every Script Manifest lists the Instruments as objects and Grants', () => 
     'stop',
   ]);
   const synth = manifest.objectKinds.find(k => k.name === 'synth')!;
+  // A frequency parameter shows the Units it takes (ADR 0166).
   expect(synth.props).toContainEqual({
     name: 'cutoff',
+    shape: { oneOf: ['number', { unitKind: 'frequency' }] },
+    readOnly: false,
+    setCost: { fuel: 1 },
+  });
+  expect(synth.props).toContainEqual({
+    name: 'resonance',
     shape: 'number',
     readOnly: false,
     setCost: { fuel: 1 },

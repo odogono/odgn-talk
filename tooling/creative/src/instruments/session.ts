@@ -9,7 +9,6 @@ import {
   defineObjectKind,
   num,
   ScriptError,
-  shape,
   text,
   type Grant,
   type HostObject,
@@ -26,9 +25,9 @@ import {
   parameterProblem,
   type InstrumentCommand,
   type InstrumentKind,
-  type ParameterDefinition,
 } from './kind';
 import { noteNumber } from './notes';
+import { parameterNumber, parameterShape } from './parameter-units';
 import { INSTRUMENT_KINDS } from './registry';
 
 /**
@@ -96,13 +95,6 @@ const valueOf = (value: InstrumentParameterValue): Value =>
       ? bool(value)
       : text(value);
 
-const shapeOf = (definition: ParameterDefinition) =>
-  definition.shape === 'number'
-    ? shape.number
-    : definition.shape === 'boolean'
-      ? shape.bool
-      : shape.text;
-
 /**
  * A declaration without its documentation, which only the Manifest reads.
  * Every Instrument Operation is fire-and-forget.
@@ -167,14 +159,14 @@ export class InstrumentSession {
     const props: Record<string, PropDef<string>> = {};
     for (const [name, definition] of Object.entries(kind.parameters)) {
       props[name] = {
-        shape: shapeOf(definition),
+        shape: parameterShape(definition),
         setCost: { fuel: SET_FUEL },
         get: ({ native }) =>
           valueOf(this.#instruments.get(native)!.parameters[name]!),
         set: ({ native }: HostObject<string>, value: Value) => {
           const next =
-            value.kind === 'number'
-              ? value.asDecimal()!.toNumberLossy()
+            value.kind === 'number' || value.kind === 'quantity'
+              ? parameterNumber(definition, value)
               : value.kind === 'boolean'
                 ? value.asBool()!
                 : value.asText()!;

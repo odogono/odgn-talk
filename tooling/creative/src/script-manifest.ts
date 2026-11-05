@@ -10,7 +10,7 @@ import {
   type SyntaxNode,
 } from '@northtalk/ts';
 import { manifestGrants } from './grants';
-import { manifestGrant } from './grants/grant';
+import { manifestGrant, shapeData } from './grants/grant';
 import { harnessGrant } from './grants/harness';
 import { TEST_LIBRARY } from '@northtalk/tooling/test-script';
 import { PUMP_FUEL } from './grants/elements';
@@ -20,6 +20,7 @@ import { addOnKinds, kindOf, scriptKindOf } from './elements/registry';
 import { PLACEHOLDER_OBJECT_KIND } from './elements/add-on';
 import { INSTRUMENT_KINDS } from './instruments/registry';
 import type { InstrumentKind } from './instruments/kind';
+import { parameterShape } from './instruments/parameter-units';
 
 export type ScriptOwner = DeepReadonly<Project | Page | Element>;
 
@@ -123,7 +124,7 @@ const instrumentObjectKinds = () =>
     name: kind.name,
     props: Object.entries(kind.parameters).map(([name, parameter]) => ({
       name,
-      shape: parameter.shape,
+      shape: shapeData(parameterShape(parameter)),
       readOnly: false,
       setCost: { fuel: 1 },
     })),

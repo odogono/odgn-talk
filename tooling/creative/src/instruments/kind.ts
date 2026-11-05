@@ -14,6 +14,12 @@ export type ParameterDefinition =
       readonly max: number;
       readonly min: number;
       readonly shape: 'number';
+      /**
+       * The Catalogue Unit a plain number is read in, such as `Hz` (ADR
+       * 0166). Scripts may then set any Quantity of that Unit's Kind, such
+       * as `2 kHz`, which is stored as a plain number in this Unit.
+       */
+      readonly unit?: string;
       /** Whole numbers only. */
       readonly whole?: boolean;
     }
@@ -102,7 +108,7 @@ export const parameterProblem = (
         return 'expected a whole number';
       }
       return value < definition.min || value > definition.max
-        ? `expected a number from ${definition.min} to ${definition.max}`
+        ? `expected a number from ${definition.min} to ${definition.max}${definition.unit ? ` ${definition.unit}` : ''}`
         : undefined;
     case 'text':
       return typeof value === 'string' && definition.choices.includes(value)
