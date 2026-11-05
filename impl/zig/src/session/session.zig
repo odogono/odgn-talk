@@ -1425,6 +1425,7 @@ pub const Session = struct {
         if (std.mem.eql(u8, name, ":save")) return s.saveCommand(args);
         if (std.mem.eql(u8, name, ":restore")) return s.restoreCommand(args);
         if (std.mem.eql(u8, name, ":library")) return s.libraryCommand(args, input.more);
+        if (std.mem.eql(u8, name, ":script")) return s.scriptCommand(args, input.more);
         if (std.mem.eql(u8, name, ":export")) return s.exportCommand(args);
         if (std.mem.eql(u8, name, ":fix")) return s.fixCommand(args, input.more);
         if (std.mem.eql(u8, name, ":store")) return s.storeCommand(args, input.more);
@@ -1675,15 +1676,21 @@ pub const Session = struct {
         var inspection: ?*c.talk_inspection = null;
         try check_(c.talk_inspect(s.group, &inspection));
         defer c.talk_inspection_release(inspection);
-        const view = for (inspection.?.scripts[0..inspection.?.scripts_len]) |*v| {
+        const all = inspection.?.scripts[0..inspection.?.scripts_len];
+        const view = for (all) |*v| {
             if (std.mem.eql(u8, v.name[0..v.name_len], "session")) break v;
         } else return;
         if (std.mem.eql(u8, name, ":vars")) {
             for (view.vars[0..view.vars_len]) |p| s.sayf("{s} = {s}", .{ p.key[0..p.key_len], s.display(p.value) });
             return;
         }
+        // `:runs` and `:mailbox` cover every Script in the Group, the Session
+        // Script's first (ADR 0170).
+        var views: std.ArrayList(*const c.talk_script_view) = .empty;
+        try views.append(s.alloc(), view);
+        for (all) |*v| if (v != view) try views.append(s.alloc(), v);
         if (std.mem.eql(u8, name, ":runs")) {
-            for (view.runs[0..view.runs_len]) |r| {
+            for (views.items) |sv| for (sv.runs[0..sv.runs_len]) |r| {
                 var line: std.ArrayList(u8) = .empty;
                 const status = switch (r.status) {
                     c.TALK_READY => "ready",
@@ -1698,10 +1705,10 @@ pub const Session = struct {
                     for (r.calls[0..r.calls_len]) |id| try line.print(s.alloc(), " {s}", .{id.data[0..id.len]});
                 }
                 s.say(line.items);
-            }
+            };
             return;
         }
-        for (view.mailbox[0..view.mailbox_len]) |m| {
+        for (views.items) |sv| for (sv.mailbox[0..sv.mailbox_len]) |m| {
             var shown: std.ArrayList(u8) = .empty;
             try shown.append(s.alloc(), '[');
             for (m.message.args[0..m.message.args_len], 0..) |v, i| {
@@ -1711,7 +1718,7 @@ pub const Session = struct {
             try shown.append(s.alloc(), ']');
             const who = if (m.delivery_len > 0) m.delivery[0..m.delivery_len] else m.from[0..m.from_len];
             s.sayf("{s} {s} {s}", .{ who, m.message.name[0..m.message.name_len], shown.items });
-        }
+        };
     }
 
     // ------------------------------------------------------------ save and restore
@@ -1952,6 +1959,26 @@ pub const Session = struct {
         try s.libraries.put(s.alloc(), s.dupe(name), .{ .source = source, .library = library.? });
         s.harvestLibrary(library, name, source);
         s.harvest();
+    }
+
+    /// `:script add <name>`, with the Script's source on the lines after it
+    /// (ADR 0170): the Script joins the session's Group with the Session
+    /// Script's Grants, owning no Host Object, and Entries reach it only by
+    /// message.
+    fn scriptCommand(s: *Session, args: []const []const u8, lines: []const []const u8) !void {
+        if (args.len != 2 or lines.len == 0 or !std.mem.eql(u8, args[0], "add")) return s.say("! bad arguments");
+        const name = args[1];
+        if (std.mem.eql(u8, name, "session") or c.talk_group_script(s.group, name.ptr, name.len) != null) return s.say("! name reused");
+        const source = s.sourceOf(lines);
+        var bound: std.ArrayList(c.talk_load_object) = .empty;
+        for (s.setup.items) |b| try bound.append(s.alloc(), .{ .name = b.name.ptr, .name_len = b.name.len, .object = try s.objectOf(b.kind, b.id) });
+        const load: c.talk_load_options = .{ .name = name.ptr, .name_len = name.len, .source = source.ptr, .source_len = source.len, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = true, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
+        const mark = s.trace_lines.items.len;
+        var script: ?*c.talk_script = null;
+        const code = c.talk_load(s.group, &load, &script);
+        if (code == c.TALK_LOAD_REFUSED) return s.diagnostics(mark, name, 0, false, true);
+        if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
+        _ = try s.pump();
     }
 
     fn exportCommand(s: *Session, args: []const []const u8) !void {

@@ -1,0 +1,74 @@
+# Unblessed: Scripts added to a session (#2124); first blessing awaits human review.
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on bump" & newline & "  send increment to counter and wait" & newline & "  say it" & newline & "end bump" identity=df46aeed771d2dcae25b192bab53941002232a003ed09bc407b1fec9e1d520bd
+> load counter identity=02150e2a54c6bc731a19e96af29d819258c6b57617f17ceb9fe245c7dcf3358a
+> pump clock=2026-09-30T10:00:00Z
+pumped state=idle fuel=0
+> extend session source="on entry1" & newline & "bump and wait" & newline & "end entry1" & newline identity=05e2d014ea0b94810fc5d85f2332550704520a7b99fd81f7a389f194fdf70a48
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+send session/r1.c1 to=counter message=increment wait=yes
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=38 alloc=32 state=304 end=send-wait
+seg counter/r1 start from=session/r1.c1 handler=increment clause=1 fuel=17 alloc=16 state=16 end=return
+run counter/r1 outcome=completed handler=increment value=1 fuel=17 alloc=16
+call session/r1.c2 op=console.write args=[1]
+seg session/r1 resume fuel=19 alloc=0 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=57 alloc=32
+pumped state=idle fuel=74
+> save s1
+> extend session source="on entry2" & newline & "bump and wait" & newline & "end entry2" & newline identity=57087f53ac9a7305a3b36bebcfea20d4ebe143fda06b292de1851daa7bbdfad8
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+send session/r2.c1 to=counter message=increment wait=yes
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=38 alloc=32 state=304 end=send-wait
+seg counter/r2 start from=session/r2.c1 handler=increment clause=1 fuel=17 alloc=16 state=16 end=return
+run counter/r2 outcome=completed handler=increment value=2 fuel=17 alloc=16
+call session/r2.c2 op=console.write args=[2]
+seg session/r2 resume fuel=19 alloc=0 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=57 alloc=32
+pumped state=idle fuel=74
+> restore from=s1 fingerprint=893b61bf357103cfcd8a7cfd3e29be64a2be7a909cc89aeee413c13ac5931799 mode=full
+> extend session source="on entry2" & newline & "bump and wait" & newline & "end entry2" & newline identity=57087f53ac9a7305a3b36bebcfea20d4ebe143fda06b292de1851daa7bbdfad8
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+send session/r2.c1 to=counter message=increment wait=yes
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=38 alloc=32 state=304 end=send-wait
+seg counter/r2 start from=session/r2.c1 handler=increment clause=1 fuel=17 alloc=16 state=16 end=return
+run counter/r2 outcome=completed handler=increment value=2 fuel=17 alloc=16
+call session/r2.c2 op=console.write args=[2]
+seg session/r2 resume fuel=19 alloc=0 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=57 alloc=32
+pumped state=idle fuel=74
+> extend session source="on entry3" & newline & "send missing to counter" & newline & "end entry3" & newline identity=d4cd5d3f445842558532d8851d84c6a7687e85692735dde94ee124723082b57a
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+send session/r3 to=counter message=missing
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=29 alloc=32 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
+seg counter/r3 start from=session/r3 fuel=0 alloc=0 state=16 end=unhandled
+run counter/r3 outcome=unhandled fuel=0 alloc=0
+unhandled message=missing
+pumped state=idle fuel=29
+> extend session source="on entry4" & newline & "send doze to counter" & newline & "end entry4" & newline identity=6b014654a6c1926a686ae11096f5594577184bf8421db369dcd5886634d7b90d
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:00Z
+send session/r4 to=counter message=doze
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=29 alloc=32 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=29 alloc=32
+seg counter/r4 start from=session/r4 handler=doze clause=1 fuel=15 alloc=0 state=192 end=wait until=2026-09-30T10:00:10Z
+pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
+> vars
+vars session
+vars counter n=2
+> pump clock=2026-09-30T10:00:10Z
+seg counter/r4 resume fuel=3 alloc=0 state=16 end=return
+run counter/r4 outcome=completed handler=doze fuel=18 alloc=0
+pumped state=idle fuel=3
+> vars
+vars session
+vars counter n=2
+> load broken identity=b25ecc79951aaf7ed3c753f7e3d69c30875f87c6fbec8844c725b77bbc6ec186
+diag broken code="unknown name" pos=2:10
+> vars
+vars session
+vars counter n=2
