@@ -212,12 +212,25 @@ const tmLanguage = {
       },
     },
     declaration: {
-      match: String.raw`(?<![A-Za-z0-9_])(?:(private)[ \t]+)?(on|function)[ \t]+([A-Za-z_][A-Za-z0-9_]*)`,
-      captures: {
-        1: { name: 'storage.modifier.northtalk' },
-        2: { name: 'storage.type.function.northtalk' },
-        3: { name: 'entity.name.function.northtalk' },
-      },
+      patterns: [
+        {
+          match: String.raw`(?<![A-Za-z0-9_])(?:(private)[ \t]+)?(on|function)[ \t]+([A-Za-z_][A-Za-z0-9_]*)`,
+          captures: {
+            1: { name: 'storage.modifier.northtalk' },
+            2: { name: 'storage.type.function.northtalk' },
+            3: { name: 'entity.name.function.northtalk' },
+          },
+        },
+        // `shape` is a keyword only heading a top-level declaration (ADR 0168).
+        {
+          match: String.raw`^[ \t]*(?:(private)[ \t]+)?(shape)[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?=[ \t]+is(?![A-Za-z0-9_]))`,
+          captures: {
+            1: { name: 'storage.modifier.northtalk' },
+            2: { name: 'storage.type.northtalk' },
+            3: { name: 'entity.name.type.northtalk' },
+          },
+        },
+      ],
     },
     'block-end': {
       patterns: [

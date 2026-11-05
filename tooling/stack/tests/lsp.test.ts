@@ -2104,3 +2104,74 @@ test('a failing Documentation Example is a warning on its first differing line',
   });
   expect(published()).toEqual([]);
 });
+
+const labels = (text: string, line: number, character: number) =>
+  setup(text)
+    .request('textDocument/completion', at(line, character))
+    .map(i => i.label);
+describe('named Shapes', () => {
+  const source = [
+    '--| An order line.',
+    'shape Line is {sku: text, qty: number}',
+    'shape Order is {lines: list of Line, ref: optional text}',
+    'on demo x',
+    ' if x is an Order then put 1 into y',
+    ' put conforms(x, Li) into z',
+    'end demo',
+    '',
+  ].join('\n');
+  test('hovers a Shape name with its source spelling and documentation', () => {
+    const { request } = setup(source);
+    const line = 'shape Line is {sku: text, qty: number}\n\nAn order line.';
+    expect(request('textDocument/hover', at(1, 7)).contents.value).toBe(line);
+    expect(request('textDocument/hover', at(2, 32)).contents.value).toBe(line);
+    expect(request('textDocument/hover', at(4, 13)).contents).toEqual({
+      kind: 'plaintext',
+      value: 'shape Order is {lines: list of Line, ref: optional text}',
+    });
+  });
+  test('hovers an imported Shape with its Library spelling', () => {
+    const library = {
+      name: 'orders',
+      version: '1',
+      source: 'shape Money is GBP or EUR\n',
+      needs: [],
+    };
+    const { request } = setup(
+      'use Money from orders\non demo x\n if x is a Money then put 1 into y\nend demo\n',
+      { ...manifest, libraries: [...manifest.libraries, library] },
+      { textDocument: { hover: { contentFormat: ['markdown'] } } },
+    );
+    expect(request('textDocument/hover', at(2, 12)).contents).toEqual({
+      kind: 'markdown',
+      value: '```northtalk\nshape Money is GBP or EUR\n```',
+    });
+  });
+  test('completes kinds and Shape names after is a and in a Shape', () => {
+    const shaped = 'shape Line is {sku: text}\n';
+    for (const [text, line, character] of [
+      [`${shaped}on demo x\n if x is a `, 2, 11],
+      [`${shaped}on demo x\n if x is not an L`, 2, 17],
+      [`${shaped}shape Order is list of `, 1, 23],
+      [`${shaped}shape Order is {lines: `, 1, 23],
+    ] as const) {
+      const got = labels(text, line, character);
+      expect(got).toEqual(
+        expect.arrayContaining(['text', 'civil date', 'any', 'Line']),
+      );
+      expect(got).not.toContain('x');
+    }
+    // A map key is the author's own word.
+    expect(labels(`${shaped}shape Order is {`, 1, 16)).not.toContain('Line');
+    expect(
+      labels(`${shaped}shape Order is {\n  sku: text,\n  `, 3, 2),
+    ).not.toContain('Line');
+  });
+  test('completes Shape names and kind texts in a Shape-taking argument', () => {
+    const items = setup(source).request('textDocument/completion', at(5, 19));
+    expect(items.map(i => i.label)).toEqual(
+      expect.arrayContaining(['Line', 'Order', '"text"', '"civil date"']),
+    );
+    expect(items.find(i => i.label === 'Line')?.detail).toBe('shape');
+  });
+});

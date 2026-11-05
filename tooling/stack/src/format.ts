@@ -17,6 +17,8 @@ type Leaf = {
   attachLeft?: boolean;
   attachRight: boolean;
   depth: number;
+  /** A `(` that groups a Shape Term, which is never a call. */
+  group?: boolean;
   token: Token;
 };
 
@@ -74,9 +76,10 @@ const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
     attachRight: boolean;
     depth: number;
     element: SyntaxElement;
+    group?: boolean;
   }[] = [{ element: tree, depth: 0, attachRight: false }];
   while (stack.length) {
-    const { element, depth, attachRight, attachLeft } = stack.pop()!;
+    const { element, depth, attachRight, attachLeft, group } = stack.pop()!;
     if (element.kind === 'token') {
       const width = element.raw.startsWith('`')
         ? 1
@@ -90,7 +93,7 @@ const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
               depth,
             )
           : element;
-      out.push({ token, depth, attachRight, attachLeft });
+      out.push({ token, depth, attachRight, attachLeft, group });
       continue;
     }
     if (element.rule === 'Interpolated') {
@@ -203,6 +206,10 @@ const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
           child.t === 'op' &&
           ((element.rule === 'Unary' && child.v === '-') ||
             (child.v === '^' && child.mode !== 'operator')),
+        group:
+          element.rule === 'ShapeTerm' &&
+          child.kind === 'token' &&
+          child.v === '(',
       };
       if (branchBlock && child.kind === 'token' && child.t === 'nl') {
         branchDepth = 1;
@@ -244,8 +251,9 @@ const gap = (previous: Leaf, next: Leaf): string => {
   }
   // `say (x)` is a Command Call; `say(x)` is a function call. The parser
   // deliberately records this lexical distinction, which layout must keep.
+  // A Shape Term's brackets only group, so they always take a space.
   if (b.t === 'op' && b.v === '(') {
-    return b.spaceBefore ? ' ' : '';
+    return b.spaceBefore || next.group ? ' ' : '';
   }
   return ' ';
 };

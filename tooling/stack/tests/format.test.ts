@@ -297,3 +297,40 @@ test('keeps the labelled or positional form an Operation call is written in', ()
     'on go\n  ask world to move "a" to "b"\n  tell world\n    place "a" at 1\n  end tell\nend go',
   );
 });
+
+test('prints one spelling of a named Shape, spacing its grouping brackets', () => {
+  const source = [
+    'shape Line   is {sku:text,qty : number}',
+    'shape Pick is ( text or number ) or list   of(Line)',
+    'shape Big is {',
+    '    a: optional(optional text),',
+    '  amount :GBP, len: a  quantity of length,',
+    '      ...',
+    '}',
+    'on check x',
+    'return x is not  an Big',
+    'end check',
+    '',
+  ].join('\n');
+  const formatted = formatSource(source);
+  expect(formatted).toEqual({
+    source: [
+      'shape Line is {sku: text, qty: number}',
+      'shape Pick is (text or number) or list of (Line)',
+      'shape Big is {',
+      '  a: optional (optional text),',
+      '  amount: GBP, len: a quantity of length,',
+      '  ...',
+      '  }',
+      'on check x',
+      '  return x is not an Big',
+      'end check',
+      '',
+    ].join('\n'),
+    error: null,
+  });
+  expect(formatSource(formatted.source)).toEqual(formatted);
+  const before = compileSource(source, { name: 'shapes' }).unit!;
+  const after = compileSource(formatted.source, { name: 'shapes' }).unit!;
+  expect(canonical(disassemble(after))).toBe(canonical(disassemble(before)));
+});

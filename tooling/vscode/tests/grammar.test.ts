@@ -66,6 +66,18 @@ describe('the TextMate grammar', () => {
     expect(scopeOf('  end repeat', 'repeat')).toBe('keyword.control.northtalk');
   });
 
+  test('scopes a Shape declaration, and shape elsewhere as a Name', () => {
+    expect(tokenize('private shape Line is {sku: text}').slice(0, 4)).toEqual([
+      ['private', 'storage.modifier.northtalk'],
+      ['shape', 'storage.type.northtalk'],
+      ['Line', 'entity.name.type.northtalk'],
+      ['is', 'keyword.operator.word.northtalk'],
+    ]);
+    expect(scopeOf('  put 1 into shape', 'shape')).toBe(
+      'variable.other.northtalk',
+    );
+  });
+
   test('scopes the Fallback Handler', () => {
     const source = 'on any message m\n  pass any message\nend any message';
     expect(tokenize(source)).toEqual([
