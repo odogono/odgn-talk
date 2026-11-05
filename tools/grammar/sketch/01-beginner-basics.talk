@@ -51,6 +51,12 @@ on basics
     say "hip hip"
   end repeat
 
+  -- `with` alone is a Name, so this counts (#2097)
+  put 2 into with
+  repeat with times
+    say "hooray"
+  end repeat
+
   repeat while count > 0
     subtract 1 from count
   end repeat

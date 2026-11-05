@@ -1163,6 +1163,12 @@ const Parser = struct {
         } else if (p.isWord(t, "forever")) {
             _ = try p.next(.operand);
         } else {
+            // HyperTalk's counted loop, `repeat with i from 1 to n` (#2097).
+            // `with` alone is a Name, so `repeat with times` still counts.
+            if (p.isWord(t, "with")) {
+                const n = try p.peek2("repeat-with", .operator);
+                if (p.isName(n) and !follow.has(p.word(n))) return p.failCode(.repeat_with, t.start);
+            }
             const n = try p.expr();
             _ = try p.expectWord("times", .operator);
             r.head = .{ .times = n };

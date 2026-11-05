@@ -165,6 +165,7 @@ export const grammar = {
     "ordering-words",
     "pattern-anchor",
     "replace-first",
+    "repeat-with",
     "script-variable",
     "target",
     "wait-from",
