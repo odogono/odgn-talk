@@ -43,10 +43,23 @@ export type PeerLink = {
    * calls `keyed`. It hands the router no frame before then.
    */
   readonly key: string;
-  /** Starts the link; `own` is this Host's key, for a link that sends it. */
-  open(events: PeerLinkEvents, own: string): void;
+  /**
+   * Starts the link; `own` is this Host's key, for a link that sends it, and
+   * `signer` proves it, for a link that must.
+   */
+  open(events: PeerLinkEvents, own: string, signer?: HostSigner): void;
   /** Sends one frame; false when it can't, as when closed or too large. */
   send(frame: string): boolean;
+};
+
+/**
+ * What proves a Host holds its key: the key's DER SubjectPublicKeyInfo, and
+ * its ECDSA P-256 SHA-256 signature over some bytes, as the 64 bytes of `r`
+ * then `s`, as WebCrypto gives it.
+ */
+export type HostSigner = {
+  sign(data: Uint8Array): Promise<Uint8Array>;
+  readonly spki: Uint8Array;
 };
 
 export type PeerRouterOptions = {
@@ -56,6 +69,8 @@ export type PeerRouterOptions = {
   dial?: (address: string) => Promise<PeerLink | undefined>;
   /** This Host's key fingerprint. */
   key: string;
+  /** Proves this Host holds that key, for a link that asks, as a WebSocket does. */
+  signer?: HostSigner;
 };
 
 const hex = (bytes: Uint8Array) =>
@@ -69,14 +84,28 @@ export const fingerprintOf = async (spki: BufferSource): Promise<string> =>
 export const newHostKey = async (): Promise<{
   fingerprint: string;
   keys: CryptoKeyPair;
+  signer: HostSigner;
 }> => {
   const keys = await crypto.subtle.generateKey(
     { name: 'ECDSA', namedCurve: 'P-256' },
     false,
     ['sign', 'verify'],
   );
-  const spki = await crypto.subtle.exportKey('spki', keys.publicKey);
-  return { fingerprint: await fingerprintOf(spki), keys };
+  const spki = new Uint8Array(
+    await crypto.subtle.exportKey('spki', keys.publicKey),
+  );
+  const signer: HostSigner = {
+    spki,
+    sign: async data =>
+      new Uint8Array(
+        await crypto.subtle.sign(
+          { name: 'ECDSA', hash: 'SHA-256' },
+          keys.privateKey,
+          data as Uint8Array<ArrayBuffer>,
+        ),
+      ),
+  };
+  return { fingerprint: await fingerprintOf(spki), keys, signer };
 };
 
 const secret = () => hex(crypto.getRandomValues(new Uint8Array(16)));
@@ -178,8 +207,12 @@ export class PeerRouter {
     group: TsGroup,
     options: Partial<PeerRouterOptions> = {},
   ): Promise<PeerRouter> {
-    const key = options.key ?? (await newHostKey()).fingerprint;
-    const router = new PeerRouter({ ...options, key });
+    const made = options.key === undefined ? await newHostKey() : undefined;
+    const router = new PeerRouter({
+      ...options,
+      key: options.key ?? made!.fingerprint,
+      signer: options.signer ?? made?.signer,
+    });
     router.bind(group);
     return router;
   }
@@ -226,6 +259,7 @@ export class PeerRouter {
         },
       },
       this.key,
+      this.o.signer,
     );
   }
 
@@ -517,3 +551,10 @@ export {
   type MessagePortLinkOptions,
   type PortEndpoint,
 } from './peer-message-port';
+export {
+  acceptWebSocket,
+  webSocketLink,
+  type AcceptWebSocketOptions,
+  type WebSocketEndpoint,
+  type WebSocketLinkOptions,
+} from './peer-websocket';

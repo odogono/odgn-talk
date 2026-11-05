@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import {
   verifyHttpExample,
   verifyRunnerPeers,
+  verifyRunnerWebSockets,
   verifyScriptRunner,
 } from './run-integration';
 
@@ -26,6 +27,10 @@ test('Bun serves the HTTP example until SIGINT', async () => {
 test('Bun Runners carry Remote Sends over TLS and loopback TCP', async () => {
   await verifyRunnerPeers([process.execPath, main]);
 }, 60_000);
+
+test('Bun Runner accepts browser Hosts over --listen ws://', async () => {
+  await verifyRunnerWebSockets([process.execPath, main]);
+}, 30_000);
 
 // The Go Runner, built here when Go is on the path, speaks the same wire
 // (ADR 0163): each listens for the other, over TLS and loopback TCP.

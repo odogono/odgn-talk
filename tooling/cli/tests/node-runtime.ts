@@ -14,10 +14,12 @@ import { createTetrisProject } from '../../creative/src/examples/tetris';
 import {
   verifyHttpExample,
   verifyRunnerPeers,
+  verifyRunnerWebSockets,
   verifyScriptRunner,
 } from './run-integration';
 import { verifyPeerRouter } from '../../../impl/ts/tests/peer-router-scenario';
 import { verifyMessagePortLinks } from '../../../impl/ts/tests/peer-port-scenario';
+import { verifyWebSocketLinks } from '../../../impl/ts/tests/peer-websocket-scenario';
 
 // Node 22/24 warn about the bundled node:sqlite import. Child processes
 // still check CLI stderr and retain runtime warnings of other types.
@@ -126,4 +128,10 @@ process.stdout.write(
 await verifyRunnerPeers([process.execPath, main]);
 process.stdout.write(
   'Node CLI run: Runners carried Remote Sends over TLS and loopback TCP\n',
+);
+await verifyWebSocketLinks();
+process.stdout.write('Node peer router: WebSockets proved both keys\n');
+await verifyRunnerWebSockets([process.execPath, main]);
+process.stdout.write(
+  'Node CLI run: browser Hosts reached --listen ws:// over WebSockets\n',
 );
