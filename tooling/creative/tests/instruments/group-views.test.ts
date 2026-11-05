@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { draggedHandle, viewPicture } from '../../src/instruments/group-views';
 import { groupViewsProblem, type GroupView } from '../../src/instruments/kind';
-import { sliderPosition } from '../../src/instruments/parameter-sliders';
+import {
+  sliderPosition,
+  type NumberParameter,
+} from '../../src/instruments/parameter-sliders';
 import { synthEngine } from '../../src/instruments/synth';
 
 const { parameters } = synthEngine;
@@ -67,7 +70,9 @@ describe('group views', () => {
       ...defaults,
       resonance: 0.9,
     }).handles[0]!;
-    expect(low.x).toBeCloseTo(sliderPosition(parameters.cutoff, 4000));
+    expect(low.x).toBeCloseTo(
+      sliderPosition(parameters.cutoff as NumberParameter, 4000),
+    );
     expect(high.y).toBeGreaterThan(low.y);
     const dragged = draggedHandle(filter, parameters, defaults, 'cutoff', {
       x: 1,
