@@ -11,6 +11,7 @@ const lexer = @import("../syntax/lexer.zig");
 const catalogue = @import("../generated/diagnostics.zig").diagnostics;
 const stdlib = @import("../generated/stdlib.zig").stdlib;
 const grammar = @import("../generated/grammar.zig").grammar;
+const units_table = @import("../generated/units.zig");
 const unicode = @import("../unicode/unicode.zig");
 const Tok = ast.Tok;
 const Expr = ast.Expr;
@@ -260,6 +261,8 @@ pub const Grant = struct { name: []const u8, operations: []const Operation };
 pub const Export = struct {
     name: []const u8,
     kind: enum { function, constant, handler },
+    /// A Constant declared with `shape`, which `is a` may name (ADR 0168).
+    shape: bool = false,
     /// For a function: its parameters without defaults, and all of them.
     required: usize = 0,
     total: usize = 0,
@@ -464,6 +467,7 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
                 try out.append(scratch, .{ .name = tree.text(f.name), .kind = .function, .required = required, .total = f.params.len });
             },
             .constant => |k| try out.append(scratch, .{ .name = tree.text(k.name), .kind = .constant }),
+            .shape => |k| try out.append(scratch, .{ .name = tree.text(k.name), .kind = .constant, .shape = true }),
             .handler => |h| {
                 if (h.fallback) continue;
                 const name = tree.text(h.name);
@@ -485,6 +489,24 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
 
 const kind_names = [_][]const u8{ "nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "pattern", "function", "object" };
 const convertible = [_][]const u8{ "text", "number", "bytes", "instant" };
+
+/// A kind name, `any` or `value`: a scalar Shape (ADR 0168).
+pub fn isScalarShape(name: []const u8) bool {
+    return among(name, &kind_names) or std.mem.eql(u8, name, "any") or std.mem.eql(u8, name, "value");
+}
+
+pub fn isUnitKind(name: []const u8) bool {
+    for (units_table.units.kind) |k| if (std.mem.eql(u8, k.name, name)) return true;
+    return false;
+}
+
+/// A Shape Map key's text: a word, or a quoted text's contents.
+pub fn shapeKey(tree: *const ast.Tree, t: Tok) []const u8 {
+    const s = tree.text(t);
+    if (tree.tokens[t].kind == .text and s.len >= 2 and s[0] == '"' and !std.mem.startsWith(u8, s, "\"\"\"")) return s[1 .. s.len - 1];
+    if (tree.tokens[t].kind == .text) return tree.shared.fenced.get(tree.tokens[t].start).?.pieces[0];
+    return s;
+}
 
 fn among(word: []const u8, list: []const []const u8) bool {
     for (list) |w| if (std.mem.eql(u8, w, word)) return true;
@@ -715,9 +737,11 @@ const Checker = struct {
             switch (d.data) {
                 .script_variable => |v| {
                     if (c.context.library) try c.report(.not_in_a_library, v.keyword);
+                    if (c.constants.contains(c.text(v.name))) try c.report(.name_clash, v.name);
                     try c.variables.put(c.scratch, c.text(v.name), @intCast(c.variables.count()));
                 },
-                .constant => |k| try c.constants.put(c.scratch, c.text(k.name), index),
+                .constant => |k| try c.declareConstant(k.name, index),
+                .shape => |k| try c.declareConstant(k.name, index),
                 .function => |f| {
                     var required: usize = 0;
                     var seen_default = false;
@@ -727,6 +751,7 @@ const Checker = struct {
                             if (seen_default) try c.report(.default_order, p.name);
                         }
                     }
+                    if (c.constants.contains(c.text(f.name))) try c.report(.name_clash, f.name);
                     try c.functions.put(c.scratch, c.text(f.name), .{ .decl = index, .required = required, .total = f.params.len });
                 },
                 .handler => |h| {
@@ -767,6 +792,7 @@ const Checker = struct {
             }
         }
         try c.unitClashes();
+        try c.shapes();
         // The initialiser: each Script Variable's and Constant's value and
         // each parameter default, in source order.
         const init = try c.newScope(.init, null);
@@ -791,6 +817,14 @@ const Checker = struct {
             }
         }
         try c.suspension();
+    }
+
+    /// A Constant's or Shape's name: a clash with a Constant, function or
+    /// Script Variable declared above it, at this one.
+    fn declareConstant(c: *Checker, t: Tok, index: u32) Allocator.Error!void {
+        const name = c.text(t);
+        if (c.constants.contains(name) or c.functions.contains(name) or c.variables.contains(name)) try c.report(.name_clash, t);
+        try c.constants.put(c.scratch, name, index);
     }
 
     fn unitClashes(c: *Checker) Allocator.Error!void {
@@ -984,6 +1018,7 @@ const Checker = struct {
         for (c.tree.declarations) |d| switch (d.data) {
             .script_variable => |v| if (std.mem.eql(u8, c.text(v.name), name)) return later(t, v.name),
             .constant => |k| if (std.mem.eql(u8, c.text(k.name), name)) return later(t, k.name),
+            .shape => |k| if (std.mem.eql(u8, c.text(k.name), name)) return later(t, k.name),
             else => {},
         };
         return t;
@@ -2135,7 +2170,106 @@ const Checker = struct {
         if (k.civil_date) return;
         const name = c.text(k.name);
         if (among(name, &kind_names) or std.mem.eql(u8, name, "integer")) return;
+        if (c.isShape(name)) return;
         try c.report(.unknown_kind, k.name);
+    }
+
+    // ------------------------------------------------------------ named Shapes
+
+    /// A named Shape in scope: declared here with `shape`, or imported or
+    /// inherited as one (ADR 0168).
+    fn isShape(c: *Checker, name: []const u8) bool {
+        if (c.localShape(name) != null) return true;
+        if (c.imports.get(name)) |im| if (im.export_) |ex| return ex.shape;
+        return false;
+    }
+
+    fn localShape(c: *Checker, name: []const u8) ?u32 {
+        for (c.tree.declarations, 0..) |d, i| if (d.data == .shape and std.mem.eql(u8, c.text(d.data.shape.name), name)) return @intCast(i);
+        return null;
+    }
+
+    /// The load rules of each Shape declaration (chapter 7, Shape
+    /// declarations): `bad shape` at each offending token.
+    fn shapes(c: *Checker) Allocator.Error!void {
+        const decls = c.tree.declarations;
+        var any = false;
+        for (decls) |d| if (d.data == .shape) {
+            any = true;
+            const name = c.text(d.data.shape.name);
+            if (isScalarShape(name) or lexer.isUnitName(name) or isUnitKind(name)) try c.report(.bad_shape, d.data.shape.name);
+        };
+        if (!any) return;
+        // Each declaration's references to local Shapes, as (Name, decl).
+        var edges: std.ArrayList(std.ArrayList(Edge)) = .empty;
+        defer {
+            for (edges.items) |*e| e.deinit(c.scratch);
+            edges.deinit(c.scratch);
+        }
+        try edges.appendNTimes(c.scratch, .empty, decls.len);
+        for (decls, 0..) |d, i| if (d.data == .shape) try c.shapeTerm(d.data.shape.body, &edges.items[i]);
+        // Each group of Shapes that reach one another is one cycle, if a
+        // reference stays inside it: one report, at its first Name in
+        // source order. A group is handled at its first declaration.
+        var members = try std.DynamicBitSetUnmanaged.initEmpty(c.scratch, decls.len);
+        defer members.deinit(c.scratch);
+        for (decls, 0..) |d, i| {
+            if (d.data != .shape) continue;
+            members.unsetAll();
+            var root = true;
+            for (decls, 0..) |_, j| {
+                if (j != i and !(try c.shapeReaches(edges.items, i, j) and try c.shapeReaches(edges.items, j, i))) continue;
+                if (j < i) root = false;
+                members.set(j);
+            }
+            if (!root) continue;
+            var first: ?Tok = null;
+            var it = members.iterator(.{});
+            while (it.next()) |j| for (edges.items[j].items) |e| {
+                if (members.isSet(e.to) and (first == null or e.at < first.?)) first = e.at;
+            };
+            if (first) |t| try c.report(.bad_shape, t);
+        }
+    }
+
+    const Edge = struct { at: Tok, to: usize };
+
+    fn shapeReaches(c: *Checker, edges: []const std.ArrayList(Edge), from: usize, to: usize) Allocator.Error!bool {
+        var seen = try std.DynamicBitSetUnmanaged.initEmpty(c.scratch, edges.len);
+        defer seen.deinit(c.scratch);
+        var work: std.ArrayList(usize) = .empty;
+        defer work.deinit(c.scratch);
+        try work.append(c.scratch, from);
+        while (work.pop()) |n| {
+            if (n == to) return true;
+            if (seen.isSet(n)) continue;
+            seen.set(n);
+            for (edges[n].items) |e| try work.append(c.scratch, e.to);
+        }
+        return false;
+    }
+
+    fn shapeTerm(c: *Checker, e: *const ast.ShapeExpr, edges: *std.ArrayList(Edge)) Allocator.Error!void {
+        switch (e.data) {
+            .name => |k| {
+                if (k.civil_date) return;
+                const name = c.text(k.name);
+                if (isScalarShape(name) or lexer.isUnitName(name)) return;
+                if (c.localShape(name)) |d| return edges.append(c.scratch, .{ .at = k.name, .to = d });
+                if (!c.isShape(name)) try c.report(.bad_shape, k.name);
+            },
+            .unit, .object => {},
+            .unit_kind => |t| if (!isUnitKind(c.text(t))) try c.report(.bad_shape, t),
+            .list, .optional => |x| try c.shapeTerm(x, edges),
+            .one_of => |xs| for (xs) |x| try c.shapeTerm(x, edges),
+            .map => |m| for (m.fields, 0..) |f, i| {
+                for (m.fields[0..i]) |g| if (std.mem.eql(u8, shapeKey(c.tree, g.key), shapeKey(c.tree, f.key))) {
+                    try c.report(.bad_shape, f.key);
+                    break;
+                };
+                try c.shapeTerm(f.shape, edges);
+            },
+        }
     }
 
     /// `as` or `can be`: a kind with a conversion, or a Unit.
@@ -3255,4 +3389,38 @@ test "every corpus unit gives the diagnostics its case expects" {
     };
     try testing.expect(units > 400);
     try testing.expectEqual(@as(usize, 0), failures);
+}
+
+test "named Shapes: `bad shape` at load, and `is a` with a Shape (ADR 0168)" {
+    const cases = [_]struct { []const u8, []const u8 }{
+        .{ "shape S is {a: Missing}", "bad shape at 1:16\n" },
+        .{ "constant C = \"text\"\nshape S is C", "bad shape at 2:12\n" },
+        .{ "shape S is a quantity of colour", "bad shape at 1:26\n" },
+        .{ "shape S is {a: text, b: text, a: number}", "bad shape at 1:31\n" },
+        .{ "shape S is {\"a\": text, a: number}", "bad shape at 1:24\n" },
+        .{ "shape text is number", "bad shape at 1:7\n" },
+        .{ "shape any is number", "bad shape at 1:7\n" },
+        .{ "shape GBP is number", "bad shape at 1:7\n" },
+        .{ "shape days is number", "bad shape at 1:7\n" },
+        .{ "shape length is number", "bad shape at 1:7\n" },
+        .{ "shape S is list of S", "bad shape at 1:20\n" },
+        .{ "shape A is {b: B}\nshape B is list of A", "bad shape at 1:16\n" },
+        .{ "shape A is B\nshape B is A\nshape C is D\nshape D is C", "bad shape at 1:12\nbad shape at 3:12\n" },
+        .{ "shape Late is Early\nshape Early is number or GBP or m/s", "" },
+        .{ "constant S = 1\nconstant S = 2", "name clash at 2:10\n" },
+        .{ "constant S = 1\nshape S is text", "name clash at 2:7\n" },
+        .{ "shape S is text\nfunction S\nend S", "name clash at 2:10\n" },
+        .{ "function S\nend S\nshape S is text", "name clash at 3:7\n" },
+        .{ "script variable S\nshape S is text", "name clash at 2:7\n" },
+        .{ "shape S is text\nscript variable S", "name clash at 2:17\n" },
+        .{ "constant Line = \"number\"\non t x\n  put x is a Line into y\nend t", "unknown kind at 3:14\n" },
+        .{ "shape Line is {sku: text}\non t x\n  put [x is a Line, x is not an Line] into y\nend t", "" },
+    };
+    for (cases) |c| try expectDiagnostics(c[0], .{}, c[1]);
+    const context: Context = .{ .libraries = &.{.{ .name = "lib", .exports = &.{
+        .{ .name = "Line", .kind = .constant, .shape = true },
+        .{ .name = "Plain", .kind = .constant },
+    } }} };
+    try expectDiagnostics("use Line, Plain from lib\nshape S is list of Line\non t x\n  put x is a Line into y\nend t", context, "");
+    try expectDiagnostics("use Line, Plain from lib\nshape S is list of Plain", context, "bad shape at 2:20\n");
 }

@@ -243,6 +243,11 @@ fn declarationsIn(arena: Allocator, tree: *const ast.Tree) Allocator.Error![]con
                 x.name = tree.text(c.name);
                 x.signature = try std.fmt.allocPrint(arena, "constant {s}", .{x.name});
             },
+            .shape => |sh| {
+                x.kind = "constant";
+                x.name = tree.text(sh.name);
+                x.signature = try std.fmt.allocPrint(arena, "shape {s}", .{x.name});
+            },
             .script_variable => |v| {
                 x.kind = "variable";
                 x.name = tree.text(v.name);
@@ -278,6 +283,7 @@ fn firstToken(d: ast.Declaration) usize {
         .handler => |h| h.on,
         .function => |f| f.keyword,
         .constant => |k| k.keyword,
+        .shape => |k| k.keyword,
         .script_variable => |v| v.keyword,
         .use => |u| u.keyword,
     };

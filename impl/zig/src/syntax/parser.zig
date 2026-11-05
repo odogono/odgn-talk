@@ -502,7 +502,7 @@ const Parser = struct {
         if (try p.atWord("private", .operand)) {
             private = try p.next(.operand);
             const u = try p.peek(.operand);
-            if (!(p.isWord(u, "on") or p.isWord(u, "function") or p.isWord(u, "constant"))) return p.failAt(u);
+            if (!(p.isWord(u, "on") or p.isWord(u, "function") or p.isWord(u, "constant") or p.isWord(u, "shape"))) return p.failAt(u);
         }
         const t = try p.peek(.operand);
         if (p.isWord(t, "on")) return .{ .private = private, .data = .{ .handler = try p.handler() } };
@@ -515,6 +515,14 @@ const Parser = struct {
             const value = try p.expr();
             try p.endOfStatement();
             return .{ .private = private, .data = .{ .constant = .{ .keyword = keyword, .name = n, .value = value } } };
+        }
+        if (p.isWord(t, "shape")) {
+            const keyword = try p.next(.operand);
+            const n = try p.name(.operand);
+            _ = try p.expectWord("is", .operator);
+            const body = try p.shapeExpr();
+            try p.endOfStatement();
+            return .{ .private = private, .data = .{ .shape = .{ .keyword = keyword, .name = n, .body = body } } };
         }
         if (p.isWord(t, "script") and p.isWord(try p.peek2("script-variable", .operand), "variable")) {
             const keyword = try p.next(.operand);
@@ -529,6 +537,86 @@ const Parser = struct {
             return .{ .private = null, .data = .{ .script_variable = .{ .keyword = keyword, .name = n, .value = value } } };
         }
         return p.failAt(t);
+    }
+
+    // ------------------------------------------------------------ Shapes
+
+    /// Shape Terms joined by `or`, which binds loosest (ADR 0168).
+    fn shapeExpr(p: *Parser) Error!*ast.ShapeExpr {
+        const first = try p.shapeTerm();
+        if (!try p.atWord("or", .operator)) return first;
+        var terms: std.ArrayList(*ast.ShapeExpr) = .empty;
+        try terms.append(p.a, first);
+        while (try p.atWord("or", .operator)) {
+            _ = try p.next(.operator);
+            try terms.append(p.a, try p.shapeTerm());
+        }
+        return p.create(ast.ShapeExpr, .{ .first = first.first, .data = .{ .one_of = try p.list(*ast.ShapeExpr, &terms) } });
+    }
+
+    fn shapeTerm(p: *Parser) Error!*ast.ShapeExpr {
+        const t = try p.peek(.conversion);
+        try p.enter(t.start);
+        defer p.leave();
+        if (t.kind == .unit or t.kind == .invalid) {
+            const u = try p.next(.conversion);
+            return p.create(ast.ShapeExpr, .{ .first = u, .data = .{ .unit = u } });
+        }
+        if (t.kind == .left_paren) {
+            _ = try p.next(.operand);
+            const e = try p.nested(shapeExpr);
+            _ = try p.expect(.right_paren, .operator);
+            return e;
+        }
+        if (t.kind == .left_brace) return p.shapeMap();
+        if (p.isWord(t, "optional")) {
+            const first = try p.next(.operand);
+            return p.create(ast.ShapeExpr, .{ .first = first, .data = .{ .optional = try p.shapeTerm() } });
+        }
+        if (p.isWord(t, "list") or p.isWord(t, "object") or p.isWord(t, "a") or p.isWord(t, "an")) {
+            const n = try p.peek2("shape-of", .operator);
+            if ((p.isWord(t, "list") or p.isWord(t, "object")) and p.isWord(n, "of")) {
+                const first = try p.next(.operand);
+                _ = try p.next(.operator);
+                if (p.isWord(t, "list")) {
+                    return p.create(ast.ShapeExpr, .{ .first = first, .data = .{ .list = try p.shapeTerm() } });
+                }
+                return p.create(ast.ShapeExpr, .{ .first = first, .data = .{ .object = try p.name(.operand) } });
+            }
+            if ((p.isWord(t, "a") or p.isWord(t, "an")) and p.isWord(n, "quantity")) {
+                const first = try p.next(.operand);
+                _ = try p.next(.operator);
+                _ = try p.expectWord("of", .operator);
+                return p.create(ast.ShapeExpr, .{ .first = first, .data = .{ .unit_kind = try p.name(.operand) } });
+            }
+        }
+        const k = try p.kind(.operand);
+        return p.create(ast.ShapeExpr, .{ .first = k.name, .data = .{ .name = k } });
+    }
+
+    /// `{key: Shape, …}`, with `...` last for an open map.
+    fn shapeMap(p: *Parser) Error!*ast.ShapeExpr {
+        const open = try p.next(.operand);
+        var fields: std.ArrayList(ast.ShapeField) = .empty;
+        var is_open = false;
+        if (!try p.atKind(.right_brace, .operand)) {
+            while (true) {
+                if (try p.atKind(.ellipsis, .operand)) {
+                    _ = try p.next(.operand);
+                    is_open = true;
+                    break;
+                }
+                const key = try p.mapKey();
+                // Read in Unit mode, so a Compound Unit after the key lexes once.
+                const optional = p.isWord(try p.peek(.conversion), "optional");
+                if (optional) _ = try p.next(.conversion);
+                try fields.append(p.a, .{ .key = key, .optional = optional, .shape = try p.nested(shapeExpr) });
+                if (!try p.atKind(.comma, .operator)) break;
+                _ = try p.next(.operator);
+            }
+        }
+        _ = try p.expect(.right_brace, .operator);
+        return p.create(ast.ShapeExpr, .{ .first = open, .data = .{ .map = .{ .fields = try p.list(ast.ShapeField, &fields), .open = is_open } } });
     }
 
     fn use(p: *Parser) Error!ast.Use {

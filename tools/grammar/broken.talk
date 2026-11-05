@@ -1698,3 +1698,43 @@ on t
   repeat with i = 1 to 3
   end repeat
 end t
+-- case: named Shapes with every Shape Term
+-- expect: parses
+shape Line is {sku: text, qty: number}
+private shape Money is GBP or USD
+shape Invoice is {
+  type: text,
+  amount: Money,
+  speed: m/s,
+  span: a quantity of length,
+  owner: object of Account,
+  ref: optional text,
+  note: (optional text),
+  lines: list of Line,
+  tags: list of (text or number),
+  "made at": civil date,
+  ...
+}
+shape Anything is {...}
+shape Nested is list of list of object
+on file msg
+  if msg is an Invoice then put check(msg, Invoice) into inv
+  if msg is not a Line then say "no"
+end file
+-- case: `shape` is a Name outside a declaration
+-- expect: parses
+on t shape
+  put shape into a
+end t
+-- case: a text literal is not a Shape Term (left for literal-value Shapes)
+-- expect: unexpected token at 1:24
+shape State is text or "draft"
+-- case: `...` comes last in a Shape Map
+-- expect: unexpected token at 1:16
+shape S is {..., a: text}
+-- case: a Shape declaration needs `is`
+-- expect: unexpected token at 1:9
+shape S = {a: text}
+-- case: `object of` takes only a Name
+-- expect: unexpected token at 1:22
+shape S is object of {a: text}

@@ -1,0 +1,4 @@
+-- orders.talk: a Library that exports a Shape built on a private one.
+
+private shape Sku is text
+shape Line is {sku: Sku, qty: number}

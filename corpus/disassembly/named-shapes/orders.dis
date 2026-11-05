@@ -1,0 +1,28 @@
+unit orders library
+constants
+  0 "text"
+  1 "sku"
+  2 ["key", "shape"]
+  3 "qty"
+  4 "number"
+  5 ["map"]
+  6 nothing
+definitions
+  0 Sku
+  1 Line
+bodies
+  0 init initialiser () locals 1 0000..0012
+code
+  0000 3:9 const 0 ; "text"
+  0001 3:9 store-definition Sku
+  0002 4:1 const 1 ; "sku"
+  0003 4:1 const 0 ; "text"
+  0004 4:1 map 2 2 ; ["key", "shape"]
+  0005 4:1 const 3 ; "qty"
+  0006 4:1 const 4 ; "number"
+  0007 4:1 map 2 2 ; ["key", "shape"]
+  0008 4:1 list 2
+  0009 4:1 map 5 1 ; ["map"]
+  0010 4:1 store-definition Line
+  0011 1:1 const 6 ; nothing
+  0012 1:1 return

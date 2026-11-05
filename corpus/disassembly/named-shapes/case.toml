@@ -1,0 +1,29 @@
+# Unblessed: named Shapes' lowering (#2106); first blessing awaits human review.
+# named-shapes: pins the lowering of Shape declarations (ADR 0168). The
+# initialiser builds each Shape's data at its `shape` keyword, in chapter 9's
+# canonical order, with local named Shapes inlined and an imported one read
+# with `load-definition`; `is a` with a named Shape loads it and calls
+# `conforms`, and `is a` with a kind is still `is-kind`.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "orders"
+version = "1"
+source = "orders.talk"
+
+[[scripts]]
+name = "checks"
+source = "checks.talk"
+
+[[disassembly]]
+unit = "orders"
+expected = "orders.dis"
+
+[[disassembly]]
+unit = "checks"
+expected = "checks.dis"
