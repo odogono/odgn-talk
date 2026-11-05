@@ -1224,6 +1224,15 @@ export class BodyCompiler {
   }
 
   handler(d: Node) {
+    // A Clause Shape, `p is a S`, tests the whole argument after every
+    // pattern and before the Guard (ADR 0171); `is not` is a load error.
+    const shapes: (Node | null)[] = d.params.map((p: Node) =>
+      p.k === 'ClauseShape' ? p : null,
+    );
+    d = {
+      ...d,
+      params: d.params.map((p: Node) => (p.k === 'ClauseShape' ? p.p : p)),
+    };
     // Each parameter arrives in slots 1 to n. A name is its own slot, and any
     // other pattern tests the argument's slot and binds its names directly,
     // since a clause's frame is fresh (chapter 8).
@@ -1241,7 +1250,7 @@ export class BodyCompiler {
       .forEach((n: string) => this.declare(n));
     this.prescan(d.body);
     const failed = this.label();
-    this.params(d.params, argSlots, d.guard, failed, true);
+    this.params(d.params, argSlots, d.guard, failed, true, shapes);
     if (d.finally) {
       this.tryBlock({
         k: 'Try',
@@ -1268,11 +1277,17 @@ export class BodyCompiler {
     guard: Node | null,
     failed: Label,
     guarded: boolean,
+    shapes: (Node | null)[] = [],
   ) {
     const test = () => {
       pats.forEach((p, i) => {
         if (p.k !== 'Bind') {
           this.pattern(p, slots[i]!, failed, null);
+        }
+      });
+      shapes.forEach((s, i) => {
+        if (s) {
+          this.clauseShape(s, slots[i]!, failed);
         }
       });
       if (guard) {
@@ -1284,6 +1299,23 @@ export class BodyCompiler {
     } else {
       test();
     }
+  }
+
+  // `p is a S` in a Handler head: the argument's slot, then the same test as
+  // the expression `is a` (ADR 0168), then a branch to `failed`.
+  clauseShape(s: Node, slot: number, failed: Label) {
+    if (s.neg) {
+      throw new Error('negated shape: write `is not a` as a Guard');
+    }
+    this.at(s);
+    this.emit('load', [slot]);
+    if (this.u.shapes.has(s.kind)) {
+      this.load(s.kind, s);
+      this.emit('call-builtin', ['conforms', 2]);
+    } else {
+      this.emit('is-kind', [s.kind]);
+    }
+    this.emit('branch-false', [failed]);
   }
 
   guard(g: Node, failed: Label) {

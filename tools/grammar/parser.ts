@@ -662,15 +662,15 @@ export class Parser {
     const t = this.peek(0);
     const labels: string[] = [];
     if (fallback) {
-      params.push(this.pattern());
+      params.push(this.headParam());
     } else if (!(
       t.t === 'nl' ||
       t.t === 'eof' ||
       this.isWord(t, 'where') ||
       this.isOp(t, ',')
     )) {
-      params.push(this.pattern());
-      this.labelled(() => this.pattern(), labels, params);
+      params.push(this.headParam());
+      this.labelled(() => this.headParam(), labels, params);
     }
     // Parameters, then a Guard, then suffixes. After a comma, a suffix word
     // is always a suffix, so it can't be a parameter name there.
@@ -704,7 +704,7 @@ export class Parser {
       } else if (inParams && labels.length) {
         this.fail(w, 'a suffix (no commas between labelled parameters)');
       } else if (inParams) {
-        params.push(this.pattern());
+        params.push(this.headParam());
       } else {
         this.fail(
           w,
@@ -2354,6 +2354,34 @@ export class Parser {
   }
 
   // ---------------------------------------------------------------- Destructuring
+
+  // A Handler parameter: a pattern, then an optional Clause Shape,
+  // `is a Kind` (ADR 0171). `is not a` parses; the loader refuses it.
+  headParam(): Node {
+    const p = this.pattern();
+    if (!this.atOperatorWord('is')) {
+      return p;
+    }
+    const is = this.next('operator');
+    let neg = false;
+    if (this.atWord('not')) {
+      this.next();
+      neg = true;
+    }
+    const a = this.peek(0);
+    if (!this.isWord(a, 'a', 'an')) {
+      this.fail(a, '`a` or `an` and a kind or Shape name');
+    }
+    this.next();
+    return {
+      k: 'ClauseShape',
+      p,
+      neg,
+      kind: this.kind(),
+      line: is.line,
+      col: is.col,
+    };
+  }
 
   pattern(): Node {
     const t = this.peek(0);

@@ -568,8 +568,12 @@ A message's name together with its Argument Labels, written `move:to:`. Two Hand
 _Avoid_: signature, method name
 
 **Handler Clause**:
-One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
+One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking optional Clause Shapes and an optional Guard, Elixir-style.
 _Avoid_: overload
+
+**Clause Shape**:
+The `is a S` after a Handler Clause's parameter, as in `on handle inv is an Invoice`. The clause matches only when that argument fits the kind or named Shape, as if a Guard tested it.
+_Avoid_: type annotation, parameter type, contract
 
 **Fallback Handler**:
 A Script's `on any message m … end any message` Handler, which takes a message after none of the Script's Handler Clauses for its Selector matches, before it climbs the Message Path. It never takes a Broadcast, a Decision or an `error` message.

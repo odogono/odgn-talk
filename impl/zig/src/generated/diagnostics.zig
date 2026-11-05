@@ -377,6 +377,15 @@ pub const diagnostics: DiagnosticsTable = .{
             },
         },
         .{
+            .code = "negated shape",
+            .raised_when = "A Handler head's Clause Shape is written `is not a` or `is not an`; write the test as a Guard",
+            .at = "`not`",
+            .sources = &.{
+                "ADR 0171",
+                "#2056",
+            },
+        },
+        .{
             .code = "bad suffixes",
             .raised_when = "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler",
             .at = "the first suffix that breaks the rule",
