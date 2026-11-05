@@ -1082,6 +1082,9 @@ export class SessionHost {
       case 'library':
         this.start();
         return this.library(rest);
+      case 'script':
+        this.start();
+        return this.addScript(rest);
       case 'export':
         this.start();
         return this.export(words(rest, rest.trim() ? 1 : 0)[0]);
@@ -1834,6 +1837,74 @@ export class SessionHost {
     return this.discarded(reports);
   }
 
+  // ------------------------------------------------------------- scripts
+
+  // `:script add <name> <path>`, or as a Transcript records it, the Script's
+  // source on the lines after `:script add <name>` (ADR 0170). The Script
+  // joins the session's Group with the Session Script's Grants, owning no
+  // Host Object, and Entries reach it only by message.
+  private addScript(rest: string): string[] {
+    const newline = rest.indexOf('\n');
+    const head = newline < 0 ? rest : rest.slice(0, newline);
+    const [how, name, path, more] = head.trim().split(/\s+/u);
+    if (
+      how !== 'add' ||
+      !NAME_TEXT.test(name ?? '') ||
+      more !== undefined ||
+      newline < 0 === (path === undefined)
+    ) {
+      refuse('bad arguments');
+    }
+    let source: string;
+    if (newline >= 0) {
+      source = `${rest.slice(newline + 1)}\n`;
+    } else {
+      try {
+        source = librarySource(this.env.readFile!(path!));
+      } catch {
+        return refuse('bad arguments');
+      }
+      // A Transcript records the Script's source in place of its path.
+      this.recording = `:script add ${name}\n${source.slice(0, -1)}`;
+    }
+    if (name === NAME || this.group!.script(name!)) {
+      refuse('name reused');
+    }
+    // The Setup names it too, so a Trace's `load` replays it,
+    // even one that doesn't load.
+    const session = this.setup0.scripts![0]!;
+    this.setup0 = immutableSetup({
+      ...this.setup0,
+      scripts: [
+        ...this.setup0.scripts!,
+        {
+          name: name!,
+          source: '(inline)',
+          text: source,
+          grants: session.grants,
+          grantsAsUsed: true,
+        },
+      ],
+    });
+    try {
+      this.group!.load({
+        name: name!,
+        source,
+        grants: this.grantsByName,
+        grantsAsUsed: true,
+        objects: this.objectBindings,
+      });
+    } catch (error) {
+      if (error instanceof LoadError) {
+        return error.diagnostics.map(
+          d => `! ${d.code} at ${d.unit}:${d.line}:${d.col}`,
+        );
+      }
+      return this.refused(error, { line: 0, col: 0 });
+    }
+    return this.pump();
+  }
+
   // ------------------------------------------------------------- stores
 
   // `:store`'s four forms, each naming a Session Store, `default` if none.
@@ -1926,34 +1997,42 @@ export class SessionHost {
 
   // `:runs`, `:mailbox` and `:vars` render `Inspect()`, the Host Input `vars`.
   private inspected(what: 'runs' | 'mailbox' | 'vars'): string[] {
-    const script = this.inspect()!.scripts.find(s => s.name === NAME)!;
+    const scripts = this.inspect()!.scripts;
+    const script = scripts.find(s => s.name === NAME)!;
+    // `:runs` and `:mailbox` cover every Script in the Group, the Session
+    // Script's first, and `:vars` the Session Script's only (ADR 0170).
+    const all = [script, ...scripts.filter(s => s !== script)];
     if (what === 'vars') {
       return script.vars.map(
         ([name, value]) => `${name} = ${value.toString()}`,
       );
     }
     if (what === 'mailbox') {
-      return script.mailbox.map(
-        m =>
-          `${m.delivery ?? m.from} ${m.message.name} ${listValues(m.message.args ?? []).toString()}`,
-      );
+      return all
+        .flatMap(s => s.mailbox)
+        .map(
+          m =>
+            `${m.delivery ?? m.from} ${m.message.name} ${listValues(m.message.args ?? []).toString()}`,
+        );
     }
-    return script.runs.map(r =>
-      [
-        r.id,
-        r.status,
-        r.handler,
-        ...(r.status === 'suspended'
-          ? [
-              r.wait,
-              ...(r.until === undefined
-                ? []
-                : ['until', formatInstant(r.until)]),
-              ...(r.calls ?? []),
-            ]
-          : []),
-      ].join(' '),
-    );
+    return all
+      .flatMap(s => s.runs)
+      .map(r =>
+        [
+          r.id,
+          r.status,
+          r.handler,
+          ...(r.status === 'suspended'
+            ? [
+                r.wait,
+                ...(r.until === undefined
+                  ? []
+                  : ['until', formatInstant(r.until)]),
+                ...(r.calls ?? []),
+              ]
+            : []),
+        ].join(' '),
+      );
   }
 
   private discarded(reports: readonly Report[]): string[] {
