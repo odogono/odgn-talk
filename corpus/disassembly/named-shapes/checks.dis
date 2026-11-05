@@ -1,0 +1,124 @@
+unit checks script
+constants
+  0 "GBP"
+  1 ["quantity"]
+  2 "USD"
+  3 ["oneOf"]
+  4 "type"
+  5 "text"
+  6 ["key", "shape"]
+  7 "amount"
+  8 "speed"
+  9 "m/s"
+  10 "span"
+  11 "length"
+  12 ["unitKind"]
+  13 "owner"
+  14 "Account"
+  15 ["object"]
+  16 "ref"
+  17 true
+  18 ["key", "shape", "optional"]
+  19 "note"
+  20 ["optional"]
+  21 "lines"
+  22 ["list"]
+  23 "made at"
+  24 "civil date"
+  25 ["map", "open"]
+  26 "number"
+  27 nothing
+  28 "invoice"
+  29 "other"
+definitions
+  0 orders:Line
+  1 Money
+  2 Invoice
+  3 Late
+  4 Early
+bodies
+  0 init initialiser () locals 1 0000..0062
+  1 handler check clause 1 (msg) locals 2 0063..0081
+code
+  0000 5:1 const 0 ; "GBP"
+  0001 5:1 map 1 1 ; ["quantity"]
+  0002 5:1 const 2 ; "USD"
+  0003 5:1 map 1 1 ; ["quantity"]
+  0004 5:1 list 2
+  0005 5:1 map 3 1 ; ["oneOf"]
+  0006 5:1 store-definition Money
+  0007 6:1 const 4 ; "type"
+  0008 6:1 const 5 ; "text"
+  0009 6:1 map 6 2 ; ["key", "shape"]
+  0010 6:1 const 7 ; "amount"
+  0011 6:1 const 0 ; "GBP"
+  0012 6:1 map 1 1 ; ["quantity"]
+  0013 6:1 const 2 ; "USD"
+  0014 6:1 map 1 1 ; ["quantity"]
+  0015 6:1 list 2
+  0016 6:1 map 3 1 ; ["oneOf"]
+  0017 6:1 map 6 2 ; ["key", "shape"]
+  0018 6:1 const 8 ; "speed"
+  0019 6:1 const 9 ; "m/s"
+  0020 6:1 map 1 1 ; ["quantity"]
+  0021 6:1 map 6 2 ; ["key", "shape"]
+  0022 6:1 const 10 ; "span"
+  0023 6:1 const 11 ; "length"
+  0024 6:1 map 12 1 ; ["unitKind"]
+  0025 6:1 map 6 2 ; ["key", "shape"]
+  0026 6:1 const 13 ; "owner"
+  0027 6:1 const 14 ; "Account"
+  0028 6:1 map 15 1 ; ["object"]
+  0029 6:1 map 6 2 ; ["key", "shape"]
+  0030 6:1 const 16 ; "ref"
+  0031 6:1 const 5 ; "text"
+  0032 6:1 const 17 ; true
+  0033 6:1 map 18 3 ; ["key", "shape", "optional"]
+  0034 6:1 const 19 ; "note"
+  0035 6:1 const 5 ; "text"
+  0036 6:1 map 20 1 ; ["optional"]
+  0037 6:1 map 6 2 ; ["key", "shape"]
+  0038 6:1 const 21 ; "lines"
+  0039 6:1 load-definition orders:Line
+  0040 6:1 map 22 1 ; ["list"]
+  0041 6:1 map 6 2 ; ["key", "shape"]
+  0042 6:1 const 23 ; "made at"
+  0043 6:1 const 24 ; "civil date"
+  0044 6:1 map 6 2 ; ["key", "shape"]
+  0045 6:1 list 9
+  0046 6:1 const 17 ; true
+  0047 6:1 map 25 2 ; ["map", "open"]
+  0048 6:1 store-definition Invoice
+  0049 18:1 const 26 ; "number"
+  0050 18:1 const 5 ; "text"
+  0051 18:1 list 2
+  0052 18:1 map 3 1 ; ["oneOf"]
+  0053 18:1 map 22 1 ; ["list"]
+  0054 18:1 store-definition Late
+  0055 19:1 const 26 ; "number"
+  0056 19:1 const 5 ; "text"
+  0057 19:1 list 2
+  0058 19:1 map 3 1 ; ["oneOf"]
+  0059 19:1 map 22 1 ; ["list"]
+  0060 19:1 store-definition Early
+  0061 1:1 const 27 ; nothing
+  0062 1:1 return
+  0063 22:6 load 1 ; msg
+  0064 22:10 load-definition Invoice
+  0065 22:10 call-builtin conforms 2
+  0066 22:3 branch-false 0069
+  0067 22:36 const 28 ; "invoice"
+  0068 22:29 return
+  0069 23:6 load 1 ; msg
+  0070 23:10 load-definition orders:Line
+  0071 23:10 call-builtin conforms 2
+  0072 23:10 not
+  0073 23:3 branch-false 0076
+  0074 23:36 const 29 ; "other"
+  0075 23:29 return
+  0076 24:10 load 1 ; msg
+  0077 24:14 is-kind number
+  0078 24:3 return
+  0079 25:1 const 27 ; nothing
+  0080 25:1 return
+  0081 25:1 clause-fail

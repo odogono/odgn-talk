@@ -1,0 +1,25 @@
+-- checks.talk: named Shapes, local and imported, and `is a` with them.
+
+use Line from orders
+
+shape Money is GBP or USD
+shape Invoice is {
+  type: text,
+  amount: Money,
+  speed: m/s,
+  span: a quantity of length,
+  owner: object of Account,
+  ref: optional text,
+  note: (optional text),
+  lines: list of Line,
+  "made at": civil date,
+  ...
+}
+shape Late is Early
+shape Early is list of (number or text)
+
+on check msg
+  if msg is an Invoice then return "invoice"
+  if msg is not a Line then return "other"
+  return msg is a number
+end check

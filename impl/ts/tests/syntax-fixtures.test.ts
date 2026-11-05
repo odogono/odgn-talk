@@ -40,13 +40,8 @@ const assertLossless = (source: string, tree: SyntaxElement) => {
 
 // These expected codes and positions are authored fixtures, never generated
 // from either parser. Run them through the public Core, independently of tools.
-// staged.talk holds cases the TS Core parses before the Zig Core does (#2106).
-const fixtures = ['broken.talk', 'staged.talk'].flatMap(file =>
-  readFileSync(resolve(root, 'tools/grammar', file), 'utf8')
-    .split(/^-- case: /m)
-    .slice(1),
-);
-for (const part of fixtures) {
+const broken = readFileSync(resolve(root, 'tools/grammar/broken.talk'), 'utf8');
+for (const part of broken.split(/^-- case: /m).slice(1)) {
   const [label, expectedLine, ...lines] = part.split('\n');
   const source = lines.join('\n');
   const expected = expectedLine!.replace('-- expect: ', '');

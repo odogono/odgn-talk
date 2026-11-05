@@ -2464,6 +2464,7 @@ pub const Group = struct {
                 const reused = switch (d.data) {
                     .script_variable => |v| s.hasName(t.text(v.name)),
                     .constant => |k| s.hasName(t.text(k.name)),
+                    .shape => |k| s.hasName(t.text(k.name)),
                     .function => |f| s.hasName(t.text(f.name)),
                     // A Handler is reused only by its Selector: `on move x`
                     // and `on move x to y` are two names.

@@ -221,7 +221,7 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
 
 // ---------------------------------------------------------------- the unit
 
-const Import = struct { library: []const u8, name: []const u8, kind: @FieldType(check.Export, "kind") };
+const Import = struct { library: []const u8, name: []const u8, kind: @FieldType(check.Export, "kind"), shape: bool = false };
 
 const BodyCode = struct {
     info: Body,
@@ -400,7 +400,7 @@ const Lowerer = struct {
                 continue;
             }
             const names = if (x.export_.kind == .handler) &l.inherited_handlers else &l.imports;
-            try names.put(l.a, x.name, .{ .library = x.unit, .name = x.export_.name, .kind = x.export_.kind });
+            try names.put(l.a, x.name, .{ .library = x.unit, .name = x.export_.name, .kind = x.export_.kind, .shape = x.export_.shape });
             if (x.export_.kind == .constant) try l.definitions.append(l.a, try l.print("{s}:{s}", .{ x.unit, x.export_.name }));
         }
         // Imports, by local name.
@@ -411,7 +411,7 @@ const Lowerer = struct {
                 const name = l.text(n);
                 const ex = check.libraryExport(l.options.context, library, name);
                 const local = if (u.rename) |r| l.text(r) else name;
-                try l.imports.put(l.a, local, .{ .library = library, .name = name, .kind = if (ex) |e| e.kind else .function });
+                try l.imports.put(l.a, local, .{ .library = library, .name = name, .kind = if (ex) |e| e.kind else .function, .shape = if (ex) |e| e.shape else false });
             }
         };
         // Definitions: imported and own Constants in source order, then
@@ -423,6 +423,10 @@ const Lowerer = struct {
                 if (im.kind == .constant) try l.definitions.append(l.a, try l.print("{s}:{s}", .{ im.library, im.name }));
             },
             .constant => |k| {
+                try l.definition_index.put(l.a, l.text(k.name), @intCast(l.definitions.items.len));
+                try l.definitions.append(l.a, l.text(k.name));
+            },
+            .shape => |k| {
                 try l.definition_index.put(l.a, l.text(k.name), @intCast(l.definitions.items.len));
                 try l.definitions.append(l.a, l.text(k.name));
             },
@@ -481,6 +485,10 @@ const Lowerer = struct {
             },
             .constant => |k| {
                 try f.expr(k.value);
+                try f.emit(.store_definition, &.{.{ .text = l.text(k.name) }}, k.keyword, "");
+            },
+            .shape => |k| {
+                try f.shapeValue(k.body, k.keyword);
                 try f.emit(.store_definition, &.{.{ .text = l.text(k.name) }}, k.keyword, "");
             },
             else => {},
@@ -571,6 +579,18 @@ const Lowerer = struct {
             for (g.operations) |o| if (std.mem.eql(u8, o.name, operation)) return o.mode;
         }
         return .immediate;
+    }
+
+    /// A named Shape's own declaration, if the unit declares it.
+    fn localShape(l: *Lowerer, name: []const u8) ?ast.Shape {
+        for (l.tree.declarations) |d| if (d.data == .shape and std.mem.eql(u8, l.text(d.data.shape.name), name)) return d.data.shape;
+        return null;
+    }
+
+    /// Whether `is a` names a Shape: declared here, imported or inherited.
+    fn isShape(l: *Lowerer, name: []const u8) bool {
+        if (l.localShape(name) != null) return true;
+        return if (l.imports.get(name)) |im| im.shape else false;
     }
 
     fn importByName(l: *Lowerer, name: []const u8) ?Import {
@@ -2269,6 +2289,83 @@ const Frame = struct {
 
     // ------------------------------------------------------------ expressions
 
+    // ------------------------------------------------------------ named Shapes
+
+    /// A named Shape's Constant: its own, or an Import's.
+    fn loadShape(f: *Frame, name: []const u8, at: Tok) Allocator.Error!void {
+        const l = f.l;
+        if (l.localShape(name) != null) return f.emit(.load_definition, &.{.{ .text = name }}, at, "");
+        const im = l.imports.get(name).?;
+        try f.emit(.load_definition, &.{.{ .text = try l.print("{s}:{s}", .{ im.library, im.name }) }}, at, "");
+    }
+
+    /// Builds a Shape's data at `at`, in chapter 9's canonical order: a
+    /// field's `key`, `shape`, then `optional`, a map's `open` last. Local
+    /// named Shapes are inlined; imported ones are read (ADR 0168).
+    fn shapeValue(f: *Frame, e: *const ast.ShapeExpr, at: Tok) Allocator.Error!void {
+        const l = f.l;
+        switch (e.data) {
+            .name => |k| {
+                const name = try f.kindText(k);
+                if (k.civil_date or check.isScalarShape(name)) return f.constAt(try f.textConstant(name), at);
+                if (lexer.isUnitName(name)) return f.shapeWrapper("quantity", name, at);
+                if (l.localShape(name)) |s| return f.shapeValue(s.body, at);
+                try f.loadShape(name, at);
+            },
+            .unit => |t| try f.shapeWrapper("quantity", l.text(t), at),
+            .unit_kind => |t| try f.shapeWrapper("unitKind", l.text(t), at),
+            .object => |t| try f.shapeWrapper("object", l.text(t), at),
+            .list => |x| {
+                try f.shapeValue(x, at);
+                try f.shapeMapOf(&.{"list"}, at);
+            },
+            .optional => |x| {
+                try f.shapeValue(x, at);
+                try f.shapeMapOf(&.{"optional"}, at);
+            },
+            .one_of => |xs| {
+                for (xs) |x| try f.shapeValue(x, at);
+                try f.emit(.list, &.{.{ .int = @intCast(xs.len) }}, at, "");
+                try f.shapeMapOf(&.{"oneOf"}, at);
+            },
+            .map => |m| {
+                for (m.fields) |field| {
+                    try f.constAt(try f.textConstant(check.shapeKey(l.tree, field.key)), at);
+                    try f.shapeValue(field.shape, at);
+                    if (field.optional) {
+                        try f.constAt(try l.constant("true", "true"), at);
+                        try f.shapeMapOf(&.{ "key", "shape", "optional" }, at);
+                    } else try f.shapeMapOf(&.{ "key", "shape" }, at);
+                }
+                try f.emit(.list, &.{.{ .int = @intCast(m.fields.len) }}, at, "");
+                if (m.open) {
+                    try f.constAt(try l.constant("true", "true"), at);
+                    try f.shapeMapOf(&.{ "map", "open" }, at);
+                } else try f.shapeMapOf(&.{"map"}, at);
+            },
+        }
+    }
+
+    /// `{key: "text"}`.
+    fn shapeWrapper(f: *Frame, key: []const u8, value: []const u8, at: Tok) Allocator.Error!void {
+        try f.constAt(try f.textConstant(value), at);
+        try f.shapeMapOf(&.{key}, at);
+    }
+
+    /// A map of the values on the stack, under `keys`.
+    fn shapeMapOf(f: *Frame, keys: []const []const u8, at: Tok) Allocator.Error!void {
+        const l = f.l;
+        var text: std.ArrayList(u8) = .empty;
+        try text.append(l.a, '[');
+        for (keys, 0..) |k, i| {
+            if (i > 0) try text.appendSlice(l.a, ", ");
+            try text.appendSlice(l.a, try f.keyTextOf(k));
+        }
+        try text.append(l.a, ']');
+        const c = try l.constant(try l.print("k{s}", .{text.items}), text.items);
+        try f.emit(.map, &.{ .{ .int = c }, .{ .int = @intCast(keys.len) } }, at, l.constants.items[c]);
+    }
+
     fn textConstant(f: *Frame, raw: []const u8) Allocator.Error!u32 {
         const v = model.text(f.l.va(), raw) catch return error.OutOfMemory;
         return f.l.valueConstant(v);
@@ -2399,7 +2496,11 @@ const Frame = struct {
             .binary => |b| try f.binary(e, b),
             .is_kind => |k| {
                 try f.expr(k.value);
-                try f.emit(.is_kind, &.{.{ .text = try f.kindText(k.kind) }}, at, "");
+                if (!k.kind.civil_date and l.isShape(l.text(k.kind.name))) {
+                    // `x is a S` is `conforms(x, S)` (ADR 0168).
+                    try f.loadShape(l.text(k.kind.name), at);
+                    try f.emit(.call_builtin, &.{ .{ .text = "conforms" }, .{ .int = 2 } }, at, "");
+                } else try f.emit(.is_kind, &.{.{ .text = try f.kindText(k.kind) }}, at, "");
                 if (k.negated) try f.emit(.not, &.{}, at, "");
             },
             .is_empty => |k| {

@@ -54,6 +54,7 @@ pub const Declaration = struct {
         handler: Handler,
         function: Function,
         constant: Constant,
+        shape: Shape,
         script_variable: ScriptVariable,
         use: Use,
     },
@@ -93,6 +94,34 @@ pub const Function = struct {
 pub const Parameter = struct { name: Tok, default: ?*Expr };
 
 pub const Constant = struct { keyword: Tok, name: Tok, value: *Expr };
+
+/// `shape Name is …`: a Constant holding Shape data (ADR 0168).
+pub const Shape = struct { keyword: Tok, name: Tok, body: *ShapeExpr };
+
+/// A Shape Expression or Term. Which Name is a kind, a Unit or a named Shape
+/// is a load rule, so `name` holds any of them.
+pub const ShapeExpr = struct {
+    /// The term's first token.
+    first: Tok,
+    data: union(enum) {
+        name: Kind,
+        /// A Compound Unit, lexed as after `as`.
+        unit: Tok,
+        /// `a quantity of K`, at `K`.
+        unit_kind: Tok,
+        /// `object of K`, at `K`.
+        object: Tok,
+        list: *ShapeExpr,
+        optional: *ShapeExpr,
+        one_of: []const *ShapeExpr,
+        map: ShapeMap,
+    },
+};
+
+pub const ShapeMap = struct { fields: []const ShapeField, open: bool };
+
+/// `key: S`, or `key: optional S`, which marks the field optional.
+pub const ShapeField = struct { key: Tok, optional: bool, shape: *ShapeExpr };
 
 pub const ScriptVariable = struct { keyword: Tok, name: Tok, value: ?*Expr };
 

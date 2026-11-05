@@ -286,6 +286,7 @@ load-diagnostics/unknown-kind
 load-diagnostics/unknown-name
 load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
+load-diagnostics/bad-shape
 math/angle-conversions
 math/domain-errors
 math/floats
@@ -498,6 +499,7 @@ stdlib/mappings-depth
 stdlib/value-paths
 stdlib/json-patch
 builtins/random
+builtins/named-shapes
 capabilities/result-targets-load-checks
 result-targets/completion-fuel
 result-targets/failures
