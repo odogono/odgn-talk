@@ -381,6 +381,7 @@ save-restore/uncaught-call-lost
 save-restore/unsettled-call-is-lost
 save-restore/variables-only-restore
 save-restore/withheld-library
+sessions/added-scripts
 sessions/apropos
 sessions/argument-labels
 sessions/basics

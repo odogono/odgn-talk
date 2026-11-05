@@ -141,7 +141,16 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 	if err := os.WriteFile(filepath.Join(dir, "session.talk"), nil, 0600); err != nil {
 		return nil, err
 	}
-	return Setup{"sessionObjects": h.ObjectTranscript(), "operations": operations, "standard": standard, "libraries": libraries, "scripts": []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}}, nil
+	scripts := []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}
+	// Scripts `:script add` gave share the Session Script's Grants (ADR 0170).
+	for _, s := range h.AddedScripts() {
+		file := "script-" + s.Name + ".talk"
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(s.Source), 0600); err != nil {
+			return nil, err
+		}
+		scripts = append(scripts, Setup{"name": s.Name, "source": file, "grants": grants, "grantsAsUsed": true})
+	}
+	return Setup{"sessionObjects": h.ObjectTranscript(), "operations": operations, "standard": standard, "libraries": libraries, "scripts": scripts}, nil
 }
 
 // Session Store results belong to the Host, outside the Trace's Host Inputs.

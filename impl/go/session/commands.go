@@ -131,7 +131,7 @@ func (h *Host) command(source string) []string {
 		return nil
 	}
 	switch name {
-	case "stub", "answer", "fail", "charge", "clock", "limits", "cancel", "fix", "save", "restore", "library", "export", "describe", "apropos":
+	case "stub", "answer", "fail", "charge", "clock", "limits", "cancel", "fix", "save", "restore", "library", "script", "export", "describe", "apropos":
 		h.start()
 	case "runs", "mailbox", "vars":
 		if len(words) > 0 {
@@ -271,6 +271,8 @@ func (h *Host) command(source string) []string {
 		return h.store(rest)
 	case "library":
 		return h.library(rest)
+	case "script":
+		return h.addScript(rest)
 	case "export":
 		if len(words) > 1 {
 			return refusal("bad arguments")
@@ -436,14 +438,23 @@ func (h *Host) override() talk.LimitOverride {
 }
 func (h *Host) inspected(what string) []string {
 	var out []string
-	s := h.Inspect().Scripts[0]
+	// :vars shows the Session Script; :mailbox and :runs show every Script,
+	// including those `:script add` gave (ADR 0170).
+	scripts := h.Inspect().Scripts
+	s := scripts[0]
+	var mailbox []talk.MessageView
+	var runs []talk.RunView
+	for _, each := range scripts {
+		mailbox = append(mailbox, each.Mailbox...)
+		runs = append(runs, each.Runs...)
+	}
 	switch what {
 	case "vars":
 		for _, p := range s.Vars {
 			out = append(out, p.Key+" = "+p.Val.String())
 		}
 	case "mailbox":
-		for _, m := range s.Mailbox {
+		for _, m := range mailbox {
 			id := string(m.Delivery)
 			if id == "" {
 				id = m.From
@@ -451,7 +462,7 @@ func (h *Host) inspected(what string) []string {
 			out = append(out, id+" "+m.Message.Name+" "+talk.List(m.Message.Args...).String())
 		}
 	case "runs":
-		for _, r := range s.Runs {
+		for _, r := range runs {
 			status := []string{"ready", "suspended", "parked", "preempted"}[r.Status]
 			line := string(r.ID) + " " + status + " " + r.Handler
 			if r.Status == talk.Suspended {
