@@ -339,9 +339,9 @@ const group = core.newGroup({ name: 'song', musicalClock: clock });
 - **Without one,** a `wait` in a Musical Unit raises `no musical time`;
   `wait 0 bars` goes straight on either way. `exportManifest({ musicalTime:
 true, ... })` tells tooling the Host keeps musical time.
-- **The Zig reactor** doesn't keep a musical clock yet, so
-  `@northtalk/ts/wasm` refuses the option with `invalid value`
-  ([#2065](https://github.com/odogono/odgn-talk/issues/2065)).
+- **The Zig reactor:** `@northtalk/ts/wasm` takes the same option. It
+  grants the clock as `musical-clock` at load and restore, and declares it
+  to the guest with `musicalClock: true` on `define-capability`.
 
 Trace Cases supply one through `[[standard]]` with `capability =
 "musical-clock"`, and end each wait with `answer` or `fail` inputs, as in
