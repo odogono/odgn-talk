@@ -595,7 +595,7 @@ A call reads `ask <capability> to <operation> <arguments>`, so the Operation's n
 
 Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)): HTTP header names are lowercase. A repeated header's values are joined with `, `, except `set-cookie`, which is a list of text. For `http`'s HTTP Exchanges and `fetch` results these conventions are normative ([chapter 7](07-libraries-and-the-standard-library.md#http)).
 
-Non-normative: a `peer` transport between Hosts authenticates both ends with mutual TLS, and its binding pins each destination's key. A browser Host, where client certificates are awkward, authenticates to its server with a session token, and the server's Host derives the Caller Identity from it. Groups on one Host need neither ([ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)).
+Non-normative: a `peer` transport between Hosts authenticates both ends with mutual TLS, and its binding pins each destination's key. A browser Host, where client certificates are awkward, authenticates to its server with a session token, and the server's Host derives the Caller Identity from it. Groups on one Host need neither ([ADR 0154](../docs/adr/0154-a-remote-sends-caller-identity-is-vouched-for-by-the-receiving-host.md)). The TS Host carries Remote Sends between a page and its workers over `MessagePort`s, and to a server over a WebSocket on which each end proves its key ([ADR 0165](../docs/adr/0165-browser-hosts-carry-remote-sends-over-message-ports-and-websockets.md)).
 
 ## Outside parity
 
