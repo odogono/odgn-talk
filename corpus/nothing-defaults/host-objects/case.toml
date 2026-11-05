@@ -15,7 +15,10 @@ costModel = "0"
 
 [[objectKinds]]
 name = "light"
-props = [{ name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } }, { name = "lockable", shape = "any", readOnly = true, getCost = { fuel = 2 } }]
+props = [
+  { name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } },
+  { name = "lockable", shape = "any", readOnly = true, getCost = { fuel = 2 } },
+]
 
 [[objects]]
 kind = "light"

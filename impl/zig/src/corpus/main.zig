@@ -44,7 +44,7 @@ fn metadata(s: []const u8, problem: *Problem) MetadataError!Metadata {
     var objects = false;
     var table: []const u8 = "";
     var nested = false;
-    var lines = std.mem.splitScalar(u8, s, '\n');
+    var lines: northtalk.corpus_case.Lines = .{ .s = s };
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
@@ -349,7 +349,9 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
         const setup = try read(init, path);
         var problem: Problem = .{};
         const meta = metadata(setup, &problem) catch |err| {
-            gpa.free(setup);
+            // The problem's table and key are slices of setup, so it's freed
+            // only once they're written.
+            defer gpa.free(setup);
             try e.print("corpus/{s}: ", .{name});
             try describe(e, err, problem);
             try e.writeByte('\n');
@@ -420,6 +422,20 @@ test "case.toml tables and keys are held to the setup catalogue for their kind" 
     try std.testing.expectError(error.UnsupportedVersions, metadata("kind = \"trace\"\n[versions]\nlanguage = \"0.1\"\ncostModel = \"0\"\n", &problem));
     try std.testing.expectError(error.InvalidCaseKind, metadata("kind = \"film\"\n" ++ versions, &problem));
     _ = try metadata("kind = \"trace\"\n" ++ versions ++ "[[scripts]]\nname = \"s\"\n[scripts.limits]\nmaxDepth = 3\n", &problem);
+}
+test "case.toml arrays and inline tables may span several lines" {
+    const versions = "[versions]\nlanguage = \"" ++ language_version ++ "\"\ncostModel = \"0\"\n";
+    const kinds = "[[objectKinds]]\nname = \"light\"\nprops = [\n  { name = \"label\", shape = \"text\" }, # a comment ]\n  { name = \"on\", getCost = {\n    fuel = 2 } },\n]\n";
+    var problem: Problem = .{};
+    _ = try metadata("kind = \"trace\"\n" ++ versions ++ kinds, &problem);
+    // A key the catalogue doesn't allow is still named, after the array.
+    try std.testing.expectError(error.UnexpectedKey, metadata("kind = \"trace\"\n" ++ versions ++ kinds ++ "nope = [\n  1,\n]\n", &problem));
+    try std.testing.expectEqualStrings("objectKinds", problem.table);
+    try std.testing.expectEqualStrings("nope", problem.key);
+    var message: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer message.deinit();
+    try describe(&message.writer, error.UnexpectedKey, problem);
+    try std.testing.expectEqualStrings("unexpected objectKinds.nope in trace case", message.written());
 }
 fn testObject(_: ?*anyopaque, kind: []const u8, id: []const u8) model.Error!*model.Value {
     return model.object(std.testing.allocator, kind, id, 0);
