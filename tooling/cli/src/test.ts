@@ -1,6 +1,7 @@
 // `northtalk test`: run each Test Handler in a Test Script against the Scripts
 // beside it, and replay each Session Transcript (ADR 0056) and each
-// Documentation Example of the manifest's Libraries (ADR 0169). Tooling, so
+// Documentation Example of the manifest's Libraries (ADR 0169) and of the
+// Scripts' Handlers (ADR 0170). Tooling, so
 // nothing here is normative; it drives the Core only through its public API.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -40,7 +41,12 @@ import {
 } from '@northtalk/ts';
 import { sourceForm } from '@northtalk/ts/debug';
 import { calendar, locale } from '@northtalk/tooling/builtins';
-import { docExamples, replayExample } from '@northtalk/tooling/doc-examples';
+import {
+  docExamples,
+  replayExample,
+  scriptExamples,
+  type DocExample,
+} from '@northtalk/tooling/doc-examples';
 import { readManifest, type HostManifest } from '@northtalk/tooling/lint';
 import {
   errorAt,
@@ -119,19 +125,11 @@ export const runTests = async (
       if (options.only && !example.name.includes(options.only)) {
         continue;
       }
-      const where = `${options.manifest!}#${library.name}`;
-      const result = replayExample(manifest!.libraries, example);
-      const outcome = result.ok
-        ? { ok: true, lines: [`ok ${where} ${example.name}`] }
-        : {
-            ok: false,
-            lines: [
-              `FAIL ${where}:${result.line} ${example.name}`,
-              ...indent(
-                result.differs ? differs(where, result) : result.problems,
-              ),
-            ],
-          };
+      const outcome = exampleOutcome(
+        `${options.manifest!}#${library.name}`,
+        manifest!.libraries,
+        example,
+      );
       report(outcome.ok, outcome.lines);
     }
   }
@@ -155,6 +153,12 @@ export const runTests = async (
       );
       continue;
     }
+    if (!file.endsWith('.test.talk')) {
+      for (const outcome of handlerExamples(file, manifest, options.only)) {
+        report(outcome.ok, outcome.lines);
+      }
+      continue;
+    }
     for (const outcome of testScript(file, manifest, options.only)) {
       report(outcome.ok, outcome.lines);
     }
@@ -167,9 +171,10 @@ export const runTests = async (
   return failed ? 1 : 0;
 };
 
-// Test Scripts, Session Transcripts and Folio Projects: a file as given, or
-// every one in a directory, skipping dot directories and node_modules.
-const TESTED = ['.test.talk', '.transcript', '.folio'];
+// Test Scripts, Session Transcripts, Folio Projects and the Scripts whose
+// Handlers carry Documentation Examples: a file as given, or every one in a
+// directory, skipping dot directories and node_modules.
+const TESTED = ['.talk', '.transcript', '.folio'];
 const tested = (name: string) => TESTED.some(suffix => name.endsWith(suffix));
 const discover = (path: string): string[] => {
   let stats;
@@ -181,7 +186,7 @@ const discover = (path: string): string[] => {
   if (stats.isFile()) {
     if (!tested(path)) {
       throw new Error(
-        `${path} is not a Test Script, a Transcript or a Folio Project`,
+        `${path} is not a Script, a Test Script, a Transcript or a Folio Project`,
       );
     }
     return [path];
@@ -200,6 +205,35 @@ const discover = (path: string): string[] => {
 const indent = (lines: readonly string[]) => lines.map(line => `  ${line}`);
 
 type Outcome = { lines: string[]; ok: boolean };
+
+// The Documentation Examples on one Script's Handlers (ADR 0170), each with
+// the Script added by its file stem.
+const handlerExamples = (
+  file: string,
+  manifest: HostManifest | null,
+  only: string | undefined,
+): Outcome[] =>
+  scriptExamples(basename(file, '.talk'), readFileSync(file, 'utf8'))
+    .filter(example => !only || `${file} ${example.name}`.includes(only))
+    .map(example => exampleOutcome(file, manifest?.libraries ?? [], example));
+
+// One Documentation Example's replay, reported at `<where>:<line>`.
+const exampleOutcome = (
+  where: string,
+  libraries: HostManifest['libraries'],
+  example: DocExample,
+): Outcome => {
+  const result = replayExample(libraries, example);
+  return result.ok
+    ? { ok: true, lines: [`ok ${where} ${example.name}`] }
+    : {
+        ok: false,
+        lines: [
+          `FAIL ${where}:${result.line} ${example.name}`,
+          ...indent(result.differs ? differs(where, result) : result.problems),
+        ],
+      };
+};
 
 // Every Test Handler of a Folio Project's Test Scripts, run as Folio's Run
 // Tests runs them (ADR 0133).

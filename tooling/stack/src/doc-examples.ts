@@ -1,6 +1,6 @@
-// Documentation Examples (ADR 0169): the Session Transcripts written in a
-// manifest Library's `--|` blocks, each replayed in a fresh session as one
-// test. Tooling, so the extraction isn't normative; the replay is the
+// Documentation Examples (ADR 0169, ADR 0170): the Session Transcripts written
+// in the `--|` blocks of a manifest Library's exports or a Script's Handlers,
+// each replayed in a fresh session as one test. Tooling, so the extraction isn't normative; the replay is the
 // Session Host's own.
 import { canvasCapabilities } from './canvas';
 import {
@@ -10,25 +10,32 @@ import {
   type TranscriptItem,
 } from '@northtalk/ts/session';
 
-/** One Documentation Example of a Library export. */
+/** One Documentation Example of a Library export or a Script's Handler. */
 export type DocExample = {
+  /** The documented export or Handler. */
   export: string;
-  library: string;
-  /** The example's first line within the Library's source, from 1. */
+  /** The example's first line within the unit's source, from 1. */
   line: number;
-  /** The test's name: `<library>.<export> example <n>`. */
+  /** The test's name: `<unit>.<export> example <n>`. */
   name: string;
+  /** The documented Script's source, for an example of a Script's Handler. */
+  script?: string;
   /** The example as a Session Transcript. */
   transcript: string;
+  /** The Library's name or the Script's file stem. */
+  unit: string;
 };
 
 const MARKER = '--|';
 // A top-level declaration a Library exports, unless it starts `private`.
 const DECLARATION = /^(private\s+)?(?:function|constant|on)\s+([A-Z_a-z]\w*)/u;
+// A Script's Handler: only these carry examples, since a Script's functions
+// and Constants are reached by no message (ADR 0170).
+const HANDLER = /^on\s+([A-Z_a-z]\w*)/u;
 const IMPORT = /^use\b.*\bfrom\s+([A-Z_a-z]\w*)\s*$/u;
 // Session Commands that name files or outlive the example.
 const REFUSED =
-  /^:(library|fix|export|save|restore|quit|store\s+load|store\s+save)(?:\s|$)/u;
+  /^:(library|script|fix|export|save|restore|quit|store\s+load|store\s+save)(?:\s|$)/u;
 // Every example starts here, under a virtual Clock, as Test Scripts do.
 const EPOCH = '2026-01-01T00:00:00Z';
 
@@ -46,15 +53,34 @@ const docLine = (line: string): string | null => {
  * line in a declaration's `--|` block starts one, and the block's next blank
  * line or its end ends it.
  */
-export const docExamples = (library: string, source: string): DocExample[] => {
+export const docExamples = (library: string, source: string): DocExample[] =>
+  examplesOf(library, source, line => {
+    const declared = DECLARATION.exec(line);
+    return declared && !declared[1] ? declared[2]! : null;
+  });
+
+/**
+ * Each Documentation Example of a Script's Handlers, as `docExamples` finds a
+ * Library's, named by the Script's file stem. Examples on its functions and
+ * Constants are ignored.
+ */
+export const scriptExamples = (stem: string, source: string): DocExample[] =>
+  examplesOf(stem, source, line => HANDLER.exec(line)?.[1] ?? null).map(
+    example => ({ ...example, script: source }),
+  );
+
+const examplesOf = (
+  unit: string,
+  source: string,
+  declared: (line: string) => string | null,
+): DocExample[] => {
   const lines = source.split('\n');
   const out: DocExample[] = [];
   lines.forEach((line, at) => {
-    const declared = DECLARATION.exec(line);
-    if (!declared || declared[1]) {
+    const name = declared(line);
+    if (name === null) {
       return;
     }
-    const name = declared[2]!;
     let first = at;
     while (first > 0 && docLine(lines[first - 1]!) !== null) {
       first--;
@@ -65,10 +91,10 @@ export const docExamples = (library: string, source: string): DocExample[] => {
       if (current) {
         n++;
         out.push({
-          library,
+          unit,
           export: name,
           line: current.line,
-          name: `${library}.${name} example ${n}`,
+          name: `${unit}.${name} example ${n}`,
           transcript: current.text.map(l => `${l}\n`).join(''),
         });
         current = null;
@@ -90,7 +116,7 @@ export const docExamples = (library: string, source: string): DocExample[] => {
 };
 
 /**
- * An example's outcome. A failure has the line within the Library's source
+ * An example's outcome. A failure has the line within the unit's source
  * it is reported at, what went wrong, and for a differing replay the
  * expected and actual lines, either missing at the Transcript's end.
  */
@@ -107,8 +133,9 @@ export type ExampleResult =
 
 /**
  * Replays one example through a fresh Session Host. Before its first Entry
- * the runner sets the virtual Clock and adds the manifest's Libraries, and
- * leaves those lines out of what it compares.
+ * the runner sets the virtual Clock, adds the manifest's Libraries it needs,
+ * and for a Script's Handler adds the Script, and leaves those lines out of
+ * what it compares.
  */
 export const replayExample = (
   libraries: readonly { name: string; source: string }[],
@@ -147,8 +174,16 @@ export const replayExample = (
     { k: 'input', source: `:clock virtual ${EPOCH}` },
     ...needed(libraries, example, recorded).map((library): TranscriptItem => ({
       k: 'input',
-      source: `:library add ${library.name}\n${library.source.replace(/\n+$/u, '')}`,
+      source: `:library add ${library.name}\n${trimmed(library.source)}`,
     })),
+    ...(example.script === undefined
+      ? []
+      : [
+          {
+            k: 'input',
+            source: `:script add ${example.unit}\n${trimmed(example.script)}`,
+          } satisfies TranscriptItem,
+        ]),
   ];
   // Each of the runner's lines, by its first line, to be dropped once.
   const heads = hidden.map(item => head((item as { source: string }).source));
@@ -195,6 +230,15 @@ export const replayExample = (
   return { ok: true };
 };
 
+const trimmed = (source: string) => source.replace(/\n+$/u, '');
+
+// The Libraries a source's `use` lines name.
+const imports = (source: string) =>
+  source.split('\n').flatMap(line => {
+    const name = IMPORT.exec(line.trim())?.[1];
+    return name ? [name] : [];
+  });
+
 // An input's first line.
 const head = (source: string) => source.split('\n')[0]!;
 
@@ -208,8 +252,8 @@ const lineOf = (items: readonly TranscriptItem[], index: number): number =>
       0,
     );
 
-// The example's own Library and those its `use` lines name, with what they
-// import, each after its imports as `:library add` needs. Only these, since a
+// The example's own Library, or its Script's, and those its `use` lines name,
+// with what they import, each after its imports as `:library add` needs. Only these, since a
 // Library calling a Capability compiles only once the example mocks it.
 const needed = <L extends { name: string; source: string }>(
   libraries: readonly L[],
@@ -233,14 +277,11 @@ const needed = <L extends { name: string; source: string }>(
     out.push(library);
   };
   const named = [
-    example.library,
+    ...(example.script === undefined
+      ? [example.unit]
+      : imports(example.script)),
     ...recorded.flatMap(item =>
-      item.k === 'input'
-        ? item.source.split('\n').flatMap(line => {
-            const name = IMPORT.exec(line.trim())?.[1];
-            return name ? [name] : [];
-          })
-        : [],
+      item.k === 'input' ? imports(item.source) : [],
     ),
   ];
   for (const name of named) {

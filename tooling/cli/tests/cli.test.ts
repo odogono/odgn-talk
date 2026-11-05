@@ -827,9 +827,15 @@ test('test replays Session Transcripts as tests', () => {
 
 test('test refuses a missing path and other files', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
-  writeFileSync(join(dir, 'plain.talk'), 'on go\nend go\n');
+  writeFileSync(join(dir, 'notes.txt'), 'on go\nend go\n');
   expect(run(['test', join(dir, 'missing')]).code).toBe(2);
-  expect(run(['test', join(dir, 'plain.talk')]).code).toBe(2);
+  expect(run(['test', join(dir, 'notes.txt')]).code).toBe(2);
+  // A Script is a test file now (ADR 0170), with no tests without examples.
+  writeFileSync(join(dir, 'plain.talk'), 'on go\nend go\n');
+  expect(run(['test', join(dir, 'plain.talk')])).toMatchObject({
+    code: 1,
+    stderr: 'No tests found\n',
+  });
   expect(run(['test', '--only']).code).toBe(2);
 });
 
@@ -1013,4 +1019,77 @@ test('test replays the Documentation Examples of the manifest Libraries', () => 
   expect(stdout).toContain('4 passed, 2 failed');
   const only = run(['test', '--manifest', manifest, '--only', 'padLeft', dir]);
   expect(only.stdout).toContain('1 passed, 1 failed');
+});
+
+test("test replays the Documentation Examples on a Script's Handlers", () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const counter = join(dir, 'counter.talk');
+  writeFileSync(
+    counter,
+    [
+      'script variable count = 0',
+      '',
+      '--| Adds 1 to the count, and gives the new count',
+      '--|',
+      '--| > on bump',
+      '--| |   send increment to counter and wait',
+      '--| |   say it',
+      '--| | end bump',
+      '--| > bump and wait',
+      '--| 1',
+      '--|',
+      '--| > on bump',
+      '--| |   send increment to counter and wait',
+      '--| |   say it',
+      '--| | end bump',
+      '--| > bump and wait',
+      '--| 1',
+      'on increment',
+      '  add 1 to count',
+      '  return count',
+      'end increment',
+      '',
+      '--| > on bump',
+      '--| |   send increment to counter and wait',
+      '--| |   say it',
+      '--| | end bump',
+      '--| > bump and wait',
+      '--| 2',
+      'on wrong',
+      'end wrong',
+      '',
+      '--| > :script add other',
+      'on adding',
+      'end adding',
+      '',
+      '--| > 1 + 1',
+      '--| 3',
+      'function helper',
+      'end helper',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(dir, 'counter.test.talk'),
+    'on testNothing\nend testNothing\n',
+  );
+  const { code, stdout } = run(['test', dir]);
+  expect(code).toBe(1);
+  expect(stdout).toContain(`ok ${counter} counter.increment example 1\n`);
+  expect(stdout).toContain(`ok ${counter} counter.increment example 2\n`);
+  expect(stdout).toContain(
+    [
+      `FAIL ${counter}:28 counter.wrong example 1`,
+      `  ${counter}:28: the replay differs`,
+      '    expected: 2',
+      '    actual:   1',
+    ].join('\n'),
+  );
+  expect(stdout).toContain(
+    `FAIL ${counter}:32 counter.adding example 1\n  an example may not use :script\n`,
+  );
+  expect(stdout).not.toContain('helper');
+  expect(stdout).toContain('3 passed, 2 failed');
+  const file = run(['test', '--only', 'increment', counter]);
+  expect(file.stdout).toContain('2 passed, 0 failed');
 });
