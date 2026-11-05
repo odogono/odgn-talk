@@ -42,6 +42,7 @@ export class WorkerSupervisor<Request, Response> {
   private worker: SupervisedWorker;
   private nextId = 1;
   private readonly pending = new Map<number, (response: Response) => void>();
+  private readonly closing = new Set<{ close(): void }>();
 
   constructor(private readonly options: WorkerSupervisorOptions<Response>) {
     this.worker = this.start();
@@ -79,6 +80,16 @@ export class WorkerSupervisor<Request, Response> {
     return reply.finally(() => clearTimeout(timer));
   }
 
+  /**
+   * Closes `link` when the current worker is ended, as a peer link to it
+   * (ADR 0165): a terminated worker sends no word, so its links would
+   * otherwise wait forever. Returns a function that forgets it.
+   */
+  closeOnTerminate(link: { close(): void }): () => void {
+    this.closing.add(link);
+    return () => this.closing.delete(link);
+  }
+
   private start(): SupervisedWorker {
     const worker = this.options.spawn();
     worker.onmessage = ({ data }) => {
@@ -99,6 +110,11 @@ export class WorkerSupervisor<Request, Response> {
   private terminate(): void {
     this.worker.onmessage = null;
     this.worker.terminate();
+    const links = [...this.closing];
+    this.closing.clear();
+    for (const link of links) {
+      link.close();
+    }
     const pending = [...this.pending.values()];
     this.pending.clear();
     for (const resolve of pending) {
