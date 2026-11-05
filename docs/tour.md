@@ -439,7 +439,7 @@ on beforeMove m, deciding           -- in the board's Script
   ask replay to record m and wait   -- the move is allowed from here on
 end beforeMove
 
--- 10. Libraries (ADR 0020, 0021, 0022, 0023, 0080, 0096, 0099, 0113, 0136) ----
+-- 10. Libraries (ADR 0020, 0021, 0022, 0023, 0080, 0096, 0099, 0113, 0136, 0168)
 
 -- A Library is shared code the Host supplies, with no state of its own. Its
 -- code runs inside the caller's Run. An Import names exactly what it brings in.
@@ -453,6 +453,11 @@ use makeDate, formatDate from date
 use celsiusToFahrenheit from units
 use trim from text as tidy          -- renamed as it comes in
 -- Two definitions with the same name are a load error, never a shadow.
+
+-- A named Shape describes data in words. It is a Constant holding the
+-- Shape's data, so a Library may export one and `use` can bring it in.
+shape Person is {name: text, age: number, email: optional text}
+shape Roster is list of Person or {people: list of Person, ...}  -- `...`: other keys allowed
 
 on librariesTour body
   put average([18, 21, 24]) into mean              -- 21
@@ -487,10 +492,11 @@ on librariesTour body
   put min(launch, nextMonth) into sooner   -- min and max take any number of values
   put random(6) into roll           -- 1 to 6, from the Host's seed: replayable
 
-  -- Shape checks test data against a Shape written as data:
-  put {map: [{key: "name", shape: "text"}, {key: "age", shape: "number"}]} into personShape
-  if conforms(data, personShape) then say "a person"
-  put explain(data, personShape) into problems     -- every mismatch, as a list
+  -- `is a` tests data against a named Shape; the Shape Built-ins take it too:
+  if data is a Person then say "a person"
+  put explain(data, Roster) into problems          -- every mismatch, as a list
+  put check(data, Person) into person              -- raises the first mismatch
+  if conforms(data, {list: "number"}) then say "numbers"  -- a Shape as data still works
 end librariesTour
 -- A Library can also `wait for` messages to the Script whose Run calls it.
 

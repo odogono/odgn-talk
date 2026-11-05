@@ -48,6 +48,7 @@ import {
   type ManifestOperation,
 } from './manifest';
 import { collectionHover, objectProperties, propertyHover } from './objects';
+import { shapeCompletion, shapeHover } from './shapes';
 import {
   argumentPhrase,
   callSignature,
@@ -633,6 +634,10 @@ export const completion = (
       return properties;
     }
   }
+  const shapes = shapeCompletion(analysis, offset, line);
+  if (shapes) {
+    return shapes;
+  }
   // `tell g to` calls only fire-and-forget Operations, and `ask g to` only the
   // others; a `tell` block line calls any, in its own mode (ADR 0063).
   const operations = (
@@ -958,6 +963,10 @@ export const hover = (
   const property = manifest && propertyHover(analysis, offset, manifest);
   if (property) {
     return property;
+  }
+  const shape = shapeHover(all, analysis, offset, client.markdown);
+  if (shape) {
+    return shape;
   }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;
