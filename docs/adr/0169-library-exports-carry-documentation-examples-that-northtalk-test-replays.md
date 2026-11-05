@@ -35,4 +35,5 @@ function padLeft t, width, fill = " "
 - **Blank output:** since `--|` and `--| ` both read as a blank line, an example can't show output containing an empty line. Such an export is tested in a Test Script or a `*.transcript` instead.
 - **Reporting:** each example is one test, named `<library>.<export> example <n>`, with n counting from 1 in source order. A manifest Library's source is inline, so a failure names the manifest path, the example, and the line within the Library's source, followed by the diff `northtalk replay` prints.
 - **Editors:** the LSP replays an open Library's examples as `northtalk test` does and reports each failing one as a warning on its first differing line (#2115). Hover shows the block verbatim.
+- Narrowed by ADR 0170, which adds a Script's Handlers, reached by message.
 - Narrows ADR 0056: `northtalk test` replays a third kind of test.
