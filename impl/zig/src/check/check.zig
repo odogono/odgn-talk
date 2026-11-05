@@ -945,6 +945,12 @@ const Checker = struct {
         try c.collectBlock(s, h.body);
         if (h.finally) |f| try c.collectBlock(s, f.body);
         for (h.params) |p| try c.pattern(s, p);
+        // A Clause Shape names a kind or a Shape, as after the expression
+        // `is a`, and `is not a` is refused (ADR 0171).
+        for (h.shapes) |shape| if (shape) |k| {
+            if (k.not) |n| try c.report(.negated_shape, n);
+            try c.kindTest(k.kind);
+        };
         if (h.guard) |g| try c.expr(s, g.condition, .guard);
         try c.block(s, h.body, .{});
         if (h.finally) |f| try c.block(s, f.body, .{ .finally = 0 });

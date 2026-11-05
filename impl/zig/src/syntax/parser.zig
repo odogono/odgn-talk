@@ -652,18 +652,19 @@ const Parser = struct {
             _ = try p.next(.operand);
         } else handler_name = try p.messageName();
         var params: std.ArrayList(*Pattern) = .empty;
+        var shapes: std.ArrayList(?ast.ClauseShape) = .empty;
         var labels: std.ArrayList(Tok) = .empty;
         var suffixes: std.ArrayList(Tok) = .empty;
         var guard: ?ast.Guard = null;
         var during: ?Tok = null;
         const t = try p.peek(.operand);
         if (fallback) {
-            try params.append(p.a, try p.pattern());
+            try p.headParam(&params, &shapes);
         } else if (!(t.kind == .newline or t.kind == .eof or p.isWord(t, "where") or t.kind == .comma)) {
-            try params.append(p.a, try p.pattern());
+            try p.headParam(&params, &shapes);
             while (p.isLabel(try p.peek(.operator))) {
                 try labels.append(p.a, try p.next(.operand));
-                try params.append(p.a, try p.pattern());
+                try p.headParam(&params, &shapes);
             }
         }
         // Parameters, then a Guard, then suffixes. After a comma, a suffix
@@ -696,7 +697,7 @@ const Parser = struct {
             } else if (in_params and labels.items.len > 0) {
                 return p.failAt(w);
             } else if (in_params) {
-                try params.append(p.a, try p.pattern());
+                try p.headParam(&params, &shapes);
             } else return p.failAt(w);
         }
         try p.endOfStatement();
@@ -721,6 +722,7 @@ const Parser = struct {
             .name = handler_name,
             .labels = try p.list(Tok, &labels),
             .params = try p.list(*Pattern, &params),
+            .shapes = try p.list(?ast.ClauseShape, &shapes),
             .guard = guard,
             .suffixes = try p.list(Tok, &suffixes),
             .during = during,
@@ -728,6 +730,21 @@ const Parser = struct {
             .finally = fin,
             .end = end,
         };
+    }
+
+    /// A Handler parameter: a pattern, then an optional Clause Shape, `is a`
+    /// and a kind or Shape name (ADR 0171). `is not a` parses; the loader
+    /// refuses it.
+    fn headParam(p: *Parser, params: *std.ArrayList(*Pattern), shapes: *std.ArrayList(?ast.ClauseShape)) Error!void {
+        try params.append(p.a, try p.pattern());
+        if (!try p.atWord("is", .operator)) return shapes.append(p.a, null);
+        const is = try p.next(.operator);
+        var not: ?Tok = null;
+        if (try p.atWord("not", .operand)) not = try p.next(.operand);
+        const a = try p.peek(.operand);
+        if (!(p.isWord(a, "a") or p.isWord(a, "an"))) return p.failAt(a);
+        _ = try p.next(.operand);
+        try shapes.append(p.a, .{ .is = is, .not = not, .kind = try p.kind(.operand) });
     }
 
     fn guardClause(p: *Parser) Error!ast.Guard {
