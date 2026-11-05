@@ -2228,6 +2228,25 @@ describe('named Shapes', () => {
       labels(`${shaped}shape Order is {\n  sku: text,\n  `, 3, 2),
     ).not.toContain('Line');
   });
+  test('hovers and completes a Clause Shape in a Handler head', () => {
+    const shaped = 'shape Line is {sku: text}\n';
+    const { request } = setup(
+      `${shaped}on route item is a Line to place is a number\n return place\nend route\n`,
+    );
+    expect(request('textDocument/hover', at(1, 20)).contents.value).toBe(
+      'shape Line is {sku: text}',
+    );
+    for (const [text, line, character] of [
+      [`${shaped}on route item is a `, 1, 19],
+      [`${shaped}on route item is a Line to place is an L`, 1, 39],
+      [`${shaped}on any message m is a `, 1, 22],
+      [`${shaped}on handle {sku: s} is a `, 1, 24],
+    ] as const) {
+      const got = labels(text, line, character);
+      expect(got).toEqual(expect.arrayContaining(['text', 'any', 'Line']));
+      expect(got).not.toContain('item');
+    }
+  });
   test('completes Shape names and kind texts in a Shape-taking argument', () => {
     const items = setup(source).request('textDocument/completion', at(5, 19));
     expect(items.map(i => i.label)).toEqual(
