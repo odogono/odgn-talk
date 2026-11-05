@@ -1496,7 +1496,7 @@ kinds = ["trace", "disassembly"]
 [[setup]]
 table = "standard"
 key = "capability"
-is = "a Standard Capability the case uses"
+is = "a Standard Capability the case uses, or `musical-clock`, which the runner supplies as the Group's [musical clock](09-embedding.md#the-musical-clock) rather than as a Grant, and whose `wait` calls the Trace's `answer` and `fail` inputs end"
 kinds = ["trace", "disassembly"]
 
 [[setup]]

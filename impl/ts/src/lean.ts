@@ -225,9 +225,11 @@ export {
   type CalendarImpl,
   clockCapability,
   consoleCapability,
+  musicalClockCapability,
   timerCapability,
   type Costs,
   type ConsoleImpl,
+  type MusicalClockImpl,
   type TimerImpl,
 } from './standard-capabilities';
 

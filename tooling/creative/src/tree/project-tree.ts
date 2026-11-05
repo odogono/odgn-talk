@@ -1056,6 +1056,33 @@ export class ProjectTree {
       }
     });
   }
+  /**
+   * Copies an Instrument's kind, voices and parameters under a fresh name,
+   * such as `synth2` for `synth`, and puts the copy after it (#2079).
+   */
+  duplicateInstrument(id: number): DeepReadonly<Instrument> {
+    return this.transaction(() => {
+      const instruments = this.#project.instruments;
+      const index = instruments.findIndex(i => i.id === id);
+      const current = instruments[index];
+      if (!current) {
+        throw new TreeError('Unknown Instrument');
+      }
+      const copy: Instrument = {
+        ...structuredClone(current as Instrument),
+        id:
+          this.#allocateId?.() ??
+          Math.max(0, ...instruments.map(i => i.id ?? 0)) + 1,
+        name: freshName(current.name, this.#namesTaken()),
+      };
+      this.#setInstruments([
+        ...instruments.slice(0, index + 1),
+        copy,
+        ...instruments.slice(index + 1),
+      ]);
+      return this.#project.instruments[index + 1]!;
+    });
+  }
   removeInstrument(id: number): void {
     this.transaction(() =>
       this.#setInstruments(this.#project.instruments.filter(i => i.id !== id)),
@@ -1523,6 +1550,37 @@ export class ProjectTree {
       };
       this.#field(this.#project, 'assets', [...this.#project.assets, asset]);
       return this.#project.assets.at(-1)!;
+    });
+  }
+  /** Renames an asset; its users are the caller's to rewrite (#2050). */
+  renameAsset(current: string, name: string): void {
+    this.transaction(() => {
+      const assets = this.#project.assets;
+      if (!assets.some(a => a.name === current)) {
+        throw new TreeError('Unknown asset');
+      }
+      if (name !== current && assets.some(a => a.name === name)) {
+        throw new TreeError('Name is unavailable');
+      }
+      this.#field(
+        this.#project,
+        'assets',
+        assets.map(a => (a.name === current ? { ...a, name } : a)),
+      );
+    });
+  }
+  /** Removes an asset from the Project; its bytes stay cached (#2050). */
+  removeAsset(name: string): void {
+    this.transaction(() => {
+      const assets = this.#project.assets;
+      if (!assets.some(a => a.name === name)) {
+        throw new TreeError('Unknown asset');
+      }
+      this.#field(
+        this.#project,
+        'assets',
+        assets.filter(a => a.name !== name),
+      );
     });
   }
   /** Adopt detached Play results by authored id; unchanged owners stay live. */

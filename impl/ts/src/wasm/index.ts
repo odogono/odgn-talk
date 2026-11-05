@@ -150,6 +150,7 @@ export type {
   CalendarImpl,
   ConsoleImpl,
   Costs,
+  MusicalClockImpl,
   TimerImpl,
 } from '../standard-capabilities';
 export type { LocaleImpl } from '../locale-capability';

@@ -399,6 +399,10 @@ _Avoid_: wipe, redraw
 A named sound source a Folio Script plays notes and sounds on, such as a sampler of the Project's sounds, a sound chip or a synth.
 _Avoid_: synth (for the general idea), voice, channel (both are parts of an Instrument)
 
+**Instrument Parameter**:
+A named setting of an Instrument, such as cutoff or attack, that Scripts `set` and the author edits. The value kept with the Project is where each Play Session starts, and a Script's `set` changes it only for that Play Session.
+_Avoid_: knob, control (those are Elements), setting
+
 **Transport**:
 A Play Session's one musical timeline: its tempo, time signature and current bar and beat, which Scripts keeping musical time follow.
 _Avoid_: clock (the Play clock is separate), sequencer, metronome
@@ -867,8 +871,12 @@ _Avoid_: derived unit, unit expression
 A Unit of duration (month, year) whose length depends on the date it is added to, so it never converts to exact time and is never part of a Compound Unit.
 _Avoid_: nominal duration
 
+**Musical Unit**:
+A Unit (`bar`, `beat`) counted on a Host's Transport rather than given a length by the Unit Catalogue, so it never converts to exact time or to the other, and a wait in it ends on a bar or beat line.
+_Avoid_: musical time unit, tempo unit, cycle
+
 **Unit Catalogue**:
-The fixed table of every Unit, with its Unit Kind and exact conversion factor, that a language version pins. Neither Hosts nor Scripts can add to it.
+The fixed table of every Unit, with its Unit Kind and exact conversion factor to its Base Unit, that a language version pins. Neither Hosts nor Scripts can add to it.
 _Avoid_: unit registry, unit table, units list
 
 **Range**:

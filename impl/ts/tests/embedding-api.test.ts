@@ -151,6 +151,7 @@ const tsOnly = new Set([
   'defineObjectKind',
   'httpCapability',
   'localeCapability',
+  'musicalClockCapability',
   'newGroup',
   'peerCapability',
   'peerKind',

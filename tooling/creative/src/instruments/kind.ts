@@ -7,27 +7,46 @@ import type { OperationDeclaration } from '../grants/grant';
 
 export type ParameterValue = number | string | boolean;
 
-export type ParameterDefinition =
-  | {
-      readonly default: number;
-      readonly description: string;
-      readonly max: number;
-      readonly min: number;
-      readonly shape: 'number';
-      /** Whole numbers only. */
-      readonly whole?: boolean;
-    }
-  | {
-      readonly choices: readonly string[];
-      readonly default: string;
-      readonly description: string;
-      readonly shape: 'text';
-    }
-  | {
-      readonly default: boolean;
-      readonly description: string;
-      readonly shape: 'boolean';
-    };
+/**
+ * What every parameter may declare: the collapsible section it belongs to
+ * in the Instruments window, such as `Envelope`. Parameters without a group
+ * come first, in an untitled section.
+ */
+type ParameterCommon = {
+  readonly group?: string;
+};
+
+export type ParameterDefinition = ParameterCommon &
+  (
+    | {
+        readonly default: number;
+        readonly description: string;
+        readonly max: number;
+        readonly min: number;
+        /** `log` makes the parameter's slider logarithmic; it is linear without. */
+        readonly scale?: 'log';
+        readonly shape: 'number';
+        /**
+         * The Catalogue Unit a plain number is read in, such as `Hz` (ADR
+         * 0166). Scripts may then set any Quantity of that Unit's Kind, such
+         * as `2 kHz`, which is stored as a plain number in this Unit.
+         */
+        readonly unit?: string;
+        /** Whole numbers only. */
+        readonly whole?: boolean;
+      }
+    | {
+        readonly choices: readonly string[];
+        readonly default: string;
+        readonly description: string;
+        readonly shape: 'text';
+      }
+    | {
+        readonly default: boolean;
+        readonly description: string;
+        readonly shape: 'boolean';
+      }
+  );
 
 /** What a Play Session asks of an Instrument's Chip. */
 export type InstrumentCommand =
@@ -102,7 +121,7 @@ export const parameterProblem = (
         return 'expected a whole number';
       }
       return value < definition.min || value > definition.max
-        ? `expected a number from ${definition.min} to ${definition.max}`
+        ? `expected a number from ${definition.min} to ${definition.max}${definition.unit ? ` ${definition.unit}` : ''}`
         : undefined;
     case 'text':
       return typeof value === 'string' && definition.choices.includes(value)

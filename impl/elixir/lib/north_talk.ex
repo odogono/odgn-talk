@@ -87,7 +87,10 @@ defmodule NorthTalk do
   @doc """
   Makes a Script Group. `trace: true` records its Trace, and `seed:`, a
   whole number from 0 to 2^64 - 1, seeds the generator `random` draws from
-  (0 without one).
+  (0 without one). `musical_clock:` is a `NorthTalk.Grant` of a Capability
+  `NorthTalk.Capability.musical_clock/2` made: every Script of the Group
+  holds it as `musical-clock`, and `wait 8 bars` calls its `wait`. Without
+  one, a `wait` in bars or beats raises `no musical time`.
   """
   def new_group(owner, name, opts \\ []), do: GenServer.call(owner, {:new_group, name, opts})
 
@@ -164,7 +167,8 @@ defmodule NorthTalk do
 
   @doc """
   Loads a Script into a Group. Returns its name, or a `NorthTalk.LoadError`.
-  `grants:` maps each name the Script uses to a `NorthTalk.Grant`, and
+  `grants:` maps each name the Script uses to a `NorthTalk.Grant`, except the
+  reserved `musical-clock`, which is the Group's own, and
   `limits:` overrides the owner's `:limits` for this Script. `owner:` makes the
   Script the Owning Script of a Host Object of the Group, its `me`, and `objects:` maps names
   the Script uses to Host Objects of the Group.
@@ -229,6 +233,17 @@ defmodule NorthTalk do
   """
   def request(%Group{owner: owner} = group, to, name, args \\ [], timeout \\ 5_000),
     do: GenServer.call(owner, {:send, "request", group, to, name, args}, timeout)
+
+  @doc """
+  Sends a message as `request/5` does, but returns its `NorthTalk.Pending` as
+  soon as it is admitted, with its delivery id, before any Run starts.
+  `await/2` gives what `request/5` would. An automatic owner Pumps on its
+  own; under manual drive nothing runs until the caller Pumps. An admission
+  refusal is `{:error, exception}`, with no handle. Use it when the Host needs
+  the delivery id before the Run; otherwise `request_pump/5` saves an exchange.
+  """
+  def send_request(%Group{owner: owner} = group, to, name, args \\ []),
+    do: GenServer.call(owner, {:send, :handle, group, to, name, args})
 
   @doc """
   Calls a Function Value a Script gave the Host, through its own Group, and
@@ -370,6 +385,9 @@ defmodule NorthTalk do
     * `:grants` - each Script's Grants, as a map from `{script, grant name}`
       to a `NorthTalk.Grant` of this owner, or a function of the two names
       returning one or `nil`. A Grant not given restores revoked.
+    * `:musical_clock` - the new Group's musical clock, as for
+      `new_group/3`. A save's `musical-clock` Grant restores to it, never to
+      `:grants`, and restores revoked without one.
     * `:libraries` - the compiled `NorthTalk.Library` values the save uses.
     * `:mismatch` - `:reject` (the default) refuses a save whose versions,
       Libraries or Grants don't match with `save mismatch`;
@@ -426,6 +444,7 @@ defmodule NorthTalk do
         decide: 4,
         decide_broadcast: 3,
         request: 5,
+        send_request: 4,
         pump: 2,
         stop: 3,
         reload: 4,

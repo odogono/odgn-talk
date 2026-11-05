@@ -439,6 +439,14 @@ export interface LocaleImpl {
   dayNames(call: Call<string>, opts: Value, tag?: string): Value;
   tag(call: Call<string>, tag?: string): Value;
 }
+/**
+ * A musical clock (ADR 0166): wait receives the Quantity a Script waits for,
+ * a whole number of bars or beats, 1 or more. Answer the call with Nothing
+ * when that many lines have passed on the Host's Transport, or fail it.
+ */
+export interface MusicalClockImpl {
+  wait(call: Call<unknown>, count: Value): void;
+}
 export interface TimerImpl {
   schedule(call: Call<unknown>, name: string, at: Value, message: string, args: Value): void;
   cancel(call: Call<unknown>, name: string): void;
@@ -654,6 +662,8 @@ export interface GroupOptions {
   trace?: (line: string) => void;
   /** Seeds the generator `random` draws from, 0 to 2^64 - 1; 0 when absent. */
   seed?: bigint;
+  /** From musicalClockCapability. Every Script holds it as the reserved Grant `musical-clock`. */
+  musicalClock?: CapabilityDef<unknown>;
 }
 
 /** Compile-time Operation modes, argument Shapes and labels, by the Grant name in source. */
@@ -703,6 +713,8 @@ export interface Core {
   peerCapability(impl: PeerImpl, costs: Costs): CapabilityDef<unknown>;
   /** The Core-fixed Object Kind `peer`, with no properties; the Host makes each Peer with it. */
   readonly peerKind: ObjectKind<unknown>;
+  /** For the Group option musicalClock: one suspending `wait`, with no maxPending (ADR 0166). */
+  musicalClockCapability(impl: MusicalClockImpl, costs: Costs, release?: ReleaseHook<unknown>): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;
@@ -1054,6 +1066,8 @@ export interface ManifestSpec {
   messages?: MessageDecl[];
   objectKinds?: ObjectKind[];
   objects?: Record<string, ObjectKind>;
+  /** True when the Host supplies a musical clock; written as `musicalTime: true`. */
+  musicalTime?: boolean;
   /** The Owner Kind: one of objectKinds, the kind of this kind of Script's `me`. Tooling only. */
   ownerKind?: ObjectKind;
 }

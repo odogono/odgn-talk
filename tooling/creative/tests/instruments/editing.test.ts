@@ -29,6 +29,31 @@ test('adding gives each Instrument a fresh name and an id', () => {
   ).toThrow('There is no Instrument kind “theremin”');
 });
 
+test('duplicating copies kind, voices and parameters under a fresh name', () => {
+  const e = editor();
+  const id = e.edit(({ tree }) => {
+    const synth = tree.addInstrument(SYNTH_KIND, 'synth').id!;
+    tree.addInstrument('sampler', 'drums');
+    tree.changeInstrument(synth, { parameter: 'cutoff', value: 900 });
+    tree.changeInstrument(synth, { voices: 3 });
+    return synth;
+  });
+  const copy = e.edit(({ tree }) => tree.duplicateInstrument(id));
+  expect(e.project.instruments.map(i => i.name)).toEqual([
+    'synth',
+    'synth2',
+    'drums',
+  ]);
+  expect(copy).toMatchObject({
+    kind: SYNTH_KIND,
+    voices: 3,
+    parameters: { cutoff: 900 },
+  });
+  expect(copy.id).not.toBe(id);
+  e.undo();
+  expect(e.project.instruments).toHaveLength(2);
+});
+
 test('changes are checked, undoable and saved', async () => {
   const e = editor();
   const id = e.edit(({ tree }) => tree.addInstrument(SYNTH_KIND, 'synth').id!);
@@ -43,7 +68,10 @@ test('changes are checked, undoable and saved', async () => {
     parameters: { cutoff: 900 },
   });
   for (const [change, message] of [
-    [{ parameter: 'cutoff', value: 5 }, 'Expected a number from 20 to 20000.'],
+    [
+      { parameter: 'cutoff', value: 5 },
+      'Expected a number from 20 to 20000 Hz.',
+    ],
     [{ parameter: 'wobble', value: 1 }, 'A synth has no parameter “wobble”.'],
     [{ voices: 17 }, 'Expected a whole number from 1 to 16.'],
     [{ name: 'go' }, '“go” is already the name of a Page or Element.'],

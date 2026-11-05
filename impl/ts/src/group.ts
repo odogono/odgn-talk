@@ -76,7 +76,9 @@ import {
   type ChargeRequest,
   type ChargeResult,
   type ReleaseReason,
+  type CapabilityDef,
 } from './capabilities';
+import { isMusicalClock, MUSICAL_CLOCK } from './standard-capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData, operationsOf } from './manifest';
 import {
@@ -162,6 +164,12 @@ import type { CodeUnit } from './code-unit';
 const compiledScripts = new Map<string, CodeUnit>();
 
 export type GroupOptions = {
+  /**
+   * The Host's musical clock, from `musicalClockCapability`, which a `wait`
+   * in a Musical Unit calls; without one it raises `no musical time`
+   * (chapter 9, The musical clock).
+   */
+  musicalClock?: CapabilityDef<unknown>;
   name: string;
   /**
    * Called once per queued Host Input. Don't pump inside it.
@@ -604,23 +612,26 @@ const declarationsOf = (
   grants: ReadonlyMap<string, Grant<unknown>>,
 ): GrantDecls =>
   Object.fromEntries(
-    [...grants].map(([name, grant]) => [
-      name,
-      Object.fromEntries(
-        [...grant.ops].map(op => {
-          const decl = grant.capability.operations.get(op)!;
-          return [
-            op,
-            {
-              mode: decl.mode,
-              args: decl.args ?? [],
-              ...(decl.labels?.length ? { labels: decl.labels } : {}),
-              ...(decl.command ? { command: true } : {}),
-            },
-          ];
-        }),
-      ),
-    ]),
+    // No source can name the musical clock's Grant (chapter 9).
+    [...grants]
+      .filter(([name]) => name !== MUSICAL_CLOCK)
+      .map(([name, grant]) => [
+        name,
+        Object.fromEntries(
+          [...grant.ops].map(op => {
+            const decl = grant.capability.operations.get(op)!;
+            return [
+              op,
+              {
+                mode: decl.mode,
+                args: decl.args ?? [],
+                ...(decl.labels?.length ? { labels: decl.labels } : {}),
+                ...(decl.command ? { command: true } : {}),
+              },
+            ];
+          }),
+        ),
+      ]),
   );
 
 const keepOperations = (
@@ -814,6 +825,8 @@ export class TsGroup implements Group {
   private saves = 0;
   private lastClock: bigint | null = null;
   private randomState = seedState(0n);
+  /** The musical clock's Grant, which every Script holds (chapter 9). */
+  private musicalClock: Grant<unknown> | undefined;
   private pumping = false;
   private combining = false;
   private combinedAdmission = false;
@@ -1318,6 +1331,7 @@ export class TsGroup implements Group {
     const group = new TsGroup({
       name: o.name,
       onReady: o.onReady,
+      ...(o.musicalClock ? { musicalClock: o.musicalClock } : {}),
       trace: o.trace
         ? line => {
             if (emitting) {
@@ -1396,6 +1410,7 @@ export class TsGroup implements Group {
       const grants: Record<string, Grant<unknown>> = Object.create(null);
       const revoked = new Set<string>();
       const grantNames = new Set<string>();
+      let musicalClock: Grant<unknown> | undefined;
       for (const grant of script.grants) {
         if (grantNames.has(grant.name)) {
           invalidSave();
@@ -1408,7 +1423,11 @@ export class TsGroup implements Group {
         ) {
           invalidSave();
         }
-        const offered = o.grants(script.name, grant.name);
+        // The musical clock re-binds to the restored Group's own.
+        const offered =
+          grant.name === MUSICAL_CLOCK
+            ? group.musicalClock
+            : o.grants(script.name, grant.name);
         const rebound = offered
           ? keepOperations(
               offered,
@@ -1437,7 +1456,11 @@ export class TsGroup implements Group {
         } else if (canonicalJSON(grantData(rebound)) !== grant.declarations) {
           wholeGroup = true;
         }
-        grants[grant.name] = rebound ?? placeholder;
+        if (grant.name === MUSICAL_CLOCK) {
+          musicalClock = rebound ?? placeholder;
+        } else {
+          grants[grant.name] = rebound ?? placeholder;
+        }
       }
       if (loadFailure) {
         continue;
@@ -1461,6 +1484,9 @@ export class TsGroup implements Group {
           ),
         });
         const state = group.scripts.at(-1)!;
+        if (musicalClock) {
+          state.grants = new Map(state.grants).set(MUSICAL_CLOCK, musicalClock);
+        }
         for (const source of sources.slice(1)) {
           group.applyExtension(state, source, undefined, false);
         }
@@ -2405,12 +2431,21 @@ export class TsGroup implements Group {
       } else {
         const id = x.pendingId ?? invalidSave();
         const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
+        // Only the musical clock's call, outside a Timeout Block, has no
+        // deadline (chapter 9, The musical clock).
+        if (ms === null && !p.block) {
+          if (p.deadline !== undefined) {
+            invalidSave();
+          }
+          this.waits.add(id, s, running);
+          continue;
+        }
         const timer = this.waits.timer(
           p.deadline ?? invalidSave(),
           {
             k: 'call',
             id,
-            ms,
+            ms: ms ?? 0,
             ...(sus.k === 'ask' ? { abort: sus.abort } : {}),
             ...(p.block
               ? { deadline: sus.deadline?.after ?? msOf(p.after) }
@@ -3040,7 +3075,12 @@ export class TsGroup implements Group {
         break;
       case 'revoke': {
         const s = this.scripts.find(s => s.name === action.name)!;
-        if (s.grants.has(action.grant) && !s.revoked.has(action.grant)) {
+        // No source names the musical clock's Grant, so nothing revokes it.
+        if (
+          action.grant !== MUSICAL_CLOCK &&
+          s.grants.has(action.grant) &&
+          !s.revoked.has(action.grant)
+        ) {
           s.revoked.add(action.grant);
           this.releaseGrant(s, action.grant, 'revoke');
         }
@@ -3504,6 +3544,15 @@ export class TsGroup implements Group {
       }
       this.randomState = seedState(options.seed);
     }
+    if (options.musicalClock !== undefined) {
+      if (!isMusicalClock(options.musicalClock)) {
+        throw new HostError(
+          'invalid value',
+          'A musical clock comes from musicalClockCapability',
+        );
+      }
+      this.musicalClock = options.musicalClock.grant('all', undefined);
+    }
     // Optional calls also skip formatting and Trace-only state traversal.
     this.trace = options.trace
       ? line => {
@@ -3623,6 +3672,7 @@ export class TsGroup implements Group {
     this.worker();
     return Object.fromEntries(
       [...this.scripts.find(s => s.name === name)!.grants]
+        .filter(([name]) => name !== MUSICAL_CLOCK)
         .sort(([a], [b]) => compareText(a, b))
         .map(([name, grant]) => [name, [...grant.ops].sort(compareText)]),
     );
@@ -3644,6 +3694,12 @@ export class TsGroup implements Group {
       this.held(object);
     }
     const grants = new Map(Object.entries(o.grants ?? {}));
+    if (grants.has(MUSICAL_CLOCK)) {
+      throw new HostError(
+        'invalid value',
+        `${MUSICAL_CLOCK} is the Group's own Grant name`,
+      );
+    }
     // Every Remote Send goes through the Script's one `peer` Grant (chapter 7).
     if (
       [...grants.values()].filter(g => g.capability.name === 'peer').length > 1
@@ -3680,6 +3736,9 @@ export class TsGroup implements Group {
         return used && bound.ops.size === 0 ? [] : [[name, bound] as const];
       }),
     );
+    if (this.musicalClock) {
+      kept.set(MUSICAL_CLOCK, this.musicalClock);
+    }
     const handle = new TsScript(this.channel, o.name);
     if (owner) {
       owner.owner = o.name;
@@ -4548,8 +4607,7 @@ export class TsGroup implements Group {
    */
   private markWait(running: Running, sus: Suspension, now: bigint) {
     const last = lastWaits.get(running);
-    const suspendedAt =
-      sus.k === 'wait-for' && sus.any ? 'wait-for-any' : suspendReasons[sus.k];
+    const suspendedAt = suspendReason(sus);
     const block = sus.deadline;
     if (sus.k === 'join') {
       // Only a Timeout Block's deadline makes a Join's own wait.
@@ -4575,7 +4633,9 @@ export class TsGroup implements Group {
     waitOrders.set(running, ++this.waitOrder);
     const own =
       sus.k === 'ask'
-        ? BigInt(sus.ms) * 1000n
+        ? sus.ms === null
+          ? null
+          : BigInt(sus.ms) * 1000n
         : sus.k === 'send' || sus.k === 'call-value'
           ? BigInt(running.run.limits.maxWaitMs) * 1000n
           : null;
@@ -4711,14 +4771,20 @@ export class TsGroup implements Group {
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
     const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
-    const own = now + BigInt(ms) * 1000n;
+    const own = ms === null ? null : now + BigInt(ms) * 1000n;
     const bounded = ends(own);
+    if (own === null && !bounded) {
+      // The musical clock's call: only its answer, a failure or an
+      // abandonment ends it (chapter 5, `wait` in Musical Units).
+      this.waits.add(id, s, running);
+      return null;
+    }
     const timer = this.waits.timer(
-      bounded ? block!.at : own,
+      bounded ? block!.at : own!,
       {
         k: 'call',
         id,
-        ms,
+        ms: ms ?? 0,
         ...(sus.k === 'ask' ? { abort: sus.abort } : {}),
         ...(bounded ? { deadline: block!.after } : {}),
       },
@@ -6034,12 +6100,7 @@ export class TsGroup implements Group {
             ...start,
             ...stretch,
             ['state', String(this.persistentState(s))],
-            [
-              'end',
-              suspension.k === 'wait-for' && suspension.any
-                ? 'wait-for-any'
-                : suspendReasons[suspension.k],
-            ],
+            ['end', suspendReason(suspension)],
             [
               'until',
               deadline === null || !isInstant(deadline)
@@ -6049,12 +6110,7 @@ export class TsGroup implements Group {
           ],
         ),
       );
-      observe(
-        suspension.k === 'wait-for' && suspension.any
-          ? 'wait-for-any'
-          : suspendReasons[suspension.k],
-        deadline ?? undefined,
-      );
+      observe(suspendReason(suspension), deadline ?? undefined);
       this.seal(running.delivery, { verdict: 'allowed' });
       run.openVerdict = false;
       return;
@@ -6696,10 +6752,7 @@ export class TsGroup implements Group {
             ? this.waits.pendingMembers(sus.members).map(m => m.id)
             : [];
     return {
-      wait:
-        sus.k === 'wait-for' && sus.any
-          ? 'wait-for-any'
-          : suspendReasons[sus.k],
+      wait: suspendReason(sus),
       ...(until === undefined || !isInstant(until) ? {} : { until }),
       ...(calls.length ? { calls } : {}),
     };
@@ -6834,6 +6887,13 @@ const suspendReasons: Record<Suspension['k'], string> = {
   join: 'join-end',
   'wait-for': 'wait-for',
 };
+// A musical `wait` waits on a call, yet is still a `wait`.
+const suspendReason = (s: Suspension): string =>
+  s.k === 'wait-for' && s.any
+    ? 'wait-for-any'
+    : s.k === 'ask' && s.ms === null
+      ? 'wait'
+      : suspendReasons[s.k];
 // A Run's error map as the Host reads it: its code and text message, and
 // every other field as its data.
 const hostError = (error: Value): ScriptError => {

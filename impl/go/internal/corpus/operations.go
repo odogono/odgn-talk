@@ -30,6 +30,17 @@ type operationReplay struct {
 	// coordinator is the name of the Grant being created.
 	coordinators map[string]*talk.SegmentLifecycle
 	coordinator  string
+	// musicalClock is the case's musical clock, which the Group, not a
+	// Grant, supplies (chapter 9, The musical clock).
+	musicalClock *talk.CapabilityDef
+}
+
+// groupOptions gives the Group the case's musical clock, if it has one.
+func (o *operationReplay) groupOptions() []talk.GroupOption {
+	if o.musicalClock == nil {
+		return nil
+	}
+	return []talk.GroupOption{talk.WithMusicalClock(o.musicalClock)}
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
@@ -161,6 +172,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"serve", "unserve", "respond", "fetch"}
 		case "peer":
 			names = []string{"expose", "unexpose", "reach", "post", "call", "caller"}
+		case "musical-clock":
+			names = []string{"wait"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -272,6 +285,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"commit":   {Mode: talk.Immediate},
 				"rollback": {Mode: talk.Immediate},
 			}
+		case "musical-clock":
+			out.musicalClock, err = core.MusicalClockCapability(replayMusicalClock{out}, costs)
 		case "locale":
 			def, err = core.LocaleCapability(replayLocale{out}, costs)
 			collation := talk.Optional(talk.OneOf(talk.MapShape(talk.Field{Key: "sensitivity", Shape: talk.TextShape, Optional: true}, talk.Field{Key: "numeric", Shape: talk.BoolShape, Optional: true}), talk.TextShape))
@@ -533,6 +548,19 @@ func setupStandardCosts(row Setup, names []string) (talk.Costs, error) {
 		costs[name] = talk.Cost{Fuel: components[0], Alloc: components[1]}
 	}
 	return costs, nil
+}
+
+// replayMusicalClock keeps each musical wait for the Trace's `answer` or
+// `fail` to end.
+type replayMusicalClock struct{ replay *operationReplay }
+
+func (h replayMusicalClock) Wait(c *talk.Call, _ talk.Value) error {
+	h.replay.calls[c.ID()] = c
+	if len(h.replay.stubs["musical-clock.wait"]) == 0 {
+		return nil
+	}
+	_, err := h.replay.invoke("musical-clock.wait", talk.Suspending, c)
+	return err
 }
 
 type replayConsole struct{ replay *operationReplay }

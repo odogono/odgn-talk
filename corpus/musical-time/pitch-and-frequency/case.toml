@@ -1,0 +1,14 @@
+# pitch-and-frequency: the frequency Kind (`Hz`, `kHz`, dimension time^-1) and
+# the pitch interval Kind (`cent`, `semitone`, `octave`) convert and compute
+# through their Base Units, and Musical Units stay within their own Kind (spec
+# chapter 3, Musical Units and Pitch intervals; ADR 0166).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "tones"
+source = "tones.talk"

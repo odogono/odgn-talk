@@ -47,8 +47,8 @@ end
 
 defmodule NorthTalk.Pending do
   @moduledoc """
-  The admitted request of `NorthTalk.request_pump/5` or
-  `NorthTalk.call_pump/4`: its Group, `delivery` id and handle. Await it with
+  The admitted request of `NorthTalk.request_pump/5`,
+  `NorthTalk.call_pump/4` or `NorthTalk.send_request/4`: its Group, `delivery` id and handle. Await it with
   `NorthTalk.await/2` as often as you like; its result is kept until
   `NorthTalk.release_pending/1` or the Group closes.
   """

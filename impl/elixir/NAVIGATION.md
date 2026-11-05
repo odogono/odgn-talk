@@ -72,6 +72,14 @@ Commands run from `impl/elixir/` unless they say otherwise.
 - Gotcha: `args:` defaults to `[]`, so an Operation declared without it takes no arguments. Declare one Shape per argument, such as `args: ["text"]`, or `["any"]` for any data value.
 - Check: `mix test test/capability_test.exs`
 
+## The musical clock
+
+- Files: `musical_clock/2` in [`capability.ex`](lib/north_talk/capability.ex); `musical_clock/2`, `with_musical_clock/2` and `rebind/3` in [`owner.ex`](lib/north_talk/owner.ex)
+- Rules: [the musical clock](../../spec/09-embedding.md#the-musical-clock), [`wait` in Musical Units](../../spec/05-handlers-messages-and-scheduling.md#wait-in-musical-units), [ADR 0166](../../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)
+- Copy from: [`musical_clock_test.exs`](test/musical_clock_test.exs). The clock is a Grant passed as `musical_clock:` to `new_group/3` and `restore/4`.
+- Gotcha: the Elixir runner doesn't run the corpus; the `corpus/musical-time` cases run in the TS, Go and Zig runners.
+- Check: `mix test test/musical_clock_test.exs`
+
 ## The `http` factory and `fetch`
 
 - Files: [`http.ex`](lib/north_talk/http.ex); `standard` in [`capability.ex`](lib/north_talk/capability.ex) makes the owner's `define-capability` ask for the Core's own checks
@@ -110,7 +118,7 @@ Commands run from `impl/elixir/` unless they say otherwise.
 
 ## Combined request and Pump, and the binary envelope
 
-- Files: `request_pump/5`, `call_pump/4`, `await/2` and `release_pending/1` in [`north_talk.ex`](lib/north_talk.ex), `combined/5` and the `handles` in [`owner.ex`](lib/north_talk/owner.ex), [`binary.ex`](lib/north_talk/binary.ex)
+- Files: `request_pump/5`, `call_pump/4`, `send_request/4`, `await/2` and `release_pending/1` in [`north_talk.ex`](lib/north_talk.ex), `combined/5` and the `handles` in [`owner.ex`](lib/north_talk/owner.ex), [`binary.ex`](lib/north_talk/binary.ex)
 - Rules: [the binary exchange contract](../../spec/embedding/request-pump-binary.md), [binary Value items](../../spec/embedding/binary-frames.md#items), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)
 - Copy from: [`request_pump_test.exs`](test/request_pump_test.exs), whose wrapping transport observes binary frames and can hide the feature. [`binary_test.exs`](test/binary_test.exs) checks the codec against bytes the TS codec wrote, in [`../testdata/envelope-frames.json`](../testdata/envelope-frames.json).
 - Gotcha: a decoded frame is a `Jason.OrderedObject`, so read its fields with `frame["key"]`, not a map pattern.

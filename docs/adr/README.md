@@ -160,3 +160,5 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0163: The Script Runner carries Remote Sends over mutual TLS with pinned keys](0163-the-script-runner-carries-remote-sends-over-mutual-tls-with-pinned-keys.md)
 - [0164: The native Runner speaks a minimal TLS 1.3 of its own](0164-the-native-runner-speaks-a-minimal-tls-1-3-of-its-own.md)
 - [0165: Browser Hosts carry Remote Sends over MessagePorts and WebSockets](0165-browser-hosts-carry-remote-sends-over-message-ports-and-websockets.md)
+- [0166: Scripts wait in Musical Units counted on the Host's Transport](0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md)
+- [0167: Folio's Instruments window edits authored parameters live during Play](0167-folios-instruments-window-edits-authored-parameters-live-during-play.md)

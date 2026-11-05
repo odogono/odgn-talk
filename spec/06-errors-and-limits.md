@@ -200,6 +200,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 | `not read-only` | none | The statement given to `sqlite`'s `query` could write; the Host raises it before the statement runs | [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [#466](https://github.com/odogono/odgn-talk/issues/466) |
 | `too many rows` | `max` | A `sqlite` statement gives more rows than the call's `max`; the Host raises it, leaving the database as it was before the call, and never truncates the result | [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [#466](https://github.com/odogono/odgn-talk/issues/466) |
 | `unrepresentable` | `column` | A `sqlite` result holds a value Talk can't hold exactly: a NaN, an infinity, a `REAL` of magnitude 10^34 or more, or `TEXT` that isn't valid UTF-8; `column` is its column's name, and the Core raises it, except that a TS Host raises it for `TEXT` | [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [#466](https://github.com/odogono/odgn-talk/issues/466) |
+| `no musical time` | none | A `wait` in a Musical Unit (`bar`, `beat`) runs in a Group whose Host supplies no musical clock | [ADR 0166](../docs/adr/0166-scripts-wait-in-musical-units-counted-on-the-hosts-transport.md) |
 | `user busy` | none | A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything | [ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md), [#527](https://github.com/odogono/odgn-talk/issues/527) |
 | `invalid serve` | `field` | An `http` `serve` or `unserve` is given empty text as its name, or `serve` a prefix that doesn't begin with `/` or an effective message that isn't a plain Name; `field` is `name`, `prefix` or `message`, and the Core raises it before the Host function runs | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
 | `address in use` | none | An `http` `serve` asks for a host and port another listener already holds; the Host raises it | [ADR 0124](../docs/adr/0124-http-is-an-optional-standard-capability-answered-by-the-receiving-run.md) |
@@ -275,6 +276,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `not read-only` | A query must not change the database |
 | `too many rows` | The statement gave more than {max} rows |
 | `unrepresentable` | The value in {column} can't be represented |
+| `no musical time` | This Host keeps no musical time |
 | `user busy` | Another prompt is waiting for an answer |
 | `invalid serve` | A Serve Registration's {field} isn't valid |
 | `address in use` | That address is already in use |

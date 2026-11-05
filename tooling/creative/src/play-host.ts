@@ -1097,6 +1097,7 @@ export class PlayHost {
     const state = JSON.stringify([
       transport.tempo,
       transport.beatsPerBar,
+      transport.bar,
       transport.count === undefined,
       stoppedRun,
       this.#play.paused,
@@ -1152,15 +1153,22 @@ export class PlayHost {
     });
   }
 
-  /** The tempo and signature, and the beat count now while it runs. */
+  /**
+   * The tempo and signature, and while it runs the beat count now, from the
+   * bar line the signature took effect on.
+   */
   #transport(session: PlaySession): TransportView {
     const { beatsPerBar, running, tempo } = session.transport;
-    return running
-      ? {
-          tempo,
-          beatsPerBar,
-          count: Math.max(0, session.transport.countAt(this.#clock())),
-        }
-      : { tempo, beatsPerBar };
+    if (!running) {
+      return { tempo, beatsPerBar };
+    }
+    const count = Math.max(0, session.transport.countAt(this.#clock()));
+    const meter = session.transport.meterAt(count);
+    return {
+      tempo,
+      beatsPerBar: meter.beatsPerBar,
+      count: count - meter.count,
+      ...(meter.bar ? { bar: meter.bar } : {}),
+    };
   }
 }

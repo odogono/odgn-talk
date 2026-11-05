@@ -68,6 +68,7 @@ import { ScriptError as ScriptErrorClass } from './errors';
 import { subjectText as subjectUnits } from './operations';
 import { property } from './operations';
 import type { Waits } from './waits';
+import { MUSICAL_CLOCK } from './standard-capabilities';
 
 export type RunPlaces = UnitPlaces & {
   object(o: ObjectState | null | undefined): number | undefined;
@@ -438,7 +439,7 @@ class RunWriter {
     if (block) {
       after = microsOf(s.deadline!.after);
     } else if (s.k === 'ask') {
-      after = BigInt(s.ms) * 1000n;
+      after = BigInt(s.ms ?? 0) * 1000n;
     } else if (s.k === 'send' || s.k === 'call-value') {
       after = BigInt(r.limits.maxWaitMs) * 1000n;
     } else if (s.k === 'wait-for' && earliest?.action.k === 'event') {
@@ -1180,6 +1181,15 @@ export const runFromRecord = (
       (block ? { ...x, deadline: block } : x) as Suspension;
     switch (at) {
       case 'wait':
+        // A `wait` in a Musical Unit waits on the musical clock's call.
+        if (w.grant === MUSICAL_CLOCK && w.call !== undefined) {
+          return withBlock({
+            k: 'ask',
+            call: ctx.call(w.call),
+            abort: new AbortController(),
+            ms: null,
+          });
+        }
         return withBlock({ k: 'wait', us: 0n });
       case 'ask-wait': {
         const call = w.call === undefined ? ctx.invalid() : ctx.call(w.call);

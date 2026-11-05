@@ -2,8 +2,10 @@
 // The guest owns scheduling, Runs, Fuel and the Trace; Grant bindings, Host
 // Objects' natives, Operation functions, lifecycle hooks and futures stay
 // here, as chapter 9's message layer rules say.
+import { isMusicalClock, MUSICAL_CLOCK } from '../standard-capabilities';
 import {
   type Call,
+  type CapabilityDef,
   type ChargeRequest,
   type ChargeResult,
   type EffectResult,
@@ -81,6 +83,8 @@ export type GroupCore = {
 };
 
 export type GroupOptions = {
+  /** From `musicalClockCapability`; every Script holds it as `musical-clock`. */
+  musicalClock?: CapabilityDef<unknown>;
   name: string;
   onReady?(): void;
   /** The `random` generator's seed, 0 to 2⁶⁴ − 1; 0 when omitted. */
@@ -243,6 +247,8 @@ export class WasmGroup implements Group {
   /** Answers given while their call was starting, sent once the exchange ends. */
   #deferred: (() => void)[] = [];
   readonly #codec: Codec;
+  /** The Group's musical clock, granted to every Script as `musical-clock`. */
+  #musicalClock: Grant<unknown> | undefined;
 
   /** @internal Made by WasmCore. */
   constructor(
@@ -250,6 +256,15 @@ export class WasmGroup implements Group {
     o: GroupOptions,
     restoring?: { options: RestoreOptions; save: Uint8Array },
   ) {
+    if (o.musicalClock !== undefined) {
+      if (!isMusicalClock(o.musicalClock)) {
+        throw new HostError(
+          'invalid value',
+          'A musical clock comes from musicalClockCapability',
+        );
+      }
+      this.#musicalClock = o.musicalClock.grant('all', undefined);
+    }
     this.#core = core;
     this.name = o.name;
     this.#trace = o.trace;
@@ -743,7 +758,9 @@ export class WasmGroup implements Group {
     const o = this.#restoring!;
     const grants = listOf(field(need, 'grants')).map(pair => {
       const [script, name] = textsOf(pair);
-      const grant = o.grants(script!, name!);
+      // The musical clock re-binds to the restored Group's own.
+      const grant =
+        name === MUSICAL_CLOCK ? this.#musicalClock : o.grants(script!, name!);
       if (!grant) {
         return null;
       }
@@ -1094,7 +1111,16 @@ export class WasmGroup implements Group {
 
   load(o: LoadOptions): WasmScript {
     this.#session.syncKinds();
-    const grants = (o.grants ?? {}) as Record<string, Grant<unknown>>;
+    const given = (o.grants ?? {}) as Record<string, Grant<unknown>>;
+    if (Object.hasOwn(given, MUSICAL_CLOCK)) {
+      throw new HostError(
+        'invalid value',
+        `${MUSICAL_CLOCK} is the Group's own Grant name`,
+      );
+    }
+    const grants = this.#musicalClock
+      ? { ...given, [MUSICAL_CLOCK]: this.#musicalClock }
+      : given;
     const ok = this.worker('load', {
       name: o.name,
       source: o.source,

@@ -334,7 +334,7 @@ describe('the registry', () => {
       },
       {
         path: 'instruments[5].parameters.cutoff',
-        message: 'expected a number from 20 to 20000',
+        message: 'expected a number from 20 to 20000 Hz',
       },
       {
         path: 'instruments[5].parameters.waveform',

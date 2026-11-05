@@ -1,0 +1,14 @@
+# no-musical-time: in a Group whose Host supplies no musical clock, a `wait`
+# in a Musical Unit raises `no musical time` before suspending, while
+# `wait 0 bars`, which doesn't suspend, goes straight on (spec chapter 5,
+# `wait` in Musical Units; ADR 0166).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "lone"
+source = "lone.talk"

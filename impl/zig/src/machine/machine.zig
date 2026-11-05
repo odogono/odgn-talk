@@ -118,6 +118,61 @@ pub const Iterator = struct {
     left: u64 = 0,
 };
 
+/// Empty frame buffers a Group keeps between calls. Each is held memory of
+/// the Group's allocator, so its physical cap still bounds them.
+pub const SpareFrames = struct {
+    const max = 16;
+    locals: [max][]*Value = undefined,
+    locals_len: u8 = 0,
+    stacks: [max][]Slot = undefined,
+    stacks_len: u8 = 0,
+
+    /// A buffer of `n` locals, uninitialised, or null to allocate one.
+    fn takeLocals(s: *SpareFrames, n: usize) ?[]*Value {
+        var i: usize = s.locals_len;
+        while (i > 0) {
+            i -= 1;
+            if (s.locals[i].len != n) continue;
+            const found = s.locals[i];
+            s.locals_len -= 1;
+            s.locals[i] = s.locals[s.locals_len];
+            return found;
+        }
+        return null;
+    }
+
+    /// An empty stack with some capacity, or an unallocated one.
+    fn takeStack(s: *SpareFrames) std.ArrayList(Slot) {
+        if (s.stacks_len == 0) return .empty;
+        s.stacks_len -= 1;
+        var stack: std.ArrayList(Slot) = .fromOwnedSlice(s.stacks[s.stacks_len]);
+        stack.items.len = 0;
+        return stack;
+    }
+
+    /// Keeps a popped frame's emptied buffers, or frees them.
+    fn give(s: *SpareFrames, gpa: Allocator, locals: []*Value, stack: []Slot) void {
+        if (locals.len > 0) {
+            if (s.locals_len < max) {
+                s.locals[s.locals_len] = locals;
+                s.locals_len += 1;
+            } else group_allocator.freeFrameBuffer(gpa, *Value, locals);
+        }
+        if (stack.len > 0) {
+            if (s.stacks_len < max) {
+                s.stacks[s.stacks_len] = stack;
+                s.stacks_len += 1;
+            } else group_allocator.freeFrameBuffer(gpa, Slot, stack);
+        }
+    }
+
+    fn deinit(s: *SpareFrames, gpa: Allocator) void {
+        for (s.locals[0..s.locals_len]) |b| group_allocator.freeFrameBuffer(gpa, *Value, b);
+        for (s.stacks[0..s.stacks_len]) |b| group_allocator.freeFrameBuffer(gpa, Slot, b);
+        s.* = .{};
+    }
+};
+
 pub const Frame = struct {
     restricted: bool = false,
     /// The Library whose code it runs, or null for its Script's.
@@ -1447,6 +1502,11 @@ fn releaseDeclarations(declarations: ?[]const capabilities.GrantDecls) void {
 
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 
+/// The reserved Grant name of the Group's musical clock (chapter 9, The
+/// musical clock). A Host that keeps musical time grants it to every Script;
+/// no source can name it, so only `wait` in a Musical Unit calls its `wait`.
+pub const musical_clock = "musical-clock";
+
 /// An Operation by the Grant name that calls it, laid out as talk.h's
 /// `talk_operation_ref`.
 pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
@@ -1717,6 +1777,9 @@ pub const Group = struct {
     /// Whether `execute` runs simple instructions through `fastSteps`.
     /// Tests turn it off to compare with the general loop.
     fast_steps: bool = true,
+    /// Popped frames' empty buffers, which the next calls take instead of
+    /// allocating (#2023): locals by length, and stacks of any capacity.
+    spare: SpareFrames = .{},
     inline_admitting: bool = false,
     pump_finishing: bool = false,
     trace_pause: bool = false,
@@ -1869,6 +1932,8 @@ pub const Group = struct {
         g.ended.deinit(g.gpa);
         g.changed_roots.deinit(g.gpa);
         g.root_discards.deinit(g.gpa);
+        // Last: tearing the Runs down above pops their frames into it.
+        g.spare.deinit(g.gpa);
     }
 
     /// Adds a report. Reports are observations: one the Group can't keep is
@@ -2052,6 +2117,7 @@ pub const Group = struct {
     /// initialiser. Writes the `load` record and any `diag` records.
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
         try g.checkCodeChange();
+        if (options.grants) |named| for (named) |n| if (std.mem.eql(u8, n.name, musical_clock) and !musicalClock(n.grant)) return error.InvalidValue;
         const s = try g.gpa.create(Script);
         s.* = .{ .name = undefined, .identity = undefined, .arena = .init(g.gpa), .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
         // Until it joins the Group, a refusal leaves nothing of it behind.
@@ -4334,6 +4400,9 @@ pub const Group = struct {
                 // The first revocation of a name the Script keeps releases
                 // it; any other does nothing.
                 const s = g.script(x.script) orelse return;
+                // No source can name the musical clock, so it can't be
+                // revoked either.
+                if (std.mem.eql(u8, x.grant, musical_clock)) return;
                 const sg = s.grant(x.grant) orelse return;
                 if (sg.revoked) return;
                 sg.revoked = true;
@@ -5229,9 +5298,11 @@ pub const Group = struct {
                 call.args = &.{};
                 if (!ok) return try g.resumeRaise(run, pc, ins, g.hostErrorAt(waited));
                 // Only the rate's terms over the result, and the answer's
-                // own cost.
+                // own cost. A musical `wait` converts its answer as the
+                // `ask … and wait` it stands for, but pushes nothing.
                 const size = costs.size(x.value);
                 try g.payResumeConversion(run, (size + 31) / 32 + x.fuel, size);
+                if (ins.op == .wait) return null;
                 try g.push(frame, x.value.retain());
                 return null;
             },
@@ -7476,7 +7547,7 @@ pub const Group = struct {
         // A call that would pass the call depth faults at the call.
         if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return g.faultOn(.depth);
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
-        const locals = try g.gpa.alloc(*Value, b.locals);
+        const locals = g.spare.takeLocals(b.locals) orelse try g.gpa.alloc(*Value, b.locals);
         var made: usize = 0;
         // Unbound locals share this call's immutable Nothing. Each slot
         // still owns a reference; replacing one cannot change another.
@@ -7500,7 +7571,12 @@ pub const Group = struct {
             locals[slot] = during.retain();
         };
         const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
-        try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
+        var stack = g.spare.takeStack();
+        run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .stack = stack, .restricted = restricted }) catch |e| {
+            g.spare.give(g.gpa, &.{}, stack.allocatedSlice());
+            stack = .empty;
+            return e;
+        };
     }
 
     /// The failed frames the Run's dispatches and cleanups hold aside, which count toward
@@ -7517,9 +7593,8 @@ pub const Group = struct {
     fn popFrame(g: *Group, run: *Run) void {
         var f = run.frames.pop().?;
         for (f.locals) |v| v.release();
-        @import("group_allocator.zig").freeFrameBuffer(g.gpa, *Value, f.locals);
         for (f.stack.items) |slot| slot.release(g.gpa);
-        @import("group_allocator.zig").freeFrameBuffer(g.gpa, Slot, f.stack.allocatedSlice());
+        g.spare.give(g.gpa, f.locals, f.stack.allocatedSlice());
     }
 
     // ------------------------------------------------------------ running
@@ -7573,7 +7648,7 @@ pub const Group = struct {
         // are the same in every frame the fast path reaches.
         const unit = unitOf(run, top);
         switch (unit.code[top.pc].op) {
-            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return", .call_handler, .get_key, .set_key, .next => {},
+            .@"const", .load, .store, .move, .jump, .branch_false, .branch_true, .less, .greater, .less_or_equal, .greater_or_equal, .add, .subtract, .multiply, .divide, .div, .mod, .convert, .call, .@"return", .call_handler, .call_value, .get_key, .set_key, .next => {},
             else => return,
         }
         for (unit.unwind) |e| if (e.kind == .finally) return;
@@ -7701,7 +7776,17 @@ pub const Group = struct {
                         for (stack.items[len - n ..]) |slot| if (slot != .value) return;
                         const handler = ins.op == .call_handler;
                         const body = if (handler) ownClause(unit, ops[0].text, n) orelse return else @as(u32, @intCast(ops[0].int));
-                        if (!g.fastCall(run, &bounds, body, n, handler)) return;
+                        if (!g.fastCall(run, &bounds, body, n, if (handler) .call_handler else .call, null)) return;
+                        g.fastTick();
+                        continue :frames;
+                    },
+                    .call_value => {
+                        const n: usize = @intCast(ops[0].int);
+                        if (len < n + 1) return;
+                        for (stack.items[len - n - 1 ..]) |slot| if (slot != .value) return;
+                        const fv = stack.items[len - n - 1].value;
+                        const body = g.ownLambda(run, frame, fv, n) orelse return;
+                        if (!g.fastCall(run, &bounds, body, n, .call_value, fv)) return;
                         g.fastTick();
                         continue :frames;
                     },
@@ -7981,7 +8066,27 @@ pub const Group = struct {
     /// nothing, for a call the general loop makes: one that leaves off
     /// parameters with defaults, binds `during`, passes the call depth or
     /// can't be allocated or charged.
-    fn fastCall(g: *Group, run: *Run, bounds: *const FastBounds, body: u32, n: usize, handler: bool) bool {
+    /// The body of the Function Value `fv` that `call-value` with `n`
+    /// arguments runs, when `callValue` would push it as `call` pushes a
+    /// body: one of this frame's unit, current, that can't suspend, given
+    /// every parameter. Otherwise null, for the general loop.
+    fn ownLambda(g: *Group, run: *Run, frame: *const Frame, fv: *const Value, n: usize) ?u32 {
+        if (fv.data != .function) return null;
+        const code = g.codeOf(fv) orelse return null;
+        if (code.library != frame.library or code.generation != run.script.generation or !std.mem.eql(u8, code.home, run.script.name)) return null;
+        const b = &unitOf(run, frame).bodies[code.body];
+        if (b.may_suspend or b.params.len != n) return null;
+        if (fv.data.function.captures.data.map.len > b.locals -| b.capture_slot) return null;
+        return code.body;
+    }
+
+    /// Pushes a frame for `body` of the top frame's unit, taking its `n`
+    /// arguments from the top of the caller's stack, for `call`,
+    /// `call-handler` or, with the Function Value under the arguments,
+    /// `call-value`. False, having changed nothing, if the general loop
+    /// must make the call.
+    fn fastCall(g: *Group, run: *Run, bounds: *const FastBounds, body: u32, n: usize, op: Opcode, function: ?*Value) bool {
+        const handler = op == .call_handler;
         const b = &unitOf(run, &run.frames.items[run.frames.items.len - 1]).bodies[body];
         if (n != b.params.len or b.during != null) return false;
         if (run.frames.items.len + heldCount(run) >= run.script.limits.call_depth) return false;
@@ -7989,18 +8094,17 @@ pub const Group = struct {
         // the frames can move them, so the caller is found after.
         run.frames.ensureUnusedCapacity(g.gpa, 1) catch return false;
         const caller = &run.frames.items[run.frames.items.len - 1];
-        const locals = g.gpa.alloc(*Value, b.locals) catch return false;
-        var stack: std.ArrayList(Slot) = .empty;
-        stack.ensureTotalCapacity(g.gpa, 8) catch {
-            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+        const locals = g.spare.takeLocals(b.locals) orelse g.gpa.alloc(*Value, b.locals) catch return false;
+        var stack = g.spare.takeStack();
+        if (stack.capacity == 0) stack.ensureTotalCapacity(g.gpa, 8) catch {
+            g.spare.give(g.gpa, locals, &.{});
             return false;
         };
         // Slot 0 and any slot past the arguments share one Nothing.
         const empty: ?*Value = if (b.locals > 0) nothing(g.gpa) catch null else null;
-        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(if (handler) .call_handler else .call))) {
+        if ((b.locals > 0 and empty == null) or !bounds.charge(run, costs.chargeUnmeasured(op))) {
             if (empty) |v| v.release();
-            group_allocator.freeFrameBuffer(g.gpa, Slot, stack.allocatedSlice());
-            group_allocator.freeFrameBuffer(g.gpa, *Value, locals);
+            g.spare.give(g.gpa, locals, stack.allocatedSlice());
             return false;
         }
         // The arguments move from the caller's stack to slots 1 to n.
@@ -8008,6 +8112,17 @@ pub const Group = struct {
         for (locals, 0..) |*l, i| l.* = if (i >= 1 and i <= n) args[i - 1].value else empty.?.retain();
         if (empty) |v| v.release();
         caller.stack.items.len -= n;
+        if (function) |fv| {
+            // A Lambda's captures fill the slots after its parameters, as
+            // `callValue` copies them; the stack's Function Value goes.
+            const captures = fv.data.function.captures.data.map;
+            for (0..captures.len, b.capture_slot..) |i, slot| {
+                locals[slot].release();
+                locals[slot] = captures.at(i).value.retain();
+            }
+            caller.stack.items.len -= 1;
+            fv.release();
+        }
         caller.pc += 1;
         // A Handler's clause is a Command Call's, as `nextClause` pushes
         // it: its `clause-fail` tries the next, and its rate is paid with
@@ -9897,6 +10012,7 @@ pub const Group = struct {
             .wait => {
                 const d = pop(frame);
                 defer d.release();
+                if (d.data == .quantity and d.data.quantity.unit.musical()) return g.musicalWait(run, frame, ins, m, d);
                 const ns = waitMicros(d) orelse {
                     if (d.data == .quantity) {
                         const e = try model.text(gpa, "s");
@@ -10834,6 +10950,24 @@ pub const Group = struct {
         };
     }
 
+    /// `wait q` in a Musical Unit (chapter 5, `wait` in Musical Units): a
+    /// whole count, 0 or more, that calls the musical clock's `wait`, which
+    /// ends when the Host answers. `wait 0 bars` calls nothing, and needs no
+    /// musical clock.
+    fn musicalWait(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures, q: *Value) !Step {
+        const count = q.data.quantity.number;
+        if (!wholeCount(count)) {
+            const function = try model.text(g.gpa, "wait");
+            defer function.release();
+            return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = q } });
+        }
+        if (count.coefficient == 0) return .next;
+        if (run.script.grant(musical_clock) == null) return g.raise("no musical time", &.{});
+        // Charged as the `ask … and wait` it stands for.
+        m.rate = "capability";
+        return g.callOperation(run, frame, ins, m, musical_clock, "wait", &.{q}, .ask_wait, &.{q});
+    }
+
     /// `ask` and `tell`: an immediate or fire-and-forget Capability call
     /// (chapter 9, Capabilities). Each argument is checked against its Shape
     /// first, and a mismatch is charged nothing. The declared cost is
@@ -11102,9 +11236,13 @@ pub const Group = struct {
             // Install a started Call before landing so interruption can
             // abandon it, without committing the Segment first.
             if (pending) {
-                const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
-                const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
-                if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
+                // The musical clock waits for its line, however long: it
+                // has no `maxPending`, and `MaxWait` doesn't apply.
+                const unbounded = ins.op == .wait;
+                const after_ms = if (unbounded) 0 else if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
+                const deadline = if (unbounded) never else micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms;
+                const wait: Pending = .{ .run = run, .deadline = deadline, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
+                if (as == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, if (unbounded) "wait" else "ask-wait", wait);
             }
         }
         if (returned != null) g.answering_crossing = false;
@@ -11849,7 +11987,9 @@ fn keptGrants(a: Allocator, named: []const NamedGrant, unit: *const lower.Unit, 
     var out: std.ArrayList(ScriptGrant) = .empty;
     for (named) |n| {
         const kept = try a.dupe(bool, n.grant.operations);
-        if (as_used) {
+        // A `wait` may count any Quantity, so the musical clock is kept
+        // whole (chapter 9, The musical clock).
+        if (as_used and !std.mem.eql(u8, n.name, musical_clock)) {
             for (kept, n.grant.capability.operations) |*k, op| {
                 if (!k.*) continue;
                 k.* = for (unit.code) |ins| switch (ins.op) {
@@ -12049,6 +12189,34 @@ pub fn micros(t: model.dates.Instant) i128 {
 pub fn deadlineInstant(at: DeadlineTicks) ?model.dates.Instant {
     if (at < -62135596800 * @as(DeadlineTicks, std.time.us_per_s) or at >= 253402300800 * @as(DeadlineTicks, std.time.us_per_s)) return null;
     return .{ .seconds = @intCast(@divFloor(at, std.time.us_per_s)), .micros = @intCast(@mod(at, std.time.us_per_s)) };
+}
+
+/// Whether a Capability can be the musical clock: `musical-clock`, whose
+/// one Operation is a suspending `wait` of one argument with no
+/// `maxPending` (chapter 9, The musical clock).
+pub fn musicalClockCapability(c: *const capabilities.Capability) bool {
+    if (c.operations.len != 1 or !std.mem.eql(u8, c.name, musical_clock)) return false;
+    const op = c.operations[0];
+    return std.mem.eql(u8, op.name, "wait") and op.mode == .suspending and op.args.len == 1 and op.max_pending_ms == 0 and op.scope == .none and !op.segment_bound and op.metering == null;
+}
+
+/// Whether a Grant can be the musical clock: a musical clock's Capability,
+/// with its `wait` granted.
+fn musicalClock(grant: *const capabilities.Grant) bool {
+    return musicalClockCapability(grant.capability) and grant.operations[0];
+}
+
+/// Whether a Musical Quantity's count is whole and 0 or more.
+fn wholeCount(d: model.decimal.Decimal) bool {
+    if (d.coefficient == 0) return true;
+    if (d.negative) return false;
+    var n = d.coefficient;
+    var e = d.exponent;
+    while (e < 0) : (e += 1) {
+        if (n % 10 != 0) return false;
+        n /= 10;
+    }
+    return true;
 }
 
 /// Exact duration microseconds. A base-unit Decimal has at most 34 digits

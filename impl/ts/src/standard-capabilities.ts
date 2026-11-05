@@ -5,6 +5,7 @@ import {
   type Call,
   type CapabilityDef,
   type Cost,
+  type ReleaseHook,
   type ValueOperation,
   type Shape,
 } from './capabilities';
@@ -28,6 +29,17 @@ export type TimerImpl = {
     args: Value,
   ): void;
 };
+
+/**
+ * A musical clock (ADR 0166): `wait` receives the Quantity a Script waits
+ * for, a whole number of bars or beats, 1 or more. The Host answers the call
+ * with Nothing when that many lines have passed on its Transport, or fails it.
+ */
+export type MusicalClockImpl = {
+  wait(call: Call<unknown>, count: Value): void;
+};
+/** The reserved Grant name every Script holds a Group's musical clock under. */
+export const MUSICAL_CLOCK = 'musical-clock';
 
 export const costOf = (costs: Costs, name: string): Cost => {
   const cost = costs && Object.hasOwn(costs, name) ? costs[name] : undefined;
@@ -107,6 +119,59 @@ export const timerCapability = (
         fire: (call, name) => impl.cancel(call, name!.asText()!),
       },
     }),
+  );
+};
+
+const musicalShape: Shape = Object.freeze({
+  k: 'oneOf',
+  of: Object.freeze([
+    Object.freeze({ k: 'unitKind', kind: 'bar' }),
+    Object.freeze({ k: 'unitKind', kind: 'beat' }),
+  ]),
+});
+
+/**
+ * The musical clock a Group's `musicalClock` option takes (chapter 9): one
+ * suspending `wait`, with no `maxPending`, that Scripts call through a plain
+ * `wait` in a Musical Unit. Only the Core makes it, since `wait` can't name
+ * a Host's Operation.
+ */
+export const musicalClockCapability = (
+  impl: MusicalClockImpl,
+  costs: Costs,
+  release?: ReleaseHook<unknown>,
+): CapabilityDef<unknown> => {
+  if (!impl || typeof impl.wait !== 'function') {
+    throw new HostError('invalid value', 'A musical clock needs Wait');
+  }
+  return fixed(
+    defineValueCapability<unknown>(
+      MUSICAL_CLOCK,
+      {
+        wait: {
+          mode: 'suspending',
+          args: [musicalShape],
+          result: Object.freeze({ k: 'kind', kind: 'nothing' }),
+          // No error catalogue: any failure raises in the Run (chapter 9).
+          cost: costOf(costs, 'wait'),
+          start: (call, count) => impl.wait(call, count!),
+        },
+      },
+      undefined,
+      release,
+      MUSICAL_CLOCK,
+    ),
+  );
+};
+
+/** Whether a Capability is one `musicalClockCapability` made. */
+export const isMusicalClock = (c: CapabilityDef<unknown>): boolean => {
+  const op = c.operations.get('wait');
+  return (
+    c.name === MUSICAL_CLOCK &&
+    c.operations.size === 1 &&
+    op?.mode === 'suspending' &&
+    op.maxPendingMs === undefined
   );
 };
 

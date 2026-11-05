@@ -9,7 +9,6 @@ import {
   defineObjectKind,
   num,
   ScriptError,
-  shape,
   text,
   type Grant,
   type HostObject,
@@ -26,9 +25,9 @@ import {
   parameterProblem,
   type InstrumentCommand,
   type InstrumentKind,
-  type ParameterDefinition,
 } from './kind';
 import { noteNumber } from './notes';
+import { parameterNumber, parameterShape } from './parameter-units';
 import { INSTRUMENT_KINDS } from './registry';
 
 /**
@@ -41,12 +40,16 @@ export type InstrumentMessage = {
   readonly instrument: string;
 };
 
-/** The musical time of the `beat` Delivery that started a Run, if one did. */
-export type BeatTimes = (delivery: string | undefined) => bigint | undefined;
+/**
+ * A call's musical time: the line its Run's last musical Wait ended on, or
+ * the time of the `beat` Delivery that started the Run, if either applies.
+ */
+export type BeatTimes = (call: Caller) => bigint | undefined;
 
 type Caller = {
   readonly delivery?: string;
   readonly now: bigint;
+  readonly runId?: string;
   readonly scriptName: string;
 };
 type Duration = Value | null | undefined;
@@ -95,13 +98,6 @@ const valueOf = (value: InstrumentParameterValue): Value =>
     : typeof value === 'boolean'
       ? bool(value)
       : text(value);
-
-const shapeOf = (definition: ParameterDefinition) =>
-  definition.shape === 'number'
-    ? shape.number
-    : definition.shape === 'boolean'
-      ? shape.bool
-      : shape.text;
 
 /**
  * A declaration without its documentation, which only the Manifest reads.
@@ -167,14 +163,14 @@ export class InstrumentSession {
     const props: Record<string, PropDef<string>> = {};
     for (const [name, definition] of Object.entries(kind.parameters)) {
       props[name] = {
-        shape: shapeOf(definition),
+        shape: parameterShape(definition),
         setCost: { fuel: SET_FUEL },
         get: ({ native }) =>
           valueOf(this.#instruments.get(native)!.parameters[name]!),
         set: ({ native }: HostObject<string>, value: Value) => {
           const next =
-            value.kind === 'number'
-              ? value.asDecimal()!.toNumberLossy()
+            value.kind === 'number' || value.kind === 'quantity'
+              ? parameterNumber(definition, value)
               : value.kind === 'boolean'
                 ? value.asBool()!
                 : value.asText()!;
@@ -268,7 +264,7 @@ export class InstrumentSession {
         );
       }
     }
-    const beat = this.#beatTimes(call.delivery);
+    const beat = this.#beatTimes(call);
     if (beat !== undefined) {
       return beat + (offset ?? 0n);
     }

@@ -58,9 +58,18 @@ export const setWindowOpener = (id: string, open: () => void): void => {
   openers.set(id, open);
 };
 
-// The windows an author closed stay closed across reloads.
+// The windows an author closed stay closed across reloads, and those that
+// start closed, such as Sounds (#2048) and Instruments (#2049), stay open
+// once opened.
 const CLOSED_KEY = 'northtalk-creative-closed-windows';
+const EDIT_ONLY = new Set([
+  'info-window',
+  'sounds-window',
+  'instruments-window',
+]);
+const OPENED_KEY = 'northtalk-creative-opened-windows';
 const remembered = new Set(['tools-window', 'info-window']);
+const rememberedOpen = new Set(['sounds-window', 'instruments-window']);
 const rememberClosed = () => {
   try {
     localStorage.setItem(
@@ -68,6 +77,10 @@ const rememberClosed = () => {
       JSON.stringify(
         [...remembered].filter(id => document.getElementById(id)?.hidden),
       ),
+    );
+    localStorage.setItem(
+      OPENED_KEY,
+      JSON.stringify([...rememberedOpen].filter(id => isShowing(id))),
     );
   } catch {
     /* Optional. */
@@ -111,6 +124,12 @@ export const mountWindows = (): void => {
     for (const id of closed.filter(id => remembered.has(id))) {
       document.getElementById(id)?.setAttribute('hidden', '');
     }
+    const opened = JSON.parse(
+      localStorage.getItem(OPENED_KEY) ?? '[]',
+    ) as string[];
+    for (const id of opened.filter(id => rememberedOpen.has(id))) {
+      document.getElementById(id)?.removeAttribute('hidden');
+    }
   } catch {
     /* Optional. */
   }
@@ -133,9 +152,9 @@ export const mountWindows = (): void => {
     for (const item of items) {
       const id = item.dataset.window!;
       item.setAttribute('aria-checked', String(isShowing(id)));
-      // The Page's Info window has nothing to show while browsing.
+      // Info, Sounds and Instruments are Edit only; browsing hides them.
       item.disabled =
-        id === 'info-window' && document.body.classList.contains('browsing');
+        EDIT_ONLY.has(id) && document.body.classList.contains('browsing');
     }
   };
   menu.addEventListener('toggle', draw);

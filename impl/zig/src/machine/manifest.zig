@@ -32,6 +32,8 @@ pub const Spec = struct {
     /// The Owner Kind, which must be one of `object_kinds`; null leaves
     /// `me` unknown to tooling.
     owner_kind: ?*const objects.Kind = null,
+    /// Whether the Host supplies a musical clock, written as `musicalTime`.
+    musical_time: bool = false,
 };
 
 pub const Error = Allocator.Error || error{InvalidValue};
@@ -206,6 +208,7 @@ fn writeAll(a: Allocator, w: *std.Io.Writer, spec: Spec, grants: []const Grant, 
         try w.writeByte('}');
     }
     try w.writeByte(']');
+    if (spec.musical_time) try w.writeAll(",\"musicalTime\":true");
     if (spec.owner_kind) |owner| {
         try w.writeAll(",\"ownerKind\":");
         try writeString(w, owner.name);

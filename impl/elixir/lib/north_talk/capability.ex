@@ -71,6 +71,14 @@ defmodule NorthTalk.Capability do
   `from_functions/3` takes them as the `:effect`, `:coordinator` and
   `:release` options.
 
+  ## The musical clock
+
+  A Host whose Scripts keep musical time, such as `wait 8 bars`, makes its
+  musical clock with `musical_clock/2`, defines it like any Capability, and
+  gives a Grant of it to `NorthTalk.new_group/3` and `NorthTalk.restore/4`
+  as `:musical_clock`. Every Script of that Group then holds it under the
+  reserved Grant name `musical-clock`, which `NorthTalk.load/4` refuses.
+
   ## Results
 
   A callback returns:
@@ -110,7 +118,9 @@ defmodule NorthTalk.Capability do
   """
 
   @enforce_keys [:name]
-  defstruct [:name, :effect, :coordinator, :release, :standard, timeout: 5_000, operations: %{}]
+  defstruct [:name, :effect, :coordinator, :release, :standard, timeout: 5_000, musical_clock: false, operations: %{}]
+
+  @musical_clock "musical-clock"
 
   @type failure :: String.t() | %{required(:code) => String.t(), optional(atom) => term}
   @type result :: {:ok, term} | {:error, failure} | :noreply | {:defer, term}
@@ -195,6 +205,45 @@ defmodule NorthTalk.Capability do
       coordinator: opts[:coordinator],
       release: opts[:release]
     }
+  end
+
+  @doc """
+  The musical clock (spec chapter 9, The musical clock; ADR 0166): the
+  Capability `musical-clock`, whose one suspending Operation, `wait`, takes
+  a whole count of bars or beats, 1 or more, as a `NorthTalk.Quantity` such
+  as `8 bars`, and answers Nothing once that many have passed on the Host's
+  Transport. It has no `max_pending`, so a call waits however long it takes,
+  and no error catalogue, so any failure raises its code in the Run.
+
+  `wait` takes the count and a `NorthTalk.Call`, as a function of arity 2 or
+  `{module, function}`, and returns a suspending callback's result:
+  `{:ok, nil}`, `{:error, failure}` or `{:defer, ref}`.
+
+  Options:
+
+    * `:cost` - required: `wait`'s Fuel, as for `operation/2`.
+    * `:release` - the Grant release hook, of arity 1.
+
+      clock = NorthTalk.Capability.musical_clock(&MyApp.Transport.wait/2, cost: 1)
+      :ok = NorthTalk.define_capability(owner, clock)
+      {:ok, grant} = NorthTalk.grant(owner, clock)
+      {:ok, group} = NorthTalk.new_group(owner, "song", musical_clock: grant)
+  """
+  def musical_clock(wait, opts) do
+    unless is_function(wait, 2) or match?({m, f} when is_atom(m) and is_atom(f), wait),
+      do: raise(ArgumentError, "a musical clock needs a wait function of arity 2")
+
+    cost = Keyword.get(opts, :cost) || raise(ArgumentError, "a musical clock needs a cost for wait")
+
+    decl = [
+      mode: :suspending,
+      args: [%{"oneOf" => [%{"unitKind" => "bar"}, %{"unitKind" => "beat"}]}],
+      result: "nothing",
+      cost: cost
+    ]
+
+    capability = build(@musical_clock, [{"wait", decl, fn [count], call -> hook(wait, [count, call]) end}], opts)
+    %{capability | musical_clock: true}
   end
 
   @doc "The Capability a module or a `from_functions/3` value stands for."

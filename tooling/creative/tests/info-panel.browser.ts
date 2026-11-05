@@ -249,6 +249,147 @@ export const runBrowserTests = async () => {
       'Suggestion renames the Element',
     );
   });
+  await test('Sounds live in their own window, which starts closed and remembers being open (#2048)', async () => {
+    shell.editor.selectPage();
+    await settle();
+    assert(
+      !document.querySelector('#info')!.textContent!.includes('Sounds'),
+      'Info has no Sounds section',
+    );
+    const win = document.querySelector<HTMLElement>('#sounds-window')!;
+    const item = document.querySelector<HTMLButtonElement>(
+      '#window-menu [data-window="sounds-window"]',
+    )!;
+    item.click();
+    assert(!win.hidden, 'Window ▸ Sounds opens it');
+    assert(
+      document.querySelector('#sounds-panel [data-sound="waves"]'),
+      'It lists the Project sound with nothing selected',
+    );
+    assert(
+      localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('sounds-window'),
+      'Its open state is remembered',
+    );
+    shell.editor.click('button');
+    await settle();
+    assert(
+      document.querySelector('#sounds-panel [data-sound="waves"]'),
+      'It does not depend on selection',
+    );
+    document.body.classList.add('playing');
+    assert(
+      getComputedStyle(win).display === 'none',
+      'It is hidden during a Play Session',
+    );
+    document.body.classList.remove('playing');
+    item.click();
+    assert(win.hidden, 'Window ▸ Sounds closes it');
+    assert(
+      !localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('sounds-window'),
+      'Its closed state is remembered',
+    );
+  });
+  await test('The Sounds window renames and removes a sound, and Undo reverses each (#2050)', async () => {
+    const listed = (name: string) =>
+      document.querySelector(`#sounds-panel [data-sound="${name}"]`);
+    document
+      .querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-rename-sound="waves"]',
+      )!
+      .click();
+    const input = document.querySelector<HTMLInputElement>(
+      '.sound-dialog [data-sound-name-input]',
+    )!;
+    input.value = '';
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-rename]')!
+      .click();
+    await settle();
+    assert(
+      !document.querySelector<HTMLElement>('[data-sound-name-problem]')!
+        .hidden && listed('waves'),
+      'An empty name is refused in the dialog',
+    );
+    input.value = 'surf';
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-rename]')!
+      .click();
+    await settle();
+    assert(
+      !document.querySelector('.sound-dialog') &&
+        listed('surf') &&
+        !listed('waves'),
+      'Rename… renames the sound',
+    );
+    shell.editor.undo();
+    await settle();
+    assert(listed('waves'), 'Undo restores its name');
+    document
+      .querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-remove-sound="waves"]',
+      )!
+      .click();
+    document
+      .querySelector<HTMLButtonElement>('.sound-dialog [data-remove]')!
+      .click();
+    await settle();
+    assert(!listed('waves'), 'Remove… removes the sound once confirmed');
+    shell.editor.undo();
+    await settle();
+    assert(listed('waves'), 'Undo brings it back');
+  });
+  await test('Instruments live in their own window, available in a Project without any (#2049)', async () => {
+    shell.editor.selectPage();
+    await settle();
+    assert(
+      !document.querySelector('#info [data-new-instrument]') &&
+        !document.querySelector('#info')!.textContent!.includes('Instruments'),
+      'Info has no Instruments section',
+    );
+    const win = document.querySelector<HTMLElement>('#instruments-window')!;
+    assert(win.hidden, 'It starts closed');
+    const item = document.querySelector<HTMLButtonElement>(
+      '#window-menu [data-window="instruments-window"]',
+    )!;
+    item.click();
+    assert(!win.hidden, 'Window ▸ Instruments opens it');
+    const panel = document.querySelector<HTMLElement>('#instruments-panel')!;
+    assert(
+      panel.textContent!.includes('No Instruments yet.') &&
+        panel.querySelector('[data-add-menu]'),
+      'A Project without Instruments shows the empty state and Add Instrument',
+    );
+    assert(
+      localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('instruments-window'),
+      'Its open state is remembered',
+    );
+    shell.editor.click('button');
+    await settle();
+    assert(
+      panel.querySelector('[data-add-menu]'),
+      'It does not depend on selection',
+    );
+    document.body.classList.add('playing');
+    assert(
+      getComputedStyle(win).display === 'none',
+      'It is hidden during a Play Session',
+    );
+    document.body.classList.remove('playing');
+    item.click();
+    assert(win.hidden, 'Window ▸ Instruments closes it');
+    assert(
+      !localStorage
+        .getItem('northtalk-creative-opened-windows')
+        ?.includes('instruments-window'),
+      'Its closed state is remembered',
+    );
+  });
   await test('Read-only controls follow every selection and leave view-only actions enabled', async () => {
     shell.setReadOnly(true);
     const check = () => {
@@ -269,8 +410,17 @@ export const runBrowserTests = async () => {
     await settle();
     check();
     assert(
-      document.querySelector('#info [data-preview-sound="waves"]'),
-      'Sound preview remains available',
+      !document.querySelector('#info [data-preview-sound]') &&
+        document.querySelector(
+          '#sounds-panel [data-preview-sound="waves"]:not([disabled])',
+        ) === null,
+      'Info lists no sounds; the Sounds window marks bytes it lacks',
+    );
+    assert(
+      document.querySelector<HTMLButtonElement>(
+        '#sounds-panel [data-add-sound]',
+      )!.disabled,
+      'Add sound… is disabled while read-only',
     );
     for (const element of shell.editor.page.elements) {
       shell.editor.click(element.name);

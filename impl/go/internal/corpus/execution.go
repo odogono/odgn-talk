@@ -170,7 +170,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" {
 			for _, raw := range standards {
 				name := raw.(Setup)["capability"].(string)
-				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" && name != "sqlite" && name != "user" && name != "http" && name != "peer" {
+				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" && name != "sqlite" && name != "user" && name != "http" && name != "peer" && name != "musical-clock" {
 					return name + " Standard Capability factory remains deferred"
 				}
 			}
@@ -328,7 +328,7 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		case ready <- struct{}{}:
 		default:
 		}
-	}})
+	}}, operations.groupOptions()...)
 	crossings.applyInput = x.apply
 	operations.crossing = crossings.crossing
 	var objects objectReplay
@@ -616,7 +616,7 @@ func (x *executionReplay) apply(i int) error {
 				return obj.Native(), true
 			}
 			return nil, false
-		}})
+		}}, operations.groupOptions()...)
 		if err != nil {
 			if _, ok := err.(*talk.HostError); !ok {
 				return err
@@ -943,7 +943,7 @@ func (x *executionReplay) apply(i int) error {
 						return nil, false
 					}
 					return o.Native(), true
-				}})
+				}}, operations.groupOptions()...)
 				crossings.hidden = false
 				if restoreErr != nil {
 					return restoreErr

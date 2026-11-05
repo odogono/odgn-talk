@@ -674,6 +674,19 @@ talk_host_error_code talk_clock_capability(talk_core *c, const talk_costs *costs
 talk_host_error_code talk_calendar_capability(talk_core *c, const talk_calendar_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_locale_capability(talk_core *c, const talk_locale_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_timer_capability(talk_core *c, const talk_timer_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* The musical clock (chapter 9, The musical clock): the Capability
+ * "musical-clock", whose one Operation, wait, is suspending, of one count of
+ * bars or beats, a whole number 1 or more, with no maxPending, result Nothing
+ * and no error catalogue; costs gives wait's cost, and options its release
+ * hook. talk_define_capability refuses wait as an Operation name, since no
+ * source can call it; a wait in a Musical Unit calls this one through the
+ * reserved "musical-clock" Grant. The Host answers Nothing when that many
+ * lines have passed on its Transport, or fails the call. */
+typedef struct talk_musical_clock_impl {
+    void *context;
+    talk_operation_fn wait;
+} talk_musical_clock_impl;
+talk_host_error_code talk_musical_clock_capability(talk_core *c, const talk_musical_clock_impl *impl, const talk_costs *costs, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 talk_host_error_code talk_console_capability(talk_core *c, const talk_console_impl *impl, const talk_costs *costs, talk_capability_def **out);
 /* store: the Grant's binding is the Store's name, as NUL-terminated text.
  * The Core has checked the Shapes, refused an empty key with invalid key and
@@ -862,7 +875,11 @@ const talk_object_kind *talk_peer_kind(talk_core *c);
 /* The Shape of an object of kind k. */
 talk_host_error_code talk_object_shape(const talk_object_kind *k, talk_shape **out);
 
-/* C only: a Grant bound by the name the Script uses. */
+/* C only: a Grant bound by the name the Script uses. A Host that keeps
+ * musical time grants its musical clock to every Script under the reserved
+ * name "musical-clock": a Capability with one suspending wait Operation,
+ * which a wait in a Musical Unit calls (chapter 9, The musical clock).
+ * Without it, such a wait raises `no musical time`. */
 typedef struct talk_load_grant {
     const char *name;
     size_t name_len;
@@ -1728,6 +1745,10 @@ typedef struct talk_manifest_spec {
     /* The Owner Kind, one of object_kinds: the kind of this kind of
      * Script's me, for tooling only. NULL leaves me unknown. */
     const talk_object_kind *owner_kind;
+    /* Whether the Host supplies a musical clock: a `musical-clock` Grant
+     * on every Script (chapter 9, The musical clock). The manifest then
+     * writes musicalTime: true. */
+    bool musical_time;
 } talk_manifest_spec;
 /* Writes the Host Manifest as deterministic JSON, in an owned buffer: the
  * same definitions always give the same bytes (chapter 9, The Host Manifest

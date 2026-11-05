@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'"
+      content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self' blob:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#2f5d8a" />
@@ -104,6 +104,20 @@
             data-window="info-window"
           >
             Info
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="sounds-window"
+          >
+            Sounds
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="instruments-window"
+          >
+            Instruments
           </button>
           <button
             id="show-message"
@@ -432,6 +446,46 @@
         </p>
         <ul id="version-list"></ul>
       </div>
+    </section>
+    <section
+      id="sounds-window"
+      class="window resizable"
+      aria-labelledby="sounds-title"
+      data-right="260"
+      data-top="56"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Sounds"
+        ></button>
+        <span id="sounds-title">Sounds</span>
+      </div>
+      <!-- The sound list and its Add buttons: src/sounds-window.tsx -->
+      <div id="sounds-panel"></div>
+    </section>
+    <section
+      id="instruments-window"
+      class="window resizable"
+      aria-labelledby="instruments-title"
+      data-right="280"
+      data-top="76"
+      hidden
+    >
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Instruments"
+        ></button>
+        <span id="instruments-title">Instruments</span>
+      </div>
+      <!-- The Instrument list and selected detail: src/instruments-window.tsx -->
+      <div id="instruments-panel"></div>
     </section>
     <section
       id="performance-window"

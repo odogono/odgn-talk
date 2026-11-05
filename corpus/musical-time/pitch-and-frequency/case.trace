@@ -1,0 +1,23 @@
+# First blessing approved by the maintainer on 2026-11-05 for #2064: Musical Units and the musical clock.
+# pitch-and-frequency: `go` completes; each other Run errors at its operator.
+
+> load tones identity=b3c427f4d7453eaae056d7b9b18e53e1f9e02de54c3a252b67c334a91eeb3b9b
+> deliver d1 to=tones message=go
+> deliver d2 to=tones message=interval
+> deliver d3 to=tones message=beats
+> deliver d4 to=tones message=squared
+> pump clock=2026-09-30T09:00:00Z
+seg tones/r1 start delivery=d1 handler=go clause=1 fuel=129 alloc=824 state=616 end=return
+run tones/r1 outcome=completed delivery=d1 handler=go fuel=129 alloc=824
+raise tones/r2 code="incompatible units" at=tones:60 pos=15:21
+seg tones/r2 start delivery=d2 handler=interval clause=1 fuel=13 alloc=0 state=584 end=error
+run tones/r2 outcome=errored delivery=d2 handler=interval error={code: "incompatible units", left: "semitone", right: "Hz", at: {unit: "tones", handler: "interval", line: 15, column: 21}} fuel=13 alloc=0
+raise tones/r3 code="incompatible units" at=tones:67 pos=19:16
+seg tones/r3 start delivery=d3 handler=beats clause=1 fuel=13 alloc=0 state=1078 end=error
+run tones/r3 outcome=errored delivery=d3 handler=beats error={code: "incompatible units", left: "bar", right: "beat", at: {unit: "tones", handler: "beats", line: 19, column: 16}} fuel=13 alloc=0
+raise tones/r4 code="incompatible units" at=tones:74 pos=23:18
+seg tones/r4 start delivery=d4 handler=squared clause=1 fuel=13 alloc=0 state=1563 end=error
+run tones/r4 outcome=errored delivery=d4 handler=squared error={code: "incompatible units", left: "beat", right: "beat", at: {unit: "tones", handler: "squared", line: 23, column: 18}} fuel=13 alloc=0
+pumped state=idle fuel=168
+> vars
+vars tones hz=[800 Hz, 1500.0 Hz, 2.5 kHz, true, 880 Hz, 500 Hz] pitch=[19 semitones, 1200 cents, 300 cents, true, true] musical=[5 bars, 16 bars, 4 bars, -1 beat, true, 1]

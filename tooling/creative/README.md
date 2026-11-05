@@ -4,7 +4,7 @@ Folio is the browser creative tool specified in [#154](https://github.com/odogon
 
 Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio and its tests, see [Running it](#running-it).
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse, line and canvas Elements (see [Canvas](#canvas)), and the kinds of the Add-ons the Project lists, such as Music's slider, knob, toggle, XY pad and level meter; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, the Code Browser and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Code Browser, the Message Box, Errors and Performance, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Blank Project** and **New Music Project**, which start a copy of a Base Project ([ADR 0161](../../docs/adr/0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)), **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The **Project** menu's **Add Sound from Music…** copies sounds from the Music Base Project, and its **Add-ons…** ticks the Add-ons the Project uses: ticking one loads it, so Tools and Info offer its kinds, and unticking one is refused while an Element or Instrument uses it. Info shows Instruments only once the Project has one or lists an Add-on with Instrument kinds. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). The Code Browser selects and edits every authored Script and Library on the [shared editor](../editor/); see [Scripts](#scripts).
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse, line and canvas Elements (see [Canvas](#canvas)), and the kinds of the Add-ons the Project lists, such as Music's slider, knob, toggle, XY pad and level meter; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected; the Project's sounds are in the Sounds window (see [Sounds](#sounds)), and its Instruments in the Instruments window (see [Instruments](#instruments)). It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Sounds, Instruments, the Code Browser and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, Sounds, Instruments, the Code Browser, the Message Box, Errors and Performance, with a tick beside each one showing; a closed Tools or Info window stays closed after a reload, and an open Sounds or Instruments window stays open. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Blank Project** and **New Music Project**, which start a copy of a Base Project ([ADR 0161](../../docs/adr/0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)), **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The **Project** menu's **Add Sound from Music…** copies sounds from the Music Base Project, and its **Add-ons…** ticks the Add-ons the Project uses: ticking one loads it, so Tools and the Instruments window offer its kinds, and unticking one is refused while an Element or Instrument uses it. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). The Code Browser selects and edits every authored Script and Library on the [shared editor](../editor/); see [Scripts](#scripts).
 
 Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
 instances. The tree owns Project mutations, hierarchy, indexed collections,
@@ -172,27 +172,47 @@ Instruments. Browser storage and earlier versions use the same
 representation. Older Folio readers refuse a newer format instead of silently
 dropping what they can't read.
 
+### Instruments
+
 An Instrument has a name, a kind (`sampler`, `ym2149` or `synth`), a number
 of voices and its kind's parameters. Up to 64 voices are shared among a
 Project's Instruments. A parameter added to a kind after a Project was saved
 takes its default.
 
-With nothing selected, Info's Instruments section lists the Project's
-Instruments. Add Instrument creates one of the chosen kind, named after it
-(`drums`, `chip` or `synth`, then `synth2` and so on). Each Instrument shows
-its name, voices and every parameter, each committed as one undoable edit when
-it changes. Info refuses a name another Instrument, Page or Element has, a name
-Scripts already use, a value out of range and too many voices, and says why.
-Remove takes an Instrument out.
+The Instruments window (Window ▸ Instruments) lists the Project's
+Instruments by name and kind, whatever is selected; it is Edit only, starts
+closed and stays open after a reload once opened. The `+ ▾` menu above the
+list adds an Instrument of any offered kind, named after it (`drums`, `chip`
+or `synth`, then `synth2` and so on), and **Duplicate** (⌘D while the list
+has focus) copies the selected one's kind, voices and parameters under a
+fresh name. `−`, or Delete while the list has focus, removes it. The sampler
+is offered in every Project, so a Project without Instruments shows an empty
+state and the `+ ▾` menu. Below the list, the selected Instrument, the first
+when the window opens, shows its name and voices, then its parameters in
+collapsible groups, such as the synth's Oscillator, Envelope, Filter and
+Output; which groups are collapsed is remembered per browser. A number is a
+slider and a value you can type, such as `5 ms` or `4.0 kHz`; a slider with
+a log scale spreads its range by ratio. Arrow keys step a slider, ⇧ makes a
+step or drag ten times finer, and a double-click or ⌥-click resets it to its
+default. Choices are segmented controls and booleans are toggles. Each change
+is one undoable edit, and a whole drag is one. The window refuses a name
+another Instrument, Page or Element has, a name Scripts already use, a value
+out of range and too many voices, and says why. The hint at the bottom shows
+how a Script plays the selected Instrument and sets the hovered parameter,
+and copies them.
 
 During Play, every Script reaches each Instrument by name. `tell bass to play
 "c3"` starts a note, a MIDI number or a name such as `f#4` with `c4` as
 middle C, at an optional velocity from 0 to 1. `release` ends a note and
 `stop` ends them all. A sampler plays a Project sound by name: `tell drums to
 play "kick"`, optionally at a note and velocity. Parameters are properties:
-`set the cutoff of bass to 800`. A change lasts for the Play Session and
-leaves the Project as authored. A bad note, velocity or value is a Script
-error. A Page or Element can't share an Instrument's name. A Script that stops
+`set the cutoff of bass to 800`. A frequency parameter, such as a synth's
+`cutoff`, also takes a frequency, `800 Hz` or `2 kHz`, and reads a plain
+number as Hz; the Instruments window labels it `Cutoff (Hz)`. A synth's `attack`, `decay` and `release` take a
+duration the same way, `5 ms` or `1.5 s`, and read a plain number as seconds. A change lasts
+for the Play Session and leaves the Project as authored. A bad note,
+velocity or value is a Script error, and a Quantity of another Unit Kind,
+such as `800 ms`, is `wrong kind`. A Page or Element can't share an Instrument's name. A Script that stops
 releases the notes it started, and stopping Play stops every Instrument. The
 Instruments play through one AudioWorklet, which starts with Play.
 
@@ -234,10 +254,11 @@ skips the beats it missed, except the latest. The `transport` Grant sets the
 tempo (`tell transport to setTempo 96`, from 20 to 400) and time signature
 (`tell transport to setTimeSignature 3, 4`), and stops and starts the
 Transport, which begins again from bar 1. A tempo change leaves the beat
-already due in place and spaces later ones at the new tempo. `ask transport to
-beats 2` gives an exact duration for `wait`, at the current tempo. Pause
+already due in place and spaces later ones at the new tempo. A time signature
+takes effect at the next bar line, and bars number on from there. Pause
 freezes the Transport with the Play clock, and the beats resume on the same
-grid. In a session with Instruments, the Play clock is the page's audio clock plus a
+grid. `wait 2 beats` and `wait 8 bars` wait on the Transport; see
+[Arranging a song](#arranging-a-song). In a session with Instruments, the Play clock is the page's audio clock plus a
 15 ms margin (ADR 0156). The page sends the Play worker a reading of the audio
 clock every 250 ms and whenever the audio starts, and the worker extrapolates
 between them. It never goes backwards, and it holds still until the audio is
@@ -739,18 +760,31 @@ stay pickable on iOS; the device checks behind that are recorded in
 
 ## Sounds
 
-With no Element selected, Info lists the Project's sounds and offers
-**Add sound…** and a **Preview** for each. MP3, AAC (`.m4a` or `.aac`) and
+The **Sounds** window (**Window ▸ Sounds**, #2048) lists every Project
+sound by its Script name, with its size and a **Preview**, whatever is
+selected. Its **Add sound…** imports files, and **Add from Music…** opens the
+same dialog as **Project ▸ Add Sound from Music…**. Like Info it is Edit
+only, hidden during a Play Session; it starts closed, and its open state and
+position are remembered per browser, not in the Project. MP3, AAC (`.m4a` or `.aac`) and
 WAV are accepted, identified from their bytes and trial-decoded before the
 Project changes, with the same size limits as images: warn above 10 MB,
 refuse above 50 MB. WAV also warns that it is uncompressed. A sound's
 Script name is its file name without the extension, so `waves.mp3` is played
 as `"waves"`; identical bytes share one asset, and adding a sound is one
-undoable edit. Sounds autosave and export like images: one zip entry per
+undoable edit. Each listed sound has **Rename…** and **Remove…** (#2050).
+Renaming also rewrites the sound's name wherever a Script or Library writes
+it in a literal pattern text: a whole-name text like `play "waves"`, or a
+word in a pattern played without `on` or `on` a sampler, like `loop "bd sn"`.
+A name used as a pattern word must stay one word, like `bd` or `bd:1`.
+**Remove…** first lists those literal uses, which are then reported as
+missing-sound problems when the Project loads. Names built while playing
+aren't seen, so they fail only when they play. Either change is one undoable
+edit. Sounds autosave and export like images: one zip entry per
 SHA-256, kept on export whenever the Project has Scripts, which may choose a
 sound by name dynamically. A missing or undecodable sound stays in the asset
-table as a placeholder; importing reports it, and playing it in Play is a
-Script error naming the sound.
+table as a placeholder, marked **Missing** or **Can’t decode** in the Sounds
+window; importing reports it, and playing it in Play is a Script error naming
+the sound.
 
 Every Script gets the `sound` Grant during Play. Its `play`, `loop` and
 `stop` are Host Commands, so `tell sound to` is optional:
@@ -837,6 +871,92 @@ sent to the audio one lead ahead of its time;
 [`tests/sound-patterns.test.ts`](tests/sound-patterns.test.ts) covers
 scheduling, replacement on the bar and ownership, and the `beats` browser
 suite proves that steps land on their samples.
+
+## Arranging a song
+
+`wait 8 bars` and `wait 2 beats` wait on the Transport, so a Script can play
+one pattern for a number of bars, then the next (ADR 0166, #2066). Write each
+part as its own Handler and start them side by side with `send`, which
+doesn't wait, so each runs as a Run of its own:
+
+```talk
+on openScript
+  send bassPart to me
+  send drumPart to me
+end openScript
+
+on bassPart
+  loop "<c3 e3 g3 a3>*4" on bass
+  wait 1 bar
+  loop "c3 e3 g3 e3 a2 c3 e3 c3" on bass
+end bassPart
+
+on drumPart
+  loop "bd [hh hh] sd hh" on drums       -- intro
+  wait 8 bars
+  loop "bd hh sd hh, - - - cp" on drums  -- verse, from bar 9
+  wait 16 bars
+  stop drums
+end drumPart
+```
+
+Or let one conductor Handler drive every part through its sections:
+
+```talk
+on openScript
+  intro()
+  wait 8 bars
+  verse()
+end openScript
+
+on intro
+  loop "<c3 e3 g3 a3>*4" on bass
+  loop "bd [hh hh] sd hh" on drums
+end intro
+
+on verse
+  loop "c3 e3 g3 e3 a2 c3 e3 c3" on bass
+  loop "bd hh sd hh, - - - cp" on drums
+end verse
+```
+
+The two mix, such as a conductor for the sections and a part Handler for a
+fill every 4 bars.
+
+- **Where it ends:** `wait N bars` ends on the Nth bar line after now, and a
+  wait that starts exactly on a bar line doesn't count it. `wait N beats`
+  counts beat lines the same way. `wait 0 bars` goes straight on. A wait in
+  bars or beats takes a whole number, and doesn't mix with seconds.
+- **On the bar:** the Run resumes one lead before the line, as `beat` does,
+  and carries the line as its musical time. A `loop` straight after starts
+  on that bar, `play` spreads its cycle over it, and an Instrument's sound
+  plays on it, even when the Pump runs late. A `wait` straight after counts
+  from that line.
+- **On the Transport:** bars are counted as they pass, so a tempo change
+  during a wait stretches or shrinks the bars still to come, and a time
+  signature change makes the bars after the next bar line longer or
+  shorter. The wait still ends on a bar line.
+- **From where:** when Play starts, bar 1 is when the Transport starts, so
+  `wait 8 bars` in `openScript` ends where bar 9 begins. A Punch In counts
+  from the bar it comes in on, so parts it starts together stay in
+  lockstep. Any other Run counts from a lead after now.
+- **Holding and ending:** Pause holds waits with the Transport. `tell
+transport to stop` holds them with the bars they still have to come,
+  counted on from bar 1 when it starts. Hush, Stop and Punch In end them,
+  since they end the Runs waiting; leaving a Page ends its Scripts' waits.
+- **Two parts on one Instrument:** a Script still has one loop per
+  Instrument, whichever of its Runs started it, so the last `loop` on it
+  wins from its bar. A conductor can hand an Instrument from one section to
+  the next this way; two parts looping on one Instrument at once replace
+  each other.
+- The Host Manifest declares that Folio keeps musical time.
+
+[`src/transport.ts`](src/transport.ts) counts the bar and beat lines and
+holds the waits; [`src/play.ts`](src/play.ts) gives the Group its musical
+clock, ends each wait a lead early and keeps each Run's musical time.
+[`tests/musical-time.test.ts`](tests/musical-time.test.ts) plays both
+arrangements on Perform and Punch In, with late Pumps and tempo and time
+signature changes.
 
 ## Punch In
 

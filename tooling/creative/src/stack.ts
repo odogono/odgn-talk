@@ -60,6 +60,10 @@ import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
 import { mountEditMenu } from './edit-menu';
 import { mountInfoPanel, type NameRefusal } from './info-panel';
+import { mountSoundsWindow } from './sounds-window';
+import { showRemoveSoundDialog, showRenameSoundDialog } from './sound-dialogs';
+import { soundUses } from './sound-uses';
+import { mountInstrumentsWindow } from './instruments-window';
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -260,6 +264,8 @@ export const mountStack = (
     if (!event.persisted) {
       unmountTitle();
       unmountInfo();
+      unmountSounds();
+      unmountInstruments();
       unmountStrip();
       unmountEditMenu();
       images.dispose();
@@ -306,7 +312,32 @@ export const mountStack = (
   };
   let scale = 1;
   const refusal = signal<NameRefusal | undefined>(undefined);
-  const unmountInfo = mountInfoPanel(info, { editor, refusal, previewName });
+  const unmountInfo = mountInfoPanel(info, { editor, refusal });
+  const soundsPanel = byId('sounds-panel');
+  const unmountSounds = mountSoundsWindow(soundsPanel, {
+    editor,
+    bytes: asset => images.bytes.get(asset.hash),
+    previewName,
+    redraw: redrawVersion,
+  });
+  const instrumentsPanel = byId('instruments-panel');
+  const selectedInstrument = signal<number | undefined>(undefined);
+  const unmountInstruments = mountInstrumentsWindow(instrumentsPanel, {
+    editor,
+    redraw: redrawVersion,
+    selected: selectedInstrument,
+    add: kind => void addInstrument(kind),
+    change: (id, change) =>
+      edit(() => editor.edit(({ tree }) => tree.changeInstrument(id, change))),
+    duplicate: id =>
+      edit(() => {
+        selectedInstrument.value = editor.edit(
+          ({ tree }) => tree.duplicateInstrument(id).id,
+        );
+      }),
+    remove: id =>
+      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id))),
+  });
   let fieldEdit: Edit | undefined;
   const finishFieldEdit = () => {
     fieldEdit?.finish();
@@ -643,9 +674,6 @@ export const mountStack = (
   });
   info.addEventListener('change', event => {
     const target = event.target as HTMLInputElement;
-    if (writeInstrument(target)) {
-      return;
-    }
     // A control's binding (#1904): one undoable edit, taking the target's
     // range when it has one.
     const binding = target.dataset.binding;
@@ -686,10 +714,6 @@ export const mountStack = (
       }
     } else if (button?.dataset.replaceImage) {
       chooseImage(button.dataset.replaceImage);
-    } else if (button?.hasAttribute('data-add-sound')) {
-      chooseSound();
-    } else if (button?.dataset.previewSound) {
-      togglePreview(button.dataset.previewSound);
     } else if (button?.dataset.clearDrawing) {
       const [canvas] = editor.selected;
       if (canvas?.kind === 'canvas') {
@@ -699,14 +723,6 @@ export const mountStack = (
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {
       rename(button.dataset.rename);
-    } else if (button?.hasAttribute('data-add-instrument')) {
-      const kind = info.querySelector<HTMLSelectElement>(
-        '[data-new-instrument]',
-      )!.value;
-      void addInstrument(kind);
-    } else if (button?.dataset.removeInstrument) {
-      const id = Number(button.dataset.removeInstrument);
-      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
     } else if (button?.dataset.movePage) {
       const from = editor.pageIndex;
       edit(() => editor.movePage(from, from + Number(button.dataset.movePage)));
@@ -1123,6 +1139,15 @@ export const mountStack = (
     );
   };
 
+  // The Instruments window (#2049) commits its name and voices fields
+  // here; it adds, removes and sets parameters through its own props.
+  instrumentsPanel.addEventListener('change', event => {
+    const target = event.target as HTMLInputElement;
+    if (target.dataset.instrumentField) {
+      writeInstrument(target);
+    }
+  });
+
   // The Tools window adds Elements: built-in kinds, then the kinds of the
   // Add-ons the Project lists (#2025), which load the first time one is
   // added (#1901). It is rebuilt only when what it offers changes.
@@ -1152,8 +1177,9 @@ export const mountStack = (
       edit(() => editor.edit(({ tree }) => tree.setPlayByPerforming(perform)));
     }
   });
-  // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in.
-  byId('add-music-sound').addEventListener('click', () =>
+  // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in; the
+  // Sounds window's Add from Music… opens the same dialog (#2048).
+  const showMusicSounds = () =>
     showMusicSoundsDialog({
       add: addMusicSound,
       missing: () =>
@@ -1161,8 +1187,46 @@ export const mountStack = (
           key => !editor.project.assets.some(a => a.name === key),
         ),
       readOnly: () => editor.readOnly,
-    }),
-  );
+    });
+  byId('add-music-sound').addEventListener('click', showMusicSounds);
+  soundsPanel.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest('button');
+    if (button?.hasAttribute('data-add-sound')) {
+      chooseSound();
+    } else if (button?.hasAttribute('data-add-music-sound-dialog')) {
+      showMusicSounds();
+    } else if (button?.dataset.previewSound) {
+      togglePreview(button.dataset.previewSound);
+    } else if (button?.dataset.renameSound !== undefined) {
+      const current = button.dataset.renameSound;
+      showRenameSoundDialog({
+        current,
+        uses: soundUses(editor.project, current),
+        rename: name => {
+          if (preview?.name === current) {
+            stopPreview();
+          }
+          let problem: string | undefined;
+          edit(() => {
+            problem = editor.renameSound(current, name);
+          });
+          return problem;
+        },
+      });
+    } else if (button?.dataset.removeSound !== undefined) {
+      const name = button.dataset.removeSound;
+      showRemoveSoundDialog({
+        name,
+        uses: soundUses(editor.project, name),
+        remove: () => {
+          if (preview?.name === name) {
+            stopPreview();
+          }
+          edit(() => editor.removeSound(name));
+        },
+      });
+    }
+  });
   // Project ▸ Add-ons… (#2025) edits the Add-ons the Project lists.
   byId('show-add-ons').addEventListener('click', () =>
     showAddOnsDialog({

@@ -18,6 +18,7 @@ import { scriptOwners } from '../src/script-manifest';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
 import { DEFAULT_SAMPLER } from '../src/sounds';
+import { createMusicBase } from '../src/base-projects';
 
 const ms = (n: number) => BigInt(n) * 1000n;
 const kit = DEFAULT_SAMPLER;
@@ -358,4 +359,48 @@ test('while Paused, a Punch In waits for the next bar after Resume', async () =>
   // 15 ms margin ahead of the audio.
   expect(steps).toEqual(['0.115 bd', '2.115 sd']);
   request({ kind: 'stop', session: 1 });
+});
+
+// Music's starter Script, its dashes removed as it says (#2042).
+test('a Punch In of Music’s starter Script keeps its beat playing', async () => {
+  const { project: p } = await createMusicBase();
+  // The synth's Add-on isn't loaded here, and the beat doesn't need it.
+  p.instruments = [];
+  p.script = p.script.replaceAll(/^-- (?=on | {2}|end )/gmu, '');
+  const { play, runTo, steps } = session(p);
+  runTo(ms(1500));
+  expect(
+    play.punchIn(
+      { kind: 'script', owner: p },
+      p.script.replace('bd hh sd hh', 'bd bd sd hh'),
+      ms(1500),
+    ),
+  ).toEqual({ kind: 'bar', bar: 2 });
+  runTo(ms(4500), ms(1500));
+  const bar = (at: string) =>
+    steps().filter(step => step.startsWith(at) && step.endsWith(' bd'));
+  expect(steps().some(step => step.startsWith('0.1 '))).toBe(true);
+  expect(bar('2.1 ')).toHaveLength(1);
+  expect(bar('2.6 ')).toHaveLength(1);
+  expect(bar('4.1 ')).toHaveLength(1);
+  expect(play.problems).toEqual([]);
+});
+
+// Loops `sd`, then `last` from a function, both on the default sampler.
+const twice = (last: string) =>
+  `on openScript\n  loop "sd"\n  bassLoop()\nend openScript\n\nfunction bassLoop\n  loop "${last}"\nend`;
+
+test('a Punch In’s last loop on an Instrument wins from the punched bar, even in a late Pump (#2045)', () => {
+  const p = project(twice('bd'));
+  const { play, pumpAt, runTo, steps } = session(p);
+  runTo(ms(1500));
+  expect(
+    play.punchIn({ kind: 'script', owner: p.pages[0]! }, twice('cp'), ms(1500)),
+  ).toEqual({ kind: 'bar', bar: 2 });
+  // The Pump that applies it comes after bar 2 began, as a busy page's can.
+  pumpAt(ms(2150));
+  runTo(ms(4500), ms(2150));
+  // As on Perform, only the last loop plays: no bar of `sd` first.
+  expect(steps()).toEqual([`0.1 ${kit} bd`, `2.1 ${kit} cp`, `4.1 ${kit} cp`]);
+  expect(play.problems).toEqual([]);
 });

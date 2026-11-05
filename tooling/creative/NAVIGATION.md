@@ -274,10 +274,17 @@ landed, and the Issue graph job ticks it as they close.
   content-addressed bytes, which hold sound bytes too.
 - [sounds.ts](src/sounds.ts): sound intake, the `SoundBoard` and playback;
   [grants/sound.ts](src/grants/sound.ts) is the `sound` Grant.
+- [sounds-window.tsx](src/sounds-window.tsx): the Sounds window's list,
+  placeholders and Add, Rename… and Remove… buttons; [stack.ts](src/stack.ts)
+  wires its clicks to [sound-dialogs.ts](src/sound-dialogs.ts).
+- [sound-uses.ts](src/sound-uses.ts): a sound's literal uses in Scripts and
+  Libraries, rewritten by `StackEditor.renameSound` (#2050).
 - Tests: [images.test.ts](tests/images.test.ts),
   [sounds.test.ts](tests/sounds.test.ts),
+  [sound-uses.test.ts](tests/sound-uses.test.ts),
   [images.browser.ts](tests/images.browser.ts),
-  [sounds.browser.ts](tests/sounds.browser.ts).
+  [sounds.browser.ts](tests/sounds.browser.ts),
+  [info-panel.browser.ts](tests/info-panel.browser.ts) (the Sounds window).
 - First check: `bun test tooling/creative/tests/images.test.ts tooling/creative/tests/sounds.test.ts`.
 
 ## Audio engines
@@ -305,12 +312,15 @@ path and commit it came from. No original game's sound assets are included.
 
 ## Transport and beat
 
-- [transport.ts](src/transport.ts): the Transport's tempo, time signature and
-  beat grid on the Play clock, the lead, and which beats are due.
+- [transport.ts](src/transport.ts): the Transport's tempo, beat grid on the
+  Play clock, Meters (a time signature from its bar line), the lead, which
+  beats are due, and Scripts' musical Waits (`wait 8 bars`, ADR 0166).
 - [play.ts](src/play.ts): `PlaySession.pump` delivers due beats to Scripts
-  that handle `beat`, remembers each Delivery's musical time for
-  `beatTimeOf`, and folds the next delivery into `nextDeadline`, so the Play
-  worker and the harness need no beat scheduling of their own.
+  that handle `beat`, ends musical Waits a lead before their line through the
+  Group's musical clock, remembers each `beat` Delivery's and resumed Run's
+  musical time for `musicalTimeOf`, and folds the next beat and Wait into
+  `nextDeadline`, so the Play worker and the harness need no beat scheduling
+  of their own. `hush` cancels the Runs waiting in bars or beats.
 - [grants/transport.ts](src/grants/transport.ts): the `transport` Grant.
   [instruments/session.ts](src/instruments/session.ts) times sounds from the
   call's beat Delivery and `at`.
@@ -321,15 +331,18 @@ path and commit it came from. No original game's sound assets are included.
   [instruments/audio.ts](src/instruments/audio.ts) sends the readings and
   suspends the AudioContext while paused.
 - Tests: [transport.test.ts](tests/transport.test.ts) covers the grid, tempo
-  changes, `beat` delivery, sound times, `beats` with `wait` and Pause;
-  [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
-- First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/audio-clock.test.ts`.
+  and time-signature changes, Waits, `beat` delivery, sound times,
+  `wait 2 beats` and Pause; [musical-time.test.ts](tests/musical-time.test.ts)
+  plays arrangements with `wait N bars` on Perform and Punch In, with Hush
+  and Stop; [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
+- First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/musical-time.test.ts tooling/creative/tests/audio-clock.test.ts`.
 - Browser: `beats` suite on `/beats-test.html` plays beats through the real
   worklet and checks each note's sample.
 
 ## Instruments
 
-Instrument kinds, editing in Info and Play wiring (ADR 0158, #1894).
+Instrument kinds, editing in the Instruments window and Play wiring (ADR 0158,
+#1894, #2049).
 
 - The synth and YM2149 are the built-in Instruments Add-on (#1901):
   [add-ons/instruments/](src/add-ons/instruments/index.ts) registers their
@@ -362,6 +375,21 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   [script-manifest.ts](src/script-manifest.ts) lists them, and
   [script-names.ts](src/script-names.ts) refuses Pages and Elements that
   share their names.
+- [instruments/parameter-units.ts](src/instruments/parameter-units.ts): a
+  number parameter that names a Catalogue Unit, such as the synth's `cutoff`
+  in `Hz`, takes any Quantity of that Unit's Kind (`2 kHz`) and keeps a plain
+  number in its Unit (ADR 0166, #2067). Its Shape is the property's and the
+  Manifest's.
+- [instruments-window.tsx](src/instruments-window.tsx): the Instruments
+  window's list, `+ ▾` menu and grouped parameter rows (#2079), with
+  [instruments/parameter-sliders.ts](src/instruments/parameter-sliders.ts)
+  for slider positions (linear or log), keyboard and drag steps, and value
+  text. Typed values go through `parameterTextNumber` in
+  `parameter-units.ts`.
+- [instruments/kind.ts](src/instruments/kind.ts): a parameter's `group`
+  names its collapsible section in the Instruments window, and a number
+  parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on
+  kinds set both; the Manifest does not describe them.
 - [instruments/audio.ts](src/instruments/audio.ts): the page's AudioContext,
   started by [play-view.ts](src/play-view.ts) when a session has Instruments.
   It decodes the Project's sounds for samplers and runs
@@ -369,8 +397,9 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   [rack.ts](src/instruments/rack.ts) mixes every Instrument's Chip.
 - Editing: [tree/project-tree.ts](src/tree/project-tree.ts)'s
   `addInstrument`, `changeInstrument` and `removeInstrument` check every
-  change; [info-panel.tsx](src/info-panel.tsx)'s Instruments section, under
-  Project, shows each one, and [stack.ts](src/stack.ts) commits its fields.
+  change; [instruments-window.tsx](src/instruments-window.tsx) lists them
+  and shows the selected one's fields, and [stack.ts](src/stack.ts) commits
+  them.
 - `Project.instruments` is in [model.ts](src/model.ts);
   [project-file.ts](src/project-file.ts) checks them and migrates format 5
   Projects to format 6.
@@ -696,8 +725,10 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
   component that draws an Element on the desk, in the Page strip and in Play
   (ADR 0146), and `renderElements`, which renders a Page's layer of them.
 - [info-panel.tsx](src/info-panel.tsx): the Preact Page, Element and
-  multi-selection Info panel, observing editor, name-refusal and sound-preview
-  signals; field and action events are handled by the shell.
+  multi-selection Info panel, observing editor and name-refusal signals;
+  field and action events are handled by the shell.
+- [instruments-window.tsx](src/instruments-window.tsx): the Instruments
+  window's list and the selected Instrument's fields (#2049).
 - [page-strip.tsx](src/page-strip.tsx): the Preact Pages strip, keyed by
   session-local Page ids, with memoised miniatures sharing the shell's direct
   DOM Page renderer.

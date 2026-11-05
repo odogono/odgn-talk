@@ -36,6 +36,9 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 			if len(def.checks) != 0 {
 				declaration["standard"] = def.name
 			}
+			if def.musical {
+				declaration["musicalClock"] = true
+			}
 			_, err := b.send("define-capability", declaration)
 			return err
 		})

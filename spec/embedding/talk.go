@@ -531,6 +531,20 @@ type TimerImpl interface {
 
 func (c *Core) TimerCapability(impl TimerImpl, costs Costs) (*CapabilityDef, error)
 
+// musical clock: Wait starts a suspending call with the count a Script waits
+// for, a whole number of bars or beats, 1 or more. The Host answers Nothing
+// when that many lines have passed on its Transport, or fails it, and the
+// failure's code raises in the Run. The Capability is "musical-clock", its
+// one Operation wait takes {"oneOf": [{"unitKind": "bar"}, {"unitKind":
+// "beat"}]}, has no MaxPending, result Nothing and no error catalogue, and
+// costs gives its cost. DefineCapability refuses wait as an Operation name,
+// so only this factory makes it. options takes a release hook.
+type MusicalClockImpl interface {
+	Wait(c *Call, count Value) error
+}
+
+func (c *Core) MusicalClockCapability(impl MusicalClockImpl, costs Costs, options ...CapabilityOption) (*CapabilityDef, error)
+
 // console: Write shows the Value's text form. Read starts a suspending call
 // and answers with text, without its line break. Read has maxPending 2147483647 ms.
 type ConsoleImpl interface {
@@ -859,7 +873,18 @@ type GroupOptions struct {
 	Seed uint64
 }
 
-func (c *Core) NewGroup(o GroupOptions) *Group
+func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group
+
+// GroupOption is a Group setting beyond GroupOptions, which NewGroup and
+// Restore both take.
+type GroupOption interface{ groupOption() }
+
+// WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
+// musical clock; ADR 0166), which MusicalClockCapability makes. Every Script is
+// granted it under the reserved name "musical-clock", which
+// LoadOptions.Grants can't use, and a wait in a Musical Unit calls it.
+// Without one, such a wait raises `no musical time`.
+func WithMusicalClock(clock *CapabilityDef) GroupOption
 
 // TraceSink receives the Trace one canonical line at a time (ADR 0018).
 type TraceSink interface{ Record(line string) }
@@ -1391,7 +1416,7 @@ const (
 
 // Restore is safe from any goroutine; the Group it returns has not been
 // pumped. The first Pump reads a Clock at or after the saved reading.
-func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
+func (c *Core) Restore(save []byte, o RestoreOptions, options ...GroupOption) (*Group, RestoreResult, error)
 
 // StateFingerprint is a save's State Fingerprint: the live Group's that a
 // full restore of it would build. InvalidSave for bytes the Core can't read,
@@ -1451,6 +1476,7 @@ type ManifestSpec struct {
 	ObjectKinds []*ObjectKind
 	Objects     map[string]*ObjectKind // well-known names bound at load
 	OwnerKind   *ObjectKind            // the Owner Kind, one of ObjectKinds: the kind of me, for tooling; nil if unknown
+	MusicalTime bool                   // the Host supplies a musical clock: writes musicalTime: true
 }
 
 // MessageDecl is tooling-only: the Core never checks a Delivery against it.

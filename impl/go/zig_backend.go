@@ -350,7 +350,11 @@ func (b *zigGroup) load(o LoadOptions) (*Script, error) {
 	if err := b.syncKinds(); err != nil {
 		return nil, err
 	}
-	grants, kept, err := b.grants(o.Grants)
+	given, err := b.group.musicalGrants(o.Grants)
+	if err != nil {
+		return nil, err
+	}
+	grants, kept, err := b.grants(given)
 	if err != nil {
 		return nil, err
 	}

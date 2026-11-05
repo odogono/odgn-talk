@@ -2041,7 +2041,7 @@ var Corpus = CorpusTable{
 		CorpusTableSetupEntry{
 			Table: "standard",
 			Key:   "capability",
-			Is:    "a Standard Capability the case uses",
+			Is:    "a Standard Capability the case uses, or `musical-clock`, which the runner supplies as the Group's [musical clock](09-embedding.md#the-musical-clock) rather than as a Grant, and whose `wait` calls the Trace's `answer` and `fail` inputs end",
 			Kinds: []string{
 				"trace",
 				"disassembly",

@@ -1,0 +1,12 @@
+# First blessing approved by the maintainer on 2026-11-05 for #2064: Musical Units and the musical clock.
+# no-musical-time: the Run catches `no musical time` and goes on.
+
+> load lone identity=7349671f101f2e4a81b5d6a2715883df4dea72dc5571d67780c374991949b85e
+> deliver d1 to=lone message=bars
+> pump clock=2026-09-30T09:00:00Z
+raise lone/r1 code="no musical time" at=lone:5 pos=7:5
+seg lone/r1 start delivery=d1 handler=bars clause=1 fuel=56 alloc=65 state=81 end=return
+run lone/r1 outcome=completed delivery=d1 handler=bars fuel=56 alloc=65
+pumped state=idle fuel=56
+> vars
+vars lone log=["no musical time", "on"]

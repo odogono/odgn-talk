@@ -1284,12 +1284,14 @@ export const defineValueCapability = <B = void>(
   ops: Record<string, ValueOperation<B>>,
   lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
   release?: ReleaseHook<B>,
+  /** Only the Core's musical clock may name its Operation `wait` (chapter 9). */
+  reserved?: 'musical-clock',
 ): CapabilityDef<B> => {
   if (release !== undefined && typeof release !== 'function') {
     invalidValue('A release hook must be a function');
   }
   for (const op of Object.keys(ops)) {
-    if (refusedNames.has(op)) {
+    if (refusedNames.has(op) && !(reserved && op === 'wait')) {
       throw new HostError('invalid value', `${op} can't name an Operation`);
     }
   }

@@ -32,7 +32,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http", "peer" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user", "http", "peer", "musical-clock" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -930,6 +930,8 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
             &.{ .{ "get", c.TALK_IMMEDIATE }, .{ "set", c.TALK_IMMEDIATE }, .{ "delete", c.TALK_IMMEDIATE }, .{ "keys", c.TALK_IMMEDIATE }, .{ "increment", c.TALK_IMMEDIATE }, .{ "swap", c.TALK_IMMEDIATE }, .{ "watch", c.TALK_IMMEDIATE }, .{ "unwatch", c.TALK_IMMEDIATE } }
+        else if (std.mem.eql(u8, which, "musical-clock"))
+            &.{.{ "wait", c.TALK_SUSPENDING }}
         else
             &.{};
         for (operations) |op| {
@@ -968,6 +970,11 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             // started the Run.
             const impl: c.talk_peer_impl = .{ .context = hosts, .expose = standardHost("peer.expose"), .reach = standardHost("peer.reach"), .call = standardHost("peer.call"), .post = standardHost("peer.post"), .unexpose = standardHost("peer.unexpose"), .caller = callerHost };
             try check(c.talk_peer_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "musical-clock")) {
+            // The Group's musical clock, which every Script is granted under
+            // its reserved name; the Trace's answers stand for a Transport.
+            const impl: c.talk_musical_clock_impl = .{ .context = hosts, .wait = standardHost("musical-clock.wait") };
+            try check(c.talk_musical_clock_capability(core, &impl, &all_costs, null, 0, &def));
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
             try check(c.talk_console_capability(core, &impl, &all_costs, &def));
@@ -1473,6 +1480,21 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
     return out.items;
 }
 
+/// A Script's Grants, with the case's musical clock, if it has one, under
+/// its reserved name (chapter 9, The musical clock).
+fn scriptGrants(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects) ![]c.talk_load_grant {
+    const named = try grantsOf(a, t, defs, effects);
+    const clock = defs.get(musical_clock) orelse return named;
+    var grant: ?*c.talk_grant = null;
+    try check(c.talk_capability_def_grant_all(clock, null, &grant));
+    const out = try a.alloc(c.talk_load_grant, named.len + 1);
+    @memcpy(out[0..named.len], named);
+    out[named.len] = .{ .name = musical_clock.ptr, .name_len = musical_clock.len, .grant = grant };
+    return out;
+}
+
+const musical_clock = "musical-clock";
+
 /// The runner's `Grants` function: each Script's Grants as it loaded them,
 /// but those `unbound` names.
 const Rebinding = struct {
@@ -1746,9 +1768,12 @@ pub const Host = struct {
             const script = for (h.all) |table| {
                 if (std.mem.eql(u8, table.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(table, "name").?.string, id[0..slash])) break table;
             } else return error.UnknownScript;
-            const named = case_setup.field(script, "grants") orelse return error.MalformedCase;
-            const grant = named.get(op[0..dot]) orelse return error.MalformedCase;
-            const capability = if (grant.get("capability")) |v| v.string else op[0..dot];
+            // The musical clock is the runner's, never in a Script's `grants`.
+            const capability = if (std.mem.eql(u8, op[0..dot], musical_clock)) musical_clock else blk: {
+                const named = case_setup.field(script, "grants") orelse return error.MalformedCase;
+                const grant = named.get(op[0..dot]) orelse return error.MalformedCase;
+                break :blk if (grant.get("capability")) |v| v.string else op[0..dot];
+            };
             const key = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, op[dot + 1 ..] });
             const host_ = h.hosts.get(key) orelse {
                 if (std.mem.eql(u8, capability, "clock")) continue;
@@ -1796,7 +1821,7 @@ pub const Host = struct {
             const table = for (all) |t| {
                 if (std.mem.eql(u8, t.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(t, "name").?.string, script)) break t;
             } else return error.UnknownScript;
-            const grants = try grantsOf(a, table, defs, effects);
+            const grants = try scriptGrants(a, table, defs, effects);
             try script_grants.put(a, script, grants);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
             const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(store, a, x) else null;

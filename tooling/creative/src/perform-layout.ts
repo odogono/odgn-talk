@@ -12,6 +12,8 @@ export type PerformTab = { label: string; source: CodeSelection };
 /** The Transport as the worker last sent it, with when it arrived (ms). */
 export type ClockAnchor = {
   at: number;
+  /** The bars before the bar line `count` counts from. */
+  bar?: number;
   beatsPerBar: number;
   count?: number;
   tempo: number;
@@ -35,7 +37,7 @@ export const clockText = (
   const count = Math.floor(
     anchor.count + (Math.max(0, now - anchor.at) * anchor.tempo) / 60_000,
   );
-  const bar = Math.floor(count / anchor.beatsPerBar) + 1;
+  const bar = (anchor.bar ?? 0) + Math.floor(count / anchor.beatsPerBar) + 1;
   const beat = (count % anchor.beatsPerBar) + 1;
   return `${tempo} · bar ${bar}.${beat}`;
 };

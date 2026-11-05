@@ -629,7 +629,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[operations]` | `maxPending` | for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait` | trace |
 | `[operations]` | `metering` | optional `read-only` (immediate or suspending) or `segment-bound` (immediate and `segmentBound`); a suspending `read-only` Operation may take `charge-request` inputs | trace, disassembly |
 | `[operations]` | `errors` | the declared error codes, each `{code, fields}`, where `fields` are `{key, shape, optional}` | trace, disassembly |
-| `[standard]` | `capability` | a Standard Capability the case uses | trace, disassembly |
+| `[standard]` | `capability` | a Standard Capability the case uses, or `musical-clock`, which the runner supplies as the Group's [musical clock](09-embedding.md#the-musical-clock) rather than as a Grant, and whose `wait` calls the Trace's `answer` and `fail` inputs end | trace, disassembly |
 | `[standard]` | `costs` | the cost of each of its Operations, a table from Operation name to `{fuel, alloc}` | trace, disassembly |
 | `[standard]` | `perStep` | for `sqlite`, the Fuel its factory charges before each SQLite statement step, 0 if absent; a Stub's rows stand for that many steps plus the completion check or the probe past `max`, and its error for one step | trace, disassembly |
 | `[objectKinds]` | `name` | an Object Kind's name | trace, encoding |

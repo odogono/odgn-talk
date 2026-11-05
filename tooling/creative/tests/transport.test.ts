@@ -54,11 +54,82 @@ test('bars follow the time signature; stop and start begin again', () => {
     [1, 3],
     [2, 1],
   ]);
-  transport.stop();
+  transport.stop(ms(1500));
   expect(transport.nextDelivery()).toBeUndefined();
   expect(transport.due(ms(5000))).toEqual([]);
   transport.start(ms(5000));
   expect(transport.due(ms(5000))[0]!.position.count).toBe(0);
+});
+
+test('a time signature takes effect at the next bar line, and bars number on', () => {
+  const transport = new Transport();
+  transport.start(0n);
+  // During bar 1's second beat: 3/4 starts with bar 2.
+  transport.due(ms(500));
+  transport.setTimeSignature(3, 4);
+  expect(transport.beatsPerBar).toBe(4);
+  const bars = [1000, 1500, 2000, 2500, 3000, 3500].flatMap(at =>
+    transport.due(ms(at)).map(b => `${b.position.bar}.${b.position.beat}`),
+  );
+  expect(bars).toEqual(['1.3', '1.4', '2.1', '2.2', '2.3', '3.1']);
+  expect(transport.beatsPerBar).toBe(3);
+  expect(transport.countOfBar(2)).toBe(7);
+  expect(transport.barAt(5.5)).toBe(1.5);
+  // A change once bar 3 has begun comes in with bar 4, at count 10, and a
+  // second one before then replaces it.
+  transport.setTimeSignature(2, 4);
+  transport.setTimeSignature(5, 8);
+  expect(transport.position(9)).toEqual({ bar: 3, beat: 3, count: 9 });
+  expect(transport.position(14)).toEqual({ bar: 4, beat: 5, count: 14 });
+  expect(transport.position(15)).toEqual({ bar: 5, beat: 1, count: 15 });
+});
+
+test('a bar Wait ends on the Nth bar line after now, not counting the one it starts on', () => {
+  const transport = new Transport();
+  transport.start(0n);
+  // Bar 1's line is count 0, at 100 ms; each bar is 2 s.
+  const onLine = transport.wait('bar', 2, 0);
+  const midBar = transport.wait('bar', 1, 1.5);
+  const beats = transport.wait('beat', 3, 1.5);
+  expect(transport.lineTime(onLine)).toBe(ms(4100));
+  expect(transport.lineTime(midBar)).toBe(ms(2100));
+  expect(transport.lineTime(beats)).toBe(ms(2100));
+  expect(transport.nextWaitEnd()).toBe(ms(2000));
+  expect(transport.endedWaits(ms(1999))).toEqual([]);
+  // A late Pump still ends them with their line's time.
+  expect(transport.endedWaits(ms(2300))).toEqual([
+    { time: ms(2100), wait: midBar },
+    { time: ms(2100), wait: beats },
+  ]);
+  expect(transport.waits.size).toBe(1);
+});
+
+test('a tempo or time-signature change mid-Wait still ends it on a bar line', () => {
+  const transport = new Transport();
+  transport.start(0n);
+  const wait = transport.wait('bar', 3, 0);
+  transport.due(ms(1000));
+  // From bar 1's last beat (1.6 s), a beat is a second, so bar 4's line
+  // comes at 10.6 s.
+  transport.setTempo(60, ms(1000));
+  expect(transport.lineTime(wait)).toBe(ms(10_600));
+  transport.due(ms(3000));
+  // Bar 3 is in 3/4, from 6.6 s, so bar 4 begins at 9.6 s.
+  transport.setTimeSignature(3, 4);
+  expect(transport.lineTime(wait)).toBe(ms(9600));
+});
+
+test('a stopped Transport holds Waits, which count on from bar 1 once it starts', () => {
+  const transport = new Transport();
+  const before = transport.wait('bar', 2, undefined);
+  transport.start(0n);
+  expect(transport.lineTime(before)).toBe(ms(4100));
+  // Stopped during bar 2: one bar line, bar 3's, is still to come.
+  transport.stop(ms(3000));
+  expect(transport.nextWaitEnd()).toBeUndefined();
+  expect(transport.endedWaits(ms(10_000))).toEqual([]);
+  transport.start(ms(10_000));
+  expect(transport.lineTime(before)).toBe(ms(12_100));
 });
 
 test('a session far behind skips to the latest beat', () => {
@@ -130,7 +201,7 @@ test('without a beat Handler no beats are delivered or scheduled', () => {
   expect(pumpAt(0n).nextDeadline).toBeUndefined();
 });
 
-test('the transport Grant sets the tempo and converts beats for wait', async () => {
+test('the transport Grant sets the tempo', async () => {
   const { play, pumpAt, sent } = session(
     band(`on beat bar, beat, count
   tell bass to play 60
@@ -155,18 +226,22 @@ end beat
   expect(sent.map(m => m.at)).toEqual([0.1, 0.6, 1.6]);
 });
 
-test('beats convert to an exact duration that wait keeps', () => {
+test('wait in beats ends on a beat line, and a sound after it plays there', () => {
   const project = band('');
   project.pages[0]!.elements[0]!.script =
-    'on click\n  ask transport to beats 2\n  wait it\n  tell bass to play 60\nend click\n';
+    'on click\n  wait 2 beats\n  tell bass to play 60\nend click\n';
   const { play, pumpAt, sent } = session(project);
   pumpAt(0n);
+  // At 200 ms, a lead later is in beat 1, so beat 3's line is the second.
   play.send(play.page.elements[0]!, 'click');
-  pumpAt(0n);
+  pumpAt(ms(200));
+  expect(pumpAt(ms(200)).nextDeadline).toBe(ms(1000));
   pumpAt(ms(999));
   expect(sent).toEqual([]);
-  pumpAt(ms(1000));
-  expect(sent.length).toBe(1);
+  // A late Pump plays it on the line all the same.
+  pumpAt(ms(1050));
+  expect(play.problems).toEqual([]);
+  expect(sent.map(m => m.at)).toEqual([1.1]);
 });
 
 test('a sound outside a beat Run plays now, or after an at from now', async () => {
@@ -180,9 +255,10 @@ test('a sound outside a beat Run plays now, or after an at from now', async () =
   expect(sent.map(m => m.at)).toEqual([undefined, 3]);
 });
 
-test('every Manifest declares beat and the transport Grant', () => {
+test('every Manifest declares beat, the transport Grant and musical time', () => {
   const project = band('');
   const manifest = scriptManifest(project, project.pages[0]!);
+  expect(manifest.musicalTime).toBe(true);
   expect(manifest.messages).toContainEqual({
     name: 'beat',
     args: ['value', 'value', 'value'],
@@ -191,14 +267,7 @@ test('every Manifest declares beat and the transport Grant', () => {
     manifest.grants
       .find(g => g.name === 'transport')!
       .operations.map(o => o.name),
-  ).toEqual([
-    'setTempo',
-    'setTimeSignature',
-    'start',
-    'stop',
-    'beats',
-    'tempo',
-  ]);
+  ).toEqual(['setTempo', 'setTimeSignature', 'start', 'stop', 'tempo']);
 });
 
 const until = async (check: () => boolean) => {

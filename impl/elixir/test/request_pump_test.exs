@@ -42,6 +42,7 @@ defmodule NorthTalk.RequestPumpTest do
 
     def double([n], call) do
       send(call.binding, {:double, n})
+      send(call.binding, {:double_delivery, call.delivery})
       {:ok, n * 2}
     end
   end
@@ -267,6 +268,56 @@ defmodule NorthTalk.RequestPumpTest do
     Process.sleep(50)
     {:ok, _} = NorthTalk.pump(group, now: @t0)
     assert {:ok, %Result{value: 3}} = Task.await(task)
+  end
+
+  describe "send_request/4" do
+    test "returns a Pending with its delivery before any Run, under manual drive" do
+      {_, group} = start(drive: :manual)
+      assert {:ok, %Pending{delivery: delivery} = pending} = NorthTalk.send_request(group, "s", "twice", [21])
+      assert is_binary(delivery)
+      refute_received {:double, _}
+      refute_received {:north_talk, _, %{"kind" => "run end"}}
+      assert {:error, %HostError{code: "timeout"}} = NorthTalk.await(pending, 0)
+
+      {:ok, _} = NorthTalk.pump(group, now: @t0)
+      assert_received {:double_delivery, ^delivery}
+      assert {:ok, %Result{value: 42}} = NorthTalk.await(pending, 0)
+      assert {:ok, %Result{value: 42}} = NorthTalk.await(pending, 0)
+    end
+
+    test "an unhandled message is a ScriptError of outcome unhandled" do
+      {_, group} = start(drive: :manual)
+      {:ok, pending} = NorthTalk.send_request(group, "s", "nobody", [])
+      {:ok, _} = NorthTalk.pump(group, now: @t0)
+      assert {:error, %ScriptError{outcome: "unhandled"}} = NorthTalk.await(pending, 0)
+    end
+
+    test "release fails awaiters without cancelling the request" do
+      {_, group} = start(drive: :manual)
+      {:ok, pending} = NorthTalk.send_request(group, "s", "plus", [1, 2])
+      awaiter = Task.async(fn -> NorthTalk.await(pending, 5_000) end)
+      wait_for_awaiter(pending)
+      :ok = NorthTalk.release_pending(pending)
+      assert {:error, %HostError{code: "pending released"}} = Task.await(awaiter)
+      assert {:error, %HostError{code: "pending released"}} = NorthTalk.await(pending)
+
+      delivery = pending.delivery
+      {:ok, _} = NorthTalk.pump(group, now: @t0)
+      assert_received {:north_talk, _, %{"kind" => "run end", "delivery" => ^delivery, "outcome" => "completed"}}
+    end
+
+    test "an admission refusal is an error with no handle" do
+      {owner, group} = start(drive: :manual)
+      assert {:error, %HostError{code: "invalid value"}} = NorthTalk.send_request(group, "missing", "plus", [1, 2])
+      assert {:error, %HostError{code: "invalid value"}} = NorthTalk.send_request(group, "s", "plus", [1.5, 2])
+      assert :sys.get_state(owner).handles == %{}
+    end
+
+    test "an automatic owner runs it on its own" do
+      {_, group} = start([])
+      {:ok, pending} = NorthTalk.send_request(group, "s", "plus", [2, 3])
+      assert {:ok, %Result{value: 5}} = NorthTalk.await(pending, 5_000)
+    end
   end
 
   defp request(group, name, args) do
