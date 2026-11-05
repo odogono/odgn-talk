@@ -298,7 +298,7 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 
 `shape Name is <Shape Expression>` declares a **named Shape**: a Constant whose value is the Shape's canonical data, in the ordering of [chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint) ([ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md)). It follows every Constant rule: it can't be put into, `private` keeps it in its Library, `use … from` imports it, and the clash rules of [Names and clashes](#names-and-clashes) apply. It is evaluated at load with the other Constants, and has no effect.
 
-```text
+```talk
 shape Line is {sku: text, qty: number}
 shape Invoice is {type: text, amount: GBP, ref: optional text, lines: list of Line}
 ```

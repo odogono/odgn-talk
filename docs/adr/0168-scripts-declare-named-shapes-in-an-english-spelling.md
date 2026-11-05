@@ -6,7 +6,7 @@ status: accepted
 
 Shapes can only be written in the Host Manifest's data spelling, which end users won't write by hand, so Scripts rarely use `conforms`, `check` and `explain` ([#2054](https://github.com/odogono/odgn-talk/issues/2054), [#2055](https://github.com/odogono/odgn-talk/issues/2055)). A Script now declares a named Shape in a readable spelling that lowers to that data, and tests a value against it with `is a` / `is an`, which end users already know from `is a number`.
 
-```text
+```talk
 shape Line is {sku: text, qty: number}
 shape Invoice is {type: text, amount: GBP, ref: optional text, lines: list of Line}
 

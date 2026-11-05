@@ -351,6 +351,112 @@ export class UnitCompiler {
     };
   }
 
+  // A Shape declaration is a Constant whose value is its Shape data (ADR
+  // 0168): local named Shapes are inlined, imported ones read at load.
+  shapeConstant(d: Node): Node {
+    if (d.k !== 'ShapeDecl') {
+      return d;
+    }
+    const local = new Map<string, Node>(
+      this.decls
+        .filter(x => x.k === 'ShapeDecl')
+        .map(x => [x.name as string, x.shape as Node]),
+    );
+    for (const name of local.keys()) {
+      this.shapes.add(name);
+    }
+    const at = { line: d.line, col: d.col };
+    const text = (v: string): Node => ({ k: 'Text', v, ...at });
+    const map = (entries: [string, Node][]): Node => ({
+      k: 'Map',
+      entries: entries.map(([key, value]) => ({ key, value })),
+      ...at,
+    });
+    const yes: Node = { k: 'Const', v: 'true', ...at };
+    const kinds = new Set([
+      'nothing',
+      'boolean',
+      'number',
+      'quantity',
+      'text',
+      'bytes',
+      'list',
+      'map',
+      'range',
+      'instant',
+      'civil date',
+      'pattern',
+      'function',
+      'object',
+      'any',
+      'value',
+    ]);
+    const lower = (n: Node): Node => {
+      switch (n.k) {
+        case 'ShapeName':
+          if (kinds.has(n.name)) {
+            return text(n.name);
+          }
+          if (local.has(n.name)) {
+            return lower(local.get(n.name)!);
+          }
+          if (
+            this.opts.libraries &&
+            this.decls.some(
+              x =>
+                x.k === 'Use' &&
+                (x.rename ? x.rename === n.name : x.names.includes(n.name)),
+            )
+          ) {
+            return { k: 'Name', name: n.name, ...at };
+          }
+          return map([['quantity', text(n.name)]]);
+        case 'ShapeUnit':
+          return map([['quantity', text(n.unit)]]);
+        case 'ShapeUnitKind':
+          return map([['unitKind', text(n.kind)]]);
+        case 'ShapeObject':
+          return map([['object', text(n.kind)]]);
+        case 'ShapeList':
+          return map([['list', lower(n.shape)]]);
+        case 'ShapeOptional':
+          return map([['optional', lower(n.shape)]]);
+        case 'ShapeOneOf':
+          return map([
+            ['oneOf', { k: 'List', items: n.alternatives.map(lower), ...at }],
+          ]);
+        case 'ShapeMap':
+          return map([
+            [
+              'map',
+              {
+                k: 'List',
+                items: n.fields.map((f: Node) =>
+                  map([
+                    ['key', text(f.key)],
+                    ['shape', lower(f.shape)],
+                    ...(f.optional
+                      ? [['optional', yes] as [string, Node]]
+                      : []),
+                  ]),
+                ),
+                ...at,
+              },
+            ],
+            ...(n.open ? [['open', yes] as [string, Node]] : []),
+          ]);
+      }
+      throw new Error(`a Shape Term ${n.k}`);
+    };
+    return {
+      k: 'Constant',
+      name: d.name,
+      value: lower(d.shape),
+      ...(d.private ? { private: true } : {}),
+      ...at,
+    };
+  }
+
   constant(display: string): number {
     let i = this.constIndex.get(display);
     if (i === undefined) {
@@ -394,15 +500,22 @@ export class UnitCompiler {
     return b;
   }
 
+  // Named Shapes, local and imported, which `is a` reads (ADR 0168).
+  shapes = new Set<string>();
+
   compile(): Unit {
+    this.decls = this.decls.map(d => this.shapeConstant(d));
     // The table of names, before any body is compiled.
     for (const d of this.decls) {
       if (d.k === 'Use') {
         const lib = this.opts.libraries?.get(d.library);
         for (const n of d.names) {
           const decl = lib?.find(x => x.name === n && !x.private);
+          if (decl?.k === 'ShapeDecl') {
+            this.shapes.add(d.rename ?? n);
+          }
           const what =
-            decl?.k === 'Constant'
+            decl?.k === 'Constant' || decl?.k === 'ShapeDecl'
               ? 'constant'
               : decl?.k === 'Handler'
                 ? 'handler'
@@ -2999,8 +3112,15 @@ export class BodyCompiler {
       }
       case 'is a':
         this.expr(n.l);
-        this.at(n);
-        this.emit('is-kind', [n.kind]);
+        if (this.u.shapes.has(n.kind)) {
+          // `x is a S` is `conforms(x, S)` (ADR 0168).
+          this.at(n);
+          this.load(n.kind, n);
+          this.emit('call-builtin', ['conforms', 2]);
+        } else {
+          this.at(n);
+          this.emit('is-kind', [n.kind]);
+        }
         if (n.neg) {
           this.emit('not');
         }

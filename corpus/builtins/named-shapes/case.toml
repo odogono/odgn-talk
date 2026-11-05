@@ -1,0 +1,18 @@
+# named-shapes: `shape Name is …` declares a Constant holding Shape data, and
+# `is a` / `is an` with a named Shape is `conforms` (spec chapter 7, Shape
+# declarations; ADR 0168). A Library exports a Shape built on a private one,
+# a Script inlines its own named Shapes, and a Guard tests one.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "orders"
+version = "1"
+source = "orders.talk"
+
+[[scripts]]
+name = "checks"
+source = "checks.talk"

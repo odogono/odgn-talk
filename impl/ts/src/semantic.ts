@@ -28,7 +28,13 @@ export type FunctionContract = {
 };
 export type LibraryExport =
   | ExportKind
-  | { contract?: FunctionContract; kind: ExportKind; maySuspend?: boolean };
+  | {
+      contract?: FunctionContract;
+      kind: ExportKind;
+      maySuspend?: boolean;
+      /** A Constant declared with `shape` (ADR 0168). */
+      shape?: boolean;
+    };
 export type Binding = {
   contract?: FunctionContract;
   id: number;
@@ -37,6 +43,8 @@ export type Binding = {
   kind: BindingKind;
   name: string;
   scope: number;
+  /** A Constant declared with `shape`, which `is a` may name (ADR 0168). */
+  shape?: boolean;
   span: SourceSpan | null;
 };
 export type SemanticScope = {

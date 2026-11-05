@@ -1,0 +1,25 @@
+-- checks.talk: the named-shapes case's Script.
+
+use Line from orders
+
+shape Money is GBP or USD
+shape Invoice is {type: text, amount: Money, ref: optional text, lines: list of Line, ...}
+shape Speed is m/s or a quantity of length
+
+script variable log = []
+
+on go
+  put Invoice after log
+  put [{type: "inv", amount: 5 GBP, lines: []} is an Invoice, {type: "inv", amount: 5 EUR, lines: []} is an Invoice, 3 m/s is a Speed, 3 kg is not a Speed] after log
+  put check({sku: "a", qty: 2}, Line) after log
+  put explain({type: "inv", amount: 5 GBP, lines: [{sku: 1, qty: 2}]}, Invoice) after log
+  put [classify({type: "inv", amount: 1 USD, lines: [], note: "open"}), classify("x")] after log
+end go
+
+on classify msg where msg is an Invoice
+  return "invoice"
+end classify
+
+on classify msg
+  return "other"
+end classify

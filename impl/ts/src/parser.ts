@@ -129,7 +129,14 @@ const CONTINUING_WORDS = new Set([
 
 // Chapter 2, Entries: the words that start a declaration, and the Reserved
 // Words that start a statement.
-const DECLARATION_WORDS = ['on', 'function', 'private', 'use', 'constant'];
+const DECLARATION_WORDS = [
+  'on',
+  'function',
+  'private',
+  'use',
+  'constant',
+  'shape',
+];
 const STATEMENT_WORDS = new Set([
   ...BLOCK_KEYWORDS,
   'add',
@@ -832,8 +839,11 @@ class Parser {
       if (this.isWord(t, 'private')) {
         this.next();
         const u = this.peek(0);
-        if (!this.isWord(u, 'on', 'function', 'constant')) {
-          this.fail(u, '`on`, `function` or `constant` after `private`');
+        if (!this.isWord(u, 'on', 'function', 'constant', 'shape')) {
+          this.fail(
+            u,
+            '`on`, `function`, `constant` or `shape` after `private`',
+          );
         }
         return { ...((yield this.declaration()) as Node), private: true };
       }
@@ -854,6 +864,14 @@ class Parser {
         this.endOfStatement();
         return { k: 'Constant', name, value };
       }
+      if (this.isWord(t, 'shape')) {
+        this.next();
+        const name = (yield this.name('a Shape name')) as string;
+        this.expectWord('is', 'operator');
+        const shape = (yield this.shapeExpr()) as Node;
+        this.endOfStatement();
+        return { k: 'ShapeDecl', name, shape };
+      }
       if (
         this.isWord(t, 'script') &&
         this.isWord(this.la2('script-variable'), 'variable')
@@ -871,8 +889,122 @@ class Parser {
       }
       this.fail(
         t,
-        '`on`, `function`, `script variable`, `constant`, `use` or `private`',
+        '`on`, `function`, `script variable`, `constant`, `shape`, `use` or `private`',
       );
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // A Shape Expression (ADR 0168): Shape Terms joined by `or`, loosest.
+  *shapeExpr(): ParseTask<Node> {
+    const frame = this.enter('ShapeExpr');
+    try {
+      const alternatives = [(yield this.shapeTerm()) as Node];
+      while (this.atOperatorWord('or')) {
+        this.next('operator');
+        alternatives.push((yield this.shapeTerm()) as Node);
+      }
+      return alternatives.length === 1
+        ? alternatives[0]!
+        : { k: 'ShapeOneOf', alternatives };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // A Unit is lexed as after `as`, so a Compound Unit is one token. Which
+  // Name is a kind, a Unit or a named Shape is a load rule.
+  *shapeTerm(): ParseTask<Node> {
+    const frame = this.enter('ShapeTerm');
+    try {
+      const t = this.peek(0, 'type');
+      if (t.t === 'unit' || t.t === 'error') {
+        return { k: 'ShapeUnit', unit: this.next('type').v };
+      }
+      if (this.isOp(t, '(')) {
+        this.next();
+        const e = (yield this.nested(() => this.shapeExpr())) as Node;
+        this.expectOp(')');
+        return e;
+      }
+      if (this.isOp(t, '{')) {
+        return (yield this.shapeMap()) as Node;
+      }
+      if (this.isWord(t, 'optional')) {
+        this.next();
+        return { k: 'ShapeOptional', shape: (yield this.shapeTerm()) as Node };
+      }
+      if (this.isWord(t, 'list', 'object', 'a', 'an')) {
+        const n = this.la2('shape-of', 'operator');
+        if (this.isWord(t, 'list', 'object') && this.isWord(n, 'of')) {
+          this.next();
+          this.next('operator');
+          return t.v === 'list'
+            ? { k: 'ShapeList', shape: (yield this.shapeTerm()) as Node }
+            : {
+                k: 'ShapeObject',
+                kind: (yield this.name('an Object Kind')) as string,
+              };
+        }
+        if (this.isWord(t, 'a', 'an') && this.isWord(n, 'quantity')) {
+          this.next();
+          this.next('operator');
+          this.expectWord('of', 'operator');
+          return {
+            k: 'ShapeUnitKind',
+            kind: (yield this.name('a Unit Kind')) as string,
+          };
+        }
+      }
+      return { k: 'ShapeName', name: (yield this.kind()) as string };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // `{key: Shape, …}`, with `...` last for an open map.
+  *shapeMap(): ParseTask<Node> {
+    const frame = this.enter('ShapeMap');
+    try {
+      this.next();
+      const fields: Node[] = [];
+      let open = false;
+      if (!this.isOp(this.peek(0), '}')) {
+        do {
+          if (fields.length || open) {
+            this.next('operator');
+          }
+          if (this.isOp(this.peek(0), '...')) {
+            this.next();
+            open = true;
+            break;
+          }
+          fields.push((yield this.shapeField()) as Node);
+        } while (this.isOp(this.peek(0, 'operator'), ','));
+      }
+      this.expectOp('}');
+      return { k: 'ShapeMap', fields, open };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  *shapeField(): ParseTask<Node> {
+    const frame = this.enter('ShapeField');
+    try {
+      const key = (yield this.mapKey()) as string;
+      // Read in Unit mode, so a Compound Unit after the key lexes once.
+      const optional = this.isWord(this.peek(0, 'type'), 'optional');
+      if (optional) {
+        this.next('type');
+      }
+      return {
+        k: 'ShapeField',
+        key,
+        optional,
+        shape: (yield this.nested(() => this.shapeExpr())) as Node,
+      };
     } finally {
       this.leave(frame);
     }

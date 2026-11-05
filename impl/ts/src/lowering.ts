@@ -561,6 +561,22 @@ class BodyLowering {
 
   // ------------------------------------------------------------- names
 
+  // A named Shape in scope, as a name to load, or undefined.
+  namedShape(name: string): SemanticName | undefined {
+    const binding = this.u.scopes[0]!.bindings.find(
+      b => b.name === name && b.shape,
+    );
+    return binding
+      ? {
+          kind: 'name',
+          role: 'value',
+          text: name,
+          binding,
+          span: binding.span ?? { line: 0, col: 0, start: 0, end: 0 },
+        }
+      : undefined;
+  }
+
   load(name: SemanticName, at: Pos) {
     const binding = name.binding!;
     const slot = this.slotOf(binding);
@@ -2268,7 +2284,11 @@ class BodyLowering {
       case 'is-kind':
       case 'is-empty':
         yield this.expr(e.l);
-        if (e.k === 'is-kind') {
+        if (e.k === 'is-kind' && this.namedShape(e.kind)) {
+          // `x is a S` is `conforms(x, S)` (ADR 0168).
+          this.load(this.namedShape(e.kind)!, at);
+          this.emit(at, 'call-builtin', 'conforms', 2);
+        } else if (e.k === 'is-kind') {
           this.emit(at, 'is-kind', e.kind);
         } else {
           this.emit(at, 'is-empty');
@@ -2680,7 +2700,7 @@ export const exportsOf = (
               kind: decl.k,
               maySuspend: tree.maySuspend?.includes(decl.name) ?? false,
             }
-          : { kind: decl.k };
+          : { kind: decl.k, ...(decl.shape ? { shape: true } : {}) };
     }
   }
   return out;

@@ -41,7 +41,7 @@ export const unconvertibleKinds: ReadonlySet<string> = new Set([
   'nothing',
   'quantity',
 ]);
-const unitNames = new Set(
+export const unitNames: ReadonlySet<string> = new Set(
   units.flatMap(unit =>
     'plural' in unit && unit.plural ? [unit.name, unit.plural] : [unit.name],
   ),
@@ -72,16 +72,22 @@ const unwrap = (node: SemanticNode): SemanticNode => {
 const isOp = (element: SemanticElement | undefined, op: string) =>
   element?.kind === 'token' && element.type === 'op' && element.text === op;
 
+/** Whether a name after `is a` is a named Shape in scope (ADR 0168). */
+export type IsShape = (name: string) => boolean;
+
 /** The kind after `is a`, `as` or `can be`: chapter 3 decides which names each allows. */
 const checkKind = (
   kind: SemanticNode,
   position: 'is' | 'as' | 'can be',
   report: ConstructReport,
+  isShape: IsShape = () => false,
 ): string | null => {
   const name = text(kind);
   const known =
     kindNames.has(name) ||
-    (position === 'is' ? name === 'integer' : unitNames.has(name));
+    (position === 'is'
+      ? name === 'integer' || isShape(name)
+      : unitNames.has(name));
   if (!known) {
     report('unknown kind', firstLeaf(kind));
     return null;
@@ -89,12 +95,16 @@ const checkKind = (
   return name;
 };
 
-const checkComparison = (node: SemanticNode, report: ConstructReport) => {
+const checkComparison = (
+  node: SemanticNode,
+  report: ConstructReport,
+  isShape: IsShape,
+) => {
   const words = leaves(node).map(leaf => leaf.text);
   const kind = nodes(node).find(child => child.rule === 'Kind');
   const is = words.includes('is');
   if (kind) {
-    checkKind(kind, is ? 'is' : 'can be', report);
+    checkKind(kind, is ? 'is' : 'can be', report, isShape);
   }
   const folding = nodes(node).find(child => child.rule === 'IgnoringCase');
   if (folding && (kind || (is && words.includes('empty')))) {
@@ -419,6 +429,7 @@ const checkElement = (
 export const checkConstructs = (
   root: SemanticNode,
   report: ConstructReport,
+  isShape: IsShape = () => false,
 ) => {
   const work: { node: SemanticNode; repeated: boolean }[] = [
     { node: root, repeated: false },
@@ -429,7 +440,7 @@ export const checkConstructs = (
     let inner = repeated;
     switch (node.rule) {
       case 'Comparison':
-        checkComparison(node, report);
+        checkComparison(node, report, isShape);
         break;
       case 'Conversion':
         checkConversion(node, report);

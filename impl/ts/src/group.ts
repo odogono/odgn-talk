@@ -3992,6 +3992,7 @@ export class TsGroup implements Group {
         const current: ExistingName = {
           kind: binding.kind,
           contract: binding.contract,
+          ...(binding.shape ? { shape: true } : {}),
           importedFrom:
             binding.kind === 'script variable'
               ? undefined

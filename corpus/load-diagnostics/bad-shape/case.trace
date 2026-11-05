@@ -1,0 +1,12 @@
+# Unblessed: `bad shape` and its source positions (#2105); first blessing awaits human review.
+> load unknown identity=2f8715e680cf12cda06ab3cbe2dc6378ff5a40fa05a9623c93fdf38d96a35d37
+diag unknown code="bad shape" pos=1:32
+> load unit-kind identity=887d2baf430bdea01a7c3ba43c4ee5be2f3426af3e09c306efdc7027833c3c1f
+diag unit-kind code="bad shape" pos=1:30
+> load duplicate identity=db10b2d6614e9a9857fd278e4cf2e16cce9bca00c22381e5dc42636fbf706c87
+diag duplicate code="bad shape" pos=1:36
+> load cycle identity=54e1cccd5e73c88fc62482364093b36ff552daae1f1136b5ca88c2722812a2c3
+diag cycle code="bad shape" pos=1:34
+> load named-like-unit-kind identity=7d41a92b5c6d3e15bd6180302eb8df433181d2ae16459a99111e29d8810a9e9f
+diag named-like-unit-kind code="bad shape" pos=1:7
+> vars

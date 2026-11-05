@@ -1,0 +1,4 @@
+-- orders.talk: the named-shapes case's Library, which exports a Shape.
+
+private shape Sku is text
+shape Line is {sku: Sku, qty: number}

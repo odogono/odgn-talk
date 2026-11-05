@@ -1,0 +1,1 @@
+shape Pair is {a: text, b: number, a: number}

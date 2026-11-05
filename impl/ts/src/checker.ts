@@ -1,4 +1,5 @@
 import { checkConstructs } from './constructs';
+import { checkShapes } from './shapes';
 import { checkDecisions } from './decisions';
 import { declarationDocs } from './documentation';
 import { checkControl } from './control';
@@ -37,7 +38,7 @@ export type Diagnostic = {
 };
 export type ExistingName = Pick<
   Binding,
-  'kind' | 'contract' | 'importedFrom'
+  'kind' | 'contract' | 'importedFrom' | 'shape'
 > & { handler?: ExistingName; maySuspend?: boolean };
 export type CheckOptions = {
   /** Names in older code units when checking a Script extension. */
@@ -504,6 +505,7 @@ const checkParsed = (
       ...makeBinding(name, previous.kind, unit, null),
       contract: previous.contract,
       importedFrom: previous.importedFrom,
+      ...(previous.shape ? { shape: true } : {}),
     });
     const handler = previous.kind === 'handler' ? previous : previous.handler;
     if (handler) {
@@ -530,6 +532,7 @@ const checkParsed = (
     contract?: FunctionContract;
     importedFrom?: Binding['importedFrom'];
     kind: BindingKind;
+    shape?: boolean;
     site: Site;
   }[] = [];
   const declaration = (
@@ -537,15 +540,18 @@ const checkParsed = (
     kind: BindingKind,
     importedFrom?: Binding['importedFrom'],
     contract?: FunctionContract,
+    shape?: boolean,
   ) => {
     const site = mark(token, importedFrom ? 'import' : 'declaration');
     site.scope = unit;
-    declarationSites.push({ site, kind, importedFrom, contract });
+    declarationSites.push({ site, kind, importedFrom, contract, shape });
   };
   const importInfo = (
     library: string,
     name: string,
-  ): { contract?: FunctionContract; kind: ExportKind } | undefined => {
+  ):
+    | { contract?: FunctionContract; kind: ExportKind; shape?: boolean }
+    | undefined => {
     const supplied =
       options.libraries && Object.hasOwn(options.libraries, library)
         ? options.libraries[library]
@@ -585,6 +591,14 @@ const checkParsed = (
               name,
               head.v === 'constant' ? 'constant' : 'script variable',
             );
+          }
+        } else if (head.v === 'shape') {
+          // A named Shape is a Constant holding its Shape data (ADR 0168).
+          const name = context.get(
+            ns().find(node => node.rule === 'Name')!,
+          )?.first;
+          if (name) {
+            declaration(name, 'constant', undefined, undefined, true);
           }
         }
         break;
@@ -653,6 +667,7 @@ const checkParsed = (
               info.kind,
               { library: library.v, name: name.v },
               info.contract,
+              info.shape,
             );
           } else {
             mark(rename ?? name, 'import');
@@ -915,7 +930,13 @@ const checkParsed = (
           .map(token => [token.pos, token]),
       )).get(pos),
   };
-  for (const { site, kind, importedFrom, contract } of declarationSites) {
+  for (const {
+    site,
+    kind,
+    importedFrom,
+    contract,
+    shape,
+  } of declarationSites) {
     const old = unit.bindings.get(site.name.text);
     const handler = handlers.get(site.name.text);
     const canShare = (previous: Binding) =>
@@ -940,6 +961,9 @@ const checkParsed = (
     }
     if (contract && !previous) {
       binding.contract = contract;
+    }
+    if (shape && !previous) {
+      binding.shape = true;
     }
     if (kind === 'handler') {
       handlers.set(site.name.text, binding);
@@ -1381,7 +1405,9 @@ const checkParsed = (
     options.objectProperties,
     options.ownerProperties,
   );
-  checkConstructs(root, reportAt);
+  const unitBinding = (name: string) => unit.bindings.get(name);
+  checkConstructs(root, reportAt, name => unitBinding(name)?.shape === true);
+  checkShapes(root, unitBinding, reportAt);
   const commands = options.grants
     ? resolveHostCommands(root, options.grants, reportAt)
     : [];
