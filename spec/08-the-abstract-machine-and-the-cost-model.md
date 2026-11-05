@@ -195,8 +195,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | --- | --- | --- | --- | --- | --- |
 | `get-key` | `key` | 1 | 1 | `the k of x`: a map's value, or a Host Object's property | `wrong kind`, `object gone`, `restricted operation` |
 | `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone`, `restricted operation` |
-| `get-optional-key` | `key` | 1 | 1 | `the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind` | `wrong kind` |
-| `get-optional-key-computed` |  | 2 | 1 | `the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does | `wrong kind` |
+| `get-optional-key` | `key` | 1 | 1 | `the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; on a Host Object it is `get-key`; any other receiver is `wrong kind` | `wrong kind`, `object gone` |
+| `get-optional-key-computed` |  | 2 | 1 | `the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does | `wrong kind`, `object gone` |
 | `get-element` |  | 2 | 1 | `element s of o`: pops the Host Object and, below it, the selector, and pushes the member the Object Kind's collection gives, or Nothing | `wrong kind`, `object gone`, `out of domain`, `restricted operation` |
 | `count-elements` |  | 1 | 1 | `the number of elements of o`: pops the Host Object and pushes its collection's count | `wrong kind`, `object gone`, `out of domain`, `restricted operation` |
 | `list-elements` |  | 1 | 1 | `the elements of o`, and the walk of an element Whose Clause: pops the Host Object and pushes a list of its collection's members | `wrong kind`, `object gone`, `out of domain`, `restricted operation` |
@@ -511,7 +511,7 @@ Both read instructions point at `the`, preserve operand positions and use
 the same rules inside Guards. They allocate no result storage of their own.
 
 An optional read charges 3 Fuel beyond its operands, including failure or
-a Nothing receiver. A default adds 1 Fuel for a present left operand, or
+a Nothing receiver; on a Host Object it charges as `get-key` does there. A default adds 1 Fuel for a present left operand, or
 2 plus the right operand's Fuel for Nothing. Left-associated chains retain
 every branch: `1 otherwise 2 otherwise 3` costs 3 Fuel including its constant;
 `nothing otherwise nothing otherwise 3` costs 7. A jump that skips later

@@ -1,48 +1,50 @@
--- h.talk: the host-objects case's Script. Each `try` catches one optional
--- read's error into `log`.
+-- h.talk: the host-objects case's Script. Each Handler logs one optional
+-- read and then its plain read; a `try` catches an error into `log`.
 
 script variable log = []
-script variable stored
 
-on known
-  try
-    put the optional id of bulb into x
-  catch e
-    put e after log
-  end try
-  try
-    put the optional label of bulb into x
-  catch e
-    put e after log
-  end try
-end known
+on defined o
+  put the optional label of o after log
+  put the label of o after log
+end defined
 
-on dynamic o
-  try
-    put the optional ("id") of o into x
-  catch e
-    put e after log
-  end try
-  try
-    put the optional ("label") of o into x
-  catch e
-    put e after log
-  end try
-end dynamic
-on viaHandler
-  dynamic bulb
-end viaHandler
+on absent o
+  put the optional colour of o otherwise "none" after log
+  put the colour of o otherwise "none" after log
+end absent
 
-on inMap
-  put {lamp: bulb} into m
-  put the optional lamp of m into stored
+on identity o
+  put the optional id of o after log
+  put the id of o after log
+end identity
+
+on computed o
+  put the optional ("label") of o after log
+  put the ("label") of o after log
+end computed
+
+on nested o
+  put the optional is_locked of the optional lockable of o otherwise false after log
+  put the optional is_locked of the lockable of o otherwise false after log
+end nested
+
+on guarded o where the optional label of o = "on"
+  put "guard passed" after log
+end guarded
+on guarded o
+  put "guard skipped" after log
+end guarded
+
+on gone o
   try
-    put the optional label of the optional lamp of m into x
+    put the optional label of o after log
   catch e
     put e after log
   end try
-end inMap
-
-on ordinary
-  put the label of bulb after log
-end ordinary
+  try
+    put the label of o after log
+  catch e
+    put e after log
+  end try
+  put the optional id of o after log
+end gone

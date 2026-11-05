@@ -1,9 +1,11 @@
-# host-objects: optional reads are map-only, so they reject every Host
-# Object, known or dynamic, live or disposed, for `id` and for any other
-# key, literal or computed, with `wrong kind` and no `prop` record: no Host
-# call. Returning a Host Object stored under a map key succeeds; reading on
-# into it fails. An ordinary read still calls the Host, for contrast (spec
-# chapter 4, Optional map-key reads; design acceptance group 6).
+# host-objects: an optional read of a Host Object is its plain read (#2093).
+# A defined property calls the Host with a `prop` record; an undefined one
+# gives Nothing with no Host call; `id` is the Core-held id; a computed key
+# reads the same property; a map stored under a property reads on
+# optionally; a Guard skips its clause as a plain read there does; and a
+# disposed object raises `object gone` for every key but `id`. Fuel matches
+# the plain reads beside them (spec chapter 4, Optional key reads; design
+# acceptance group 6).
 
 kind = "trace"
 
@@ -13,12 +15,12 @@ costModel = "0"
 
 [[objectKinds]]
 name = "light"
-props = [{ name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } }]
+props = [{ name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } }, { name = "lockable", shape = "any", readOnly = true, getCost = { fuel = 2 } }]
 
 [[objects]]
 kind = "light"
 id = "bulb-1"
-props = { label = '"on"' }
+props = { label = '"on"', lockable = '{is_locked: true}' }
 
 [[scripts]]
 name = "h"

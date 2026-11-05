@@ -55,7 +55,8 @@ expressions in a replace expression's subject or replacement need parentheses.
 
 ### Optional key read
 
-`the optional k of x` reads only a map key. Its key can be a Word, a Text
+`the optional k of x` reads a map key, or a Host Object's key as an ordinary
+read does (changed by [#2093](https://github.com/odogono/odgn-talk/issues/2093)). Its key can be a Word, a Text
 literal, the two-word key `code points`, or a parenthesized expression.
 Bare `length`, `target`, `first` and all other key spellings are literal keys,
 not Built-in properties, the message target or ordinal chunks.
@@ -72,12 +73,18 @@ Then dispatch on the receiver:
 - Nothing returns Nothing.
 - A map returns its value under that key, or Nothing if absent. A present key
   holding Nothing and an absent key yield the same result.
+- A Host Object reads as `the k of x` does: `id` gives the Core-held id,
+  another key reads the Host's property, with the same Host call and Fuel,
+  or Nothing for a key its Object Kind doesn't define, and a disposed object
+  raises `object gone`.
 - Every other value raises `wrong kind`, `expected: "map"`, `value` the
-  receiver. Host Objects, live or disposed, are rejected even for `id`.
+  receiver.
 
-Optional reads never call the Host, perform property dispatch or coerce a
-receiver into a map. A map value may itself be a Host Object; returning the
-handle is allowed, but the next optional read cannot step into it.
+As first designed, optional reads rejected every Host Object, even for `id`.
+#2093 reversed that: a Script author can't see whether a Host models a thing
+as a map or as an object, so one spelling should read both. Purity is kept,
+since on a Host Object the optional read is the plain read, and nothing new
+reaches the Host. Optional reads still never coerce a receiver into a map.
 
 An error from the read instruction has `at` at its `the` token. Operand errors
 retain their own source positions. Both statements remain subject to the
@@ -109,11 +116,10 @@ that will not run, against existing Guard restrictions. Thus
 A nonboolean final result or a runtime error skips the clause under the
 existing Guard rules and is recorded as such in the Trace.
 
-Optional reads of a statically known Host Object use the same map-only
-runtime rejection as reads of a dynamic object. They are not ordinary Host
-property accesses, so the existing special load rule for such accesses does
-not apply to them. Ordinary `the id of object` remains allowed in Guards;
-`the optional id of object` fails at runtime and skips the clause.
+Optional reads of a Host Object follow the rules for its ordinary reads in
+Guards (#2093): a statically known Host Object's property read is
+`not in a guard`, `id` stays allowed, and a dynamic object's property read
+fails at runtime and skips the clause.
 
 Whose conditions, Constants, Script Variable initializers and parameter
 defaults retain their existing expression restrictions. Both forms are
@@ -298,9 +304,12 @@ follow-up witnesses received first-blessing approval on 2026-10-14.
    of a fabricated path, and instruction charge on failures. An optional-read
    or evaluated-operand error raised inside stdlib source must retain the
    existing attribution to the entering Script call.
-6. Live and disposed Host Objects, known and dynamic, fail optional reads
-   for both `id` and another key, with zero Host calls. Returning a Host
-   Object stored under a map key succeeds; stepping into it fails.
+6. An optional read of a Host Object is its ordinary read (#2093): a
+   defined property calls the Host, an undefined one gives Nothing, `id`
+   gives the Core-held id, a computed key reads the same property, a map
+   held in a property reads on optionally, a Guard skips as an ordinary read
+   there does, and a disposed object raises `object gone` for every key but
+   `id`, all at the ordinary read's Fuel.
 7. Guards: absent optional boolean key with `otherwise false` skips normally;
    present true chooses the clause. Runtime wrong-kind errors skip with the
    existing Trace behavior. Forbidden Script/Library calls in either branch
