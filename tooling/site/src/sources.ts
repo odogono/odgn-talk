@@ -50,6 +50,7 @@ const stdlibPages = (): Source[] => {
 
 export const sources = (): Source[] => [
   { path: 'docs/tour.md', slug: 'learn/tour', title: 'Learn NorthTalk' },
+  { path: 'docs/idioms.md', slug: 'learn/idioms', title: 'Common idioms' },
   {
     path: 'docs/concepts.md',
     slug: 'learn/concepts',
