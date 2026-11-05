@@ -100,6 +100,7 @@ pub const Code = enum {
     unit_without_number,
     unexpected_token,
     reserved_word,
+    repeat_with,
     not_a_container,
     unterminated_interpolation,
     empty_interpolation,

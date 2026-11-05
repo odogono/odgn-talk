@@ -1824,6 +1824,21 @@ class Parser {
     }
   }
 
+  // HyperTalk's counted loop, `repeat with i from 1 to n` (#2097). `with`
+  // alone is a Name, so `repeat with times` still counts.
+  private repeatWith(t: Token) {
+    if (!this.isWord(t, 'with')) {
+      return;
+    }
+    const n = this.la2('repeat-with', 'operator');
+    if (this.isName(n) && !FOLLOW.has(n.v)) {
+      throw new ParseError(
+        t,
+        'repeat with',
+        `NorthTalk has no \`repeat with\`; count with \`repeat for each i in 1..n\``,
+      );
+    }
+  }
   *repeat(): ParseTask<Node> {
     const frame = this.enter('Repeat');
     try {
@@ -1843,6 +1858,7 @@ class Parser {
         this.next();
         head = { k: 'Forever' };
       } else {
+        this.repeatWith(t);
         const n = (yield this.expr()) as Node;
         this.expectWord('times', 'operator');
         head = { k: 'Times', n };

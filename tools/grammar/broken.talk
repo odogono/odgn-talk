@@ -1684,3 +1684,17 @@ end t
 on t piece
   put 1 into the location of piece
 end t
+
+-- case: HyperTalk's counted loop `repeat with i from a to b` is reported at `with` (#2097)
+-- expect: repeat with at 2:10
+on t parts
+  repeat with i from 2 to the length of parts
+  end repeat
+end t
+
+-- case: HyperTalk's counted loop `repeat with i = a to b` (#2097)
+-- expect: repeat with at 2:10
+on t
+  repeat with i = 1 to 3
+  end repeat
+end t

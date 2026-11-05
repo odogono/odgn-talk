@@ -927,6 +927,10 @@ pub const grammar: GrammarTable = .{
             .rule = "after `replace`, `first` followed by anything but `in` means only the first match",
         },
         .{
+            .name = "repeat-with",
+            .rule = "straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count",
+        },
+        .{
             .name = "script-variable",
             .rule = "at top level, `script` followed by `variable` starts a Script Variable",
         },
@@ -1023,6 +1027,10 @@ pub const grammar: GrammarTable = .{
         .{
             .code = "reserved word",
             .raised_when = "A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target, a Result Target or a Whose Key (a Reserved Word that can't start the Whose Clause's condition); checked before `unexpected token` and `not a container`, and reported at the Reserved Word",
+        },
+        .{
+            .code = "repeat with",
+            .raised_when = "`repeat` is followed by `with` and a Name that isn't in the FOLLOW set, as in HyperTalk's `repeat with i from 1 to n` or `repeat with i = 1 to n`; NorthTalk counts with `repeat for each i in 1..n`; reported at `with`",
         },
         .{
             .code = "not a container",

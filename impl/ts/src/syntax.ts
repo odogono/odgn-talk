@@ -12,6 +12,7 @@ export type SyntaxErrorCode =
   | 'unit without number'
   | 'unexpected token'
   | 'reserved word'
+  | 'repeat with'
   | 'not a container';
 
 /** All offsets index the original TS string; line and col count Unicode scalars. */

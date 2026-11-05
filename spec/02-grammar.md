@@ -723,6 +723,7 @@ These are the only places where the parser reads a second token before it choose
 | `ordering-words` | after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
 | `replace-first` | after `replace`, `first` followed by anything but `in` means only the first match |
+| `repeat-with` | straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count |
 | `script-variable` | at top level, `script` followed by `variable` starts a Script Variable |
 | `target` | after `the`, `target` not followed by `of` is `the target` |
 | `wait-from` | in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns |
@@ -768,6 +769,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | `unit without number` | A Unit word can't continue the parse and follows a Name or a closing bracket on its line; a Unit follows only a number literal, so write `x as s`, `x * 1 s`, or the Unit in the Constant; reported at the Unit word |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
 | `reserved word` | A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target, a Result Target or a Whose Key (a Reserved Word that can't start the Whose Clause's condition); checked before `unexpected token` and `not a container`, and reported at the Reserved Word |
+| `repeat with` | `repeat` is followed by `with` and a Name that isn't in the FOLLOW set, as in HyperTalk's `repeat with i from 1 to n` or `repeat with i = 1 to n`; NorthTalk counts with `repeat for each i in 1..n`; reported at `with` |
 | `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token |
 | `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |
 | `empty interpolation` | An interpolation hole contains no expression |

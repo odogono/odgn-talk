@@ -74,6 +74,21 @@ say characters 2..10 of t
 
 There is no open-ended `2..` form. `2..-1` already says it, and every Core runs it ([#2090](https://github.com/odogono/odgn-talk/issues/2090)). See [reading chunks](../spec/04-expressions-and-statements.md#reading).
 
+## Count with a range
+
+There is no HyperTalk `repeat with i from 1 to n`. Count over a range with `repeat for each`. Both ends are included.
+
+```talk
+put ["a", "b", "c"] into parts
+repeat for each i in 2..the length of parts
+  say i & ": " & item i of parts
+end repeat
+--> 2: b
+--> 3: c
+```
+
+`repeat with i …` is the syntax error `repeat with`, reported at `with` ([#2097](https://github.com/odogono/odgn-talk/issues/2097)). See [`repeat`](../spec/04-expressions-and-statements.md#repeat).
+
 ## Keep an answer
 
 A later `ask` overwrites `it`. To keep an answer, name a Result Target with `into`. The answer goes into that name as well as into `it`.
