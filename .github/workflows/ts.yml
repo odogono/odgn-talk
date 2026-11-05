@@ -48,6 +48,9 @@ jobs:
       # Two peer routers over a real Web Worker (ADR 0165).
       - run: bun tools/peer-port-browser.ts
         working-directory: impl/ts
+      # The chat example: two tabs over a Runner's --listen ws://.
+      - run: bun browser-check.ts
+        working-directory: examples/peer-chat
 
   corpus:
     runs-on: ubuntu-latest

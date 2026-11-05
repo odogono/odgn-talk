@@ -6,7 +6,8 @@
     "impl/ts",
     "tooling/*",
     "bench/ts",
-    "tools"
+    "tools",
+    "examples/peer-chat"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",

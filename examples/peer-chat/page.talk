@@ -1,0 +1,19 @@
+-- The browser's side of the chat: it reaches the server's "chat" exposure,
+-- and hands it an unnamed exposure of its own to push lines to.
+script variable server = nothing
+script variable myNick = ""
+
+on start nick
+  put nick into myNick
+  ask peer to reach "chat" into server and wait
+  ask peer to expose into inbox and wait
+  send join with "#talk", nick, inbox to server and wait
+end start
+
+on said channel, nick, line
+  say nick & ": " & line
+end said
+
+on type line
+  send speak with "#talk", myNick, line to server
+end type

@@ -1,0 +1,16 @@
+{
+  "name": "@northtalk/example-peer-chat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "serve": "bun serve.ts",
+    "check:browser": "bun browser-check.ts"
+  },
+  "dependencies": {
+    "@northtalk/ts": "workspace:*"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

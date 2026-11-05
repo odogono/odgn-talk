@@ -1,0 +1,28 @@
+-- A chat server for browsers (ADR 0155, ADR 0165). Run it with
+-- `northtalk --listen ws://127.0.0.1:7401 examples/peer-chat/chat.talk`,
+-- then `bun examples/peer-chat/serve.ts` and open http://127.0.0.1:7400 in
+-- two tabs. Each browser hands the server a Peer to push lines to.
+script variable members = []
+
+on start args
+  ask peer to expose "chat" and wait
+  say "chat ready"
+end start
+
+on join channel, nick, inbox
+  put {channel: channel, nick: nick, inbox: inbox} after members
+  say nick & " joined " & channel
+  repeat for each member in members
+    if the channel of member = channel then
+      send said with channel, "*", nick & " joined" to the inbox of member
+    end if
+  end repeat
+end join
+
+on speak channel, nick, line
+  repeat for each member in members
+    if the channel of member = channel then
+      send said with channel, nick, line to the inbox of member
+    end if
+  end repeat
+end speak

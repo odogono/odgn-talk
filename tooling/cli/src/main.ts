@@ -9,7 +9,7 @@ import { lsp } from './lsp';
 import { replay } from './replay';
 
 const usage = `Usage:
-  northtalk [--port <n>] [--listen <host:port>] [--peer <name=tls://host:port#key>]… [--peer-key <file>] <file.talk> [args…]
+  northtalk [--port <n>] [--listen [tls://|tcp://|ws://]<host:port>] [--peer <name=tls://host:port#key>]… [--peer-key <file>] <file.talk> [args…]
                                           run a Script: Deliver start args
   northtalk debug <script> [--trace <file>] live debugger in a Bun Host
   northtalk debug --trace <file> [--setup <file>]

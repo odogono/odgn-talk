@@ -21,6 +21,15 @@
         "wasmoon": "1.16.0",
       },
     },
+    "examples/peer-chat": {
+      "name": "@northtalk/example-peer-chat",
+      "dependencies": {
+        "@northtalk/ts": "workspace:*",
+      },
+      "devDependencies": {
+        "playwright": "^1.64.1",
+      },
+    },
     "impl/ts": {
       "name": "@northtalk/ts",
       "devDependencies": {
@@ -433,6 +442,8 @@
     "@northtalk/creative": ["@northtalk/creative@workspace:tooling/creative"],
 
     "@northtalk/editor": ["@northtalk/editor@workspace:tooling/editor"],
+
+    "@northtalk/example-peer-chat": ["@northtalk/example-peer-chat@workspace:examples/peer-chat"],
 
     "@northtalk/fuzz": ["@northtalk/fuzz@workspace:tooling/fuzz"],
 

@@ -2,9 +2,10 @@
 // under Bun and Node: each case spawns the real command.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fingerprintOf, newPeerKey } from '../src/peers';
 
 const scripts = {
@@ -304,5 +305,62 @@ export const verifyRunnerPeers = async (
     tls.kill();
     tcp.kill();
     rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+/**
+ * Browser Hosts reach a Runner over `--listen ws://` (ADR 0165): the chat
+ * example's server Script, and two of its page's Hosts over real
+ * WebSockets. Each hands the server an unnamed exposure, and a line one
+ * types reaches both through the Peers the server holds.
+ */
+export const verifyRunnerWebSockets = async (
+  /** The Runner's command, such as `[bun, main.ts]`. */
+  listenWith: readonly string[],
+) => {
+  const example = fileURLToPath(
+    new URL('../../../examples/peer-chat/', import.meta.url),
+  );
+  const { joinChat } = await import('../../../examples/peer-chat/browser-host');
+  const source = readFileSync(join(example, 'page.talk'), 'utf8');
+  const server = await listener(listenWith, [
+    '--listen',
+    'ws://127.0.0.1:0',
+    join(example, 'chat.talk'),
+  ]);
+  const heard: Record<string, string[]> = { alice: [], bob: [] };
+  const chats: Awaited<ReturnType<typeof joinChat>>[] = [];
+  try {
+    assert.match(server.address, /^ws:\/\/127\.0\.0\.1:\d+$/u);
+    for (const nick of ['alice', 'bob']) {
+      chats.push(
+        await joinChat({
+          nick,
+          source,
+          url: server.address,
+          write: line => heard[nick]!.push(line),
+        }),
+      );
+    }
+    chats[1]!.type('hi alice');
+    for (let i = 0; i < 100 && heard['alice']!.length < 3; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.deepEqual(heard['alice'], [
+      '*: alice joined',
+      '*: bob joined',
+      'bob: hi alice',
+    ]);
+    assert.equal(chats[0]!.link.key.length, 64);
+    assert.equal(
+      await server.said('chat ready\nalice joined #talk\nbob joined #talk\n'),
+      'chat ready\nalice joined #talk\nbob joined #talk\n',
+    );
+    assert.equal(await server.stop(), 130);
+  } finally {
+    for (const chat of chats) {
+      await chat.close();
+    }
+    server.kill();
   }
 };

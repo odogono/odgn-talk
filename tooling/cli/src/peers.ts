@@ -7,6 +7,7 @@
 import {
   createHash,
   createPrivateKey,
+  createPublicKey,
   generateKeyPairSync,
   randomBytes,
   sign,
@@ -32,10 +33,13 @@ import {
   type Value,
 } from '@northtalk/ts';
 import {
+  acceptWebSocket,
   PeerRouter,
+  type HostSigner,
   type PeerLink,
   type PeerLinkEvents,
 } from '@northtalk/ts/peer';
+import { webSocketServer } from './websocket-server';
 
 /** The largest frame a Runner sends or reads. */
 const MAX_FRAME = 16 * 1024 * 1024;
@@ -43,15 +47,23 @@ const MAX_FRAME = 16 * 1024 * 1024;
 export type PeerOptions = {
   /** `--peer-key`: a PEM file with an ECDSA P-256 key and its certificate. */
   keyFile?: string;
-  /** `--listen [tls://|tcp://]HOST:PORT`. */
+  /** `--listen [tls://|tcp://|ws://]HOST:PORT`. */
   listen?: Address;
   log: (line: string) => void;
   /** `--peer NAME=tls://HOST:PORT#FINGERPRINT` or `NAME=tcp://HOST:PORT`. */
   remotes: ReadonlyMap<string, Remote>;
 };
 
-/** Where a Runner listens or dials: `plain` is TCP without TLS. */
-export type Address = { host: string; plain: boolean; port: number };
+/**
+ * Where a Runner listens or dials: `plain` is TCP without TLS, and `ws`
+ * listens for WebSocket links from browsers, with TLS left to a proxy.
+ */
+export type Address = {
+  host: string;
+  plain: boolean;
+  port: number;
+  ws?: boolean;
+};
 /** A `--peer`: plain ones pin no key. */
 export type Remote = Address & { fingerprint?: string };
 
@@ -85,11 +97,17 @@ export const parsePeerFlag = (given: string): [string, Remote] => {
   );
 };
 
-/** Reads `--listen`: `HOST:PORT` or `tls://HOST:PORT` for TLS, `tcp://HOST:PORT` for plain. */
+/**
+ * Reads `--listen`: `HOST:PORT` or `tls://HOST:PORT` for TLS, `tcp://HOST:PORT`
+ * for plain, `ws://HOST:PORT` for WebSockets.
+ */
 export const parseListen = (given: string): Address => {
-  const m = /^(?:(tls|tcp):\/\/)?(.+):(\d+)$/.exec(given);
+  const m = /^(?:(tls|tcp|ws):\/\/)?(.+):(\d+)$/.exec(given);
   if (!m) {
-    throw new Error(`--listen wants [tls://|tcp://]HOST:PORT: ${given}`);
+    throw new Error(`--listen wants [tls://|tcp://|ws://]HOST:PORT: ${given}`);
+  }
+  if (m[1] === 'ws') {
+    return { ...address(undefined, m[2]!, m[3]!), ws: true };
   }
   return address(m[1], m[2]!, m[3]!);
 };
@@ -97,6 +115,22 @@ export const parseListen = (given: string): Address => {
 // ---------------------------------------------------------------- keys
 
 type Identity = { cert: string; fingerprint: string; key: string };
+
+// The Runner's key proving itself to a WebSocket's other end.
+const signerOf = (tls: Identity): HostSigner => {
+  const privateKey = createPrivateKey(tls.key);
+  return {
+    spki: new Uint8Array(
+      createPublicKey(privateKey).export({ format: 'der', type: 'spki' }),
+    ),
+    sign: data =>
+      Promise.resolve(
+        new Uint8Array(
+          sign('sha256', data, { key: privateKey, dsaEncoding: 'ieee-p1363' }),
+        ),
+      ),
+  };
+};
 
 const der = (tag: number, body: Uint8Array): Uint8Array => {
   const length =
@@ -338,6 +372,7 @@ export class RunnerPeers {
   private readonly router: PeerRouter;
   private server: Server | undefined;
   private readonly links = new Set<SocketLink>();
+  private readonly webSockets = new Set<PeerLink>();
   private readonly dialling = new Map<
     string,
     Promise<SocketLink | undefined>
@@ -354,6 +389,7 @@ export class RunnerPeers {
     }
     this.router = new PeerRouter({
       key: this.fingerprint,
+      signer: signerOf(this.tls),
       addressOf: key => this.byKey.get(key),
       dial: name =>
         this.o.remotes.has(name) ? this.dial(name) : Promise.resolve(undefined),
@@ -380,28 +416,36 @@ export class RunnerPeers {
     if (!at) {
       return;
     }
-    const server = at.plain
-      ? createTcpServer(socket => {
-          void this.adopt(socket, '', true)
-            .greet(this.fingerprint)
-            .then(link => link && this.router.connect(link));
-        })
-      : createServer(
-          {
-            cert: this.tls.cert,
-            key: this.tls.key,
-            minVersion: 'TLSv1.3',
-            rejectUnauthorized: false,
-            requestCert: true,
-          },
-          socket => {
-            const key = this.peerKey(socket);
-            if (!key) {
-              return socket.destroy();
-            }
-            this.router.connect(this.adopt(socket, key, false));
-          },
-        );
+    const server = at.ws
+      ? webSocketServer(socket => {
+          // No `authenticate`: the Caller Identity is the key alone.
+          const link = acceptWebSocket(socket);
+          this.webSockets.add(link);
+          socket.addEventListener('close', () => this.webSockets.delete(link));
+          this.router.connect(link);
+        }, MAX_FRAME)
+      : at.plain
+        ? createTcpServer(socket => {
+            void this.adopt(socket, '', true)
+              .greet(this.fingerprint)
+              .then(link => link && this.router.connect(link));
+          })
+        : createServer(
+            {
+              cert: this.tls.cert,
+              key: this.tls.key,
+              minVersion: 'TLSv1.3',
+              rejectUnauthorized: false,
+              requestCert: true,
+            },
+            socket => {
+              const key = this.peerKey(socket);
+              if (!key) {
+                return socket.destroy();
+              }
+              this.router.connect(this.adopt(socket, key, false));
+            },
+          );
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(at.port, at.host, () => resolve());
@@ -412,9 +456,11 @@ export class RunnerPeers {
       typeof address === 'object' && address ? address.port : at.port;
     const host = at.host.includes(':') ? `[${at.host}]` : at.host;
     this.o.log(
-      at.plain
-        ? `peer: listening on tcp://${host}:${port}`
-        : `peer: listening on tls://${host}:${port}#${this.fingerprint}`,
+      at.ws
+        ? `peer: listening on ws://${host}:${port}`
+        : at.plain
+          ? `peer: listening on tcp://${host}:${port}`
+          : `peer: listening on tls://${host}:${port}#${this.fingerprint}`,
     );
   }
 
@@ -427,7 +473,7 @@ export class RunnerPeers {
   /** Closes every link. */
   close(): void {
     this.stopListening();
-    for (const link of this.links) {
+    for (const link of [...this.links, ...this.webSockets]) {
       link.close();
     }
   }
