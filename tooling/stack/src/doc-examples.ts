@@ -2,14 +2,13 @@
 // manifest Library's `--|` blocks, each replayed in a fresh session as one
 // test. Tooling, so the extraction isn't normative; the replay is the
 // Session Host's own.
-import { canvasCapabilities } from '@northtalk/tooling/canvas';
+import { canvasCapabilities } from './canvas';
 import {
   parseTranscript,
   replayTranscript,
   writeTranscript,
   type TranscriptItem,
 } from '@northtalk/ts/session';
-import { differs } from './replay';
 
 /** One Documentation Example of a Library export. */
 export type DocExample = {
@@ -90,26 +89,35 @@ export const docExamples = (library: string, source: string): DocExample[] => {
   return out;
 };
 
-/** An example's outcome: the lines `northtalk test` prints for it. */
-export type ExampleOutcome = { lines: string[]; ok: boolean };
+/**
+ * An example's outcome. A failure has the line within the Library's source
+ * it is reported at, what went wrong, and for a differing replay the
+ * expected and actual lines, either missing at the Transcript's end.
+ */
+export type ExampleResult =
+  | { ok: true }
+  | {
+      actual?: string;
+      differs?: true;
+      expected?: string;
+      line: number;
+      ok: false;
+      problems: string[];
+    };
 
 /**
  * Replays one example through a fresh Session Host. Before its first Entry
  * the runner sets the virtual Clock and adds the manifest's Libraries, and
  * leaves those lines out of what it compares.
  */
-export const runExample = (
-  manifestPath: string,
+export const replayExample = (
   libraries: readonly { name: string; source: string }[],
   example: DocExample,
-): ExampleOutcome => {
-  const where = `${manifestPath}#${example.library}`;
-  const fail = (line: number, problems: string[]): ExampleOutcome => ({
+): ExampleResult => {
+  const fail = (line: number, problems: string[]): ExampleResult => ({
     ok: false,
-    lines: [
-      `FAIL ${where}:${line} ${example.name}`,
-      ...problems.map(p => `  ${p}`),
-    ],
+    line,
+    problems,
   });
   let recorded: TranscriptItem[];
   try {
@@ -174,19 +182,17 @@ export const runExample = (
   const actual = writeTranscript(shown).split('\n');
   for (let i = 0; i < Math.max(expected.length, actual.length); i++) {
     if (expected[i] !== actual[i]) {
-      const line = example.line + i;
-      return fail(
-        line,
-        differs(where, {
-          ok: false,
-          line,
-          ...(expected[i] === undefined ? {} : { expected: expected[i] }),
-          ...(actual[i] === undefined ? {} : { actual: actual[i] }),
-        }),
-      );
+      return {
+        ok: false,
+        line: example.line + i,
+        problems: ['the replay differs'],
+        differs: true,
+        ...(expected[i] === undefined ? {} : { expected: expected[i] }),
+        ...(actual[i] === undefined ? {} : { actual: actual[i] }),
+      };
     }
   }
-  return { ok: true, lines: [`ok ${where} ${example.name}`] };
+  return { ok: true };
 };
 
 // An input's first line.

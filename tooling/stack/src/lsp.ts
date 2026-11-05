@@ -6,6 +6,7 @@ import {
   type Document,
   type WorkspaceSource,
 } from './lsp/workspace';
+import { exampleDiagnostics, type ExampleCache } from './lsp/examples';
 import { readManifest, type HostManifest } from './lsp/manifest';
 import {
   implementors,
@@ -113,14 +114,19 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   const open = new Map<string, Document>();
   const workspace = createWorkspace();
   let analyses = new Map<string, Analysis>();
+  let examples: ExampleCache = new Map();
   const refresh = () => {
     const documents = new Map(sources.map(source => [source.uri, source]));
     for (const [uri, doc] of open) {
       documents.set(uri, { ...documents.get(uri), ...doc });
     }
     analyses = workspace.analyze([...documents.values()], manifest, profile);
+    const replayed: ExampleCache = new Map();
     for (const [uri, doc] of open) {
-      const diagnostics = [...(analyses.get(uri)?.diagnostics ?? [])];
+      const diagnostics = [
+        ...(analyses.get(uri)?.diagnostics ?? []),
+        ...exampleDiagnostics(analyses, uri, examples, replayed),
+      ];
       if (manifestError) {
         diagnostics.push({
           range: rangeAt(doc.text, 0, 0),
@@ -136,6 +142,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
         params: { uri, version: doc.version, diagnostics },
       });
     }
+    examples = replayed;
   };
   const configure = (configuration: WorkspaceConfiguration) => {
     if ('manifest' in configuration) {
