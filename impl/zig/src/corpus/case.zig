@@ -1,8 +1,8 @@
 //! A case's setup, as the front end needs it: its Scripts and Libraries,
 //! each Script's well-known objects and Grants, and its Disassembly Cases'
 //! units. It reads only the case.toml shapes the Corpus uses: top-level and
-//! `[[table]]` keys, each on one line, with strings, arrays and inline tables
-//! as values.
+//! `[[table]]` keys, with strings, arrays and inline tables as values. An
+//! array or inline table may span several lines.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const check = @import("../check/check.zig");
@@ -30,8 +30,14 @@ const Reader = struct {
     s: []const u8,
     i: usize = 0,
 
+    /// Skips blanks, and the line breaks and comments inside a value that
+    /// spans several lines.
     fn space(r: *Reader) void {
-        while (r.i < r.s.len and (r.s[r.i] == ' ' or r.s[r.i] == '\t')) r.i += 1;
+        while (r.i < r.s.len) switch (r.s[r.i]) {
+            ' ', '\t', '\r', '\n' => r.i += 1,
+            '#' => r.i = std.mem.indexOfScalarPos(u8, r.s, r.i, '\n') orelse r.s.len,
+            else => return,
+        };
     }
 
     fn value(r: *Reader, a: Allocator) Error!Value {
@@ -80,9 +86,42 @@ const Reader = struct {
             else => {
                 const start = r.i;
                 while (r.i < r.s.len and r.s[r.i] != ',' and r.s[r.i] != '}' and r.s[r.i] != ']') r.i += 1;
-                return .{ .raw = std.mem.trim(u8, r.s[start..r.i], " ") };
+                return .{ .raw = std.mem.trim(u8, r.s[start..r.i], " \t\r\n") };
             },
         }
+    }
+};
+
+/// Splits case.toml into logical lines: each is one line, or, where an array
+/// or inline table is left open, every line up to the one that closes it.
+/// Each logical line is a slice of the text, untrimmed.
+pub const Lines = struct {
+    s: []const u8,
+    i: usize = 0,
+
+    pub fn next(l: *Lines) ?[]const u8 {
+        if (l.i > l.s.len) return null;
+        const start = l.i;
+        var depth: usize = 0;
+        var quote: ?u8 = null;
+        while (l.i < l.s.len) : (l.i += 1) {
+            const ch = l.s[l.i];
+            if (quote) |q| {
+                if (ch == '\\' and q == '"') l.i += 1 else if (ch == q) quote = null else if (ch == '\n') quote = null;
+                continue;
+            }
+            switch (ch) {
+                '"', '\'' => quote = ch,
+                '#' => l.i = (std.mem.indexOfScalarPos(u8, l.s, l.i, '\n') orelse l.s.len) - 1,
+                '[', '{' => depth += 1,
+                ']', '}' => depth -|= 1,
+                '\n' => if (depth == 0) break,
+                else => {},
+            }
+        }
+        const end = @min(l.i, l.s.len);
+        l.i += 1;
+        return l.s[start..end];
     }
 };
 
@@ -94,7 +133,7 @@ pub fn tables(a: Allocator, toml: []const u8) Error![]const Table {
     var out: std.ArrayList(Table) = .empty;
     var header: []const u8 = "";
     var entries: std.ArrayList(Value.Entry) = .empty;
-    var lines = std.mem.splitScalar(u8, toml, '\n');
+    var lines: Lines = .{ .s = toml };
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
@@ -281,4 +320,26 @@ test "inline tables, arrays and Grants" {
     try std.testing.expectEqual(@as(usize, 2), u.grants[0].operations[0].total);
     try std.testing.expectEqualStrings("now", u.grants[1].operations[0].name);
     try std.testing.expectEqualStrings("s.dis", setup.disassembly[0].expected);
+}
+
+test "an array of inline tables may span several lines" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const all = try tables(arena.allocator(),
+        \\kind = "trace"
+        \\[[objectKinds]]
+        \\name = "light"
+        \\props = [
+        \\  { name = "label", shape = "text" }, # a comment ]
+        \\  { name = "on", getCost = {
+        \\    fuel = 2 } },
+        \\]
+        \\next = "x"
+    );
+    try std.testing.expectEqual(2, all.len);
+    const props = field(all[1], "props").?.array;
+    try std.testing.expectEqual(2, props.len);
+    try std.testing.expectEqualStrings("label", props[0].get("name").?.string);
+    try std.testing.expectEqualStrings("2", props[1].get("getCost").?.get("fuel").?.raw);
+    try std.testing.expectEqualStrings("x", field(all[1], "next").?.string);
 }
