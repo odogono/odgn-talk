@@ -1,0 +1,17 @@
+# Pins the load diagnostics of Clause Shapes (chapter 5, Handlers and
+# dispatch; ADR 0171): `is not a` in a Handler head is `negated shape` at
+# `not`, and a name after a head's `is a` that is no kind or Shape in scope
+# is `unknown kind`, as after the expression `is a`.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "negated"
+source = "negated.talk"
+
+[[scripts]]
+name = "unknown"
+source = "unknown.talk"

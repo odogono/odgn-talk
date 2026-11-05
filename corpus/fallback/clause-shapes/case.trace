@@ -1,0 +1,41 @@
+# Unblessed: Clause Shapes (#2136); first blessing awaits human review.
+> load s identity=e34ab57528149d3ee66a098d745799586c2dba510a3ce66bfa49f3eefc0c4865
+> request d1 to=s message=handle args=[{type: "inv", amount: 500}]
+> pump clock=2026-11-05T09:00:00Z
+seg s/r1 start delivery=d1 handler=handle clause=1 fuel=44 alloc=0 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=handle value="big invoice" fuel=44 alloc=0
+pumped state=idle fuel=44
+> request d2 to=s message=handle args=[{type: "inv", amount: 5}]
+> pump clock=2026-11-05T09:00:01Z
+seg s/r2 start delivery=d2 handler=handle clause=2 fuel=89 alloc=28 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=handle value="invoice of 5" fuel=89 alloc=28
+pumped state=idle fuel=89
+> request d3 to=s message=handle args=[7]
+> pump clock=2026-11-05T09:00:02Z
+seg s/r3 start delivery=d3 handler=handle clause=3 fuel=52 alloc=8 state=16 end=return
+run s/r3 outcome=completed delivery=d3 handler=handle value="number" fuel=52 alloc=8
+pumped state=idle fuel=52
+> request d4 to=s message=handle args=[{type: 1, amount: 5}]
+> pump clock=2026-11-05T09:00:03Z
+seg s/r4 start delivery=d4 handler=handle fallback=yes clause=1 fuel=103 alloc=16 state=16 end=return
+run s/r4 outcome=completed delivery=d4 handler=handle fallback=yes value="fallback" fuel=103 alloc=16
+pumped state=idle fuel=103
+> request d5 to=s message=move:to: args=["knight", 4]
+> pump clock=2026-11-05T09:00:04Z
+seg s/r5 start delivery=d5 handler=move:to: clause=1 fuel=25 alloc=69 state=16 end=return
+run s/r5 outcome=completed delivery=d5 handler=move:to: value="knight to 4" fuel=25 alloc=69
+pumped state=idle fuel=25
+> request d6 to=s message=move:to: args=["knight", "e4"]
+> pump clock=2026-11-05T09:00:05Z
+seg s/r6 start delivery=d6 handler=move:to: fuel=33 alloc=24 state=16 end=unhandled
+run s/r6 outcome=unhandled delivery=d6 handler=move:to: fuel=33 alloc=24
+unhandled d6 message=move:to: args=["knight", "e4"]
+pumped state=idle fuel=33
+> deliver d7 to=s message=go
+> pump clock=2026-11-05T09:00:06Z
+raise s/r7 code="no match" at=s:98 pos=35:5
+seg s/r7 start delivery=d7 handler=go clause=1 fuel=74 alloc=72 state=72 end=return
+run s/r7 outcome=completed delivery=d7 handler=go fuel=74 alloc=72
+pumped state=idle fuel=74
+> vars
+vars s log=[3, "no match"]

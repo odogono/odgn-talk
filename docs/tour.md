@@ -282,7 +282,7 @@ on unitsTour
   -- `1 month + 1 day` is an error: a month has no fixed length.
 end unitsTour
 
--- 8. Handlers and functions (ADR 0004, 0016, 0019, 0020, 0021, 0035, 0055) ----
+-- 8. Handlers and functions (ADR 0004, 0016, 0019, 0020, 0021, 0035, 0055, 0171)
 
 -- A Handler runs when its message reaches the Script. Its Run lasts from
 -- that message to its end.
@@ -307,6 +307,15 @@ end handle
 on handle other
   pass handle                       -- hand it on up the Message Path
 end handle
+
+-- `is a` after a parameter is a Clause Shape: the clause is skipped unless
+-- the argument fits the kind or named Shape, as `where inv is an Invoice`
+-- would.
+shape Invoice is {type: text, amount: GBP, ...}
+
+on pay inv is an Invoice where the amount of inv > 1000 GBP
+  send review with inv to approvals
+end pay
 -- With no matching clause, dispatch tries a Fallback Handler if present,
 -- then climbs the Message Path: the parent objects the Host declares.
 

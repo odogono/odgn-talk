@@ -1,0 +1,3 @@
+on handle x is an Invoice
+  return x
+end handle

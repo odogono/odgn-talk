@@ -6,7 +6,7 @@ status: accepted
 
 Since [ADR 0168](0168-scripts-declare-named-shapes-in-an-english-spelling.md), a Clause can already test a named Shape in its Guard: `on handle inv where inv is an Invoice`. The test is buried in an expression, though, so tooling can't read a Script's message interface off its heads, and reply Shapes ([#2058](https://github.com/odogono/odgn-talk/issues/2058)) have no head form to follow ([#2054](https://github.com/odogono/odgn-talk/issues/2054), [#2056](https://github.com/odogono/odgn-talk/issues/2056)). A parameter may now carry its Shape in the head.
 
-```text
+```talk
 shape Invoice is {type: text, amount: GBP, ...}
 
 on handle inv is an Invoice where the amount of inv > 1000 GBP
@@ -40,4 +40,4 @@ end handle
 
 - Grammar: `HeadParam` in `HandlerHead` and `FallbackHead`; the load diagnostic `negated shape`.
 - Tooling ([#2138](https://github.com/odogono/odgn-talk/issues/2138)) highlights, formats, hovers and completes the Shape name in a head. A Script's message interface and mismatch explanations are [#2059](https://github.com/odogono/odgn-talk/issues/2059).
-- Delivery is staged as ADR 0168's was: the Spec, grammar and reference parser land first, with parser cases in `tools/grammar/staged.talk`. The first Core PR turns this ADR's `text` example into `talk` and adds the tour's example. The Core PRs ([#2136](https://github.com/odogono/odgn-talk/issues/2136), [#2137](https://github.com/odogono/odgn-talk/issues/2137)) bring the corpus cases and move the staged cases into `broken.talk`.
+- Delivery is staged as ADR 0168's was: the Spec, grammar and reference parser land first, with parser cases in `tools/grammar/staged.talk`. The Core PRs ([#2136](https://github.com/odogono/odgn-talk/issues/2136), [#2137](https://github.com/odogono/odgn-talk/issues/2137)) bring the corpus cases and move the staged cases into `broken.talk`.

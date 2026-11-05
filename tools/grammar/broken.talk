@@ -1738,3 +1738,33 @@ shape S = {a: text}
 -- case: `object of` takes only a Name
 -- expect: unexpected token at 1:22
 shape S is object of {a: text}
+-- case: a Clause Shape on a parameter
+-- expect: parses
+shape Invoice is {type: text, ...}
+on handle inv is an Invoice where the type of inv is "x"
+  return 1
+end handle
+-- case: Clause Shapes before Argument Labels
+-- expect: parses
+on move item is a text to place is a number
+  return 1
+end move
+-- case: a Clause Shape after a Destructuring pattern and on a Fallback
+-- expect: parses
+shape Invoice is {amount: number, ...}
+on handle {amount: a} is an Invoice
+  return a
+end handle
+on any message m is a map
+  return 1
+end any message
+-- case: `is not a` parses, and is the load error `negated shape`
+-- expect: parses
+on handle inv is not a text
+  return 1
+end handle
+-- case: `is` after a parameter needs `a` or `an`
+-- expect: unexpected token at 1:18
+on handle inv is 3
+  return 1
+end handle

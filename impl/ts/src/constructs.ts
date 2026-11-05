@@ -112,6 +112,29 @@ const checkComparison = (
   }
 };
 
+// A Handler head's Clause Shapes, `p is a S`: the Kind after `is` names a
+// kind or a Shape, as after the expression `is a`, and `is not a` is refused
+// (ADR 0171). Only the Handler's own leaves are its head's words; a Guard's
+// `is` sits inside an Expression node.
+const checkClauseShapes = (
+  node: SemanticNode,
+  report: ConstructReport,
+  isShape: IsShape,
+) => {
+  const { children } = node;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]!;
+    if (child.kind !== 'node' || child.rule !== 'Kind') {
+      continue;
+    }
+    const not = children[i - 2];
+    if (not?.kind === 'token' && not.text === 'not') {
+      report('negated shape', not);
+    }
+    checkKind(child, 'is', report, isShape);
+  }
+};
+
 const checkConversion = (node: SemanticNode, report: ConstructReport) => {
   const { children } = node;
   for (let index = 1; index < children.length; index++) {
@@ -441,6 +464,9 @@ export const checkConstructs = (
     switch (node.rule) {
       case 'Comparison':
         checkComparison(node, report, isShape);
+        break;
+      case 'Handler':
+        checkClauseShapes(node, report, isShape);
         break;
       case 'Conversion':
         checkConversion(node, report);

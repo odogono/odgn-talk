@@ -1,0 +1,15 @@
+# clause-shapes: a Clause Shape, `p is a S`, skips its clause unless the
+# argument fits the kind or named Shape (chapter 5, Handlers and dispatch;
+# ADR 0171). A mismatch falls through to the next clause, then to the
+# Fallback Handler, whose own clause takes a Shape too; a plain call with
+# no matching clause raises `no match`. Shapes follow a Destructuring
+# pattern, and come before each Argument Label.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

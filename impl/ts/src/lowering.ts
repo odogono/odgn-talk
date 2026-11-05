@@ -42,6 +42,7 @@ import {
   viewSource,
   type BinaryField,
   type BuildField,
+  type ClauseShape,
   type Decl,
   type Event,
   type Expr,
@@ -700,7 +701,7 @@ class BodyLowering {
     const failed = this.label();
     yield this.guarded(
       failed,
-      this.parameters(params, args, decl.guard, failed),
+      this.parameters(params, args, decl.guard, failed, decl.shapes),
     );
     this.body.acceptedAt = this.code.length;
     yield decl.finally
@@ -729,10 +730,26 @@ class BodyLowering {
     args: number[],
     guard: Guard | null,
     failed: Label,
+    shapes: (ClauseShape | null)[] = [],
   ): Task {
     for (const [i, p] of params.entries()) {
       if (p.k !== 'bind') {
         yield this.pattern(p, args[i]!, failed, null, false);
+      }
+    }
+    // Each Clause Shape tests its whole argument as `is a` does, after every
+    // pattern and before the Guard (ADR 0171).
+    for (const [i, s] of shapes.entries()) {
+      if (s) {
+        this.emit(s.pos, 'load', args[i]!);
+        const shape = this.namedShape(s.kind);
+        if (shape) {
+          this.load(shape, s.pos);
+          this.emit(s.pos, 'call-builtin', 'conforms', 2);
+        } else {
+          this.emit(s.pos, 'is-kind', s.kind);
+        }
+        this.emit(s.pos, 'branch-false', failed);
       }
     }
     if (guard) {
