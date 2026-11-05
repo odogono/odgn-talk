@@ -196,9 +196,12 @@ During Play, every Script reaches each Instrument by name. `tell bass to play
 middle C, at an optional velocity from 0 to 1. `release` ends a note and
 `stop` ends them all. A sampler plays a Project sound by name: `tell drums to
 play "kick"`, optionally at a note and velocity. Parameters are properties:
-`set the cutoff of bass to 800`. A change lasts for the Play Session and
-leaves the Project as authored. A bad note, velocity or value is a Script
-error. A Page or Element can't share an Instrument's name. A Script that stops
+`set the cutoff of bass to 800`. A frequency parameter, such as a synth's
+`cutoff`, also takes a frequency, `800 Hz` or `2 kHz`, and reads a plain
+number as Hz; the Instruments window labels it `Cutoff (Hz)`. A change lasts
+for the Play Session and leaves the Project as authored. A bad note,
+velocity or value is a Script error, and a Quantity of another Unit Kind,
+such as `800 ms`, is `wrong kind`. A Page or Element can't share an Instrument's name. A Script that stops
 releases the notes it started, and stopping Play stops every Instrument. The
 Instruments play through one AudioWorklet, which starts with Play.
 

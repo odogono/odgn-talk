@@ -38,7 +38,9 @@ const parameterControl = (
   switch (definition.shape) {
     case 'number':
       return field(
-        parameterLabel(name),
+        definition.unit
+          ? `${parameterLabel(name)} (${definition.unit})`
+          : parameterLabel(name),
         <input
           {...common}
           max={definition.max}

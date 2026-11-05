@@ -63,7 +63,7 @@ export const pageShape = { k: 'object' as const, kind: 'page' };
 export const canvasShape = { k: 'object' as const, kind: 'canvas' };
 
 // The Host Manifest's Shape data (chapter 9).
-const shapeData = (s: Shape): unknown => {
+export const shapeData = (s: Shape): unknown => {
   switch (s.k) {
     case 'any':
     case 'value':

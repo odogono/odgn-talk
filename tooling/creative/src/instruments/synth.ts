@@ -53,6 +53,7 @@ const parameters = {
     min: 20,
     max: 20_000,
     default: 4000,
+    unit: 'Hz',
     description: "The low-pass filter's cutoff, in hertz.",
   },
   resonance: {
