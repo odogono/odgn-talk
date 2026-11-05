@@ -1,0 +1,11 @@
+# Unblessed: named Shapes and `is a` with a named Shape (#2105); first blessing awaits human review.
+
+> add-library orders identity=3a089cb42899de0e7c7f98395785e15a8d2a186527144d19ba7823cf1c1ebe64
+> load checks identity=8e71dbd2718225b656f70630a652bca17c26d0f18479757728a8034f03f4519f
+> deliver d1 to=checks message=go
+> pump clock=2026-09-30T09:00:00Z
+seg checks/r1 start delivery=d1 handler=go clause=1 fuel=566 alloc=3507 state=1810 end=return
+run checks/r1 outcome=completed delivery=d1 handler=go fuel=566 alloc=3507
+pumped state=idle fuel=566
+> vars
+vars checks log=[{map: [{key: "type", shape: "text"}, {key: "amount", shape: {oneOf: [{quantity: "GBP"}, {quantity: "USD"}]}}, {key: "ref", shape: "text", optional: true}, {key: "lines", shape: {list: {map: [{key: "sku", shape: "text"}, {key: "qty", shape: "number"}]}}}], open: true}, [true, false, true, true], {sku: "a", qty: 2}, [{code: "wrong kind", expected: "text", got: "number", value: 1, path: ["lines", 1, "sku"]}], ["invoice", "other"]]

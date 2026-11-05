@@ -13,6 +13,7 @@ import {
   type SemanticNode,
   type SemanticToken,
 } from './semantic';
+import { shapeData, type ShapeData } from './shapes';
 
 export type Pos = { col: number; line: number };
 export type Leaf = SemanticName | SemanticToken;
@@ -345,6 +346,8 @@ export type Decl =
       name: SemanticName;
       pos: Pos;
       private?: boolean;
+      /** Declared with `shape`: `value` builds its Shape data (ADR 0168). */
+      shape?: boolean;
       value: Expr;
     }
   | { init: Expr | null; k: 'variable'; name: SemanticName; pos: Pos }
@@ -514,6 +517,12 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       );
     case 'Declaration':
       return declaration(node, of);
+    // A Shape declaration's value comes from its load check (ADR 0168).
+    case 'ShapeExpr':
+    case 'ShapeTerm':
+    case 'ShapeMap':
+    case 'ShapeField':
+      return null;
     case 'Use': {
       const from = children.findIndex(child => isToken(child, 'from'));
       const names = children
@@ -1108,12 +1117,92 @@ const declaration = (node: SemanticNode, of: Of): Decl => {
       value: of<Expr>(fourth),
     };
   }
+  if (isToken(first, 'shape')) {
+    const at = pos(node);
+    const data = shapeData.get(node);
+    return {
+      k: 'constant',
+      pos: at,
+      name: of<SemanticName>(node.children[1]),
+      shape: true,
+      value: data
+        ? shapeExpr(data, at)
+        : { k: 'literal', pos: at, value: 'nothing' },
+    };
+  }
   return {
     k: 'variable',
     pos: pos(node),
     name: of<SemanticName>(third),
     init: fifth ? of<Expr>(fifth) : null,
   };
+};
+
+// Shape data as the literal that builds it, in chapter 9's canonical order:
+// a field's `key`, `shape`, then `optional`, and a map's `open` last.
+const shapeExpr = (data: ShapeData, at: Pos): Expr => {
+  const text = (value: string): Expr => ({ k: 'text', pos: at, value });
+  const map = (entries: [string, Expr][]): Expr => ({
+    k: 'map',
+    pos: at,
+    entries: entries.map(([key, value]) => ({ key, value })),
+  });
+  const list = (items: Expr[]): Expr => ({
+    k: 'list',
+    pos: at,
+    items: items.map(e => ({ e, spread: false })),
+  });
+  const yes: Expr = { k: 'literal', pos: at, value: 'true' };
+  if (typeof data === 'string') {
+    return text(data);
+  }
+  if ('ref' in data) {
+    const binding = data.ref;
+    return {
+      k: 'name',
+      pos: at,
+      name: {
+        kind: 'name',
+        role: 'value',
+        text: binding.name,
+        binding,
+        span: { line: at.line, col: at.col, start: 0, end: 0 },
+      },
+    };
+  }
+  if ('quantity' in data) {
+    return map([['quantity', text(data.quantity)]]);
+  }
+  if ('unitKind' in data) {
+    return map([['unitKind', text(data.unitKind)]]);
+  }
+  if ('object' in data) {
+    return map([['object', text(data.object)]]);
+  }
+  if ('list' in data) {
+    return map([['list', shapeExpr(data.list, at)]]);
+  }
+  if ('optional' in data) {
+    return map([['optional', shapeExpr(data.optional, at)]]);
+  }
+  if ('oneOf' in data) {
+    return map([['oneOf', list(data.oneOf.map(s => shapeExpr(s, at)))]]);
+  }
+  return map([
+    [
+      'map',
+      list(
+        data.map.map(field =>
+          map([
+            ['key', text(field.key)],
+            ['shape', shapeExpr(field.shape, at)],
+            ...(field.optional ? [['optional', yes] as [string, Expr]] : []),
+          ]),
+        ),
+      ),
+    ],
+    ...(data.open ? [['open', yes] as [string, Expr]] : []),
+  ]);
 };
 
 // The statements after a block's opening keyword, which an empty block omits.

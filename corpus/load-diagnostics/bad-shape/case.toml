@@ -1,0 +1,29 @@
+# Pins the load diagnostic `bad shape` (chapter 7, Shape declarations; ADR
+# 0168): a Name that is no kind, Unit or named Shape, an unknown Unit Kind, a
+# repeated key, a cycle at its first Name in source order, and a Shape named
+# like a Unit Kind.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "unknown"
+source = "unknown.talk"
+
+[[scripts]]
+name = "unit-kind"
+source = "unit-kind.talk"
+
+[[scripts]]
+name = "duplicate"
+source = "duplicate.talk"
+
+[[scripts]]
+name = "cycle"
+source = "cycle.talk"
+
+[[scripts]]
+name = "named-like-unit-kind"
+source = "named-like-unit-kind.talk"

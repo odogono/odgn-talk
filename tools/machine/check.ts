@@ -433,7 +433,8 @@ for (const f of files(join(ROOT, 'corpus'), '.talk')) {
     true,
   );
 }
-const DECLARATION = /^(on|function|private|use|constant|script\s+variable)\b/;
+const DECLARATION =
+  /^(on|function|private|use|constant|shape|script\s+variable)\b/;
 for (const dir of ['docs', 'spec']) {
   for (const f of files(join(ROOT, dir), '.md')) {
     const text = readFileSync(f, 'utf8');

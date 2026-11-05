@@ -234,7 +234,9 @@ for (const path of files(join(root, 'spec')).filter(path =>
         .map(line => line.trim())
         .find(line => line && !line.startsWith('--')) ?? '';
     const source =
-      /^(on|function|private|use|constant|script\s+variable)\b/.test(first)
+      /^(on|function|private|use|constant|shape|script\s+variable)\b/.test(
+        first,
+      )
         ? body
         : `on example\n${body}end example\n`;
     test(`formatter invariants: ${path.slice(root.length + 1)} at ${block.index}`, () => {

@@ -1,0 +1,2 @@
+shape Tree is {children: list of Branch}
+shape Branch is Tree or text
