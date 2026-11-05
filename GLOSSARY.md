@@ -397,6 +397,10 @@ _Avoid_: wipe, redraw
 A named sound source a Folio Script plays notes and sounds on, such as a sampler of the Project's sounds, a sound chip or a synth.
 _Avoid_: synth (for the general idea), voice, channel (both are parts of an Instrument)
 
+**Instrument Parameter**:
+A named setting of an Instrument, such as cutoff or attack, that Scripts `set` and the author edits. The value kept with the Project is where each Play Session starts, and a Script's `set` changes it only for that Play Session.
+_Avoid_: knob, control (those are Elements), setting
+
 **Transport**:
 A Play Session's one musical timeline: its tempo, time signature and current bar and beat, which Scripts keeping musical time follow.
 _Avoid_: clock (the Play clock is separate), sequencer, metronome
