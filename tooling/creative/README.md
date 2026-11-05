@@ -198,7 +198,8 @@ middle C, at an optional velocity from 0 to 1. `release` ends a note and
 play "kick"`, optionally at a note and velocity. Parameters are properties:
 `set the cutoff of bass to 800`. A frequency parameter, such as a synth's
 `cutoff`, also takes a frequency, `800 Hz` or `2 kHz`, and reads a plain
-number as Hz; the Instruments window labels it `Cutoff (Hz)`. A change lasts
+number as Hz; the Instruments window labels it `Cutoff (Hz)`. A synth's `attack`, `decay` and `release` take a
+duration the same way, `5 ms` or `1.5 s`, and read a plain number as seconds. A change lasts
 for the Play Session and leaves the Project as authored. A bad note,
 velocity or value is a Script error, and a Quantity of another Unit Kind,
 such as `800 ms`, is `wrong kind`. A Page or Element can't share an Instrument's name. A Script that stops
@@ -930,7 +931,7 @@ fill every 4 bars.
   from the bar it comes in on, so parts it starts together stay in
   lockstep. Any other Run counts from a lead after now.
 - **Holding and ending:** Pause holds waits with the Transport. `tell
-  transport to stop` holds them with the bars they still have to come,
+transport to stop` holds them with the bars they still have to come,
   counted on from bar 1 when it starts. Hush, Stop and Punch In end them,
   since they end the Runs waiting; leaving a Page ends its Scripts' waits.
 - **Two parts on one Instrument:** a Script still has one loop per

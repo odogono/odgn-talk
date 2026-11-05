@@ -13,16 +13,19 @@ import { allocate, type Voice } from './voices';
 
 const parameters = {
   tone: {
+    group: 'Tone',
     shape: 'boolean',
     default: true,
     description: 'Whether each voice plays its square-wave tone.',
   },
   noise: {
+    group: 'Noise',
     shape: 'boolean',
     default: false,
     description: "Whether each voice plays the chip's noise.",
   },
   noisePeriod: {
+    group: 'Noise',
     shape: 'number',
     min: 0,
     max: 31,
@@ -31,6 +34,7 @@ const parameters = {
     description: 'The noise period, 0 (brightest) to 31.',
   },
   volume: {
+    group: 'Tone',
     shape: 'number',
     min: 0,
     max: 15,
@@ -40,12 +44,14 @@ const parameters = {
       "A note's level at full velocity, 0 to 15, without the envelope.",
   },
   envelope: {
+    group: 'Envelope',
     shape: 'boolean',
     default: false,
     description:
       "Whether notes follow the chip's envelope instead of a fixed volume.",
   },
   envelopeShape: {
+    group: 'Envelope',
     shape: 'number',
     min: 0,
     max: 15,
@@ -55,6 +61,7 @@ const parameters = {
       'The envelope shape, 0 to 15, as the chip numbers them; 9 decays once and stays silent.',
   },
   envelopePeriod: {
+    group: 'Envelope',
     shape: 'number',
     min: 1,
     max: 65_535,
@@ -63,6 +70,7 @@ const parameters = {
     description: 'The envelope period, in 256-cycle steps of the 2 MHz clock.',
   },
   gain: {
+    group: 'Output',
     shape: 'number',
     min: 0,
     max: 1,
@@ -70,6 +78,7 @@ const parameters = {
     description: 'Output level, from 0 to 1.',
   },
   pan: {
+    group: 'Output',
     shape: 'number',
     min: -1,
     max: 1,
