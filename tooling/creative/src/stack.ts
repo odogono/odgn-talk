@@ -338,8 +338,14 @@ export const mountStack = (
     redraw: redrawVersion,
     selected: selectedInstrument,
     add: kind => void addInstrument(kind),
-    change: (id, change) =>
-      edit(() => editor.edit(({ tree }) => tree.changeInstrument(id, change))),
+    change: (id, changes) =>
+      edit(() =>
+        editor.edit(({ tree }) => {
+          for (const change of [changes].flat()) {
+            tree.changeInstrument(id, change);
+          }
+        }),
+      ),
     duplicate: id =>
       edit(() => {
         selectedInstrument.value = editor.edit(

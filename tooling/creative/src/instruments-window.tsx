@@ -12,7 +12,12 @@ import type { StackEditor } from './editing';
 import { field } from './elements/controls';
 import type { Instrument, Project } from './model';
 import type { InstrumentChange } from './tree/project-tree';
-import type { ParameterDefinition, ParameterValue } from './instruments/kind';
+import type {
+  GroupView,
+  ParameterDefinition,
+  ParameterValue,
+} from './instruments/kind';
+import { draggedHandle, viewPicture } from './instruments/group-views';
 import {
   draggedPosition,
   formatParameter,
@@ -48,8 +53,14 @@ import { offeredInstrumentKinds } from './add-ons/offered';
 type InstrumentsProps = {
   /** Adds an Instrument of `kind`, loading its Add-on first. */
   add(kind: string): void;
-  /** Applies one checked, undoable change; a refusal shows a notice. */
-  change(id: number, change: InstrumentChange): void;
+  /**
+   * Applies checked changes as one undoable step; a refusal shows a notice
+   * and applies none.
+   */
+  change(
+    id: number,
+    change: InstrumentChange | readonly InstrumentChange[],
+  ): void;
   duplicate(id: number): void;
   editor: StackEditor;
   /** An audition that can't sound, such as a sound that won't decode. */
@@ -344,6 +355,117 @@ const ParameterRow = (props: RowProps & { onHover(line?: string): void }) => {
       </span>
       {control}
     </div>
+  );
+};
+
+type GroupPictureProps = {
+  disabled: boolean;
+  group: string;
+  parameters: Readonly<Record<string, ParameterDefinition>>;
+  /** After a drag is let go. */
+  released(): void;
+  /** Sets the dragged parameters together, as one change. */
+  set(values: Record<string, number>): void;
+  values: Readonly<Record<string, ParameterValue>>;
+  view: GroupView;
+};
+
+const PICTURE_WIDTH = 200;
+const PICTURE_HEIGHT = 56;
+const PICTURE_PAD = 5;
+
+/**
+ * A group's picture (#2084), such as an envelope's shape, whose handles
+ * drag the same parameters as its sliders. It commits once, when a drag
+ * ends; the sliders stay the way to set them by keyboard.
+ */
+const GroupPicture = (props: GroupPictureProps) => {
+  const { view, parameters } = props;
+  const [drag, setDrag] = useState<
+    { handle: string; values: Record<string, number> } | undefined
+  >(undefined);
+  const values = drag ? { ...props.values, ...drag.values } : props.values;
+  const picture = viewPicture(view, parameters, values);
+  const w = PICTURE_WIDTH - 2 * PICTURE_PAD;
+  const h = PICTURE_HEIGHT - 2 * PICTURE_PAD;
+  const px = (x: number) => PICTURE_PAD + x * w;
+  const py = (y: number) => PICTURE_PAD + (1 - y) * h;
+  const unit = (event: PointerEvent, svg: SVGSVGElement) => {
+    const rect = svg.getBoundingClientRect();
+    return {
+      x:
+        ((event.clientX - rect.left) * (PICTURE_WIDTH / (rect.width || 1)) -
+          PICTURE_PAD) /
+        w,
+      y:
+        1 -
+        ((event.clientY - rect.top) * (PICTURE_HEIGHT / (rect.height || 1)) -
+          PICTURE_PAD) /
+          h,
+    };
+  };
+  const path = picture.line
+    .map(
+      (p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`,
+    )
+    .join(' ');
+  return (
+    <svg
+      aria-disabled={props.disabled || undefined}
+      aria-label={`${props.group} ${view.view}`}
+      className="group-picture"
+      data-view={view.view}
+      onPointerMove={event => {
+        if (!drag) {
+          return;
+        }
+        const point = unit(event, event.currentTarget);
+        setDrag({
+          handle: drag.handle,
+          values: draggedHandle(
+            view,
+            parameters,
+            props.values,
+            drag.handle,
+            point,
+          ),
+        });
+      }}
+      onPointerUp={() => {
+        if (drag) {
+          setDrag(undefined);
+          props.set(drag.values);
+          props.released();
+        }
+      }}
+      role="img"
+      viewBox={`0 0 ${PICTURE_WIDTH} ${PICTURE_HEIGHT}`}
+    >
+      <path className="group-picture-line" d={path} />
+      {picture.handles.map(handle => (
+        <circle
+          className="group-picture-handle"
+          cx={px(handle.x)}
+          cy={py(handle.y)}
+          data-handle={handle.id}
+          key={handle.id}
+          onPointerDown={event => {
+            if (props.disabled || event.button !== 0) {
+              return;
+            }
+            event.preventDefault();
+            const svg = event.currentTarget.ownerSVGElement!;
+            try {
+              svg.setPointerCapture(event.pointerId);
+            } catch {
+              // A pointer the browser doesn't know, such as a synthetic one.
+            }
+            setDrag({ handle: handle.id, values: {} });
+          }}
+          r={4}
+        />
+      ))}
+    </svg>
   );
 };
 
@@ -887,6 +1009,25 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                   open={!collapsed.has(group)}
                 >
                   <summary>{group}</summary>
+                  {kind.views?.[group] && (
+                    <GroupPicture
+                      disabled={disabled}
+                      group={group}
+                      parameters={kind.parameters}
+                      released={() => auditioned && replay && audition()}
+                      set={values =>
+                        props.change(
+                          instrument.id!,
+                          Object.entries(values).map(([parameter, value]) => ({
+                            parameter,
+                            value,
+                          })),
+                        )
+                      }
+                      values={instrument.parameters}
+                      view={kind.views[group]}
+                    />
+                  )}
                   {rows}
                 </details>
               ) : (

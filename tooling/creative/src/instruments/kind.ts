@@ -87,6 +87,26 @@ export type InstrumentSetup = {
 };
 
 /**
+ * What a group of parameters is, so the Instruments window can draw it
+ * (#2084): each role names one of the group's number parameters.
+ * `envelope` is attack, decay and release times with a sustain level;
+ * `filter` is a low-pass cutoff in hertz and a resonance.
+ */
+export type GroupView =
+  | {
+      readonly attack: string;
+      readonly decay: string;
+      readonly release: string;
+      readonly sustain: string;
+      readonly view: 'envelope';
+    }
+  | {
+      readonly cutoff: string;
+      readonly resonance: string;
+      readonly view: 'filter';
+    };
+
+/**
  * What plays an Instrument kind: its parameters, voice cap and Chip. The
  * audio thread needs only this, so engines never import the Core.
  */
@@ -98,6 +118,11 @@ export type InstrumentEngine = {
   readonly maxVoices: number;
   readonly name: string;
   readonly parameters: Readonly<Record<string, ParameterDefinition>>;
+  /**
+   * Pictures the Instruments window draws above groups, by group name. A
+   * group without one shows only its rows.
+   */
+  readonly views?: Readonly<Record<string, GroupView>>;
   /** Voices a new Instrument of this kind gets. */
   readonly voices: number;
 };
@@ -170,4 +195,32 @@ export const parameterStore = (
       return true;
     },
   };
+};
+
+/** The roles a view's parameters play, in order. */
+export const groupViewRoles = (view: GroupView): readonly string[] =>
+  view.view === 'envelope'
+    ? ['attack', 'decay', 'sustain', 'release']
+    : ['cutoff', 'resonance'];
+
+/**
+ * The first problem with a kind's `views`, else undefined: each must name
+ * a group, and each role a number parameter in that group.
+ */
+export const groupViewsProblem = (
+  kind: Pick<InstrumentEngine, 'parameters' | 'views'>,
+): string | undefined => {
+  for (const [group, view] of Object.entries(kind.views ?? {})) {
+    if (view.view !== 'envelope' && view.view !== 'filter') {
+      return `group ${group} has an unknown view`;
+    }
+    for (const role of groupViewRoles(view)) {
+      const name = (view as Record<string, string>)[role]!;
+      const definition = kind.parameters[name];
+      if (definition?.shape !== 'number' || definition.group !== group) {
+        return `the ${view.view} view of ${group} needs a number parameter in that group for ${role}`;
+      }
+    }
+  }
+  return undefined;
 };

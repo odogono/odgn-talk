@@ -6,6 +6,7 @@ import { isIdentifierName, type Instrument } from '../model';
 import type { DeepReadonly } from '../readonly';
 import {
   defaultParameters,
+  groupViewsProblem,
   parameterProblem,
   type InstrumentKind,
 } from './kind';
@@ -40,6 +41,10 @@ export const registerInstrumentKind = (
 ): string | undefined => {
   if (KINDS.has(kind)) {
     return undefined;
+  }
+  const viewProblem = groupViewsProblem(definition);
+  if (viewProblem) {
+    return viewProblem;
   }
   if (
     instrumentObjectKindNames().has(definition.name) ||

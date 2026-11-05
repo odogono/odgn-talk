@@ -395,6 +395,12 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   names its collapsible section in the Instruments window, and a number
   parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on
   kinds set both; the Manifest does not describe them.
+  A kind's `views` names a group as an `envelope` or `filter` and which
+  number parameter plays each role (#2084); `registerInstrumentKind` refuses
+  a view whose roles aren't number parameters in that group.
+  [instruments/group-views.ts](src/instruments/group-views.ts) draws them
+  and maps a handle's drag to values. Tests:
+  [group-views.test.ts](tests/instruments/group-views.test.ts).
 - [instruments/audio.ts](src/instruments/audio.ts): the page's AudioContext,
   started by [play-view.ts](src/play-view.ts) when a session has Instruments.
   It decodes the Project's sounds for samplers and runs
