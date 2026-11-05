@@ -380,6 +380,12 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   in `Hz`, takes any Quantity of that Unit's Kind (`2 kHz`) and keeps a plain
   number in its Unit (ADR 0166, #2067). Its Shape is the property's and the
   Manifest's.
+- [instruments-window.tsx](src/instruments-window.tsx): the Instruments
+  window's list, `+ ▾` menu and grouped parameter rows (#2079), with
+  [instruments/parameter-sliders.ts](src/instruments/parameter-sliders.ts)
+  for slider positions (linear or log), keyboard and drag steps, and value
+  text. Typed values go through `parameterTextNumber` in
+  `parameter-units.ts`.
 - [instruments/kind.ts](src/instruments/kind.ts): a parameter's `group`
   names its collapsible section in the Instruments window, and a number
   parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on

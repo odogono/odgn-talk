@@ -180,16 +180,26 @@ Project's Instruments. A parameter added to a kind after a Project was saved
 takes its default.
 
 The Instruments window (Window ▸ Instruments) lists the Project's
-Instruments by name, kind and voices, whatever is selected; it is Edit only,
-starts closed and stays open after a reload once opened. Below the list, the
-selected Instrument, the first when the window opens, shows its name, voices
-and every parameter, each committed as one undoable edit when it changes. Add
-Instrument creates one of the chosen kind, named after it (`drums`, `chip` or
-`synth`, then `synth2` and so on). The sampler is offered in every Project, so
-a Project without Instruments shows an empty state with Add Instrument. The
-window refuses a name another Instrument, Page or Element has, a name
-Scripts already use, a value out of range and too many voices, and says why.
-Remove takes the selected Instrument out.
+Instruments by name and kind, whatever is selected; it is Edit only, starts
+closed and stays open after a reload once opened. The `+ ▾` menu above the
+list adds an Instrument of any offered kind, named after it (`drums`, `chip`
+or `synth`, then `synth2` and so on), and **Duplicate** (⌘D while the list
+has focus) copies the selected one's kind, voices and parameters under a
+fresh name. `−`, or Delete while the list has focus, removes it. The sampler
+is offered in every Project, so a Project without Instruments shows an empty
+state and the `+ ▾` menu. Below the list, the selected Instrument, the first
+when the window opens, shows its name and voices, then its parameters in
+collapsible groups, such as the synth's Oscillator, Envelope, Filter and
+Output; which groups are collapsed is remembered per browser. A number is a
+slider and a value you can type, such as `5 ms` or `4.0 kHz`; a slider with
+a log scale spreads its range by ratio. Arrow keys step a slider, ⇧ makes a
+step or drag ten times finer, and a double-click or ⌥-click resets it to its
+default. Choices are segmented controls and booleans are toggles. Each change
+is one undoable edit, and a whole drag is one. The window refuses a name
+another Instrument, Page or Element has, a name Scripts already use, a value
+out of range and too many voices, and says why. The hint at the bottom shows
+how a Script plays the selected Instrument and sets the hovered parameter,
+and copies them.
 
 During Play, every Script reaches each Instrument by name. `tell bass to play
 "c3"` starts a note, a MIDI number or a name such as `f#4` with `c4` as

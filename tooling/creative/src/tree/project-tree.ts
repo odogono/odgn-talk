@@ -1056,6 +1056,33 @@ export class ProjectTree {
       }
     });
   }
+  /**
+   * Copies an Instrument's kind, voices and parameters under a fresh name,
+   * such as `synth2` for `synth`, and puts the copy after it (#2079).
+   */
+  duplicateInstrument(id: number): DeepReadonly<Instrument> {
+    return this.transaction(() => {
+      const instruments = this.#project.instruments;
+      const index = instruments.findIndex(i => i.id === id);
+      const current = instruments[index];
+      if (!current) {
+        throw new TreeError('Unknown Instrument');
+      }
+      const copy: Instrument = {
+        ...structuredClone(current as Instrument),
+        id:
+          this.#allocateId?.() ??
+          Math.max(0, ...instruments.map(i => i.id ?? 0)) + 1,
+        name: freshName(current.name, this.#namesTaken()),
+      };
+      this.#setInstruments([
+        ...instruments.slice(0, index + 1),
+        copy,
+        ...instruments.slice(index + 1),
+      ]);
+      return this.#project.instruments[index + 1]!;
+    });
+  }
   removeInstrument(id: number): void {
     this.transaction(() =>
       this.#setInstruments(this.#project.instruments.filter(i => i.id !== id)),

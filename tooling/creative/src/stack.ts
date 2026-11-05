@@ -326,6 +326,17 @@ export const mountStack = (
     editor,
     redraw: redrawVersion,
     selected: selectedInstrument,
+    add: kind => void addInstrument(kind),
+    change: (id, change) =>
+      edit(() => editor.edit(({ tree }) => tree.changeInstrument(id, change))),
+    duplicate: id =>
+      edit(() => {
+        selectedInstrument.value = editor.edit(
+          ({ tree }) => tree.duplicateInstrument(id).id,
+        );
+      }),
+    remove: id =>
+      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id))),
   });
   let fieldEdit: Edit | undefined;
   const finishFieldEdit = () => {
@@ -1128,24 +1139,12 @@ export const mountStack = (
     );
   };
 
-  // The Instruments window (#2049) lists, adds, removes and edits them.
+  // The Instruments window (#2049) commits its name and voices fields
+  // here; it adds, removes and sets parameters through its own props.
   instrumentsPanel.addEventListener('change', event => {
-    writeInstrument(event.target as HTMLInputElement);
-  });
-  instrumentsPanel.addEventListener('click', event => {
-    const target = event.target as HTMLElement;
-    const button = target.closest('button');
-    const row = target.closest<HTMLElement>('[data-select-instrument]');
-    if (row) {
-      selectedInstrument.value = Number(row.dataset.selectInstrument);
-    } else if (button?.hasAttribute('data-add-instrument')) {
-      const kind = instrumentsPanel.querySelector<HTMLSelectElement>(
-        '[data-new-instrument]',
-      )!.value;
-      void addInstrument(kind);
-    } else if (button?.dataset.removeInstrument) {
-      const id = Number(button.dataset.removeInstrument);
-      edit(() => editor.edit(({ tree }) => tree.removeInstrument(id)));
+    const target = event.target as HTMLInputElement;
+    if (target.dataset.instrumentField) {
+      writeInstrument(target);
     }
   });
 

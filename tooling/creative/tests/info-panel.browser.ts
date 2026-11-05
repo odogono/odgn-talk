@@ -360,8 +360,7 @@ export const runBrowserTests = async () => {
     const panel = document.querySelector<HTMLElement>('#instruments-panel')!;
     assert(
       panel.textContent!.includes('No Instruments yet.') &&
-        panel.querySelector('[data-add-instrument]') &&
-        panel.querySelector('[data-new-instrument] option[value="sampler"]'),
+        panel.querySelector('[data-add-menu]'),
       'A Project without Instruments shows the empty state and Add Instrument',
     );
     assert(
@@ -373,7 +372,7 @@ export const runBrowserTests = async () => {
     shell.editor.click('button');
     await settle();
     assert(
-      panel.querySelector('[data-add-instrument]'),
+      panel.querySelector('[data-add-menu]'),
       'It does not depend on selection',
     );
     document.body.classList.add('playing');
