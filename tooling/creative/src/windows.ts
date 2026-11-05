@@ -152,9 +152,16 @@ export const mountWindows = (): void => {
     for (const item of items) {
       const id = item.dataset.window!;
       item.setAttribute('aria-checked', String(isShowing(id)));
-      // Info, Sounds and Instruments are Edit only; browsing hides them.
+      // Info and Sounds are Edit only; Browse and Present hide them, and
+      // Instruments too, which Perform docks (#2081).
+      const { classList } = document.body;
       item.disabled =
-        EDIT_ONLY.has(id) && document.body.classList.contains('browsing');
+        EDIT_ONLY.has(id) &&
+        (classList.contains('browsing') ||
+          (classList.contains('playing') &&
+            !(
+              id === 'instruments-window' && classList.contains('performing')
+            )));
     }
   };
   menu.addEventListener('toggle', draw);

@@ -7,7 +7,7 @@ import { allElements, elementVisibility } from './tree/rules';
 // #154: the Page on a desk, floating Tools and Info windows, and a strip of
 // Pages. The edits themselves live in `editing.ts`; this file draws them and
 // turns pointer and form events into them.
-import { effect, signal, untracked } from '@preact/signals-core';
+import { effect, signal, untracked, type Signal } from '@preact/signals-core';
 import {
   HANDLES,
   PAGE_HANDLES,
@@ -64,6 +64,11 @@ import { mountSoundsWindow } from './sounds-window';
 import { showRemoveSoundDialog, showRenameSoundDialog } from './sound-dialogs';
 import { soundUses } from './sound-uses';
 import { mountInstrumentsWindow } from './instruments-window';
+import {
+  changedParameters,
+  type LiveParameter,
+  type PlayingParameters,
+} from './instruments/live';
 
 /** A Page at design size, unscaled. */
 const renderPage = (
@@ -210,6 +215,16 @@ export type StackShell = {
   };
   editor: StackEditor;
   images: ImageAssets;
+  /** The Instruments window during Perform (ADR 0167, #2081). */
+  instruments: {
+    /**
+     * Hears each parameter the window changes for the running Instruments:
+     * while dragged, and after each authored change, undo and redo.
+     */
+    onLive(listener: (change: LiveParameter) => void): void;
+    /** The parameters as they play while performing; undefined otherwise. */
+    playing: Signal<PlayingParameters | undefined>;
+  };
   onRedraw(listener: () => void): void;
   openLibrary(id: number, line?: number): void;
   openScript(owner: ScriptOwner, line?: number): void;
@@ -322,8 +337,39 @@ export const mountStack = (
   });
   const instrumentsPanel = byId('instruments-panel');
   const selectedInstrument = signal<number | undefined>(undefined);
+  // While performing, the window's changes reach the running Instruments
+  // (#2081): a drag as it moves, and every authored change, undo and redo
+  // as the Project changes.
+  const playingParameters = signal<PlayingParameters | undefined>(undefined);
+  const liveListeners = new Set<(change: LiveParameter) => void>();
+  const sendLive = (change: LiveParameter) => {
+    if (playing.peek() === 'perform') {
+      for (const listener of liveListeners) {
+        listener(change);
+      }
+    }
+  };
+  let heardInstruments = editor.project.instruments;
+  effect(() => {
+    const { instruments } = editor.state.value.project;
+    const before = heardInstruments;
+    heardInstruments = instruments;
+    for (const change of changedParameters(before, instruments)) {
+      sendLive(change);
+    }
+  });
   const unmountInstruments = mountInstrumentsWindow(instrumentsPanel, {
     editor,
+    playing,
+    playingParameters,
+    live: (id, parameter, value) => {
+      const instrument = editor.project.instruments.find(i => i.id === id);
+      if (instrument) {
+        sendLive({ instrument: instrument.name, parameter, value });
+      }
+    },
+    undo: () => edit(() => editor.undo()),
+    redo: () => edit(() => editor.redo()),
     onError: message => {
       byId('notice-text').textContent = message;
       byId('notice-banner').hidden = false;
@@ -1434,6 +1480,12 @@ export const mountStack = (
     },
     editor,
     images,
+    instruments: {
+      onLive: listener => {
+        liveListeners.add(listener);
+      },
+      playing: playingParameters,
+    },
     punchIn: {
       onRequest: listener => scripts.onPunchIn(listener),
       show: message => scripts.showPunch(message),
@@ -1454,6 +1506,7 @@ export const mountStack = (
       closeText();
       byId('edit-menu').removeAttribute('open');
       playing.value = mode;
+      playingParameters.value = mode === 'perform' ? {} : undefined;
       editor.readOnly = readOnly || mode === 'present';
       draw();
     },

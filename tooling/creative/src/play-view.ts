@@ -51,6 +51,7 @@ import { controls } from './play-controls';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
 import { isPerformKey, isPlayKey } from './shortcuts';
 import { PerformLayout } from './perform-layout';
+import { withPlaying } from './instruments/live';
 import { allElements } from './tree/rules';
 import { InPlaceTextEditor } from './text-editor';
 import { VariablesWindow } from './variables-window';
@@ -601,6 +602,31 @@ export const mountPlay = (shell: StackShell): void => {
         });
     deliver(fields, applied);
   };
+  // The Instruments window's authored changes while performing (#2081): sent
+  // straight to the audio as a bound control's are, then recorded by the
+  // worker, which reports the playing values back.
+  shell.instruments.onLive(change => {
+    if (!session || session.ended || mode !== 'perform') {
+      return;
+    }
+    const applied =
+      instrumentAudio?.send({
+        instrument: change.instrument,
+        commands: [
+          { kind: 'set', parameter: change.parameter, value: change.value },
+        ],
+      }) ?? false;
+    const shown = shell.instruments.playing.peek();
+    if (shown) {
+      shell.instruments.playing.value = withPlaying(shown, change);
+    }
+    post({
+      kind: 'instrumentParameter',
+      session: sessionId,
+      ...change,
+      ...(applied ? { applied: true } : {}),
+    });
+  });
   /** `pageIndex` names the Page `target` is on, if it isn't the showing one. */
   const sendTo = (
     target: MirrorPage | Element,
@@ -689,6 +715,9 @@ export const mountPlay = (shell: StackShell): void => {
     const wasPaused = session.paused;
     const wasStopped = JSON.stringify(session.stoppedRun);
     session.apply(response);
+    if (mode === 'perform' && response.instruments) {
+      shell.instruments.playing.value = response.instruments;
+    }
     // The audio stops whenever the session is paused, at a Breakpoint too.
     instrumentAudio?.setPaused(session.paused);
     if (mode === 'browse') {

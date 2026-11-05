@@ -192,7 +192,8 @@ export class InstrumentSession {
   }
 
   /**
-   * Sets a parameter for a bound control (#1904), with no Run. `send` is
+   * Sets a parameter for a bound control (#1904) or the Instruments
+   * window (#2081), with no Run. `send` is
    * false when the page already sent it to the audio, so a later value it
    * sent is never overtaken by this one.
    */
@@ -210,6 +211,19 @@ export class InstrumentSession {
     if (send) {
       this.#send(instrument, [{ kind: 'set', parameter, value }]);
     }
+  }
+
+  /**
+   * Every Instrument's parameters as they play now, by Instrument name, for
+   * the Instruments window's playing values (#2081).
+   */
+  parameters(): Record<string, Record<string, InstrumentParameterValue>> {
+    return Object.fromEntries(
+      [...this.#instruments].map(([name, { parameters }]) => [
+        name,
+        { ...parameters },
+      ]),
+    );
   }
 
   /** Each Instrument's object kind, by Instrument name. */

@@ -1,11 +1,12 @@
 // Dedicated page: Palettes in Perform (#2001). A Palette docks in the
 // column under the code unless it is set to float over the stage, and the
-// Window menu still opens and closes them.
+// Window menu still opens and closes them. The Instruments window docks there
+// too (#2081).
 import { createElement, createPalette, createProject } from '../src/model';
 import { paletteWindowId } from '../src/palette-windows';
 import { mountPlay } from '../src/play-view';
 import { mountStack } from '../src/stack';
-import { mountWindows } from '../src/windows';
+import { hideWindow, mountWindows, showWindow } from '../src/windows';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -88,6 +89,41 @@ export const runBrowserTests = async () => {
     menuItem('mixer').click();
     await until(() => showing(win('mixer')), 'the menu opening mixer');
     assert(win('mixer')!.closest('.perform-palettes'), 'docked again');
+  });
+
+  await test('Perform docks the Instruments window with the Palettes; Browse hides it (#2081)', async () => {
+    const instruments = () => document.getElementById('instruments-window')!;
+    // The Window menu's Instruments item shows and hides it this way.
+    showWindow('instruments-window');
+    await until(() => showing(instruments()), 'the Instruments window');
+    assert(
+      instruments().closest('#perform .perform-palettes'),
+      'it docks in the column',
+    );
+    hideWindow('instruments-window');
+    await until(() => !showing(instruments()), 'its close');
+    showWindow('instruments-window');
+    await until(() => showing(instruments()), 'it opening again');
+    perform().click();
+    await until(() => !win('mixer'), 'Perform to end');
+    assert(
+      !instruments().closest('#perform') &&
+        !instruments().classList.contains('docked'),
+      'it floats again in Edit',
+    );
+    [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')]
+      .find(b => b.textContent?.includes('Browse'))!
+      .click();
+    await until(() => showing(win('mixer')), 'Browse');
+    assert(!showing(instruments()), 'Browse hides it');
+    [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')]
+      .find(b => b.textContent?.includes('Edit'))!
+      .click();
+    await until(() => !win('mixer'), 'Edit');
+    assert(showing(instruments()), 'Edit shows it');
+    instruments().hidden = true;
+    perform().click();
+    await until(() => showing(win('mixer')), 'Perform again');
   });
 
   await test('Browse floats every Palette, as before', async () => {

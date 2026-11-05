@@ -764,6 +764,23 @@ button:disabled {
   opacity: 0.55;
   pointer-events: none;
 }
+/* During Play, a faint tick marks the saved value when a Script's set has
+   moved the thumb away from it (#2081). */
+.slider-saved {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--line);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.parameter-bound {
+  margin-left: 0.2rem;
+  font-size: 0.75em;
+  cursor: help;
+}
 #instruments-panel input.slider-value {
   padding: 0 0.2rem;
   text-align: right;
@@ -1943,12 +1960,20 @@ body.playing #performance-window {
   border-top: 1.5px solid var(--line);
   background: var(--bg);
 }
-.perform-palettes:not(:has(.palette-window:not([hidden]))) {
+.perform-palettes:not(:has(.window:not([hidden]))) {
   display: none;
 }
-.perform-palettes .palette-window.docked {
+.perform-palettes .window.docked {
   position: static;
   box-shadow: none;
+}
+/* Perform docks the Instruments window with the Palettes (#2081); its close
+   box collapses it as a docked Palette's does. */
+.performing .perform-palettes #instruments-window.docked:not([hidden]) {
+  display: flex;
+  max-width: none;
+  max-height: none;
+  resize: none;
 }
 /* Perform keeps the Window menu, to open and close Palettes. */
 .performing #window-menu {

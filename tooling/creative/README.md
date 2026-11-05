@@ -180,8 +180,9 @@ Project's Instruments. A parameter added to a kind after a Project was saved
 takes its default.
 
 The Instruments window (Window ▸ Instruments) lists the Project's
-Instruments by name and kind, whatever is selected; it is Edit only, starts
-closed and stays open after a reload once opened. The `+ ▾` menu above the
+Instruments by name and kind, whatever is selected; it starts closed and
+stays open after a reload once opened. Browse and Present hide it, and
+Perform docks it with the Palettes (see below). The `+ ▾` menu above the
 list adds an Instrument of any offered kind, named after it (`drums`, `chip`
 or `synth`, then `synth2` and so on), and **Duplicate** (⌘D while the list
 has focus) copies the selected one's kind, voices and parameters under a
@@ -204,6 +205,20 @@ another Instrument, Page or Element has, a name Scripts already use, a value
 out of range and too many voices, and says why. The hint at the bottom shows
 how a Script plays the selected Instrument and sets the hovered parameter,
 and copies them.
+
+During Perform the window docks in the right-hand column above the docked
+Palettes, and its close box and the Window menu collapse and open it
+([ADR 0167](../../docs/adr/0167-folios-instruments-window-edits-authored-parameters-live-during-play.md),
+[#2081](https://github.com/odogono/odgn-talk/issues/2081)). A change there is
+still an authored edit, kept with the Project, and the running Instrument
+hears it straight away, a slider while it is dragged, as a bound control's
+value reaches it. ⌘Z and ⇧⌘Z in the window undo and redo, and the running
+Instrument hears those too. When a Script's `set` changes a parameter, the
+thumb shows the playing value and a faint tick marks the saved one; a drag
+sets both, and when Play stops the thumb returns to the saved value. A row
+whose parameter a control is bound to shows 🔗, naming the control. Adding,
+removing, duplicating and renaming Instruments, and Voices, are disabled
+while performing, since Scripts reach Instruments by name at load.
 
 ▶ above the parameters auditions the selected Instrument
 ([#2080](https://github.com/odogono/odgn-talk/issues/2080)), through its own

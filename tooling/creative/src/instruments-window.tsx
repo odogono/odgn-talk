@@ -2,7 +2,10 @@
 // with a `+ ▾` menu to add or duplicate one and `−` to remove it, then the
 // selected one's name, voices and parameters in collapsible groups of
 // compact rows, with ▶ and the computer keyboard to audition it (#2080).
-// Edit only, and independent of the Page's selection.
+// Independent of the Page's selection. Perform docks it (ADR 0167, #2081):
+// a change there is still an authored edit, which the running Instrument
+// hears straight away, and each row shows the playing value a Script's `set`
+// gave it, with a tick at the saved one.
 import type { ReadonlySignal, Signal } from '@preact/signals';
 import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -47,6 +50,9 @@ import {
   type HeldPreview,
   type SoundBytes,
 } from './instruments/preview';
+import type { PlayingParameters } from './instruments/live';
+import { boundControls } from './bindings';
+import type { PlayMode } from './stack';
 import { pageAddOns } from './add-ons/page';
 import { offeredInstrumentKinds } from './add-ons/offered';
 
@@ -63,8 +69,18 @@ type InstrumentsProps = {
   ): void;
   duplicate(id: number): void;
   editor: StackEditor;
+  /**
+   * Sends a parameter to the running Instrument while it is dragged, before
+   * the drag commits it (#2081).
+   */
+  live(id: number, parameter: string, value: ParameterValue): void;
   /** An audition that can't sound, such as a sound that won't decode. */
   onError(message: string): void;
+  /** How Play runs, if it does; Perform docks the window (#2081). */
+  playing: ReadonlySignal<PlayMode | undefined>;
+  /** The parameters as they play while performing. */
+  playingParameters: ReadonlySignal<PlayingParameters | undefined>;
+  redo(): void;
   /** Bumped by the shell's redraw, such as after undo or read-only. */
   redraw: ReadonlySignal<number>;
   remove(id: number): void;
@@ -72,6 +88,7 @@ type InstrumentsProps = {
   selected: Signal<number | undefined>;
   /** A sound asset's bytes, for a sampler's audition. */
   soundBytes: SoundBytes;
+  undo(): void;
 };
 
 /** `envelopePeriod` as `Envelope period`. */
@@ -121,9 +138,15 @@ const setLine = (
 ) => `set the ${name} of ${instrument} to ${scriptValue(definition, value)}`;
 
 type RowProps = {
+  /** The controls bound to this parameter, which a 🔗 names. */
+  bound?: readonly string[];
   definition: ParameterDefinition;
   disabled: boolean;
+  /** Sends a dragged value to the running Instrument, during Play. */
+  live?(value: ParameterValue): void;
   name: string;
+  /** The value as it plays, during Play; the thumb shows it. */
+  playing?: ParameterValue;
   /** After a slider is let go or a typed value committed. */
   released(): void;
   /** Sets the parameter, or resets it to its default. */
@@ -139,19 +162,34 @@ type RowProps = {
 const Slider = ({
   definition,
   disabled,
+  live,
   name,
+  playing,
   released,
   set,
   value,
 }: RowProps) => {
   const number = definition as NumberParameter;
   // The drag under way: where the slider is and the pointer's last x.
-  const [drag, setDrag] = useState<{ position: number; x: number } | undefined>(
-    undefined,
-  );
+  const [drag, setDragState] = useState<
+    { position: number; x: number } | undefined
+  >(undefined);
+  // Pointer moves can outrun a redraw, so each reads the drag from here.
+  const dragRef = useRef(drag);
+  const setDrag = (next: typeof drag) => {
+    dragRef.current = next;
+    setDragState(next);
+  };
   const shown =
-    drag === undefined ? Number(value) : sliderValue(number, drag.position);
+    drag === undefined
+      ? Number(playing ?? value)
+      : sliderValue(number, drag.position);
   const position = sliderPosition(number, shown);
+  // A Script's set moved the playing value away from the saved one.
+  const saved =
+    drag === undefined && playing !== undefined && playing !== value
+      ? sliderPosition(number, Number(value))
+      : undefined;
   const reset = () => set(number.default);
   return (
     <div
@@ -218,24 +256,31 @@ const Slider = ({
           // A pointer the browser doesn't know, such as a synthetic one.
         }
         setDrag({ position: start, x: event.clientX });
+        live?.(sliderValue(number, start));
       }}
       onPointerMove={event => {
+        const drag = dragRef.current;
+        if (!drag) {
+          return;
+        }
         const { clientX, shiftKey } = event;
         const width = event.currentTarget.getBoundingClientRect().width || 1;
-        setDrag(
-          current =>
-            current && {
-              position: draggedPosition(
-                current.position,
-                clientX - current.x,
-                width,
-                shiftKey,
-              ),
-              x: clientX,
-            },
-        );
+        const next = {
+          position: draggedPosition(
+            drag.position,
+            clientX - drag.x,
+            width,
+            shiftKey,
+          ),
+          x: clientX,
+        };
+        setDrag(next);
+        if (next.position !== drag.position) {
+          live?.(sliderValue(number, next.position));
+        }
       }}
       onPointerUp={() => {
+        const drag = dragRef.current;
         if (drag) {
           setDrag(undefined);
           set(sliderValue(number, drag.position));
@@ -247,6 +292,14 @@ const Slider = ({
       title={definition.description}
     >
       <span className="slider-fill" style={{ width: `${position * 100}%` }} />
+      {saved !== undefined && (
+        <span
+          className="slider-saved"
+          data-saved-value={String(value)}
+          style={{ left: `${saved * 100}%` }}
+          title={`Saved: ${formatParameter(number, Number(value))}`}
+        />
+      )}
     </div>
   );
 };
@@ -256,12 +309,13 @@ const ValueField = ({
   definition,
   disabled,
   name,
+  playing,
   released,
   set,
   value,
 }: RowProps) => {
   const number = definition as NumberParameter;
-  const text = formatParameter(number, Number(value));
+  const text = formatParameter(number, Number(playing ?? value));
   return (
     <input
       aria-label={`${accessibleLabel(name, definition)} value`}
@@ -292,7 +346,8 @@ const ValueField = ({
 };
 
 const ParameterRow = (props: RowProps & { onHover(line?: string): void }) => {
-  const { definition, disabled, name, set, value } = props;
+  const { definition, disabled, name, set } = props;
+  const value = props.playing ?? props.value;
   const label = parameterLabel(name);
   const control = (() => {
     switch (definition.shape) {
@@ -352,6 +407,16 @@ const ParameterRow = (props: RowProps & { onHover(line?: string): void }) => {
     >
       <span className="parameter-label" title={definition.description}>
         {label}
+        {props.bound?.length ? (
+          <span
+            aria-label={`Bound to ${props.bound.join(', ')}`}
+            className="parameter-bound"
+            data-parameter-bound={props.bound.join(',')}
+            title={`Bound to ${props.bound.join(', ')}`}
+          >
+            🔗
+          </span>
+        ) : null}
       </span>
       {control}
     </div>
@@ -361,6 +426,8 @@ const ParameterRow = (props: RowProps & { onHover(line?: string): void }) => {
 type GroupPictureProps = {
   disabled: boolean;
   group: string;
+  /** Sends dragged values to the running Instrument, during Play. */
+  live?(values: Record<string, number>): void;
   parameters: Readonly<Record<string, ParameterDefinition>>;
   /** After a drag is let go. */
   released(): void;
@@ -420,16 +487,15 @@ const GroupPicture = (props: GroupPictureProps) => {
           return;
         }
         const point = unit(event, event.currentTarget);
-        setDrag({
-          handle: drag.handle,
-          values: draggedHandle(
-            view,
-            parameters,
-            props.values,
-            drag.handle,
-            point,
-          ),
-        });
+        const values = draggedHandle(
+          view,
+          parameters,
+          props.values,
+          drag.handle,
+          point,
+        );
+        setDrag({ handle: drag.handle, values });
+        props.live?.(values);
       }}
       onPointerUp={() => {
         if (drag) {
@@ -791,6 +857,45 @@ const usePianoKeyboard = (
   }, [on, id]);
 };
 
+/**
+ * While performing, ⌘Z and ⇧⌘Z in the window undo and redo, which the
+ * running Instruments hear too (#2081); Edit's own shortcuts are off in Play.
+ */
+const usePerformUndo = (
+  on: boolean,
+  props: { redo(): void; root: HTMLElement; undo(): void },
+) => {
+  const latestRef = useRef(props);
+  useEffect(() => {
+    latestRef.current = props;
+  });
+  useEffect(() => {
+    if (!on) {
+      return;
+    }
+    const { root } = latestRef.current;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== 'z' ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        isTyping(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.shiftKey) {
+        latestRef.current.redo();
+      } else {
+        latestRef.current.undo();
+      }
+    };
+    root.addEventListener('keydown', keydown);
+    return () => root.removeEventListener('keydown', keydown);
+  }, [on]);
+};
+
 const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
   const { editor, redraw, selected } = props;
   void redraw.value;
@@ -798,10 +903,21 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
   const [hovered, setHovered] = useState<string | undefined>(undefined);
   const { project } = editor.state.value;
   const disabled = editor.readOnly;
+  // Scripts reach Instruments by name at load, so Play keeps the list.
+  const performing = props.playing.value === 'perform';
+  const listFixed = disabled || performing;
   const { instruments } = project;
   const instrument =
     instruments.find(i => i.id === selected.value) ?? instruments[0];
   const kind = instrument && INSTRUMENT_KINDS.get(instrument.kind);
+  const playingNow =
+    performing && instrument
+      ? props.playingParameters.value?.[instrument.name]
+      : undefined;
+  const bound = instrument
+    ? boundControls(project, instrument.name)
+    : new Map<string, string[]>();
+  usePerformUndo(performing && !disabled, props);
   useEffect(() => setHovered(undefined), [instrument?.id]);
   // The audition's own state, which the Project doesn't keep.
   const [chosen, setChosen] = useState<ReadonlyMap<number, string>>(
@@ -853,7 +969,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
       <div className="instrument-tools">
         <AddMenu
           add={props.add}
-          disabled={disabled}
+          disabled={listFixed}
           duplicate={
             instrument && kind
               ? () => props.duplicate(instrument.id!)
@@ -864,7 +980,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
         <button
           aria-label="Remove Instrument"
           data-remove-instrument={instrument?.id}
-          disabled={disabled || !instrument}
+          disabled={listFixed || !instrument}
           onClick={() => instrument && props.remove(instrument.id!)}
           type="button"
         >
@@ -880,7 +996,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
               return;
             }
             if (
-              !disabled &&
+              !listFixed &&
               (event.key === 'Delete' || event.key === 'Backspace')
             ) {
               // The page's own Delete and ⌘D act on Elements.
@@ -888,7 +1004,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
               event.stopPropagation();
               props.remove(instrument.id!);
             } else if (
-              !disabled &&
+              !listFixed &&
               kind &&
               event.key === 'd' &&
               (event.metaKey || event.ctrlKey)
@@ -947,7 +1063,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
               <input
                 autoComplete="off"
                 data-instrument-field="name"
-                disabled={disabled}
+                disabled={listFixed}
                 spellcheck={false}
                 type="text"
                 value={instrument.name}
@@ -958,7 +1074,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                 'Voices',
                 <input
                   data-instrument-field="voices"
-                  disabled={disabled}
+                  disabled={listFixed}
                   max={kind.maxVoices}
                   min={1}
                   step={1}
@@ -986,11 +1102,18 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
             grouped(kind.parameters).map(([group, entries]) => {
               const rows = entries.map(([name, definition]) => (
                 <ParameterRow
+                  bound={bound.get(name)}
                   definition={definition}
                   disabled={disabled}
                   key={name}
+                  live={
+                    performing
+                      ? value => props.live(instrument.id!, name, value)
+                      : undefined
+                  }
                   name={name}
                   onHover={setHovered}
+                  playing={playingNow?.[name]}
                   released={() => auditioned && replay && audition()}
                   set={value =>
                     props.change(instrument.id!, { parameter: name, value })
@@ -1013,6 +1136,17 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                     <GroupPicture
                       disabled={disabled}
                       group={group}
+                      live={
+                        performing
+                          ? values => {
+                              for (const [name, value] of Object.entries(
+                                values,
+                              )) {
+                                props.live(instrument.id!, name, value);
+                              }
+                            }
+                          : undefined
+                      }
                       parameters={kind.parameters}
                       released={() => auditioned && replay && audition()}
                       set={values =>
@@ -1024,7 +1158,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                           })),
                         )
                       }
-                      values={instrument.parameters}
+                      values={{ ...instrument.parameters, ...playingNow }}
                       view={kind.views[group]}
                     />
                   )}

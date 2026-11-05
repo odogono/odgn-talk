@@ -386,6 +386,17 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   for slider positions (linear or log), keyboard and drag steps, and value
   text. Typed values go through `parameterTextNumber` in
   `parameter-units.ts`.
+- Live during Perform (ADR 0167, #2081):
+  [instruments/live.ts](src/instruments/live.ts) finds the parameters an
+  authored change, undo or redo moved; [stack.ts](src/stack.ts) sends them,
+  and a drag's moves, to `shell.instruments.onLive`, which
+  [play-view.ts](src/play-view.ts) sends to the audio and the worker
+  (`instrumentParameter`). Views carry the playing values (`instruments`),
+  which the window shows with a tick at the saved value.
+  [perform-layout.ts](src/perform-layout.ts) docks the window;
+  `boundControls` in [bindings.ts](src/bindings.ts) finds the 🔗 rows.
+  Tests: [live.test.ts](tests/instruments/live.test.ts), and the
+  `instruments` and `perform-palettes` browser suites.
 - Auditioning (#2080): [instruments/audition.ts](src/instruments/audition.ts)
   builds the messages ▶ and the computer keyboard send, and picks a
   sampler's sound; [instruments/preview.ts](src/instruments/preview.ts)
