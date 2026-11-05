@@ -88,8 +88,10 @@ Handler        ::= 'on' ( 'any' 'message' FallbackHead | MessageName HandlerHead
                    ( 'finally' NL Block )? 'end' ( 'any' 'message' | Name )? NL
                    /* `any message` is the Fallback Handler, and closes only it; a Name
                       after `end`, if present, is the Handler's name */
-HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
-FallbackHead   ::= Pattern Guard? ( ',' Suffix )*
+HandlerHead    ::= ( HeadParam ( ( ',' HeadParam )* | ( Label HeadParam )+ ) )? Guard? ( ',' Suffix )*
+FallbackHead   ::= HeadParam Guard? ( ',' Suffix )*
+HeadParam      ::= Pattern ( 'is' 'not'? Article Kind )?
+                   /* a Clause Shape; `is not` parses, and is the load error `negated shape` */
 Label          ::= Name | 'to'
                    /* an Argument Label: any Name but those grammar.toml's [labels]
                       excludes, or one of its Reserved Words; never the start of an

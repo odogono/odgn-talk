@@ -58,6 +58,7 @@ pub const Code = enum {
     veto_outside_a_decision,
     after_a_suspension,
     wrong_message,
+    negated_shape,
     bad_suffixes,
     cant_write,
     not_a_property,

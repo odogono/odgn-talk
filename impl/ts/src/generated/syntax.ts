@@ -786,6 +786,7 @@ export const diagnosticCodes = [
   "veto outside a decision",
   "after a suspension",
   "wrong message",
+  "negated shape",
   "bad suffixes",
   "can't write",
   "not a property",
