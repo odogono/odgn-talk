@@ -1022,7 +1022,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .code = "reserved word",
-            .raised_when = "A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target or a Result Target; checked before `unexpected token` and `not a container`, and reported at the Reserved Word",
+            .raised_when = "A Reserved Word stands where the grammar wants a Name: a Container root (other than `the`, which starts a property path, or a Constant), a Handler, message, function or Capture name, a parameter, a pattern binding, a `let` name, a `collecting` target, a Result Target or a Whose Key (a Reserved Word that can't start the Whose Clause's condition); checked before `unexpected token` and `not a container`, and reported at the Reserved Word",
         },
         .{
             .code = "not a container",
