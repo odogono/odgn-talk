@@ -194,7 +194,11 @@ Output; which groups are collapsed is remembered per browser. A number is a
 slider and a value you can type, such as `5 ms` or `4.0 kHz`; a slider with
 a log scale spreads its range by ratio. Arrow keys step a slider, ⇧ makes a
 step or drag ten times finer, and a double-click or ⌥-click resets it to its
-default. Choices are segmented controls and booleans are toggles. Each change
+default. Choices are segmented controls and booleans are toggles. The synth's
+Envelope group draws its ADSR shape, whose corners drag attack, decay with
+sustain, and release, and its Filter group draws the low-pass response,
+whose handle drags cutoff across and resonance up; a kind declares these
+with `views` (#2084). Each change
 is one undoable edit, and a whole drag is one. The window refuses a name
 another Instrument, Page or Element has, a name Scripts already use, a value
 out of range and too many voices, and says why. The hint at the bottom shows

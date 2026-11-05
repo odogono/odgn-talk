@@ -280,5 +280,15 @@ export const synthEngine: InstrumentEngine = {
   maxVoices: 16,
   voices: 8,
   parameters,
+  views: {
+    Envelope: {
+      view: 'envelope',
+      attack: 'attack',
+      decay: 'decay',
+      sustain: 'sustain',
+      release: 'release',
+    },
+    Filter: { view: 'filter', cutoff: 'cutoff', resonance: 'resonance' },
+  },
   chip,
 };

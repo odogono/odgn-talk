@@ -32,11 +32,8 @@ export const sliderPosition = (
   return Math.log1p(share * Math.expm1(k)) / k;
 };
 
-/**
- * The value at `position` on the slider, rounded to three significant
- * digits, or to a whole number for a whole parameter, and kept in range.
- */
-export const sliderValue = (
+/** The exact value at `position` on the slider, as a curve draws it. */
+export const unroundedSliderValue = (
   definition: NumberParameter,
   position: number,
 ): number => {
@@ -47,7 +44,19 @@ export const sliderValue = (
       ? Math.expm1(steepness(definition) * t) /
         Math.expm1(steepness(definition))
       : t;
-  const raw = min + share * (max - min);
+  return min + share * (max - min);
+};
+
+/**
+ * The value at `position` on the slider, rounded to three significant
+ * digits, or to a whole number for a whole parameter, and kept in range.
+ */
+export const sliderValue = (
+  definition: NumberParameter,
+  position: number,
+): number => {
+  const { min, max } = definition;
+  const raw = unroundedSliderValue(definition, position);
   const rounded = definition.whole
     ? Math.round(raw)
     : raw === 0

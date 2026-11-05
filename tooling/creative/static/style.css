@@ -694,6 +694,36 @@ button:disabled {
   cursor: default;
   margin-bottom: 0.1rem;
 }
+.group-picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.1rem 0 0.25rem;
+  border: 1.5px solid var(--line);
+  border-radius: 3px;
+  touch-action: none;
+}
+.group-picture[aria-disabled] {
+  opacity: 0.5;
+}
+.group-picture-line {
+  fill: rgb(47 111 237 / 0.15);
+  stroke: #2f6fed;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.group-picture[data-view='filter'] .group-picture-line {
+  fill: none;
+}
+.group-picture-handle {
+  fill: #2f6fed;
+  stroke: #fff;
+  stroke-width: 1.5;
+  cursor: move;
+}
+.group-picture[aria-disabled] .group-picture-handle {
+  cursor: default;
+}
 .parameter-row {
   display: grid;
   grid-template-columns: 4.6rem 1fr 3.9rem;
