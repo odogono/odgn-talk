@@ -607,6 +607,33 @@ describe('Saves, Libraries and export', () => {
     expect(host.input('twice(5)')).toEqual(['10']);
   });
 
+  test(':script reads a file given a path, and records its source', () => {
+    const recorded: string[] = [];
+    const host = new SessionHost({
+      now: () => start,
+      readFile: path => {
+        if (path !== 'counter.talk') {
+          throw new Error('no file');
+        }
+        return 'on ping\n  say "pong"\nend ping';
+      },
+      record: item => {
+        if (item.k === 'input') {
+          recorded.push(item.source);
+        }
+      },
+    });
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    expect(host.input(':script add counter counter.talk')).toEqual([]);
+    expect(recorded.at(-1)).toBe(
+      ':script add counter\non ping\n  say "pong"\nend ping',
+    );
+    expect(host.input('send ping to counter')).toEqual(['[counter/r1] pong']);
+    expect(host.input(':script add other missing.talk')).toEqual([
+      '! bad arguments',
+    ]);
+  });
+
   test(':export prints the session source, or writes it and each Library', () => {
     const written: string[] = [];
     const host = new SessionHost({
