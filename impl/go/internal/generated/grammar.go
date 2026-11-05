@@ -197,6 +197,7 @@ var Grammar = GrammarTable{
 				"after `is` or `is not`, before a kind",
 				"after `can be`",
 				"before a kind in a Text Pattern (a Typed Element)",
+				"at the start of a Shape Term, before `quantity of`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -443,6 +444,12 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "list",
+			Positions: []string{
+				"at the start of a Shape Term, before `of`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "lazily",
 			Positions: []string{
 				"after a Text Pattern element",
@@ -485,9 +492,16 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "object",
+			Positions: []string{
+				"at the start of a Shape Term, before `of`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "optional",
 			Positions: []string{
 				"after `the`, unless followed by `of`",
+				"at the start of a Shape Term, or straight after a Shape Map field's `:`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -499,7 +513,13 @@ var Grammar = GrammarTable{
 		GrammarTableContextualEntry{
 			Word: "private",
 			Positions: []string{
-				"at the start of a top-level declaration, before `on`, `function` or `constant`",
+				"at the start of a top-level declaration, before `on`, `function`, `constant` or `shape`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "quantity",
+			Positions: []string{
+				"in a Shape Term, after `a` or `an` and before `of`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -512,6 +532,12 @@ var Grammar = GrammarTable{
 			Word: "replacing",
 			Positions: []string{
 				"after a comma in a Handler head",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "shape",
+			Positions: []string{
+				"at the start of a top-level declaration",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -930,6 +956,10 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "repeat-with",
 			Rule: "straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count",
+		},
+		GrammarTableDecisionEntry{
+			Name: "shape-of",
+			Rule: "at the start of a Shape Term, `list` or `object` followed by `of` is a wrapper, and `a` or `an` followed by `quantity` starts a Unit Kind Shape; otherwise the word is a kind, a Unit or a Shape name",
 		},
 		GrammarTableDecisionEntry{
 			Name: "script-variable",

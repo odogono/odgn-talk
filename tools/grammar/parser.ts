@@ -482,8 +482,8 @@ export class Parser {
     if (this.isWord(t, 'private')) {
       this.next();
       const u = this.peek(0);
-      if (!this.isWord(u, 'on', 'function', 'constant')) {
-        this.fail(u, '`on`, `function` or `constant` after `private`');
+      if (!this.isWord(u, 'on', 'function', 'constant', 'shape')) {
+        this.fail(u, '`on`, `function`, `constant` or `shape` after `private`');
       }
       return { ...this.declaration(), private: true };
     }
@@ -504,6 +504,14 @@ export class Parser {
       this.endOfStatement();
       return { k: 'Constant', name, value };
     }
+    if (this.isWord(t, 'shape')) {
+      this.next();
+      const name = this.name('a Shape name');
+      this.expectWord('is', 'operator');
+      const shape = this.shapeExpr();
+      this.endOfStatement();
+      return { k: 'ShapeDecl', name, shape };
+    }
     if (
       this.isWord(t, 'script') &&
       this.isWord(this.la2('script-variable'), 'variable')
@@ -521,8 +529,92 @@ export class Parser {
     }
     this.fail(
       t,
-      '`on`, `function`, `script variable`, `constant`, `use` or `private`',
+      '`on`, `function`, `script variable`, `constant`, `shape`, `use` or `private`',
     );
+  }
+
+  // A Shape Expression (ADR 0168): Shape Terms joined by `or`, loosest.
+  shapeExpr(): Node {
+    const first = this.shapeTerm();
+    if (!this.atOperatorWord('or')) {
+      return first;
+    }
+    const alternatives = [first];
+    while (this.atOperatorWord('or')) {
+      this.next('operator');
+      alternatives.push(this.shapeTerm());
+    }
+    return { k: 'ShapeOneOf', alternatives };
+  }
+
+  shapeTerm(): Node {
+    const t = this.peek(0, 'type');
+    if (t.t === 'unit' || t.t === 'error') {
+      return { k: 'ShapeUnit', unit: this.next('type').v };
+    }
+    if (this.isOp(t, '(')) {
+      this.next();
+      const e = this.nested(() => this.shapeExpr());
+      this.expectOp(')');
+      return e;
+    }
+    if (this.isOp(t, '{')) {
+      return this.shapeMap();
+    }
+    if (this.isWord(t, 'optional')) {
+      this.next();
+      return { k: 'ShapeOptional', shape: this.shapeTerm() };
+    }
+    if (this.isWord(t, 'list', 'object', 'a', 'an')) {
+      const n = this.la2('shape-of', 'operator');
+      if (this.isWord(t, 'list', 'object') && this.isWord(n, 'of')) {
+        this.next();
+        this.next('operator');
+        return t.v === 'list'
+          ? { k: 'ShapeList', shape: this.shapeTerm() }
+          : { k: 'ShapeObject', kind: this.name('an Object Kind') };
+      }
+      if (this.isWord(t, 'a', 'an') && this.isWord(n, 'quantity')) {
+        this.next();
+        this.next('operator');
+        this.expectWord('of', 'operator');
+        return { k: 'ShapeUnitKind', kind: this.name('a Unit Kind') };
+      }
+    }
+    return { k: 'ShapeName', name: this.kind() };
+  }
+
+  // `{key: Shape, …}`, with `...` last for an open map.
+  shapeMap(): Node {
+    this.next();
+    const fields: Node[] = [];
+    let open = false;
+    if (!this.isOp(this.peek(0), '}')) {
+      do {
+        if (fields.length) {
+          this.next('operator');
+        }
+        if (this.isOp(this.peek(0), '...')) {
+          this.next();
+          open = true;
+          break;
+        }
+        const key = this.mapKey();
+        // Read in Unit mode, so a Compound Unit after the key lexes once.
+        const optional = this.isWord(this.peek(0, 'type'), 'optional');
+        if (optional) {
+          this.next('type');
+        }
+        fields.push({
+          k: 'ShapeField',
+          key,
+          optional,
+          shape: this.nested(() => this.shapeExpr()),
+        });
+      } while (this.isOp(this.peek(0, 'operator'), ','));
+    }
+    this.expectOp('}');
+    return { k: 'ShapeMap', fields, open };
   }
 
   use(): Node {

@@ -45,7 +45,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 
 | Contextual keyword | Positions |
 | --- | --- |
-| `a` | after `is` or `is not`, before a kind; after `can be`; before a kind in a Text Pattern (a Typed Element) |
+| `a` | after `is` or `is not`, before a kind; after `can be`; before a kind in a Text Pattern (a Typed Element); at the start of a Shape Term, before `quantity of` |
 | `all` | straight after `wait for` (a Join) |
 | `an` | as `a` |
 | `any` | after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler) |
@@ -84,18 +84,22 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `lazily` | after a Text Pattern element |
 | `least` | after `is at` or `is not at` |
 | `less` | after `is` or `is not`, before `than` |
+| `list` | at the start of a Shape Term, before `of` |
 | `matches` | operator position |
 | `message` | after `any` (the Fallback Handler) |
 | `mod` | operator position |
 | `most` | after `is at` or `is not at` |
 | `next` | at the start of a statement, before `repeat` |
 | `number` | after `the`, before `of elements of` (an Element Count) |
-| `optional` | after `the`, unless followed by `of` |
+| `object` | at the start of a Shape Term, before `of` |
+| `optional` | after `the`, unless followed by `of`; at the start of a Shape Term, or straight after a Shape Map field's `:` |
 | `otherwise` | between default expression operands |
-| `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
+| `private` | at the start of a top-level declaration, before `on`, `function`, `constant` or `shape` |
+| `quantity` | in a Shape Term, after `a` or `an` and before `of` |
 | `queued` | after a comma in a Handler head |
 | `replacing` | after a comma in a Handler head |
 | `script` | at the start of a top-level declaration, before `variable` |
+| `shape` | at the start of a top-level declaration |
 | `target` | after `the`, when `of` doesn't follow |
 | `than` | after `is greater` or `is less`, with or without `not` after `is` |
 | `timeout` | after `with` at the start of a statement (a Timeout Block); after a Timeout Block's `end` |
@@ -137,9 +141,21 @@ Any Name may be an [Argument Label](#argument-labels), except these. Of the Rese
 
 ```ebnf
 Source         ::= NL* ( Declaration NL* )*
-Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable | Use
+Declaration    ::= 'private'? ( Handler | Function | Constant | ShapeDecl ) | ScriptVariable | Use
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
+ShapeDecl      ::= 'shape' Name 'is' ShapeExpr NL
+ShapeExpr      ::= ShapeTerm ( 'or' ShapeTerm )*
+ShapeTerm      ::= 'optional' ShapeTerm
+                 | ( 'list' | 'object' ) 'of' ShapeTerm
+                 | Article 'quantity' 'of' Name
+                 | '(' ShapeExpr ')'
+                 | ShapeMap
+                 | Kind | Unit
+                   /* `list` and `object` without `of` are kinds; after `object of`, only a Name;
+                      whether a Name is a kind, a Unit or a named Shape is a load rule */
+ShapeMap       ::= '{' ( ShapeField ( ',' ShapeField )* ( ',' '...' )? | '...' )? '}'
+ShapeField     ::= MapKey 'optional'? ShapeExpr
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
 Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name? NL
                    /* a Name after `end`, if present, is the function's name */
@@ -152,10 +168,11 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 <!-- end -->
 
 - **Top level:** a Script or Library is a sequence of declarations, and a top-level line can only start one. A statement at top level is a syntax error at its first token.
-- **Declarations are decided on their first token,** except `script variable`, which is decided on two. `use`, `constant`, `private`, `script` and `variable` are contextual, since a top-level line can't start anything else.
+- **Declarations are decided on their first token,** except `script variable`, which is decided on two. `use`, `constant`, `shape`, `private`, `script` and `variable` are contextual, since a top-level line can't start anything else.
 - **`=`** in a Script Variable or Constant means "starts as", and in a function's parameters "defaults to". It is equality everywhere else.
 - **`use … as`** renames a single imported name (`use trim from text as tidy`). After two or more names, `as` is a syntax error.
-- **`private`** goes before a Handler, a function or a Constant. It is a load error in a Script ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **`private`** goes before a Handler, a function, a Constant or a Shape declaration. It is a load error in a Script ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **Shape declarations:** `shape Name is` and a Shape Expression declare a named Shape ([ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md)). `or` joins Shape Terms and binds loosest; brackets group. At the start of a Shape Term, `optional` wraps the next term, `list` or `object` followed by `of` is a wrapper, and `a` or `an` followed by `quantity of` names a Unit Kind; otherwise those words are kinds or Names. Straight after a Shape Map field's `:`, `optional` marks the field optional instead. `...` may only be a Shape Map's last entry. A Unit in a Shape Term may be a Compound Unit, lexed as after `as`. A text literal is a syntax error there, left for literal-value Shapes. Which Name is a kind, a Unit or a named Shape is a load rule ([chapter 7](07-libraries-and-the-standard-library.md#shape-declarations)).
 - **Functions** take a list of names, with no Destructuring. A Name after `end`, if present, must be the function's name.
 - **Defaults:** `name = expression` gives a parameter a default, which a call may leave off ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)). The default runs to the next top-level comma or the end of the line. Only trailing parameters may have one, and what a default may use is a load rule ([chapter 7](07-libraries-and-the-standard-library.md#defaults)).
 
@@ -473,7 +490,7 @@ The operators, lowest precedence first:
 - **Comparisons don't chain:** `a = b = c` is a syntax error at the second `=`.
 - **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, `greater than`, `less than`, `at least` and `at most` order, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`. Likewise `x is at least 3` orders, and `x is at` compares `x` with a variable `at`.
 - **English comparison words** spell existing comparisons ([ADR 0075](../docs/adr/0075-english-comparison-words-spell-the-existing-comparisons.md)). `does not` takes `contain`, `begin with`, `end with` or `match`, and anything else after it is a syntax error at that token. `comes` takes `before` or `after`. Each is decided on its first two words: `does` without `not`, and `comes` without `before` or `after`, end the expression, as `begins` without `with` does.
-- **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. Which names are kinds is a load rule ([chapter 3](03-values.md)).
+- **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. After `is a`, the Name may also be a named Shape. Which names are kinds or Shapes is a load rule ([chapter 3](03-values.md)).
 - **Unary minus** binds tighter than `^`, so `-2 ^ 2` is `4`.
 
 Each trailing modifier attaches to its own construct:
@@ -724,6 +741,7 @@ These are the only places where the parser reads a second token before it choose
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
 | `replace-first` | after `replace`, `first` followed by anything but `in` means only the first match |
 | `repeat-with` | straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count |
+| `shape-of` | at the start of a Shape Term, `list` or `object` followed by `of` is a wrapper, and `a` or `an` followed by `quantity` starts a Unit Kind Shape; otherwise the word is a kind, a Unit or a Shape name |
 | `script-variable` | at top level, `script` followed by `variable` starts a Script Variable |
 | `target` | after `the`, `target` not followed by `of` is `the target` |
 | `wait-from` | in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns |
@@ -803,7 +821,8 @@ A local Handler may share a Script Variable's or Constant's name without a `name
 | `not in recovery` | A choice is outside a lexically enclosing Recovery Catch; functions and Lambdas reset permission | `choose` | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [#387](https://github.com/odogono/odgn-talk/issues/387) |
 | `leaves recovery catch` | A Recovery Catch contains return, veto or pass, or a loop jump whose loop is outside it | the statement's first token | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [#387](https://github.com/odogono/odgn-talk/issues/387) |
 | `duplicate key` | A map literal names a key twice | the second key | [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `unknown kind` | A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, or a Text Pattern's `a` or `an` is followed by a kind other than `number` | the kind name | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `unknown kind` | A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, nor, after `is a`, a named Shape in scope, or a Text Pattern's `a` or `an` is followed by a kind other than `number` | the kind name | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `bad shape` | A Shape declaration names a Name that is no kind, Unit or named Shape in scope, a Unit that doesn't parse, or a Unit Kind or, with a Host Manifest, an Object Kind that doesn't exist, repeats a key in one Shape Map, reaches itself through named Shapes, or is named like a kind, `any`, `value`, a Unit or a Unit Kind (chapter 7) | the offending token: the Name, Unit or key, the first Name on a cycle in source order, or the declared name | [ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md), [#2055](https://github.com/odogono/odgn-talk/issues/2055) |
 | `no conversion` | `as` names a kind that has no conversion, or a Text Pattern's `as number` follows an element that can match something other than ASCII digits or `a number` | `as` | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `bad number` | A number literal has more than 34 significant digits, a magnitude of 10^34 or more, or more than 6176 fraction digits | the literal | [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `pattern too large` | A Text Pattern with no splices compiles to a program over the Script's `patternSize`, counting every copy of a counted repetition | the pattern's opening `<` | [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [#92](https://github.com/odogono/odgn-talk/issues/92), [#115](https://github.com/odogono/odgn-talk/issues/115) |

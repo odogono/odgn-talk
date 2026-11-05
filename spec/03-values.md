@@ -113,7 +113,7 @@ This one equality is used everywhere: by Destructuring literals, map keys, `is i
 - **Quantities in text:** text read by `as` with a Unit is the number syntax, then optionally spaces and a Unit spelled as in source, such as `"5 kg"` or `"60 mi/hr"`. Without a Unit it reads as a plain number.
 - **White space:** converting text to a number, a Unit, a Civil Date or an Instant ignores White_Space Characters at either end.
 - **`can be`:** `x can be a K`, and `x can be U` with a single-word Unit, is `true` exactly when `x as K` or `x as U` would succeed, and it never raises.
-- **`is a`:** `x is a K` is `true` exactly when the kind of `x` is `K`. So `"42" is a number` is `false`.
+- **`is a`:** `x is a K` is `true` exactly when the kind of `x` is `K`. So `"42" is a number` is `false`. When `K` is a named Shape, `x is a K` is `conforms(x, K)`, with its acceptance, errors and charge ([ADR 0168](../docs/adr/0168-scripts-declare-named-shapes-in-an-english-spelling.md), [chapter 7](07-libraries-and-the-standard-library.md#shape-declarations)).
 - **`is empty`** is `true` for empty text, an empty list, an empty map and empty Bytes, and `false` for every other value, Nothing included.
 
 > **Example.**

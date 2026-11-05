@@ -80,7 +80,7 @@ excluded = ["from", "otherwise"]
 
 [[contextual]]
 word = "a"
-positions = ["after `is` or `is not`, before a kind", "after `can be`", "before a kind in a Text Pattern (a Typed Element)"]
+positions = ["after `is` or `is not`, before a kind", "after `can be`", "before a kind in a Text Pattern (a Typed Element)", "at the start of a Shape Term, before `quantity of`"]
 
 [[contextual]]
 word = "an"
@@ -235,6 +235,10 @@ word = "less"
 positions = ["after `is` or `is not`, before `than`"]
 
 [[contextual]]
+word = "list"
+positions = ["at the start of a Shape Term, before `of`"]
+
+[[contextual]]
 word = "lazily"
 positions = ["after a Text Pattern element"]
 
@@ -263,8 +267,12 @@ word = "number"
 positions = ["after `the`, before `of elements of` (an Element Count)"]
 
 [[contextual]]
+word = "object"
+positions = ["at the start of a Shape Term, before `of`"]
+
+[[contextual]]
 word = "optional"
-positions = ["after `the`, unless followed by `of`"]
+positions = ["after `the`, unless followed by `of`", "at the start of a Shape Term, or straight after a Shape Map field's `:`"]
 
 [[contextual]]
 word = "otherwise"
@@ -272,7 +280,11 @@ positions = ["between default expression operands"]
 
 [[contextual]]
 word = "private"
-positions = ["at the start of a top-level declaration, before `on`, `function` or `constant`"]
+positions = ["at the start of a top-level declaration, before `on`, `function`, `constant` or `shape`"]
+
+[[contextual]]
+word = "quantity"
+positions = ["in a Shape Term, after `a` or `an` and before `of`"]
 
 [[contextual]]
 word = "queued"
@@ -281,6 +293,10 @@ positions = ["after a comma in a Handler head"]
 [[contextual]]
 word = "replacing"
 positions = ["after a comma in a Handler head"]
+
+[[contextual]]
+word = "shape"
+positions = ["at the start of a top-level declaration"]
 
 [[contextual]]
 word = "script"
@@ -568,6 +584,10 @@ rule = "after `replace`, `first` followed by anything but `in` means only the fi
 [[decision]]
 name = "repeat-with"
 rule = "straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count"
+
+[[decision]]
+name = "shape-of"
+rule = "at the start of a Shape Term, `list` or `object` followed by `of` is a wrapper, and `a` or `an` followed by `quantity` starts a Unit Kind Shape; otherwise the word is a kind, a Unit or a Shape name"
 
 [[decision]]
 name = "script-variable"

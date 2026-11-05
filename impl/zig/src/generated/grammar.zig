@@ -196,6 +196,7 @@ pub const grammar: GrammarTable = .{
                 "after `is` or `is not`, before a kind",
                 "after `can be`",
                 "before a kind in a Text Pattern (a Typed Element)",
+                "at the start of a Shape Term, before `quantity of`",
             },
         },
         .{
@@ -442,6 +443,12 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
+            .word = "list",
+            .positions = &.{
+                "at the start of a Shape Term, before `of`",
+            },
+        },
+        .{
             .word = "lazily",
             .positions = &.{
                 "after a Text Pattern element",
@@ -484,9 +491,16 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
+            .word = "object",
+            .positions = &.{
+                "at the start of a Shape Term, before `of`",
+            },
+        },
+        .{
             .word = "optional",
             .positions = &.{
                 "after `the`, unless followed by `of`",
+                "at the start of a Shape Term, or straight after a Shape Map field's `:`",
             },
         },
         .{
@@ -498,7 +512,13 @@ pub const grammar: GrammarTable = .{
         .{
             .word = "private",
             .positions = &.{
-                "at the start of a top-level declaration, before `on`, `function` or `constant`",
+                "at the start of a top-level declaration, before `on`, `function`, `constant` or `shape`",
+            },
+        },
+        .{
+            .word = "quantity",
+            .positions = &.{
+                "in a Shape Term, after `a` or `an` and before `of`",
             },
         },
         .{
@@ -511,6 +531,12 @@ pub const grammar: GrammarTable = .{
             .word = "replacing",
             .positions = &.{
                 "after a comma in a Handler head",
+            },
+        },
+        .{
+            .word = "shape",
+            .positions = &.{
+                "at the start of a top-level declaration",
             },
         },
         .{
@@ -929,6 +955,10 @@ pub const grammar: GrammarTable = .{
         .{
             .name = "repeat-with",
             .rule = "straight after `repeat`, `with` followed by a Name that isn't in the FOLLOW set is HyperTalk's counted loop, the syntax error `repeat with`; otherwise `with` starts the count",
+        },
+        .{
+            .name = "shape-of",
+            .rule = "at the start of a Shape Term, `list` or `object` followed by `of` is a wrapper, and `a` or `an` followed by `quantity` starts a Unit Kind Shape; otherwise the word is a kind, a Unit or a Shape name",
         },
         .{
             .name = "script-variable",
