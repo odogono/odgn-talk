@@ -1,4 +1,4 @@
-# Unblessed: Musical Units and the musical clock (#2064); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-11-05 for #2064: Musical Units and the musical clock.
 # bar-waits: the scripted Transport plays 120 bpm in 4/4, so a bar is 2 s and
 # bar 1 starts at 09:00:00. It answers one lead, 0.1 s, before each line.
 # `arrange` starts exactly on bar line 1, which doesn't count, so its 20 bars
