@@ -1,6 +1,6 @@
 defmodule NorthTalk.ShapeTest do
   use ExUnit.Case, async: true
-  alias NorthTalk.{LoadError, Map, Result}
+  alias NorthTalk.{LoadError, Map, Result, ScriptError}
 
   @source """
   shape Line is {sku: text, qty: number}
@@ -22,6 +22,10 @@ defmodule NorthTalk.ShapeTest do
   on classify msg
     return "other"
   end classify
+
+  on route item is a Line to place is a number
+    return place
+  end route
 
   on invoice
     return Invoice
@@ -47,6 +51,17 @@ defmodule NorthTalk.ShapeTest do
 
   test "a where clause dispatches on a named Shape", %{group: group} do
     assert {:ok, %Result{value: "other"}} = NorthTalk.request(group, "s", "classify", ["x"])
+  end
+
+  test "a Clause Shape picks a clause, and a mismatch is unhandled", %{group: group} do
+    line = %Map{entries: [{"sku", "a"}, {"qty", 2}]}
+    assert {:ok, %Result{value: 4}} = NorthTalk.request(group, "s", "route:to:", [line, 4])
+    assert {:error, %ScriptError{outcome: "unhandled"}} = NorthTalk.request(group, "s", "route:to:", [line, "e4"])
+  end
+
+  test "is not a in a Handler head is a negated shape load error", %{group: group} do
+    assert {:error, %LoadError{diagnostics: [%{"code" => "negated shape"} | _]}} =
+             NorthTalk.load(group, "neg", "on h x is not a number\n  return x\nend h\n")
   end
 
   test "a Shape name evaluates to its canonical Shape data", %{group: group} do
