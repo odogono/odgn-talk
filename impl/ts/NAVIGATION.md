@@ -66,6 +66,7 @@ Files, grammar, or lowering.
 - Implementation: [the Wait table](src/waits.ts) (pending calls and replies, timers and their order, `wait for` waiters, Join settlement and cuts, abandonment with a reason, the awaited-call query, and save export/import), [Group](src/group.ts) (`suspended`, `settleReply`, `fireTimer`, `forgetWait`: scheduling and Trace writes), [Run](src/machine.ts) (`pendingCall`, `discard`, `abandonJoin`: the Run's own suspension and open Join). The ownership boundary follows [ADR 0105](../../docs/adr/0105-each-core-keeps-its-waits-in-one-wait-table-module.md).
 - Rules: [Suspension Points](../../spec/05-handlers-messages-and-scheduling.md#suspension-points)
 - Tests and cases: [Wait table tests](tests/waits.test.ts), [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts)
+- Musical waits: `musicalWait` in [machine.ts](src/machine.ts) calls the Group's musical clock, a pending call with no deadline of its own; `musicalClockCapability` in [standard-capabilities.ts](src/standard-capabilities.ts) and the `musicalClock` option in [Group](src/group.ts) ([guide](README.md#musical-time), [musical wait tests](tests/musical-wait.test.ts), [`musical-time` cases](../../corpus/musical-time/))
 - First check: `bun test impl/ts/tests/waits.test.ts impl/ts/tests/group.test.ts`
 
 ## Capability Scopes, Segment-bound effects and Coordinators

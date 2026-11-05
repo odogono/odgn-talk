@@ -20,7 +20,7 @@ end drumPart
 - Within one Kind they add, subtract, scale by a plain number and compare. They can be stored and passed like any Quantity.
 - Only a plain `wait` accepts them. Timeout Blocks, `maxWait` and Host Operations still take exact durations.
 - `wait` takes a whole number of bars or beats, 0 or more. `wait 0 bars` doesn't suspend, and a fraction or a negative number is an error. `wait` doesn't set `it`.
-- The Core doesn't turn a Musical Unit into a deadline. It suspends the Run with a musical Wait, and the Host ends that Wait. A Host without a Transport raises an error saying it keeps no musical time. The Host Manifest declares whether a Host keeps musical time, so the editor can flag such a `wait` before it runs.
+- The Core doesn't turn a Musical Unit into a deadline. It suspends the Run with a musical Wait, and the Host ends that Wait. The Wait is a call to the Host's musical clock, a Capability every Script holds under the reserved Grant name `musical-clock`, which no source can write and a Trace can name. A Host without a Transport raises an error saying it keeps no musical time. The Host Manifest declares whether a Host keeps musical time, so the editor can flag such a `wait` before it runs.
 
 **What a bar wait means**
 

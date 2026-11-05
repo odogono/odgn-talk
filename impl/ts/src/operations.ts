@@ -120,6 +120,7 @@ import {
 import {
   combine,
   fromBase,
+  musicalKind,
   ownUnit,
   parseUnit,
   powerOf,
@@ -801,6 +802,22 @@ export const waitUs = (v: Value): bigint => {
     ]);
   }
   return durationUs(q);
+};
+/**
+ * `wait q`'s count when `q` is in a Musical Unit (chapter 5, `wait` in
+ * Musical Units): a whole number, 0 or more, or `out of domain`. Undefined
+ * for any other value, which waits as an exact duration.
+ */
+export const musicalCount = (v: Value): bigint | undefined => {
+  const q = v.asQuantityRef();
+  if (!q || !musicalKind(q.unit)) {
+    return undefined;
+  }
+  const n = numberOf(q);
+  if (!isInteger(n) || (n.negative && n.coefficient !== 0n)) {
+    throw outOfDomain('wait', v);
+  }
+  return integerOf(n);
 };
 // A difference in `s`, with no more decimal places than it needs, at most six.
 const secondsOf = (us: bigint): Value => {

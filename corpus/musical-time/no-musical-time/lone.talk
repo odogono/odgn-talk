@@ -1,0 +1,13 @@
+-- lone.talk: the no-musical-time case's Script.
+
+script variable log = []
+
+on bars
+  try
+    wait 2 bars
+  catch e
+    put the code of e after log
+  end try
+  wait 0 beats
+  put "on" after log
+end bars

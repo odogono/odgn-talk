@@ -1,0 +1,67 @@
+# Unblessed: Musical Units and the musical clock (#2064); first blessing awaits human review.
+# bar-waits: the scripted Transport plays 120 bpm in 4/4, so a bar is 2 s and
+# bar 1 starts at 09:00:00. It answers one lead, 0.1 s, before each line.
+# `arrange` starts exactly on bar line 1, which doesn't count, so its 20 bars
+# end on bar 21 at 09:00:40, past the 30 s `MaxWait` that doesn't apply; its
+# 2 beats then end at 09:00:40.5. `counted` waits 3 bars from 09:00:41, and
+# the tempo halves to 60 bpm on bar 22 at 09:00:42, so the bars still to come
+# stretch to 4 s and its third line falls at 09:00:50. The Core counts none of
+# this; it waits for each answer.
+
+> load song identity=be06b74ca5af06d6f0188cba285a7a221665134c6c4810d93204dd6a999b7cda
+> deliver d1 to=song message=arrange
+> deliver d2 to=song message=now
+> pump clock=2026-09-30T09:00:00Z
+call song/r1.c1 op=musical-clock.wait args=[20 bars]
+seg song/r1 start delivery=d1 handler=arrange clause=1 fuel=27 alloc=29 state=330 end=wait
+seg song/r2 start delivery=d2 handler=now clause=1 fuel=36 alloc=16 state=298 end=return
+run song/r2 outcome=completed delivery=d2 handler=now value=2 fuel=36 alloc=16
+pumped state=idle fuel=63
+> pump clock=2026-09-30T09:00:30Z
+pumped state=idle fuel=0
+> answer song/r1.c1 value=nothing
+> pump clock=2026-09-30T09:00:39.9Z
+call song/r1.c2 op=musical-clock.wait args=[2 beats]
+seg song/r1 resume fuel=24 alloc=37 state=327 end=wait
+pumped state=idle fuel=24
+> answer song/r1.c2 value=nothing
+> pump clock=2026-09-30T09:00:40.4Z
+seg song/r1 resume fuel=13 alloc=36 state=102 end=return
+run song/r1 outcome=completed delivery=d1 handler=arrange value=["intro", "verse", "fill"] fuel=64 alloc=102
+pumped state=idle fuel=13
+> deliver d3 to=song message=counted args=[2 bars]
+> pump clock=2026-09-30T09:00:41Z
+call song/r3.c1 op=musical-clock.wait args=[3 bars]
+seg song/r3 start delivery=d3 handler=counted clause=1 fuel=28 alloc=48 state=374 end=wait
+pumped state=idle fuel=28
+> pump clock=2026-09-30T09:00:44Z
+pumped state=idle fuel=0
+> answer song/r3.c1 value=nothing
+> pump clock=2026-09-30T09:00:49.9Z
+seg song/r3 resume fuel=13 alloc=40 state=134 end=return
+run song/r3 outcome=completed delivery=d3 handler=counted fuel=41 alloc=88
+pumped state=idle fuel=13
+> deliver d4 to=song message=halted
+> pump clock=2026-09-30T09:00:51Z
+call song/r4.c1 op=musical-clock.wait args=[1 bar]
+seg song/r4 start delivery=d4 handler=halted clause=1 fuel=18 alloc=0 state=406 end=wait
+pumped state=idle fuel=18
+> fail song/r4.c1 error={code: "transport stopped"}
+> pump clock=2026-09-30T09:00:52Z
+raise song/r4 code="transport stopped" at=song:60 pos=33:5
+seg song/r4 resume fuel=22 alloc=57 state=175 end=return
+run song/r4 outcome=completed delivery=d4 handler=halted fuel=40 alloc=57
+pumped state=idle fuel=22
+> deliver d5 to=song message=limited
+> pump clock=2026-09-30T09:00:53Z
+call song/r5.c1 op=musical-clock.wait args=[4 bars]
+seg song/r5 start delivery=d5 handler=limited clause=1 fuel=21 alloc=40 state=487 end=wait until=2026-09-30T09:00:54Z
+pumped state=idle fuel=21 next=2026-09-30T09:00:54Z
+> pump clock=2026-09-30T09:00:54Z
+raise song/r5 code="timeout" at=song:82 pos=43:7
+abandon song/r5.c1
+seg song/r5 resume fuel=21 alloc=31 state=206 end=return
+run song/r5 outcome=completed delivery=d5 handler=limited fuel=42 alloc=71
+pumped state=idle fuel=21
+> vars
+vars song log=["intro", "verse", "fill", 2 bars, "transport stopped", "timeout"]

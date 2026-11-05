@@ -10,6 +10,7 @@ import {
 } from './capabilities';
 import type { GrantDecls } from './effects';
 import { operationDeclarations } from './capabilities';
+import { MUSICAL_CLOCK } from './standard-capabilities';
 export { operationDeclarations };
 import type { Limits } from './machine';
 import { LoadError } from './errors';
@@ -288,6 +289,14 @@ export type SetupGroup = {
 };
 
 /** Make a Group whose Scripts are loaded only when the Host requests them. */
+/** A case's `musical-clock` Standard Capability, as the Group option. */
+export const musicalClockOf = (
+  capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
+): { musicalClock?: CapabilityDef<unknown> } => {
+  const clock = capabilities.get(MUSICAL_CLOCK);
+  return clock ? { musicalClock: clock } : {};
+};
+
 export const buildSetupGroup = (
   setup: Setup,
   capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
@@ -308,6 +317,7 @@ export const buildSetupGroup = (
     session: options.session,
     trace: options.trace,
     ...(setup.seed === undefined ? {} : { seed: BigInt(setup.seed) }),
+    ...musicalClockOf(capabilities),
   });
   const readSource =
     options.readSource ??

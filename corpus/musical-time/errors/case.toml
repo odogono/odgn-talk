@@ -1,0 +1,20 @@
+# errors: what a `wait` in a Musical Unit refuses (spec chapter 5, `wait` in
+# Musical Units; chapter 3, Musical Units; ADR 0166). A fraction or a negative
+# count raises `out of domain`; a Musical Unit beside another Unit, in a
+# Compound Unit or converted is refused before the wait; and only a plain
+# `wait` takes one, so a `wait for` timeout, an `after` branch and a Timeout
+# Block raise `wrong kind` with `expected` "s". None calls the musical clock.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[standard]]
+capability = "musical-clock"
+costs = { wait = { fuel = 3 } }
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"

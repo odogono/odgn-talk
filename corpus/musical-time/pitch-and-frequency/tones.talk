@@ -1,0 +1,24 @@
+-- tones.talk: the pitch-and-frequency case's Script. `go` fills the Script
+-- Variables the Trace's `vars` shows; the other Handlers raise.
+
+script variable hz
+script variable pitch
+script variable musical
+
+on go
+  put [800 Hz, 1.5 kHz as Hz, 2 kHz + 500 Hz, 1 Hz = 1 1/s, 440 Hz * 2, (1 / 2 ms) as Hz] into hz
+  put [7 semitones + 1 octave, 1 octave as cents, 3 semitones as cents, 1200 cents = 1 octave, 50 cents < 1 semitone] into pitch
+  put [2 bars + 3 bars, 8 bars * 2, 8 bars / 2, 3 beats - 4 beats, 3 bars < 4 bars, 1 bar / 1 bar] into musical
+end go
+
+on interval
+  return 1 semitone + 1 Hz
+end interval
+
+on beats
+  return 1 bar + 1 beat
+end beats
+
+on squared
+  return 2 beats * 2 beats
+end squared

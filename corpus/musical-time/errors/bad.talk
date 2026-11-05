@@ -1,0 +1,43 @@
+-- bad.talk: the errors case's Script. Each Handler raises, and the Trace
+-- writes its error map.
+
+on fraction
+  wait 1.5 bars
+end fraction
+
+on negative
+  wait -1 beat
+end negative
+
+on mixed
+  wait 1 bar + 2 beats
+end mixed
+
+on timed
+  wait 1 bar + 500 ms
+end timed
+
+on compound
+  wait 1 bar / 1 min
+end compound
+
+on converted
+  wait 8 bars as s
+end converted
+
+on timeout
+  wait for go or 1 bar
+end timeout
+
+on branch
+  wait for
+    when go then return 1
+    after 2 beats then return 2
+  end wait
+end branch
+
+on block
+  with timeout of 1 bar
+    wait 1 s
+  end timeout
+end block

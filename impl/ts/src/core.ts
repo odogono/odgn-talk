@@ -11,6 +11,7 @@ import {
   calendarCapability,
   clockCapability,
   consoleCapability,
+  musicalClockCapability,
   timerCapability,
 } from './standard-capabilities';
 import { sqliteCapability } from './sqlite-capability';
@@ -51,6 +52,7 @@ const core: TsCore = Object.freeze({
   httpCapability,
   peerCapability,
   peerKind,
+  musicalClockCapability,
   compileLibrary,
   newGroup,
   restore,

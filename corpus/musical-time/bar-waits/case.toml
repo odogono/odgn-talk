@@ -1,0 +1,20 @@
+# bar-waits: a plain `wait` in a Musical Unit calls the Group's musical clock,
+# and the Run resumes when the Host answers (spec chapter 5, `wait` in Musical
+# Units; chapter 9, The musical clock; ADR 0166).
+# The runner supplies the musical clock from the `musical-clock` Standard
+# Capability below, not as a Grant: every Script holds it under that reserved
+# name. The Trace's `answer` and `fail` inputs stand for a scripted Transport.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[standard]]
+capability = "musical-clock"
+costs = { wait = { fuel = 3 } }
+
+[[scripts]]
+name = "song"
+source = "song.talk"

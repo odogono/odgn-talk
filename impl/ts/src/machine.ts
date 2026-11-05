@@ -79,6 +79,7 @@ import {
   setKey,
   splice,
   textForm,
+  musicalCount,
   waitUs,
   wrongKind,
   randomBound,
@@ -88,6 +89,7 @@ import {
 import { readDisplay } from './readers';
 import { validComputedMessageName } from './selectors';
 import { PEER_CALL, PEER_KIND, PEER_POST } from './peer-capability';
+import { MUSICAL_CLOCK } from './standard-capabilities';
 import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
@@ -829,7 +831,13 @@ export type CallContext = {
 /** Why a Run suspended, which its Group waits on (chapter 5, Suspension Points). */
 export type Suspension = (
   | { k: 'wait'; us: bigint }
-  | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
+  | {
+      abort: AbortController;
+      call: CallContext;
+      k: 'ask';
+      /** Its own deadline, or null for the musical clock's, which has none. */
+      ms: number | null;
+    }
   | { args: Value[]; id: string; k: 'send'; message: string; to: string }
   | { args: Value[]; fn: Value; id: string; k: 'call-value'; to: string }
   | { k: 'join'; members: Member[] }
@@ -3361,7 +3369,8 @@ export class Run {
       this.abandoning = own === undefined ? [] : [own];
     }
     const value = this.settled(s.k === 'ask' ? s.call : null, r);
-    if (s.k !== 'wait') {
+    // A `wait` gives nothing, the musical clock's answer included.
+    if (s.k !== 'wait' && frame.code.unit.code[frame.pc]!.opcode !== Op.Wait) {
       frame.stack.push(value);
     }
     frame.pc++;
@@ -4881,6 +4890,29 @@ export class Run {
   }
 
   /**
+   * `wait q` in a Musical Unit (chapter 5): `wait 0 bars` goes straight on;
+   * any other count calls the Group's musical clock with `q`, as an
+   * `ask … and wait` would, or raises `no musical time` without one.
+   */
+  private musicalWait(count: bigint, rate: number, frame: Frame) {
+    if (count === 0n) {
+      this.pay(rate);
+      this.pop();
+      next(frame);
+      return;
+    }
+    if (
+      !this.host?.grants.has(MUSICAL_CLOCK) ||
+      this.host.isUnbound?.(MUSICAL_CLOCK)
+    ) {
+      throw new ScriptError('no musical time');
+    }
+    // Charged as the call it is, at the `capability` rate (chapter 8), as a
+    // restored call converts.
+    this.capability(MUSICAL_CLOCK, 'wait', [this.peek()], CAPABILITY);
+  }
+
+  /**
    * A Capability call (chapter 9): the arguments checked against their
    * Shapes, uncharged; the declared cost; the Host function, which may
    * `Charge` more while it starts; then an immediate call's result checked
@@ -5142,15 +5174,22 @@ export class Run {
     if (op.mode === 'suspending') {
       this.hostCrossing({ ...record, charged });
       callSites.get(ctx)!.charged = charged;
-      const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
+      // The musical clock's call has no `maxPending` and `MaxWait` doesn't
+      // apply (chapter 5, `wait` in Musical Units).
+      const ms =
+        grantName === MUSICAL_CLOCK
+          ? null
+          : (op.maxPendingMs ?? this.limits.maxWaitMs);
       if (member) {
+        // A Join Member is an `ask`, never the musical clock's call.
+        const memberMs = ms ?? this.limits.maxWaitMs;
         const m: Member = {
           site: { frame: this.frame, pc: this.frame.pc },
           id,
           call: ctx,
           abort,
-          ms,
-          at: this.host!.now + BigInt(ms) * 1000n,
+          ms: memberMs,
+          at: this.host!.now + BigInt(memberMs) * 1000n,
         };
         waitOrders.set(m, this.host!.waitOrder?.() ?? 0);
         m.order = this.host!.timerOrder?.();
@@ -5964,6 +6003,10 @@ export class Run {
         return next(frame);
       }
       case Op.Wait: {
+        const count = musicalCount(this.peek());
+        if (count !== undefined) {
+          return this.musicalWait(count, rate, frame);
+        }
         const us = waitUs(this.peek());
         this.checkDeadline();
         this.checkScopeBoundary();

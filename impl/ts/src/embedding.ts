@@ -30,6 +30,7 @@ import type {
   calendarCapability,
   clockCapability,
   consoleCapability,
+  musicalClockCapability,
   timerCapability,
 } from './standard-capabilities';
 import type { localeCapability } from './locale-capability';
@@ -60,6 +61,8 @@ export type Core = {
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   httpCapability: typeof httpCapability;
   localeCapability: typeof localeCapability;
+  /** A musical clock for the Group option `musicalClock` (ADR 0166). */
+  musicalClockCapability: typeof musicalClockCapability;
   newGroup(o: GroupOptions): Group;
   /** Optional for Hosts (ADR 0153). */
   peerCapability: typeof peerCapability;

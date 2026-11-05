@@ -1,5 +1,7 @@
+import { MUSICAL_CLOCK } from './standard-capabilities';
 import {
   buildSetupGroup,
+  musicalClockOf,
   tsCore,
   type CaseCore,
   MissingCapabilityError,
@@ -29,6 +31,7 @@ import {
   storeCapability,
   timerCapability,
   userCapability,
+  musicalClockCapability,
   httpCapability,
   peerCapability,
   peerKind,
@@ -624,6 +627,26 @@ const capabilitiesOf = (
           costs,
           standard.perStep ?? 0,
         ) as CapabilityDef<unknown>,
+      );
+    } else if (capability === MUSICAL_CLOCK) {
+      // The Group's musical clock (chapter 9): each `wait` waits for the
+      // Trace's `answer` or `fail`, as a scripted Transport would end it.
+      out.set(
+        capability,
+        musicalClockCapability(
+          {
+            wait: call =>
+              startStub(
+                stubs,
+                `${MUSICAL_CLOCK}.wait`,
+                call,
+                calls,
+                crossing,
+                recordedCall(call),
+              ),
+          },
+          costs,
+        ),
       );
     } else if (capability === 'user') {
       const prompt = (operation: string, call: Call<unknown>) =>
@@ -1590,6 +1613,7 @@ const driveReplay = function* (
           const restorePort = sessionObjects?.port();
           const restored = core.restore(saved.get(from)!, {
             name: 'case',
+            ...musicalClockOf(capabilities),
             session: restorePort,
             trace: writeTrace,
             libraries: [...registered.values()].filter(
@@ -1857,6 +1881,7 @@ const driveReplay = function* (
             const retryPort = sessionObjects?.port();
             const restored = core.restore(bytes, {
               name: 'case',
+              ...musicalClockOf(capabilities),
               session: retryPort,
               trace: writeTrace,
               libraries: [...registered.values()],

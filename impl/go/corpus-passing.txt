@@ -292,6 +292,10 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+musical-time/bar-waits
+musical-time/errors
+musical-time/no-musical-time
+musical-time/pitch-and-frequency
 names/handler-shared-names
 nothing-defaults/compatibility
 nothing-defaults/evaluation-order

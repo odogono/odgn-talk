@@ -1,0 +1,48 @@
+-- song.talk: the bar-waits case's Script. Each Handler logs where it is, so
+-- the Trace's `vars` shows the order the waits ended in.
+
+script variable log = []
+
+-- Waits on the clock in bars, then in beats.
+on arrange
+  put "intro" after log
+  wait 20 bars
+  put "verse" after log
+  wait 2 beats
+  put "fill" after log
+  return log
+end arrange
+
+-- `wait 0 bars` and `wait 0 beats` go straight on and call nothing.
+on now
+  put 1 into n
+  wait 0 bars
+  wait 0 beats
+  return n + 1
+end now
+
+-- A computed Musical Quantity, given by the Host.
+on counted q
+  wait q * 2 - 1 bar
+  put q after log
+end counted
+
+-- A failed musical wait raises in the Run like any Operation's failure.
+on halted
+  try
+    wait 1 bar
+  catch e
+    put the code of e after log
+  end try
+end halted
+
+-- A Timeout Block's deadline ends a musical wait with `timeout`.
+on limited
+  try
+    with timeout of 1 s
+      wait 4 bars
+    end timeout
+  catch e
+    put the code of e after log
+  end try
+end limited

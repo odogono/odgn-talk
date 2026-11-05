@@ -25,6 +25,7 @@ import {
   callbacksFeature,
 } from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
+import { isMusicalClock } from '../standard-capabilities';
 import type { Versions } from '../versions';
 import { guestPayload } from './codec';
 import { InstanceLostError, Reactor, type Diagnostics } from './reactor';
@@ -271,7 +272,9 @@ export class Session {
       })) as Frame,
       segmentLifecycle: segmentBound(def) || undefined,
       release: def.release ? true : undefined,
-      standard: isStandard(def) ? def.name : undefined,
+      // The guest makes its own musical clock declaration (chapter 9).
+      standard: isStandard(def) && !isMusicalClock(def) ? def.name : undefined,
+      musicalClock: isMusicalClock(def) || undefined,
     });
     this.#definitions.set(def, handle);
     return handle;
