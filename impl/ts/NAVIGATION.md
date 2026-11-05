@@ -18,6 +18,17 @@ Files, grammar, or lowering.
 - Tests and cases: [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts)
 - First check: `bun test impl/ts/tests/parser.test.ts impl/ts/tests/checker.test.ts`
 
+## New top-level declaration
+
+A declaration word such as `constant` or `shape` touches every stage; `rg -n -w "'constant'" impl/ts/src tools/grammar` finds each site to mirror.
+
+- Parsing: `DECLARATION_WORDS` and the declaration's parse in [parser.ts](src/parser.ts), its node in [syntax.ts](src/syntax.ts), and the [reference parser](../../tools/grammar/parser.ts)
+- Load checks: name roles and duplicate rules in [checker.ts](src/checker.ts); Library exports in [library.ts](src/library.ts)
+- Lowering and runtime: [lowering.ts](src/lowering.ts), constants in [machine.ts](src/machine.ts), the encoded form in [binary-value.ts](src/binary-value.ts)
+- Tooling views: the declaration node in [view.ts](src/view.ts), `:describe` in [describe.ts](src/session/describe.ts) and [host.ts](src/session/host.ts)
+- Grammar cases: the spec PR stages cases the Cores can't parse yet in [staged.talk](../../tools/grammar/staged.talk); each Core PR moves them into [broken.talk](../../tools/grammar/broken.talk), which [syntax-fixtures.test.ts](tests/syntax-fixtures.test.ts) reads
+- First check: `bun tools/grammar/check.ts && bun test impl/ts/tests/syntax-fixtures.test.ts impl/ts/tests/parser.test.ts impl/ts/tests/checker.test.ts`
+
 ## Lowering and execution
 
 - Implementation: [lowering](src/lowering.ts), [machine](src/machine.ts)

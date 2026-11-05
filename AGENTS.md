@@ -20,7 +20,7 @@ Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/a
 
 On a fresh worktree, run `bun install --frozen-lockfile && bun run unicode:check` before any test, lint or push.
 
-For implementation work, open the area's task map: [Go](impl/go/NAVIGATION.md), [Zig](impl/zig/NAVIGATION.md), [TS and tooling](impl/ts/NAVIGATION.md), [Elixir](impl/elixir/NAVIGATION.md) or [Folio](tooling/creative/NAVIGATION.md). These and this file are the only agent guides; [the layout](README.md#layout) covers the other directories. A language change (Data Files, grammar, lowering) also touches [the consumers in spec-changes.md](docs/agents/spec-changes.md).
+For implementation work, list the `## ` headings of the area's task map and read the matching section: [Go](impl/go/NAVIGATION.md), [Zig](impl/zig/NAVIGATION.md), [TS and tooling](impl/ts/NAVIGATION.md), [Elixir](impl/elixir/NAVIGATION.md) or [Folio](tooling/creative/NAVIGATION.md). These and this file are the only agent guides; [the layout](README.md#layout) covers the other directories. A language change (Data Files, grammar, lowering) also touches [the consumers in spec-changes.md](docs/agents/spec-changes.md).
 
 ### Review
 
