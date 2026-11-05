@@ -1,0 +1,53 @@
+# Unblessed: Scripts added to a session (#2124); first blessing awaits human review.
+# Scripts added beside the Session Script, reached only by message
+# (ADR 0170), and kept by :save and :restore.
+> :clock virtual 2026-09-30T10:00:00Z
+> on bump
+|   send increment to counter and wait
+|   say it
+| end bump
+> :script add counter
+| script variable n = 0
+| on increment
+|   add 1 to n
+|   return n
+| end increment
+| on doze
+|   wait 10 s
+| end doze
+> bump and wait
+1
+> :save
+saved default
+> bump and wait
+2
+> :restore
+restored default
+> bump and wait
+2
+> send missing to counter
+[counter/r3] ! unhandled missing []
+> send doze to counter
+> :runs
+counter/r4 suspended doze wait until 2026-09-30T10:00:10Z
+> :clock advance 10 s
+> :runs
+> :script add counter
+| on other
+| end other
+! name reused
+> :script add session
+| on other
+| end other
+! name reused
+> :script add broken
+| on f
+|   return nope
+| end f
+! unknown name at broken:2:10
+> :script replace counter
+| on f
+| end f
+! bad arguments
+> :script add later
+! bad arguments

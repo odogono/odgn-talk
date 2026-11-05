@@ -205,6 +205,7 @@ fn fileLines(io: std.Io, a: std.mem.Allocator, path: []const u8) ?[]const []cons
 }
 
 /// A command that names a file, `:library add|replace <name> <path>`,
+/// `:script add <name> <path>`,
 /// `:fix <run> <path>` or `:store load [<store>] <path>`, as the Session
 /// Host takes it: without the path, and with the file's lines.
 fn withFile(io: std.Io, a: std.mem.Allocator, input: transcript.Input) ?transcript.Input {
@@ -212,7 +213,7 @@ fn withFile(io: std.Io, a: std.mem.Allocator, input: transcript.Input) ?transcri
     var it = std.mem.tokenizeAny(u8, input.first, " \t");
     while (it.next()) |w| words.append(a, w) catch return null;
     const items = words.items;
-    const names_file = (items.len == 4 and std.mem.eql(u8, items[0], ":library")) or
+    const names_file = (items.len == 4 and (std.mem.eql(u8, items[0], ":library") or std.mem.eql(u8, items[0], ":script"))) or
         (items.len == 3 and std.mem.eql(u8, items[0], ":fix")) or
         (items.len >= 3 and items.len <= 4 and std.mem.eql(u8, items[0], ":store") and std.mem.eql(u8, items[1], "load"));
     if (!names_file or input.more.len > 0) return input;

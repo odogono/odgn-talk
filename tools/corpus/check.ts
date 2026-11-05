@@ -592,20 +592,23 @@ const checkCase = (dir: string) => {
   if (!setup.versions?.language || !setup.versions?.costModel) {
     problems.push(`${where}: [versions] needs language and costModel`);
   }
-  // A Session Transcript's Group holds the one Session Script (chapter 12).
-  const scripts = new Set<string>(
-    setup.kind === 'transcript' ? ['session'] : [],
-  );
-  // Its user Libraries are the ones its `:library add` lines add.
-  const libraries = new Set<string>(
+  // A Session Transcript's Group holds the Session Script and the Scripts its
+  // `:script add` lines add, and its user Libraries are the ones its
+  // `:library add` lines add (chapter 12).
+  const transcript =
     setup.kind === 'transcript' && existsSync(join(dir, 'session.transcript'))
-      ? [
-          ...readFileSync(join(dir, 'session.transcript'), 'utf8').matchAll(
-            /^> :library add (\S+)$/gmu,
-          ),
-        ].map(m => m[1]!)
-      : [],
+      ? readFileSync(join(dir, 'session.transcript'), 'utf8')
+      : '';
+  const added = (command: string) =>
+    [
+      ...transcript.matchAll(
+        new RegExp(String.raw`^> :${command} add (\S+)$`, 'gmu'),
+      ),
+    ].map(m => m[1]!);
+  const scripts = new Set<string>(
+    setup.kind === 'transcript' ? ['session', ...added('script')] : [],
   );
+  const libraries = new Set<string>(added('library'));
   for (const s of setup.scripts ?? []) {
     scripts.add(s.name);
     if (!existsSync(join(dir, s.source))) {
