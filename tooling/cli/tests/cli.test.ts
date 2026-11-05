@@ -922,3 +922,95 @@ test('diff-save names the variable two saves differ in, and dump-save prints one
   expect(dump.stdout).toContain('variable count (#0): number');
   expect(run(['diff-save', before]).code).toBe(2);
 });
+
+test('test replays the Documentation Examples of the manifest Libraries', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const manifest = join(dir, 'host.talk-manifest.json');
+  const strings = [
+    '--| `t` with `fill` added at the start until it is `width` long',
+    '--|',
+    '--| > use padLeft from strings',
+    '--| > padLeft("7", 3, "0")',
+    '--| "007"',
+    '--|',
+    '--| > use padLeft from strings',
+    '--| > padLeft("7", 2)',
+    '--| "07"',
+    'function padLeft t, width, fill = " "',
+    '  repeat while the length of t < width',
+    '    put fill & t into t',
+    '  end repeat',
+    '  return t',
+    'end padLeft',
+    '',
+    '--| > put 1 into kept',
+    '--| > kept',
+    '--| 1',
+    '--|',
+    '--| > kept',
+    '--| ! unknown name at 1:1',
+    'function shares',
+    'end shares',
+    '',
+    '--| > :save',
+    'function saving',
+    'end saving',
+    '',
+    '--| Prose only, with no example',
+    'function plain',
+    'end plain',
+    '',
+  ].join('\n');
+  const net = [
+    '--| > :mock net.get immediate',
+    '--| > :grant net net',
+    '--| > use fetchText from net',
+    '--| > :stub net.get "hi"',
+    '--| > fetchText("u")',
+    '--| call session/r1.c1 net.get ["u"]',
+    '--| "hi"',
+    'function fetchText url',
+    '  ask net to get url',
+    '  return it',
+    'end fetchText',
+    '',
+  ].join('\n');
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      kind: 'demo',
+      version: '1',
+      language: coreVersions.language,
+      grants: [],
+      libraries: [
+        { name: 'strings', source: strings },
+        { name: 'net', source: net },
+      ],
+      messages: [],
+      objects: [],
+      objectKinds: [],
+    }),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  const at = `${manifest}#strings`;
+  expect(stdout).toContain(`ok ${at} strings.padLeft example 1\n`);
+  expect(stdout).toContain(
+    [
+      `FAIL ${at}:9 strings.padLeft example 2`,
+      `  ${at}:9: the replay differs`,
+      '    expected: "07"',
+      '    actual:   " 7"',
+    ].join('\n'),
+  );
+  expect(stdout).toContain(`ok ${at} strings.shares example 1\n`);
+  expect(stdout).toContain(`ok ${at} strings.shares example 2\n`);
+  expect(stdout).toContain(
+    `FAIL ${at}:26 strings.saving example 1\n  an example may not use :save\n`,
+  );
+  expect(stdout).not.toContain('plain');
+  expect(stdout).toContain(`ok ${manifest}#net net.fetchText example 1\n`);
+  expect(stdout).toContain('4 passed, 2 failed');
+  const only = run(['test', '--manifest', manifest, '--only', 'padLeft', dir]);
+  expect(only.stdout).toContain('1 passed, 1 failed');
+});
