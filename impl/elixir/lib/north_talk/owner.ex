@@ -33,6 +33,7 @@ defmodule NorthTalk.Owner do
   @elements "object-elements-v1"
   @climb "climb-v1"
   @default_fuel_slice 10_000
+  @musical_clock "musical-clock"
 
   defstruct [
     :transport,
@@ -70,8 +71,10 @@ defmodule NorthTalk.Owner do
     calls: %{},
     monitors: %{},
     deferred: %{},
-    # While a restore asks for Grants: how the caller rebinds them.
+    # While a restore asks for Grants: how the caller rebinds them, and the
+    # restored Group's musical clock.
     restoring: nil,
+    restoring_clock: nil,
     # While a restore asks for Host Objects: how the caller resolves them.
     resolving: nil,
     # Whether the Session negotiated object-elements-v1.
@@ -355,13 +358,13 @@ defmodule NorthTalk.Owner do
     fields = %{"group" => name, "name" => name, "trace" => Keyword.get(opts, :trace, false)}
     fields = if seed = opts[:seed], do: Map.put(fields, "seed", seed_field(seed)), else: fields
 
-    case exchange(state, "new-group", fields) do
-      {{:ok, _}, state} ->
-        state = put_in(state.groups[name], group_entry())
-        {:reply, {:ok, %Group{owner: self(), name: name}}, state}
-
-      {error, state} ->
-        {:reply, error, state}
+    with {:ok, clock} <- musical_clock(state, opts),
+         {{:ok, _}, state} <- exchange(state, "new-group", fields) do
+      state = put_in(state.groups[name], %{group_entry() | musical_clock: clock})
+      {:reply, {:ok, %Group{owner: self(), name: name}}, state}
+    else
+      {error, %__MODULE__{} = state} -> {:reply, error, state}
+      error -> {:reply, error, state}
     end
   end
 
@@ -374,6 +377,8 @@ defmodule NorthTalk.Owner do
       |> then(&if(capability.release, do: Map.put(&1, "release", true), else: &1))
       # A Standard factory's Operations get the Core's own checks.
       |> then(&if(capability.standard, do: Map.put(&1, "standard", capability.standard), else: &1))
+      # The Core checks a musical clock's fixed declaration (chapter 9).
+      |> then(&if(capability.musical_clock, do: Map.put(&1, "musicalClock", true), else: &1))
 
     case exchange(state, "define-capability", fields) do
       {{:ok, _}, state} -> {:reply, :ok, put_in(state.capabilities[capability.name], capability)}
@@ -401,9 +406,10 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:load, %Group{name: g}, name, source, opts}, _from, state) do
-    grants = Map.new(Keyword.get(opts, :grants, %{}))
+    given = Map.new(Keyword.get(opts, :grants, %{}))
 
-    with :ok <- own_grants(grants),
+    with :ok <- own_grants(given),
+         {:ok, grants} <- with_musical_clock(given, state.groups[g].musical_clock),
          {:ok, limits} <- limits(Keyword.get(opts, :limits, [])) do
       fields = %{
         "group" => g,
@@ -528,38 +534,9 @@ defmodule NorthTalk.Owner do
       "trace" => Keyword.get(opts, :trace, false)
     }
 
-    state = %{state | restoring: Keyword.get(opts, :grants, %{}), resolving: opts[:resolve_object]}
-    {reply, state} = exchange(state, "restore", fields)
-    state = %{state | restoring: nil, resolving: nil}
-
-    case reply do
-      {:ok, ok} ->
-        pending = Enum.map(ok["pending"], &pending_call(state, name, &1))
-        entry = %{group_entry() | unsettled: MapSet.new(pending, & &1.call)}
-        state = put_in(state.groups[name], entry)
-        state = settle_all(state, name, Enum.map(ok["reports"] || [], &report(state, name, &1)))
-
-        restored = %Restored{
-          group: %Group{owner: self(), name: name},
-          variables_only: ok["variablesOnly"],
-          reloaded: plain(ok["reloaded"] || []),
-          pending: pending,
-          disposed: plain(ok["disposed"]),
-          discarded_runs: plain(ok["discardedRuns"]),
-          dropped_messages: plain(ok["droppedMessages"]),
-          abandoned_calls: plain(ok["abandonedCalls"])
-        }
-
-        {:reply, {:ok, restored}, release_held(state, name)}
-
-      error ->
-        # Bindings and Host Objects the resolve recorded belong to no Group.
-        {:reply, error,
-         %{
-           state
-           | bindings: Map.reject(state.bindings, &match?({{^name, _, _}, _}, &1)),
-             objects: Map.reject(state.objects, &match?({{^name, _, _}, _}, &1))
-         }}
+    case musical_clock(state, opts) do
+      {:ok, clock} -> restore(state, name, fields, clock, opts)
+      error -> {:reply, error, state}
     end
   end
 
@@ -957,7 +934,39 @@ defmodule NorthTalk.Owner do
     end
   end
 
-  defp group_entry, do: %{timer: nil, queued: false, unsettled: MapSet.new()}
+  defp group_entry, do: %{timer: nil, queued: false, unsettled: MapSet.new(), musical_clock: nil}
+
+  # The Group's musical clock: a Grant of this owner's musical clock
+  # Capability with `wait` granted, or nil (chapter 9, The musical clock).
+  defp musical_clock(state, opts) do
+    me = self()
+
+    case opts[:musical_clock] do
+      nil ->
+        {:ok, nil}
+
+      %Grant{owner: ^me, capability: name} = grant ->
+        case state.capabilities[name] do
+          %Capability{musical_clock: true} ->
+            {:ok, grant}
+
+          _ ->
+            {:error, %HostError{code: "invalid value", detail: "a musical clock comes from Capability.musical_clock/2"}}
+        end
+
+      other ->
+        {:error,
+         %HostError{code: "invalid value", detail: "#{inspect(other)} is not a musical clock Grant of this owner"}}
+    end
+  end
+
+  # A Script's Grants with the Group's musical clock under its reserved
+  # name, which the Host's own Grants can't use.
+  defp with_musical_clock(given, _clock) when is_map_key(given, @musical_clock),
+    do: {:error, %HostError{code: "invalid value", detail: "#{inspect(@musical_clock)} is a reserved Grant name"}}
+
+  defp with_musical_clock(given, nil), do: {:ok, given}
+  defp with_musical_clock(given, clock), do: {:ok, Map.put(given, @musical_clock, clock)}
 
   # A restored Group isn't pumped automatically until every pending call is
   # settled, since its first Pump fails each one still unsettled.
@@ -1198,7 +1207,53 @@ defmodule NorthTalk.Owner do
 
   defp answer(state, _g, need, _args), do: {%{"m" => "#{need["m"]}-result"}, state}
 
+  defp restore(state, name, fields, clock, opts) do
+    state = %{
+      state
+      | restoring: Keyword.get(opts, :grants, %{}),
+        restoring_clock: clock,
+        resolving: opts[:resolve_object]
+    }
+
+    {reply, state} = exchange(state, "restore", fields)
+    state = %{state | restoring: nil, restoring_clock: nil, resolving: nil}
+
+    case reply do
+      {:ok, ok} ->
+        pending = Enum.map(ok["pending"], &pending_call(state, name, &1))
+        entry = %{group_entry() | unsettled: MapSet.new(pending, & &1.call), musical_clock: clock}
+        state = put_in(state.groups[name], entry)
+        state = settle_all(state, name, Enum.map(ok["reports"] || [], &report(state, name, &1)))
+
+        restored = %Restored{
+          group: %Group{owner: self(), name: name},
+          variables_only: ok["variablesOnly"],
+          reloaded: plain(ok["reloaded"] || []),
+          pending: pending,
+          disposed: plain(ok["disposed"]),
+          discarded_runs: plain(ok["discardedRuns"]),
+          dropped_messages: plain(ok["droppedMessages"]),
+          abandoned_calls: plain(ok["abandonedCalls"])
+        }
+
+        {:reply, {:ok, restored}, release_held(state, name)}
+
+      error ->
+        # Bindings and Host Objects the resolve recorded belong to no Group.
+        {:reply, error,
+         %{
+           state
+           | bindings: Map.reject(state.bindings, &match?({{^name, _, _}, _}, &1)),
+             objects: Map.reject(state.objects, &match?({{^name, _, _}, _}, &1))
+         }}
+    end
+  end
+
   # A restore's Grant for one Script's name, or nil to restore it revoked.
+  # The musical clock re-binds to the restored Group's own, never the
+  # caller's Grants.
+  defp rebind(%{restoring_clock: clock}, _script, @musical_clock), do: clock
+
   defp rebind(state, script, name) do
     me = self()
 
