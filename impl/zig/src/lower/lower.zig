@@ -558,6 +558,16 @@ const Lowerer = struct {
             }
             try f.testPattern(p, @intCast(i + 1), fail, .direct, false);
         }
+        // Each Clause Shape tests its whole argument as `is a` does, after
+        // every pattern and before the Guard (ADR 0171).
+        for (h.shapes, 0..) |shape, i| if (shape) |k| {
+            try f.load(@intCast(i + 1), k.is);
+            if (!k.kind.civil_date and l.isShape(l.text(k.kind.name))) {
+                try f.loadShape(l.text(k.kind.name), k.is);
+                try f.emit(.call_builtin, &.{ .{ .text = "conforms" }, .{ .int = 2 } }, k.is, "");
+            } else try f.emit(.is_kind, &.{.{ .text = try f.kindText(k.kind) }}, k.is, "");
+            try f.jump(.branch_false, fail, k.is);
+        };
         if (h.guard) |g| try f.guard(g, fail);
         if (f.pc() > start) try f.body.unwind.append(f.l.work(), .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
         const guard_entry = if (f.pc() > start) f.body.unwind.items.len - 1 else null;

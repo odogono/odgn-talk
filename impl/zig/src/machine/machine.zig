@@ -4917,6 +4917,9 @@ pub const Group = struct {
             run.clause = b.clause orelse 1;
             if (try g.tryClause(s, run, place.library, @intCast(i), &.{message}, true)) |end| return end;
         }
+        // No Fallback clause took it either: the Run wasn't started by the
+        // Fallback (ADR 0064).
+        run.fallback = false;
         return .unhandled;
     }
 

@@ -69,6 +69,8 @@ pub const Handler = struct {
     /// The Argument Labels, in order; with them the name makes the Selector.
     labels: []const Tok,
     params: []const *Pattern,
+    /// Each parameter's Clause Shape, `p is a S`, or null (ADR 0171).
+    shapes: []const ?ClauseShape,
     guard: ?Guard,
     /// `queued`, `dropping`, `replacing`, `deciding` and `during`, in order.
     suffixes: []const Tok,
@@ -78,6 +80,10 @@ pub const Handler = struct {
     finally: ?Finally,
     end: Tok,
 };
+
+/// A Clause Shape: `is a` and a kind or Shape name after a Handler
+/// parameter. `not` parses so the loader can refuse it (ADR 0171).
+pub const ClauseShape = struct { is: Tok, not: ?Tok, kind: Kind };
 
 pub const Finally = struct { keyword: Tok, body: Block };
 
