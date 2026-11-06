@@ -31,7 +31,7 @@ type Results = {
   'textDocument/references': Location[];
   'textDocument/rename': { changes: Record<string, TextEdit[]> };
 };
-type Published = { diagnostics: LspDiagnostic[] };
+type Published = { diagnostics: LspDiagnostic[]; uri?: string };
 const uri = 'file:///workspace/main.talk';
 const manifest = {
   kind: 'demo',
@@ -2253,5 +2253,78 @@ describe('named Shapes', () => {
       expect.arrayContaining(['Line', 'Order', '"text"', '"civil date"']),
     );
     expect(items.find(i => i.label === 'Line')?.detail).toBe('shape');
+  });
+});
+
+const shop = (extra = '') =>
+  [
+    'shape Line is {sku: text, qty: number}',
+    'on route item is a Line to place is a number',
+    ' return place',
+    'end route',
+    'on route item is a text to place is a text',
+    ' return place',
+    'end route',
+    extra,
+  ].join('\n');
+const open = (source: string, implementor = shop()) => {
+  const harness = setup(source);
+  harness.server.configure({
+    sources: [{ uri: 'file:///workspace/shop.talk', text: implementor }],
+  });
+  const published = () =>
+    harness.sent
+      .filter(m => m.method === 'textDocument/publishDiagnostics')
+      .map(m => m.params as Published)
+      .filter(p => p.uri === uri)
+      .at(-1)!
+      .diagnostics.filter(d => d.code === 'send-fits-no-clause');
+  return { ...harness, published };
+};
+describe('a Script message interface from its Clause Shapes', () => {
+  test('hovers a send with the Clauses that may answer it', () => {
+    const { request } = open(
+      'on demo b\n send to b: route "a" to 4\nend demo\n',
+    );
+    expect(request('textDocument/hover', at(1, 13)).contents.value).toBe(
+      'shop:\n  on route item is a Line to place is a number\n  on route item is a text to place is a text',
+    );
+  });
+  test('completes a workspace Script message after send', () => {
+    const { request } = open('on demo b\n send to b: \nend demo\n');
+    const items = request('textDocument/completion', at(1, 12));
+    expect(items.find(i => i.label === 'route arg1 to arg2')).toMatchObject({
+      detail: 'on route item is a Line to place is a number',
+    });
+  });
+  test('warns when literal arguments fit no Clause Shape', () => {
+    for (const [args, warns] of [
+      ['"a" to 4', true],
+      ['{sku: "a", qty: 1} to 4', false],
+      ['{sku: "a"} to 4', true],
+      ['"a" to "b"', false],
+      ['x to 4', false],
+      ['[1] to nothing', true],
+    ] as const) {
+      const { published } = open(
+        `on demo b, x\n send to b: route ${args} to b\nend demo\n`.replace(
+          ' to b\nend',
+          '\nend',
+        ),
+      );
+      expect([args, published().length > 0]).toEqual([args, warns]);
+    }
+  });
+  test('a Fallback Handler or a different arity keeps the Lint quiet or warns', () => {
+    const source = 'on demo b\n send to b: route "a" to 4\nend demo\n';
+    expect(
+      open(
+        source,
+        shop('on any message m\n return 1\nend any message'),
+      ).published(),
+    ).toEqual([]);
+    expect(
+      open('on demo b\n send route with 1 to b\nend demo\n').published(),
+    ).toHaveLength(0);
   });
 });

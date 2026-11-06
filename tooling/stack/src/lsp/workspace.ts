@@ -19,6 +19,7 @@ import {
   type CompiledScript,
 } from '@northtalk/ts';
 import { lintSyntax, type Lint, type LintProfile } from '../lint';
+import { addSendLints } from './interface';
 import { grantDeclarations, type HostManifest } from './manifest';
 import { rangeAt, type LspDiagnostic } from './protocol';
 
@@ -550,6 +551,7 @@ const analyze = (
       }
     }
   }
+  addSendLints(out, manifest, profile);
   return out;
 };
 export const bindingKey = (analysis: Analysis, binding: Binding): string => {

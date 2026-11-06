@@ -288,6 +288,23 @@ with no extra fields; the reader checks its parts and argument count and uses
 argument placeholders in completion. Between arguments, completion offers the
 next matching label. Legacy `send` completion offers only unlabelled messages.
 
+A Script's message interface comes from its Handler Clauses and their Clause
+Shapes ([ADR 0171](../../docs/adr/0171-a-handler-clause-may-require-a-shape-of-a-parameter.md),
+[#2059](https://github.com/odogono/odgn-talk/issues/2059)), without a Host
+Manifest ([`src/lsp/interface.ts`](src/lsp/interface.ts)). The Host sets the
+Message Path at run time, so a `send` is matched by Selector against every
+workspace Script, as Find References is. Completion after `send` offers each
+other Script's messages, with the first Clause head as detail and every head as
+documentation. Hovering a `send`'s message lists the other Scripts' Clause heads
+that may answer it. The sender's own Handlers stay with Command Calls and
+definition. The `send-fits-no-clause` Lint warns when a `send`'s literal
+arguments fit no Clause of any workspace Script answering its message. It only
+claims a mismatch it can prove from literals, checked against local Shapes, and
+`tests/interface.test.ts` checks each warning against the Core's `is a`. A
+Fallback Handler in an answering Script, a message the Host Manifest declares,
+or a spread argument keeps it quiet. A Clause Shape, like a Guard, also stops a
+clause from making later ones `unreachable-clause`.
+
 An Operation Declaration's `labels` ([ADR 0115](../../docs/adr/0115-operation-declarations-may-declare-argument-labels.md))
 make its dictionary entry the labelled call, `ask world to move ‹text› to
 ‹text›`. Between an `ask`, `tell` or `tell` block line's arguments, completion

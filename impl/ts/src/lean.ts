@@ -119,6 +119,8 @@ export {
 export { encodeValue } from './encoding';
 /** Chapter 3's kind names, as `kindOf` gives them and `is a` tests them. */
 export { kindNames } from './constructs';
+/** Each loaded Shape declaration's data, for tooling (ADR 0168). */
+export { shapeData, type ShapeData } from './shapes';
 export { decodeJson, encodeJson } from './json';
 export { coreVersions, type Versions } from './versions';
 export { createCore, type TsCore } from './core';
