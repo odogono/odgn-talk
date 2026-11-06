@@ -78,6 +78,13 @@ describe('the TextMate grammar', () => {
     );
   });
 
+  test('scopes a Clause Shape in a Handler head as is a in an expression', () => {
+    const head = tokenize('on route item is a Line to place is a number');
+    const expression = tokenize('  put item is a Line into y');
+    expect(head.slice(3, 6)).toEqual(expression.slice(2, 5));
+    expect(head[6]).toEqual(['to', 'keyword.other.northtalk']);
+  });
+
   test('scopes the Fallback Handler', () => {
     const source = 'on any message m\n  pass any message\nend any message';
     expect(tokenize(source)).toEqual([

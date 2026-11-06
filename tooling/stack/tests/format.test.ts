@@ -298,6 +298,16 @@ test('keeps the labelled or positional form an Operation call is written in', ()
   );
 });
 
+test('prints one spelling of a Clause Shape in a Handler head', () => {
+  expect(
+    formatSource(
+      'shape Line is {sku: text}\non route item  is   an Line to place is a  number where place > 0\nreturn place\nend route\n',
+    ).source,
+  ).toBe(
+    'shape Line is {sku: text}\non route item is an Line to place is a number where place > 0\n  return place\nend route\n',
+  );
+});
+
 test('prints one spelling of a named Shape, spacing its grouping brackets', () => {
   const source = [
     'shape Line   is {sku:text,qty : number}',
