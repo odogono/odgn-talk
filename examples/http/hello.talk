@@ -2,23 +2,57 @@
 -- `curl localhost:3000/users/7`. `--port` or PORT picks another port.
 use decodeText from bytes
 
+--| Serves the site on port 3000, and says the port it got
+--|
+--| > :mock http.serve suspending
+--| > :mock http.respond immediate
+--| > send start with [] to hello
+--| [hello/r1] call hello/r1.c1 http.serve ["site", "/", "httpRequest", {port: 3000}]
+--| > :answer hello/r1.c1 {port: 3000}
+--| [hello/r1] listening on 3000
 on start args
   ask http to serve "site", "/", "httpRequest", {port: 3000} and wait
   say "listening on " & the port of it
 end start
 
+--| Answers the root path with "hello"
+--|
+--| > :mock http.serve suspending
+--| > :mock http.respond immediate
+--| > :stub http.respond nothing
+--| > send httpRequest with {method: "GET", segments: [], exchange: "x1"} to hello and wait
+--| [hello/r1] call hello/r1.c1 http.respond ["x1", {body: "hello"}]
 on httpRequest {method: "GET", segments: [], exchange: x}
   ask http to respond x, {body: "hello"}
 end httpRequest
 
+--| Answers `/users/<id>` with the id as JSON
+--|
+--| > :mock http.serve suspending
+--| > :mock http.respond immediate
+--| > :stub http.respond nothing
+--| > send httpRequest with {method: "GET", segments: ["users", "7"], exchange: "x1"} to hello and wait
+--| [hello/r1] call hello/r1.c1 http.respond ["x1", {json: {id: "7"}}]
 on httpRequest {method: "GET", segments: ["users", id], exchange: x}
   ask http to respond x, {json: {id: id}}
 end httpRequest
 
+--| Echoes a POST body back as text, with status 201
+--|
+--| > :mock http.serve suspending
+--| > :mock http.respond immediate
+--| > use encodeText from bytes
+--| > :stub http.respond nothing
+--| > send httpRequest with {method: "POST", segments: ["echo"], body: encodeText("hi"), exchange: "x1"} to hello and wait
+--| [hello/r1] call hello/r1.c1 http.respond ["x1", {status: 201, body: "hi"}]
 on httpRequest {method: "POST", segments: ["echo"], body: b, exchange: x}
   ask http to respond x, {status: 201, body: decodeText(b)}
 end httpRequest
 
--- Returns without responding, so the Host answers 500.
+--| Returns without responding, so the Host answers 500
+--|
+--| > :mock http.serve suspending
+--| > :mock http.respond immediate
+--| > send httpRequest with {method: "GET", segments: ["never"], exchange: "x1"} to hello and wait
 on httpRequest {method: "GET", segments: ["never"]}
 end httpRequest
