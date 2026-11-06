@@ -10,6 +10,12 @@ on start nick
   send join with "#talk", nick, inbox to server and wait
 end start
 
+--| Says a line the server pushed, after its sender's nick
+--|
+--| > :mock peer.reach suspending
+--| > :mock peer.expose suspending
+--| > send said with "#talk", "ann", "hello" to page and wait
+--| [page/r1] ann: hello
 on said channel, nick, line
   say nick & ": " & line
 end said

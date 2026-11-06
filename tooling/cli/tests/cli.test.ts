@@ -1108,3 +1108,16 @@ test("test replays the Documentation Examples on a Script's Handlers", () => {
   const file = run(['test', '--only', 'increment', counter]);
   expect(file.stdout).toContain('2 passed, 0 failed');
 });
+
+// The examples and lowering.talk carry Handler examples (#2159), so they
+// can't go stale.
+test("the repo's Handler Documentation Examples pass", () => {
+  const repo = resolve(import.meta.dir, '../../..');
+  const { code, stdout } = run([
+    'test',
+    join(repo, 'examples'),
+    join(repo, 'tools/machine/lowering.talk'),
+  ]);
+  expect(stdout).toContain('11 passed, 0 failed');
+  expect(code).toBe(0);
+});

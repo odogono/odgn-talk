@@ -39,6 +39,15 @@ end routing
 
 -- A repeat that collects its results (ADR 0059).
 
+--| Gives the names of the rows aged 18 or over
+--|
+--| > :mock weather.forecast suspending
+--| > on bump
+--| |   send collectingAdults with [{name: "Ann", age: 30}, {name: "Bo", age: 9}] to lowering and wait
+--| |   say it
+--| | end bump
+--| > bump and wait
+--| ["Ann"]
 on collectingAdults rows
   repeat for each r in rows collecting the name of r into names
     if the age of r < 18 then next repeat
@@ -47,12 +56,30 @@ on collectingAdults rows
 end collectingAdults
 
 -- `collecting` is in the FOLLOW set, so `item` here is a variable, not a chunk.
+--| Gives each item of the list with "!" after it
+--|
+--| > :mock weather.forecast suspending
+--| > on bump
+--| |   send collectingLetters with ["h", "i"] to lowering and wait
+--| |   say it
+--| | end bump
+--| > bump and wait
+--| ["h!", "i!"]
 on collectingLetters item
   repeat for each c in item collecting c & "!" into shouted
   end repeat
   return shouted
 end collectingLetters
 
+--| Gives the products of two pairs, and the squares of 1 to 10
+--|
+--| > :mock weather.forecast suspending
+--| > on bump
+--| |   send collectingSquares to lowering and wait
+--| |   say it
+--| | end bump
+--| > bump and wait
+--| [[2, 12], [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]]
 on collectingSquares
   repeat for each [k, v] in [[1, 2], [3, 4]] collecting k * v into products
   end repeat
@@ -76,6 +103,19 @@ on collectingRolls
 end collectingRolls
 
 -- The loop that only a `repeat` can write: its body waits for each element.
+--| Asks for each city's forecast in turn, and gives them in order
+--|
+--| > :mock weather.forecast suspending
+--| > on bump
+--| |   send collectingForecasts with ["Oslo", "Rome"] to lowering and wait
+--| |   say it
+--| | end bump
+--| > bump and wait
+--| [lowering/r1] call lowering/r1.c1 weather.forecast ["Oslo"]
+--| > :answer lowering/r1.c1 "sun"
+--| [lowering/r1] call lowering/r1.c2 weather.forecast ["Rome"]
+--| > :answer lowering/r1.c2 "rain"
+--| [session/r1] ["sun", "rain"]
 on collectingForecasts cities
   repeat for each city in cities collecting it into reports
     ask weather to forecast city and wait
@@ -84,6 +124,15 @@ on collectingForecasts cities
 end collectingForecasts
 
 -- A Lambda's body ends at `into`, since it isn't an operator.
+--| Gives a list of three functions, scaling by 1, 2 and 3
+--|
+--| > :mock weather.forecast suspending
+--| > on bump
+--| |   send collectingScalers to lowering and wait
+--| |   say the length of it
+--| | end bump
+--| > bump and wait
+--| 3
 on collectingScalers
   repeat for each n in [1, 2, 3] collecting given x: x * n into fs
   end
