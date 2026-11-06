@@ -11,8 +11,14 @@ import {
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
 import { clickAdvice } from './click-advice';
 import { patternDiagnostics, projectPatternNames } from './pattern-checks';
+import { musicSoundIn } from './sounds';
 import { readDictionary } from '@northtalk/tooling/dictionary';
-import { libraryUri, operationAt, readManifest } from '@northtalk/tooling/lsp';
+import {
+  libraryUri,
+  operationAt,
+  readManifest,
+  type LspDiagnostic,
+} from '@northtalk/tooling/lsp';
 import {
   codeWindow,
   languageServer,
@@ -118,6 +124,11 @@ export class CodeBrowser {
   #punchIn: (source: CodeSelection, text: string) => boolean = () => false;
   // Who hears which source the browser shows, as Perform's tabs do.
   #shown: (source: CodeSelection, label: string) => void = () => {};
+  // Who copies a Music sound into the Project, for the missing-sound quick
+  // fix (#1963), and the shown source's last language-server diagnostics.
+  #addMusicSound: (key: string) => Promise<void> = async () => {};
+  #soundsShown = '';
+  #found: { diagnostics: readonly LspDiagnostic[]; uri: string } | undefined;
   readonly dictionary = new DictionaryWindow();
 
   constructor(
@@ -368,22 +379,8 @@ export class CodeBrowser {
       if (uri !== this.#uri()) {
         return;
       }
-      const text = view.state.doc.toString();
-      const diagnostics = [
-        ...found,
-        ...clickAdvice(text),
-        ...patternDiagnostics(text, projectPatternNames(this.editor.project)),
-      ];
-      view.dispatch(diagnosticsSpec(view.state, diagnostics));
-      problems.classList.toggle(
-        'bad',
-        diagnostics.some(d => d.severity === 1),
-      );
-      problems.textContent = diagnostics.length
-        ? diagnostics
-            .map(d => `Line ${d.range.start.line + 1}: ${d.message}`)
-            .join('\n')
-        : '✓ No problems';
+      this.#found = { diagnostics: found, uri };
+      this.#showDiagnostics();
     };
     win.close.addEventListener('click', () => {
       closeRecipePicker(recipes);
@@ -393,6 +390,61 @@ export class CodeBrowser {
     this.sync();
     server.lsp.open(this.#uri(), this.#text());
     return browser;
+  }
+
+  onAddMusicSound(add: (key: string) => Promise<void>): void {
+    this.#addMusicSound = add;
+  }
+
+  // Shows the language server's diagnostics with Folio's own checks, which
+  // follow the Project's sounds.
+  #showDiagnostics(): void {
+    const win = this.#window;
+    if (!win) {
+      return;
+    }
+    const { problems, view } = win;
+    const found =
+      this.#found?.uri === this.#uri() ? this.#found.diagnostics : [];
+    const text = view.state.doc.toString();
+    this.#soundsShown = this.#sounds();
+    const diagnostics = [
+      ...found,
+      ...clickAdvice(text),
+      ...patternDiagnostics(text, projectPatternNames(this.editor.project)),
+    ];
+    view.dispatch(
+      diagnosticsSpec(view.state, diagnostics, d => this.#fixes(d)),
+    );
+    problems.classList.toggle(
+      'bad',
+      diagnostics.some(d => d.severity === 1),
+    );
+    problems.textContent = diagnostics.length
+      ? diagnostics
+          .map(d => `Line ${d.range.start.line + 1}: ${d.message}`)
+          .join('\n')
+      : '✓ No problems';
+  }
+
+  #sounds(): string {
+    return [...projectPatternNames(this.editor.project).sounds].join('\n');
+  }
+
+  // A missing Music sound's quick fix copies it in as one undoable edit.
+  #fixes(diagnostic: LspDiagnostic) {
+    const key =
+      diagnostic.code === 'mini-notation' && !this.editor.readOnly
+        ? musicSoundIn(diagnostic.message)
+        : undefined;
+    return key === undefined
+      ? []
+      : [
+          {
+            name: `Add “${key}” from Music`,
+            apply: () => void this.#addMusicSound(key),
+          },
+        ];
   }
 
   /** Every Script's and Library's Breakpoints, in shown or saved editors. */
@@ -777,6 +829,9 @@ export class CodeBrowser {
           changes: { from: 0, to: win.view.state.doc.length, insert: text },
         });
         win.server.lsp.change(this.#uri(), text);
+      } else if (this.#soundsShown !== this.#sounds()) {
+        // Adding or removing a sound changes the pattern checks (#1963).
+        this.#showDiagnostics();
       }
     } finally {
       this.#syncing = false;

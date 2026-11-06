@@ -16,7 +16,12 @@ import {
   indentWithTab,
 } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint';
+import {
+  lintGutter,
+  setDiagnostics,
+  type Action,
+  type Diagnostic,
+} from '@codemirror/lint';
 import {
   StateEffect,
   StateField,
@@ -308,10 +313,14 @@ export const onEdits = (hook: typeof editHook) => {
   editHook = hook;
 };
 
-/** The language server's diagnostics, as a CodeMirror transaction. */
+/**
+ * The language server's diagnostics, as a CodeMirror transaction. A page
+ * may offer quick fixes on some of them through `actions`.
+ */
 export const diagnosticsSpec = (
   state: EditorState,
   diagnostics: readonly LspDiagnostic[],
+  actions: (diagnostic: LspDiagnostic) => readonly Action[] = () => [],
 ) =>
   setDiagnostics(
     state,
@@ -325,6 +334,7 @@ export const diagnosticsSpec = (
         d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
       message: `${d.message} (${d.code})`,
       source: d.source,
+      actions: [...actions(d)],
     })),
   );
 

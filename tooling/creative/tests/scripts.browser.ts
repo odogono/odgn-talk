@@ -1,4 +1,5 @@
 // Run on a dedicated page without main.js; see README.md.
+import { forEachDiagnostic, type Diagnostic } from '@codemirror/lint';
 import { EditorView } from '@codemirror/view';
 import { createElement, createProject } from '../src/model';
 import { mountStack } from '../src/stack';
@@ -35,6 +36,11 @@ const choose = async (win: HTMLElement, label: string) => {
   buttonIn(win, label)!.click();
 };
 const tick = () => new Promise(requestAnimationFrame);
+const diagnosticsIn = (view: EditorView) => {
+  const found: Diagnostic[] = [];
+  forEachDiagnostic(view.state, d => found.push(d));
+  return found;
+};
 const source =
   'on click {button: 0}\n  put the label of button1 into message\nend click\n';
 const open = (name: string, shiftKey = false) => {
@@ -566,6 +572,40 @@ export const runBrowserTests = async () => {
     assert(!away.defaultPrevented, 'Elsewhere keeps the browser menu');
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: '' },
+    });
+  });
+  await test('a missing Music sound offers an editor quick fix (#1963)', async () => {
+    shell.openScript(shell.editor.project);
+    const win = windows()[0]!;
+    const view = viewOf(win);
+    const original = view.state.doc.toString();
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: 'on go\n  play "bd zz"\nend go\n',
+      },
+    });
+    const fixes = () => diagnosticsIn(view).flatMap(d => d.actions ?? []);
+    await until(() => fixes().length === 1);
+    assert(fixes()[0]!.name === 'Add “bd” from Music', 'Fix names bd');
+    assert(
+      diagnosticsIn(view).some(d => d.message.includes('“zz”')),
+      'A sound Music lacks is still reported',
+    );
+    const before = shell.editor.project.assets.length;
+    fixes()[0]!.apply(view, 0, 0);
+    await until(() => shell.editor.project.assets.some(a => a.name === 'bd'));
+    await until(() => fixes().length === 0);
+    assert(
+      shell.editor.project.assets.length === before + 1,
+      'The fix adds one sound',
+    );
+    shell.editor.undo();
+    shell.redraw();
+    await until(() => fixes().length === 1);
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: original },
     });
   });
   await test('text gestures, close, read-only and Project replacement', () => {
