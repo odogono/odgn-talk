@@ -1,9 +1,11 @@
 name: Benchmark page
 
-# Runs the whole Benchmark Suite on a shared runner and lands the page at
-# docs/benchmarks.html, with the run's results under bench/results/, through a
-# PR (#1485). Its timings are advisory, never a gate (ADR 0054). A failed run,
-# such as Fuel differing between the Cores, uploads the page and opens no PR.
+# Runs the whole Benchmark Suite on a shared runner and lands the run's results
+# under bench/results/ through a PR (#1485). Merging it redeploys
+# northtalk.org, whose /benchmarks/ page shows the latest complete CI run
+# (ADR 0173). Its timings are advisory, never a gate (ADR 0054). A failed run,
+# such as Fuel differing between the Cores, uploads the page and its results
+# and opens no PR.
 #
 # Approving and merging the PR needs a second identity, since a workflow can't
 # approve its own PR. Once per repository:
@@ -57,7 +59,7 @@ jobs:
           FILTER: ${{ inputs.filter }}
           ONLY: ${{ inputs.only }}
         run: |
-          args=(--count "$COUNT" --html docs/benchmarks.html)
+          args=(--count "$COUNT" --html .cache/benchmarks.html)
           if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
           if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
           bun run bench "${args[@]}"
@@ -67,7 +69,7 @@ jobs:
         with:
           name: benchmark-page-${{ github.run_id }}
           path: |
-            docs/benchmarks.html
+            .cache/benchmarks.html
             bench/results/
           if-no-files-found: ignore
       - name: Open the PR
@@ -83,12 +85,12 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$BRANCH"
-          git add docs/benchmarks.html bench/results/
-          git commit -m 'docs(repo): Refresh the benchmark page'
+          git add bench/results/
+          git commit -m 'docs(repo): Refresh the benchmark results'
           git push origin "$BRANCH"
           body="From [run $GITHUB_RUN_ID]($RUN_URL) on \`$GITHUB_SHA\`, with count ${COUNT}${FILTER:+, filter \`$FILTER\`}${ONLY:+, runners \`$ONLY\`}. The timings are advisory (ADR 0054)."
           url=$(gh pr create --base main --head "$BRANCH" \
-            --title 'docs(repo): Refresh the benchmark page' --body "$body")
+            --title 'docs(repo): Refresh the benchmark results' --body "$body")
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Approve and merge the PR
         env:

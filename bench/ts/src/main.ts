@@ -254,6 +254,13 @@ const results: Results = {
     cpu,
     memory: `${Math.round(totalmem() / 2 ** 30)} GiB`,
     os: platform(),
+    // Where the run happened, so northtalk.org publishes only CI runs (ADR 0173).
+    ...(process.env.GITHUB_ACTIONS === 'true'
+      ? {
+          ci: 'github-actions',
+          runUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+        }
+      : {}),
   },
   measurements,
   outlierFactor,
@@ -267,6 +274,7 @@ const results: Results = {
   settings: {
     count: flags.smoke ? 1 : Number(flags.count),
     filter,
+    only: flags.only ?? '',
     runners: runners.join(','),
     smoke: flags.smoke,
   },

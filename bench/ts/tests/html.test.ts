@@ -97,7 +97,12 @@ test('the page lists Fuel parity failures, outliers and skipped Benchmarks', () 
 test('the page loads nothing from elsewhere', () => {
   const page = html(results({ payload }));
   expect(page).not.toMatch(/\bsrc=/);
-  expect(page).not.toMatch(/href="https?:/);
+  expect(page).not.toMatch(/<link\b/);
+  // Links go to the repo on GitHub, since the page is read from a clone or on
+  // northtalk.org.
+  for (const [, href] of page.matchAll(/href="([^"]+)"/g)) {
+    expect(href).toStartWith('https://github.com/odogono/odgn-talk/');
+  }
 });
 
 test("the page and the Markdown show each Core's Payload only when it was measured", () => {

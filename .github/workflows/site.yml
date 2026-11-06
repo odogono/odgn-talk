@@ -23,6 +23,10 @@ on:
       - 'impl/*/README.md'
       - 'spec/*.md'
       - 'GLOSSARY.md'
+      # The /benchmarks/ page: the saved runs and the sections it embeds (ADR 0173).
+      - 'bench/results/*.json'
+      - 'bench/ts/src/html.ts'
+      - 'bench/ts/src/report.ts'
       - 'bun.lock'
       - '.github/workflows/site.yml'
   workflow_dispatch:

@@ -19,6 +19,8 @@ The site's prose is the repo's own Markdown. [`src/sources.ts`](src/sources.ts) 
 
 **A listed file is read in two places.** If you edit the tour, the spec, the Glossary or a Host guide, it must still read well on GitHub and on northtalk.org. Write relative links to repo files as usual; the sync rewrites them. To publish another file, add it to `src/sources.ts` and the sidebar in [`astro.config.mjs`](astro.config.mjs).
 
+The sync also picks the benchmark run that [`/benchmarks/`](src/pages/benchmarks.astro) shows, the latest complete CI run in `bench/results/` ([ADR 0173](../../docs/adr/0173-northtalk-org-shows-the-latest-ci-benchmark-run-as-advisory.md)), and writes it to the git-ignored `src/generated/benchmarks.json`. Before any run qualifies, the page says so.
+
 Site-only pages, such as the home page and the Examples page that links each Example Project in Folio, live in `src/content/docs/` itself. `talk` code blocks are highlighted with the [VS Code extension's grammar](../vscode/syntaxes/northtalk.tmLanguage.json).
 
 ## The Worker

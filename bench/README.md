@@ -64,9 +64,9 @@ node bench/ts/dist/measure-tooling.js [filter] [smoke]
 
 ## The benchmark page
 
-[`docs/benchmarks.html`](../docs/benchmarks.html) shows one run as a single page with no external resources: the Payload, Fuel parity, Cost Model outliers, a bar chart per Benchmark comparing each runner's Run median with its min–max range, and a sortable table of every measurement. Open it from a clone; GitHub shows its source.
+[northtalk.org/benchmarks/](https://northtalk.org/benchmarks/) shows the latest complete CI run ([ADR 0173](../docs/adr/0173-northtalk-org-shows-the-latest-ci-benchmark-run-as-advisory.md)): Fuel parity, the Payload, Cost Model outliers, a bar chart per Benchmark comparing each runner's Run median with its min–max range, and a sortable table of every measurement. A run counts as a CI run when its results record `machine.ci`, which the runner sets under GitHub Actions, and as complete when it had no `filter` or `only`. Local and partial runs stay here unpublished. The page's sections come from [`ts/src/html.ts`](ts/src/html.ts), which also renders any saved run as one self-contained file.
 
-The [Benchmark page workflow](../.github/workflows/bench-page.yml), run by hand from the Actions tab with optional `count`, `filter` and `only`, runs the suite on `ubuntu-latest` and opens a `docs(repo)` PR with the page and the run's results. Its timings come from a shared runner and are advisory, never a gate. A run that fails, such as on a Fuel difference, uploads the page as an artifact instead.
+The [Benchmark page workflow](../.github/workflows/bench-page.yml), run by hand from the Actions tab with optional `count`, `filter` and `only`, runs the suite on `ubuntu-latest` and opens a `docs(repo)` PR with the run's results. Merging it redeploys the site. Its timings come from a shared runner and are advisory, never a gate. A run that fails, such as on a Fuel difference, uploads the page and its results as an artifact instead.
 
 The workflow approves and auto-merges its PR with the `BENCH_PAGE_TOKEN` secret, a fine-grained token with Contents and Pull requests write on this repository, and needs "Allow auto-merge" and "Allow GitHub Actions to create and approve pull requests" turned on. Without the secret, the PR waits to be merged by hand.
 
@@ -76,7 +76,7 @@ To render a saved run again:
 bun run bench:html results/<run>.json [out.html]
 ```
 
-The output defaults to `docs/benchmarks.html`.
+The output defaults to `.cache/benchmarks.html`, which is git-ignored.
 
 ## Native Zig comparison
 
