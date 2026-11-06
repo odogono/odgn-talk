@@ -506,3 +506,5 @@ result-targets/completion-fuel
 result-targets/failures
 result-targets/join
 result-targets/ordinary
+fallback/clause-shapes
+load-diagnostics/negated-shape
