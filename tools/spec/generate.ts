@@ -1628,6 +1628,12 @@ const stdlibPages = (d: Data): Map<string, string> => {
       `# ${lib}`,
       '',
       `The \`${lib}\` Library is part of the Standard Library, so every Group holds it. A Script imports the names it uses, as in \`use ${first} from ${lib}\`. Its normative source is [\`spec/stdlib/${lib}.talk\`](@/spec/stdlib/${lib}.talk), and the full rules are in ${spec(lib)}.`,
+      ...(lib === 'units'
+        ? [
+            '',
+            'Units themselves need no import: a Script writes a Quantity as a number and a Unit, as in `5 km`, `440 Hz`, `2 semitones` or `wait 8 bars`. Every Unit, including the Musical Units `bar` and `beat`, is listed in [the Unit Catalogue](@/spec/03-values.md#the-unit-catalogue). This Library holds only the absolute temperature conversions, which Quantity arithmetic cannot do because Temperature Units are differences.',
+          ]
+        : []),
       '',
       kinds,
       '',

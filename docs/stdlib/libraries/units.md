@@ -4,6 +4,8 @@
 
 The `units` Library is part of the Standard Library, so every Group holds it. A Script imports the names it uses, as in `use celsiusToFahrenheit from units`. Its normative source is [`spec/stdlib/units.talk`](../../../spec/stdlib/units.talk), and the full rules are in [chapter 7](../../../spec/07-libraries-and-the-standard-library.md#units).
 
+Units themselves need no import: a Script writes a Quantity as a number and a Unit, as in `5 km`, `440 Hz`, `2 semitones` or `wait 8 bars`. Every Unit, including the Musical Units `bar` and `beat`, is listed in [the Unit Catalogue](../../../spec/03-values.md#the-unit-catalogue). This Library holds only the absolute temperature conversions, which Quantity arithmetic cannot do because Temperature Units are differences.
+
 An argument of the wrong kind raises `wrong kind` before any work is done, so the entries below list only the other errors each raises ([every stdlib function](../../../spec/07-libraries-and-the-standard-library.md#rules-for-every-stdlib-function)).
 
 ### celsiusToFahrenheit
