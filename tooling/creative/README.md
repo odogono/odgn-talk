@@ -52,6 +52,13 @@ A problem naming a sound the Project lacks but Music brings has an **Add
 [ADR 0161](../../docs/adr/0161-folio-projects-carry-their-own-sounds-and-start-from-a-base-project.md)
 (#2033). It copies the sound in as one undoable edit, and it is gone once
 the Project has that sound.
+A Script's message that no Handler Clause took warns `Unhandled message`
+with one line per clause saying why it passed the message by, read from the
+Trace's `mismatches` ([ADR 0172](../../docs/adr/0172-the-trace-explains-why-no-handler-clause-matched.md),
+[`mismatches.ts`](../stack/src/mismatches.ts)): `clause 1: argument 1 is
+text, not number`. Under each Script's buttons, Info lists the messages that
+Script answers as its Handler Clause heads, Clause Shapes included
+([`script-messages.ts`](src/script-messages.ts), #2059).
 The notice, save, storage, read-only, orphan, update and offline banners stay
 direct DOM: each sets its text and toggles `hidden`, with nothing to rebuild.
 

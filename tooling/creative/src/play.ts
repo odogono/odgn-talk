@@ -1,3 +1,7 @@
+import {
+  describeMismatches,
+  mismatchesOf,
+} from '@northtalk/tooling/mismatches';
 import type { CanvasCommand } from '@northtalk/tooling/canvas';
 import { Drawing, type DrawingChange, type DrawingMark } from './drawing';
 import { grantDeclarations, grantsFor, type GrantStates } from './grants';
@@ -273,6 +277,7 @@ export class PlaySession {
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
   #unhandledSender: string | undefined;
+  #mismatches: string[] = [];
   readonly problems: PlayProblem[] = [];
   readonly #objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
   readonly #authored = new Map<ScriptOwner, DeepReadonly<ScriptOwner>>();
@@ -1729,13 +1734,20 @@ export class PlaySession {
       this.#unhandledSender =
         ended[2] === 'unhandled' ? this.#senders.get(ended[1]!) : undefined;
       this.#senders.delete(ended[1]!);
+      // Why the receiver's clauses passed it by (ADR 0172).
+      this.#mismatches =
+        ended[2] === 'unhandled'
+          ? describeMismatches(mismatchesOf(line) ?? [])
+          : [];
     }
     const unhandled = /^unhandled message=(\S+)/u.exec(line);
     if (unhandled) {
+      const message = [unhandled[1]!, ...this.#mismatches].join('\n  ');
+      this.#mismatches = [];
       if (this.#unhandledSender) {
-        this.#warn(this.#unhandledSender, unhandled[1]!);
+        this.#warn(this.#unhandledSender, message);
       } else {
-        this.#pendingWarnings.push(unhandled[1]!);
+        this.#pendingWarnings.push(message);
       }
       this.#unhandledSender = undefined;
     }

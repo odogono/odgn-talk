@@ -42,6 +42,10 @@ import {
 import { sourceForm } from '@northtalk/ts/debug';
 import { calendar, locale } from '@northtalk/tooling/builtins';
 import {
+  describeMismatches,
+  mismatchesOf,
+} from '@northtalk/tooling/mismatches';
+import {
   docExamples,
   replayExample,
   scriptExamples,
@@ -370,6 +374,7 @@ class TestRun {
   private readonly timers = new Map<string, Timer>();
   private timersSet = 0;
   private readonly unhandled: string[] = [];
+  private readonly mismatches: string[][] = [];
   private advances: { call: Call<unknown>; to: bigint }[] = [];
   private answers: (() => void)[] = [];
   private now = EPOCH;
@@ -388,6 +393,10 @@ class TestRun {
         const name = /^unhandled (?:\S+ )?message=(\S+)/u.exec(line)?.[1];
         if (name) {
           this.unhandled.push(name);
+        }
+        // Why no clause took it, in the order the Runs end (ADR 0172).
+        if (/^run \S+ outcome=unhandled\b/u.test(line)) {
+          this.mismatches.push(describeMismatches(mismatchesOf(line) ?? []));
         }
       },
     });
@@ -550,8 +559,9 @@ class TestRun {
         });
       } else if (r.outcome === 'unhandled') {
         const name = this.unhandled.shift();
+        const why = this.mismatches.shift() ?? [];
         this.problems.push({
-          text: `${r.script} has no Handler for ${name ?? 'a message'}`,
+          text: `${r.script} has no Handler for ${name ?? 'a message'}${why.map(w => `\n  ${w}`).join('')}`,
         });
       } else {
         this.problems.push({

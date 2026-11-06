@@ -1,3 +1,4 @@
+import { scriptMessages } from './script-messages';
 import type { ReadonlySignal } from '@preact/signals';
 import { Fragment, render } from 'preact';
 import { useState } from 'preact/hooks';
@@ -146,6 +147,23 @@ const BindingFields = ({
   );
 };
 
+// The messages the Script answers, by Handler Clause head (#2059).
+const ScriptMessages = ({ source }: { source: string | undefined }) => {
+  const heads = scriptMessages(source);
+  return heads.length ? (
+    <details className="script-messages">
+      <summary>Messages ({heads.length})</summary>
+      <ul>
+        {heads.map((h, i) => (
+          <li key={i}>
+            <code>{h}</code>
+          </li>
+        ))}
+      </ul>
+    </details>
+  ) : null;
+};
+
 const InfoPanel = ({ editor, refusal }: InfoProps) => {
   const { project, pageIndex } = editor.state.value;
   const page = editor.currentPage.value.page;
@@ -155,8 +173,10 @@ const InfoPanel = ({ editor, refusal }: InfoProps) => {
   const scriptButtons = (
     owner: 'page' | 'project' | 'element',
     label: string,
+    source?: string,
   ) => (
     <>
+      <ScriptMessages source={source} />
       <button data-script={owner} data-view-only="" type="button">
         {label}
       </button>
@@ -186,7 +206,7 @@ const InfoPanel = ({ editor, refusal }: InfoProps) => {
         <h2>
           {kindOf(element).label} “{element.name}”
         </h2>
-        {scriptButtons('element', 'Edit Script')}
+        {scriptButtons('element', 'Edit Script', element.script)}
         <NameField
           current={element.name}
           disabled={disabled}
@@ -224,7 +244,7 @@ const InfoPanel = ({ editor, refusal }: InfoProps) => {
       <Fragment key={page.id}>
         <h2>Palette “{page.name}”</h2>
         <NameField current={page.name} disabled={disabled} refused={refused} />
-        {scriptButtons('page', 'Edit Palette Script')}
+        {scriptButtons('page', 'Edit Palette Script', page.script)}
         {field(
           'Title',
           input('paletteTitle', page.palette.title ?? '', disabled, 'text', {
@@ -283,7 +303,7 @@ const InfoPanel = ({ editor, refusal }: InfoProps) => {
         Page {pageIndex + 1} of {pageCount(project)}
       </h2>
       <NameField current={page.name} disabled={disabled} refused={refused} />
-      {scriptButtons('page', 'Edit Page Script')}
+      {scriptButtons('page', 'Edit Page Script', page.script)}
       <div className="row">
         {field(
           'Height',
@@ -340,7 +360,7 @@ const InfoPanel = ({ editor, refusal }: InfoProps) => {
         </button>
       </div>
       <h2>Project</h2>
-      {scriptButtons('project', 'Edit Project Script')}
+      {scriptButtons('project', 'Edit Project Script', project.script)}
       {field('Title', input('projectName', project.name, disabled))}
       {field(
         'Design width',

@@ -220,6 +220,30 @@ test('Host messages ending unhandled are ignored; Script messages warn with thei
   ]);
 });
 
+test('an unhandled Script message warns with why each clause passed it by', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = [
+    'on click',
+    ' send move with "e4" to me',
+    'end click',
+    'on move n is a number',
+    ' return n',
+    'end move',
+    'on move n where n is "a1"',
+    ' return n',
+    'end move',
+  ].join('\n');
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems).toMatchObject([
+    {
+      message:
+        "Unhandled message: move\n  clause 1: argument 1 is text, not number\n  clause 2: its Guard wasn't true",
+    },
+  ]);
+});
+
 // Navigation yields to the request's settlement between browser Pump turns.
 const advance = async (play: PlaySession, now = 0n) => {
   for (let i = 0; i < 100; i++) {
