@@ -1,0 +1,14 @@
+-- board.talk: a Clause Shape, a Guard that gives false, and a Fallback that
+-- takes only messages with at least two arguments.
+
+on move n is a number
+  return n
+end move
+
+on move n where n is "a1"
+  return "corner"
+end move
+
+on any message {args: [a, b, ...rest]}
+  return "fallback"
+end any message

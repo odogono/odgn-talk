@@ -10,7 +10,7 @@
 > broadcast b2 message=zap recipients=[t:d2]
 > pump clock=2026-10-07T09:00:00Z
 seg s/r1 start delivery=d1 broadcast=b1 handler=ping fuel=11 alloc=0 state=16 end=unhandled
-run s/r1 outcome=unhandled delivery=d1 broadcast=b1 handler=ping fuel=11 alloc=0
+run s/r1 outcome=unhandled delivery=d1 broadcast=b1 handler=ping mismatches=[{clause: 1, reason: "guard"}] fuel=11 alloc=0
 seg t/r1 start delivery=d2 broadcast=b2 handler=zap clause=1 fuel=17 alloc=16 state=16 end=return
 run t/r1 outcome=completed delivery=d2 broadcast=b2 handler=zap fuel=17 alloc=16
 pumped state=idle fuel=28

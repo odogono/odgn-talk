@@ -18,7 +18,7 @@ pumped state=idle fuel=52
 > request d4 to=s message=handle args=[{type: 1, amount: 5}]
 > pump clock=2026-11-05T09:00:03Z
 seg s/r4 start delivery=d4 handler=handle fallback=yes clause=1 fuel=103 alloc=16 state=16 end=return
-run s/r4 outcome=completed delivery=d4 handler=handle fallback=yes value="fallback" fuel=103 alloc=16
+run s/r4 outcome=completed delivery=d4 handler=handle fallback=yes value="fallback" mismatches=[{clause: 1, reason: "shape", argument: 1, mismatches: [{code: "wrong kind", expected: "text", got: "number", value: 1, path: ["type"]}]}, {clause: 2, reason: "shape", argument: 1, mismatches: [{code: "wrong kind", expected: "text", got: "number", value: 1, path: ["type"]}]}, {clause: 3, reason: "shape", argument: 1, mismatches: [{code: "wrong kind", expected: "number", got: "map", value: {type: 1, amount: 5}}]}] fuel=103 alloc=16
 pumped state=idle fuel=103
 > request d5 to=s message=move:to: args=["knight", 4]
 > pump clock=2026-11-05T09:00:04Z
@@ -28,7 +28,7 @@ pumped state=idle fuel=25
 > request d6 to=s message=move:to: args=["knight", "e4"]
 > pump clock=2026-11-05T09:00:05Z
 seg s/r6 start delivery=d6 handler=move:to: fuel=33 alloc=24 state=16 end=unhandled
-run s/r6 outcome=unhandled delivery=d6 handler=move:to: fuel=33 alloc=24
+run s/r6 outcome=unhandled delivery=d6 handler=move:to: mismatches=[{clause: 1, reason: "shape", argument: 2, mismatches: [{code: "wrong kind", expected: "number", got: "text", value: "e4"}]}] fuel=33 alloc=24
 unhandled d6 message=move:to: args=["knight", "e4"]
 pumped state=idle fuel=33
 > deliver d7 to=s message=go

@@ -1,0 +1,21 @@
+# Unblessed: Clause mismatches (#2149); first blessing awaits human review.
+> load board identity=e82ce88fd6afc980b079e194251f70cbd41018986b6a528914993ef604223521
+> load piece identity=fd91d1012379727c0a9b463c76d36f1a005262b51d2f9a1983edf54a3018a281
+> set-parent object=<object piece "knight"> parent=<object board "board">
+> deliver d1 to=<object piece "knight"> message=move args=["e4"]
+> pump clock=2026-11-06T09:00:00Z
+guard-skip piece/r1 at=piece:34 pos=13:18 code="wrong kind"
+seg piece/r1 start delivery=d1 handler=move fuel=50 alloc=0 state=0 end=unhandled
+run piece/r1 outcome=unhandled delivery=d1 handler=move mismatches=[{clause: 1, reason: "shape", argument: 1, mismatches: [{code: "wrong kind", expected: "map", got: "text", value: "e4"}]}, {clause: 2, reason: "pattern"}, {clause: 3, reason: "guard"}, {clause: 4, reason: "arity"}] fuel=50 alloc=0
+seg board/r1 start delivery=d1 handler=move fuel=35 alloc=8 state=0 end=unhandled
+run board/r1 outcome=unhandled delivery=d1 handler=move mismatches=[{clause: 1, reason: "shape", argument: 1, mismatches: [{code: "wrong kind", expected: "number", got: "text", value: "e4"}]}, {clause: 2, reason: "guard"}] fuel=35 alloc=8
+unhandled d1 message=move args=["e4"] target=<object piece "knight">
+pumped state=idle fuel=85
+> deliver d2 to=<object board "board"> message=move args=[5, 6]
+> pump clock=2026-11-06T09:00:01Z
+seg board/r2 start delivery=d2 handler=move fallback=yes clause=1 fuel=24 alloc=16 state=0 end=return
+run board/r2 outcome=completed delivery=d2 handler=move fallback=yes value="fallback" mismatches=[{clause: 1, reason: "arity"}, {clause: 2, reason: "arity"}] fuel=24 alloc=16
+pumped state=idle fuel=24
+> vars
+vars board
+vars piece

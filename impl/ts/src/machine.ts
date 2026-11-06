@@ -524,6 +524,16 @@ export const msOf = (us: bigint): Value => {
 };
 // A Library Constant's Function Values are templates until used by a Script.
 // Walk explicitly so nested constants and captures do not grow the JS stack.
+/** Why dispatch skipped a named clause (ADR 0172). */
+export type ClauseMismatch = {
+  argument?: number;
+  clause: number;
+  reason: 'arity' | 'pattern' | 'shape' | 'guard';
+  /** For `shape`, the Shape data the argument failed, if it is known. */
+  shape?: Value;
+  value?: Value;
+};
+
 const homeConstant = (root: Value, home: Script): Value => {
   if (root.kind !== 'function' && root.kind !== 'list' && root.kind !== 'map') {
     return root;
@@ -1504,6 +1514,17 @@ export class Run {
   private clause = 0;
   /** Its entry dispatch reached the Fallback Handler's clauses (ADR 0064). */
   private viaFallback = false;
+  /**
+   * Why dispatch skipped each named clause of the entry Delivery, for the
+   * Trace's `mismatches` (ADR 0172). Tooling-only, never saved or charged.
+   */
+  mismatches: ClauseMismatch[] = [];
+  // The last two instructions `step` started, so a `clause-fail` knows which
+  // dispatch test sent it there.
+  private stepFrame: Frame | null = null;
+  private stepPc = -1;
+  private priorFrame: Frame | null = null;
+  private priorPc = -1;
   private during: Value = nothing;
   /** Its Fuel when its cancellation cleanup began, if it has been cancelled. */
   private cleanupFrom: number | null = null;
@@ -2530,7 +2551,11 @@ export class Run {
     for (;;) {
       while (d.next < d.clauses.length) {
         const body = d.clauses[d.next++]!;
-        if (body.params.length === d.args.length) {
+        if (body.params.length !== d.args.length) {
+          if (!this.frames.length && !this.viaFallback) {
+            this.mismatches.push({ clause: body.clause ?? 0, reason: 'arity' });
+          }
+        } else {
           // The Run's clause is its entry Handler's, not a called Handler's.
           if (!this.frames.length) {
             this.clause = body.clause ?? 0;
@@ -2554,6 +2579,43 @@ export class Run {
       ];
       this.viaFallback = true;
     }
+  }
+
+  // Which dispatch test a failed clause's frame last ran: an instruction
+  // before its first Clause Shape is a pattern's, one of a Clause Shape's
+  // is that Shape's, and anything later, or in a function the Guard called,
+  // is the Guard's (ADR 0172).
+  private mismatchOf(frame: Frame): ClauseMismatch {
+    const clause = frame.body.clause ?? 0;
+    const tests = frame.body.tests;
+    const pc = this.priorFrame === frame ? this.priorPc : null;
+    if (!tests || pc === null || pc >= tests.guardAt) {
+      return { clause, reason: 'guard' };
+    }
+    let shape: (typeof tests.shapes)[number] | undefined;
+    for (const s of tests.shapes) {
+      if (s.at <= pc) {
+        shape = s;
+      }
+    }
+    if (!shape) {
+      return { clause, reason: 'pattern' };
+    }
+    const definition =
+      shape.definition === undefined
+        ? undefined
+        : frame.code.definitions[shape.definition];
+    return {
+      clause,
+      reason: 'shape',
+      argument: shape.arg + 1,
+      value: frame.dispatch!.args[shape.arg]!,
+      shape:
+        shape.kind !== undefined
+          ? text(shape.kind)
+          : definition &&
+            homeConstant(definition, this.script.home ?? this.script),
+    };
   }
 
   /** Whether a dispatch has a clause left to try after the current one. */
@@ -2734,6 +2796,10 @@ export class Run {
     const frame = this.frame;
     const ins = frame.code.unit.code[frame.pc]!;
     const rate = ins.rate;
+    this.priorFrame = this.stepFrame;
+    this.priorPc = this.stepPc;
+    this.stepFrame = frame;
+    this.stepPc = frame.pc;
     // Counts and subjects are instruction-local, including after a resumption.
     const m = this.m;
     resetMeasured(m);
@@ -6473,6 +6539,9 @@ export class Run {
           this.checkState();
         }
         this.pay(rate);
+        if (this.frames.length === 1 && !this.viaFallback) {
+          this.mismatches.push(this.mismatchOf(frame));
+        }
         const failed = this.frames.pop()!;
         const d = failed.dispatch!;
         if (this.dispatch(d)) {

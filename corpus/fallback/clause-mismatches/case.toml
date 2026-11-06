@@ -1,0 +1,38 @@
+# clause-mismatches: a Run no named clause matched carries `mismatches` on
+# its `run` record, with each named clause's reason: `arity`, `pattern`,
+# `shape` (with `explain`'s report) or `guard`, for a Guard that gave false
+# or raised (chapter 11, Clause mismatches; ADR 0172). An unmatched message
+# climbs, and each Script's Run explains its own clauses. A Fallback Run
+# carries it too, and the field adds no Fuel.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "board"
+parentKinds = []
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "board"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "board" }
+
+[[scripts]]
+name = "piece"
+source = "piece.talk"
+owner = { kind = "piece", id = "knight" }

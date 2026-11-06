@@ -331,6 +331,12 @@ class UnitLowering {
       if (body.acceptedAt !== undefined) {
         body.acceptedAt += body.start;
       }
+      if (body.tests) {
+        body.tests.guardAt += body.start;
+        for (const shape of body.tests.shapes) {
+          shape.at += body.start;
+        }
+      }
       for (const ins of this.code.get(body.index) ?? []) {
         const opcode = opcodes.get(ins.op);
         if (opcode === undefined) {
@@ -739,10 +745,21 @@ class BodyLowering {
     }
     // Each Clause Shape tests its whole argument as `is a` does, after every
     // pattern and before the Guard (ADR 0171).
+    const tests: NonNullable<Body['tests']> = { guardAt: 0, shapes: [] };
     for (const [i, s] of shapes.entries()) {
       if (s) {
-        this.emit(s.pos, 'load', args[i]!);
         const shape = this.namedShape(s.kind);
+        const definition = shape && this.u.definitionOf.get(shape.binding!);
+        tests.shapes.push({
+          arg: i,
+          at: this.code.length,
+          ...(shape
+            ? definition === undefined
+              ? {}
+              : { definition }
+            : { kind: s.kind }),
+        });
+        this.emit(s.pos, 'load', args[i]!);
         if (shape) {
           this.load(shape, s.pos);
           this.emit(s.pos, 'call-builtin', 'conforms', 2);
@@ -751,6 +768,10 @@ class BodyLowering {
         }
         this.emit(s.pos, 'branch-false', failed);
       }
+    }
+    tests.guardAt = this.code.length;
+    if (this.body.kind === 'handler' || this.body.kind === 'fallback') {
+      this.body.tests = tests;
     }
     if (guard) {
       yield this.guard(guard, failed);
