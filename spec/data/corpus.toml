@@ -1127,6 +1127,12 @@ optional = true
 is = "for effect-failed, a map {grant, segment, phase, status} identifying the failure that prevented commit; scope follows status for abandonment"
 
 [[record.key]]
+key = "mismatches"
+type = "value"
+optional = true
+is = "for a Run no named clause matched, which ended `unhandled` or was started by the Fallback Handler, why dispatch skipped each named clause it tried ([Clause mismatches](#clause-mismatches))"
+
+[[record.key]]
 key = "fuel"
 type = "count"
 is = "the Fuel it used over its life"

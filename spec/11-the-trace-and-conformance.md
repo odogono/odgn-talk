@@ -197,8 +197,20 @@ A record is written when what it records happens, so a Trace is in the order the
 - **A reissued call,** settled with `how=reissue`, crosses to the Host again as the first Pump drains the `settle`: a `call` record under its saved call id, before any Stretch. It has `charged` only if the Host function draws with `Charge`, since the declared cost isn't charged again.
 - **Guard regions:** an error raised in a guard region, which skips its clause or branch, is written as `guard-skip` with its code, and not as `raise`. A Guard that gives something other than a boolean is a `guard-skip` with that `value`.
 - **An unhandled Delivery** is written as its Run's `seg`, with `end=unhandled`, then its `run`, then the `unhandled` record.
+- **Clause mismatches:** a Run that no named clause matched, which ended `unhandled` or was started by the Fallback Handler, carries `mismatches` on its `run` record when it tried at least one named clause ([below](#clause-mismatches)).
 - **Every Host crossing** is recorded: each Capability call as `call`, with an immediate call's result or error and the Fuel it charged, and each property or collection call as `prop`. So a Trace carries every answer a Host gave, and replays without that Host ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)).
 - **Errors:** a Core-raised error map is written without its `message`, wherever the map appears, whose wording is outside parity. Every other key is kept, in the order [chapter 6](06-errors-and-limits.md#errors) gives, and so is the `message` of an error a Script or a Host made ([chapter 6](06-errors-and-limits.md#messages)). Text a Script builds from a Core-raised `message` is outside parity too, and no case may depend on it.
+
+### Clause mismatches
+
+`mismatches` says why dispatch skipped each named clause of the Run's Selector, so a reader of the Trace can see why a message wasn't handled without running anything ([ADR 0172](../docs/adr/0172-the-trace-explains-why-no-handler-clause-matched.md)). It is a list with one map per named clause dispatch tried, in clause order, each with `clause`, its 1-based number among the Selector's clauses, and `reason`, the first test that failed ([chapter 5](05-handlers-messages-and-scheduling.md#handlers-and-dispatch)):
+
+- `"arity"`: the message has a different number of arguments.
+- `"pattern"`: an argument failed its parameter's Destructuring pattern.
+- `"shape"`: an argument didn't fit its Clause Shape. The map adds `argument`, the 1-based position of the first argument whose Clause Shape failed, left to right, and `mismatches`, what `explain` gives for that argument and Shape ([chapter 7](07-libraries-and-the-standard-library.md#shape-checks)).
+- `"guard"`: the Guard gave `false`, or was skipped with a `guard-skip`. Why is never recorded.
+
+Each `reason` is what dispatch already found, so nothing runs again to find it. A Core builds the `explain` report only while it writes a Trace, and charges nothing for it: Fuel, allocation and every outcome are the same with or without a Trace. The Fallback Handler's own clauses are not listed. A Run whose Selector has no named clause, or a Delivery the Fallback took because it was a message map with no named Handler, has no `mismatches`.
 
 ### Host Inputs
 
@@ -347,7 +359,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `fault` | `run` | `limit`, `at`, `pos`, `rollback`? | a Limit Fault |
 | `cleanup-failed` | `run` | `code`?, `limit`? | a cancelled Run's cleanup that failed |
 | `note` | `subject` | `kind` | something the Core noted, about a Run, a call or a Delivery |
-| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fallback`?, `fn`?, `value`?, `error`?, `limit`?, `effect`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
+| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fallback`?, `fn`?, `value`?, `error`?, `limit`?, `effect`?, `mismatches`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
 | `stopped` | `script` | `reason`, `discarded`?, `dropped`?, `abandoned`? | a `stop` report |
 | `unhandled` | `delivery` (optional) | `message`, `args`?, `target`? | an `unhandled` report; the id is absent for a message a Script sent |
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
@@ -439,6 +451,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `run` | `error` | `value` | for `errored`, the error map |
 | `run` | `limit` | `word` | for `limit-fault`, the limit: `fuel`, `alloc`, `persistent`, `depth`, `pattern`, `join` |
 | `run` | `effect` | `value` | for effect-failed, a map {grant, segment, phase, status} identifying the failure that prevented commit; scope follows status for abandonment |
+| `run` | `mismatches` | `value` | for a Run no named clause matched, which ended `unhandled` or was started by the Fallback Handler, why dispatch skipped each named clause it tried ([Clause mismatches](#clause-mismatches)) |
 | `run` | `fuel` | `count` | the Fuel it used over its life |
 | `run` | `alloc` | `count` | the allocation it made over its life |
 | `stopped` | `reason` | `value` | the Host's reason, or `"owner disposed"` or `"reload"` |
