@@ -7,6 +7,44 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
+### Breaking
+
+- **repo:** A Library replacement can keep every reloaded importer's mailbox, as a Reload's `keepMailbox` does: the kept messages go to the new code and count toward each Script's Persistent State cap, and the Trace's `replace-library` record writes `mailbox=keep`. In TS pass `replaceLibrary(library, carry, { keepMailbox: true })`, in Go `ReplaceLibrary(l, carry, ReloadOptions{KeepMailbox: true})`, and on the message layer `keepMailbox` on `replace-library`. In C, `talk_replace_library` now takes a `const talk_reload_options *` before `reports`; pass `NULL` to keep the old behaviour. Folio's Library Punch In now keeps its importers' mailboxes (#1951).
+
+### Added
+
+- **spec:** A labelled Operation call may leave out an Optional argument along with its label, which then arrives as Nothing, and `on` and `with` may be Argument Labels, so `loop "bd hh" with {gain: 0.5}` and `loop "c3" on bass with {gain: 0.5}` call the same Operation (ADR 0160).
+- **ts:** Add the optional `peer` Standard Capability to the TS Core: `peerCapability` and the Core-fixed `peerKind`. A `send` to a Peer is a Remote Send through the Script's one `peer` Grant (`post`, or `call` with `and wait`), with `expose`, `unexpose`, `reach` and `caller`, and Peers that travel inside Remote Sends (#1972). The Conformance Corpus gains `peer/` cases and a `caller` key on `deliver` and `request` lines for a Remote Send's Caller Identity (#1971).
+- **spec:** Add the syntax error `reserved word`. A Reserved Word where a Name belongs, such as `put x into wait` or `on go end`, is now reported at the word, and the message says which word is reserved, instead of a generic `unexpected token` that `put 1 into replace` used to report at the end of the line (#2089).
+- **spec:** A Reserved Word used as a Whose Key, as in `every item of xs whose end > 1`, now raises the syntax error `reserved word` at the word instead of `unexpected token` (#2095).
+- **spec:** Add the syntax error `repeat with`. HyperTalk's counted loop, `repeat with i from 1 to n` or `repeat with i = 1 to n`, is now reported at `with`, and the message says to write `repeat for each i in 1..n`, instead of an `unexpected token` at `i` that pointed at `repeat 3 times` (#2097).
+- **ts:** The TS Session Host adds Scripts beside the Session Script with `:script add <name> <path>`, reached by message and kept by `:save` and `:restore`; `:runs` and `:mailbox` list their Runs too (ADR 0170, #2124).
+- **spec:** A Trace explains why no Handler Clause matched: the `run` record of a Run that ended `unhandled`, or that the Fallback Handler took, carries `mismatches`, with each named clause's reason (`arity`, `pattern`, `shape` or `guard`) and, for a Clause Shape, what `explain` gives. It's built only while tracing and charges nothing (ADR 0172, #2148).
+- **ts:** The TS Core writes `mismatches` on the `run` record of a Run no named clause matched: why dispatch skipped each named clause (`arity`, `pattern`, `shape` with its `explain` report, or `guard`). It's built only while tracing and charges nothing (ADR 0172, #2149).
+- **spec:** Specify Clause Shapes: `on handle inv is an Invoice` skips the clause unless the argument fits the kind or named Shape, exactly as the same test at the start of its Guard would (ADR 0171).
+- **spec:** Add the Musical Units `bar` and `beat`, so `wait 8 bars` waits until the Host's Transport reaches the 8th bar line, and add the frequency Units `Hz` and `kHz` and the pitch-interval Units `cent`, `semitone` and `octave` (ADR 0166, #2063).
+- **spec:** Specify named Shapes: `shape Invoice is {type: text, amount: GBP, ref: optional text}` declares a Constant holding Shape data, and `msg is an Invoice` tests a value against it as `conforms` does (ADR 0168).
+- **ts:** Export `operationDeclarations`, which builds the `declarations` `compileLibrary` needs from CapabilityDefs, so a Host can compile a Library that calls a Capability without rebuilding them by hand (#1936).
+- **spec:** An Exposed Script can ask `caller` for the Caller Identity its Host vouches for, so a server knows who made a Remote Send (ADR 0154). Peers can now travel inside Remote Sends, and holding one is permission to send to it. `expose` gives a Peer, and without a name makes an unnamed exposure that only that Peer reaches, which a Script can hand out as a reply-to or push channel (ADR 0155). The Cores and Hosts implement both in later releases.
+- **ts:** Let a page's Group and a Web Worker's Group, or two workers, send to each other's Peers: `messagePortLink` in `@northtalk/ts/peer` carries Remote Sends over a `MessagePort`, a `Worker` or a worker's `self`, and `WorkerSupervisor.closeOnTerminate` fails a terminated worker's pending calls as `unreachable` (#2037).
+- **spec:** Scripts can send messages to Scripts in other Groups, on the same Host or another machine, with the ordinary `send` and `send … and wait`, through Peers from the new optional `peer` Standard Capability (ADR 0153). The Cores and Hosts implement it in later releases.
+- **ts:** Add `@northtalk/ts/peer`: a `PeerRouter` that holds a Host's exposures and carries Remote Sends over any link that moves whole frames, using only web-standard APIs so it runs in browsers, workers, Bun and Node. The Script Runner's TLS and loopback TCP now plug into it as one such link (#2036).
+- **ts:** Let a browser Script reach a server's exposures and hand it Peers to push to: `webSocketLink` and `acceptWebSocket` in `@northtalk/ts/peer` carry Remote Sends over a WebSocket on which each end proves its key, and the TS Runner's `--listen ws://HOST:PORT` accepts them. The chat example in `examples/peer-chat` shows both ends (#2038).
+- **ts:** The TS Core runs Clause Shapes: `on handle inv is an Invoice` skips the clause unless the argument fits the kind or named Shape, and `is not a` in a head is the load error `negated shape` (ADR 0171, #2136).
+- **ts:** Let a TS Group take a musical clock, made by `musicalClockCapability` and passed as the `musicalClock` option, so a Script's `wait 8 bars` or `wait 2 beats` ends when the Host's Transport reaches that line. Without one, such a `wait` raises `no musical time`. A Musical Unit inside a Compound Unit, such as `1 bar / 1 min`, now raises `incompatible units`, and `exportManifest` writes `musicalTime: true` for a Host that keeps musical time (ADR 0166, #2064).
+- **ts:** The TS Core loads named Shapes: `shape Invoice is {type: text, amount: GBP, ref: optional text}` declares a Constant holding the Shape's data, Libraries can export one, and `msg is an Invoice` tests a value as `conforms(msg, Invoice)` does. A malformed declaration is the load diagnostic `bad shape` (ADR 0168).
+
+### Fixed
+
+- **ts:** A Request whose Run ends `errored` now rejects with `send failed` carrying the Run's `error` map beside its `reason`, as the Zig Core does, so a Remote Send to a TS Runner's Script that throws brings back the thrown error (#2008).
+
+### Performance
+
+- **ts:** Compute fractional Numbers with small coefficients without BigInt on the TS Core: add, subtract and compare at equal exponents, multiply, and exact division. `numbers/add` runs about 45% faster, `numbers/multiply` about 55–60% and `numbers/divide` 25–40% (#1938).
+- **ts:** Run Map writes to a key the Map already has, and calls to a Script's own Handler, on the TS Core's fast path, and keep that path compiled on Bun when a Script first reaches one of its cases late: on Bun, `macro/game-tick` runs about 12% faster, `collections/map-update` about 10% and `macro/transform` about 21%; Node is unchanged (#1939).
+
 ## [0.6.0] - 2026-11-01
 
 ### Added
