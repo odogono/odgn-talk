@@ -1379,6 +1379,12 @@ pub const corpus: CorpusTable = .{
                     .optional = true,
                 },
                 .{
+                    .key = "mismatches",
+                    .type = "value",
+                    .is = "for a Run no named clause matched, which ended `unhandled` or was started by the Fallback Handler, why dispatch skipped each named clause it tried ([Clause mismatches](#clause-mismatches))",
+                    .optional = true,
+                },
+                .{
                     .key = "fuel",
                     .type = "count",
                     .is = "the Fuel it used over its life",

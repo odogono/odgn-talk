@@ -1380,6 +1380,12 @@ var Corpus = CorpusTable{
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:      "mismatches",
+					Type:     "value",
+					Is:       "for a Run no named clause matched, which ended `unhandled` or was started by the Fallback Handler, why dispatch skipped each named clause it tried ([Clause mismatches](#clause-mismatches))",
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:  "fuel",
 					Type: "count",
 					Is:   "the Fuel it used over its life",
