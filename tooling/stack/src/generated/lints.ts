@@ -121,6 +121,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "send-fits-no-clause",
+    "flags": "a `send` whose literal arguments fit no Clause Shape of any workspace Script answering its message",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "No Handler Clause for {message} in the workspace accepts these arguments.",
+    "status": "implemented"
+  },
+  {
     "id": "message-argument-count",
     "flags": "a command no Handler in the Script answers, giving a different number of arguments than the Host Manifest declares for its message",
     "beginner": "warning",

@@ -42,10 +42,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships thirty-nine implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(39);
+test('ships forty implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(40);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(39);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(40);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -309,6 +309,9 @@ test('clause coverage respects arity, guards and structural restrictions', () =>
     ['[x, ...rest]', '[1, 2]', true],
     ['[x]', '[1, 2]', false],
     ['x where false', '1', false],
+    ['x is a text', 'n is a number', false],
+    ['{key: x} is a map', '{key: 1}', false],
+    ['x', 'n is a number', true],
     ['^limit', '^limit', false],
   ] as const) {
     const source =

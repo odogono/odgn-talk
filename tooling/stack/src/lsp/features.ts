@@ -48,6 +48,7 @@ import {
   type ManifestOperation,
 } from './manifest';
 import { collectionHover, objectProperties, propertyHover } from './objects';
+import { interfaceText, sendHover, workspaceMessages } from './interface';
 import { shapeCompletion, shapeHover } from './shapes';
 import {
   argumentPhrase,
@@ -694,9 +695,28 @@ export const completion = (
     /\bsend\s+to\s+.+:\s*[\p{L}\p{N}_]*$/u.test(line)
   ) {
     const legacySend = /\bsend\s+[\p{L}\p{N}_]*$/u.test(line);
-    return (manifest?.messages ?? [])
-      .filter(name => !legacySend || !name.includes(':'))
-      .map(name => messageItem(manifest!, name, client));
+    const declared = manifest?.messages ?? [];
+    // A `send` may also reach a workspace Script's own Handler (#2059).
+    const scripts = /^\s*on\b/u.test(line)
+      ? []
+      : [...workspaceMessages(all, analysis)]
+          .filter(([name]) => !declared.includes(name))
+          .map(([name, clauses]) => ({
+            ...item(messagePhrase(name), 3, clauses[0]!.head),
+            documentation: client.markdown
+              ? { kind: 'markdown', value: interfaceText(clauses, true) }
+              : interfaceText(clauses, false),
+            selector: name,
+          }));
+    return [
+      ...declared.map(name => ({
+        ...messageItem(manifest!, name, client),
+        selector: name,
+      })),
+      ...scripts,
+    ]
+      .filter(i => !legacySend || !i.selector.includes(':'))
+      .map(({ selector: _, ...i }) => i);
   }
   const use = /^\s*use\s+[^\n]*$/.test(line);
   if (use) {
@@ -967,6 +987,11 @@ export const hover = (
   const shape = shapeHover(all, analysis, offset, client.markdown);
   if (shape) {
     return shape;
+  }
+  // A `send`'s message: the workspace Clauses that may answer it (#2059).
+  const send = sendHover(all, analysis, offset, client.markdown);
+  if (send) {
+    return send;
   }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;

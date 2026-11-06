@@ -230,6 +230,8 @@ const tsOnly = new Set([
   'exportsOf',
   'grammar',
   'kindNames',
+  'shapeData',
+  'ShapeData',
   'loadScript',
   'lowerTree',
   'parseEntry',

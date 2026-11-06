@@ -1421,7 +1421,9 @@ export const lintBindings = (
           message: name.replaceAll(':', ' ').trim(),
         });
       }
-      if (!leaves(clause).some(t => t.text === 'where')) {
+      // A Guard, or a Clause Shape (`p is a S`, ADR 0171), may skip the
+      // clause, so it covers nothing after it.
+      if (!leaves(clause).some(t => t.text === 'where' || t.text === 'is')) {
         earlier.push(args);
       }
       if (unit === 'script' && manifest && !manifest.messages.includes(name)) {
