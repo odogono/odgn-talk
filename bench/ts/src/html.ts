@@ -1,5 +1,6 @@
-// The benchmark page: one self-contained HTML file of a saved run, with no
-// external resources. See bench/README.md.
+// The benchmark page of a saved run: as one self-contained HTML file with no
+// external resources, or as sections northtalk.org/benchmarks/ embeds. See
+// bench/README.md.
 import {
   bytes,
   cores,
@@ -48,8 +49,10 @@ const duration = (ns: number) =>
         ? `${(ns / 1e3).toPrecision(3)} µs`
         : `${ns.toPrecision(3)} ns`;
 
-const style = `
-.viz-root {
+// Every rule is scoped to .bench, so the sections can sit inside another page,
+// such as northtalk.org/benchmarks/, which sets the same custom properties.
+export const style = `
+.bench {
   color-scheme: light;
   --surface-1: #fcfcfb;
   --surface-2: #f0efec;
@@ -62,7 +65,7 @@ const style = `
   --critical: #d03b3b;
 }
 @media (prefers-color-scheme: dark) {
-  .viz-root {
+  .bench {
     color-scheme: dark;
     --surface-1: #1a1a19;
     --surface-2: #2a2a28;
@@ -75,51 +78,53 @@ const style = `
     --critical: #e66767;
   }
 }
-* { box-sizing: border-box; }
-.viz-root {
+.bench * { box-sizing: border-box; }
+body.bench {
   margin: 0;
   background: var(--surface-1);
   color: var(--text-primary);
   font: 14px/1.45 system-ui, sans-serif;
 }
-main { padding: 24px; max-width: 1200px; margin: 0 auto; }
-figure { margin: 0; }
-h1 { font-size: 22px; margin: 0 0 8px; }
-h2 { font-size: 17px; margin: 32px 0 8px; }
-h3 { font-size: 14px; margin: 20px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
-p, li { color: var(--text-secondary); }
-a { color: var(--series-1); }
-.note { border-left: 3px solid var(--grid); padding: 4px 12px; background: var(--surface-2); }
-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { padding: 4px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
-th:first-child, td:first-child, th.l, td.l { text-align: left; }
-thead th { position: sticky; top: 0; background: var(--surface-1); cursor: pointer; user-select: none; color: var(--text-secondary); font-weight: 600; }
-thead th[aria-sort="ascending"]::after { content: " ▲"; }
-thead th[aria-sort="descending"]::after { content: " ▼"; }
-.payload { max-width: 760px; }
-.payload th { cursor: default; position: static; }
-.controls { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
-.legend { display: flex; gap: 16px; align-items: center; color: var(--text-secondary); }
-.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px 24px; }
-.chart figcaption { font-weight: 600; margin-bottom: 2px; }
-.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.chart text { fill: var(--text-secondary); font-size: 12px; }
-.chart .value { fill: var(--text-primary); }
-.chart .whisker { stroke: var(--text-secondary); stroke-width: 1.5; }
-.chart .baseline { stroke: var(--grid); stroke-width: 1; }
-.chart .hit { fill: transparent; }
-.chart .hit:hover { fill: var(--surface-2); }
-.core { fill: var(--series-1); background: var(--series-1); }
-.peer { fill: var(--series-2); background: var(--series-2); }
-.reactor { fill: var(--series-3); background: var(--series-3); }
-.bad { color: var(--critical); }
-[hidden] { display: none !important; }
+body.bench main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.bench figure { margin: 0; }
+body.bench h1 { font-size: 22px; margin: 0 0 8px; }
+body.bench h2 { font-size: 17px; margin: 32px 0 8px; }
+.bench h3 { font-size: 14px; margin: 20px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+body.bench p, body.bench li { color: var(--text-secondary); }
+body.bench a { color: var(--series-1); }
+.bench .note { border-left: 3px solid var(--grid); padding: 4px 12px; background: var(--surface-2); }
+.bench table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.bench th, .bench td { padding: 4px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+.bench th:first-child, .bench td:first-child, .bench th.l, .bench td.l { text-align: left; }
+.bench thead th { position: sticky; top: 0; background: var(--surface-1); cursor: pointer; user-select: none; color: var(--text-secondary); font-weight: 600; }
+.bench thead th[aria-sort="ascending"]::after { content: " ▲"; }
+.bench thead th[aria-sort="descending"]::after { content: " ▼"; }
+.bench .payload { max-width: 760px; }
+.bench .payload th { cursor: default; position: static; }
+.bench .controls { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+.bench .legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: var(--text-secondary); }
+.bench .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.bench .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 16px 24px; }
+.bench .chart figcaption { font-weight: 600; margin-bottom: 2px; }
+.bench .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.bench .chart text { fill: var(--text-secondary); font-size: 12px; }
+.bench .chart .value { fill: var(--text-primary); }
+.bench .chart .whisker { stroke: var(--text-secondary); stroke-width: 1.5; }
+.bench .chart .baseline { stroke: var(--grid); stroke-width: 1; }
+.bench .chart .hit { fill: transparent; }
+.bench .chart .hit:hover { fill: var(--surface-2); }
+.bench .core { fill: var(--series-1); background: var(--series-1); }
+.bench .peer { fill: var(--series-2); background: var(--series-2); }
+.bench .reactor { fill: var(--series-3); background: var(--series-3); }
+.bench .bad { color: var(--critical); }
+.bench .scroll { overflow-x: auto; }
+.bench [hidden] { display: none !important; }
 `;
 
 // Sorts the table by a clicked header, and filters the table and charts by category.
-const script = `
+export const script = `
 const table = document.querySelector('#measurements');
+if (table) {
 const body = table.tBodies[0];
 table.querySelectorAll('thead th').forEach((th, column) => {
   th.addEventListener('click', () => {
@@ -149,7 +154,12 @@ document.querySelector('#category').addEventListener('change', event => {
     el.hidden = chosen !== '' && el.dataset.category !== chosen;
   });
 });
+}
 `;
+
+// The page is read from a clone or on northtalk.org, so repo links go to GitHub.
+const repo = (path: string) =>
+  `https://github.com/odogono/odgn-talk/blob/main/${path}`;
 
 const payloadPanel = (p: Payload) => {
   const zig = zigPayload(p);
@@ -167,12 +177,12 @@ const payloadPanel = (p: Payload) => {
   return `
 <h2 id="payload">Payload</h2>
 <p>What a browser Host ships to embed each Core. The TS Core's figure is the core-switch Example Host, bundled${zig ? "; the Zig Core's is the same Host over <code>@northtalk/ts/wasm</code> plus the <code>talk.wasm</code> reactor it loads" : ''}.</p>
-<table class="payload">
+<div class="scroll"><table class="payload">
 <thead><tr><th>Payload</th><th>Brotli</th><th>gzip -9</th><th>Raw</th></tr></thead>
 <tbody>${rows.join('')}</tbody>
-</table>
+</table></div>
 ${zig ? payloadBars(p, zig) : ''}
-<p>Bundled with <code>Bun.build({ target: 'browser', minify: true })</code>; compressed with <code>node:zlib</code> at Brotli quality 11 and gzip level 9, as in <a href="research/zig-browser-figures.md">the #1121 browser figures</a>.</p>`;
+<p>Bundled with <code>Bun.build({ target: 'browser', minify: true })</code>; compressed with <code>node:zlib</code> at Brotli quality 11 and gzip level 9, as in <a href="${repo('docs/research/zig-browser-figures.md')}">the #1121 browser figures</a>.</p>`;
 };
 
 // Each Core's Brotli Payload as one bar, the Zig Core's split into its Host and reactor.
@@ -214,10 +224,10 @@ const table = (measurements: readonly Measurement[]) => {
     return `<tr data-category="${esc(category(m.benchmark))}"><td class="l">${esc(category(m.benchmark))}</td><td class="l">${esc(m.benchmark)}</td><td class="l">${esc(m.runner)}</td>${num(m.load?.medianNs, us(m.load?.medianNs))}${num(m.run.medianNs, ms(m.run.medianNs))}${num(m.run.minNs, ms(m.run.minNs))}${num(m.run.maxNs, m.run.maxNs === undefined ? '' : ms(m.run.maxNs))}${num(m.fuel, m.fuel === undefined ? '' : String(m.fuel))}${num(perFuel, perFuel?.toFixed(1) ?? '')}${num(m.logicalAlloc, bytes(m.logicalAlloc))}${num(m.hostBytes, bytes(m.hostBytes))}${num(m.hostAllocs, count(m.hostAllocs))}</tr>`;
   });
   return `
-<table id="measurements">
+<div class="scroll"><table id="measurements">
 <thead><tr><th class="l">Category</th><th class="l">Benchmark</th><th class="l">Runner</th><th>Load median (µs)</th><th>Run median (ms)</th><th>Run min (ms)</th><th>Run max (ms)</th><th>Fuel</th><th>ns/Fuel</th><th>Logical alloc</th><th>Host bytes</th><th>Host allocs</th></tr></thead>
 <tbody>${rows.join('\n')}</tbody>
-</table>`;
+</table></div>`;
 };
 
 // One Benchmark's run median on each runner, with its min–max range as a whisker.
@@ -274,7 +284,15 @@ const list = (items: string[], none: string) =>
     ? `<ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`
     : `<p>${none}</p>`;
 
-export const html = (r: Results): string => {
+/** Where and when a run happened, as one line of HTML. */
+export const provenance = (r: Results) =>
+  `Commit <code>${esc(r.commit)}</code> on ${esc(r.machine.cpu)} (${esc(r.machine.cores)} cores, ${esc(r.machine.memory)}), ${esc(r.machine.os)} ${esc(r.machine.arch)}${r.machine.runUrl ? `, in <a href="${esc(r.machine.runUrl)}">a CI run</a>` : ''}.`;
+
+/**
+ * Everything on the page below its title, for this file's own page and for
+ * northtalk.org/benchmarks/ (ADR 0173). The sections need `style` and `script`.
+ */
+export const sections = (r: Results): string => {
   const categories = [
     ...new Set(r.measurements.map(m => category(m.benchmark))),
   ].sort();
@@ -291,7 +309,30 @@ export const html = (r: Results): string => {
   const skipped = r.skipped.map(
     s => `${esc(s.benchmark)} on ${esc(s.runner)}: ${esc(s.reason)}`,
   );
-  return `<!doctype html>
+  return `<p>${provenance(r)}</p>
+<p>Versions: ${entries(r.versions)}.</p>
+<p>Settings: ${entries(r.settings)}.</p>
+<p class="note">These timings are advisory. They come from one run on one machine, often a noisy shared runner, so they inform the Cost Model and find slow paths but are never a gate, a promise or a ranking (<a href="${repo('docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md')}">ADR 0054</a>). Fuel is exact.</p>
+<h2 id="fuel-parity">Fuel parity</h2>
+${list(parity, 'Every Benchmark used the same Fuel on each Core.')}
+${r.payload ? payloadPanel(r.payload) : ''}
+<h2 id="outliers">Cost Model outliers</h2>
+<p>Benchmarks whose ns/Fuel is more than ${esc(r.outlierFactor)}× their runner's median. These are advisory: any reweighting goes through the Spec.</p>
+${list(found, 'None.')}
+<h2 id="charts">Run median by runner</h2>
+<div class="controls">
+<label>Category <select id="category"><option value="">All</option>${categories.map(c => `<option value="${esc(c)}">${esc(c || 'other')}</option>`).join('')}</select></label>
+</div>
+<div class="legend"><span><span class="swatch core"></span>Core</span><span><span class="swatch peer"></span>Peer Language</span><span>Whisker: min to max over the samples</span></div>
+${charts(r.measurements)}
+<h2 id="table">Measurements</h2>
+<p>Click a heading to sort.</p>
+${table(r.measurements)}
+${skipped.length ? `<h2 id="skipped">Skipped</h2>${list(skipped, '')}` : ''}`;
+};
+
+/** The whole run as one self-contained HTML file, for viewing offline. */
+export const html = (r: Results): string => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -299,32 +340,12 @@ export const html = (r: Results): string => {
 <title>Benchmark results, ${esc(r.date)}</title>
 <style>${style}</style>
 </head>
-<body class="viz-root">
+<body class="bench">
 <main>
 <h1>Benchmark results, ${esc(r.date)}</h1>
-<p>Commit <code>${esc(r.commit)}</code> on ${esc(r.machine.cpu)} (${esc(r.machine.cores)} cores, ${esc(r.machine.memory)}), ${esc(r.machine.os)} ${esc(r.machine.arch)}.</p>
-<p>Versions: ${entries(r.versions)}.</p>
-<p>Settings: ${entries(r.settings)}.</p>
-<p class="note">These timings are advisory. A shared runner is noisy, so they inform the Cost Model and find slow paths but are never a gate (<a href="adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md">ADR 0054</a>). Fuel is exact.</p>
-${r.payload ? payloadPanel(r.payload) : ''}
-<h2 id="fuel-parity">Fuel parity</h2>
-${list(parity, 'Every Benchmark used the same Fuel on each Core.')}
-<h2 id="outliers">Cost Model outliers</h2>
-<p>Benchmarks whose ns/Fuel is more than ${esc(r.outlierFactor)}× their runner's median. These are advisory: any reweighting goes through the Spec.</p>
-${list(found, 'None.')}
-<div class="controls">
-<label>Category <select id="category"><option value="">All</option>${categories.map(c => `<option value="${esc(c)}">${esc(c || 'other')}</option>`).join('')}</select></label>
-</div>
-<h2 id="charts">Run median by runner</h2>
-<div class="legend"><span><span class="swatch core"></span>Core</span><span><span class="swatch peer"></span>Peer Language</span><span>Whisker: min to max over the samples</span></div>
-${charts(r.measurements)}
-<h2 id="table">Measurements</h2>
-<p>Click a heading to sort.</p>
-${table(r.measurements)}
-${skipped.length ? `<h2 id="skipped">Skipped</h2>${list(skipped, '')}` : ''}
+${sections(r)}
 </main>
 <script>${script}</script>
 </body>
 </html>
 `;
-};

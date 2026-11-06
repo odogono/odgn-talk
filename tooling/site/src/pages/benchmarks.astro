@@ -1,0 +1,61 @@
+---
+// The latest complete CI benchmark run (ADR 0173). tools/sync.ts picks it from
+// bench/results/; the sections are the ones `bun run bench:html` renders.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { script, sections, style } from '../../../../bench/ts/src/html.ts';
+import type { Results } from '../../../../bench/ts/src/report.ts';
+import saved from '../generated/benchmarks.json';
+
+const run = saved as Results | null;
+const heading = (slug: string, text: string) => ({ depth: 2, slug, text });
+const headings = run
+  ? [
+      heading('fuel-parity', 'Fuel parity'),
+      ...(run.payload ? [heading('payload', 'Payload')] : []),
+      heading('outliers', 'Cost Model outliers'),
+      heading('charts', 'Run median by runner'),
+      heading('table', 'Measurements'),
+      ...(run.skipped.length ? [heading('skipped', 'Skipped')] : []),
+    ]
+  : [];
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Benchmarks',
+    description:
+      "The latest Benchmark Suite run from CI: Fuel parity between the Cores, each Core's Payload, and advisory timings against Peer Languages.",
+  }}
+  headings={headings}
+>
+  <p>
+    The <a href="https://github.com/odogono/odgn-talk/tree/main/bench">Benchmark Suite</a> runs
+    each Benchmark's Script on every Core and compares it with idiomatic ports in its Peer
+    Languages. This page shows the latest complete run on GitHub's shared CI runner.
+  </p>
+  {
+    run ? (
+      <div class="bench site" set:html={sections(run)} />
+    ) : (
+      <p>No CI run has been published yet.</p>
+    )
+  }
+</StarlightPage>
+
+<style is:inline set:html={style}></style>
+<style>
+  /* The benchmark sections in the site's colours, which follow its theme. */
+  :global(div.bench.site) {
+    color-scheme: inherit;
+    --surface-1: var(--sl-color-bg);
+    --surface-2: var(--sl-color-gray-6);
+    --text-primary: var(--sl-color-white);
+    --text-secondary: var(--sl-color-gray-2);
+    --grid: var(--sl-color-hairline);
+    --series-1: var(--sl-color-accent);
+    --series-2: var(--sl-color-orange);
+    --series-3: var(--sl-color-green);
+    --critical: var(--sl-color-red);
+  }
+</style>
+{run && <script is:inline set:html={script} />}

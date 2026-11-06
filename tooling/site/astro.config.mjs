@@ -76,6 +76,7 @@ export default defineConfig({
               ],
             },
             'reference/glossary',
+            { label: 'Benchmarks', link: '/benchmarks/' },
             {
               label: 'Design decisions',
               link: 'https://github.com/odogono/odgn-talk/tree/main/docs/adr',

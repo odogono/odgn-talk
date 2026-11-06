@@ -3,6 +3,7 @@
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { latestRun, savedRuns } from '../src/benchmarks.ts';
 import { githubBlob, rewritePage } from '../src/rewrite.ts';
 import { repoRoot, sources } from '../src/sources.ts';
 
@@ -24,3 +25,17 @@ for (const source of list) {
 }
 
 console.log(`site: synced ${list.length} pages`);
+
+// The run /benchmarks/ shows, or null before any CI run qualifies (ADR 0173).
+const run = latestRun(savedRuns());
+const benchmarks = join(
+  import.meta.dirname,
+  '../src/generated/benchmarks.json',
+);
+mkdirSync(dirname(benchmarks), { recursive: true });
+writeFileSync(benchmarks, JSON.stringify(run ?? null));
+console.log(
+  run
+    ? `site: benchmarks from the ${run.date} run on ${run.commit}`
+    : 'site: no CI benchmark run to show yet',
+);

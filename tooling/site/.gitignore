@@ -1,3 +1,4 @@
 src/content/docs/generated/
 .astro/
 .wrangler/
+src/generated/
