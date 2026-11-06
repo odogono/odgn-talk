@@ -11,6 +11,7 @@ const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const display = @import("../display.zig");
 const lower = @import("../lower/lower.zig");
+const shape_check = @import("shape_check.zig");
 const standard = @import("standard.zig");
 const check = @import("../check/check.zig");
 const parser = @import("../syntax/parser.zig");
@@ -393,6 +394,14 @@ pub const Run = struct {
     /// While it is dispatched, the pc in its clause body where the clause's
     /// patterns and Guard have passed.
     select_at: ?u32 = null,
+    /// While it is dispatched, the last two instructions run in its clause
+    /// frame, or -1 for one in a frame it called, so a `clause-fail` knows
+    /// which test sent it there (ADR 0172).
+    dispatch_pc: i64 = -1,
+    dispatch_prior: i64 = -1,
+    /// Its Trace `mismatches` entries, written only while tracing: why
+    /// dispatch skipped each named clause (ADR 0172).
+    mismatches: std.ArrayList(u8) = .empty,
     /// The calls a cancellation abandoned, which its first cleanup Stretch's
     /// `seg` or `preempt` names; the ids are the Group's.
     abandoned: std.ArrayList([]const u8) = .empty,
@@ -3950,6 +3959,7 @@ pub const Group = struct {
         if (run.cleanup_code) |c| c.release();
         if (run.end_handler) |h| h.release();
         run.abandoned.deinit(g.gpa);
+        run.mismatches.deinit(g.gpa);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
         g.releaseDelivery(run.delivery);
@@ -4897,7 +4907,10 @@ pub const Group = struct {
             for (s.unitIn(place.library).bodies[from..], from..) |b, i| {
                 if (b.kind != .handler or !std.mem.eql(u8, b.name, d.message)) continue;
                 run.clauses_seen += 1;
-                if (b.params.len != d.args.len) continue;
+                if (b.params.len != d.args.len) {
+                    if (g.trace != null) g.addMismatch(run, run.clauses_seen, "arity", null);
+                    continue;
+                }
                 run.clause = run.clauses_seen;
                 if (try g.tryClause(s, run, place.library, @intCast(i), d.args, false)) |end| return end;
             }
@@ -4921,6 +4934,51 @@ pub const Group = struct {
         // Fallback (ADR 0064).
         run.fallback = false;
         return .unhandled;
+    }
+
+    /// Adds one `mismatches` entry, with `explain`'s report for a `shape`.
+    fn addMismatch(g: *Group, run: *Run, clause: u32, reason: []const u8, shape: ?struct { arg: u32, report: *Value }) void {
+        var out: std.Io.Writer.Allocating = .fromArrayList(g.gpa, &run.mismatches);
+        defer run.mismatches = out.toArrayList();
+        const w = &out.writer;
+        if (run.mismatches.items.len > 0 or w.end > 0) w.writeAll(", ") catch return;
+        w.print("{{clause: {d}, reason: \"{s}\"", .{ clause, reason }) catch return;
+        if (shape) |x| {
+            w.print(", argument: {d}, mismatches: ", .{x.arg + 1}) catch return;
+            display.writeTrace(w, x.report) catch return;
+        }
+        w.writeAll("}") catch return;
+    }
+
+    /// Why the failed entry clause's frame didn't match: the last
+    /// instruction it ran before `clause-fail` was a pattern's, a Clause
+    /// Shape's, or the Guard's (ADR 0172). Only while tracing, uncharged.
+    fn clauseMismatch(g: *Group, run: *Run, failed: *Frame) !void {
+        const unit = unitOf(run, failed);
+        const b = unit.bodies[failed.body];
+        const clause = b.clause orelse run.clauses_seen;
+        const prior = run.dispatch_prior;
+        if (prior < b.first or prior - b.first >= b.guard_at) return g.addMismatch(run, clause, "guard", null);
+        const at: u32 = @intCast(prior - b.first);
+        var test_: ?lower.ShapeTest = null;
+        for (b.shape_tests) |t| if (t.at <= at) {
+            test_ = t;
+        };
+        const t = test_ orelse return g.addMismatch(run, clause, "pattern", null);
+        const data = if (t.definition) |name|
+            (try g.definitionsOf(run, failed))[definitionIndex(unit, name)].retain()
+        else
+            try model.text(g.gpa, t.kind.?);
+        defer data.release();
+        const outcome = try shape_check.run(g.gpa, g.gpa, failed.locals[t.arg + 1], data, false);
+        defer outcome.release();
+        var records: std.ArrayList(*Value) = .empty;
+        defer records.deinit(g.gpa);
+        defer for (records.items) |r| r.release();
+        for (outcome.diagnostics) |d| try records.append(g.gpa, try shape_check.record(g.gpa, d));
+        const explained = try model.list(g.gpa, records.items);
+        defer explained.release();
+        g.addMismatch(run, clause, "shape", .{ .arg = t.arg, .report = explained });
     }
 
     /// Goes on with a preempted Run: its dispatch, if a clause's patterns or
@@ -6538,6 +6596,8 @@ pub const Group = struct {
                 },
                 else => {},
             }
+            const unmatched = run.fallback or outcome == .unhandled or outcome == .clause_failed;
+            if (unmatched and run.mismatches.items.len > 0) out.print(" mismatches=[{s}]", .{run.mismatches.items}) catch {};
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
         }
         g.reportRunEnd(s, run, outcome, segment) catch {};
@@ -8313,10 +8373,14 @@ pub const Group = struct {
             run.called_clause = 0;
             const frame = &run.frames.items[run.frames.items.len - 1];
             const pc = frame.pc;
-            if (run.select_at) |at| if (run.frames.items.len == 1 and pc == at) {
-                run.select_at = null;
-                return .selected;
-            };
+            if (run.select_at) |at| {
+                if (run.frames.items.len == 1 and pc == at) {
+                    run.select_at = null;
+                    return .selected;
+                }
+                run.dispatch_prior = run.dispatch_pc;
+                run.dispatch_pc = if (run.frames.items.len == 1) pc else -1;
+            }
             // What landed at the last Host crossing, between instructions.
             if (!g.answering_crossing) g.flushHeld();
             if (!g.answering_crossing and !run.holding and g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) {
@@ -8504,6 +8568,7 @@ pub const Group = struct {
                 .clause_failed => {
                     const failed = &run.frames.items[run.frames.items.len - 1];
                     if (!failed.called or run.frames.items.len - 1 <= run.base) {
+                        if (g.trace != null and run.frames.items.len == 1 and !run.fallback) try g.clauseMismatch(run, failed);
                         g.popFrame(run);
                         return .clause_failed;
                     }

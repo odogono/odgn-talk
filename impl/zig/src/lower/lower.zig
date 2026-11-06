@@ -97,7 +97,16 @@ pub const Body = struct {
     may_suspend: bool,
     first: u32,
     last: u32,
+    /// For a Handler Clause, where its dispatch tests start, relative to
+    /// `first`, so a failure can be explained in the Trace (ADR 0172): each
+    /// Clause Shape's test, then the Guard. Tooling-only, never saved.
+    shape_tests: []const ShapeTest = &.{},
+    guard_at: u32 = 0,
 };
+
+/// A Clause Shape's test: its argument (0-based), where it starts, and the
+/// Shape: a definition's operand text, or a kind's.
+pub const ShapeTest = struct { arg: u32, at: u32, definition: ?[]const u8 = null, kind: ?[]const u8 = null };
 
 pub const Policy = enum { none, queued, dropping, replacing };
 
@@ -560,7 +569,17 @@ const Lowerer = struct {
         }
         // Each Clause Shape tests its whole argument as `is a` does, after
         // every pattern and before the Guard (ADR 0171).
+        var tests: std.ArrayList(ShapeTest) = .empty;
         for (h.shapes, 0..) |shape, i| if (shape) |k| {
+            var t: ShapeTest = .{ .arg = @intCast(i), .at = f.pc() };
+            if (!k.kind.civil_date and l.isShape(l.text(k.kind.name))) {
+                const shape_name = l.text(k.kind.name);
+                t.definition = if (l.localShape(shape_name) != null) shape_name else blk: {
+                    const im = l.imports.get(shape_name).?;
+                    break :blk try l.print("{s}:{s}", .{ im.library, im.name });
+                };
+            } else t.kind = try f.kindText(k.kind);
+            try tests.append(l.a, t);
             try f.load(@intCast(i + 1), k.is);
             if (!k.kind.civil_date and l.isShape(l.text(k.kind.name))) {
                 try f.loadShape(l.text(k.kind.name), k.is);
@@ -568,6 +587,8 @@ const Lowerer = struct {
             } else try f.emit(.is_kind, &.{.{ .text = try f.kindText(k.kind) }}, k.is, "");
             try f.jump(.branch_false, fail, k.is);
         };
+        f.body.info.shape_tests = try tests.toOwnedSlice(l.a);
+        f.body.info.guard_at = f.pc();
         if (h.guard) |g| try f.guard(g, fail);
         if (f.pc() > start) try f.body.unwind.append(f.l.work(), .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = 0, .depth = 0 });
         const guard_entry = if (f.pc() > start) f.body.unwind.items.len - 1 else null;

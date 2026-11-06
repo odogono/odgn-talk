@@ -508,3 +508,4 @@ result-targets/join
 result-targets/ordinary
 fallback/clause-shapes
 load-diagnostics/negated-shape
+fallback/clause-mismatches
