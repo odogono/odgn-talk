@@ -496,6 +496,21 @@ test('test runs each Test Handler against the Scripts beside it', () => {
   );
 });
 
+test('test explains why no Handler Clause took an unhandled message', () => {
+  const { dir, manifest } = testDir(
+    [
+      'on testShape',
+      '  send inc with "two" to counter',
+      'end testShape',
+      '',
+    ].join('\n'),
+  );
+  const { stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(stdout).toContain(
+    'counter has no Handler for inc\n    clause 1: takes a different number of arguments\n',
+  );
+});
+
 test('test reports a failed assertion, a background error and an unhandled message', () => {
   const { dir, manifest } = testDir(
     [

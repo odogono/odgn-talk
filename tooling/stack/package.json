@@ -15,7 +15,8 @@
     "./session-driver": "./src/session-driver.ts",
     "./test-script": "./src/test-script.ts",
     "./worker-supervisor": "./src/worker-supervisor.ts",
-    "./save-diff": "./src/save-diff.ts"
+    "./save-diff": "./src/save-diff.ts",
+    "./mismatches": "./src/mismatches.ts"
   },
   "scripts": {
     "typecheck": "tsc",

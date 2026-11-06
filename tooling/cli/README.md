@@ -130,7 +130,7 @@ bun run northtalk test --only testIncrements counter.test.talk
   - Each test starts at `2026-01-01T00:00:00Z`.
   - Time moves only on `advance`, or when the test waits with nothing else able to run. Then it jumps to the next deadline, so `wait for reply or 10 s` times out at once.
   - A test that waits for something that can never come fails.
-- **The pass rule:** a test passes when its Run completes, no Run in the Group errors and no message goes unhandled. After the test Run ends, the Group runs on to idle without moving the Clock, so a background error still fails it.
+- **The pass rule:** a test passes when its Run completes, no Run in the Group errors and no message goes unhandled. An unhandled message's failure lists why each Handler Clause passed it by, from the Trace's `mismatches` ([ADR 0172](../../docs/adr/0172-the-trace-explains-why-no-handler-clause-matched.md)), such as `clause 1: takes a different number of arguments`. After the test Run ends, the Group runs on to idle without moving the Clock, so a background error still fails it.
 - **Output:**
   - stdout has `ok <file> <test>` for a pass.
   - A failure prints `FAIL <file>:<line>:<col> <test>`, each problem indented, and the console output as ` |` lines. The position is where the error was raised. For an assertion, or an error raised in stdlib code, it's the call that raised it, and for a failure with no position, or one in a Host Manifest's Library, it's the Test Handler's.
