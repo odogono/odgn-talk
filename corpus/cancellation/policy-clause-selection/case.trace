@@ -23,7 +23,7 @@ seg s/r3 start delivery=d3 handler=work clause=3 fuel=41 alloc=0 state=730 end=d
 run s/r3 outcome=dropped delivery=d3 handler=work fuel=41 alloc=0
 seg s/r4 start delivery=d4 handler=work clause=1 fuel=14 alloc=0 state=922 end=park
 seg s/r5 start delivery=d5 handler=work fuel=24 alloc=0 state=872 end=unhandled
-run s/r5 outcome=unhandled delivery=d5 handler=work fuel=24 alloc=0
+run s/r5 outcome=unhandled delivery=d5 handler=work mismatches=[{clause: 1, reason: "pattern"}, {clause: 2, reason: "pattern"}, {clause: 3, reason: "pattern"}] fuel=24 alloc=0
 unhandled d5 message=work args=["no"]
 pumped state=idle fuel=161 next=2026-10-03T12:00:01Z
 > counters s

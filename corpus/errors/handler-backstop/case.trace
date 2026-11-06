@@ -23,7 +23,7 @@ raise recursive/r1 code="first" at=recursive:5 pos=4:3
 seg recursive/r1 start delivery=d3 handler=fail clause=1 fuel=19 alloc=48 state=16 end=error
 run recursive/r1 outcome=errored delivery=d3 handler=fail error={code: "first", at: {unit: "recursive", handler: "fail", line: 4, column: 3}} fuel=19 alloc=48
 seg unmatched/r2 start from=unmatched/r1 handler=error fuel=13 alloc=0 state=0 end=unhandled
-run unmatched/r2 outcome=unhandled handler=error fuel=13 alloc=0
+run unmatched/r2 outcome=unhandled handler=error mismatches=[{clause: 1, reason: "pattern"}] fuel=13 alloc=0
 raise recursive/r2 code="second" at=recursive:16 pos=9:3
 seg recursive/r2 start from=recursive/r1 handler=error clause=1 fuel=28 alloc=164 state=132 end=error
 run recursive/r2 outcome=errored handler=error error={code: "second", at: {unit: "recursive", handler: "error", line: 9, column: 3}} fuel=28 alloc=164
@@ -44,7 +44,7 @@ counters recursive fuel=47 alloc=212 runs=2 faults=0 state=132 mailbox=0
 > deliver d7 to=recursive message=unknown
 > pump clock=2026-09-30T10:00:00Z
 seg unmatched/r3 start delivery=d4 handler=error fuel=13 alloc=0 state=0 end=unhandled
-run unmatched/r3 outcome=unhandled delivery=d4 handler=error fuel=13 alloc=0
+run unmatched/r3 outcome=unhandled delivery=d4 handler=error mismatches=[{clause: 1, reason: "pattern"}] fuel=13 alloc=0
 unhandled d4 message=error args=[{code: "host"}]
 raise recursive/r3 code="second" at=recursive:16 pos=9:3
 seg recursive/r3 start delivery=d5 handler=error clause=1 fuel=28 alloc=64 state=212 end=error

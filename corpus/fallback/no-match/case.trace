@@ -16,9 +16,9 @@ seg a/r1 start delivery=d1 handler=go clause=1 fuel=102 alloc=220 state=256 end=
 seg b/r1 start from=a/r1 handler=missing fallback=yes clause=1 fuel=28 alloc=74 state=219 end=return
 run b/r1 outcome=completed handler=missing fallback=yes value="I don't know how to missing" fuel=28 alloc=74
 seg b/r2 start from=a/r1 handler=greet fallback=yes clause=1 fuel=40 alloc=70 state=197 end=return
-run b/r2 outcome=completed handler=greet fallback=yes value="I don't know how to greet" fuel=40 alloc=70
+run b/r2 outcome=completed handler=greet fallback=yes value="I don't know how to greet" mismatches=[{clause: 1, reason: "guard"}] fuel=40 alloc=70
 seg b/r3 start from=a/r1 handler=greet fallback=yes clause=1 fuel=28 alloc=70 state=156 end=return
-run b/r3 outcome=completed handler=greet fallback=yes value="I don't know how to greet" fuel=28 alloc=70
+run b/r3 outcome=completed handler=greet fallback=yes value="I don't know how to greet" mismatches=[{clause: 1, reason: "arity"}] fuel=28 alloc=70
 seg b/r4 start from=a/r1.c1 handler=greet clause=1 fuel=18 alloc=25 state=105 end=return
 run b/r4 outcome=completed handler=greet value="hello Ann" fuel=18 alloc=25
 send a/r1.c2 to=b message=frobnicate wait=yes

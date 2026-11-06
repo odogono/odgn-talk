@@ -1,0 +1,19 @@
+-- piece.talk: four clauses for move, each skipped for a different reason.
+
+shape Square is {file: text, rank: number}
+
+on move sq is a Square
+  return "square"
+end move
+
+on move [file, rank]
+  return file
+end move
+
+on move sq where the rank of sq > 8
+  return "off the board"
+end move
+
+on move a, b
+  return a
+end move

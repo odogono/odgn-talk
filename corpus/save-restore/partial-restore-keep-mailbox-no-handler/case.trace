@@ -21,7 +21,7 @@ stopped a reason="reload" discarded=[a/r1] dropped=[d2]
 
 > pump clock=2026-10-28T10:00:01Z
 seg a/r2 start delivery=d2 handler=note fuel=12 alloc=0 state=16 end=unhandled
-run a/r2 outcome=unhandled delivery=d2 handler=note fuel=12 alloc=0
+run a/r2 outcome=unhandled delivery=d2 handler=note mismatches=[{clause: 1, reason: "guard"}] fuel=12 alloc=0
 unhandled d2 message=note args=["v1"]
 pumped state=idle fuel=12
 

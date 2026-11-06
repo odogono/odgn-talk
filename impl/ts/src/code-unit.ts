@@ -42,6 +42,15 @@ export type Body = {
   params: string[];
   policy?: 'queued' | 'dropping' | 'replacing';
   start: number;
+  /**
+   * For a Handler Clause, where its dispatch tests start, so a failure can be
+   * explained in the Trace (ADR 0172): each Clause Shape's first instruction,
+   * its argument and Shape, then the Guard's. Tooling-only, never saved.
+   */
+  tests?: {
+    guardAt: number;
+    shapes: { arg: number; at: number; definition?: number; kind?: string }[];
+  };
 };
 /** The argument counts a function body accepts: `wrong arity` and `functionArity` read the same range. */
 export const arityOf = (body: Body): { max: number; min: number } =>

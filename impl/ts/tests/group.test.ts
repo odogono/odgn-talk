@@ -306,7 +306,7 @@ describe('Deliveries and Pumps', () => {
     g.pump(clock);
     expect(lines.slice(-4)).toEqual([
       'seg a/r1 start delivery=d1 handler=go fuel=0 alloc=0 state=0 end=unhandled',
-      'run a/r1 outcome=unhandled delivery=d1 handler=go fuel=0 alloc=0',
+      'run a/r1 outcome=unhandled delivery=d1 handler=go mismatches=[{clause: 1, reason: "arity"}] fuel=0 alloc=0',
       'unhandled d1 message=go',
       'pumped state=idle fuel=0',
     ]);

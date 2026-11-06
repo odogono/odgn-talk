@@ -60,6 +60,7 @@ import {
   msOf,
   type Suspension,
   type Script as Loaded,
+  type ClauseMismatch,
 } from './machine';
 import {
   abandon,
@@ -77,6 +78,9 @@ import {
   type ChargeResult,
   type ReleaseReason,
   type CapabilityDef,
+  decodeShape,
+  diagnosticRecord,
+  shapeDiagnostics,
 } from './capabilities';
 import { isMusicalClock, MUSICAL_CLOCK } from './standard-capabilities';
 import { languageVersion, costModel } from './generated/machine';
@@ -6556,6 +6560,12 @@ export class TsGroup implements Group {
                 )
               : null,
           ],
+          [
+            'mismatches',
+            (outcome.kind === 'unhandled' || fallback) && run.mismatches.length
+              ? traceValue(mismatchesValue(run.mismatches))
+              : null,
+          ],
           ['fuel', String(run.fuel)],
           ['alloc', String(run.alloc)],
         ],
@@ -7187,3 +7197,27 @@ export const restore = (bytes: Uint8Array, options: TsRestoreOptions) => {
   primeFastSteps();
   return TsGroup.restore(bytes, options);
 };
+
+/**
+ * A Run's `mismatches`, built only for the Trace and charged to no one
+ * (ADR 0172): each skipped named clause's reason, and for a Clause Shape,
+ * what `explain` gives for its argument.
+ */
+const mismatchesValue = (mismatches: ClauseMismatch[]): Value =>
+  listValues(
+    mismatches.map(m => {
+      const entries: [string, Value][] = [
+        ['clause', num(m.clause)],
+        ['reason', text(m.reason)],
+      ];
+      if (m.reason === 'shape') {
+        entries.push(['argument', num(m.argument!)]);
+        const shape = m.shape && decodeShape(m.shape).shape;
+        if (shape) {
+          const { diags } = shapeDiagnostics(m.value!, shape, false, 0);
+          entries.push(['mismatches', listValues(diags.map(diagnosticRecord))]);
+        }
+      }
+      return map(entries);
+    }),
+  );

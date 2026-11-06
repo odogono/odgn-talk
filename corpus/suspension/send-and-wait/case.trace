@@ -24,7 +24,7 @@ seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=123
 send front/r4.c1 to=back message=quote args=["slow"] wait=yes
 seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=1502 end=send-wait
 seg back/r3 start from=front/r3.c1 handler=quote fuel=24 alloc=0 state=52 end=unhandled
-run back/r3 outcome=unhandled handler=quote fuel=24 alloc=0
+run back/r3 outcome=unhandled handler=quote mismatches=[{clause: 1, reason: "pattern"}, {clause: 2, reason: "pattern"}, {clause: 3, reason: "pattern"}] fuel=24 alloc=0
 unhandled message=quote args=["other"]
 seg front/r1 resume fuel=14 alloc=28 state=1196 end=return
 run front/r1 outcome=completed delivery=d1 handler=query fuel=42 alloc=78
