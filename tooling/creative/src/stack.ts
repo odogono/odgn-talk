@@ -1240,6 +1240,7 @@ export const mountStack = (
       edit(() => editor.edit(({ tree }) => tree.setPlayByPerforming(perform)));
     }
   });
+  scripts.onAddMusicSound(addMusicSound);
   // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in; the
   // Sounds window's Add from Music… opens the same dialog (#2048).
   const showMusicSounds = () =>

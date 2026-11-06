@@ -16,6 +16,7 @@
     "start": "bun tools/serve.ts"
   },
   "dependencies": {
+    "@codemirror/lint": "^6.9.7",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@northtalk/ts": "workspace:*",

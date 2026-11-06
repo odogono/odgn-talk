@@ -52,6 +52,7 @@
     "tooling/creative": {
       "name": "@northtalk/creative",
       "dependencies": {
+        "@codemirror/lint": "^6.9.7",
         "@codemirror/state": "^6.7.6",
         "@codemirror/view": "^6.43.13",
         "@northtalk/editor": "workspace:*",
