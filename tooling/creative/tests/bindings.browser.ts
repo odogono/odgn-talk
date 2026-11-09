@@ -141,7 +141,7 @@ export const runBrowserTests = async () => {
     shell.redraw();
   });
 
-  document.querySelector<HTMLButtonElement>('#menu [aria-pressed]')!.click();
+  document.querySelector<HTMLButtonElement>('#present-project')!.click();
   await until(() => !!reader('cutoff'), 'Present shows the knob');
 
   // The meter rising also shows the audio is running before the drag.
@@ -195,6 +195,6 @@ export const runBrowserTests = async () => {
     );
   });
 
-  document.querySelector<HTMLButtonElement>('#menu [aria-pressed]')!.click();
+  document.querySelector<HTMLButtonElement>('#present-project')!.click();
   return results;
 };

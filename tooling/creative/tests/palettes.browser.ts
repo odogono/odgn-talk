@@ -70,7 +70,9 @@ const tool = (name: string) =>
     button => button.textContent?.includes(name),
   )!;
 const toggle = () =>
-  document.querySelector<HTMLButtonElement>('#play-controls [aria-pressed]')!;
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
+const present = () =>
+  document.querySelector<HTMLButtonElement>('#present-project')!;
 const menuItem = (name: string) =>
   document.querySelector<HTMLButtonElement>(
     `#window-menu [data-palette="${name}"]`,
@@ -161,7 +163,7 @@ export const runBrowserTests = async () => {
   for (const mode of ['Browse', 'Present'] as const) {
     await test(`${mode} shows open Palettes in windows whose Scripts outlast Page changes`, async () => {
       shell.editor.goToPage(0);
-      (mode === 'Present' ? toggle() : tool('Browse')).click();
+      (mode === 'Present' ? present() : toggle()).click();
       await until(() => isOpen('mixer'), 'mixer');
       assert(!isOpen('extras'), 'A Palette not set to open stays closed');
       assert(
@@ -189,7 +191,7 @@ export const runBrowserTests = async () => {
 
   await test('the Window menu lists Palettes while browsing, and a Script shows one', async () => {
     shell.editor.goToPage(0);
-    tool('Browse').click();
+    toggle().click();
     await until(() => !!menuItem('extras'), 'the menu items');
     assert(
       menuItem('mixer')!.textContent === 'The mixer' &&
@@ -213,7 +215,7 @@ export const runBrowserTests = async () => {
   });
 
   await test('a dragged Palette window keeps its place in the next session', async () => {
-    tool('Browse').click();
+    toggle().click();
     await until(() => isOpen('mixer'), 'mixer');
     const bar = win('mixer')!.querySelector<HTMLElement>('.bar')!;
     const start = bar.getBoundingClientRect();
@@ -229,7 +231,7 @@ export const runBrowserTests = async () => {
     const moved = win('mixer')!.offsetLeft;
     tool('Edit').click();
     await until(() => !win('mixer'), 'Play to end');
-    tool('Browse').click();
+    toggle().click();
     await until(() => !!win('mixer'), 'mixer again');
     assert(
       win('mixer')!.offsetLeft === moved,

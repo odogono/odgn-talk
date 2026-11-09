@@ -193,7 +193,7 @@ const pageIndexOf = (event: Event) => {
   return index === undefined ? undefined : Number(index);
 };
 
-export type PlayMode = 'browse' | 'perform' | 'present';
+export type PlayMode = 'browse' | 'present';
 
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
@@ -206,23 +206,21 @@ export type StackShell = {
     setLoaded(loaded: LoadedSource | undefined): void;
     showStopped(at: { line: number; source: CodeSelection } | undefined): void;
   };
-  /** The Code Browser's shown source, for Perform's tabs (#2000). */
+  /** The Code Browser's shown source, for Revert (#2002). */
   code: {
-    onShow(listener: (source: CodeSelection, label: string) => void): void;
     replace(text: string): void;
     readonly selected: CodeSelection;
-    show(source: CodeSelection): void;
   };
   editor: StackEditor;
   images: ImageAssets;
-  /** The Instruments window during Perform (ADR 0167, #2081). */
+  /** The Instruments window while browsing (ADR 0167, ADR 0174). */
   instruments: {
     /**
      * Hears each parameter the window changes for the running Instruments:
      * while dragged, and after each authored change, undo and redo.
      */
     onLive(listener: (change: LiveParameter) => void): void;
-    /** The parameters as they play while performing; undefined otherwise. */
+    /** The parameters as they play while browsing; undefined otherwise. */
     playing: Signal<PlayingParameters | undefined>;
   };
   onRedraw(listener: () => void): void;
@@ -337,13 +335,13 @@ export const mountStack = (
   });
   const instrumentsPanel = byId('instruments-panel');
   const selectedInstrument = signal<number | undefined>(undefined);
-  // While performing, the window's changes reach the running Instruments
+  // While browsing, the window's changes reach the running Instruments
   // (#2081): a drag as it moves, and every authored change, undo and redo
   // as the Project changes.
   const playingParameters = signal<PlayingParameters | undefined>(undefined);
   const liveListeners = new Set<(change: LiveParameter) => void>();
   const sendLive = (change: LiveParameter) => {
-    if (playing.peek() === 'perform') {
+    if (playing.peek() === 'browse') {
       for (const listener of liveListeners) {
         listener(change);
       }
@@ -542,12 +540,6 @@ export const mountStack = (
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     (byId('add-palette') as HTMLButtonElement).disabled = editor.readOnly;
     drawTools();
-    const performing = byId('play-by-performing') as HTMLButtonElement;
-    performing.setAttribute(
-      'aria-checked',
-      String(editor.project.play === 'perform'),
-    );
-    performing.disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
       button.disabled = editor.readOnly;
     }
@@ -648,11 +640,7 @@ export const mountStack = (
             'paletteWidth',
             Math.max(MIN_PAGE_WIDTH, value as number),
           );
-        } else if (
-          key === 'paletteTitle' ||
-          key === 'openOnPlay' ||
-          key === 'floatInPerform'
-        ) {
+        } else if (key === 'paletteTitle' || key === 'openOnPlay') {
           draft.tree.setProperty(page, key, value as string | boolean);
         } else if (key === 'alignX' || key === 'alignY') {
           draft.tree.setProperty(page, key, String(value));
@@ -1233,13 +1221,6 @@ export const mountStack = (
       ...offered.map(k => toolButton(k.kind, k.label, k.icon ?? '')),
     );
   };
-  // Project ▸ Play by Performing (#2028) chooses how Play runs the Project.
-  byId('play-by-performing').addEventListener('click', () => {
-    if (!editor.readOnly) {
-      const perform = editor.project.play !== 'perform';
-      edit(() => editor.edit(({ tree }) => tree.setPlayByPerforming(perform)));
-    }
-  });
   scripts.onAddMusicSound(addMusicSound);
   // Project ▸ Add Sound from Music… (#2027) copies Music's sounds in; the
   // Sounds window's Add from Music… opens the same dialog (#2048).
@@ -1472,12 +1453,10 @@ export const mountStack = (
       showStopped: at => scripts.showStopped(at),
     },
     code: {
-      onShow: listener => scripts.onShow(listener),
       replace: text => scripts.replace(text),
       get selected() {
         return scripts.selected;
       },
-      show: source => scripts.show(source),
     },
     editor,
     images,
@@ -1507,7 +1486,7 @@ export const mountStack = (
       closeText();
       byId('edit-menu').removeAttribute('open');
       playing.value = mode;
-      playingParameters.value = mode === 'perform' ? {} : undefined;
+      playingParameters.value = mode === 'browse' ? {} : undefined;
       editor.readOnly = readOnly || mode === 'present';
       draw();
     },

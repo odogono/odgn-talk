@@ -1489,8 +1489,7 @@ button:disabled {
 .browsing #stage,
 .browsing #strip,
 .browsing #info-window,
-.browsing #sounds-window,
-.browsing #instruments-window {
+.browsing #sounds-window {
   display: none;
 }
 #desk #reader {
@@ -1860,143 +1859,10 @@ body.playing #performance-window {
   justify-content: flex-end;
 }
 
-/* Perform (#1999): the stage on the left, the code and docked Palettes on
-   the right, with a draggable divider between them. */
-#perform {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 60fr auto 40fr;
-}
-#perform[hidden] {
-  display: none;
-}
-.perform-stage {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-.perform-stage #reader {
-  flex: 1;
-  min-width: 0;
-}
-.perform-divider {
-  width: 6px;
-  cursor: col-resize;
-  background: var(--line);
-}
-.perform-divider:focus-visible {
-  outline: 2px solid var(--accent, #36c);
-}
-.perform-side {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  border-left: 1.5px solid var(--line);
-}
-.perform-code {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.perform-code .code-browser.docked {
-  position: static;
-  background: var(--panel);
-  flex: 1;
-  width: auto;
-  height: auto;
-  box-shadow: none;
-  border: 0;
-  display: flex;
-  flex-direction: column;
-}
-.perform-code .code-browser.docked > .bar .close {
-  display: none;
-}
-/* Perform's code pane shows one Script at a time (#2000): the recent ones
-   as tabs above it, and the latest error over it. */
-.perform-code .code-browser.docked .code-browser-columns {
-  display: none;
-}
-.perform-tabs {
-  display: flex;
-  gap: 2px;
-  overflow-x: auto;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-}
-.perform-tabs:empty {
-  display: none;
-}
-.perform-tabs [role='tab'] {
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: transparent;
-  padding: 0.3rem 0.7rem;
-  white-space: nowrap;
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.perform-tabs [aria-selected='true'] {
-  background: var(--panel);
-  font-weight: 600;
-}
-.perform-error {
-  padding: 0.4rem 0.7rem;
-  background: var(--error);
-  color: #fff;
-  font-size: 0.9rem;
-}
-.perform-error[hidden] {
-  display: none;
-}
-/* Perform docks Palettes in the column under the code (#2001); one set to
-   float keeps its window over the stage. */
-.perform-palettes {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
-  padding: 6px;
-  max-height: 50%;
-  overflow: auto;
-  border-top: 1.5px solid var(--line);
-  background: var(--bg);
-}
-.perform-palettes:not(:has(.window:not([hidden]))) {
-  display: none;
-}
-.perform-palettes .window.docked {
-  position: static;
-  box-shadow: none;
-}
-/* Perform docks the Instruments window with the Palettes (#2081); its close
-   box collapses it as a docked Palette's does. */
-.performing .perform-palettes #instruments-window.docked:not([hidden]) {
-  display: flex;
-  max-width: none;
-  max-height: none;
-  resize: none;
-}
-/* Perform keeps the Window menu, to open and close Palettes. */
-.performing #window-menu {
-  display: revert;
-}
-/* Perform's toolbar (#2002): Hush, Revert, and the tempo and bar. */
-.perform-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-}
-.perform-toolbar [data-hush] {
-  font-weight: 600;
-}
-.perform-clock {
-  margin-left: auto;
+/* Browse's live-coding controls (ADR 0174): the tempo and bar. */
+.play-clock {
   font-variant-numeric: tabular-nums;
+}
+.play-clock:empty {
+  display: none;
 }

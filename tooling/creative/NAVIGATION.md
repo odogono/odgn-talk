@@ -212,34 +212,24 @@ landed, and the Issue graph job ticks it as they close.
 - Tests: [add-on-signing.test.ts](tests/add-on-signing.test.ts) and the
   WebCrypto case in the `add-ons` browser suite.
 
-## Perform
+## Play and Present
 
-- [perform-layout.ts](src/perform-layout.ts): the Perform layout (#1999):
-  stage, divider and docked Code Browser, with the divider and code zoom
-  kept per Project in browser storage. [play-view.ts](src/play-view.ts)
-  starts the `perform` Play mode and ⌘+/⌘−. Its one header button plays the
-  Project's way, `Project.play` (#2028), which Project ▸ Play by Performing
-  sets; ⌘⇧↩ (`isPerformKey` in [shortcuts.ts](src/shortcuts.ts)) plays the
-  other way once. Format 12's
-  [controls/migration.ts](src/add-ons/controls/migration.ts) makes Music
-  copies perform and lists the controls Add-on where controls are used.
-  Tests: [play-by-performing.test.ts](tests/play-by-performing.test.ts).
-- Code pane (#2000): `recentTabs`, the tab bar and the error banner are in
-  perform-layout.ts; [scripts.ts](src/scripts.ts) `onShow`/`show` feed the
-  tabs through `shell.code`; play-view.ts handles ⌥-click and lets Punch In
-  run while performing (`punching` in [play-controls.ts](src/play-controls.ts)).
-- Docked Palettes (#2001): `PaletteSettings.float` (file `float`, Info
-  `floatInPerform`); [palette-windows.ts](src/palette-windows.ts) docks a
-  window in the layout's `palettes` column through its `dock` option.
-- Toolbar (#2002): `PlaySession.hush` in [play.ts](src/play.ts) behind the
-  `hush` request; [play-host.ts](src/play-host.ts) sends a `TransportView`
-  anchor that `clockText` in perform-layout.ts counts on from; Revert uses
-  `shell.code.replace` with play-view.ts's loaded source.
-- Tests: [perform-layout.test.ts](tests/perform-layout.test.ts) and the
-  `perform`, `perform-code`, `perform-palettes` and `perform-toolbar`
-  browser suites, and the Hush case in
-  [sound-patterns.test.ts](tests/sound-patterns.test.ts).
-- First check: `bun test tooling/creative/tests/perform-layout.test.ts`.
+- [play-view.ts](src/play-view.ts): the header's Play button browses in
+  place and stops (ADR 0174); Project ▸ Present (`#present-project` in
+  [static/index.html](static/index.html), ⌘⇧↩ `isPresentKey` in
+  [shortcuts.ts](src/shortcuts.ts)) plays full-window. Perform (#1999) was
+  removed; format 12's `play` and a Palette's `float` are read and dropped
+  in [project-file.ts](src/project-file.ts).
+- Live-coding controls while browsing:
+  [transport-controls.ts](src/transport-controls.ts) holds Hush, Revert and
+  the clock (`clockText`); `PlaySession.hush` in [play.ts](src/play.ts) is
+  behind the `hush` request, and [play-host.ts](src/play-host.ts) sends the
+  `TransportView` anchor. Revert uses `shell.code.replace` with
+  play-view.ts's loaded source.
+- Tests: [transport-controls.test.ts](tests/transport-controls.test.ts),
+  [play-setting.test.ts](tests/play-setting.test.ts) and the
+  `browse-toolbar` browser suite.
+- First check: `bun test tooling/creative/tests/play-setting.test.ts`.
 
 ## Group Elements
 
@@ -333,7 +323,7 @@ path and commit it came from. No original game's sound assets are included.
 - Tests: [transport.test.ts](tests/transport.test.ts) covers the grid, tempo
   and time-signature changes, Waits, `beat` delivery, sound times,
   `wait 2 beats` and Pause; [musical-time.test.ts](tests/musical-time.test.ts)
-  plays arrangements with `wait N bars` on Perform and Punch In, with Hush
+  plays arrangements with `wait N bars` as played and Punched In, with Hush
   and Stop; [audio-clock.test.ts](tests/audio-clock.test.ts) covers the clock.
 - First check: `bun test tooling/creative/tests/transport.test.ts tooling/creative/tests/musical-time.test.ts tooling/creative/tests/audio-clock.test.ts`.
 - Browser: `beats` suite on `/beats-test.html` plays beats through the real
@@ -386,17 +376,16 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   for slider positions (linear or log), keyboard and drag steps, and value
   text. Typed values go through `parameterTextNumber` in
   `parameter-units.ts`.
-- Live during Perform (ADR 0167, #2081):
+- Live while browsing (ADR 0167, ADR 0174, #2081):
   [instruments/live.ts](src/instruments/live.ts) finds the parameters an
   authored change, undo or redo moved; [stack.ts](src/stack.ts) sends them,
   and a drag's moves, to `shell.instruments.onLive`, which
   [play-view.ts](src/play-view.ts) sends to the audio and the worker
   (`instrumentParameter`). Views carry the playing values (`instruments`),
   which the window shows with a tick at the saved value.
-  [perform-layout.ts](src/perform-layout.ts) docks the window;
   `boundControls` in [bindings.ts](src/bindings.ts) finds the 🔗 rows.
   Tests: [live.test.ts](tests/instruments/live.test.ts), and the
-  `instruments` and `perform-palettes` browser suites.
+  `instruments` browser suite.
 - Auditioning (#2080): [instruments/audition.ts](src/instruments/audition.ts)
   builds the messages ▶ and the computer keyboard send, and picks a
   sampler's sound; [instruments/preview.ts](src/instruments/preview.ts)

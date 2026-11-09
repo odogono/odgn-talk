@@ -189,8 +189,6 @@ export type Page = {
  * are its size.
  */
 export type PaletteSettings = {
-  /** Whether Perform floats its window over the stage instead of docking it (#2001). */
-  float?: boolean;
   /** Whether Play opens its window when it starts. */
   openOnPlay: boolean;
   /** The window's title; absent means the Palette's name. */
@@ -320,8 +318,6 @@ export type Project = {
   libraries: ProjectLibrary[];
   name: string;
   pages: Page[];
-  /** How Play runs it (#2028): absent presents, `perform` performs. */
-  play?: 'perform';
   /** The Project Script source. */
   script: string;
   testScripts: ProjectTestScript[];

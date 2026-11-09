@@ -49,12 +49,14 @@ export const runBrowserTests = async () => {
       document.querySelector<HTMLElement>('#page [data-element="input1"]')!,
     ),
   );
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
+    '#play-controls [data-play]',
   )!;
   const readerButton = () =>
     document.querySelector<HTMLElement>('#reader [data-element="button1"]')!;
-  toggle.click();
+  present.click();
   readerButton().click();
   await until(() => readerButton().textContent === 'Clicked');
   const field = document.querySelector<HTMLElement>(
@@ -159,7 +161,7 @@ export const runBrowserTests = async () => {
       JSON.stringify(serializeProject(original)),
     'Play mutated authored data',
   );
-  toggle.click();
+  present.click();
   assert(!shell.readOnly, 'Edit remains locked');
   assert(toolbar.hidden, 'Reader toolbar visible in Edit');
   assert(
@@ -175,18 +177,18 @@ export const runBrowserTests = async () => {
       'Button',
     'Edit did not restore label',
   );
-  toggle.click();
+  present.click();
   assert(readerButton().textContent === 'Button', 'New Play kept old state');
   assert(
     document.querySelector('#reader [data-element="input1"]')!.textContent ===
       'Authored journal',
     'New Play kept reader text',
   );
-  toggle.click();
+  present.click();
   button.script =
     'on click {button: 0}\n set the text of input1 to "Authored journal"\nend click';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const replaced = document.querySelector<HTMLElement>(
     '#reader [data-element="input1"]',
   )!;
@@ -206,7 +208,7 @@ export const runBrowserTests = async () => {
       .disabled,
     'Script replacement kept stale reader undo',
   );
-  toggle.click();
+  present.click();
   const second = createPage('page2');
   const back = createElement('button', 'button1');
   back.script = 'on click {button: 0}\n tell pages to show page1\nend click';
@@ -216,7 +218,7 @@ export const runBrowserTests = async () => {
     'on click {button: 0}\n set the label of me to "Kept"\n tell pages to show page2\nend click';
   input.script = '';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const journal = document.querySelector<HTMLElement>(
     '#reader [data-element="input1"]',
   )!;
@@ -249,13 +251,13 @@ export const runBrowserTests = async () => {
     ) === keptRichText,
     'Navigation lost reader text or formatting',
   );
-  toggle.click();
+  present.click();
   button.script =
     'on click {button: 0}\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Finished"\nend click';
   input.script =
     'on pointerEnter\n set the text of me to "Responsive"\nend pointerEnter';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   readerButton().click();
   await until(() => readerButton().textContent === 'Waiting');
   document
@@ -271,7 +273,7 @@ export const runBrowserTests = async () => {
     'Wait blocked other Scripts',
   );
   await until(() => readerButton().textContent === 'Finished');
-  toggle.click();
+  present.click();
 
   // The Page and Element Runs must be cancelled, while the Project Run lives.
   project.script =
@@ -282,7 +284,7 @@ export const runBrowserTests = async () => {
     'on click {button: 0}\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\n send leaked to project\nend click';
   input.script = 'on click {button: 0}\n tell pages to show page2\nend click';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   readerButton().click();
   await until(() => readerButton().textContent === 'Waiting');
   document
@@ -304,7 +306,7 @@ export const runBrowserTests = async () => {
     () => !!document.querySelector('#reader [data-element="input1"]'),
   );
   assert(readerButton().textContent === 'Waiting', 'Departed Element wait ran');
-  toggle.click();
+  present.click();
 
   project.script =
     'on startPlay\n wait 200 ms\n set the height of page1 to 999\nend startPlay';
@@ -315,7 +317,7 @@ export const runBrowserTests = async () => {
   shell.editor.replaceProject(project);
   const waitingOriginal = structuredClone(project);
   for (const action of ['Stop', 'Escape']) {
-    toggle.click();
+    present.click();
     readerButton().click();
     await until(() => readerButton().textContent === 'Waiting');
     if (action === 'Escape') {
@@ -357,7 +359,7 @@ export const runBrowserTests = async () => {
   button.script =
     'on click {button: 0}\n repeat forever\n end repeat\nend click';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   readerButton().click();
   await new Promise(resolve => setTimeout(resolve, 10));
   document.dispatchEvent(
@@ -370,7 +372,7 @@ export const runBrowserTests = async () => {
   assert(!shell.readOnly, 'Runaway blocked Edit');
   button.script = 'on click {button: 0}\n put missing into x\nend click';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const findErrorLink = () =>
     [
       ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
@@ -389,7 +391,7 @@ export const runBrowserTests = async () => {
     'Error link did not select line',
   );
   assert(view.state.readOnly, 'Script editor allows authored changes in Play');
-  toggle.click();
+  present.click();
   assert(
     document.querySelectorAll('#error-list li').length === 1 &&
       !document.querySelector<HTMLElement>('#errors-window')!.hidden,
@@ -398,11 +400,9 @@ export const runBrowserTests = async () => {
 
   // Browsing plays in place beside the windows; Scripts stay editable and
   // apply to the next session.
-  const mode = (name: string) =>
-    [
-      ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
-    ].find(b => b.textContent?.includes(name))!;
-  mode('Browse').click();
+  document
+    .querySelector<HTMLButtonElement>('#play-controls [data-play]')!
+    .click();
   assert(
     document.body.classList.contains('browsing') &&
       document.querySelector('#desk #reader') &&
@@ -440,7 +440,9 @@ export const runBrowserTests = async () => {
       document.querySelector<HTMLElement>('#reader')!.hidden,
     'Esc did not leave Browse',
   );
-  mode('Browse').click();
+  document
+    .querySelector<HTMLButtonElement>('#play-controls [data-play]')!
+    .click();
   await until(() => !document.querySelectorAll('#error-list li').length).catch(
     () => {
       throw new Error('Fixed Script still reported');
@@ -459,7 +461,7 @@ export const runBrowserTests = async () => {
   shell.editor.undo();
   shell.redraw();
   shell.setReadOnly(true);
-  toggle.click();
+  present.click();
   assert(shell.readOnly, 'Returning to Edit lost external read-only state');
   return {
     passed: true,
@@ -503,12 +505,11 @@ end click`;
   const before = structuredClone(project);
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const element = (name: string) =>
     document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`);
-  toggle.click();
+  present.click();
   await until(
     () => !!element('original2') && element('made')?.textContent === 'Created',
   );
@@ -527,7 +528,7 @@ end click`;
   );
   element('original')!.click();
   await until(() => !element('original'));
-  toggle.click();
+  present.click();
   assert(
     JSON.stringify(serializeProject(shell.editor.project)) ===
       JSON.stringify(serializeProject(before)),
@@ -563,9 +564,8 @@ on frame elapsed
 end frame`;
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const counter = () =>
     Number(
       document.querySelector('#reader [data-element="counter"]')?.textContent,
@@ -574,7 +574,7 @@ end frame`;
     ...document.querySelectorAll<HTMLButtonElement>('#play-controls button'),
   ].slice(1);
   assert(pause!.disabled && step!.disabled, 'Pause or Step enabled in Edit');
-  toggle.click();
+  present.click();
   await until(() => counter() >= 10);
   assert(!pause!.disabled && step!.disabled, 'Pause or Step wrong in Present');
   pause!.click();
@@ -599,7 +599,7 @@ end frame`;
   );
   await until(() => pause!.textContent === 'Pause' && step!.disabled);
   await until(() => counter() >= paused + 10);
-  toggle.click();
+  present.click();
   const stopped = document.querySelector(
     '#page [data-element="counter"]',
   )?.textContent;
@@ -627,9 +627,8 @@ export const runKeyBrowserTests = async () => {
   project.pages[0]!.elements.push(button);
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const reader = document.querySelector<HTMLElement>('#reader')!;
   const press = () => {
     const event = new KeyboardEvent('keydown', {
@@ -640,7 +639,7 @@ export const runKeyBrowserTests = async () => {
     reader.dispatchEvent(event);
     return event.defaultPrevented;
   };
-  toggle.click();
+  present.click();
   assert(!press(), 'An unhandled arrow key was claimed');
   const unhandledRelease = new KeyboardEvent('keyup', {
     key: 'ArrowDown',
@@ -649,25 +648,25 @@ export const runKeyBrowserTests = async () => {
   });
   reader.dispatchEvent(unhandledRelease);
   assert(!unhandledRelease.defaultPrevented, 'An unhandled keyUp was claimed');
-  toggle.click();
+  present.click();
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to key\nend keyDown';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   assert(press(), 'A handled arrow key still scrolls');
   await until(
     () =>
       document.querySelector('#reader [data-element="last"]')?.textContent ===
       'ArrowDown',
   );
-  toggle.click();
+  present.click();
   // Space on a focused button clicks it without also reaching the Page.
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to "key " & key\nend keyDown';
   button.script =
     'on click {button: 0}\n set the label of me to "clicked"\nend click';
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const last = () =>
     document.querySelector<HTMLElement>('#reader [data-element="last"]')!;
   last().focus();
@@ -680,14 +679,14 @@ export const runKeyBrowserTests = async () => {
   // A pointer click leaves focus with the Page, so Space reaches it.
   last().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
   assert(document.activeElement === reader, 'A pointer click kept focus');
-  toggle.click();
+  present.click();
   // keyUp has its own Handler and claims only Page keys on its path.
   project.pages[0]!.script = '';
   project.script = `on keyUp key
  set the label of element "last" of page1 to the label of element "last" of page1 & " up " & key
 end keyUp`;
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const keyEvent = (
     type: 'keydown' | 'keyup',
     key = 'ArrowDown',
@@ -708,7 +707,7 @@ end keyUp`;
   assert(keyEvent('keyup'), 'A Project keyUp Handler did not claim keyUp');
   await until(() => last().textContent === 'Button up ArrowDown');
   // Text receives both messages while retaining normal browser editing.
-  toggle.click();
+  present.click();
   const input = createElement('text', 'input1');
   if (input.kind === 'text') {
     input.editable = true;
@@ -721,7 +720,7 @@ on keyUp key
 end keyUp`;
   project.pages[0]!.elements.push(input);
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   const field = document.querySelector<HTMLElement>(
     '#reader [data-element="input1"]',
   )!;
@@ -765,12 +764,12 @@ end keyUp`;
     Reflect.deleteProperty(document, 'hidden');
   }
   await until(() => last().textContent === released + ' up h');
-  toggle.click();
+  present.click();
   project.pages[0]!.script = `on keyDown key
  set the label of last to the label of last & " down " & key
 end keyDown`;
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   keyEvent('keydown', 'x');
   keyEvent('keydown', 'x', reader, true);
   keyEvent('keyup', 'x');
@@ -785,15 +784,15 @@ end keyDown`;
   reader.focus();
   keyEvent('keydown', 'z');
   // A stopped session's release must not reach the next one.
-  toggle.click();
-  toggle.click();
+  present.click();
+  present.click();
   keyEvent('keyup', 'z');
   await new Promise(resolve => setTimeout(resolve, 50));
   assert(
     last().textContent === 'Button',
     'A stale keyUp reached a new session',
   );
-  toggle.click();
+  present.click();
   // A held key must not start auto-repeating into a different Page.
   project.pages[0]!.script = `on keyDown key
  tell pages to show page2
@@ -803,7 +802,7 @@ end keyDown`;
     'on keyDown key\n set the background of me to "red"\nend keyDown';
   project.pages.push(next);
   shell.editor.replaceProject(project);
-  toggle.click();
+  present.click();
   keyEvent('keydown', 'n');
   await until(() => !document.querySelector('#reader [data-element="last"]'));
   keyEvent('keydown', 'n', reader, true);
@@ -814,7 +813,7 @@ end keyDown`;
       .background !== 'red',
     'A held key repeated into the new Page',
   );
-  toggle.click();
+  present.click();
   return {
     passed: true,
     checks: [
@@ -852,15 +851,17 @@ end click`;
   project.pages[0]!.elements.push(button, waiter);
   const shell = mountStack(project);
   mountPlay(shell);
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
+    '#play-controls [data-play]',
   )!;
   const element = (name: string) =>
     document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`)!;
   const dialog = () =>
     document.querySelector<HTMLFormElement>('#reader .play-prompt');
   const title = () => dialog()?.querySelector('p')?.textContent;
-  toggle.click();
+  present.click();
   element('button1').click();
   await until(() => title() === 'Carry on?');
   assert(
@@ -898,7 +899,7 @@ end click`;
   // Stop takes a pending prompt down.
   element('waiter').click();
   await until(() => title() === 'Pending?');
-  toggle.click();
+  present.click();
   assert(!dialog(), 'Prompt survived Stop');
   return {
     passed: true,
@@ -998,7 +999,9 @@ export const runMessageBoxBrowserTests = async () => {
   assert(shell.editor.canUndo, 'hide was not undoable');
 
   // While browsing, `show` changes only the session.
-  document.querySelector<HTMLButtonElement>('#tool-modes button')!.click();
+  document
+    .querySelector<HTMLButtonElement>('#play-controls [data-play]')!
+    .click();
   const set = (text: string) => {
     const doc = view.state.doc;
     const range = {

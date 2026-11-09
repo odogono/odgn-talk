@@ -40,9 +40,8 @@ export const runBrowserTests = async () => {
     );
   }
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const inReader = (name: string) =>
     document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`);
   const tap = (name: string) =>
@@ -50,7 +49,7 @@ export const runBrowserTests = async () => {
       new PointerEvent('click', { bubbles: true, pointerType: 'touch' }),
     );
 
-  toggle.click();
+  present.click();
   // A phone-width reader: the Page scales to fit, with no sideways
   // scrolling, and its full height stays reachable by scrolling down.
   const reader = document.querySelector<HTMLElement>('#reader')!;
@@ -127,7 +126,7 @@ export const runBrowserTests = async () => {
 
   // Stop restores the authored Project exactly: no trapdoor, no
   // reader note, clues hidden again.
-  toggle.click();
+  present.click();
   assert(JSON.stringify(project) === authored, 'Play mutated authored data');
   assert(
     !document.querySelector('#page [data-element="trapdoor"]'),
@@ -141,14 +140,14 @@ export const runBrowserTests = async () => {
   );
 
   // A fresh Play Session starts from the authored state.
-  toggle.click();
+  present.click();
   await until(() => !!inReader('examineButton'));
   assert(inReader('clueText')!.hidden, 'New Play kept the revealed clue');
   assert(
     inReader('examineButton')!.textContent === 'Examine the tide chart',
     'New Play kept the changed label',
   );
-  toggle.click();
+  present.click();
   reader.style.maxWidth = '';
   reader.style.maxHeight = '';
   return { passed: true };

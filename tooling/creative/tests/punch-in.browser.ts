@@ -37,6 +37,8 @@ const mode = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')].find(
     b => b.textContent?.includes(label),
   )!;
+const play = () =>
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const view = () =>
   EditorView.findFromDOM(
     document.querySelector<HTMLElement>('#code-browser .cm-editor')!,
@@ -83,7 +85,7 @@ export const runBrowserTests = async () => {
       () => !!document.querySelector('#code-browser .cm-editor'),
       'No Code Browser',
     );
-    mode('Browse').click();
+    play().click();
     await until(() => !!goNode(), 'Browse did not start');
     goNode().click();
     await until(
@@ -157,6 +159,18 @@ export const runBrowserTests = async () => {
     )!;
     assert(item.disabled, 'Punch In stayed enabled in Edit');
     assert(note().hidden, 'The Punch In note stayed after Play');
+  });
+
+  await test('⌘↩ in the Code Browser plays from Edit, typing nothing', async () => {
+    const before = view().state.doc.toString();
+    pressPunchIn();
+    await until(() => !!goNode(), '⌘↩ did not start Play');
+    assert(
+      view().state.doc.toString() === before,
+      'The key typed into the Script',
+    );
+    mode('Edit').click();
+    await until(() => !goNode(), 'Play did not end');
   });
 
   return results;

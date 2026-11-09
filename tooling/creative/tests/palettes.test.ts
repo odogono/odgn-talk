@@ -279,24 +279,13 @@ test('Play started on a Palette starts on the first Page', () => {
   expect(play.page.name).toBe('page1');
 });
 
-test('a Palette can float in Perform, saved only when set (#2001)', () => {
-  const editor = new StackEditor(withPalette());
-  editor.edit(({ tree, project }) =>
-    tree.setProperty(project.pages[2]!, 'floatInPerform', true),
-  );
-  expect(editor.project.pages[2]!.palette?.float).toBe(true);
-  const json = serializeProject(editor.project);
-  expect((json.palettes as Record<string, unknown>[])[0]!.float).toBe(true);
-  expect(validateProjectJson(json)).toHaveProperty(
-    'project.pages.2.palette.float',
-    true,
-  );
-  editor.edit(({ tree, project }) =>
-    tree.setProperty(project.pages[2]!, 'floatInPerform', false),
-  );
-  expect(editor.project.pages[2]!.palette).not.toHaveProperty('float');
-  (json.palettes as Record<string, unknown>[])[0]!.float = 'yes';
-  expect(validateProjectJson(json)).toMatchObject({
-    issues: [{ path: 'palettes[0].float' }],
-  });
+test('an old Palette `float` is read and dropped, as Perform is gone (ADR 0174)', () => {
+  const json = serializeProject(withPalette());
+  (json.palettes as Record<string, unknown>[])[0]!.float = true;
+  const read = validateProjectJson(json);
+  expect(read).toHaveProperty('project.pages.2.palette');
+  expect(
+    (read as { project: { pages: { palette?: object }[] } }).project.pages[2]!
+      .palette,
+  ).not.toHaveProperty('float');
 });

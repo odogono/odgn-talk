@@ -42,6 +42,8 @@ const mode = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')].find(
     b => b.textContent?.includes(label),
   )!;
+const play = () =>
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const [, pause, step] = document.querySelectorAll<HTMLButtonElement>(
   '#play-controls button',
 );
@@ -97,7 +99,7 @@ export const runBrowserTests = async () => {
       () => markers() === 1 && markers('.bp-unverified') === 0,
       'The gutter click set no Breakpoint',
     );
-    mode('Browse').click();
+    play().click();
     document.querySelector<HTMLElement>('#reader [data-element="go"]')!.click();
     await until(() => !!stopped(), 'The Run never stopped');
     const heading = stopped()!.querySelector('h4')!.textContent;

@@ -508,8 +508,8 @@ export const runBrowserTests = async () => {
     assert(silent.title.includes('no sounds'), 'Its tooltip says why');
   });
 
-  await test('while performing, a drag is heard live and committed once, and undo is heard too (#2081)', async () => {
-    const project = createProject('Perform check');
+  await test('while browsing, a drag is heard live and committed once, and undo is heard too (#2081)', async () => {
+    const project = createProject('Browse check');
     project.addOns = [INSTRUMENTS_REF];
     shell.editor.replaceProject(project);
     shell.redraw();
@@ -525,7 +525,7 @@ export const runBrowserTests = async () => {
         shell.instruments.playing.value = withPlaying(shown, change);
       }
     });
-    shell.setPlaying('perform');
+    shell.setPlaying('browse');
     // A Script's set moved the playing value away from the saved one.
     shell.instruments.playing.value = {
       synth: { ...synthParameters(), cutoff: 400 },

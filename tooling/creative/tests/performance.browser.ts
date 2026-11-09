@@ -37,15 +37,14 @@ export const runBrowserTests = async () => {
   project.script = 'on frame elapsed\n wait 50 ms\nend frame';
   const shell = mountStack(project);
   mountPlay(shell);
-  const browse = [
-    ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
-  ].find(b => b.textContent?.includes('Browse'))!;
+  const browse = document.querySelector<HTMLButtonElement>(
+    '#play-controls [data-play]',
+  )!;
   const edit = [
     ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
   ].find(b => b.textContent?.includes('Edit'))!;
-  const present = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   assert(node('performance-window').hidden, 'Profiler should start hidden');
   assert(status().includes('No capture'), 'Empty state missing');
   browse.click();
@@ -72,6 +71,8 @@ export const runBrowserTests = async () => {
   shortcut(input);
   assert(!node('performance-window').hidden, 'Shortcut intercepted editing');
   input.remove();
+  edit.click();
+  await until(() => status().includes('Stopped'));
   present.click();
   await until(() => status().includes('Capturing'));
   assert(

@@ -25,9 +25,8 @@ export const runBrowserTests = async () => {
   const { project } = await createTetrisProject();
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const reader = document.querySelector<HTMLElement>('#reader')!;
   const lit = () =>
     [...reader.querySelectorAll<HTMLElement>('[data-element^="cell_"]')]
@@ -45,7 +44,7 @@ export const runBrowserTests = async () => {
     reader.dispatchEvent(event);
     return event.defaultPrevented;
   };
-  toggle.click();
+  present.click();
   reader.focus();
   await until(() => lit().length === 4);
   const spawned = lit().join();
@@ -62,7 +61,7 @@ export const runBrowserTests = async () => {
     await until(() => lit().length > before);
   }
   const perDrop = (performance.now() - started) / 5;
-  toggle.click();
+  present.click();
   return {
     passed: true,
     perDropMs: Math.round(perDrop),
@@ -82,7 +81,7 @@ export const runCanvasBrowserTests = async () => {
   const shell = mountStack(project);
   mountPlay(shell);
   const browse = document.querySelector<HTMLButtonElement>(
-    '#tool-modes [title^="Browse:"]',
+    '#play-controls [data-play]',
   )!;
   const edit = document.querySelector<HTMLButtonElement>(
     '#tool-modes [title^="Edit:"]',

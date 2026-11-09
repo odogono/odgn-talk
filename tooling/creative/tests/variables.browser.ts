@@ -60,6 +60,8 @@ const mode = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')].find(
     b => b.textContent?.includes(label),
   )!;
+const play = () =>
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
@@ -75,7 +77,7 @@ export const runBrowserTests = async () => {
     assert(node('variables-window').hidden, 'Variables window opened itself');
     showWindow('variables-window');
     assert(!node('variables-empty').hidden, 'Empty note hidden before Play');
-    mode('Browse').click();
+    play().click();
     await until(
       () => value('target')?.textContent === 'go',
       'The Element reference never showed its name',
@@ -145,7 +147,7 @@ export const runBrowserTests = async () => {
       'The ended note never showed',
     );
     assert(value('presses')?.textContent === '1', 'Values went with Play');
-    mode('Browse').click();
+    play().click();
     await until(
       () => node('variables-ended').hidden === true,
       'A new session kept the ended note',
@@ -153,7 +155,7 @@ export const runBrowserTests = async () => {
     mode('Edit').click();
   });
   await test('Watches evaluate while paused, in their chosen context', async () => {
-    mode('Browse').click();
+    play().click();
     await until(() => value('presses') !== undefined, 'Browse did not start');
     const add = (text: string, context?: string) => {
       const input =

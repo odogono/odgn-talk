@@ -89,7 +89,7 @@ export class SoundPatterns {
 
   /**
    * The loops a Punch In has made so far, so a later `loop` on the same
-   * Instrument replaces one from the punched bar, as it would on Perform.
+   * Instrument replaces one from the punched bar, as it would while browsing.
    */
   readonly #punchedLoops = new Set<string>();
 

@@ -82,13 +82,16 @@ export const runBrowserTests = async () => {
   for (const mode of ['Browse', 'Present']) {
     await test(`${mode} renders Script border changes and restores authored borders on exit`, async () => {
       const toggle = document.querySelector<HTMLButtonElement>(
-        '#menu [aria-pressed]',
+        '#play-controls [data-play]',
       )!;
       const tool = (name: string) =>
         [
           ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
         ].find(button => button.textContent?.includes(name))!;
-      (mode === 'Present' ? toggle : tool('Browse')).click();
+      (mode === 'Present'
+        ? document.querySelector<HTMLButtonElement>('#present-project')!
+        : toggle
+      ).click();
       for (const kind of ['rectangle', 'ellipse']) {
         assert(
           border(kind, true) === '2px',

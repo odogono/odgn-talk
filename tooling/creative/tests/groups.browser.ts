@@ -48,6 +48,8 @@ const mode = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')].find(
     b => b.textContent?.includes(name),
   )!;
+const play = () =>
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
@@ -150,10 +152,9 @@ export const runBrowserTests = async () => {
       );
     });
     for (const playMode of ['Browse', 'Present']) {
-      const present = document.querySelector<HTMLButtonElement>(
-        '#menu [aria-pressed]',
-      )!;
-      (playMode === 'Browse' ? mode('Browse') : present).click();
+      const present =
+        document.querySelector<HTMLButtonElement>('#present-project')!;
+      (playMode === 'Browse' ? play() : present).click();
       await wait();
       assert(
         !document.querySelector('#reader [data-element="group1"]'),
@@ -186,7 +187,7 @@ export const runBrowserTests = async () => {
         entry.hidden && entry.contentEditable === 'false',
         'Hidden ancestor ends reader text editing',
       );
-      (playMode === 'Browse' ? mode('Edit') : present).click();
+      (playMode === 'Browse' ? mode('Edit') : play()).click();
       await wait();
       assert(
         !node('a').classList.contains('hidden'),
