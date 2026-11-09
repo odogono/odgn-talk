@@ -2,7 +2,7 @@
 // can list it without loading it.
 
 export const PIANO_ROLL_ADD_ON = 'https://northtalk.org/add-ons/piano-roll';
-export const PIANO_ROLL_VERSION = '1.3.0';
+export const PIANO_ROLL_VERSION = '1.4.0';
 
 /** The Add-on's entry in a Project that uses it. */
 export const PIANO_ROLL_REF = {

@@ -226,7 +226,8 @@ landed, and the Issue graph job ticks it as they close.
   (`rename`, `toRest`, `fromRest`, `split`, `merge`, and for Chords (#2187)
   `addToChord` and `remove`, pure, on the step tree); rests are placed by parsing the text with each rest as a word
   (`restsAsWords`, through the host's `parse`); `select`/`caret` link the
-  window's selection with the Code Browser's. Bump `PIANO_ROLL_VERSION` with
+  window's selection with the Code Browser's. `host.audition` (#2190) plays a step through
+  [pattern-audition.ts](src/pattern-audition.ts) and Edit's preview audio. Bump `PIANO_ROLL_VERSION` with
   any change, since the service worker caches the chunk by version.
   Tests: [piano-roll.test.ts](tests/piano-roll.test.ts), [piano-roll-edits.test.ts](tests/piano-roll-edits.test.ts) and the `piano-roll`
   browser suite.

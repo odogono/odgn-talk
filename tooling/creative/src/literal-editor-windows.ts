@@ -46,6 +46,8 @@ export class LiteralEditorWindows {
 
   constructor(
     private readonly options: {
+      /** Plays `name` on the Instrument `on` names, or the default (#2190). */
+      audition(name: string, on: string | undefined): void;
       /** The text of `source` now, if it still exists. */
       read(source: CodeSelection): string | undefined;
       /** Selects `from`–`to` of `source` in the Code Browser, if it shows it. */
@@ -109,6 +111,8 @@ export class LiteralEditorWindows {
       element: body,
       view: VIEW_API,
       replace: (from, to, insert) => this.#replace(open, from, to, insert),
+      audition: name =>
+        this.options.audition(name, literalAt(open.text, open.pin.at)?.on),
       parse: text => {
         const parsed = parseMiniNotation(text);
         return parsed.ok ? parsed.pattern : undefined;

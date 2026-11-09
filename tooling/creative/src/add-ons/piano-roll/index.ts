@@ -5,7 +5,9 @@
 // Code Browser's selection), move it with ↑↓ or by dragging, Delete makes it
 // a rest, S splits and M merges, and clicking a rest's cell writes a note
 // there. Clicking under a sounding note adds a Chord member, and Delete takes
-// one out (#2187); that is the only bracket the Piano Roll writes. It draws with plain DOM and Folio's
+// one out (#2187); that is the only bracket the Piano Roll writes.
+// A press plays the note it lands on, as does a press on a row's name, and
+// a second tap on the selected note removes it (#2190). It draws with plain DOM and Folio's
 // style variables, so it needs nothing from Folio at run time.
 import type { LiteralEditorHost, LiteralEditorView } from '../api';
 import { defineAddOn } from '../api';
@@ -272,18 +274,19 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
   };
 
   /** Applies `result`, then selects the step that starts at `next`. */
-  const apply = (result: EditResult, next?: number) => {
+  const apply = (result: EditResult, next?: number): boolean => {
     if ('problem' in result) {
       say(`Can't: ${result.problem}.`);
-      return;
+      return false;
     }
     const problem = host.replace(result.from, result.to, result.insert);
     if (problem) {
       say(`Can't: ${problem}.`);
-      return;
+      return false;
     }
     say('');
     select(next ?? result.from);
+    return true;
   };
 
   /** The selected note moved `by` rows: semitones up, or sound rows down. */
@@ -299,8 +302,11 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
           ? noteLabel(row.note! + by)
           : undefined
         : layout.rows[note.row - by]?.label;
-    if (name !== undefined) {
-      apply(rename(shown.pattern.layers, note.from, name), note.from);
+    if (
+      name !== undefined &&
+      apply(rename(shown.pattern.layers, note.from, name), note.from)
+    ) {
+      host.audition(name);
     }
   };
 
@@ -332,9 +338,17 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
     }
   });
 
-  // A press on a note selects it, and dragging it up or down moves it; a
-  // press on a rest's cell writes the row's note or sound there.
-  let drag: { from: number; y: number } | undefined;
+  // A press on a note selects it and plays it, dragging it up or down moves
+  // it, and a second tap on the selected note removes it (#2190); a press on
+  // a rest's cell writes the row's note or sound there, and on a row's name
+  // plays it.
+  let drag: { again: boolean; from: number; y: number } | undefined;
+  const play = (row: number | undefined) => {
+    const label = row === undefined ? undefined : layout?.rows[row]?.label;
+    if (label !== undefined) {
+      host.audition(label);
+    }
+  };
   scroller.addEventListener('pointerdown', event => {
     const grid = scroller.firstElementChild as HTMLElement | null;
     if (!grid || !layout || !shown || shown.kind !== 'ready') {
@@ -346,9 +360,13 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
     );
     if (bar) {
       const from = Number(bar.dataset.from);
+      const again = selected === from;
       say('');
       select(from);
-      drag = { from, y: event.clientY };
+      drag = { again, from, y: event.clientY };
+      if (!again) {
+        play(Number(bar.dataset.row));
+      }
       return;
     }
     const box = grid.getBoundingClientRect();
@@ -361,11 +379,17 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       r => r.cycle === cycle && t >= r.begin && t < r.end,
     );
     const label = layout.rows[row]?.label;
-    if (x < 0 || label === undefined) {
+    if (label === undefined) {
+      return;
+    }
+    if (x < 0) {
+      play(row);
       return;
     }
     if (rest) {
-      apply(fromRest(shown.pattern.layers, rest.from, label), rest.from);
+      if (apply(fromRest(shown.pattern.layers, rest.from, label), rest.from)) {
+        host.audition(label);
+      }
       return;
     }
     // A note sounding then gains this row's note as a Chord (#2187): the
@@ -385,7 +409,11 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       label,
       layout.rows[row]!.note,
     );
-    apply(result, 'problem' in result ? undefined : addedAt(result, label));
+    if (
+      apply(result, 'problem' in result ? undefined : addedAt(result, label))
+    ) {
+      host.audition(label);
+    }
   });
   scroller.addEventListener('pointerup', event => {
     const started = drag;
@@ -396,6 +424,12 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
     const rows = Math.round((started.y - event.clientY) / ROW);
     if (rows !== 0) {
       move(rows);
+    } else if (
+      started.again &&
+      shown?.kind === 'ready' &&
+      apply(remove(shown.pattern.layers, started.from))
+    ) {
+      select(undefined, false);
     }
   });
   range.addEventListener('click', () => {
