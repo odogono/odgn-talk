@@ -88,7 +88,7 @@ on drumPart
 end drumPart
 `;
 
-test('parts started side by side play as written on Perform, in lockstep', () => {
+test('parts started side by side play as written, in lockstep', () => {
   const { play, runTo, steps } = session(
     band(parts(['bd', 'sd'], ['c3', 'e3'])),
   );

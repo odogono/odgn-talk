@@ -23,9 +23,8 @@ export const runBrowserTests = async () => {
   const { project } = await createFirstSoundsProject();
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const inReader = (name: string) =>
     document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`);
   const click = (name: string) =>
@@ -38,7 +37,7 @@ export const runBrowserTests = async () => {
     return shown.includes('No errors.') ? '' : shown;
   };
 
-  toggle.click();
+  present.click();
   await until(
     () => inReader('title')?.textContent === LESSONS[0]!.title,
     'the first Lesson',
@@ -61,7 +60,7 @@ export const runBrowserTests = async () => {
   if (errors()) {
     throw new Error(`Play reported problems: ${errors()}`);
   }
-  toggle.click();
+  present.click();
   return {
     passed: true,
     checks: ['plays, mutes a layer and leads to the next Lesson'],

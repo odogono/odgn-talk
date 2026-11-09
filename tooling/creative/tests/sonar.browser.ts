@@ -17,13 +17,12 @@ export const runBrowserTests = async () => {
   const { project } = await createSonarProject();
   const shell = mountStack(project);
   mountPlay(shell);
-  const toggle = document.querySelector<HTMLButtonElement>(
-    '#menu [aria-pressed]',
-  )!;
+  const present =
+    document.querySelector<HTMLButtonElement>('#present-project')!;
   const reader = document.querySelector<HTMLElement>('#reader')!;
   const status = () =>
     reader.querySelector('[data-element="statusText"]')?.textContent;
-  toggle.click();
+  present.click();
   await until(() => status() === '10 mines left');
   // The first frame lays out a fresh sea and sets the status again.
   await new Promise(resolve => setTimeout(resolve, 300));
@@ -46,6 +45,6 @@ export const runBrowserTests = async () => {
   if (changes.length) {
     throw new Error(`An idle frame changed the DOM: ${changes.slice(0, 5)}`);
   }
-  toggle.click();
+  present.click();
   return { passed: true, checks: ['idle frames leave the DOM alone'] };
 };

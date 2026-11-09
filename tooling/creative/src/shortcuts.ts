@@ -51,8 +51,8 @@ export const menuButtonForKey = (event: Key): string | undefined => {
   return undefined;
 };
 
-/** ⌘⇧↩ plays the other way than the Project chooses, or stops (#2028). */
-export const isPerformKey = (event: Key): boolean =>
+/** ⌘⇧↩ presents the Project, or stops (ADR 0174). */
+export const isPresentKey = (event: Key): boolean =>
   (event.metaKey || event.ctrlKey) &&
   !event.altKey &&
   event.shiftKey &&

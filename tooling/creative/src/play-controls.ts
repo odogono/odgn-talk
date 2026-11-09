@@ -22,7 +22,7 @@ export type Controls = {
   /** Paused, while playing. */
   paused: boolean;
   pauseLabel: 'Pause' | 'Resume';
-  /** Punch In loads edits into the session: while browsing or performing. */
+  /** Punch In loads edits into the session while browsing. */
   punching: boolean;
   /** Playing and not paused: its frames and held presses go on. */
   running: boolean;
@@ -47,7 +47,7 @@ export const controls = (
     running: live && !view!.paused,
     takesInput: live && !view!.navigating && !view!.paused,
     browsing: live && mode === 'browse',
-    punching: live && (mode === 'browse' || mode === 'perform'),
+    punching: live && mode === 'browse',
     atStoppedRun: stoppedRun,
     pauseLabel: paused ? 'Resume' : 'Pause',
     frameStepEnabled: paused && !stoppedRun,

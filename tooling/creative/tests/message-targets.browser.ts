@@ -56,8 +56,9 @@ export const runBrowserTests = async () => {
     run.click();
     return win.querySelector('.message-log')!.lastElementChild!;
   };
-  const browse =
-    document.querySelector<HTMLButtonElement>('#tool-modes button')!;
+  const browse = document.querySelector<HTMLButtonElement>(
+    '#play-controls [data-play]',
+  )!;
   const edit = document.querySelector<HTMLButtonElement>(
     '#tool-modes button:last-child',
   )!;

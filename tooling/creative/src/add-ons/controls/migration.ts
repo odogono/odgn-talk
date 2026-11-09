@@ -1,7 +1,7 @@
-// Format 11 to 12 (#2028): Play performs a Project copied from Music, and a
-// Project whose Elements are controls lists the controls Add-on, since
-// Tools offers only the kinds of the Add-ons a Project lists (#2025). The
-// base is read once here, never afterwards (ADR 0161).
+// Format 11 to 12 (#2028): a Project whose Elements are controls lists the
+// controls Add-on, since Tools offers only the kinds of the Add-ons a
+// Project lists (#2025). Format 12 also made Music Projects perform, which
+// ADR 0174 undid, so `play` is no longer written.
 import { CONTROLS_ADD_ON, CONTROLS_VERSION } from './ids';
 
 type Obj = Record<string, unknown>;
@@ -21,11 +21,8 @@ const usesControls = (data: Obj): boolean =>
       ),
   );
 
-export const migratePlayAndControls = (data: Obj): Obj => {
+export const migrateControls = (data: Obj): Obj => {
   const out = { ...data };
-  if ((data.base as Obj | undefined)?.name === 'music') {
-    out.play = 'perform';
-  }
   const addOns = Array.isArray(data.addOns) ? (data.addOns as Obj[]) : [];
   if (usesControls(data) && !addOns.some(a => a?.id === CONTROLS_ADD_ON)) {
     out.addOns = [

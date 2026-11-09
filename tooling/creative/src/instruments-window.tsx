@@ -2,7 +2,7 @@
 // with a `+ ▾` menu to add or duplicate one and `−` to remove it, then the
 // selected one's name, voices and parameters in collapsible groups of
 // compact rows, with ▶ and the computer keyboard to audition it (#2080).
-// Independent of the Page's selection. Perform docks it (ADR 0167, #2081):
+// Independent of the Page's selection. It stays open while browsing (ADR 0174):
 // a change there is still an authored edit, which the running Instrument
 // hears straight away, and each row shows the playing value a Script's `set`
 // gave it, with a tick at the saved one.
@@ -77,9 +77,9 @@ type InstrumentsProps = {
   live(id: number, parameter: string, value: ParameterValue): void;
   /** An audition that can't sound, such as a sound that won't decode. */
   onError(message: string): void;
-  /** How Play runs, if it does; Perform docks the window (#2081). */
+  /** How Play runs, if it does; the window stays live while browsing. */
   playing: ReadonlySignal<PlayMode | undefined>;
-  /** The parameters as they play while performing. */
+  /** The parameters as they play while browsing. */
   playingParameters: ReadonlySignal<PlayingParameters | undefined>;
   redo(): void;
   /** Bumped by the shell's redraw, such as after undo or read-only. */
@@ -888,10 +888,10 @@ const usePianoKeyboard = (
 };
 
 /**
- * While performing, ⌘Z and ⇧⌘Z in the window undo and redo, which the
+ * While browsing, ⌘Z and ⇧⌘Z in the window undo and redo, which the
  * running Instruments hear too (#2081); Edit's own shortcuts are off in Play.
  */
-const usePerformUndo = (
+const useBrowseUndo = (
   on: boolean,
   props: { redo(): void; root: HTMLElement; undo(): void },
 ) => {
@@ -934,20 +934,20 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
   const { project } = editor.state.value;
   const disabled = editor.readOnly;
   // Scripts reach Instruments by name at load, so Play keeps the list.
-  const performing = props.playing.value === 'perform';
-  const listFixed = disabled || performing;
+  const browsing = props.playing.value === 'browse';
+  const listFixed = disabled || browsing;
   const { instruments } = project;
   const instrument =
     instruments.find(i => i.id === selected.value) ?? instruments[0];
   const kind = instrument && INSTRUMENT_KINDS.get(instrument.kind);
   const playingNow =
-    performing && instrument
+    browsing && instrument
       ? props.playingParameters.value?.[instrument.name]
       : undefined;
   const bound = instrument
     ? boundControls(project, instrument.name)
     : new Map<string, string[]>();
-  usePerformUndo(performing && !disabled, props);
+  useBrowseUndo(browsing && !disabled, props);
   useEffect(() => setHovered(undefined), [instrument?.id]);
   // The audition's own state, which the Project doesn't keep.
   const [chosen, setChosen] = useState<ReadonlyMap<number, string>>(
@@ -1137,7 +1137,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                   disabled={disabled}
                   key={name}
                   live={
-                    performing
+                    browsing
                       ? value => props.live(instrument.id!, name, value)
                       : undefined
                   }
@@ -1167,7 +1167,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
                       disabled={disabled}
                       group={group}
                       live={
-                        performing
+                        browsing
                           ? values => {
                               for (const [name, value] of Object.entries(
                                 values,

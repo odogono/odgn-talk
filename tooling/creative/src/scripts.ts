@@ -122,8 +122,6 @@ export class CodeBrowser {
   // Punch In (ADR 0157): who loads the shown source into a browsing
   // session; it answers false when no session is browsing.
   #punchIn: (source: CodeSelection, text: string) => boolean = () => false;
-  // Who hears which source the browser shows, as Perform's tabs do.
-  #shown: (source: CodeSelection, label: string) => void = () => {};
   // Who copies a Music sound into the Project, for the missing-sound quick
   // fix (#1963), and the shown source's last language-server diagnostics.
   #addMusicSound: (key: string) => Promise<void> = async () => {};
@@ -553,11 +551,6 @@ export class CodeBrowser {
     this.#drawStopped();
   }
 
-  /** Tells `listener` each source the browser shows, with its label. */
-  onShow(listener: (source: CodeSelection, label: string) => void): void {
-    this.#shown = listener;
-  }
-
   /** The source the browser shows. */
   get selected(): CodeSelection {
     return this.#selected;
@@ -565,7 +558,7 @@ export class CodeBrowser {
 
   /**
    * Replaces the shown source's text, as an edit like any other, so undo
-   * takes it back; Perform's Revert (#2002) puts back what Play loaded.
+   * takes it back; Revert (#2002, ADR 0174) puts back what Play loaded.
    */
   replace(text: string): void {
     const view = this.#window?.view;
@@ -574,11 +567,6 @@ export class CodeBrowser {
         changes: { from: 0, to: view.state.doc.length, insert: text },
       });
     }
-  }
-
-  /** Shows a source, as a Perform tab does. */
-  show(source: CodeSelection): void {
-    this.#show(source);
   }
 
   open(owner: ScriptOwner, line?: number): void {
@@ -656,7 +644,6 @@ export class CodeBrowser {
       });
     }
     win.view.focus();
-    this.#shown(this.#selected, this.#label());
   }
 
   addAction(owner: ScriptOwner): void {

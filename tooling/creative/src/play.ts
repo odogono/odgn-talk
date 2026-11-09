@@ -2210,7 +2210,7 @@ export class PlaySession {
   }
 
   /**
-   * Perform's Hush (#2002): every sound and Instrument note stops and every
+   * Hush (#2002, ADR 0174): every sound and Instrument note stops and every
    * pattern ends, but the session, its Scripts and the Transport go on.
    * Runs waiting in bars or beats are cancelled, so an arrangement doesn't
    * start its next section after the Hush (ADR 0166).

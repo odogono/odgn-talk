@@ -37,6 +37,8 @@ const mode = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('#tool-modes button')].find(
     b => b.textContent?.includes(label),
   )!;
+const play = () =>
+  document.querySelector<HTMLButtonElement>('#play-controls [data-play]')!;
 const view = () =>
   EditorView.findFromDOM(
     document.querySelector<HTMLElement>('#code-browser .cm-editor')!,
@@ -83,7 +85,7 @@ export const runBrowserTests = async () => {
       () => !!document.querySelector('#code-browser .cm-editor'),
       'No Code Browser',
     );
-    mode('Browse').click();
+    play().click();
     await until(() => !!goNode(), 'Browse did not start');
     goNode().click();
     await until(

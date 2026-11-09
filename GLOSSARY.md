@@ -446,8 +446,8 @@ The temporary state of a Play Session, including reader input, visual changes, c
 _Avoid_: Project, Script Snapshot, saved progress
 
 **Browse**:
-To run a Play Session in place, on the Page being edited, with the authoring windows still open. Returning to Edit discards its Play State.
-_Avoid_: preview, test mode, Play mode
+What Play does: run a Play Session in place, on the Page being edited, with the authoring windows and Palettes still open, including while live-coding. Returning to Edit discards its Play State.
+_Avoid_: preview, test mode, Play mode, Perform
 
 **Pause**:
 To freeze a Play Session in Browse or Present: its time stops and reader input is ignored. While browsing, it can still be inspected and changed from the Message Box.
@@ -490,12 +490,8 @@ A window in Folio for inspecting a Play Session's Script workload and frame-mess
 _Avoid_: FPS counter, Errors window
 
 **Present**:
-To run a Play Session full-window, with the authoring windows hidden except for explicitly opened performance diagnostics, as a reader would see it.
+To run a Play Session full-window, with the authoring windows hidden except for explicitly opened performance diagnostics, as a reader would see it. Chosen explicitly from the Project menu, never by Play.
 _Avoid_: publish, preview, fullscreen
-
-**Perform**:
-To run a Play Session with the stage beside the code of the Scripts being changed and the Project's docked Palettes, for live-coding in front of an audience. Each Project chooses whether Play presents or performs.
-_Avoid_: live mode, music mode, jam
 
 ## Syntax
 

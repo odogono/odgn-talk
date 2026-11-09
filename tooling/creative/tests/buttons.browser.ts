@@ -166,13 +166,16 @@ export const runBrowserTests = async () => {
   for (const mode of ['Browse', 'Present']) {
     await test(`${mode} renders styles, invisible hit targets and keyboard activation`, async () => {
       const toggle = document.querySelector<HTMLButtonElement>(
-        '#menu [aria-pressed]',
+        '#play-controls [data-play]',
       )!;
       const tool = (name: string) =>
         [
           ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
         ].find(button => button.textContent?.includes(name))!;
-      (mode === 'Present' ? toggle : tool('Browse')).click();
+      (mode === 'Present'
+        ? document.querySelector<HTMLButtonElement>('#present-project')!
+        : toggle
+      ).click();
       try {
         await until(() => !!element('transparent', true));
         assert(

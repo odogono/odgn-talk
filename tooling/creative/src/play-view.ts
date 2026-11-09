@@ -1,6 +1,7 @@
 // Browser driving and reader input stay outside the testable Play Session.
-// Browsing plays the Project in place on the desk, beside the Tools and
-// Code Browser; presenting plays it full-window with the editor hidden.
+// Play browses: it plays the Project in place on the desk, beside the
+// windows and Palettes; Project ▸ Present plays it full-window with the
+// editor hidden (ADR 0174).
 // The session runs in the Play worker (#1225); the page draws from its
 // mirror of Play State and posts reader input to the worker.
 import { pageTrust } from './add-ons/page';
@@ -49,8 +50,8 @@ import { ElementView, renderElements } from './element-view';
 import { type PlayMode, type StackShell } from './stack';
 import { controls } from './play-controls';
 import { clickEvent, type ClickEvent, type ReaderArg } from './pointer';
-import { isPerformKey, isPlayKey } from './shortcuts';
-import { PerformLayout } from './perform-layout';
+import { isPlayKey, isPresentKey } from './shortcuts';
+import { TransportControls } from './transport-controls';
 import { withPlaying } from './instruments/live';
 import { allElements } from './tree/rules';
 import { InPlaceTextEditor } from './text-editor';
@@ -78,18 +79,14 @@ type ControlFields = Record<string, number | boolean>;
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 export const mountPlay = (shell: StackShell): void => {
-  // Play presents or performs the Project, as it chooses (#2028); Pause
-  // and Step act on any Play Session.
+  // Play browses the Project in place (ADR 0174); Pause and Step act on
+  // any Play Session.
   const toggle = h(
     'button',
     { type: 'button', 'aria-pressed': 'false', 'data-play': '' },
     'Play',
   );
-  /** The way Play runs this Project; ⌘⇧↩ runs the other way once. */
-  const chosen = (): 'perform' | 'present' =>
-    shell.editor.project.play === 'perform' ? 'perform' : 'present';
-  const performLayout = new PerformLayout();
-  shell.code.onShow((source, label) => performLayout.shown({ source, label }));
+  const transport = new TransportControls();
   const pauseButton = h(
     'button',
     {
@@ -134,18 +131,10 @@ export const mountPlay = (shell: StackShell): void => {
       pauseButton,
       stepButton,
       ...statementSteps,
+      transport.hushButton,
+      transport.revertButton,
+      transport.clock,
     ),
-  );
-  // Browse and Edit head the Tools window, as HyperCard's browse tool did.
-  const browseTool = h(
-    'button',
-    {
-      type: 'button',
-      'aria-pressed': 'false',
-      title: 'Browse: try the Project here',
-    },
-    h('span', { 'aria-hidden': 'true' }, '☞'),
-    'Browse',
   );
   // Record Test (ADR 0134) Browses from a test's start and writes what
   // the reader does as a Recorded Test.
@@ -173,7 +162,6 @@ export const mountPlay = (shell: StackShell): void => {
     h(
       'div',
       { id: 'tool-modes', role: 'group', 'aria-label': 'Mode' },
-      browseTool,
       recordTool,
       editTool,
     ),
@@ -270,22 +258,22 @@ export const mountPlay = (shell: StackShell): void => {
     }
   };
   shell.breakpoints.onChange(sendBreakpoints);
-  // Perform's toolbar (#2002): Hush silences and keeps playing; Revert puts
-  // the shown Script back as Play last loaded it.
+  // Hush silences and keeps playing; Revert puts the shown Script back as
+  // Play last loaded it (#2002, ADR 0174).
   const hush = () => {
-    if (mode === 'perform' && allowed().live) {
+    if (mode === 'browse' && allowed().live) {
       post({ kind: 'hush', session: sessionId });
     }
   };
   const revert = () => {
     const text = loadedSource(shell.code.selected);
-    if (mode === 'perform' && text !== undefined) {
+    if (mode === 'browse' && text !== undefined) {
       shell.code.replace(text);
       shell.punchIn.show('Reverted to the Script Play loaded.');
     }
   };
-  performLayout.hushButton.addEventListener('click', hush);
-  performLayout.revertButton.addEventListener('click', revert);
+  transport.hushButton.addEventListener('click', hush);
+  transport.revertButton.addEventListener('click', revert);
   // Punch In (ADR 0157): the Code Browser's source, already saved as an
   // authored edit, also goes to the browsing session.
   shell.punchIn.onRequest((source, text) => {
@@ -306,7 +294,6 @@ export const mountPlay = (shell: StackShell): void => {
         }
         const { reply } = response;
         if (reply.kind === 'now' || reply.kind === 'bar') {
-          performLayout.problem(undefined);
           if (place.kind === 'library') {
             loadedLibraries[place.index] = text;
           } else {
@@ -397,15 +384,15 @@ export const mountPlay = (shell: StackShell): void => {
       event.preventDefault();
     }
   });
-  // ⌥-click in Perform opens an Element's Script instead of clicking it
-  // (#2000), so the performer can reach any Script from the stage.
+  // ⌥-click while browsing opens an Element's Script instead of clicking it
+  // (#2000), so a live-coder can reach any Script from the stage.
   pageNode.addEventListener(
     'click',
     event => {
       const node = (event.target as HTMLElement).closest<HTMLElement>(
         '[data-element]',
       );
-      if (mode !== 'perform' || !event.altKey || !node || !session) {
+      if (mode !== 'browse' || !event.altKey || !node || !session) {
         return;
       }
       event.preventDefault();
@@ -602,11 +589,11 @@ export const mountPlay = (shell: StackShell): void => {
         });
     deliver(fields, applied);
   };
-  // The Instruments window's authored changes while performing (#2081): sent
+  // The Instruments window's authored changes while browsing (#2081): sent
   // straight to the audio as a bound control's are, then recorded by the
   // worker, which reports the playing values back.
   shell.instruments.onLive(change => {
-    if (!session || session.ended || mode !== 'perform') {
+    if (!session || session.ended || mode !== 'browse') {
       return;
     }
     const applied =
@@ -715,7 +702,7 @@ export const mountPlay = (shell: StackShell): void => {
     const wasPaused = session.paused;
     const wasStopped = JSON.stringify(session.stoppedRun);
     session.apply(response);
-    if (mode === 'perform' && response.instruments) {
+    if (mode === 'browse' && response.instruments) {
       shell.instruments.playing.value = response.instruments;
     }
     // The audio stops whenever the session is paused, at a Breakpoint too.
@@ -736,13 +723,6 @@ export const mountPlay = (shell: StackShell): void => {
     }
     draw();
     prompts.draw(session.prompt, response.notices);
-    // Perform shows the latest error over the code; the music plays on.
-    const latest = response.problems.at(-1);
-    if (mode === 'perform' && latest) {
-      performLayout.problem(
-        latest.line ? `Line ${latest.line}: ${latest.message}` : latest.message,
-      );
-    }
     errors.add(
       response.problems.map(problem => ({
         line: problem.line,
@@ -854,10 +834,6 @@ export const mountPlay = (shell: StackShell): void => {
     };
   };
   const paletteWindows = new PaletteWindows({
-    dock: () =>
-      mode === 'perform' && performLayout.mounted
-        ? performLayout.palettes
-        : undefined,
     setOpen: (name, open) => {
       if (session && !session.ended) {
         post({ kind: 'palette', session: sessionId, name, open });
@@ -894,8 +870,8 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const play = session;
     paletteWindows.draw(play.palettes);
-    if (mode === 'perform') {
-      performLayout.showTransport(play.transport);
+    if (mode === 'browse') {
+      transport.show(play.transport);
     }
     if (drawnPage !== play.page) {
       // Old Page Scripts have stopped; release to any surviving Project
@@ -1150,19 +1126,13 @@ export const mountPlay = (shell: StackShell): void => {
   };
   const drawModes = () => {
     const now = allowed();
-    const running = mode === 'present' || mode === 'perform';
-    const way = chosen();
-    toggle.textContent = running
-      ? 'Stop'
-      : way === 'perform'
-        ? 'Perform'
-        : 'Play';
+    const running = mode !== undefined;
+    toggle.textContent = running ? 'Stop' : 'Play';
     toggle.setAttribute('aria-pressed', String(running));
     toggle.title = running
       ? 'Stop (⌘↩)'
-      : way === 'perform'
-        ? 'Perform: play with the code beside the stage (⌘↩; ⌘⇧↩ presents)'
-        : 'Play: present the Project (⌘↩; ⌘⇧↩ performs)';
+      : 'Play: try the Project here (⌘↩; Project ▸ Present, ⌘⇧↩, plays it full-window)';
+    transport.shown(mode === 'browse');
     pauseButton.textContent = now.pauseLabel;
     pauseButton.setAttribute('aria-pressed', String(now.paused));
     pauseButton.disabled = !now.live;
@@ -1172,18 +1142,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     stepButton.title = now.frameStepTitle;
     reader.classList.toggle('paused', now.paused);
-    browseTool.setAttribute(
-      'aria-pressed',
-      String(mode === 'browse' && !recorder),
-    );
     recordTool.setAttribute('aria-pressed', String(Boolean(recorder)));
     editTool.setAttribute('aria-pressed', String(mode === undefined));
-    // Perform hides the editor as Present does, keeping the code pane.
-    document.body.classList.toggle(
-      'playing',
-      mode === 'present' || mode === 'perform',
-    );
-    document.body.classList.toggle('performing', mode === 'perform');
+    document.body.classList.toggle('playing', mode === 'present');
     document.body.classList.toggle('browsing', mode === 'browse');
   };
   /**
@@ -1216,9 +1177,6 @@ export const mountPlay = (shell: StackShell): void => {
     reader.hidden = true;
     pageNode.replaceChildren();
     paletteWindows.clear();
-    if (performLayout.mounted) {
-      performLayout.unmount();
-    }
     drawModes();
     const index = shell.editor.project.pages.findIndex(
       p => p.name === pageName,
@@ -1332,32 +1290,24 @@ export const mountPlay = (shell: StackShell): void => {
     } else {
       document.body.append(toolbar, reader);
     }
-    if (mode === 'perform') {
-      performLayout.mount(
-        reader,
-        playing.name,
-        () => {
-          if (session) {
-            draw();
-          }
-        },
-        source => shell.code.show(source),
-      );
-    }
     reader.hidden = false;
     drawModes();
     draw();
     reader.focus();
   };
-  /** Starts Play `way`, or stops a Present or Perform already running. */
-  const playOrStop = (way: 'perform' | 'present') => {
-    if (mode === 'present' || mode === 'perform') {
+  /** Starts Play `way`, or stops the Play Session already running. */
+  const playOrStop = (way: PlayMode) => {
+    if (mode) {
       leave();
     } else {
       start(way);
     }
   };
-  toggle.addEventListener('click', () => playOrStop(chosen()));
+  toggle.addEventListener('click', () => playOrStop('browse'));
+  byId('present-project').addEventListener('click', () => {
+    byId('project-menu').removeAttribute('open');
+    playOrStop('present');
+  });
   recordTool.addEventListener('click', () => {
     if (recorder) {
       leave();
@@ -1410,11 +1360,6 @@ export const mountPlay = (shell: StackShell): void => {
       notes.map(message => ({ owner: shell.editor.project, message })),
     );
   };
-  browseTool.addEventListener('click', () => {
-    if (mode !== 'browse') {
-      start('browse');
-    }
-  });
   editTool.addEventListener('click', () => leave());
   /** Pausing releases held keys first, as input while paused is dropped. */
   const togglePause = () => {
@@ -1474,7 +1419,7 @@ export const mountPlay = (shell: StackShell): void => {
       }
       return;
     }
-    // ⌘↩ plays the Project's way and stops, from Edit, Browse or Play.
+    // ⌘↩ plays the Project in place and stops, from Edit, Browse or Present.
     if (
       isPlayKey(event) &&
       !isTyping(event.target) &&
@@ -1486,9 +1431,9 @@ export const mountPlay = (shell: StackShell): void => {
       }
       return;
     }
-    // ⌘⇧. Hushes while performing, even from the code.
+    // ⌘⇧. Hushes while browsing, even from the code.
     if (
-      mode === 'perform' &&
+      mode === 'browse' &&
       (event.metaKey || event.ctrlKey) &&
       event.shiftKey &&
       event.code === 'Period'
@@ -1497,23 +1442,12 @@ export const mountPlay = (shell: StackShell): void => {
       hush();
       return;
     }
-    if (isPerformKey(event) && !prompts.contains(event.target as Node)) {
+    if (isPresentKey(event) && !prompts.contains(event.target as Node)) {
       event.preventDefault();
-      // ⌘⇧↩ plays the other way, for this Play Session only.
+      // ⌘⇧↩ presents the Project, or stops whatever is playing.
       if (!event.repeat) {
-        playOrStop(chosen() === 'perform' ? 'present' : 'perform');
+        playOrStop('present');
       }
-      return;
-    }
-    // ⌘+ and ⌘− zoom Perform's code, not the page.
-    if (
-      mode === 'perform' &&
-      (event.metaKey || event.ctrlKey) &&
-      !event.altKey &&
-      ['=', '+', '-'].includes(event.key)
-    ) {
-      event.preventDefault();
-      performLayout.zoom(event.key === '-' ? -1 : 1);
       return;
     }
     // A prompt's keys, Escape included, answer the prompt.
@@ -1536,7 +1470,10 @@ export const mountPlay = (shell: StackShell): void => {
     if (
       event.key === 'Escape' &&
       (mode === 'present' ||
-        !(event.target as HTMLElement).closest('.window, #menu'))
+        // A key sent to the document itself has no `closest`.
+        !(event.target as Partial<HTMLElement> | null)?.closest?.(
+          '.window, #menu',
+        ))
     ) {
       event.preventDefault();
       leave();

@@ -400,7 +400,7 @@ test('a Punch In’s last loop on an Instrument wins from the punched bar, even 
   // The Pump that applies it comes after bar 2 began, as a busy page's can.
   pumpAt(ms(2150));
   runTo(ms(4500), ms(2150));
-  // As on Perform, only the last loop plays: no bar of `sd` first.
+  // As while browsing, only the last loop plays: no bar of `sd` first.
   expect(steps()).toEqual([`0.1 ${kit} bd`, `2.1 ${kit} cp`, `4.1 ${kit} cp`]);
   expect(play.problems).toEqual([]);
 });

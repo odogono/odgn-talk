@@ -40,12 +40,8 @@ describe('controls', () => {
     expect(controls(view(), 'browse').browsing).toBe(true);
   });
 
-  test('Punch In loads edits while browsing or performing, not presenting', () => {
+  test('Punch In loads edits while browsing, not presenting', () => {
     expect(controls(view(), 'browse').punching).toBe(true);
-    expect(controls(view(), 'perform')).toMatchObject({
-      browsing: false,
-      punching: true,
-    });
     expect(controls(view(), 'present').punching).toBe(false);
   });
 

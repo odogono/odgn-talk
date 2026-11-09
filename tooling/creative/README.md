@@ -188,8 +188,8 @@ takes its default.
 
 The Instruments window (Window ▸ Instruments) lists the Project's
 Instruments by name and kind, whatever is selected; it starts closed and
-stays open after a reload once opened. Browse and Present hide it, and
-Perform docks it with the Palettes (see below). The `+ ▾` menu above the
+stays open after a reload once opened. Present hides it; Browse keeps it
+open and live (see below). The `+ ▾` menu above the
 list adds an Instrument of any offered kind, named after it (`drums`, `chip`
 or `synth`, then `synth2` and so on), and **Duplicate** (⌘D while the list
 has focus) copies the selected one's kind, voices and parameters under a
@@ -213,9 +213,9 @@ out of range and too many voices, and says why. The hint at the bottom shows
 how a Script plays the selected Instrument and sets the hovered parameter,
 and copies them.
 
-During Perform the window docks in the right-hand column above the docked
-Palettes, and its close box and the Window menu collapse and open it
+While browsing the window stays open
 ([ADR 0167](../../docs/adr/0167-folios-instruments-window-edits-authored-parameters-live-during-play.md),
+[ADR 0174](../../docs/adr/0174-folio-play-browses-in-place-and-present-is-a-project-action.md),
 [#2081](https://github.com/odogono/odgn-talk/issues/2081)). A change there is
 still an authored edit, kept with the Project, and the running Instrument
 hears it straight away, a slider while it is dragged, as a bound control's
@@ -225,7 +225,7 @@ thumb shows the playing value and a faint tick marks the saved one; a drag
 sets both, and when Play stops the thumb returns to the saved value. A row
 whose parameter a control is bound to shows 🔗, naming the control. Adding,
 removing, duplicating and renaming Instruments, and Voices, are disabled
-while performing, since Scripts reach Instruments by name at load.
+while browsing, since Scripts reach Instruments by name at load.
 
 ▶ above the parameters auditions the selected Instrument
 ([#2080](https://github.com/odogono/odgn-talk/issues/2080)), through its own
@@ -997,7 +997,7 @@ transport to stop` holds them with the bars they still have to come,
 holds the waits; [`src/play.ts`](src/play.ts) gives the Group its musical
 clock, ends each wait a lead early and keeps each Run's musical time.
 [`tests/musical-time.test.ts`](tests/musical-time.test.ts) plays both
-arrangements on Perform and Punch In, with late Pumps and tempo and time
+arrangements as played and Punched In, with late Pumps and tempo and time
 signature changes.
 
 ## Punch In
@@ -1323,28 +1323,22 @@ through it.
 
 ## Play
 
-There are three ways to run a Project, all on the Page being edited
-([ADR 0093](../../docs/adr/0093-folio-browses-in-place.md)). **Browse**, at
-the top of the Tools window, plays the Page in place on the desk with the
-Tools, Script and Errors windows still open (the Edit menu offers only Undo and Redo, for Script edits), as HyperCard's browse tool did.
-**Present** plays it full-window with the editor hidden; an explicitly opened Performance window remains available. **Perform** is for live coding in front of an audience. Each Project chooses one with **Project ▸ Play by Performing**, and the header's one button reads Play or Perform to match: ⌘↩ plays the Project's way and stops it, and ⌘⇧↩ plays the other way for that Play Session only. A new Blank Project presents and a new Music Project performs; a Project copied from Music before this choice existed performs too. Perform is one window with
-the stage on the left, scaled to fit, and the Code Browser docked on the
-right, so the audience sees the code being played. The Errors window stays
-hidden. Drag the divider (or focus it and use the arrow keys) to share the
-width, and ⌘+ and ⌘− zoom the code; both are remembered for each Project. The
-code pane shows one Script at a time, with the recent ones as tabs above it;
-⌥-click an Element on the stage to open its Script without clicking it. ⌘↩
-Punches In as in Browse. Errors never stop the show: a Punch In that fails to
-compile keeps the last good version playing, a runtime error stops only its
-Handler, and the latest error shows over the code until a good Punch In
-clears it. Open Palettes dock in a column under the code; tick **Float over
-the stage in Perform** in a Palette's Info to keep its window floating
-instead. The Window menu still opens and closes them. A toolbar over the
-code has **Hush** (⌘⇧.), which silences every sound and Instrument and stops
-every pattern while Play, its Scripts and the Transport go on (⌘. is still
-Pause); **Revert**, which puts the shown Script back as Play last loaded it,
-as an edit Undo takes back; and the tempo and bar, such as `120 BPM · bar
-3.2`. Each session uses a fresh Core
+There are two ways to run a Project
+([ADR 0093](../../docs/adr/0093-folio-browses-in-place.md),
+[ADR 0174](../../docs/adr/0174-folio-play-browses-in-place-and-present-is-a-project-action.md)).
+**Play** in the header (⌘↩) browses: it plays the Page in place on the desk
+with the Tools, Script, Errors, Instruments and Palette windows still open
+(the Edit menu offers only Undo and Redo, for Script edits), as HyperCard's
+browse tool did, and the same button, now reading Stop, ends it.
+**Project ▸ Present** (⌘⇧↩) plays it full-window with the editor hidden, as
+a reader would see it; an explicitly opened Performance window remains
+available. Browsing is also how to live-code: ⌘↩ in the Code Browser Punches
+In, and ⌥-click an Element on the stage to open its Script without clicking
+it. While browsing, the play controls add **Hush** (⌘⇧.), which silences
+every sound and Instrument and stops every pattern while Play, its Scripts
+and the Transport go on (⌘. is still Pause); **Revert**, which puts the shown
+Script back as Play last loaded it, as an edit Undo takes back; and the tempo
+and bar, such as `120 BPM · bar 3.2`. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,

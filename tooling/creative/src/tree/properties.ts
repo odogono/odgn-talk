@@ -51,7 +51,7 @@ const paletteSetting = <K extends keyof PaletteSettings>(
       string,
       unknown
     >;
-    if ((key === 'title' && value === '') || (key === 'float' && !value)) {
+    if (key === 'title' && value === '') {
       delete next[key];
     } else {
       next[key] = value;
@@ -74,7 +74,6 @@ const fields: Record<string, Readonly<Record<string, PropertyDescriptor>>> = {
     paletteTitle: paletteSetting('title', 'text', ''),
     paletteWidth: paletteSetting('width', 'number', 0),
     openOnPlay: paletteSetting('openOnPlay', 'boolean', false),
-    floatInPerform: paletteSetting('float', 'boolean', false),
   },
   // Each Element kind's properties are in its definition.
   ...Object.fromEntries(
