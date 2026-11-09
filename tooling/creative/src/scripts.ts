@@ -147,6 +147,7 @@ export class CodeBrowser {
   readonly literals = new LiteralEditorWindows({
     read: source => this.#textOf(source),
     write: (source, text) => this.#write(source, text),
+    audition: (name, on) => this.#audition(name, on),
     select: (source, from, to) => {
       const view = this.#window?.view;
       const shown = this.#selected;
@@ -538,6 +539,12 @@ export class CodeBrowser {
     this.sync();
     server.lsp.open(this.#uri(), this.#text());
     return browser;
+  }
+
+  #audition: (name: string, on: string | undefined) => void = () => {};
+  /** Who plays a Literal Editor's note or sound (#2190). */
+  onAudition(play: (name: string, on: string | undefined) => void): void {
+    this.#audition = play;
   }
 
   onAddMusicSound(add: (key: string) => Promise<void>): void {

@@ -78,6 +78,14 @@ const pressFirstColumn = (label: string) => {
   press(grid, grid.getBoundingClientRect().left + 45, rowTop(label));
 };
 
+// A press and a release in place, as a tap.
+const tap = (target: Element, clientX: number, clientY: number) => {
+  press(target, clientX, clientY);
+  target.dispatchEvent(
+    new PointerEvent('pointerup', { clientX, clientY, bubbles: true }),
+  );
+};
+
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
   const test = async (name: string, run: () => void | Promise<void>) => {
@@ -180,6 +188,30 @@ export const runBrowserTests = async () => {
     key('Delete');
     assert(pattern().startsWith('<[g4 f4'), pattern());
     assert(hint() === '', `hint ${hint()}`);
+  });
+
+  await test('a second tap on the selected note removes it (#2190)', () => {
+    pressFirstColumn('c5');
+    assert(pattern().startsWith('<[[g4,c5] f4'), pattern());
+    const added = notes().find(n => n.classList.contains('selected'))!;
+    const bar = added.getBoundingClientRect();
+    tap(added, bar.left + 2, bar.top + 2);
+    assert(pattern().startsWith('<[g4 f4'), pattern());
+    assert(!notes().some(n => n.classList.contains('selected')), 'none');
+    const g4 = notes().find(n => n.dataset.from === '2')!;
+    const box = g4.getBoundingClientRect();
+    tap(g4, box.left + 2, box.top + 2);
+    assert(pattern().startsWith('<[g4 f4'), pattern());
+  });
+
+  await test('a press on a row name changes nothing', () => {
+    const before = pattern();
+    const label = [
+      ...roll()!.querySelectorAll<HTMLElement>('.piano-roll-row'),
+    ][0]!;
+    const box = label.getBoundingClientRect();
+    press(label, box.left + 5, box.top + 5);
+    assert(pattern() === before, 'unchanged');
   });
 
   return results;

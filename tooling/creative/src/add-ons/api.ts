@@ -82,6 +82,8 @@ export type AddOnInstrumentModule = {
 
 /** What a Literal Editor's window gives it (ADR 0175). */
 export type LiteralEditorHost = {
+  /** Plays `name`, a note or sound, as the literal's pattern would (#2190). */
+  audition(name: string): void;
   /** The window's body, which the editor draws into. */
   element: HTMLElement;
   /** Folio's reading of a Mini-Notation text, as `show` is given (#2182). */
