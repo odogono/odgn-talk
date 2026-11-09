@@ -427,6 +427,14 @@ _Avoid_: step (as a term), hit, note (unless it plays an Instrument note)
 The Code Browser lighting up the Mini-Notation text of each Pattern Event while it sounds, as the Play Session browses.
 _Avoid_: playhead, cursor, flash
 
+**Literal Editor**:
+An alternative view of one kind of source literal in the Code Browser, provided by an Add-on and shown in its own window, that edits the literal only by rewriting its text.
+_Avoid_: Palette (an authored panel), inline editor, widget
+
+**Piano Roll**:
+The Literal Editor for Mini-Notation, laying a Sound Pattern's cycles out left to right with a row per note pitch or sound name.
+_Avoid_: step sequencer, grid editor, drum machine
+
 **Base Project**:
 A Project that ships with Folio and that a new Project starts as a copy of, bringing its sounds, Palettes and Add-ons, such as Blank or Music. The copy remembers which Base Project and version it came from but never depends on it, carrying every sound it plays.
 _Avoid_: template, starter, kit (for the sounds a Base Project brings)
@@ -440,7 +448,7 @@ An authored panel of Elements, kept with the Project and authored like a Page, t
 _Avoid_: panel, custom window, widget, plugin
 
 **Add-on**:
-A separately loaded part of Folio that provides Element kinds or Instrument kinds a Project can use, either built with Folio and referenced by version, or carried in the Project's `.folio` file and run only once trusted.
+A separately loaded part of Folio that provides Element kinds, Instrument kinds or Literal Editors a Project can use, either built with Folio and referenced by version, or carried in the Project's `.folio` file and run only once trusted.
 _Avoid_: extension (an Extend's source), plugin, module
 
 **Script Recipe**:
