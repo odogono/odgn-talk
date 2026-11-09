@@ -89,6 +89,36 @@ const parameters = {
     description:
       "How often an arpeggio steps to its next offset; 50 Hz is the ST's frame rate.",
   },
+  vibratoDepth: {
+    group: 'Vibrato',
+    shape: 'number',
+    min: 0,
+    max: 1200,
+    unit: 'cent',
+    default: 0,
+    description:
+      'How far each note wobbles either side of its pitch, in cents; 0 is off.',
+  },
+  vibratoRate: {
+    group: 'Vibrato',
+    shape: 'number',
+    min: 0.1,
+    max: 50,
+    scale: 'log',
+    unit: 'Hz',
+    default: 6,
+    description: 'How many times a second the vibrato wobbles.',
+  },
+  vibratoDelay: {
+    group: 'Vibrato',
+    shape: 'number',
+    min: 0,
+    max: 10,
+    unit: 's',
+    default: 0,
+    description:
+      'How long after a note starts its vibrato begins, as Atari ST drivers delay it.',
+  },
   gain: {
     group: 'Output',
     shape: 'number',
@@ -118,10 +148,25 @@ export const tonePeriod = (note: number): number =>
 export const arpeggioOffsets = (text: string): number[] =>
   text.trim().split(/\s+/).filter(Boolean).map(Number);
 
+/** How often a vibrating note's tone period follows the wobble. */
+const VIBRATO_TICK_SECONDS = 0.002;
+
+/** The vibrato's bend in cents, `seconds` after a note starts. */
+export const vibratoCents = (
+  seconds: number,
+  vibrato: { delay: number; depth: number; rate: number },
+): number =>
+  seconds < vibrato.delay
+    ? 0
+    : vibrato.depth *
+      Math.sin(2 * Math.PI * vibrato.rate * (seconds - vibrato.delay));
+
 type Channel = Voice & {
   /** Samples since the arpeggio last stepped. */
   elapsed: number;
   index: number;
+  /** Samples since the note started, which its vibrato follows. */
+  sounding: number;
   /** The arpeggio offset sounding now. */
   step: number;
 };
@@ -137,6 +182,7 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
       elapsed: 0,
       index,
       note: 0,
+      sounding: 0,
       step: 0,
     }),
   );
@@ -147,7 +193,12 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   const writePeriod = (channel: Channel) => {
     const offset =
       offsets.length > 0 ? offsets[channel.step % offsets.length]! : 0;
-    const period = tonePeriod(channel.note + offset);
+    const bend = vibratoCents(channel.sounding / setup.sampleRate, {
+      depth: values.number('vibratoDepth'),
+      rate: values.number('vibratoRate'),
+      delay: values.number('vibratoDelay'),
+    });
+    const period = tonePeriod(channel.note + offset + bend / 100);
     ym.write(channel.index * 2, period & 0xff);
     ym.write(channel.index * 2 + 1, period >> 8);
   };
@@ -184,25 +235,40 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   };
   writeMixer();
 
-  // Renders `count` frames, stepping each held note's arpeggio on time.
-  const renderArpeggio = (count: number): Float32Array => {
+  // Renders `count` frames, stepping each held note's arpeggio and
+  // following its vibrato on time.
+  const renderNotes = (count: number): Float32Array => {
     const playing = channels.filter(channel => channel.active);
-    if (offsets.length < 2 || playing.length === 0) {
-      return ym.render(count);
-    }
-    const every = setup.sampleRate / values.number('arpeggioRate');
+    const arpeggiating = offsets.length >= 2;
+    const vibrating = values.number('vibratoDepth') > 0;
+    const every = arpeggiating
+      ? setup.sampleRate / values.number('arpeggioRate')
+      : Infinity;
+    const tick = vibrating
+      ? Math.max(1, Math.round(setup.sampleRate * VIBRATO_TICK_SECONDS))
+      : Infinity;
     const mono = new Float32Array(count);
     let done = 0;
     while (done < count) {
-      const due = Math.min(...playing.map(channel => every - channel.elapsed));
+      const due = Math.min(
+        tick,
+        ...playing.map(channel => every - channel.elapsed),
+      );
       const frames = Math.min(count - done, Math.max(1, Math.ceil(due)));
       mono.set(ym.render(frames), done);
       done += frames;
       for (const channel of playing) {
-        channel.elapsed += frames;
-        if (channel.elapsed >= every) {
-          channel.elapsed -= every;
-          channel.step = (channel.step + 1) % offsets.length;
+        channel.sounding += frames;
+        let changed = vibrating;
+        if (arpeggiating) {
+          channel.elapsed += frames;
+          if (channel.elapsed >= every) {
+            channel.elapsed -= every;
+            channel.step = (channel.step + 1) % offsets.length;
+            changed = true;
+          }
+        }
+        if (changed) {
           writePeriod(channel);
         }
       }
@@ -218,8 +284,10 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
           channel.active = true;
           channel.age = ++started;
           channel.note = command.note;
-          // A new note restarts the arpeggio at its first offset.
+          // A new note restarts the arpeggio at its first offset, and its
+          // vibrato's delay.
           channel.elapsed = 0;
+          channel.sounding = 0;
           channel.step = 0;
           velocities[channel.index] = Math.max(
             0,
@@ -246,6 +314,11 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
           if (values.set(command.parameter, command.value)) {
             if (command.parameter === 'arpeggio') {
               offsets = arpeggioOffsets(values.text('arpeggio'));
+            }
+            if (
+              command.parameter === 'arpeggio' ||
+              command.parameter.startsWith('vibrato')
+            ) {
               for (const channel of channels) {
                 if (channel.active) {
                   writePeriod(channel);
@@ -262,7 +335,7 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
     },
     channels: 2,
     render: count => {
-      const mono = renderArpeggio(count);
+      const mono = renderNotes(count);
       const [left, right] = panGains(values.number('pan'));
       const gain = values.number('gain');
       const output = new Float32Array(mono.length * 2);
@@ -277,6 +350,7 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
       for (const channel of channels) {
         channel.active = false;
         channel.elapsed = 0;
+        channel.sounding = 0;
         channel.step = 0;
       }
       writeMixer();
