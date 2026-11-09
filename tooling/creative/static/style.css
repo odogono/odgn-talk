@@ -920,10 +920,8 @@ button:disabled {
 #info .suggestion button {
   font-family: ui-monospace, monospace;
 }
-/* Script windows and the Message Box: resizable from the bottom-right
-   corner, with the editor taking the space the window gives it. */
-/* Resizable windows (Script windows, the Message Box and Info) grow from
-   the bottom-right corner but stay on screen. */
+/* Every window resizes from its bottom-right corner but stays on screen;
+   a code window's editor takes the space the window gives it. */
 .window.resizable {
   display: flex;
   flex-direction: column;
@@ -1251,7 +1249,18 @@ button:disabled {
   color: var(--accent);
 }
 .literal-editor-window {
+  width: min(40rem, 100vw);
+  height: 24rem;
   min-width: 16rem;
+  min-height: 8rem;
+}
+/* A Literal Editor fills the window as it is resized. */
+.literal-editor-window > .literal-editor-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  flex-shrink: 1;
+  min-height: 0;
 }
 .literal-editor-notice:empty {
   display: none;

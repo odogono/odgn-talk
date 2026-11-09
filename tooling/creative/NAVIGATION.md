@@ -589,8 +589,9 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
 
 ## Windows and code windows
 
-- [windows.ts](src/windows.ts): the title bar and close box every floating
-  window shares, show/hide/bring-forward and the Window menu. Dragging and
+- [windows.ts](src/windows.ts): the title bar, close box and resize corner
+  (the `resizable` class; static windows in index.html carry it too) every
+  floating window shares, show/hide/bring-forward and the Window menu. Dragging and
   positions are in [stack.ts](src/stack.ts).
 - [code-window.ts](src/code-window.ts): the resizable NorthTalk editor window,
   its language-server worker and the [shared editor](../editor/src/editor.ts).
