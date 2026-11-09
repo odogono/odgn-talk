@@ -68,6 +68,16 @@ const press = (target: Element, clientX: number, clientY: number) =>
 const pattern = () => patternTexts(shell.editor.project.script)[0]!.text;
 const hint = () => roll()!.querySelector('.piano-roll-hint')!.textContent;
 
+// A press on the first step's column, in the row labelled `label`.
+const rowTop = (label: string) =>
+  [...roll()!.querySelectorAll('.piano-roll-row')]
+    .find(r => r.textContent === label)!
+    .getBoundingClientRect().top + 5;
+const pressFirstColumn = (label: string) => {
+  const grid = scroller().firstElementChild!;
+  press(grid, grid.getBoundingClientRect().left + 45, rowTop(label));
+};
+
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
   const test = async (name: string, run: () => void | Promise<void>) => {
@@ -155,16 +165,21 @@ export const runBrowserTests = async () => {
     assert(pattern().startsWith('<[g4 f4'), pattern());
   });
 
-  await test('a cell that is no rest refuses a note', () => {
-    const grid = scroller().firstElementChild!;
-    const box = grid.getBoundingClientRect();
-    const before = pattern();
-    const c5 = [...roll()!.querySelectorAll('.piano-roll-row')].find(
-      r => r.textContent === 'c5',
-    )!;
-    press(grid, box.left + 45, c5.getBoundingClientRect().top + 5);
-    assert(pattern() === before, 'unchanged');
-    assert(hint()!.includes('rest'), `hint ${hint()}`);
+  await test('a cell under a note adds it as a Chord, and Delete takes it out (#2187)', () => {
+    pressFirstColumn('c5');
+    assert(pattern().startsWith('<[[g4,c5] f4'), pattern());
+    pressFirstColumn('a4');
+    assert(pattern().startsWith('<[[g4,a4,c5] f4'), pattern());
+    const a4 = notes().find(n => n.classList.contains('selected'))!;
+    assert(a4.dataset.from === '6', `selected ${a4.dataset.from}`);
+    key('Delete');
+    assert(pattern().startsWith('<[[g4,c5] f4'), pattern());
+    const c5 = notes().find(n => n.dataset.from === '6')!;
+    const bar = c5.getBoundingClientRect();
+    press(c5, bar.left + 2, bar.top + 2);
+    key('Delete');
+    assert(pattern().startsWith('<[g4 f4'), pattern());
+    assert(hint() === '', `hint ${hint()}`);
   });
 
   return results;

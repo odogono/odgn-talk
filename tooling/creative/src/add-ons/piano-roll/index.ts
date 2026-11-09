@@ -4,20 +4,23 @@
 // (#2182) rewrites one step's text at a time: select a note (linked to the
 // Code Browser's selection), move it with ↑↓ or by dragging, Delete makes it
 // a rest, S splits and M merges, and clicking a rest's cell writes a note
-// there. Nothing changes the brackets. It draws with plain DOM and Folio's
+// there. Clicking under a sounding note adds a Chord member, and Delete takes
+// one out (#2187); that is the only bracket the Piano Roll writes. It draws with plain DOM and Folio's
 // style variables, so it needs nothing from Folio at run time.
 import type { LiteralEditorHost, LiteralEditorView } from '../api';
 import { defineAddOn } from '../api';
 import type { LiteralState } from '../../literal-editors';
 import { PIANO_ROLL_ADD_ON, PIANO_ROLL_VERSION } from './ids';
 import {
+  addToChord,
   fromRest,
   merge,
   rename,
   split,
   stepAt,
-  toRest,
+  remove,
   type EditResult,
+  type TextEdit,
 } from './edits';
 import {
   noteLabel,
@@ -150,6 +153,17 @@ const drawGrid = (
   return { bars, grid };
 };
 
+/** Where the note `name` an edit adds to a Chord starts. */
+const addedAt = (edit: TextEdit, name: string): number =>
+  edit.from +
+  (edit.insert.startsWith(`[${name},`)
+    ? 1
+    : edit.insert.endsWith(`,${name}]`)
+      ? edit.insert.length - name.length - 1
+      : edit.insert.startsWith(',')
+        ? 1
+        : 0);
+
 const open = (host: LiteralEditorHost): LiteralEditorView => {
   let fullRange = false;
   let shown: Shown | undefined;
@@ -200,7 +214,7 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       class: 'piano-roll-scroller',
       tabindex: '0',
       'aria-label':
-        'Notes: ↑↓ move, Shift for an octave, Delete for a rest, S splits, M merges',
+        'Notes: ↑↓ move, Shift for an octave, Delete removes, S splits, M merges',
     },
   );
   toolbar.append(summary, range, hint);
@@ -303,7 +317,8 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       move(event.key === 'ArrowUp' ? step : -step);
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       handled();
-      apply(toRest(layers, at), at);
+      // A Chord's member leaves it; a lone note becomes a rest (#2187).
+      apply(remove(layers, at), at);
     } else if (event.key === 's' || event.key === 'S') {
       handled();
       // The first of the two halves stays selected, inside its bracket.
@@ -349,11 +364,28 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
     if (x < 0 || label === undefined) {
       return;
     }
-    if (!rest) {
-      say('Only a rest’s cell takes a note; change the rhythm in the text.');
+    if (rest) {
+      apply(fromRest(shown.pattern.layers, rest.from, label), rest.from);
       return;
     }
-    apply(fromRest(shown.pattern.layers, rest.from, label), rest.from);
+    // A note sounding then gains this row's note as a Chord (#2187): the
+    // step written first, when several sound.
+    const sounding = layout.notes
+      .filter(n => n.cycle === cycle && t >= n.begin && t < n.end)
+      .sort((a, b) => a.from - b.from)[0];
+    if (!sounding) {
+      say(
+        'Only a rest’s or a note’s column takes a note; change the rhythm in the text.',
+      );
+      return;
+    }
+    const result = addToChord(
+      shown.pattern.layers,
+      sounding.from,
+      label,
+      layout.rows[row]!.note,
+    );
+    apply(result, 'problem' in result ? undefined : addedAt(result, label));
   });
   scroller.addEventListener('pointerup', event => {
     const started = drag;

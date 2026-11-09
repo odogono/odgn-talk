@@ -110,3 +110,81 @@ const wordText = (step: Word) =>
   step.value.index === undefined
     ? step.value.name
     : `${step.value.name}:${step.value.index}`;
+
+// --- Chords (#2187) ----------------------------------------------------------
+
+type Sequence = Extract<Step, { kind: 'sequence' }>;
+
+/** The Chord the word at `from` is a member of: a bracket of single notes. */
+const chordOf = (
+  layers: readonly Step[][],
+  from: number,
+): { chord: Sequence; members: Word[] } | undefined => {
+  for (const step of allSteps(layers)) {
+    if (
+      step.kind === 'sequence' &&
+      step.layers.length > 1 &&
+      step.layers.every(l => l.length === 1 && l[0]!.kind === 'word') &&
+      step.layers.some(l => l[0]!.from === from)
+    ) {
+      return { chord: step, members: step.layers.map(l => l[0] as Word) };
+    }
+  }
+  return undefined;
+};
+
+/**
+ * `name` added to the step of the note at `from`, making it a Chord or
+ * joining its Chord, in pitch order when `note` gives the pitch.
+ */
+export const addToChord = (
+  layers: readonly Step[][],
+  from: number,
+  name: string,
+  note?: number,
+): EditResult => {
+  const step = stepAt(layers, from);
+  if (step?.kind !== 'word') {
+    return { problem: 'only a note can become a Chord' };
+  }
+  const found = chordOf(layers, from);
+  const members = found?.members ?? [step];
+  if (members.some(m => wordText(m) === name)) {
+    return { problem: `the Chord already has ${name}` };
+  }
+  const above =
+    note === undefined
+      ? undefined
+      : members.find(m => m.value.note !== undefined && m.value.note > note);
+  if (!found) {
+    const word = wordText(step);
+    return {
+      from: step.from,
+      to: step.to,
+      insert: above ? `[${name},${word}]` : `[${word},${name}]`,
+    };
+  }
+  return above
+    ? { from: above.from, to: above.from, insert: `${name},` }
+    : { from: members.at(-1)!.to, to: members.at(-1)!.to, insert: `,${name}` };
+};
+
+/**
+ * The note at `from` removed: out of its Chord, dropping the brackets when
+ * one note is left, or as a rest when it plays alone.
+ */
+export const remove = (layers: readonly Step[][], from: number): EditResult => {
+  const found = chordOf(layers, from);
+  if (!found) {
+    return toRest(layers, from);
+  }
+  const { chord, members } = found;
+  const index = members.findIndex(m => m.from === from);
+  if (members.length === 2) {
+    const kept = members[1 - index]!;
+    return { from: chord.from, to: chord.to, insert: wordText(kept) };
+  }
+  return index === 0
+    ? { from: members[0]!.from, to: members[1]!.from, insert: '' }
+    : { from: members[index - 1]!.to, to: members[index]!.to, insert: '' };
+};
