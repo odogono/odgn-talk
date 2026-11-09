@@ -21,7 +21,10 @@ export const windowBar = (label: string, closeLabel = 'Close') => {
   return { bar: h('div', { class: 'bar' }, close, title), close, title };
 };
 
-/** A floating window built in code, with the shared title bar. */
+/**
+ * A floating window built in code, with the shared title bar and the resize
+ * corner every window has.
+ */
 export type FloatingWindow = {
   close: HTMLButtonElement;
   node: HTMLElement;
@@ -41,7 +44,7 @@ export const floatingWindow = (o: {
     'section',
     {
       id: o.id,
-      class: `window ${o.className ?? ''}`.trim(),
+      class: `window resizable ${o.className ?? ''}`.trim(),
       'aria-label': o.label,
       'data-left': o.left,
       'data-top': o.top,

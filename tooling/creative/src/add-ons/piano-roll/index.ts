@@ -205,8 +205,8 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
     'div',
     {
       overflow: 'auto',
-      maxWidth: '640px',
-      maxHeight: '360px',
+      flex: '1',
+      minHeight: '0',
       padding: '0.3rem 0',
       outline: 'none',
     },
