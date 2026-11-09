@@ -6,7 +6,7 @@ For issue work, start with [repository identity and issue conventions](docs/agen
 
 ### Commits
 
-PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment at `changelog/unreleased/<slug>.md` whose `type` and `scope` front matter copy the title. See `docs/agents/commits.md`, which also covers the git hooks and reading a failed CI check with `bun run ci:log <pr>`.
+PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment at `changelog/unreleased/<slug>.md` whose front matter copies the title's `type` and `scope` (`---`, `type: feat`, `scope: tools`, `---`), followed by one sentence for a changelog reader. See `docs/agents/commits.md`, which also covers the git hooks and reading a failed CI check with `bun run ci:log <pr>`.
 
 ### Triage labels
 
@@ -14,7 +14,7 @@ Use the five default triage labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`. Look up a language rule in [the Spec's chapter list](spec/README.md#chapters).
 
 ### Implementation navigation
 

@@ -51,6 +51,13 @@ A declaration word such as `constant` or `shape` touches every stage; `rg -n -w 
 - Tests and cases: [cancellation state tests](tests/recovery-cancellation-state.test.ts), [nested accounting tests](tests/recovery-nested-accounting.test.ts), [snapshot tests](tests/recovery-snapshot.test.ts), [Recovery Offer cases](../../corpus/recovery-offers/)
 - First check: `bun test impl/ts/tests/recovery-cancellation-state.test.ts impl/ts/tests/recovery-nested-accounting.test.ts impl/ts/tests/recovery-snapshot.test.ts`
 
+## Shapes and Shape checks
+
+- Implementation: `decodeShape` and `shapeDiagnostics` in [capabilities.ts](src/capabilities.ts), the `is a Shape` Built-in in [operations.ts](src/operations.ts), Clause Shape `mismatches` in [group.ts](src/group.ts)
+- Rules: [Shape checks](../../spec/07-libraries-and-the-standard-library.md#shape-checks), [Shape declarations](../../spec/07-libraries-and-the-standard-library.md#shape-declarations), [Shapes at the boundary](../../spec/09-embedding.md#shapes)
+- Tests and cases: [shape-checks.test.ts](tests/shape-checks.test.ts), [named-shapes.test.ts](tests/named-shapes.test.ts), [object-shapes.test.ts](tests/object-shapes.test.ts), [Clause Shape cases](../../corpus/fallback/clause-shapes/)
+- First check: `bun test impl/ts/tests/shape-checks.test.ts && bun run corpus:run fallback`
+
 ## Values and collections
 
 - Implementation: [values](src/values.ts), [List storage](src/list-storage.ts), [Map storage](src/map-storage.ts), code-point ordering in `compareText` ([text.ts](src/text.ts))
