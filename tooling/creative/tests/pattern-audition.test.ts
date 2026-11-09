@@ -21,6 +21,8 @@ test('a note plays on the pattern’s Instrument', async () => {
   project.instruments.push(synthInstrument('lead') as never);
   const sent = await auditionStep(project, 'e4', 'lead');
   expect(notes(sent)).toContain('lead:note:64');
+  // Its session's end stops nothing, or the note would never sound.
+  expect(notes(sent).some(n => n.includes(':stop:'))).toBe(false);
 });
 
 test('a sound plays on the default sampler without an Instrument', async () => {
