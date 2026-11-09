@@ -786,6 +786,11 @@ button:disabled {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+#instruments-panel input.parameter-text {
+  min-width: 0;
+  padding: 0 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
 .segmented {
   display: flex;
 }

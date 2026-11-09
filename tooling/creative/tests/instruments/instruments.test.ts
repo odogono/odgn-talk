@@ -273,6 +273,50 @@ describe('the YM2149', () => {
     expect(peak(channel(output, 0, 0.6, 0.8))).toBeLessThan(0.01);
   });
 
+  test('an arpeggio steps a held note through its offsets at its rate', () => {
+    // 0, +12, 0, +12… at 10 Hz: a tenth of a second on each.
+    const output = render(ym2149Engine, 0.6, [note(0, 57)], {
+      parameters: { arpeggio: '0 12', arpeggioRate: 10 },
+    });
+    expect(Math.abs(pitch(channel(output, 0, 0.02, 0.09)) - 220)).toBeLessThan(
+      20,
+    );
+    expect(Math.abs(pitch(channel(output, 0, 0.12, 0.19)) - 440)).toBeLessThan(
+      20,
+    );
+    expect(Math.abs(pitch(channel(output, 0, 0.22, 0.29)) - 220)).toBeLessThan(
+      20,
+    );
+  });
+
+  test('a new note restarts the arpeggio at its first offset', () => {
+    const output = render(ym2149Engine, 0.4, [note(0, 57), note(0.15, 57)], {
+      parameters: { arpeggio: '0 12', arpeggioRate: 10 },
+      voices: 1,
+    });
+    // Without the restart, 0.15–0.2 would still be the octave above.
+    expect(Math.abs(pitch(channel(output, 0, 0.16, 0.24)) - 220)).toBeLessThan(
+      20,
+    );
+    expect(Math.abs(pitch(channel(output, 0, 0.26, 0.34)) - 440)).toBeLessThan(
+      20,
+    );
+  });
+
+  test('instrumentProblems refuses bad arpeggio offsets', () => {
+    const chip = createInstrument(YM2149_KIND, 'chip');
+    chip.parameters.arpeggio = '0 4 7';
+    expect(instrumentProblems([chip])).toEqual([]);
+    for (const bad of ['0 x 7', '0,4,7', '0 400']) {
+      chip.parameters.arpeggio = bad;
+      expect(instrumentProblems([chip])).toEqual([
+        expect.objectContaining({
+          path: expect.stringContaining('parameters.arpeggio'),
+        }),
+      ]);
+    }
+  });
+
   test('noise without tone is not a pitched note', () => {
     const output = render(ym2149Engine, 0.3, [note(0, 69)], {
       parameters: { tone: false, noise: true, noisePeriod: 1 },

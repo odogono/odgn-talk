@@ -69,6 +69,26 @@ const parameters = {
     default: 3000,
     description: 'The envelope period, in 256-cycle steps of the 2 MHz clock.',
   },
+  arpeggio: {
+    group: 'Arpeggio',
+    shape: 'text',
+    default: '',
+    pattern: String.raw`\s*(?:-?\d{1,2}(?:\s+-?\d{1,2})*)?\s*`,
+    expected: 'semitone offsets from -99 to 99, such as "0 4 7"',
+    description:
+      'Semitone offsets each held note steps through, such as "0 4 7"; empty is off.',
+  },
+  arpeggioRate: {
+    group: 'Arpeggio',
+    shape: 'number',
+    min: 1,
+    max: 1000,
+    scale: 'log',
+    unit: 'Hz',
+    default: 50,
+    description:
+      "How often an arpeggio steps to its next offset; 50 Hz is the ST's frame rate.",
+  },
   gain: {
     group: 'Output',
     shape: 'number',
@@ -94,7 +114,17 @@ export const tonePeriod = (note: number): number =>
     Math.min(4095, Math.round(YM_CLOCK_HERTZ / 16 / noteFrequency(note))),
   );
 
-type Channel = Voice & { index: number };
+/** An arpeggio's semitone offsets; empty when it is off. */
+export const arpeggioOffsets = (text: string): number[] =>
+  text.trim().split(/\s+/).filter(Boolean).map(Number);
+
+type Channel = Voice & {
+  /** Samples since the arpeggio last stepped. */
+  elapsed: number;
+  index: number;
+  /** The arpeggio offset sounding now. */
+  step: number;
+};
 
 const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   const ym = new Ym2149(setup.sampleRate);
@@ -104,12 +134,23 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
     (_, index) => ({
       active: false,
       age: 0,
+      elapsed: 0,
       index,
       note: 0,
+      step: 0,
     }),
   );
   let started = 0;
   const velocities = [0, 0, 0];
+  let offsets = arpeggioOffsets(values.text('arpeggio'));
+
+  const writePeriod = (channel: Channel) => {
+    const offset =
+      offsets.length > 0 ? offsets[channel.step % offsets.length]! : 0;
+    const period = tonePeriod(channel.note + offset);
+    ym.write(channel.index * 2, period & 0xff);
+    ym.write(channel.index * 2 + 1, period >> 8);
+  };
 
   // The mixer and noise registers follow the parameters.
   const writeMixer = () => {
@@ -143,6 +184,32 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
   };
   writeMixer();
 
+  // Renders `count` frames, stepping each held note's arpeggio on time.
+  const renderArpeggio = (count: number): Float32Array => {
+    const playing = channels.filter(channel => channel.active);
+    if (offsets.length < 2 || playing.length === 0) {
+      return ym.render(count);
+    }
+    const every = setup.sampleRate / values.number('arpeggioRate');
+    const mono = new Float32Array(count);
+    let done = 0;
+    while (done < count) {
+      const due = Math.min(...playing.map(channel => every - channel.elapsed));
+      const frames = Math.min(count - done, Math.max(1, Math.ceil(due)));
+      mono.set(ym.render(frames), done);
+      done += frames;
+      for (const channel of playing) {
+        channel.elapsed += frames;
+        if (channel.elapsed >= every) {
+          channel.elapsed -= every;
+          channel.step = (channel.step + 1) % offsets.length;
+          writePeriod(channel);
+        }
+      }
+    }
+    return mono;
+  };
+
   return {
     apply: command => {
       switch (command.kind) {
@@ -151,13 +218,14 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
           channel.active = true;
           channel.age = ++started;
           channel.note = command.note;
+          // A new note restarts the arpeggio at its first offset.
+          channel.elapsed = 0;
+          channel.step = 0;
           velocities[channel.index] = Math.max(
             0,
             Math.min(1, command.velocity),
           );
-          const period = tonePeriod(command.note);
-          ym.write(channel.index * 2, period & 0xff);
-          ym.write(channel.index * 2 + 1, period >> 8);
+          writePeriod(channel);
           writeLevel(channel);
           if (values.flag('envelope')) {
             const envelope = values.number('envelopePeriod');
@@ -176,6 +244,14 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
           break;
         case 'set':
           if (values.set(command.parameter, command.value)) {
+            if (command.parameter === 'arpeggio') {
+              offsets = arpeggioOffsets(values.text('arpeggio'));
+              for (const channel of channels) {
+                if (channel.active) {
+                  writePeriod(channel);
+                }
+              }
+            }
             writeMixer();
             for (const channel of channels) {
               writeLevel(channel);
@@ -186,7 +262,7 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
     },
     channels: 2,
     render: count => {
-      const mono = ym.render(count);
+      const mono = renderArpeggio(count);
       const [left, right] = panGains(values.number('pan'));
       const gain = values.number('gain');
       const output = new Float32Array(mono.length * 2);
@@ -200,6 +276,8 @@ const chip = (setup: InstrumentSetup): Chip<InstrumentCommand> => {
       ym.reset();
       for (const channel of channels) {
         channel.active = false;
+        channel.elapsed = 0;
+        channel.step = 0;
       }
       writeMixer();
     },

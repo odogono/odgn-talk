@@ -15,10 +15,11 @@ import type { StackEditor } from './editing';
 import { field } from './elements/controls';
 import type { Instrument, Project } from './model';
 import type { InstrumentChange } from './tree/project-tree';
-import type {
-  GroupView,
-  ParameterDefinition,
-  ParameterValue,
+import {
+  parameterProblem,
+  type GroupView,
+  type ParameterDefinition,
+  type ParameterValue,
 } from './instruments/kind';
 import { draggedHandle, viewPicture } from './instruments/group-views';
 import {
@@ -359,6 +360,35 @@ const ParameterRow = (props: RowProps & { onHover(line?: string): void }) => {
           </>
         );
       case 'text':
+        if (!definition.choices) {
+          return (
+            <input
+              aria-label={label}
+              autoComplete="off"
+              className="parameter-text"
+              data-parameter={name}
+              disabled={disabled}
+              onChange={event => {
+                const input = event.currentTarget;
+                if (parameterProblem(definition, input.value) === undefined) {
+                  set(input.value.trim());
+                } else {
+                  // A refused text goes back to what's stored.
+                  input.value = String(value);
+                }
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
+              spellcheck={false}
+              title={definition.description}
+              type="text"
+              value={String(value)}
+            />
+          );
+        }
         return (
           <div
             aria-label={label}

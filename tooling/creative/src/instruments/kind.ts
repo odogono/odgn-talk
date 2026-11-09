@@ -36,9 +36,14 @@ export type ParameterDefinition = ParameterCommon &
         readonly whole?: boolean;
       }
     | {
-        readonly choices: readonly string[];
+        /** The texts it may take; without them, any text `pattern` matches. */
+        readonly choices?: readonly string[];
         readonly default: string;
         readonly description: string;
+        /** What a refused free text should look like, such as `semitone offsets, such as "0 4 7"`. */
+        readonly expected?: string;
+        /** A regular expression the whole of a free text must match. */
+        readonly pattern?: string;
         readonly shape: 'text';
       }
     | {
@@ -149,9 +154,16 @@ export const parameterProblem = (
         ? `expected a number from ${definition.min} to ${definition.max}${definition.unit ? ` ${definition.unit}` : ''}`
         : undefined;
     case 'text':
-      return typeof value === 'string' && definition.choices.includes(value)
+      if (definition.choices) {
+        return typeof value === 'string' && definition.choices.includes(value)
+          ? undefined
+          : `expected one of ${definition.choices.join(', ')}`;
+      }
+      return typeof value === 'string' &&
+        (definition.pattern === undefined ||
+          new RegExp(`^(?:${definition.pattern})$`).test(value))
         ? undefined
-        : `expected one of ${definition.choices.join(', ')}`;
+        : `expected ${definition.expected ?? 'text'}`;
     case 'boolean':
       return typeof value === 'boolean' ? undefined : 'expected true or false';
   }
