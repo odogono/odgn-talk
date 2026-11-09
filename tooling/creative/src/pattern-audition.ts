@@ -37,6 +37,9 @@ export const auditionStep = async (
   }
   const reply = await settle(play, started.result, () => play.pump(0n));
   play.patterns.flush();
+  // Stopping the session stops its Instruments too, which would silence
+  // the note as it starts: only what the step played is kept.
+  const played = sent.slice();
   play.stop(0n);
-  return reply.error ? { problem: reply.error } : sent;
+  return reply.error ? { problem: reply.error } : played;
 };
