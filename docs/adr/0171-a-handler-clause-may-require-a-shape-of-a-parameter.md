@@ -30,7 +30,7 @@ end handle
 
 - A Clause Shape is a Guard. A mismatch means the clause doesn't match, so dispatch tries the next clause, then the Fallback Handler ([ADR 0064](0064-a-fallback-handler-receives-messages-no-clause-matches.md)), and a plain call raises `no match`.
 - A clause matches by checking the number of arguments, then the patterns, then the Clause Shapes from left to right, then the written Guard. Each Clause Shape lowers to what a Guard of only `where p is a S` lowers to, and charges the same Fuel. Chaining several with `and` in a Guard costs a little more, for the `and`s. It needs no new instruction or cost row, and doesn't touch save, restore or Reload.
-- We deferred contract semantics, in which a mismatch is an error that blames the sender, like Kit's `@pre`. That needs answers about whose Fuel pays, where the error goes for a `send` that doesn't wait, and whether the Fallback Handler still sees the message. Host-enforced Shapes at admission ([#2057](https://github.com/odogono/odgn-talk/issues/2057)) is where to settle them.
+- We deferred contract semantics, in which a mismatch is an error that blames the sender, like Kit's `@pre`. That needs answers about whose Fuel pays, where the error goes for a `send` that doesn't wait, and whether the Fallback Handler still sees the message. Host-enforced Shapes at admission ([#2057](https://github.com/odogono/odgn-talk/issues/2057)) is where to settle them. [#2057](https://github.com/odogono/odgn-talk/issues/2057) declined them for now; the [research note](../research/host-enforced-message-shapes.md) records the answers and a decision ready if a Host asks.
 
 **Not changed**
 
