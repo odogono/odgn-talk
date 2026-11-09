@@ -151,6 +151,27 @@ test('a note on a synth gets its gain and is released at the step’s end', () =
   ]);
 });
 
+test('a held note is sent once and released at the end of its last step (#2170)', () => {
+  const { click, pumpAt, runTo, sent } = session(
+    project('  loop "c3 _ _ d3" on bass'),
+  );
+  pumpAt(0n);
+  click(0);
+  runTo(ms(4000), ms(700));
+  expect(
+    sent.flatMap(m =>
+      m.commands.map(c => `${m.at} ${c.kind} ${'note' in c ? c.note : ''}`),
+    ),
+  ).toEqual([
+    '2.1 note 48',
+    '3.598 release 48',
+    '3.6 note 50',
+    '4.098 release 50',
+    '4.1 note 48',
+    '5.598 release 48',
+  ]);
+});
+
 test('a sampler step carries the pattern’s pan and speed', () => {
   const { click, pumpAt, runTo, sent } = session(
     project('  loop "bd" on drums with {pan: -1, speed: 2}'),

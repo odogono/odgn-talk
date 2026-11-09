@@ -1,7 +1,8 @@
 // Folio's Mini-Notation (ADR 0159, #1893), written from Strudel's documented
 // syntax with none of its code. Milestone 1 covers sequences, `-` rests,
 // `[ ]` subdivision, `< >` alternation, `*n` and `/n`, `,` layers, `name:n`
-// sample indexes and note names. One cycle is one bar.
+// sample indexes and note names, and `_` and `@n` to hold a step for longer
+// (#2170). One cycle is one bar.
 //
 // A pattern answers which events start in a span of cycles. Times are exact
 // fractions, so `*3` inside `/2` never drifts, and every event keeps the
@@ -84,6 +85,14 @@ export type Step =
       by: Time;
       from: number;
       kind: 'fast' | 'slow';
+      step: Step;
+      to: number;
+    }
+  | {
+      /** The step's share of its sequence, from `@n` and trailing `_`s. */
+      by: Time;
+      from: number;
+      kind: 'weight';
       step: Step;
       to: number;
     };
@@ -221,6 +230,38 @@ const parser = (text: string) => {
     return found;
   };
 
+  // A lone `_` holds the step before it; `_` inside a word is part of it.
+  const isHold = () =>
+    text[at] === '_' &&
+    !(WORD.test(text[at + 1] ?? '') || text[at + 1] === ':');
+
+  const weigh = (found: Step, by: Time): Step =>
+    found.kind === 'weight'
+      ? { ...found, by: found.by.add(by), to: at }
+      : {
+          kind: 'weight',
+          step: found,
+          by: ONE.add(by),
+          from: found.from,
+          to: at,
+        };
+
+  const weighted = (found: Step): Step => {
+    if (text[at] !== '@') {
+      return found;
+    }
+    const number = NUMBER.exec(text.slice(at + 1))?.[0];
+    if (!number) {
+      fail('Write a number after “@”, as in g5@2.', at, at + 1);
+    }
+    const by = decimal(number!);
+    if (by.n === 0) {
+      fail('A step can’t be weighted by 0.', at, at + 1 + number!.length);
+    }
+    at += 1 + number!.length;
+    return { kind: 'weight', step: found, by, from: found.from, to: at };
+  };
+
   const sequence = (close?: string): Step[] => {
     const steps: Step[] = [];
     space();
@@ -228,7 +269,15 @@ const parser = (text: string) => {
       if (text[at] === ']' || text[at] === '>') {
         fail(`This “${text[at]}” closes nothing.`);
       }
-      steps.push(step());
+      if (isHold()) {
+        if (!steps.length) {
+          fail('A “_” holds the step before it, so it can’t come first.');
+        }
+        at += 1;
+        steps.push(weigh(steps.pop()!, ONE));
+      } else {
+        steps.push(weighted(step()));
+      }
       const before = at;
       space();
       if (
@@ -359,19 +408,73 @@ const queryOf = (step: Step): Query => {
     case 'sequence':
       return stack(step.layers.map(sequenceQuery));
     case 'alternation':
-      return stack(step.layers.map(steps => alternate(steps.map(queryOf))));
+      return stack(step.layers.map(alternationQuery));
     case 'fast':
       return scale(queryOf(step.step), step.by);
     case 'slow':
       return scale(queryOf(step.step), ONE.div(step.by));
+    case 'weight':
+      return queryOf(step.step);
   }
 };
 
-/** Fits every step into one cycle, each taking an equal share. */
+const weightOf = (step: Step): Time => (step.kind === 'weight' ? step.by : ONE);
+const isEven = (steps: Step[]) => steps.every(s => weightOf(s).valueOf() === 1);
+
+/**
+ * Fits every step into one cycle by its weight. Each step plays its own
+ * cycle `c` squeezed into its share of cycle `c`.
+ */
+const weightedQuery = (steps: Step[]): Query => {
+  const total = steps.reduce((sum, s) => sum.add(weightOf(s)), new Time(0));
+  let offset = new Time(0);
+  const parts = steps.map(s => {
+    const part = {
+      query: queryOf(s),
+      begin: offset.div(total),
+      size: weightOf(s).div(total),
+    };
+    offset = offset.add(weightOf(s));
+    return part;
+  });
+  return (from, to) =>
+    byCycle(from, to, (c, a, b) =>
+      parts.flatMap(({ query, begin, size }) => {
+        const cycle = new Time(c);
+        const start = cycle.add(begin);
+        const end = start.add(size);
+        const lo = a.lt(start) ? start : a;
+        const hi = end.lt(b) ? end : b;
+        if (!lo.lt(hi)) {
+          return [];
+        }
+        const inner = (t: Time) => cycle.add(t.sub(start).div(size));
+        const outer = (t: Time) => start.add(t.sub(cycle).mul(size));
+        return query(inner(lo), inner(hi)).map(e => ({
+          ...e,
+          begin: outer(e.begin),
+          end: outer(e.end),
+        }));
+      }),
+    );
+};
+
+/** Fits every step into one cycle, each taking its share. */
 const sequenceQuery = (steps: Step[]): Query =>
   steps.length === 1
     ? queryOf(steps[0]!)
-    : scale(alternate(steps.map(queryOf)), new Time(steps.length));
+    : isEven(steps)
+      ? scale(alternate(steps.map(queryOf)), new Time(steps.length))
+      : weightedQuery(steps);
+
+/** Plays one step per cycle, a weighted step for that many cycles. */
+const alternationQuery = (steps: Step[]): Query =>
+  isEven(steps)
+    ? alternate(steps.map(queryOf))
+    : scale(
+        weightedQuery(steps),
+        ONE.div(steps.reduce((sum, s) => sum.add(weightOf(s)), new Time(0))),
+      );
 
 const patternOf = (layers: Step[][]): Pattern => {
   const query = stack(layers.map(sequenceQuery));

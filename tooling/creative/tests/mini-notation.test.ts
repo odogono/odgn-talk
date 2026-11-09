@@ -133,6 +133,48 @@ test('a span query returns the events that start in it', () => {
   ]);
 });
 
+test('_ holds the step before it, as one longer event (#2170)', () => {
+  expect(cycle('f5 g5 _ c5')).toEqual(['0–1/4 f5', '1/4–3/4 g5', '3/4–1 c5']);
+  expect(cycle('a _ _ b')).toEqual(['0–3/4 a', '3/4–1 b']);
+  // `_` inside a word is part of the word.
+  expect(cycle('bd_x _')).toEqual(['0–1 bd_x']);
+});
+
+test('@n weights a step, the same as trailing _s (#2170)', () => {
+  expect(cycle('f5 g5@2 c5')).toEqual(cycle('f5 g5 _ c5'));
+  expect(cycle('a@1.5 b@0.5')).toEqual(['0–3/4 a', '3/4–1 b']);
+  expect(cycle('a@2 _ b')).toEqual(['0–3/4 a', '3/4–1 b']);
+  // A weighted group divides its own share.
+  expect(cycle('[a b]@3 c')).toEqual(['0–3/8 a', '3/8–3/4 b', '3/4–1 c']);
+});
+
+test('holds work inside brackets, angle brackets and layers (#2170)', () => {
+  expect(cycle('x [a _ b]')).toEqual(['0–1/2 x', '1/2–5/6 a', '5/6–1 b']);
+  expect(cycle('a _ b, c d@3')).toEqual([
+    '0–2/3 a',
+    '0–1/4 c',
+    '1/4–1 d',
+    '2/3–1 b',
+  ]);
+  // In `< >`, a held child plays for that many cycles.
+  expect([0, 1, 2, 3].map(c => cycle('<a _ b>', c))).toEqual([
+    ['0–2 a'],
+    [],
+    ['2–3 b'],
+    ['3–5 a'],
+  ]);
+  // A weighted step keeps its alternation's turn.
+  expect([0, 1].map(c => cycle('[<a b> c]@2 d', c))).toEqual([
+    ['0–1/3 a', '1/3–2/3 c', '2/3–1 d'],
+    ['1–4/3 b', '4/3–5/3 c', '5/3–2 d'],
+  ]);
+});
+
+test('a held event keeps its step’s character range (#2170)', () => {
+  const [, held] = parse('f5 g5 _ c5').cycle(0);
+  expect([held?.from, held?.to]).toEqual([3, 5]);
+});
+
 for (const [text, message, from, to] of [
   ['', 'Write at least one step.', 0, 0],
   ['bd [hh', 'This “[” has no “]”.', 3, 4],
@@ -146,6 +188,16 @@ for (const [text, message, from, to] of [
   ['bd:', 'Write a whole number after “:”, as in bd:3.', 2, 3],
   ['bd ! sd', '“!” can’t start a step.', 3, 4],
   ['bd[hh]', 'Put a space between steps.', 2, 3],
+  ['_ bd', 'A “_” holds the step before it, so it can’t come first.', 0, 1],
+  [
+    'bd [_ sd]',
+    'A “_” holds the step before it, so it can’t come first.',
+    4,
+    5,
+  ],
+  ['bd, _', 'A “_” holds the step before it, so it can’t come first.', 4, 5],
+  ['bd@0', 'A step can’t be weighted by 0.', 2, 4],
+  ['bd@x', 'Write a number after “@”, as in g5@2.', 2, 3],
 ] as const) {
   test(`“${text}” is an error`, () => {
     expect(parseMiniNotation(text)).toEqual({
