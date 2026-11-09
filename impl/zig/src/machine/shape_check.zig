@@ -553,25 +553,70 @@ fn diagnostics(c: *Ctx, v: *Value, s: *const Shape, first: bool) ![]Diagnostic {
     return root.items;
 }
 
-/// Decodes `data` as a Shape and checks `v` against it, first mismatch
-/// only when `first`. The caller releases the outcome after use.
-pub fn run(a: Allocator, gpa: Allocator, v: *Value, data: *Value, first: bool) !Outcome {
+/// Decoded Shapes kept by the identity of their Shape data, so that a
+/// Constant's Shape is decoded once rather than on every test (#2196).
+/// Each entry retains its data, so the address can't be reused while it
+/// is kept, and values are immutable, so a kept Shape is always the data's.
+/// The scanned count is kept too: Fuel is charged as if decoded each time.
+/// Definition errors are not kept; they end the Run anyway.
+pub const Cache = struct {
+    entries: [8]?Entry = @splat(null),
+    next: usize = 0,
+
+    const Entry = struct { data: *Value, shape: *Shape, scanned: u64 };
+
+    fn find(c: *const Cache, data: *const Value) ?Entry {
+        for (c.entries) |e| if (e) |x| if (x.data == data) return x;
+        return null;
+    }
+
+    fn put(c: *Cache, data: *Value, shape: *Shape, scanned: u64) void {
+        if (c.entries[c.next]) |old| releaseEntry(old);
+        c.entries[c.next] = .{ .data = data.retain(), .shape = shape.retain(), .scanned = scanned };
+        c.next = (c.next + 1) % c.entries.len;
+    }
+
+    pub fn deinit(c: *Cache) void {
+        for (&c.entries) |*e| if (e.*) |x| {
+            releaseEntry(x);
+            e.* = null;
+        };
+    }
+};
+
+fn releaseEntry(e: Cache.Entry) void {
+    e.data.release();
+    e.shape.release();
+}
+
+/// Decodes `data` as a Shape, or reads it from `cache`, and checks `v`
+/// against it, first mismatch only when `first`. The caller releases the
+/// outcome after use.
+pub fn run(a: Allocator, gpa: Allocator, v: *Value, data: *Value, first: bool, cache: ?*Cache) !Outcome {
     var c: Ctx = .{ .a = a, .gpa = gpa };
-    const shape = decode(&c, data) catch |e| switch (e) {
-        error.InvalidShape => return .{
-            .scanned = c.scanned,
-            .definition_error = c.definition_error.?,
-            .kept = c.kept.items,
-        },
-        else => return e,
+    const shape = if (cache) |k| if (k.find(data)) |hit| blk: {
+        c.scanned = hit.scanned;
+        break :blk hit.shape.retain();
+    } else null else null;
+    const decoded = shape orelse blk: {
+        const s = decode(&c, data) catch |e| switch (e) {
+            error.InvalidShape => return .{
+                .scanned = c.scanned,
+                .definition_error = c.definition_error.?,
+                .kept = c.kept.items,
+            },
+            else => return e,
+        };
+        if (cache) |k| k.put(data, s, c.scanned);
+        break :blk s;
     };
-    errdefer shape.release();
-    const diags = try diagnostics(&c, v, shape, first);
+    errdefer decoded.release();
+    const diags = try diagnostics(&c, v, decoded, first);
     return .{
         .scanned = c.scanned,
         .diagnostics = diags,
         .kept = c.kept.items,
-        .shape = shape,
+        .shape = decoded,
     };
 }
 
@@ -641,7 +686,7 @@ fn runCase(a: Allocator, gpa: Allocator, value_text: []const u8, shape_text: []c
     // Built-in's arguments are alive for the call.
     const v = try display.parse(a, value_text, .{});
     const data = try display.parse(a, shape_text, .{});
-    return run(a, gpa, v, data, first);
+    return run(a, gpa, v, data, first, null);
 }
 
 test "Script Shape checks decode, match and group union alternatives" {
@@ -706,4 +751,28 @@ test "Script Shape definitions fail before matching, with reasons and paths" {
     const nested = try runCase(a, gpa, "3", "{oneOf: [\"number\", \"bogus\"]}", true);
     defer nested.release();
     try testing.expectEqual(@as(usize, 2), nested.definition_error.?.path.len);
+}
+
+test "Script Shape checks read a kept Shape with the same scanned count" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const gpa = testing.allocator;
+    var cache: Cache = .{};
+    defer cache.deinit();
+    const data = try display.parse(gpa, "{map: [{key: \"x\", shape: \"number\"}]}", .{});
+    defer data.release();
+    const v = try display.parse(a, "{x: 1}", .{});
+    const first = try run(a, gpa, v, data, true, &cache);
+    defer first.release();
+    try testing.expect(cache.find(data) != null);
+    const again = try run(a, gpa, v, data, true, &cache);
+    defer again.release();
+    try testing.expectEqual(first.scanned, again.scanned);
+    try testing.expectEqual(first.shape.?, again.shape.?);
+    const bad = try display.parse(a, "\"bogus\"", .{});
+    const failed = try run(a, gpa, v, bad, true, &cache);
+    defer failed.release();
+    try testing.expect(failed.definition_error != null);
+    try testing.expect(cache.find(bad) == null);
 }

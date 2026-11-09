@@ -342,6 +342,27 @@ type DecodeFrame =
     }
   | { acc: FieldAcc; key: string; optional: boolean; t: 'fieldDone' };
 
+const decodedShapes = new WeakMap<
+  Value,
+  { error?: ShapeDefinitionError; scanned: number; shape?: Shape }
+>();
+
+/**
+ * `decodeShape`, kept per Shape data value: values are immutable, and a
+ * Constant's Shape data is decoded once per load rather than per test.
+ * The scanned count is kept too, so the Fuel charged is unchanged.
+ */
+export const decodeShapeCached = (
+  data: Value,
+): { error?: ShapeDefinitionError; scanned: number; shape?: Shape } => {
+  let decoded = decodedShapes.get(data);
+  if (!decoded) {
+    decoded = decodeShape(data);
+    decodedShapes.set(data, decoded);
+  }
+  return decoded;
+};
+
 /** Reads Shape data into a Shape, or gives the first definition error. */
 export const decodeShape = (
   data: Value,
