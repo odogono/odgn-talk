@@ -201,6 +201,23 @@ landed, and the Issue graph job ticks it as they close.
   suite.
 - First check: `bun test tooling/creative/tests/palettes.test.ts`.
 
+## Literal Editors
+
+- [literal-editors.ts](src/literal-editors.ts) (ADR 0175, #2180): the
+  registry (`registerLiteralEditor`, called by the loader for an Add-on's
+  `literalEditors`; `literalEditorsFor` the Project's listed Add-ons), and
+  the pure pin logic: `followLiteral` tracks a literal through a source
+  change, `replaceInLiteral` rewrites its characters. The types are in
+  [add-ons/api.ts](src/add-ons/api.ts); Project Add-ons can't bring one yet.
+- [literal-editor-windows.ts](src/literal-editor-windows.ts): one session-only
+  window per pinned literal; [literal-gutter.ts](src/literal-gutter.ts) the
+  gutter mark. [scripts.ts](src/scripts.ts) wires them: the context menu,
+  `#write` back through the shown editor, `refresh` from `sync`, and the
+  Playing Highlight through `#hearLiterals`.
+- Tests: [literal-editors.test.ts](tests/literal-editors.test.ts) and the
+  `literal-editors` browser suite (a dummy Echo editor).
+- First check: `bun test tooling/creative/tests/literal-editors.test.ts`.
+
 ## Add-on signing
 
 - [add-ons/signing.ts](src/add-ons/signing.ts) (#1967): the shipped public
