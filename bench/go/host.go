@@ -9,8 +9,8 @@ func bindHost(core *northtalk.Core, group *northtalk.Group, options *northtalk.L
 	switch host {
 	case "", "restore":
 		return nil
-	case "partner":
-		source, err := readScript("messaging/partner")
+	case "partner", "shape-partner":
+		source, err := readScript("messaging/" + host)
 		if err != nil {
 			return err
 		}

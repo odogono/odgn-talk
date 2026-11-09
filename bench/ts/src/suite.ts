@@ -37,6 +37,7 @@ export type Benchmark = Size & {
     | 'properties'
     | 'conversion'
     | 'partner'
+    | 'shape-partner'
     | 'parents'
     | 'restore';
   name: string;
@@ -126,11 +127,11 @@ export class Loaded {
   ) {
     const { host } = b;
     const bindings: Partial<LoadOptions> = {};
-    if (host === 'partner') {
+    if (host === 'partner' || host === 'shape-partner') {
       this.group.load({
         limits,
         name: 'partner',
-        source: readScript('messaging/partner'),
+        source: readScript(`messaging/${host}`),
       });
     } else if (host === 'parents') {
       // leaf → branch → root, and only root has an Owning Script: the

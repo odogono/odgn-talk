@@ -1,0 +1,8 @@
+-- The partner Script the `shape-partner` Host loads beside
+-- `messaging/shape-sends`. Its Clause Shape tests each message's Point,
+-- which `messaging/sends` doesn't. It is not a Benchmark itself.
+shape Point is {kind: text, x: number, y: number}
+
+on echo p is a Point
+  return the x of p
+end echo

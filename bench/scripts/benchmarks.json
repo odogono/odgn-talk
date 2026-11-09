@@ -34,6 +34,18 @@
       }
     },
     {
+      "name": "core/shapes",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": {
+        "n": 100,
+        "expect": "5050"
+      },
+      "skip": {
+        "peers": "Shapes are a NorthTalk construct; no peer counterpart."
+      }
+    },
+    {
       "name": "core/lambdas",
       "n": 2000,
       "expect": "6003000",
@@ -284,6 +296,20 @@
         "expect": "10"
       },
       "host": "partner",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."
+      }
+    },
+    {
+      "name": "messaging/shape-sends",
+      "n": 1500,
+      "expect": "1125750",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "shape-partner",
       "skip": {
         "peers": "NorthTalk embedding API; no peer counterpart.",
         "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."

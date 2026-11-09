@@ -1,0 +1,10 @@
+-- `messaging/sends` with a Clause Shape on the receiver: each send's
+-- message is a Point the receiver's Clause tests before its Run.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    send echo with {kind: "point", x: i, y: i} to partner and wait
+    add it to total
+  end repeat
+  return total
+end run

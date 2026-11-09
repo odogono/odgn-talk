@@ -1765,6 +1765,9 @@ pub const Group = struct {
     /// the state a draw leaves until its instruction is charged.
     random_state: u64 = random_gen.seedState(0),
     random_pending: ?u64 = null,
+    /// Decoded Shapes by their Shape data, for `conforms`, `check` and
+    /// `explain` and Clause Shapes.
+    shape_cache: shape_check.Cache = .{},
     /// Whether a Pump is running: a Stop, CancelRun or RewindRun made then
     /// lands at its next Host crossing, or at its end, rather than waiting
     /// for the next Pump (chapter 9, Threads and the input queue).
@@ -1873,6 +1876,7 @@ pub const Group = struct {
     }
 
     pub fn deinit(g: *Group) void {
+        g.shape_cache.deinit();
         // A Reload or library replacement left paused holds its built code.
         if (g.paused_work) |work| switch (work) {
             .reload => |x| g.dropFresh(x.fresh),
@@ -4970,7 +4974,7 @@ pub const Group = struct {
         else
             try model.text(g.gpa, t.kind.?);
         defer data.release();
-        const outcome = try shape_check.run(g.gpa, g.gpa, failed.locals[t.arg + 1], data, false);
+        const outcome = try shape_check.run(g.gpa, g.gpa, failed.locals[t.arg + 1], data, false, &g.shape_cache);
         defer outcome.release();
         var records: std.ArrayList(*Value) = .empty;
         defer records.deinit(g.gpa);
@@ -10587,7 +10591,12 @@ pub const Group = struct {
                 var raised: builtins.Raised = .{};
                 // A Built-in that raises still pays its rate.
                 m.builtin = ops[0].text;
-                const r = builtins.call(a, gpa, ops[0].text, args, &raised, m) catch |e| switch (e) {
+                const shape_builtin = std.mem.eql(u8, ops[0].text, "conforms") or std.mem.eql(u8, ops[0].text, "check") or std.mem.eql(u8, ops[0].text, "explain");
+                const call = if (shape_builtin)
+                    builtins.shapeCall(a, gpa, ops[0].text, args, &raised, m, &g.shape_cache)
+                else
+                    builtins.call(a, gpa, ops[0].text, args, &raised, m);
+                const r = call catch |e| switch (e) {
                     error.Raised => return g.raiseBuiltin(raised),
                     else => |other| return other,
                 };

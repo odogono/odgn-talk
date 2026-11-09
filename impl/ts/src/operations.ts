@@ -21,7 +21,7 @@ import {
 } from './decimal';
 import { functionHead } from './code-unit';
 import {
-  decodeShape,
+  decodeShapeCached,
   diagnosticRecord,
   pathValue,
   shapeDiagnostics,
@@ -2443,7 +2443,7 @@ export const builtin = (
     case 'conforms':
     case 'check':
     case 'explain': {
-      const decoded = decodeShape(y!);
+      const decoded = decodeShapeCached(y!);
       measure.scanned = decoded.scanned;
       if (decoded.error) {
         throw new ScriptError('invalid shape', [

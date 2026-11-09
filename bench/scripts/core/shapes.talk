@@ -1,0 +1,12 @@
+-- Tests a map against a named Shape: `p is a Point` is a `conforms`
+-- call on the Shape's Constant data (ADR 0168), as a Clause Shape is.
+shape Point is {kind: text, x: number, y: number}
+
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    put {kind: "point", x: i, y: i} into p
+    if p is a Point then add the x of p to total
+  end repeat
+  return total
+end run

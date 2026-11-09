@@ -162,7 +162,7 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
     if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "toInstant")) return civilOrInstant(a, gpa, name, args, raised);
     if (std.mem.startsWith(u8, name, "fromFloat") or std.mem.startsWith(u8, name, "toFloat")) return float(gpa, name, args, raised);
     if (std.mem.startsWith(u8, name, "bit")) return bits(gpa, name, args, raised);
-    if (std.mem.eql(u8, name, "conforms") or std.mem.eql(u8, name, "check") or std.mem.eql(u8, name, "explain")) return shapeCall(a, gpa, name, args, raised, m);
+    if (std.mem.eql(u8, name, "conforms") or std.mem.eql(u8, name, "check") or std.mem.eql(u8, name, "explain")) return shapeCall(a, gpa, name, args, raised, m, null);
     return raise(raised, gpa, "not implemented", &.{});
 }
 
@@ -255,10 +255,12 @@ fn bits(gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised) Error
 const shape_check = @import("shape_check.zig");
 
 /// `conforms`, `check` and `explain` (chapter 7): the definition is
-/// validated first, and failed work is charged through `m.scanned`.
-fn shapeCall(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised, m: *costs.Measures) Error!*Value {
+/// validated first, and failed work is charged through `m.scanned`. A
+/// Group passes its `cache` of decoded Shapes.
+pub fn shapeCall(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised, m: *costs.Measures, cache: ?*shape_check.Cache) Error!*Value {
+    m.args = args;
     const explain = std.mem.eql(u8, name, "explain");
-    const outcome = shape_check.run(a, gpa, args[0], args[1], !explain) catch return error.OutOfMemory;
+    const outcome = shape_check.run(a, gpa, args[0], args[1], !explain, cache) catch return error.OutOfMemory;
     defer outcome.release();
     m.scanned = outcome.scanned;
     if (outcome.definition_error) |e| {
