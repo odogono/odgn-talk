@@ -23,6 +23,7 @@ import type {
 } from '../elements/definition';
 import type { ElementKindView } from '../elements/views';
 import type { LiteralKind, LiteralState } from '../literal-editors';
+import type { Pattern } from '../mini-notation';
 import type { InstrumentKind } from '../instruments/kind';
 import type {
   NOTE_OPERATIONS,
@@ -83,16 +84,22 @@ export type AddOnInstrumentModule = {
 export type LiteralEditorHost = {
   /** The window's body, which the editor draws into. */
   element: HTMLElement;
+  /** Folio's reading of a Mini-Notation text, as `show` is given (#2182). */
+  parse(text: string): Pattern | undefined;
   /**
    * Rewrites the literal's characters `from`–`to` as `insert`, as an edit
    * of the source; why not, when it can't.
    */
   replace(from: number, to: number, insert: string): string | undefined;
+  /** Selects the literal's characters `from`–`to` in the Code Browser. */
+  select(from: number, to: number): void;
   view: AddOnViewApi;
 };
 
 /** A Literal Editor's view of its literal, which its window drives. */
 export type LiteralEditorView = {
+  /** The author's caret moved to the literal's character `at` (#2182). */
+  caret?(at: number): void;
   /** Its window is closing. */
   close?(): void;
   /**

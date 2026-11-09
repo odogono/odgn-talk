@@ -52,6 +52,22 @@ const lit = () => notes().filter(n => n.classList.contains('playing'));
 const rows = () =>
   [...roll()!.querySelectorAll('.piano-roll-row')].map(r => r.textContent);
 
+// Editing (#2182): the first step of the pattern, `f4` at its third
+// character, through keys and presses on the grid.
+const first = () => notes().find(n => n.dataset.from === '2')!;
+const scroller = () =>
+  roll()!.querySelector<HTMLElement>('.piano-roll-scroller')!;
+const key = (key: string, shiftKey = false) =>
+  scroller().dispatchEvent(
+    new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }),
+  );
+const press = (target: Element, clientX: number, clientY: number) =>
+  target.dispatchEvent(
+    new PointerEvent('pointerdown', { clientX, clientY, bubbles: true }),
+  );
+const pattern = () => patternTexts(shell.editor.project.script)[0]!.text;
+const hint = () => roll()!.querySelector('.piano-roll-hint')!.textContent;
+
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
   const test = async (name: string, run: () => void | Promise<void>) => {
@@ -104,6 +120,51 @@ export const runBrowserTests = async () => {
       '.piano-roll-playhead',
     )!;
     await until(() => playhead.hidden === true, 'the playhead to go');
+  });
+
+  await test('a pressed note is selected, and ↑ raises it a semitone', () => {
+    const bar = first().getBoundingClientRect();
+    press(first(), bar.left + 2, bar.top + 2);
+    assert(first().classList.contains('selected'), 'selected');
+    key('ArrowUp');
+    assert(pattern().startsWith('<[f#4 f4 g4'), pattern());
+    assert(first().classList.contains('selected'), 'still selected');
+    key('ArrowDown', true);
+    assert(pattern().startsWith('<[f#3 f4 g4'), pattern());
+    key('ArrowUp', true);
+    key('ArrowDown');
+    assert(pattern().startsWith('<[f4 f4 g4'), pattern());
+  });
+
+  await test('Delete makes a rest, and its cell takes a row’s note', () => {
+    key('Delete');
+    assert(pattern().startsWith('<[- f4 g4'), pattern());
+    const grid = scroller().firstElementChild!;
+    const g4 = [...roll()!.querySelectorAll('.piano-roll-row')].find(
+      r => r.textContent === 'g4',
+    )!;
+    const box = grid.getBoundingClientRect();
+    press(grid, box.left + 45, g4.getBoundingClientRect().top + 5);
+    assert(pattern().startsWith('<[g4 f4 g4'), pattern());
+  });
+
+  await test('S splits the note within its step, and M merges it', () => {
+    key('s');
+    assert(pattern().startsWith('<[[g4 g4] f4'), pattern());
+    key('m');
+    assert(pattern().startsWith('<[g4 f4'), pattern());
+  });
+
+  await test('a cell that is no rest refuses a note', () => {
+    const grid = scroller().firstElementChild!;
+    const box = grid.getBoundingClientRect();
+    const before = pattern();
+    const c5 = [...roll()!.querySelectorAll('.piano-roll-row')].find(
+      r => r.textContent === 'c5',
+    )!;
+    press(grid, box.left + 45, c5.getBoundingClientRect().top + 5);
+    assert(pattern() === before, 'unchanged');
+    assert(hint()!.includes('rest'), `hint ${hint()}`);
   });
 
   return results;

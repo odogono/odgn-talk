@@ -8,6 +8,7 @@ import { AddOnLoader } from '../src/add-ons/loader';
 import { createProject } from '../src/model';
 import { mountStack } from '../src/stack';
 import { mountWindows } from '../src/windows';
+import { EditorView } from '@codemirror/view';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -28,6 +29,7 @@ const until = async (check: () => boolean, what: string) => {
 const ADD_ON = 'https://northtalk.org/add-ons/test-echo';
 const hosts: LiteralEditorHost[] = [];
 const heard: { from: number; to: number }[] = [];
+const carets: number[] = [];
 new AddOnLoader().register(
   defineAddOn({
     id: ADD_ON,
@@ -44,6 +46,7 @@ new AddOnLoader().register(
               host.element.textContent = state.text;
             },
             heard: ({ from, to }) => heard.push({ from, to }),
+            caret: at => carets.push(at),
           };
         },
       },
@@ -112,6 +115,23 @@ export const runBrowserTests = async () => {
   await test('it hears its own Pattern Events', () => {
     shell.code.light(0, source(), { from: 3, text: 'a4 e4', to: 5 }, 50);
     assert(heard.at(-1)?.from === 3, JSON.stringify(heard));
+  });
+
+  await test('its selection and the Code Browser’s are linked', () => {
+    const view = EditorView.findFromDOM(
+      document.querySelector<HTMLElement>('#code-browser .cm-editor')!,
+    )!;
+    hosts[0]!.select(3, 5);
+    const { from, to } = view.state.selection.main;
+    assert(view.state.sliceDoc(from, to) === 'e4', `selected ${from}–${to}`);
+    assert(carets.at(-1) === 3, `caret echoed at ${carets.at(-1)}`);
+    view.dispatch({ selection: { anchor: source().indexOf('a4 e4') + 1 } });
+    assert(carets.at(-1) === 1, `caret at ${carets.at(-1)}`);
+    view.dispatch({ selection: { anchor: 0 } });
+    assert(carets.at(-1) === 1, 'outside the literal says nothing');
+    const pattern = hosts[0]!.parse('c4 [e4');
+    assert(pattern === undefined, 'a broken text has no pattern');
+    assert(hosts[0]!.parse('c4 e4')?.layers.length === 1, 'parses');
   });
 
   await test('it closes when the literal is removed', () => {

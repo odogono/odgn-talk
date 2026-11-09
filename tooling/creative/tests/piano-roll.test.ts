@@ -6,6 +6,8 @@ import {
   MAX_CYCLES,
   noteLabel,
   pianoRollLayout,
+  restOffsets,
+  restsAsWords,
 } from '../src/add-ons/piano-roll/layout';
 import { parseMiniNotation, type Pattern } from '../src/mini-notation';
 
@@ -78,4 +80,19 @@ test('sound patterns get a row per name, in the order they first sound', () => {
     1 / 3,
     0.5,
   ]);
+});
+
+test('rests are placed when the layout is given them', () => {
+  const text = 'c4 - [e4 -]';
+  const pattern = parse(text);
+  const at = restOffsets(pattern.layers);
+  expect(at).toEqual([3, 9]);
+  const layout = pianoRollLayout(pattern, {
+    rests: { at, pattern: parse(restsAsWords(text, at)) },
+  });
+  expect(layout.rests.map(r => [r.from, r.begin, r.end])).toEqual([
+    [3, 1 / 3, 2 / 3],
+    [9, 5 / 6, 1],
+  ]);
+  expect(layout.steps).toBe(6);
 });

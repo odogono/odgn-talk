@@ -2,7 +2,7 @@
 // right until the pattern repeats, a row per note pitch or sound name, and
 // a bar per Pattern Event. It reads only the Pattern it is given, so the
 // Add-on imports nothing from Folio at run time.
-import type { Pattern, PatternEvent, Time } from '../../mini-notation';
+import type { Pattern, PatternEvent, Step, Time } from '../../mini-notation';
 
 /** The most cycles the roll lays out. */
 export const MAX_CYCLES = 16;
@@ -36,10 +36,35 @@ export type RollLayout = {
   cycles: number;
   mode: 'pitch' | 'sound';
   notes: RollNote[];
+  /** Where each rest falls, when the layout was given them (#2182). */
+  rests: Omit<RollNote, 'row'>[];
   rows: RollRow[];
   /** Grid divisions per cycle, from the shortest steps. */
   steps: number;
 };
+
+/** Every rest step's place in a text, from its step tree. */
+export const restOffsets = (layers: readonly Step[][]): number[] => {
+  const found: number[] = [];
+  const visit = (step: Step) => {
+    if (step.kind === 'rest') {
+      found.push(step.from);
+    } else if (step.kind === 'sequence' || step.kind === 'alternation') {
+      step.layers.flat().forEach(visit);
+    } else if (step.kind !== 'word') {
+      visit(step.step);
+    }
+  };
+  layers.flat().forEach(visit);
+  return found;
+};
+
+/**
+ * `text` with each rest written as a one-letter word, so its parse places
+ * the rests as events at the same characters.
+ */
+export const restsAsWords = (text: string, rests: readonly number[]): string =>
+  rests.reduce((t, at) => `${t.slice(0, at)}r${t.slice(at + 1)}`, text);
 
 const NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
 const BLACK = new Set([1, 3, 6, 8, 10]);
@@ -90,7 +115,14 @@ const soundLabel = (e: PatternEvent) =>
 /** Lays out `pattern` for the roll; `fullRange` shows the whole keyboard. */
 export const pianoRollLayout = (
   pattern: Pattern,
-  { fullRange = false }: { fullRange?: boolean } = {},
+  {
+    fullRange = false,
+    rests,
+  }: {
+    fullRange?: boolean;
+    /** The pattern with its rests as words, and where they are. */
+    rests?: { at: readonly number[]; pattern: Pattern };
+  } = {},
 ): RollLayout => {
   const cycles = cyclesOf(pattern);
   const events = Array.from({ length: cycles }, (_, c) =>
@@ -101,8 +133,17 @@ export const pianoRollLayout = (
     events.every(({ event }) => event.value.note !== undefined)
       ? 'pitch'
       : 'sound';
+  const restAt = new Set(rests?.at ?? []);
+  const restEvents = rests
+    ? Array.from({ length: cycles }, (_, c) =>
+        rests.pattern
+          .cycle(c)
+          .filter(event => restAt.has(event.from))
+          .map(event => ({ c, event })),
+      ).flat()
+    : [];
   let steps = 1;
-  for (const { event } of events) {
+  for (const { event } of [...events, ...restEvents]) {
     steps = Math.min(64, lcm(steps, lcm(event.begin.d, event.end.d)));
   }
   let rows: RollRow[];
@@ -130,6 +171,13 @@ export const pianoRollLayout = (
     mode,
     rows,
     steps,
+    rests: restEvents.map(({ c, event }) => ({
+      cycle: c,
+      begin: fraction(within(event.begin, c)),
+      end: fraction(within(event.end, c)),
+      from: event.from,
+      to: event.to,
+    })),
     notes: events.map(({ c, event }) => ({
       cycle: c,
       begin: fraction(within(event.begin, c)),
