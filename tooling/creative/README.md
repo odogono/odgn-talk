@@ -1332,8 +1332,8 @@ with the Tools, Script, Errors, Instruments and Palette windows still open
 browse tool did, and the same button, now reading Stop, ends it.
 **Project ▸ Present** (⌘⇧↩) plays it full-window with the editor hidden, as
 a reader would see it; an explicitly opened Performance window remains
-available. Browsing is also how to live-code: ⌘↩ in the Code Browser Punches
-In, and ⌥-click an Element on the stage to open its Script without clicking
+available. Browsing is also how to live-code: ⌘↩ in the Code Browser starts
+Play when nothing is playing and Punches In while browsing, and ⌥-click an Element on the stage to open its Script without clicking
 it. While browsing, the play controls add **Hush** (⌘⇧.), which silences
 every sound and Instrument and stops every pattern while Play, its Scripts
 and the Transport go on (⌘. is still Pause); **Revert**, which puts the shown

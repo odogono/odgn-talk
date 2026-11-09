@@ -514,8 +514,9 @@ export class CodeBrowser {
   }
 
   /**
-   * Punches In the shown Script or Library, as ⌘↩ and Edit → Punch In do:
-   * false, leaving the key to the editor, when Play isn't browsing.
+   * Punches In the shown Script or Library, as ⌘↩ and Edit → Punch In do,
+   * or starts Play when nothing is playing; false leaves the key to the
+   * editor.
    */
   punchIn(): boolean {
     const win = this.#window;

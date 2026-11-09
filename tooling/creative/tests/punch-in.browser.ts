@@ -161,5 +161,17 @@ export const runBrowserTests = async () => {
     assert(note().hidden, 'The Punch In note stayed after Play');
   });
 
+  await test('⌘↩ in the Code Browser plays from Edit, typing nothing', async () => {
+    const before = view().state.doc.toString();
+    pressPunchIn();
+    await until(() => !!goNode(), '⌘↩ did not start Play');
+    assert(
+      view().state.doc.toString() === before,
+      'The key typed into the Script',
+    );
+    mode('Edit').click();
+    await until(() => !goNode(), 'Play did not end');
+  });
+
   return results;
 };

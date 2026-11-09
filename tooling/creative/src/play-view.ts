@@ -277,6 +277,12 @@ export const mountPlay = (shell: StackShell): void => {
   // Punch In (ADR 0157): the Code Browser's source, already saved as an
   // authored edit, also goes to the browsing session.
   shell.punchIn.onRequest((source, text) => {
+    // ⌘↩ in the Code Browser plays the Project when nothing is playing, as
+    // it does outside the editor, rather than typing a newline.
+    if (!mode) {
+      start('browse');
+      return true;
+    }
     if (!allowed().punching) {
       return false;
     }
