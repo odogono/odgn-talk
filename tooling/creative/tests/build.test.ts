@@ -182,6 +182,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   7: 'c3b565d074336552',
   // The Piano Roll edits patterns from version 1.1.0 (#2182).
   8: 'c223cfd4d9498228',
+  // The Piano Roll adds and removes Chord notes from 1.2.0 (#2187).
+  9: 'd4620f60898ebcac',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

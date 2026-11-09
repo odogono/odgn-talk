@@ -417,6 +417,10 @@ _Avoid_: pattern (unqualified), loop, sequence, riff
 The compact text form of a Sound Pattern, e.g. `"bd [hh hh] sd, - cp"`, in which spaces divide a cycle into steps, brackets subdivide a step and commas layer figures.
 _Avoid_: pattern string, step string
 
+**Chord**:
+Notes of a Sound Pattern that one step plays together, written with commas inside that step's brackets, as `[c4,e4,g4]`. Figures separated by commas outside any brackets are layers, not a Chord.
+_Avoid_: stack, layer (for notes of one step), polyphony
+
 **Pattern Event**:
 One sounding of a part of a Sound Pattern's Mini-Notation, at a time on the Transport and for a length.
 _Avoid_: step (as a term), hit, note (unless it plays an Instrument note)

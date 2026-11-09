@@ -223,8 +223,8 @@ landed, and the Issue graph job ticks it as they close.
   it. Heard events carry the pattern `cycle` from
   [sound-patterns.ts](src/sound-patterns.ts), so only that cycle's bar lights.
   Editing (#2182): [add-ons/piano-roll/edits.ts](src/add-ons/piano-roll/edits.ts)
-  (`rename`, `toRest`, `fromRest`, `split`, `merge`, pure, on the step
-  tree); rests are placed by parsing the text with each rest as a word
+  (`rename`, `toRest`, `fromRest`, `split`, `merge`, and for Chords (#2187)
+  `addToChord` and `remove`, pure, on the step tree); rests are placed by parsing the text with each rest as a word
   (`restsAsWords`, through the host's `parse`); `select`/`caret` link the
   window's selection with the Code Browser's. Bump `PIANO_ROLL_VERSION` with
   any change, since the service worker caches the chunk by version.
