@@ -95,8 +95,16 @@ export type LiteralEditorHost = {
 export type LiteralEditorView = {
   /** Its window is closing. */
   close?(): void;
-  /** A Pattern Event of the literal sounds now for `ms`, as its characters. */
-  heard?(event: { from: number; ms: number; to: number }): void;
+  /**
+   * A Pattern Event of the literal sounds now for `ms`: its characters and,
+   * when known, the pattern's cycle it falls in.
+   */
+  heard?(event: {
+    cycle: number | undefined;
+    from: number;
+    ms: number;
+    to: number;
+  }): void;
   /** Shows the literal as it is now. */
   show(state: Extract<LiteralState, { text: string }>): void;
 };

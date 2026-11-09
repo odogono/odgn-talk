@@ -217,6 +217,13 @@ landed, and the Issue graph job ticks it as they close.
 - Tests: [literal-editors.test.ts](tests/literal-editors.test.ts) and the
   `literal-editors` browser suite (a dummy Echo editor).
 - First check: `bun test tooling/creative/tests/literal-editors.test.ts`.
+- The Piano Roll Add-on (#2181): [add-ons/piano-roll/layout.ts](src/add-ons/piano-roll/layout.ts)
+  (`cyclesOf`, `pianoRollLayout`, pure) and its plain-DOM view in
+  [add-ons/piano-roll/index.ts](src/add-ons/piano-roll/index.ts); Music lists
+  it. Heard events carry the pattern `cycle` from
+  [sound-patterns.ts](src/sound-patterns.ts), so only that cycle's bar lights.
+  Tests: [piano-roll.test.ts](tests/piano-roll.test.ts) and the `piano-roll`
+  browser suite.
 
 ## Add-on signing
 

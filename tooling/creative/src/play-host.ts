@@ -264,6 +264,7 @@ export class PlayHost {
     this.#heard.push({
       owner: index,
       text: event.text,
+      cycle: event.cycle,
       from: event.from,
       to: event.to,
       at: this.#audio.toAudio(Number(event.time) / 1_000_000),

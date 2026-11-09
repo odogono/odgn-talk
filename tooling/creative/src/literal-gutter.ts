@@ -21,6 +21,7 @@ class LiteralMarker extends GutterMarker {
     button.title = `Open in ${this.label}`;
     button.setAttribute('aria-label', button.title);
     button.textContent = '♪';
+    button.dataset.at = String(this.at);
     return button;
   }
 }
@@ -51,17 +52,14 @@ export const literalGutter = (
       return RangeSet.of(marks, true);
     },
     domEventHandlers: {
-      click: (view, line, event) => {
-        const target = (event.target as HTMLElement).closest(
+      click: (view, _line, event) => {
+        const target = (event.target as HTMLElement).closest<HTMLElement>(
           '.literal-editor-mark',
         );
-        const found = patternTexts(view.state.doc.toString()).find(
-          f => view.state.doc.lineAt(f.offset).from === line.from,
-        );
-        if (!target || !found) {
+        if (!target?.dataset.at) {
           return false;
         }
-        open(view, found.offset);
+        open(view, Number(target.dataset.at));
         return true;
       },
     },

@@ -134,7 +134,7 @@ export class LiteralEditorWindows {
   heard(
     source: CodeSelection,
     text: string,
-    event: { from: number; to: number },
+    event: { cycle?: number; from: number; to: number },
     ms: number,
   ): void {
     for (const open of this.#open) {
@@ -143,7 +143,12 @@ export class LiteralEditorWindows {
         open.state.kind === 'ready' &&
         open.state.text === text
       ) {
-        open.view.heard?.({ ...event, ms });
+        open.view.heard?.({
+          cycle: event.cycle,
+          from: event.from,
+          to: event.to,
+          ms,
+        });
       }
     }
   }

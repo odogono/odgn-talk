@@ -295,6 +295,8 @@ export type PlayView = {
  */
 export type PatternEventView = {
   at: number;
+  /** The pattern's cycle it falls in (#2181). */
+  cycle: number;
   end: number;
   from: number;
   owner: number;

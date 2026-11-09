@@ -648,7 +648,7 @@ export class CodeBrowser {
   light(
     scriptId: number,
     script: string,
-    event: { from: number; text: string; to: number },
+    event: { cycle?: number; from: number; text: string; to: number },
     ms: number,
   ): void {
     if (highlightOn()) {
@@ -682,7 +682,7 @@ export class CodeBrowser {
   #hearLiterals(
     scriptId: number,
     script: string,
-    event: { from: number; text: string; to: number },
+    event: { cycle?: number; from: number; text: string; to: number },
     ms: number,
   ): void {
     this.literals.heard(
