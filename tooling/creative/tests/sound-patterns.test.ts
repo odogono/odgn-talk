@@ -300,8 +300,11 @@ test('a pattern built at run time is checked when it plays', () => {
   }
   runTo(ms(4000));
   expect(play.problems.map(p => p.message)).toEqual([
-    ...Array(5).fill('"sound" failed while doing "loop"'),
-    '"sound" failed while doing "play"',
+    // A bad pattern names its step (#2173).
+    'Pattern “bd [hh”: This “[” has no “]”.',
+    'The pattern step “zz” names no Project sound',
+    ...Array(3).fill('"sound" failed while doing "loop"'),
+    '“bd” is not a note bass can play',
   ]);
   expect(play.patterns.active).toBe(false);
 });

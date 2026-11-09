@@ -117,6 +117,47 @@ test('a pattern `on` an Instrument is checked as its kind plays', () => {
   ]);
 });
 
+test('backtick and raw texts without holes are checked too (#2173)', () => {
+  const instruments = new Map([['lead', false]]);
+  const source = [
+    'on openScript',
+    '  loop `',
+    '    c4 e4',
+    '      g4 zz9',
+    '    ` on lead',
+    '  tell sound to play """bd [zz"""',
+    '  loop `c4 ${"zz"}` on lead',
+    'end openScript',
+  ].join('\n');
+  expect(patternTexts(source).map(t => t.text)).toEqual([
+    'c4 e4\n  g4 zz9',
+    'bd [zz',
+  ]);
+  const problems = patternProblems(source, { ...names, instruments });
+  expect(
+    problems.map(p => [p.line, source.slice(p.from, p.to), p.message]),
+  ).toEqual([
+    [4, 'zz9', '“zz9” is not a note lead can play.'],
+    [6, '[', 'This “[” has no “]”.'],
+  ]);
+  expect(
+    patternDiagnostics(source, { ...names, instruments })[0]!.range,
+  ).toEqual({
+    start: { line: 3, character: 9 },
+    end: { line: 3, character: 12 },
+  });
+});
+
+test('escapes and inline backtick text map to their source', () => {
+  const instruments = new Map([['lead', false]]);
+  const source = 'on x\n  loop `c4\\nzz \\x41\\u{42}` on lead\nend x';
+  expect(
+    patternProblems(source, { ...names, instruments }).map(p =>
+      source.slice(p.from, p.to),
+    ),
+  ).toEqual(['zz', String.raw`\x41\u{42}`]);
+});
+
 test('a Project needs Instrument audio for Instruments or a pattern word', () => {
   const p = createProject('Quiet');
   expect(needsInstrumentAudio(p)).toBe(false);

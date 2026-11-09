@@ -30,7 +30,7 @@ import {
   type PatternOptions,
   type PatternTarget,
 } from './sound-patterns';
-import type { SoundCall } from './grants/sound';
+import { INVALID_PATTERN, type SoundCall } from './grants/sound';
 import {
   instrumentAddOn,
   instrumentObjectKindNames,
@@ -94,7 +94,6 @@ import {
 import {
   DEFAULT_SAMPLER,
   isSoundAsset,
-  missingSoundMessage,
   SoundBoard,
   soundKey,
   type SoundBackend,
@@ -814,7 +813,7 @@ export class PlaySession {
       : parseMiniNotation(source);
     if (!parsed.ok) {
       throw new ScriptError(
-        'out of domain',
+        INVALID_PATTERN,
         `Pattern “${source}”: ${parsed.error.message}`,
       );
     }
@@ -824,9 +823,11 @@ export class PlaySession {
       const key = soundKey(word.value);
       if (target.sampler ? !sounds.has(key) : note === undefined) {
         throw new ScriptError(
-          'out of domain',
+          INVALID_PATTERN,
           target.sampler
-            ? missingSoundMessage(key).replace(/\.$/u, '')
+            ? // Not missingSoundMessage: the Errors window's quick fix reads
+              // that, and the load check has offered it already (#2173).
+              `The pattern step “${key}” names no Project sound`
             : `“${name}” is not a note ${target.instrument} can play`,
         );
       }
