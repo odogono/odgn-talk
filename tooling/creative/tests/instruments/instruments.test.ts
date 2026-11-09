@@ -317,6 +317,58 @@ describe('the YM2149', () => {
     }
   });
 
+  test('a vibrato wobbles each note from its own start, after its delay', () => {
+    // A 1200-cent wobble at 1 Hz after 0.2 s: an octave up a quarter-cycle in.
+    const output = render(ym2149Engine, 1, [note(0, 57), note(0.3, 45)], {
+      parameters: { vibratoDepth: 1200, vibratoRate: 1, vibratoDelay: 0.2 },
+      voices: 1,
+    });
+    // The first note is steady through its delay…
+    expect(Math.abs(pitch(channel(output, 0, 0.05, 0.15)) - 220)).toBeLessThan(
+      20,
+    );
+    // …and the second, at 0.3 s, restarts it: steady until 0.5 s, then an
+    // octave up a quarter-cycle later, at 0.75 s.
+    expect(Math.abs(pitch(channel(output, 0, 0.32, 0.48)) - 110)).toBeLessThan(
+      10,
+    );
+    expect(Math.abs(pitch(channel(output, 0, 0.73, 0.77)) - 220)).toBeLessThan(
+      25,
+    );
+  });
+
+  test('a vibrato without depth leaves the pitch alone', () => {
+    const output = render(ym2149Engine, 0.6, [note(0, 57)], {
+      parameters: { vibratoRate: 1, vibratoDelay: 0 },
+    });
+    expect(Math.abs(pitch(channel(output, 0, 0.2, 0.3)) - 220)).toBeLessThan(
+      20,
+    );
+  });
+
+  test('instrumentProblems checks the vibrato parameters', () => {
+    const chip = createInstrument(YM2149_KIND, 'chip');
+    Object.assign(chip.parameters, {
+      vibratoDepth: 30,
+      vibratoRate: 6,
+      vibratoDelay: 0.2,
+    });
+    expect(instrumentProblems([chip])).toEqual([]);
+    for (const [name, bad] of [
+      ['vibratoDepth', -1],
+      ['vibratoRate', 0],
+      ['vibratoDelay', 'soon'],
+    ] as const) {
+      const wrong = createInstrument(YM2149_KIND, 'chip');
+      wrong.parameters[name] = bad;
+      expect(instrumentProblems([wrong])).toEqual([
+        expect.objectContaining({
+          path: expect.stringContaining(`parameters.${name}`),
+        }),
+      ]);
+    }
+  });
+
   test('noise without tone is not a pitched note', () => {
     const output = render(ym2149Engine, 0.3, [note(0, 69)], {
       parameters: { tone: false, noise: true, noisePeriod: 1 },

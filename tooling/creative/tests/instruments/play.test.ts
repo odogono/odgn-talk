@@ -274,3 +274,31 @@ test('a Script sets a YM2149 arpeggio and its rate in Hz', async () => {
     },
   ]);
 });
+
+test('a Script sets a YM2149 vibrato in Catalogue Units', async () => {
+  const project = createProject('Chip');
+  project.instruments.push(createInstrument(YM2149_KIND, 'lead'));
+  const { play, run, sent } = session(project);
+  await run('set the vibratoDelay of lead to 0.2 s');
+  await run('set the vibratoRate of lead to 6 Hz');
+  await run('set the vibratoDepth of lead to 1 semitone');
+  expect(await run('the vibratoDelay of lead')).toMatchObject({ text: '0.2' });
+  expect(await run('set the vibratoDelay of lead to 6 Hz')).toMatchObject({
+    error: expect.anything(),
+  });
+  expect(play.problems).toEqual([]);
+  expect(sent).toEqual([
+    {
+      instrument: 'lead',
+      commands: [{ kind: 'set', parameter: 'vibratoDelay', value: 0.2 }],
+    },
+    {
+      instrument: 'lead',
+      commands: [{ kind: 'set', parameter: 'vibratoRate', value: 6 }],
+    },
+    {
+      instrument: 'lead',
+      commands: [{ kind: 'set', parameter: 'vibratoDepth', value: 100 }],
+    },
+  ]);
+});

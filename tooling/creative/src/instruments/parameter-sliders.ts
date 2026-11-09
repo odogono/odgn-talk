@@ -120,6 +120,8 @@ export const formatParameter = (
       return Math.abs(value) >= 1000
         ? `${(value / 1000).toFixed(1)} kHz`
         : `${short(value)} Hz`;
+    case 'cent':
+      return `${short(value)} cents`;
     case undefined:
       return definition.whole ? String(value) : short(value);
     default:
