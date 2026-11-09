@@ -76,6 +76,8 @@ const examplesOf = (
 ): DocExample[] => {
   const lines = source.split('\n');
   const out: DocExample[] = [];
+  // Examples number across a name's Clauses, so each test name is unique.
+  const counts = new Map<string, number>();
   lines.forEach((line, at) => {
     const name = declared(line);
     if (name === null) {
@@ -85,11 +87,11 @@ const examplesOf = (
     while (first > 0 && docLine(lines[first - 1]!) !== null) {
       first--;
     }
-    let n = 0;
     let current: { line: number; text: string[] } | null = null;
     const end = () => {
       if (current) {
-        n++;
+        const n = (counts.get(name) ?? 0) + 1;
+        counts.set(name, n);
         out.push({
           unit,
           export: name,

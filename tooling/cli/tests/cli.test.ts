@@ -1120,4 +1120,9 @@ test("the repo's Handler Documentation Examples pass", () => {
   ]);
   expect(stdout).toContain('11 passed, 0 failed');
   expect(code).toBe(0);
+  // A Handler's examples number across its Clauses (#2162).
+  const hello = join(repo, 'examples/http/hello.talk');
+  for (const n of [1, 2, 3, 4]) {
+    expect(stdout).toContain(`ok ${hello} hello.httpRequest example ${n}\n`);
+  }
 });
