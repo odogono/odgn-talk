@@ -412,6 +412,9 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   [instruments/group-views.ts](src/instruments/group-views.ts) draws them
   and maps a handle's drag to values. Tests:
   [group-views.test.ts](tests/instruments/group-views.test.ts).
+  A `text` parameter without `choices` is free text, checked against its
+  `pattern` and edited in a text field, such as the YM2149's `arpeggio`
+  (#2167), whose offsets its Chip steps through in `render`.
 - [instruments/audio.ts](src/instruments/audio.ts): the page's AudioContext,
   started by [play-view.ts](src/play-view.ts) when a session has Instruments.
   It decodes the Project's sounds for samplers and runs

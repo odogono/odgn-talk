@@ -251,3 +251,26 @@ test('the rack mixes every Instrument and routes commands by name', () => {
   rack.process(left, right, 0.2);
   expect(Math.max(...left.map(Math.abs))).toBeGreaterThan(0.05);
 });
+
+test('a Script sets a YM2149 arpeggio and its rate in Hz', async () => {
+  const project = createProject('Chip');
+  project.instruments.push(createInstrument(YM2149_KIND, 'lead'));
+  const { play, run, sent } = session(project);
+  await run('set the arpeggio of lead to "0 4 7"');
+  await run('set the arpeggioRate of lead to 25 Hz');
+  expect(await run('the arpeggioRate of lead')).toMatchObject({ text: '25' });
+  expect(await run('set the arpeggio of lead to "0 x"')).toMatchObject({
+    error: expect.anything(),
+  });
+  expect(play.problems).toEqual([]);
+  expect(sent).toEqual([
+    {
+      instrument: 'lead',
+      commands: [{ kind: 'set', parameter: 'arpeggio', value: '0 4 7' }],
+    },
+    {
+      instrument: 'lead',
+      commands: [{ kind: 'set', parameter: 'arpeggioRate', value: 25 }],
+    },
+  ]);
+});
