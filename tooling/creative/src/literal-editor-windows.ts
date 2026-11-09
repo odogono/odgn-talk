@@ -6,8 +6,10 @@ import { VIEW_API } from './add-ons/page';
 import type { LiteralEditorView } from './add-ons/api';
 import type { CodeSelection } from './code-browser-panel';
 import { h } from './dom';
+import { parseMiniNotation } from './mini-notation';
 import {
   followLiteral,
+  literalAt,
   replaceInLiteral,
   type LiteralPin,
   type LiteralState,
@@ -46,6 +48,8 @@ export class LiteralEditorWindows {
     private readonly options: {
       /** The text of `source` now, if it still exists. */
       read(source: CodeSelection): string | undefined;
+      /** Selects `from`–`to` of `source` in the Code Browser, if it shows it. */
+      select(source: CodeSelection, from: number, to: number): void;
       /** Writes `text` as `source`, as an author's edit. */
       write(source: CodeSelection, text: string): void;
     },
@@ -105,6 +109,17 @@ export class LiteralEditorWindows {
       element: body,
       view: VIEW_API,
       replace: (from, to, insert) => this.#replace(open, from, to, insert),
+      parse: text => {
+        const parsed = parseMiniNotation(text);
+        return parsed.ok ? parsed.pattern : undefined;
+      },
+      select: (from, to) => {
+        const found = literalAt(open.text, open.pin.at);
+        if (found && from >= 0 && from <= to && to <= found.text.length) {
+          const range = found.range(from, to);
+          this.options.select(open.source, range.from, range.to);
+        }
+      },
     });
     close.addEventListener('click', event => {
       event.stopPropagation();
@@ -149,6 +164,24 @@ export class LiteralEditorWindows {
           to: event.to,
           ms,
         });
+      }
+    }
+  }
+
+  /** Tells the windows on `source` whose literal holds `pos` where it is. */
+  caret(source: CodeSelection, pos: number): void {
+    for (const open of this.#open) {
+      if (!same(open.source, source) || open.state.kind !== 'ready') {
+        continue;
+      }
+      const found = literalAt(open.text, open.pin.at);
+      const length = found?.text.length ?? 0;
+      for (let i = 0; found && i < length; i++) {
+        const range = found.range(i, i + 1);
+        if (pos >= range.from && pos < range.to) {
+          open.view.caret?.(i);
+          break;
+        }
       }
     }
   }

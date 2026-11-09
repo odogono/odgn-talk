@@ -180,6 +180,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   6: 'cbc56ee0328ae3ba',
   // Music lists the Piano Roll Add-on (#2181).
   7: 'c3b565d074336552',
+  // The Piano Roll edits patterns from version 1.1.0 (#2182).
+  8: 'c223cfd4d9498228',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

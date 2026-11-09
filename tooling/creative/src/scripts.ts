@@ -147,6 +147,16 @@ export class CodeBrowser {
   readonly literals = new LiteralEditorWindows({
     read: source => this.#textOf(source),
     write: (source, text) => this.#write(source, text),
+    select: (source, from, to) => {
+      const view = this.#window?.view;
+      const shown = this.#selected;
+      if (view && shown.kind === source.kind && shown.id === source.id) {
+        view.dispatch({
+          selection: { anchor: from, head: to },
+          scrollIntoView: true,
+        });
+      }
+    },
   });
 
   constructor(
@@ -331,6 +341,15 @@ export class CodeBrowser {
           (view, at) => this.#openLiteral(view, at),
         ),
         playingHighlight(),
+        // A Literal Editor follows the caret into its literal (#2182).
+        EditorView.updateListener.of(update => {
+          if (update.selectionSet && !this.#syncing) {
+            this.literals.caret(
+              this.#selected,
+              update.state.selection.main.from,
+            );
+          }
+        }),
         this.#editing.of(EditorState.readOnly.of(this.editor.readOnly)),
         northtalkEditor(
           this.#uri(),

@@ -222,7 +222,13 @@ landed, and the Issue graph job ticks it as they close.
   [add-ons/piano-roll/index.ts](src/add-ons/piano-roll/index.ts); Music lists
   it. Heard events carry the pattern `cycle` from
   [sound-patterns.ts](src/sound-patterns.ts), so only that cycle's bar lights.
-  Tests: [piano-roll.test.ts](tests/piano-roll.test.ts) and the `piano-roll`
+  Editing (#2182): [add-ons/piano-roll/edits.ts](src/add-ons/piano-roll/edits.ts)
+  (`rename`, `toRest`, `fromRest`, `split`, `merge`, pure, on the step
+  tree); rests are placed by parsing the text with each rest as a word
+  (`restsAsWords`, through the host's `parse`); `select`/`caret` link the
+  window's selection with the Code Browser's. Bump `PIANO_ROLL_VERSION` with
+  any change, since the service worker caches the chunk by version.
+  Tests: [piano-roll.test.ts](tests/piano-roll.test.ts), [piano-roll-edits.test.ts](tests/piano-roll-edits.test.ts) and the `piano-roll`
   browser suite.
 
 ## Add-on signing
