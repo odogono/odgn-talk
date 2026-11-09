@@ -23,6 +23,7 @@ import type {
   AddOnKindModule,
   AddOnModule,
 } from './api';
+import { registerLiteralEditor } from '../literal-editors';
 import { compareVersions } from './versions';
 import { addOnChunk, BUILT_IN_ADD_ONS, type CatalogueEntry } from './catalogue';
 
@@ -156,7 +157,10 @@ export class AddOnLoader {
         module =>
           module?.instruments && Object.keys(module.instruments).length
             ? 'Instrument kinds in a Project Add-on are not supported yet'
-            : this.#register(ref.id, ref.version, module),
+            : module?.literalEditors &&
+                Object.keys(module.literalEditors).length
+              ? 'Literal Editors in a Project Add-on are not supported yet'
+              : this.#register(ref.id, ref.version, module),
         (error: unknown) =>
           `its code failed to load${error instanceof Error ? `: ${error.message}` : ''}`,
       );
@@ -208,6 +212,12 @@ export class AddOnLoader {
         { id, version },
         isObjectKindTaken,
       );
+      if (problem) {
+        return problem;
+      }
+    }
+    for (const [name, editor] of Object.entries(module.literalEditors ?? {})) {
+      const problem = registerLiteralEditor(id, name, editor);
       if (problem) {
         return problem;
       }

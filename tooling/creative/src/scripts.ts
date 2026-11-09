@@ -54,6 +54,9 @@ import {
 import { runProjectTests } from './test-runner';
 import { containingGroups } from './tree/rules';
 import { bringWindowForward, setWindowOpener } from './windows';
+import { LiteralEditorWindows } from './literal-editor-windows';
+import { literalAt, literalEditorsFor } from './literal-editors';
+import { literalGutter } from './literal-gutter';
 import {
   highlightOn,
   lightFor,
@@ -140,6 +143,11 @@ export class CodeBrowser {
   #soundsShown = '';
   #found: { diagnostics: readonly LspDiagnostic[]; uri: string } | undefined;
   readonly dictionary = new DictionaryWindow();
+  // Literal Editor windows (ADR 0175), each pinned to one literal.
+  readonly literals = new LiteralEditorWindows({
+    read: source => this.#textOf(source),
+    write: (source, text) => this.#write(source, text),
+  });
 
   constructor(
     readonly editor: StackEditor,
@@ -178,6 +186,79 @@ export class CodeBrowser {
   #text(): string {
     return this.#named()?.source.source ?? this.#owner()?.script ?? '';
   }
+  #textOf(source: CodeSelection): string | undefined {
+    const project = this.editor.project;
+    return source.kind === 'library'
+      ? project.libraries.find(l => l.id === source.id)?.source
+      : source.kind === 'test'
+        ? project.testScripts.find(t => t.id === source.id)?.source
+        : ownerById(project, source.id)?.script;
+  }
+
+  // A Literal Editor's edit: through the shown editor when it shows the
+  // source, so undo and the language server see it, else to the Project.
+  #write(source: CodeSelection, text: string): void {
+    const view = this.#window?.view;
+    const shown = this.#selected;
+    if (this.editor.readOnly) {
+      return;
+    }
+    if (view && shown.kind === source.kind && shown.id === source.id) {
+      const doc = view.state.doc.toString();
+      let from = 0;
+      while (from < doc.length && doc[from] === text[from]) {
+        from++;
+      }
+      let end = 0;
+      while (
+        end < doc.length - from &&
+        end < text.length - from &&
+        doc[doc.length - 1 - end] === text[text.length - 1 - end]
+      ) {
+        end++;
+      }
+      view.dispatch({
+        changes: {
+          from,
+          to: doc.length - end,
+          insert: text.slice(from, text.length - end),
+        },
+      });
+      return;
+    }
+    this.editor.edit(({ project, tree }) => {
+      if (source.kind === 'library') {
+        tree.setLibrarySource(source.id, text);
+      } else if (source.kind === 'test') {
+        tree.setTestScriptSource(source.id, text);
+      } else {
+        const owner = ownerById(project, source.id);
+        if (owner) {
+          tree.setScript(owner, text);
+        }
+      }
+    });
+    this.redraw();
+  }
+
+  // The Literal Editor this Project lists for Mini-Notation, if any.
+  #literalEditor() {
+    return literalEditorsFor(this.editor.project.addOns, 'mini-notation')[0];
+  }
+
+  #openLiteral(view: EditorView, at: number): void {
+    const editor = this.#literalEditor();
+    if (!editor) {
+      return;
+    }
+    const line = view.state.doc.lineAt(at).number;
+    this.literals.open(
+      editor,
+      this.#selected,
+      at,
+      `${this.#label()}, line ${line}`,
+    );
+  }
 
   // The selected source's Manifest, which completion and the Dictionary read.
   #manifest() {
@@ -205,20 +286,31 @@ export class CodeBrowser {
     if (pos === null) {
       return;
     }
-    const target = operationAt(
-      view.state.doc.toString(),
-      pos,
-      readManifest(this.#manifest()),
-    );
-    if (!target) {
+    const doc = view.state.doc.toString();
+    const target = operationAt(doc, pos, readManifest(this.#manifest()));
+    const editor = this.#literalEditor();
+    const literal = editor ? literalAt(doc, pos) : undefined;
+    if (!target && !literal) {
       return;
     }
     event.preventDefault();
     showContextMenu(event.clientX, event.clientY, [
-      {
-        label: `Show ${target.operation ? `${target.grant} ${target.operation}` : target.grant} in Dictionary`,
-        run: () => this.dictionary.open(target),
-      },
+      ...(editor && literal
+        ? [
+            {
+              label: `Open in ${editor.label}`,
+              run: () => this.#openLiteral(view, literal.offset),
+            },
+          ]
+        : []),
+      ...(target
+        ? [
+            {
+              label: `Show ${target.operation ? `${target.grant} ${target.operation}` : target.grant} in Dictionary`,
+              run: () => this.dictionary.open(target),
+            },
+          ]
+        : []),
     ]);
   }
 
@@ -234,6 +326,10 @@ export class CodeBrowser {
               this.#breakpointsChanged();
             }, 'Breakpoint in source changed since Play began: it applies from the next Play'),
         lineNumbers(),
+        literalGutter(
+          () => this.#literalEditor()?.label,
+          (view, at) => this.#openLiteral(view, at),
+        ),
         playingHighlight(),
         this.#editing.of(EditorState.readOnly.of(this.editor.readOnly)),
         northtalkEditor(
@@ -555,6 +651,9 @@ export class CodeBrowser {
     event: { from: number; text: string; to: number },
     ms: number,
   ): void {
+    if (highlightOn()) {
+      this.#hearLiterals(scriptId, script, event, ms);
+    }
     const win = this.#window;
     const shown = this.#selected;
     if (!win || win.node.hidden || !highlightOn()) {
@@ -575,6 +674,32 @@ export class CodeBrowser {
         ),
         ms,
       );
+    }
+  }
+
+  // Literal Editor windows show the Playing Highlight too: those on the
+  // Script, or on a Library when the Script writes no such pattern.
+  #hearLiterals(
+    scriptId: number,
+    script: string,
+    event: { from: number; text: string; to: number },
+    ms: number,
+  ): void {
+    this.literals.heard(
+      { kind: 'script', id: scriptId },
+      event.text,
+      event,
+      ms,
+    );
+    if (!patternTexts(script).some(found => found.text === event.text)) {
+      for (const library of this.editor.project.libraries) {
+        this.literals.heard(
+          { kind: 'library', id: library.id! },
+          event.text,
+          event,
+          ms,
+        );
+      }
     }
   }
 
@@ -740,6 +865,7 @@ export class CodeBrowser {
 
   sync(): void {
     if (this.#generation !== this.editor.generation) {
+      this.literals.clear();
       const win = this.#window;
       if (win) {
         closeRecipePicker(win.recipes);
@@ -754,6 +880,7 @@ export class CodeBrowser {
       this.#generation = this.editor.generation;
     }
     if (!this.#syncing) {
+      this.literals.refresh();
       this.dictionary.update(readDictionary(this.#manifest()), this.#label());
     }
     const win = this.#window;

@@ -8,7 +8,7 @@ import type { AddOnViewApi } from './api';
 import { AddOnLoader, type AddOnLoaderOptions } from './loader';
 import { TrustStore } from './trust';
 
-const VIEW_API: AddOnViewApi = {
+export const VIEW_API: AddOnViewApi = {
   controls,
   Fragment: Fragment as AddOnViewApi['Fragment'],
   h,

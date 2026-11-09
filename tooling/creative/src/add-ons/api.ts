@@ -22,6 +22,7 @@ import type {
   scalar,
 } from '../elements/definition';
 import type { ElementKindView } from '../elements/views';
+import type { LiteralKind, LiteralState } from '../literal-editors';
 import type { InstrumentKind } from '../instruments/kind';
 import type {
   NOTE_OPERATIONS,
@@ -78,6 +79,36 @@ export type AddOnInstrumentModule = {
   label: string;
 };
 
+/** What a Literal Editor's window gives it (ADR 0175). */
+export type LiteralEditorHost = {
+  /** The window's body, which the editor draws into. */
+  element: HTMLElement;
+  /**
+   * Rewrites the literal's characters `from`–`to` as `insert`, as an edit
+   * of the source; why not, when it can't.
+   */
+  replace(from: number, to: number, insert: string): string | undefined;
+  view: AddOnViewApi;
+};
+
+/** A Literal Editor's view of its literal, which its window drives. */
+export type LiteralEditorView = {
+  /** Its window is closing. */
+  close?(): void;
+  /** A Pattern Event of the literal sounds now for `ms`, as its characters. */
+  heard?(event: { from: number; ms: number; to: number }): void;
+  /** Shows the literal as it is now. */
+  show(state: Extract<LiteralState, { text: string }>): void;
+};
+
+/** A Literal Editor (ADR 0175): another view of one kind of source literal. */
+export type LiteralEditorModule = {
+  /** Its name in menus and its window's title, such as `Piano Roll`. */
+  label: string;
+  literal: LiteralKind;
+  open(host: LiteralEditorHost): LiteralEditorView;
+};
+
 /** An Add-on module's default export. */
 export type AddOnModule = {
   /** The Add-on's URL (ADR 0162). */
@@ -86,6 +117,8 @@ export type AddOnModule = {
   instruments?: Readonly<Record<string, AddOnInstrumentModule>>;
   /** Its Element kinds by name, each written `<id>#<name>` in a Project. */
   kinds: Readonly<Record<string, AddOnKindModule>>;
+  /** Its Literal Editors by name; only Add-ons built with Folio have them. */
+  literalEditors?: Readonly<Record<string, LiteralEditorModule>>;
   version: string;
 };
 
