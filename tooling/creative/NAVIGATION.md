@@ -231,6 +231,22 @@ landed, and the Issue graph job ticks it as they close.
   `browse-toolbar` browser suite.
 - First check: `bun test tooling/creative/tests/play-setting.test.ts`.
 
+## Playing Highlight
+
+- [sound-patterns.ts](src/sound-patterns.ts) reports each Pattern Event it
+  sends (`HeardEvent`, the `heard` option); [play-host.ts](src/play-host.ts)
+  turns the owner into its `scriptOwners` place and the times into audio
+  time, and posts `patternEvents`.
+- [play-view.ts](src/play-view.ts) `lightEvents` times each one against the
+  audio clock and puts them out on Pause, Hush and Stop;
+  [playing-highlight.ts](src/playing-highlight.ts) finds the ranges with
+  `patternTexts` from [pattern-checks.ts](src/pattern-checks.ts), draws the
+  `cm-playing` marks and keeps the toggle; [scripts.ts](src/scripts.ts)
+  `light` picks the Script or Library shown.
+- Tests: [playing-highlight.test.ts](tests/playing-highlight.test.ts) and
+  the `playing-highlight` browser suite.
+- First check: `bun test tooling/creative/tests/playing-highlight.test.ts`.
+
 ## Group Elements
 
 - [tree/project-tree.ts](src/tree/project-tree.ts): the persistent mutable

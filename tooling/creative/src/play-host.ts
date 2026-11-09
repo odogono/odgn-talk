@@ -27,6 +27,7 @@ import {
   type DrawingView,
   type PaletteView,
   type PlayRequest,
+  type PatternEventView,
   type PlayResponse,
   type PlayView,
   type PromptView,
@@ -34,6 +35,7 @@ import {
   type StoppedRun,
   type TransportView,
 } from './play-protocol';
+import { type HeardEvent } from './sound-patterns';
 import {
   runLine,
   whenReady,
@@ -238,6 +240,36 @@ export class PlayHost {
     { onEnded(): void; onError(message: string): void }
   >();
   #nextVoice = 1;
+  // Pattern Events heard since the last post, sent together (#2176).
+  #heard: PatternEventView[] = [];
+  /** Sends a Pattern Event's place and audio time to the page (#2176). */
+  #hear = (event: HeardEvent): void => {
+    const session = this.#session;
+    const owner = session?.owners.get(event.owner);
+    const index =
+      owner && this.#owners.get(session!.authored.get(owner) ?? owner);
+    // Only the audio clock can place it against what is heard.
+    if (index === undefined || !this.#audio.active) {
+      return;
+    }
+    if (!this.#heard.length) {
+      queueMicrotask(() => {
+        const events = this.#heard;
+        this.#heard = [];
+        this.post({
+          response: { kind: 'patternEvents', session: this.#id, events },
+        });
+      });
+    }
+    this.#heard.push({
+      owner: index,
+      text: event.text,
+      from: event.from,
+      to: event.to,
+      at: this.#audio.toAudio(Number(event.time) / 1_000_000),
+      end: this.#audio.toAudio(Number(event.end) / 1_000_000),
+    });
+  };
 
   constructor(
     private readonly post: (reply: Reply<PlayResponse>) => void,
@@ -588,6 +620,7 @@ export class PlayHost {
       // The Performance window leaves out paused time too.
       performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
+      heard: this.#hear,
       // Commands go straight to the worklet over the session's port, never
       // through the page (ADR 0156). A sound's Play-clock time goes as audio
       // time; without the audio clock there is no such time, so it plays on

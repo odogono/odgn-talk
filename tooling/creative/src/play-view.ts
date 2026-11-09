@@ -27,6 +27,7 @@ import { mountPlayPrompts } from './play-prompts';
 import { type CodeSelection } from './code-browser-panel';
 import {
   type FrameView,
+  type PatternEventView,
   type PlayRequest,
   type PlayResponse,
   type ReaderMessage,
@@ -77,6 +78,9 @@ const VARIABLES_REFRESH = 100;
 type ControlFields = Record<string, number | boolean>;
 
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
+
+/** The shortest a Pattern Event stays lit, so a fast one still shows (#2176). */
+const MIN_LIT_MS = 80;
 
 export const mountPlay = (shell: StackShell): void => {
   // Play browses the Project in place (ADR 0174); Pause and Step act on
@@ -262,6 +266,7 @@ export const mountPlay = (shell: StackShell): void => {
   // Play last loaded it (#2002, ADR 0174).
   const hush = () => {
     if (mode === 'browse' && allowed().live) {
+      unlight();
       post({ kind: 'hush', session: sessionId });
     }
   };
@@ -466,7 +471,42 @@ export const mountPlay = (shell: StackShell): void => {
   const voices = new Map<number, { stop(): void }>();
   // A session's Instruments play here too, through one AudioWorklet.
   let instrumentAudio: InstrumentAudio | undefined;
+  // The Playing Highlight (#2176): each Pattern Event lights when the audio
+  // clock reaches it, so the outline keeps time with what is heard.
+  const lights = new Set<ReturnType<typeof setTimeout>>();
+  const unlight = () => {
+    for (const timer of lights) {
+      clearTimeout(timer);
+    }
+    lights.clear();
+    shell.code.unlight();
+  };
+  const lightEvents = (events: readonly PatternEventView[]) => {
+    const audio = instrumentAudio;
+    if (mode !== 'browse' || !audio || !session || session.paused) {
+      return;
+    }
+    const now = audio.reading().audio;
+    for (const event of events) {
+      const owner = owners[event.owner];
+      if (!owner) {
+        continue;
+      }
+      const id = ownerId(owner);
+      const ms = Math.max(MIN_LIT_MS, (event.end - event.at) * 1000);
+      const timer = setTimeout(
+        () => {
+          lights.delete(timer);
+          const current = ownerById(shell.editor.project, id);
+          shell.code.light(id, current?.script ?? '', event, ms);
+        },
+        Math.max(0, (event.at - now) * 1000),
+      );
+      lights.add(timer);
+    }
+  };
   const silence = () => {
+    unlight();
     for (const voice of voices.values()) {
       voice.stop();
     }
@@ -698,6 +738,12 @@ export const mountPlay = (shell: StackShell): void => {
       voices.delete(response.voice);
       return;
     }
+    if (response.kind === 'patternEvents') {
+      if (response.session === sessionId) {
+        lightEvents(response.events);
+      }
+      return;
+    }
     if (
       response.kind !== 'view' ||
       !session ||
@@ -711,8 +757,12 @@ export const mountPlay = (shell: StackShell): void => {
     if (mode === 'browse' && response.instruments) {
       shell.instruments.playing.value = response.instruments;
     }
-    // The audio stops whenever the session is paused, at a Breakpoint too.
+    // The audio stops whenever the session is paused, at a Breakpoint too,
+    // and the Playing Highlight goes out with it.
     instrumentAudio?.setPaused(session.paused);
+    if (session.paused && !wasPaused) {
+      unlight();
+    }
     if (mode === 'browse') {
       variables.context(sessionId, session.messageTargets, session.paused);
       variables.stoppedRun(session.stoppedRun);

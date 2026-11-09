@@ -206,10 +206,17 @@ export type StackShell = {
     setLoaded(loaded: LoadedSource | undefined): void;
     showStopped(at: { line: number; source: CodeSelection } | undefined): void;
   };
-  /** The Code Browser's shown source, for Revert (#2002). */
+  /** The Code Browser's shown source, for Revert (#2002), and its Playing Highlight (#2176). */
   code: {
+    light(
+      scriptId: number,
+      script: string,
+      event: { from: number; text: string; to: number },
+      ms: number,
+    ): void;
     replace(text: string): void;
     readonly selected: CodeSelection;
+    unlight(): void;
   };
   editor: StackEditor;
   images: ImageAssets;
@@ -1453,7 +1460,10 @@ export const mountStack = (
       showStopped: at => scripts.showStopped(at),
     },
     code: {
+      light: (scriptId, script, event, ms) =>
+        scripts.light(scriptId, script, event, ms),
       replace: text => scripts.replace(text),
+      unlight: () => scripts.unlight(),
       get selected() {
         return scripts.selected;
       },

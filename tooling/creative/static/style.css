@@ -1232,6 +1232,18 @@ button:disabled {
 .cm-paused {
   background: var(--paused) !important;
 }
+/* The Playing Highlight (#2176): a Pattern Event's text while it sounds. */
+.cm-playing {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 0;
+  border-radius: 2px;
+}
+.code-toolbar .highlight-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
 .stopped-note {
   background: var(--paused);
   border-bottom: 1px solid var(--line);

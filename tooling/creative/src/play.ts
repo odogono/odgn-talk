@@ -27,6 +27,7 @@ import { LEAD_US, Transport, type MusicalWait } from './transport';
 import { parseMiniNotation, wholeSoundPattern } from './mini-notation';
 import {
   SoundPatterns,
+  type HeardEvent,
   type PatternOptions,
   type PatternTarget,
 } from './sound-patterns';
@@ -867,6 +868,8 @@ export class PlaySession {
     public pageIndex = 0,
     options: {
       events?: boolean;
+      /** Hears each Pattern Event as it is sent to sound (#2176). */
+      heard?: (event: HeardEvent) => void;
       /** Where Instrument commands go; nowhere when absent. */
       instrumentBackend?: InstrumentBackend;
       performanceNow?: () => number;
@@ -924,7 +927,7 @@ export class PlaySession {
     this.patterns = new SoundPatterns(
       this.transport,
       options.instrumentBackend ?? silentInstrumentBackend,
-      { loopsPlay: options.events !== false },
+      { loopsPlay: options.events !== false, heard: options.heard },
     );
     this.#grants = {
       ...grantsFor(this.#grantStates()),

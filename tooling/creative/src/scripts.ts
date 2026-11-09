@@ -10,7 +10,11 @@ import {
 } from '@northtalk/editor/breakpoints';
 import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
 import { clickAdvice } from './click-advice';
-import { patternDiagnostics, projectPatternNames } from './pattern-checks';
+import {
+  patternDiagnostics,
+  patternTexts,
+  projectPatternNames,
+} from './pattern-checks';
 import { musicSoundIn } from './sounds';
 import { readDictionary } from '@northtalk/tooling/dictionary';
 import {
@@ -50,6 +54,14 @@ import {
 import { runProjectTests } from './test-runner';
 import { containingGroups } from './tree/rules';
 import { bringWindowForward, setWindowOpener } from './windows';
+import {
+  highlightOn,
+  lightFor,
+  patternRanges,
+  playingHighlight,
+  setHighlightOn,
+  unlightAll,
+} from './playing-highlight';
 
 // A new Test Script's source: one Test Handler to start from.
 const NEW_TEST_SCRIPT = `use assert, assertEqual from test
@@ -222,6 +234,7 @@ export class CodeBrowser {
               this.#breakpointsChanged();
             }, 'Breakpoint in source changed since Play began: it applies from the next Play'),
         lineNumbers(),
+        playingHighlight(),
         this.#editing.of(EditorState.readOnly.of(this.editor.readOnly)),
         northtalkEditor(
           this.#uri(),
@@ -314,6 +327,27 @@ export class CodeBrowser {
       { type: 'button', class: 'show-dictionary' },
       'Dictionary',
     );
+    // The Playing Highlight (#2176) is on unless this browser turned it off.
+    const highlightBox = h('input', {
+      type: 'checkbox',
+      'data-playing-highlight': '',
+    });
+    highlightBox.checked = highlightOn();
+    highlightBox.addEventListener('change', () => {
+      setHighlightOn(highlightBox.checked);
+      if (!highlightBox.checked) {
+        this.unlight();
+      }
+    });
+    const highlightToggle = h(
+      'label',
+      {
+        class: 'highlight-toggle',
+        title: 'Light up each pattern step as it sounds while browsing',
+      },
+      highlightBox,
+      'Highlight',
+    );
     showDictionary.addEventListener('click', () => this.dictionary.open());
     addAction.addEventListener('click', () => {
       const owner = this.#owner();
@@ -345,6 +379,7 @@ export class CodeBrowser {
         path,
         h('span', { class: 'spacer' }),
         addAction,
+        highlightToggle,
         showDictionary,
       ),
       recipes,
@@ -507,6 +542,47 @@ export class CodeBrowser {
     win.stoppedNote.textContent = here
       ? `Stopped at line ${here.line} of this source as Play loaded it; it has changed since.`
       : '';
+  }
+
+  /**
+   * Lights a Pattern Event's characters for `ms` (#2176), if the browser
+   * shows the Script with id `scriptId` or, when that Script's source
+   * `script` writes no such pattern, a Library that does.
+   */
+  light(
+    scriptId: number,
+    script: string,
+    event: { from: number; text: string; to: number },
+    ms: number,
+  ): void {
+    const win = this.#window;
+    const shown = this.#selected;
+    if (!win || win.node.hidden || !highlightOn()) {
+      return;
+    }
+    const inScript = shown.kind === 'script' && shown.id === scriptId;
+    const inLibrary =
+      shown.kind === 'library' &&
+      !patternTexts(script).some(found => found.text === event.text);
+    if (inScript || inLibrary) {
+      lightFor(
+        win.view,
+        patternRanges(
+          win.view.state.doc.toString(),
+          event.text,
+          event.from,
+          event.to,
+        ),
+        ms,
+      );
+    }
+  }
+
+  /** Puts out the Playing Highlight, as Pause, Hush and Stop do. */
+  unlight(): void {
+    if (this.#window) {
+      unlightAll(this.#window.view);
+    }
   }
 
   onPunchIn(listener: (source: CodeSelection, text: string) => boolean): void {

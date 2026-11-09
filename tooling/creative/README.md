@@ -1338,7 +1338,13 @@ it. While browsing, the play controls add **Hush** (⌘⇧.), which silences
 every sound and Instrument and stops every pattern while Play, its Scripts
 and the Transport go on (⌘. is still Pause); **Revert**, which puts the shown
 Script back as Play last loaded it, as an edit Undo takes back; and the tempo
-and bar, such as `120 BPM · bar 3.2`. Each session uses a fresh Core
+and bar, such as `120 BPM · bar 3.2`. The Code Browser's **Highlight**
+toggle, on unless this browser turned it off, outlines the Mini-Notation of
+each Pattern Event as it sounds, in time with the audio
+([#2176](https://github.com/odogono/odgn-talk/issues/2176)): it finds the
+pattern text in the Script that started it, or in a Library when that
+Script has none, so a pattern built at run time stays dark, as does one
+edited since it was Punched In. Pause, Hush and Stop put it out. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → containing groups → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
