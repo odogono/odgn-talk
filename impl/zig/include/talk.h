@@ -245,6 +245,11 @@ talk_host_error_code talk_one_of(const talk_shape *const *shapes, size_t len, ta
 talk_host_error_code talk_optional(const talk_shape *s, talk_shape **out);
 /* C only: ends the caller's reference to a Shape. */
 void talk_shape_release(const talk_shape *s);
+/* Checks v against s with a Capability argument's acceptance; pure and
+ * uncharged (ADR 0176). talk_explain gives the explain Built-in's report, a
+ * list of mismatch maps, empty when v fits. */
+talk_host_error_code talk_conforms(const talk_value *v, const talk_shape *s, bool *out);
+talk_host_error_code talk_explain(const talk_value *v, const talk_shape *s, talk_value **out);
 
 /* Capabilities and Operations (chapter 9). */
 typedef enum talk_mode {

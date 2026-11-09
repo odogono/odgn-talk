@@ -1711,3 +1711,11 @@ export const operationDeclarations = (
   }
   return declarations;
 };
+
+/** True exactly when `v` fits `s`, with a Capability argument's acceptance (ADR 0176). */
+export const conforms = (v: Value, s: Shape): boolean =>
+  shapeDiagnostics(v, s, true, 0).diags.length === 0;
+
+/** The `explain` Built-in's report for `v` against `s` (ADR 0176). */
+export const explain = (v: Value, s: Shape): Value =>
+  listValues(shapeDiagnostics(v, s, false, 0).diags.map(diagnosticRecord));

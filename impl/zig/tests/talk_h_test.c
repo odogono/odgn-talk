@@ -3349,6 +3349,41 @@ static int metering_test(void) {
     return bad;
 }
 
+/* Host Shape checks (ADR 0176): the Built-in's acceptance and report. */
+static int shape_check_test(void) {
+    int bad = 0;
+    talk_shape *list = NULL;
+    talk_value *one = NULL, *x = NULL, *items = NULL, *report = NULL;
+    bool fits = true;
+    bad |= talk_list_of(talk_number_shape(), &list) != TALK_OK;
+    bad |= talk_int(1, &one) != TALK_OK;
+    bad |= talk_text("x", 1, &x) != TALK_OK;
+    talk_value *both[] = {one, x};
+    bad |= talk_list(both, 2, &items) != TALK_OK;
+    bad |= talk_conforms(one, talk_number_shape(), &fits) != TALK_OK || !fits;
+    bad |= talk_conforms(items, list, &fits) != TALK_OK || fits;
+    bad |= talk_explain(items, list, &report) != TALK_OK;
+    talk_owned_bytes buffer = {0};
+    const char *want = "[{\"code\":\"wrong kind\",\"expected\":\"number\",\"got\":\"text\",\"value\":\"x\",\"path\":[2]}]";
+    bad |= talk_encode_value(report, &buffer) != TALK_OK;
+    bad |= buffer.len != strlen(want) || memcmp(buffer.data, want, buffer.len) != 0;
+    if (bad && buffer.data) fprintf(stderr, "%.*s\n", (int)buffer.len, buffer.data);
+    talk_owned_bytes_release(&buffer);
+    talk_value_release(report);
+    report = NULL;
+    bad |= talk_explain(one, list, &report) != TALK_OK;
+    bad |= talk_encode_value(report, &buffer) != TALK_OK;
+    const char *scalar = "[{\"code\":\"wrong kind\",\"expected\":\"list\",\"got\":\"number\",\"value\":1}]";
+    bad |= buffer.len != strlen(scalar) || memcmp(buffer.data, scalar, buffer.len) != 0;
+    talk_owned_bytes_release(&buffer);
+    talk_value_release(report);
+    talk_value_release(items);
+    talk_value_release(x);
+    talk_value_release(one);
+    talk_shape_release(list);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -3544,5 +3579,6 @@ int main(void) {
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     expect(combined_test() == 0, "combined public Request and Function APIs");
+    expect(shape_check_test() == 0, "talk_conforms and talk_explain check a value against a Host Shape with the explain report");
     return failures == 0 ? 0 : 1;
 }

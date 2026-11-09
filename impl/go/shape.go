@@ -60,3 +60,19 @@ func ObjectShape(kind *ObjectKind) Shape {
 	}
 	return Shape{shape.Shape{Kind: "object", Name: kind.name}}
 }
+
+// Conforms reports whether v fits s, with a Capability argument's acceptance (ADR 0176).
+func Conforms(v Value, s Shape) bool {
+	diags, _ := shape.Diagnostics(v.inner, s.inner, true, 0)
+	return len(diags) == 0
+}
+
+// Explain gives the explain Built-in's report for v against s (ADR 0176).
+func Explain(v Value, s Shape) Value {
+	diags, _ := shape.Diagnostics(v.inner, s.inner, false, 0)
+	records := make([]corevalue.Value, len(diags))
+	for i, d := range diags {
+		records[i] = shape.Record(d)
+	}
+	return Value{corevalue.NewList(records)}
+}
