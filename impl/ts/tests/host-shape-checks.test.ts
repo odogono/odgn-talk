@@ -10,7 +10,10 @@ import {
   shape,
   text,
 } from '../src/index';
-import * as wasm from '../src/wasm/index';
+import {
+  conforms as wasmConforms,
+  explain as wasmExplain,
+} from '../src/wasm/index';
 
 // Host checks (ADR 0176): a Host-built Shape, the Built-in's acceptance and report.
 describe('conforms and explain for Hosts', () => {
@@ -108,7 +111,7 @@ describe('conforms and explain for Hosts', () => {
   });
 
   test('the WASM entry point exports the same functions', () => {
-    expect(wasm.conforms).toBe(conforms);
-    expect(wasm.explain).toBe(explain);
+    expect(wasmConforms).toBe(conforms);
+    expect(wasmExplain).toBe(explain);
   });
 });
