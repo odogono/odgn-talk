@@ -57,6 +57,8 @@ const labelOffsets = (line: string, lineStart: number): Set<number> => {
 
 export const northtalkParser: StreamParser<State> = {
   name: 'northtalk',
+  // Lets the default keymap's Mod-/ toggle `--` line comments.
+  languageData: { commentTokens: { line: '--' } },
   startState: () => ({ labels: new Set(), pending: '', regions: [] }),
   copyState: state => ({
     labels: new Set(state.labels),
