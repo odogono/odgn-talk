@@ -211,7 +211,7 @@ export type StackShell = {
     light(
       scriptId: number,
       script: string,
-      event: { from: number; text: string; to: number },
+      event: { cycle?: number; from: number; text: string; to: number },
       ms: number,
     ): void;
     replace(text: string): void;

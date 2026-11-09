@@ -65,3 +65,33 @@ test('the session hears each Pattern Event it sends, with its owner and text', (
   );
   expect(heard.every(e => e.owner === owner && e.end > e.time)).toBe(true);
 });
+
+test('each heard Pattern Event carries the pattern cycle it falls in (#2181)', () => {
+  const p = withMusicSounds(createProject('Alternating'));
+  const button = createElement('button', 'b0');
+  button.script = 'on click\n  loop "<bd hh>"\nend click';
+  p.pages[0]!.elements.push(button);
+  const heard: HeardEvent[] = [];
+  const play = new PlaySession(p, 0, {
+    instrumentBackend: () => {},
+    heard: event => heard.push(event),
+  });
+  const pumpAt = (us: bigint) => {
+    let result = play.pump(us);
+    while (result.state === 'sliced') {
+      result = play.pump(us);
+    }
+  };
+  pumpAt(0n);
+  play.send(play.page.elements[0]!, 'click');
+  for (let t = 500; t <= 10_000; t += 500) {
+    pumpAt(ms(t));
+  }
+  expect(heard.length).toBeGreaterThan(2);
+  expect(heard.map(e => e.cycle)).toEqual(heard.map((_, i) => i));
+  expect(
+    heard.every(
+      e => e.text.slice(e.from, e.to) === (e.cycle % 2 ? 'hh' : 'bd'),
+    ),
+  ).toBe(true);
+});

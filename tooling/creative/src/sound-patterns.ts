@@ -41,6 +41,8 @@ export type SoundPattern = {
  * that text, and when it sounds and ends on the Play clock.
  */
 export type HeardEvent = {
+  /** The pattern's cycle the event falls in, from 0 when it starts. */
+  cycle: number;
   end: bigint;
   from: number;
   owner: string;
@@ -433,7 +435,15 @@ export class SoundPatterns {
       at: seconds(time),
       commands: [command],
     });
-    this.#heard?.({ owner, text, from: event.from, to: event.to, time, end });
+    this.#heard?.({
+      owner,
+      text,
+      cycle: event.begin.floor(),
+      from: event.from,
+      to: event.to,
+      time,
+      end,
+    });
     if (!target.sampler && command.kind === 'note') {
       const release =
         end - RELEASE_EARLY_US > time ? end - RELEASE_EARLY_US : end;

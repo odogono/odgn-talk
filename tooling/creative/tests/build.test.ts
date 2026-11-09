@@ -178,6 +178,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   5: 'e78a6130985b087b',
   // Play browses every Project, so Music no longer sets `play` (ADR 0174).
   6: 'cbc56ee0328ae3ba',
+  // Music lists the Piano Roll Add-on (#2181).
+  7: 'c3b565d074336552',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

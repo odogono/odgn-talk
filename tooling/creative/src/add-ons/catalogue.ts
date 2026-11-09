@@ -3,6 +3,7 @@
 // needs it and kept by the service worker.
 import { CONTROLS_ADD_ON } from './controls/ids';
 import { INSTRUMENTS_ADD_ON, INSTRUMENTS_VERSION } from './instruments/ids';
+import { PIANO_ROLL_ADD_ON, PIANO_ROLL_VERSION } from './piano-roll/ids';
 
 export type CatalogueEntry = {
   /** The Add-on's URL. */
@@ -45,6 +46,13 @@ export const BUILT_IN_ADD_ONS: readonly CatalogueEntry[] = [
     slug: 'instruments',
     version: INSTRUMENTS_VERSION,
     worklet: true,
+  },
+  {
+    id: PIANO_ROLL_ADD_ON,
+    kinds: [],
+    label: 'Piano Roll',
+    slug: 'piano-roll',
+    version: PIANO_ROLL_VERSION,
   },
 ];
 
