@@ -463,8 +463,8 @@ The sample kits Folio ships (ADR 0158, #1895), synthesised and CC0.
 Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
 
 - [mini-notation.ts](src/mini-notation.ts): `parseMiniNotation` reads
-  sequences, `-` rests, `[ ]`, `< >`, `*n`, `/n`, `,`, `name:n` and note
-  names into a `Pattern`, whose `cycle(n)` and `query` give events with exact
+  sequences, `-` rests, `[ ]`, `< >`, `*n`, `/n`, `,`, `name:n`, note
+  names and `_`/`@n` holds (one longer event) into a `Pattern`, whose `cycle(n)` and `query` give events with exact
   `Time`s and each step's character range; errors carry a range too.
 - [pattern-checks.ts](src/pattern-checks.ts): finds literal texts given to
   `play` or `loop` as Host Commands or told to `sound`, and reports syntax
