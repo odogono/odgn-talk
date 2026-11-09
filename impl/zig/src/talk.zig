@@ -2542,6 +2542,44 @@ export fn talk_shape_release(s: ?*const Shape) void {
     if (s) |shape| @constCast(shape).release();
 }
 
+const shape_check = @import("machine/shape_check.zig");
+
+/// The Host Shape checks (ADR 0176): pure, uncharged, no Group.
+fn hostCheck(v: *const Value, s: *const Shape, first: bool, out: anytype) !void {
+    var arena: std.heap.ArenaAllocator = .init(allocator);
+    defer arena.deinit();
+    const outcome = try shape_check.check(arena.allocator(), allocator, @constCast(v), s, first);
+    defer outcome.release();
+    switch (@TypeOf(out)) {
+        *bool => out.* = outcome.diagnostics.len == 0,
+        else => {
+            var records: std.ArrayList(*Value) = .empty;
+            defer {
+                for (records.items) |r| r.release();
+                records.deinit(allocator);
+            }
+            for (outcome.diagnostics) |d| {
+                const r = try shape_check.record(allocator, d);
+                records.append(allocator, r) catch |e| {
+                    r.release();
+                    return e;
+                };
+            }
+            out.* = try model.list(allocator, records.items);
+        },
+    }
+}
+export fn talk_conforms(v: *const Value, s: *const Shape, out: *bool) HostErrorCode {
+    out.* = false;
+    hostCheck(v, s, true, out) catch |err| return status(err);
+    return .ok;
+}
+export fn talk_explain(v: *const Value, s: *const Shape, out: *?*Value) HostErrorCode {
+    out.* = null;
+    hostCheck(v, s, false, out) catch |err| return status(err);
+    return .ok;
+}
+
 // ---------------------------------------------------------------- Capabilities
 
 pub const Mode = enum(c_int) { immediate, suspending, fire_and_forget };

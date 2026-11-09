@@ -220,6 +220,11 @@ export declare const shape: {
   optional<T>(s: Shape<T>): Shape<T | null | undefined>; // Nothing or s; an outer Optional suffix may be omitted
 };
 
+/** True exactly when v fits s, with a Capability argument's acceptance; pure and uncharged (ADR 0176). */
+export declare function conforms(v: Value, s: Shape): boolean;
+/** The `explain` Built-in's report for v against s: a list of mismatch maps, empty when v fits (ADR 0176). */
+export declare function explain(v: Value, s: Shape): Value;
+
 // ---------------------------------------------------------------------------
 // Capabilities and Operations (ADRs 0012, 0015)
 // ---------------------------------------------------------------------------

@@ -620,6 +620,14 @@ pub fn run(a: Allocator, gpa: Allocator, v: *Value, data: *Value, first: bool, c
     };
 }
 
+/// Checks `v` against a Shape a Host built (ADR 0176): no decoding, so no
+/// definition error. The caller releases the outcome, not the Shape.
+pub fn check(a: Allocator, gpa: Allocator, v: *Value, s: *const Shape, first: bool) !Outcome {
+    var c: Ctx = .{ .a = a, .gpa = gpa };
+    const diags = try diagnostics(&c, v, s, first);
+    return .{ .scanned = c.scanned, .diagnostics = diags, .kept = c.kept.items };
+}
+
 /// A Value Path as a Script list value.
 pub fn pathList(gpa: Allocator, path: []*Value) !*Value {
     return try model.list(gpa, path);

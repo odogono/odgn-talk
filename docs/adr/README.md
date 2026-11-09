@@ -166,3 +166,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0170: Sessions add Scripts, so Documentation Examples reach a Script's Handlers by message](0170-sessions-add-scripts-so-documentation-examples-reach-handlers-by-message.md)
 - [0171: A Handler Clause may require a Shape of a parameter](0171-a-handler-clause-may-require-a-shape-of-a-parameter.md)
 - [0172: The Trace explains why no Handler Clause matched](0172-the-trace-explains-why-no-handler-clause-matched.md)
+- [0176: Hosts check values against Shapes with the Core's acceptance](0176-hosts-check-values-against-shapes-with-the-cores-acceptance.md)

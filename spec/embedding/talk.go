@@ -269,6 +269,12 @@ func ObjectShape(kind *ObjectKind) Shape
 func OneOf(ss ...Shape) Shape
 func Optional(s Shape) Shape // Nothing or s; an outer Optional suffix may be omitted
 
+// Conforms reports whether v fits s, with a Capability argument's
+// acceptance. Explain gives the explain Built-in's report: a list of
+// mismatch maps, empty when v fits. Both are pure and uncharged (ADR 0176).
+func Conforms(v Value, s Shape) bool
+func Explain(v Value, s Shape) Value
+
 type Field struct {
 	Key      string
 	Shape    Shape

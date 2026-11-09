@@ -21,6 +21,8 @@ export {
 export {
   defineCapability,
   LimitReached,
+  conforms,
+  explain,
   shape,
   type Call,
   type ChargeRequest,

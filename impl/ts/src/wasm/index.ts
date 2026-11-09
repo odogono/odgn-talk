@@ -47,6 +47,8 @@ export type {
 } from '../objects';
 export {
   LimitReached,
+  conforms,
+  explain,
   shape,
   type Call,
   type ChargeRequest,

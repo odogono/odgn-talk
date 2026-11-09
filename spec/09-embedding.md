@@ -163,6 +163,7 @@ In TS the Host function takes each checked argument in its Shape's JS form ([ADR
 - **Results:** a result that breaks its Shape is the Host's fault. The call ends as `host error`, and the detail goes in a `call failed` report.
 - **Messages** have Shapes only in the Host Manifest, for tooling. The Core never checks a Delivery against them.
 - **From a Script:** the Built-ins `conforms`, `check` and `explain` check a value against a Shape written in this same data spelling, with this same acceptance, under the Script's own budgets ([chapter 7](07-libraries-and-the-standard-library.md#shape-checks)). They change nothing at this boundary: a Capability argument is still checked as above, uncharged, whatever a Script checked earlier.
+- **From a Host:** `conforms(value, shape)` and `explain(value, shape)` check a value against a Shape the Host built, with this same acceptance ([ADR 0176](../docs/adr/0176-hosts-check-values-against-shapes-with-the-cores-acceptance.md)). They are pure: they need no Group, charge nothing and write nothing to a Trace. `conforms` gives true exactly when the value fits. `explain` gives the `explain` Built-in's report as a Value: a list of every mismatch record, in its order, empty when the value fits. The Shape constructors already refuse a malformed Shape, so neither function raises `invalid shape`.
 
 ## Capabilities
 
