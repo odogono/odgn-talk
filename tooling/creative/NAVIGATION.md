@@ -466,7 +466,9 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   sequences, `-` rests, `[ ]`, `< >`, `*n`, `/n`, `,`, `name:n`, note
   names and `_`/`@n` holds (one longer event) into a `Pattern`, whose `cycle(n)` and `query` give events with exact
   `Time`s and each step's character range; errors carry a range too.
-- [pattern-checks.ts](src/pattern-checks.ts): finds literal texts given to
+- [pattern-checks.ts](src/pattern-checks.ts): finds literal texts (`"…"`,
+  raw `"""…"""` and hole-free backticks, mapped back through margins and
+  escapes) given to
   `play` or `loop` as Host Commands or told to `sound`, and reports syntax
   errors and unknown sound names. [play.ts](src/play.ts) adds them to
   `problems` when a Script loads, without stopping it; [scripts.ts](src/scripts.ts)
@@ -486,7 +488,8 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   run from `PlaySession.pump`.
 - [grants/sound.ts](src/grants/sound.ts): the Host Commands, with `on` and
   `with` as Argument Labels (ADR 0160). [play.ts](src/play.ts) resolves the
-  Instrument and options, checks texts built at run time, plays a whole
+  Instrument and options, checks texts built at run time (raising
+  `invalid pattern`, which names the step), plays a whole
   Project sound, and stops an owner's patterns with its sounds.
 - [sound-migration.ts](src/sound-migration.ts): format 7's rewrite of
   `tell sound to loop` to `play … with {repeat: true}`.

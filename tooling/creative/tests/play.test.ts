@@ -717,7 +717,8 @@ for (const bad of ['missing', 'picture']) {
   });
 }
 
-// Playing it reports again, generically, so only the load report offers it.
+// Playing it reports again, naming the step (#2173), but only the load
+// report offers the quick fix.
 test('loading a missing Music sound offers its quick fix', () => {
   const project = fixture();
   project.pages[0]!.elements[0]!.script =

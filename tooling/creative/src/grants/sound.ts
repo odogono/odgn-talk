@@ -37,6 +37,12 @@ export const PATTERN_OPTIONS = shape.map({
   repeat: { optional: true, shape: shape.bool },
 });
 
+/**
+ * The failure a pattern text that doesn't parse, or names a step its
+ * Instrument can't play, raises, with a message naming the step (#2173).
+ */
+export const INVALID_PATTERN = 'invalid pattern';
+
 const target = shape.optional(shape.value);
 const LABELS = ['on', 'with'] as const;
 const ON_WITH =
@@ -49,6 +55,7 @@ const operations = {
     args: [shape.text, target, shape.optional(PATTERN_OPTIONS)],
     labels: LABELS,
     cost: { fuel: 1 },
+    errors: [{ code: INVALID_PATTERN }] as { code: string }[],
     description: `Plays a Sound Pattern in Mini-Notation once, spread over one bar from now, or a whole Project sound by its name; \`with {repeat: true}\` repeats a Project sound end to end until it is stopped.${ON_WITH}`,
     examples: [
       'play "bd hh sd hh"',
@@ -62,6 +69,7 @@ const operations = {
     args: [shape.text, target, shape.optional(PATTERN_OPTIONS)],
     labels: LABELS,
     cost: { fuel: 1 },
+    errors: [{ code: INVALID_PATTERN }] as { code: string }[],
     description: `Loops a Sound Pattern in Mini-Notation from the next bar, one cycle each bar. A Script loops one pattern per Instrument, so a second \`loop\` on the same Instrument replaces the first on the next bar.${ON_WITH}`,
     examples: [
       'loop "bd [hh hh] sd hh"',
@@ -98,6 +106,7 @@ export const soundGrant: GrantDefinition<SoundState> = {
             ...operations.play,
             labels: [...LABELS],
             examples: [...operations.play.examples],
+            errors: [...operations.play.errors],
             fire: (call, text, on, options) =>
               state.play(call, text, on, options),
           },
@@ -105,6 +114,7 @@ export const soundGrant: GrantDefinition<SoundState> = {
             ...operations.loop,
             labels: [...LABELS],
             examples: [...operations.loop.examples],
+            errors: [...operations.loop.errors],
             fire: (call, text, on, options) =>
               state.loop(call, text, on, options),
           },

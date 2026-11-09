@@ -1,7 +1,7 @@
 // Load-time and editor checks for the Mini-Notation a Script writes (ADR
-// 0159, #1893). A pattern text is a string literal given to `play` or `loop`,
-// as a Host Command or told to `sound`. Texts built at run time are checked
-// when they play.
+// 0159, #1893). A pattern text is a literal given to `play` or `loop`, as a
+// Host Command or told to `sound`: `"…"`, raw `"""…"""` or backtick text
+// without holes (#2173). Texts built at run time are checked when they play.
 import { parseSource } from '@northtalk/ts';
 import { rangeAt, type LspDiagnostic } from '@northtalk/tooling/lsp';
 import { parseMiniNotation } from './mini-notation';
@@ -19,6 +19,7 @@ type Node = {
   children?: readonly Node[];
   end?: number;
   kind: string;
+  parts?: readonly { end: number; start: number }[];
   pos?: number;
   rule?: string;
   v?: string;
@@ -61,22 +62,159 @@ const first = (node: Node | undefined, rule: string): Node | undefined =>
 const tokens = (node: Node): Node[] =>
   node.kind === 'token' ? [node] : (node.children ?? []).flatMap(tokens);
 
-/** The string literal an Expression is made of, if that is all it is. */
-const literal = (source: string, expression: Node | undefined) => {
+/** Characters a backtick escape stands for, by the letter after `\\`. */
+const ESCAPES: Record<string, string> = {
+  b: '\b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+};
+
+/**
+ * Where each character of a fenced text's value sits in the Script, and one
+ * past the last: the source offset of the character, or of the escape it
+ * came from. Undefined when the value doesn't line up with the source, as
+ * NFC normalisation can make it.
+ */
+const fencedOffsets = (
+  source: string,
+  start: number,
+  end: number,
+  value: string,
+  escapes: boolean,
+): { ends: number[]; offsets: number[] } | undefined => {
+  const body = source
+    .slice(start, end)
+    .replaceAll(/\r\n?/gu, m => (m.length === 2 ? ' \n' : '\n'));
+  // Margin-stripped form: an opening newline, and a closer whose line holds
+  // only the margin (chapter 1, "Fenced text").
+  const lastBreak = body.lastIndexOf('\n');
+  const stripped =
+    body.startsWith('\n') &&
+    lastBreak >= 0 &&
+    /^[ \t]*$/u.test(body.slice(lastBreak + 1));
+  const margin = stripped ? end - start - (lastBreak + 1) : 0;
+  const stop = stripped ? lastBreak : body.length;
+  const offsets: number[] = [];
+  const ends: number[] = [];
+  let i = stripped ? 1 : 0;
+  let lineStart = true;
+  while (i < stop) {
+    if (lineStart && stripped) {
+      let skipped = 0;
+      while (skipped < margin && i < stop && /[ \t]/u.test(body[i]!)) {
+        i++;
+        skipped++;
+      }
+      lineStart = false;
+      continue;
+    }
+    const char = body[i]!;
+    // A CRLF reads as one LF; its padding space is skipped here.
+    if (char === ' ' && body[i + 1] === '\n' && source[start + i] === '\r') {
+      i++;
+      continue;
+    }
+    if (escapes && char === '\\') {
+      const escape =
+        /^\\(?:\n|x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f]+\}|u[0-9A-Fa-f]{4}|[^])/u.exec(
+          body.slice(i, stop),
+        )?.[0];
+      if (escape === undefined) {
+        return undefined;
+      }
+      if (escape !== '\\\n') {
+        const letter = escape[1]!;
+        const decoded =
+          letter === 'x' || letter === 'u'
+            ? String.fromCodePoint(
+                Number.parseInt(escape.slice(2).replaceAll(/[{}]/gu, ''), 16),
+              )
+            : letter === '0'
+              ? '\0'
+              : (ESCAPES[letter] ?? letter);
+        for (const unit of decoded.split('')) {
+          offsets.push(start + i);
+          ends.push(start + i + escape.length);
+          if (value[offsets.length - 1] !== unit) {
+            return undefined;
+          }
+        }
+      }
+      i += escape.length;
+      continue;
+    }
+    offsets.push(start + i);
+    ends.push(start + i + 1);
+    if (value[offsets.length - 1] !== char) {
+      return undefined;
+    }
+    lineStart = char === '\n';
+    i++;
+  }
+  offsets.push(start + stop);
+  return offsets.length === value.length + 1 ? { offsets, ends } : undefined;
+};
+
+/**
+ * The text an Expression is, when it is one literal: `"…"`, raw `"""…"""`
+ * or hole-free backtick text, which the language treats as literals too.
+ */
+const literal = (
+  source: string,
+  expression: Node | undefined,
+): Omit<PatternText, 'on'> | undefined => {
   const found = expression ? tokens(expression) : [];
   const [token] = found;
   if (found.length !== 1 || token?.pos === undefined || token.v === undefined) {
     return undefined;
   }
   const raw = source.slice(token.pos, token.end);
-  // Only plain quoted text maps one-to-one onto the Script's characters.
-  return raw === `"${token.v}"`
-    ? { text: token.v, offset: token.pos + 1 }
-    : undefined;
+  if (raw === `"${token.v}"`) {
+    const offset = token.pos + 1;
+    return {
+      text: token.v,
+      offset,
+      range: (from, to) => ({ from: offset + from, to: offset + to }),
+    };
+  }
+  const part = token.parts?.length === 1 ? token.parts[0] : undefined;
+  if (!part || !(raw.startsWith('`') || raw.startsWith('"""'))) {
+    return undefined;
+  }
+  const mapped = fencedOffsets(
+    source,
+    part.start,
+    part.end,
+    token.v,
+    raw.startsWith('`'),
+  );
+  if (!mapped) {
+    return undefined;
+  }
+  const { offsets, ends } = mapped;
+  return {
+    text: token.v,
+    offset: offsets[0]!,
+    // A range ends where its last character does, never past a margin.
+    range: (from, to) => ({
+      from: offsets[from]!,
+      to: to > from ? ends[to - 1]! : offsets[to]!,
+    }),
+  };
 };
 
 /** A pattern text written as a literal, and the name `on` gives, if any. */
-export type PatternText = { offset: number; on?: string; text: string };
+export type PatternText = {
+  /** Where the text's first character is in the Script. */
+  offset: number;
+  on?: string;
+  /** Where the text's characters `from` up to `to` are in the Script. */
+  range: (from: number, to: number) => { from: number; to: number };
+  text: string;
+};
 
 /** The bare name an `on` label gives, as `loop "c3" on bass` does. */
 const onName = (list: Node | undefined): string | undefined => {
@@ -136,19 +274,17 @@ export const patternProblems = (
   source: string,
   names: PatternNames,
 ): PatternProblem[] =>
-  patternTexts(source).flatMap(({ text, offset, on }) => {
+  patternTexts(source).flatMap(({ text, range, on }) => {
     // A Project sound's own name plays the whole sound, spaces and all.
     if (on === undefined && names.sounds.has(text)) {
       return [];
     }
     // A name that isn't an Instrument's is left to the call to check.
     const sampler = on === undefined ? true : names.instruments?.get(on);
-    const at = (from: number, to: number, message: string) => ({
-      from: offset + from,
-      to: offset + to,
-      line: lineAt(source, offset + from),
-      message,
-    });
+    const at = (from: number, to: number, message: string) => {
+      const span = range(from, to);
+      return { ...span, line: lineAt(source, span.from), message };
+    };
     const parsed = parseMiniNotation(text);
     if (!parsed.ok) {
       const { from, to, message } = parsed.error;

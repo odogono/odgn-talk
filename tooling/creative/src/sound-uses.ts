@@ -25,10 +25,10 @@ const spans = (
   sound: string,
   samplers: ReadonlySet<string>,
 ): Span[] =>
-  patternTexts(source).flatMap(({ offset, on, text }): Span[] => {
+  patternTexts(source).flatMap(({ range, on, text }): Span[] => {
     // A Project sound's own name plays the whole sound, spaces and all.
     if (on === undefined && text === sound) {
-      return [{ from: offset, to: offset + text.length, whole: true }];
+      return [{ ...range(0, text.length), whole: true }];
     }
     if (on !== undefined && !samplers.has(on)) {
       return [];
@@ -42,11 +42,7 @@ const spans = (
               soundKey(word.value) === sound &&
               text.slice(word.from, word.to) === sound,
           )
-          .map(word => ({
-            from: offset + word.from,
-            to: offset + word.to,
-            whole: false,
-          }))
+          .map(word => ({ ...range(word.from, word.to), whole: false }))
       : [];
   });
 
