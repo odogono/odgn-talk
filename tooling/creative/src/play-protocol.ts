@@ -288,8 +288,23 @@ export type PlayView = {
   wantsFrames: boolean;
 };
 
+/**
+ * A Pattern Event for the Playing Highlight (#2176): the Script that owns
+ * it, by its place in `scriptOwners`, its pattern text, the event's
+ * characters in that text, and when it sounds and ends in audio time.
+ */
+export type PatternEventView = {
+  at: number;
+  end: number;
+  from: number;
+  owner: number;
+  text: string;
+  to: number;
+};
+
 export type PlayResponse =
   | { kind: 'performance'; session: number; snapshot: PerformanceSnapshot }
+  | { events: PatternEventView[]; kind: 'patternEvents'; session: number }
   | ({ kind: 'view' } & PlayView)
   | { asset: Asset; kind: 'play'; loop: boolean; voice: number }
   | { kind: 'stopSound'; voice: number }

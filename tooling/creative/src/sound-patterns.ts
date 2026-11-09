@@ -35,6 +35,20 @@ export type SoundPattern = {
   readonly text: string;
 };
 
+/**
+ * A Pattern Event as it is sent to sound (#2176), for the Playing Highlight:
+ * the Script that owns it, its pattern text and the event's characters in
+ * that text, and when it sounds and ends on the Play clock.
+ */
+export type HeardEvent = {
+  end: bigint;
+  from: number;
+  owner: string;
+  text: string;
+  time: bigint;
+  to: number;
+};
+
 type Segment = SoundPattern & {
   /** The bar it starts on; undefined until the Transport runs. */
   from: number | undefined;
@@ -55,6 +69,7 @@ type Shot = {
   readonly options: PatternOptions;
   readonly owner: string;
   readonly target: PatternTarget;
+  readonly text: string;
   readonly time: bigint;
 };
 
@@ -96,14 +111,21 @@ export class SoundPatterns {
   /** Whether loops play; Edit holds them without playing (ADR 0159). */
   readonly #loopsPlay: boolean;
 
+  /** Hears each Pattern Event as it is sent to sound (#2176). */
+  readonly #heard: ((event: HeardEvent) => void) | undefined;
+
   constructor(
     transport: Transport,
     send: (message: InstrumentMessage) => void,
-    { loopsPlay = true }: { loopsPlay?: boolean } = {},
+    {
+      heard,
+      loopsPlay = true,
+    }: { heard?: (event: HeardEvent) => void; loopsPlay?: boolean } = {},
   ) {
     this.#transport = transport;
     this.#send = send;
     this.#loopsPlay = loopsPlay;
+    this.#heard = heard;
   }
 
   /** The Sound Patterns a Script loops, by Instrument; for tests and views. */
@@ -195,6 +217,7 @@ export class SoundPatterns {
         owner,
         target,
         event,
+        text: sound.text,
         options: sound.options,
         time: at(event.begin),
         end: at(event.end),
@@ -244,7 +267,7 @@ export class SoundPatterns {
   /** Sends every step `play` has queued, however far ahead; for previews. */
   flush(): void {
     for (const shot of this.#shots) {
-      this.#sound(shot.target, shot.event, shot.options, shot.time, shot.end);
+      this.#sound(shot, shot.event, shot.options, shot.time, shot.end);
     }
     this.#shots = [];
   }
@@ -254,7 +277,7 @@ export class SoundPatterns {
     const horizon = now + LEAD_US;
     while (this.#shots.length && this.#shots[0]!.time <= horizon) {
       const shot = this.#shots.shift()!;
-      this.#sound(shot.target, shot.event, shot.options, shot.time, shot.end);
+      this.#sound(shot, shot.event, shot.options, shot.time, shot.end);
     }
     if (!this.#transport.running || !this.#loopsPlay) {
       return;
@@ -328,7 +351,7 @@ export class SoundPatterns {
         to.sub(start),
       )) {
         this.#sound(
-          loop.target,
+          { owner: loop.owner, target: loop.target, text: segment.text },
           event,
           segment.options,
           this.#timeOf(event.begin.add(start)),
@@ -378,7 +401,11 @@ export class SoundPatterns {
   }
 
   #sound(
-    target: PatternTarget,
+    {
+      owner,
+      target,
+      text,
+    }: { owner: string; target: PatternTarget; text: string },
     event: PatternEvent,
     options: PatternOptions,
     time: bigint,
@@ -406,6 +433,7 @@ export class SoundPatterns {
       at: seconds(time),
       commands: [command],
     });
+    this.#heard?.({ owner, text, from: event.from, to: event.to, time, end });
     if (!target.sampler && command.kind === 'note') {
       const release =
         end - RELEASE_EARLY_US > time ? end - RELEASE_EARLY_US : end;
