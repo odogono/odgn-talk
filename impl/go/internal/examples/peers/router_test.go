@@ -75,6 +75,7 @@ type world struct {
 	clock         time.Time
 	billing, shop *talk.Group
 	b, s          *talk.Script
+	grant         *talk.Grant
 }
 
 func setUp(t *testing.T) *world {
@@ -99,6 +100,7 @@ func setUp(t *testing.T) *world {
 	router.Attach(w.billing, identity("billing"))
 	router.Attach(w.shop, identity("shop"))
 	binding := Binding{Expose: []string{"billing"}, Reach: []string{"billing"}}
+	w.grant = def.GrantAll(binding)
 	if w.b, err = w.billing.Load(talk.LoadOptions{Name: "billing", Source: billingSource, Grants: map[string]*talk.Grant{"peer": def.GrantAll(binding)}}); err != nil {
 		t.Fatal(err)
 	}
@@ -223,4 +225,30 @@ func TestGrantsAsUsedKeepsRemoteSends(t *testing.T) {
 	w.deliver(w.s, "start")
 	w.settle(w.shop, w.billing)
 	w.expect(w.billing, "seen", `[[1, nothing]]`)
+}
+
+// Stopping the exposing Script withdraws its exposures (chapter 7, Lifetime):
+// the name is free, `reach` fails and a retained Peer's call fails (#2217).
+func TestStopWithdrawsExposures(t *testing.T) {
+	w := setUp(t)
+	w.started()
+	w.b.Stop("done")
+	w.settle(w.billing)
+	w.deliver(w.s, "reachAgain")
+	w.deliver(w.s, "pay", talk.Int(1))
+	w.settle(w.shop)
+	w.expect(w.shop, "got", `["not exposed", ["send failed", "not exposed"]]`)
+	// Another Script can take the freed name.
+	again, err := w.billing.Load(talk.LoadOptions{Name: "billing2", Source: billingSource, Grants: map[string]*talk.Grant{"peer": w.grant}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.deliver(again, "start")
+	w.settle(w.billing)
+	// The old Peer stood for the withdrawn exposure; reach the new one.
+	w.deliver(w.s, "start")
+	w.settle(w.shop)
+	w.deliver(w.s, "pay", talk.Int(2))
+	w.settle(w.shop, w.billing)
+	w.expect(w.shop, "got", `["not exposed", ["send failed", "not exposed"], 3]`)
 }
