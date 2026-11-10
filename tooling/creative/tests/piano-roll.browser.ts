@@ -39,7 +39,8 @@ const LEAD = `<[f4 f4 g4 g4 g4 g4 c4 c4]
 
 const project = createProject('Piano Roll');
 project.addOns = [PIANO_ROLL_REF];
-project.script = `on openScript\n  loop \`\n    ${LEAD}\n    \` on lead\nend openScript`;
+// A lone note and a lone sound, each to delete and write again (#2214).
+project.script = `on openScript\n  loop \`\n    ${LEAD}\n    \` on lead\n  loop \`c4\` on pad\n  loop \`bd\` on drums\nend openScript`;
 const shell = mountStack(project);
 mountWindows();
 
@@ -86,6 +87,21 @@ const tap = (target: Element, clientX: number, clientY: number) => {
   );
 };
 
+// A new window on the literal by the `index`th gutter mark (#2214).
+const windowOn = async (index: number) => {
+  const before = document.querySelectorAll('.literal-editor-window').length;
+  const marks = document.querySelectorAll<HTMLButtonElement>(
+    '.literal-editor-mark',
+  );
+  marks[index]!.click();
+  await until(
+    () => document.querySelectorAll('.literal-editor-window').length > before,
+    'another window',
+  );
+  return [
+    ...document.querySelectorAll<HTMLElement>('.literal-editor-window'),
+  ].at(-1)!;
+};
 export const runBrowserTests = async () => {
   const results: { error?: string; name: string; passed: boolean }[] = [];
   const test = async (name: string, run: () => void | Promise<void>) => {
@@ -212,6 +228,86 @@ export const runBrowserTests = async () => {
     const box = label.getBoundingClientRect();
     press(label, box.left + 5, box.top + 5);
     assert(pattern() === before, 'unchanged');
+  });
+
+  // Emptied patterns keep rows to write into (#2214), in their own windows.
+  const textOf = (index: number) =>
+    patternTexts(shell.editor.project.script)[index]!.text;
+  const emptyThenWrite = (win: HTMLElement, index: number, row: string) => {
+    const scroll = win.querySelector<HTMLElement>('.piano-roll-scroller')!;
+    const bar = win.querySelector<HTMLElement>('.piano-roll-note')!;
+    const box = bar.getBoundingClientRect();
+    press(bar, box.left + 2, box.top + 2);
+    scroll.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }),
+    );
+    assert(textOf(index) === '-', textOf(index));
+    const labels = () =>
+      [...win.querySelectorAll('.piano-roll-row')].map(r => r.textContent);
+    assert(labels().includes(row), `rows ${labels().join(' ')}`);
+    const rangeHidden =
+      win.querySelector<HTMLButtonElement>('.piano-roll-range')!.hidden;
+    const grid = scroll.firstElementChild!;
+    const top =
+      [...win.querySelectorAll('.piano-roll-row')]
+        .find(r => r.textContent === row)!
+        .getBoundingClientRect().top + 5;
+    press(grid, grid.getBoundingClientRect().left + 45, top);
+    return { labels, rangeHidden };
+  };
+
+  await test('deleting the sole note keeps pitch rows to write into', async () => {
+    const win = await windowOn(1);
+    const { labels, rangeHidden } = emptyThenWrite(win, 1, 'd4');
+    assert(!rangeHidden, 'Full range offered');
+    assert(textOf(1) === 'd4', textOf(1));
+    assert(labels()[0] === 'f4', `top row ${labels()[0]}`);
+  });
+
+  await test('an emptied pitch grid shows the full range and fits again', async () => {
+    const win = [
+      ...document.querySelectorAll<HTMLElement>('.literal-editor-window'),
+    ].at(-1)!;
+    const scroll = win.querySelector<HTMLElement>('.piano-roll-scroller')!;
+    const bar = win.querySelector<HTMLElement>('.piano-roll-note')!;
+    const box = bar.getBoundingClientRect();
+    press(bar, box.left + 2, box.top + 2);
+    scroll.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }),
+    );
+    assert(textOf(1) === '-', textOf(1));
+    const range = win.querySelector<HTMLButtonElement>('.piano-roll-range')!;
+    const top = () => win.querySelector('.piano-roll-row')!.textContent;
+    const fitted = top();
+    range.click();
+    assert(top() === 'c8', `full range top ${top()}`);
+    range.click();
+    assert(top() === fitted, `fits again ${top()}`);
+  });
+
+  await test('deleting the sole sound keeps its row to write into', async () => {
+    const win = await windowOn(2);
+    const { labels, rangeHidden } = emptyThenWrite(win, 2, 'bd');
+    assert(rangeHidden, 'no Full range for sounds');
+    assert(textOf(2) === 'bd', textOf(2));
+    assert(labels().join(' ') === 'bd', `rows ${labels().join(' ')}`);
+  });
+
+  await test('another window on a rest-only pattern starts around C4', async () => {
+    // The pad window was left at `-`, after its rows reached f4 (#2214).
+    assert(textOf(1) === '-', textOf(1));
+    for (const win of document.querySelectorAll<HTMLElement>(
+      '.literal-editor-window',
+    )) {
+      win
+        .querySelector<HTMLButtonElement>(
+          '.window-close, [aria-label^="Close"]',
+        )
+        ?.click();
+    }
+    const win = await windowOn(1);
+    const top = win.querySelector('.piano-roll-row')!.textContent;
+    assert(top === 'd#4', `top row ${top}`);
   });
 
   return results;

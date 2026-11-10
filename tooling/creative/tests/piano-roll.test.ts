@@ -96,3 +96,48 @@ test('rests are placed when the layout is given them', () => {
   ]);
   expect(layout.steps).toBe(6);
 });
+
+// A pattern of rests still has rows to write into (#2214).
+test('a rest-only pattern opens on pitch rows around C4', () => {
+  for (const text of ['-', '- -']) {
+    const layout = pianoRollLayout(parse(text));
+    expect(layout.mode).toBe('pitch');
+    expect(layout.notes).toEqual([]);
+    expect(layout.rows[0]!.label).toBe('d#4');
+    expect(layout.rows.at(-1)!.label).toBe('a3');
+    expect(layout.rows.length).toBe(2 * 3 + 1);
+  }
+});
+
+test('a rest-only pattern keeps the rows it is given', () => {
+  const pitch = pianoRollLayout(parse('c4 e4')).hint;
+  const kept = pianoRollLayout(parse('- -'), { empty: pitch });
+  expect(kept.rows.map(r => r.label)).toEqual(
+    pianoRollLayout(parse('c4 e4')).rows.map(r => r.label),
+  );
+  const full = pianoRollLayout(parse('-'), { empty: pitch, fullRange: true });
+  expect(full.rows[0]!.label).toBe('c8');
+  expect(full.rows.at(-1)!.label).toBe('c1');
+  // Full range then fits back to the remembered rows.
+  expect(full.hint).toEqual(pitch);
+
+  const sound = pianoRollLayout(parse('bd sn:2')).hint;
+  expect(sound).toEqual({ mode: 'sound', labels: ['bd', 'sn:2'] });
+  const sounds = pianoRollLayout(parse('-'), { empty: sound });
+  expect(sounds.mode).toBe('sound');
+  expect(sounds.rows.map(r => r.label)).toEqual(['bd', 'sn:2']);
+});
+
+test('a rest-only pattern keeps its rests and steps', () => {
+  const text = '- [- -]';
+  const at = restOffsets(parse(text).layers);
+  const layout = pianoRollLayout(parse(text), {
+    rests: { at, pattern: parse(restsAsWords(text, at)) },
+  });
+  expect(layout.steps).toBe(4);
+  expect(layout.rests.map(r => [r.from, r.begin, r.end])).toEqual([
+    [0, 0, 0.5],
+    [3, 0.5, 0.75],
+    [5, 0.75, 1],
+  ]);
+});

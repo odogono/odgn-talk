@@ -30,6 +30,7 @@ import {
   restOffsets,
   restsAsWords,
   type RollLayout,
+  type RowHint,
 } from './layout';
 
 export { PIANO_ROLL_ADD_ON, PIANO_ROLL_VERSION } from './ids';
@@ -170,6 +171,9 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
   let fullRange = false;
   let shown: Shown | undefined;
   let layout: RollLayout | undefined;
+  // The rows this view keeps when every note goes (#2214); never shared
+  // with another view.
+  let rowHint: RowHint | undefined;
   let bars: HTMLElement[] = [];
   // The playhead sits at the start of the step last heard.
   const playhead = el(
@@ -233,9 +237,11 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       ? host.parse(restsAsWords(shown.text, at))
       : undefined;
     layout = pianoRollLayout(shown.pattern, {
+      ...(rowHint ? { empty: rowHint } : {}),
       fullRange,
       ...(restPattern ? { rests: { at, pattern: restPattern } } : {}),
     });
+    rowHint = layout.hint;
     range.hidden = layout.mode !== 'pitch';
     summary.textContent = `${layout.cycles} ${layout.cycles === 1 ? 'cycle' : 'cycles'}`;
     const drawn = drawGrid(layout);
