@@ -1231,9 +1231,9 @@ typedef struct talk_causal_work {
     int64_t discarded_messages; /* cumulative lifecycle discards */
 } talk_causal_work;
 
-/* C only: a Metered Operation's charge request, owned by its Group. */
+/* A Metered Operation's charge request, owned by its Group. */
 typedef struct talk_charge_request talk_charge_request;
-/* C only: the outcome of a charge request; text is borrowed. */
+/* The outcome of a charge request; text is borrowed. */
 typedef struct talk_charge_result {
     const char *request;
     size_t request_len;
@@ -1243,7 +1243,7 @@ typedef struct talk_charge_result {
     const char *status; /* "accepted", "limit", "inactive" */
     size_t status_len;
 } talk_charge_result;
-/* C only: admission is safe from Host threads. Enqueue only; a starting
+/* Admission is safe from Host threads. Enqueue only; a starting
  * callback must return before awaiting a later Pump. Check cancellation
  * before work. The future and its result live until the Group is released. */
 talk_host_error_code talk_call_request_charge(talk_call *c, int64_t fuel, talk_charge_request **out);
@@ -1254,11 +1254,11 @@ talk_host_error_code talk_request_charge(talk_group *g, const char *call, size_t
  * this readiness hook outside the admission lock. Wake the serialized worker;
  * do not reenter a Pump from a starting callback. NULL clears it. */
 void talk_group_on_ready(talk_group *g, void (*hook)(void *context), void *context);
-/* C only: Group-wide q<N> identity, available immediately. */
+/* Group-wide q<N> identity, available immediately. */
 void talk_charge_request_id(const talk_charge_request *q, const char **id, size_t *len);
-/* C only: becomes true at the end of the processing Pump. */
+/* Becomes true at the end of the processing Pump. */
 bool talk_charge_request_done(const talk_charge_request *q);
-/* C only: false before settlement; otherwise a borrowed result. */
+/* False before settlement; otherwise a borrowed result. */
 bool talk_charge_request_result(const talk_charge_request *q, talk_charge_result *out);
 
 /* C only: discriminant for the C report view. */
@@ -1481,7 +1481,7 @@ talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t micros, c
  * crosses into the Group. A reused id within the kind is
  * TALK_DUPLICATE_OBJECT_ID. The handle lives as long as the Group. */
 talk_host_error_code talk_group_object(talk_group *g, const talk_object_kind *kind, const char *id, size_t id_len, void *native, talk_object **out);
-/* talk_group_object, with the new object's parent set at once, even inside
+/* C only: talk_group_object, with the new object's parent set at once, even inside
  * a Pump (ADR 0152). parent may be NULL. A parent from another Group is
  * TALK_WRONG_GROUP, a disposed one TALK_INVALID_VALUE; a refused call makes
  * no object. A parent writes an `object` Trace record. */

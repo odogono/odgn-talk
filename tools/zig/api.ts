@@ -12,7 +12,9 @@
 //   const KindText, InvalidValue           TALK_KIND_TEXT, TALK_INVALID_VALUE
 //   var ErrLimit                           TALK_ERR_LIMIT, a status code
 // A talk.h declaration with no talk.go counterpart, such as a release function,
-// is preceded by a comment starting `C only`.
+// is preceded by a comment starting `C only`. A talk.go declaration with no
+// talk.h counterpart, such as a functional option, has a doc comment whose
+// first line starts `// Go only`.
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -30,7 +32,17 @@ export const goNames = (source: string): Map<string, string> => {
   const names = new Map<string, string>();
   const methods: [string, string][] = [];
   let block: 'const' | 'var' | undefined;
+  let comment: 'go-only' | 'other' | undefined;
   for (const line of source.split('\n')) {
+    if (!block && line.startsWith('//')) {
+      comment ??= line.startsWith('// Go only') ? 'go-only' : 'other';
+      continue;
+    }
+    const goOnly = comment === 'go-only';
+    comment = undefined;
+    if (goOnly && !block) {
+      continue;
+    }
     if (block) {
       if (line.startsWith(')')) {
         block = undefined;

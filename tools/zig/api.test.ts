@@ -20,6 +20,10 @@ type Group struct{}
 func (g *Group) Deliver(to *Object, m Message) (DeliveryID, error)
 func (g *Group) Script(name string) *Script
 func (c *Core) NewGroup(name string) *Group
+// Go only: an option.
+type GroupOption interface{ groupOption() }
+// Go only: a method.
+func (c *Core) NewGroupWith(name string) *Group
 type CalendarImpl interface {
 \tToday(c *Call, zone string) (Value, error)
 }

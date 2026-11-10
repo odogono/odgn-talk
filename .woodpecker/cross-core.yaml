@@ -54,5 +54,7 @@ steps:
       - git config --global --add safe.directory "$PWD"
       # Generated Zig tables against the Data Files.
       - bun run zig:check
+      # A talk.h name talk.go doesn't declare, or a talk.go name talk.h doesn't.
+      - bun tools/zig/api.ts
       - cd impl/zig
       - zig fmt --check .
