@@ -614,6 +614,26 @@ defmodule NorthTalk.Owner do
     error in HostError -> {:reply, {:error, error}, state}
   end
 
+  # The Host Shape check (ADR 0176): pure, uncharged, no Group needed. A
+  # Group, when given, resolves its Host Objects and Function Values.
+  def handle_call({:explain, %Group{name: g}, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:explain, group, value, shape}, _from, state) do
+    {g, fields} =
+      case group do
+        %Group{name: g} -> {g, %{"group" => g, "value" => encode(state, g, value)}}
+        nil -> {nil, %{"value" => Value.encode(value)}}
+      end
+
+    case exchange(state, "explain", Map.put(fields, "shape", shape)) do
+      {{:ok, ok}, state} -> {:reply, {:ok, decode(state, g, ok["value"])}, state}
+      {error, state} -> {:reply, error, state}
+    end
+  rescue
+    error in HostError -> {:reply, {:error, error}, state}
+  end
+
   def handle_call({:pump, %Group{name: g}, opts}, _from, state) do
     {reply, state} = pump(state, g, now(state, opts), Keyword.get(opts, :fuel_slice, state.fuel_slice))
     {:reply, reply, state}

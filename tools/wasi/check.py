@@ -128,6 +128,11 @@ def check(engine, module):
         assert h.reply(length)["err"]["kind"] == "protocol error"
     assert h.frame(b"{")["err"]["kind"] == "protocol error"
     assert h.ok("add", a=20, b=22)["value"] == 42
+    # The Host Shape check (ADR 0176) needs no Group.
+    assert h.ok("explain", value="hi", shape="text")["value"] == []
+    report = h.ok("explain", value=[1, "x"], shape={"list": "number"})["value"]
+    assert len(report) == 1 and report[0]["code"] == "wrong kind", report
+    assert h.send("explain", value=1, shape={"nope": 1})["err"]["code"] == "invalid value"
 
     # Frames and Values have no transport nesting cap. Use raw reply bytes
     # beyond Python's own JSON nesting ceiling; do not mistake a Host decoder

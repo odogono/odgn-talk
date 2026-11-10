@@ -73,4 +73,27 @@ defmodule NorthTalk.ShapeTest do
     assert {:error, %LoadError{diagnostics: [%{"code" => "bad shape"} | _]}} =
              NorthTalk.load(group, "bad", "shape Tree is {children: list of Branch}\nshape Branch is Tree or text\n")
   end
+
+  describe "Host Shape checks (ADR 0176)" do
+    test "conforms needs no Group", %{group: group} do
+      owner = group.owner
+      assert {:ok, true} = NorthTalk.conforms(owner, "hi", "text")
+      assert {:ok, false} = NorthTalk.conforms(owner, [1, "x"], %{"list" => "number"})
+      assert {:ok, true} = NorthTalk.conforms(owner, nil, %{"optional" => "text"})
+    end
+
+    test "explain gives the Built-in's report", %{group: group} do
+      assert {:ok, []} = NorthTalk.explain(group, %{"sku" => "a"}, %{"map" => [%{"key" => "sku", "shape" => "text"}]})
+      assert {:ok, [mismatch]} = NorthTalk.explain(group.owner, [1, "x"], %{"list" => "number"})
+
+      assert %Map{
+               entries: [{"code", "wrong kind"}, {"expected", "number"}, {"got", "text"}, {"value", "x"}, {"path", [2]}]
+             } =
+               mismatch
+    end
+
+    test "a malformed Shape is invalid value", %{group: group} do
+      assert {:error, %NorthTalk.HostError{code: "invalid value"}} = NorthTalk.explain(group.owner, 1, %{"nope" => 1})
+    end
+  end
 end
