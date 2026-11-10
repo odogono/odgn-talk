@@ -307,6 +307,27 @@ defmodule NorthTalk do
   end
 
   @doc """
+  Checks `value` against `shape`, a Shape in the Host Manifest's data
+  spelling (`"text"`, `%{"list" => "number"}`, …), with a Capability
+  argument's acceptance (ADR 0176). Returns `{:ok, true}` exactly when it fits.
+
+  The check is pure: it charges nothing and writes no Trace. Pass a Group
+  instead of an owner when `value` holds that Group's Host Objects or
+  Function Values. A malformed Shape is `invalid value`.
+  """
+  def conforms(owner_or_group, value, shape) do
+    with {:ok, report} <- explain(owner_or_group, value, shape), do: {:ok, report == []}
+  end
+
+  @doc """
+  The `explain` Built-in's report for `value` against `shape`: a list of
+  mismatch maps (`code`, `expected`, `got`, `value`, `path`, `alternatives`),
+  empty when it fits. Takes what `conforms/3` takes.
+  """
+  def explain(%Group{owner: owner} = group, value, shape), do: GenServer.call(owner, {:explain, group, value, shape})
+  def explain(owner, value, shape), do: GenServer.call(owner, {:explain, nil, value, shape})
+
+  @doc """
   Releases a Function Value handle. Later use of it is `function released`.
   Releasing it twice, or through a closed owner, does nothing. A Group's or
   owner's handles are all released when it closes; there are no finalisers.

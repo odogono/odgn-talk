@@ -17,6 +17,7 @@ const display = @import("display.zig");
 const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
+const shape_check = @import("machine/shape_check.zig");
 const objects = machine.objects;
 const talk = @import("talk.zig");
 const standard = @import("machine/standard.zig");
@@ -2501,6 +2502,44 @@ fn messageNameReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
+/// The Host Shape check (ADR 0176): `value` against a Shape in the data
+/// spelling, replying with the `explain` Built-in's report. Pure and
+/// uncharged; an optional `group` resolves Host Objects and Function Values.
+fn explainReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const gpa = s.gpa;
+    const entry: ?*GroupEntry = if (field(msg, "group") != null) groupOf(s, msg) orelse return hostError(gpa, ref, .invalid_value) else null;
+    const vj = field(msg, "value") orelse return hostError(gpa, ref, .invalid_value);
+    const sj = field(msg, "shape") orelse return hostError(gpa, ref, .invalid_value);
+    const v = decodeValue(gpa, vj, entry) catch |e| return hostError(gpa, ref, decodeError(e));
+    defer v.release();
+    const shape = shapeOf(gpa, sj, 0) catch |e| return hostError(gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    defer shape.release();
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    const outcome = shape_check.check(arena.allocator(), gpa, v, shape, false) catch return hostError(gpa, ref, .out_of_memory);
+    defer outcome.release();
+    var records: std.ArrayList(*Value) = .empty;
+    defer {
+        for (records.items) |r| r.release();
+        records.deinit(gpa);
+    }
+    for (outcome.diagnostics) |d| {
+        const r = shape_check.record(gpa, d) catch return hostError(gpa, ref, .out_of_memory);
+        records.append(gpa, r) catch {
+            r.release();
+            return hostError(gpa, ref, .out_of_memory);
+        };
+    }
+    const report = model.list(gpa, records.items) catch return hostError(gpa, ref, .out_of_memory);
+    defer report.release();
+    var o = Out.init(gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"value\":") catch return oomReply();
+    o.value(report) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 fn addReply(s: *Session, msg: Json, ref: i64) []u8 {
     const gpa = s.gpa;
     const aj = field(msg, "a") orelse return hostError(gpa, ref, .invalid_value);
@@ -4566,6 +4605,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
         return addReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "explain")) {
+        return explainReply(s, msg, ref);
     } else if (s.analysis and std.mem.eql(u8, m, "analyze-entry")) {
         return analyzeEntryReply(s, msg, ref);
     } else if (s.analysis and std.mem.eql(u8, m, "analyze-source")) {
