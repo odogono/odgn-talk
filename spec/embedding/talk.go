@@ -678,7 +678,7 @@ type HTTPImpl interface {
 	Respond(c *Call, exchange *Object, response Value) error
 }
 
-// HTTPFetchImpl makes fetch's requests (chapter 7, Fetching; ADR 0151). The
+// Go only (talk_http_impl's fetch): HTTPFetchImpl makes fetch's requests (chapter 7, Fetching; ADR 0151). The
 // Core has checked the Shapes and raised `out of domain` and `invalid
 // request`. Fetch hears the normalized URL, with `query` added, and the
 // request without `query`: `method` always, `headers` and `body` as given,
@@ -693,7 +693,7 @@ type HTTPFetchImpl interface {
 // HTTPCapability is optional for Hosts. It offers the server Operations.
 func (c *Core) HTTPCapability(impl HTTPImpl, costs Costs) (*CapabilityDef, error)
 
-// HTTPCapabilityWith offers the server Operations, fetch, or both: a nil
+// Go only (talk_http_capability with a NULL server or fetch): HTTPCapabilityWith offers the server Operations, fetch, or both: a nil
 // server or client leaves its Operations out, and costs needs an entry for
 // each Operation offered. The binding also describes the origins a Grant may
 // fetch from, none unless it says so.
@@ -862,7 +862,7 @@ type Versions struct {
 
 func CoreVersions() Versions
 
-// SetCompilationCacheDir keeps the compiled Core in dir between processes.
+// Go only: SetCompilationCacheDir keeps the compiled Core in dir between processes.
 // The Core compiles once per process, for the first Core that needs it, so a
 // later call fails. Empty restores the Host's default.
 func SetCompilationCacheDir(dir string) error
@@ -881,11 +881,11 @@ type GroupOptions struct {
 
 func (c *Core) NewGroup(o GroupOptions, options ...GroupOption) *Group
 
-// GroupOption is a Group setting beyond GroupOptions, which NewGroup and
+// Go only: GroupOption is a Group setting beyond GroupOptions, which NewGroup and
 // Restore both take.
 type GroupOption interface{ groupOption() }
 
-// WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
+// Go only (a talk_load_grant named "musical-clock"): WithMusicalClock supplies the Group's musical clock (09-embedding.md, The
 // musical clock; ADR 0166), which MusicalClockCapability makes. Every Script is
 // granted it under the reserved name "musical-clock", which
 // LoadOptions.Grants can't use, and a wait in a Musical Unit calls it.
@@ -994,10 +994,10 @@ const (
 // (ADR 0152). Any goroutine.
 func (g *Group) Object(kind *ObjectKind, id string, native any, opts ...ObjectOption) (*Object, error)
 
-// ObjectOption configures Object.
+// Go only: ObjectOption configures Object.
 type ObjectOption func(*objectOptions)
 
-// WithParent makes the object with this parent.
+// Go only (talk_group_object_with_parent): WithParent makes the object with this parent.
 func WithParent(parent *Object) ObjectOption
 
 // ObjectByID returns the handle with this Object Kind name and id, disposed
