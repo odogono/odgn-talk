@@ -13,9 +13,10 @@ type(scope)!: Sentence-case imperative description (#issue)
   - `fix`: a behavior that was wrong.
   - `perf`: the same behavior, faster or smaller.
   - `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert`: no change a user would notice.
-- **scope**, optional, one of `spec`, `ts`, `go`, `cli`, `tools`, `corpus`, `repo`. There is one scope per published package, not per Core or app:
+- **scope**, optional, one of `spec`, `ts`, `go`, `zig`, `cli`, `tools`, `corpus`, `repo`. There is one scope per published package, not per Core or app:
   - `go` covers the Go embedding, the `northtalk.org/go` and `northtalk.org/go/sqlite` modules in `impl/go/`. A PR refreshing its embedded reactor adds a `go` fragment summarising the Zig changes Go Hosts receive.
-  - `repo` covers the Zig and Elixir Cores and embeddings, CI and workspace changes.
+  - `zig` covers the Zig Core and its C embedding in `impl/zig/`, including `talk.h`.
+  - `repo` covers the Elixir Core and embedding, CI and workspace changes.
   - `tools` covers `tooling/` (Folio, the LSP, the formatter and Lints) and `tools/`.
   - `ts` covers the TS Core in `impl/ts/`.
 - **!**, before the colon, marks a breaking change. A `BREAKING CHANGE: ...` line in the PR body does too.
