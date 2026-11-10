@@ -130,6 +130,11 @@ func (c *Core) PeerCapability(impl PeerImpl, costs Costs) (*CapabilityDef, error
 	if err != nil {
 		return nil, err
 	}
+	// An impl with Release hears each Grant's release, so it can withdraw the
+	// released owner's exposures (chapter 7, Lifetime).
+	if r, ok := impl.(interface{ Release(GrantContext) }); ok {
+		def.release = r.Release
+	}
 	// The embedded Core makes chapter 7's checks; these mark the
 	// declaration as the Standard Capability's.
 	def.checks = map[string]operationChecks{}

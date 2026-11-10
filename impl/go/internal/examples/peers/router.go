@@ -141,6 +141,26 @@ func (r *Router) Unexpose(c *talk.Call, name string, peer *talk.Object) error {
 	return nil
 }
 
+// Release withdraws the exposures of a Script whose `peer` Grant is released
+// by a stop, freeing each name only while it still points at that exposure.
+// Reload, revoke and disable keep them until #2211 decides otherwise.
+func (r *Router) Release(ctx talk.GrantContext) {
+	if ctx.Reason != talk.ReleaseStop {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key, e := range r.exposures {
+		if e.group != ctx.Group || e.script != ctx.ScriptName {
+			continue
+		}
+		delete(r.exposures, key)
+		if e.name != "" && r.names[e.name] == key {
+			delete(r.names, e.name)
+		}
+	}
+}
+
 func (r *Router) Reach(c *talk.Call, address string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
