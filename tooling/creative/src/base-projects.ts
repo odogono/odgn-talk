@@ -17,7 +17,7 @@ import { fetchKeptFile } from './open-url';
 import { readProjectFile, sha256Hex } from './project-file';
 
 /** Bumped whenever Music's content changes; build tests hold the two together. */
-export const MUSIC_BASE_VERSION = 11;
+export const MUSIC_BASE_VERSION = 12;
 export const BLANK_BASE_VERSION = 1;
 
 /** The most bytes a Base Project's `.folio` file may take. */

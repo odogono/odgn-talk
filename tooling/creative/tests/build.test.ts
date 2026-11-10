@@ -188,6 +188,8 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   10: '259a8840f98d8d70',
   // The Piano Roll plays notes as they are pressed, from 1.4.0 (#2190).
   11: 'ee1af39253452e26',
+  // The Piano Roll keeps rows for a rest-only pattern, from 1.4.1 (#2214).
+  12: '119d48f69ceafa86',
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {

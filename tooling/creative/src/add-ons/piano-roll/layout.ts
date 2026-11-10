@@ -31,9 +31,31 @@ export type RollNote = {
   to: number;
 };
 
+/**
+ * The rows a pattern with no sounding events keeps (#2214): its fitted
+ * pitch range, without Full range, or its sound names. A view remembers the
+ * last one so deleting every note leaves rows to write into; it is view
+ * state only and never adds events.
+ */
+export type RowHint =
+  | { high: number; low: number; mode: 'pitch' }
+  | { labels: readonly string[]; mode: 'sound' };
+
+/** Middle C, the centre of a rest-only pattern's first grid. */
+export const MIDDLE_C = 60;
+
+/** The rows a rest-only pattern opens with: a fitted range around C4. */
+export const DEFAULT_ROW_HINT: RowHint = {
+  mode: 'pitch',
+  low: MIDDLE_C - PITCH_MARGIN,
+  high: MIDDLE_C + PITCH_MARGIN,
+};
+
 export type RollLayout = {
   /** Cycles laid out before the pattern repeats, at most MAX_CYCLES. */
   cycles: number;
+  /** The rows to keep should every sounding event go. */
+  hint: RowHint;
   mode: 'pitch' | 'sound';
   notes: RollNote[];
   /** Where each rest falls, when the layout was given them (#2182). */
@@ -112,13 +134,18 @@ const soundLabel = (e: PatternEvent) =>
     ? e.value.name
     : `${e.value.name}:${e.value.index}`;
 
-/** Lays out `pattern` for the roll; `fullRange` shows the whole keyboard. */
+/**
+ * Lays out `pattern` for the roll; `fullRange` shows the whole keyboard, and
+ * `empty` gives the rows when no event sounds.
+ */
 export const pianoRollLayout = (
   pattern: Pattern,
   {
+    empty = DEFAULT_ROW_HINT,
     fullRange = false,
     rests,
   }: {
+    empty?: RowHint;
     fullRange?: boolean;
     /** The pattern with its rests as words, and where they are. */
     rests?: { at: readonly number[]; pattern: Pattern };
@@ -129,10 +156,11 @@ export const pianoRollLayout = (
     pattern.cycle(c).map(event => ({ c, event })),
   ).flat();
   const mode =
-    events.length > 0 &&
-    events.every(({ event }) => event.value.note !== undefined)
-      ? 'pitch'
-      : 'sound';
+    events.length === 0
+      ? empty.mode
+      : events.every(({ event }) => event.value.note !== undefined)
+        ? 'pitch'
+        : 'sound';
   const restAt = new Set(rests?.at ?? []);
   const restEvents = rests
     ? Array.from({ length: cycles }, (_, c) =>
@@ -148,26 +176,40 @@ export const pianoRollLayout = (
   }
   let rows: RollRow[];
   let rowOf: (event: PatternEvent) => number;
+  let hint: RowHint;
   if (mode === 'pitch') {
     const notes = events.map(({ event }) => event.value.note!);
+    hint =
+      events.length === 0 && empty.mode === 'pitch'
+        ? { mode: 'pitch', low: empty.low, high: empty.high }
+        : {
+            mode: 'pitch',
+            low: Math.max(0, Math.min(...notes) - PITCH_MARGIN),
+            high: Math.min(127, Math.max(...notes) + PITCH_MARGIN),
+          };
     const low = fullRange
-      ? Math.min(FULL_RANGE.low, ...notes)
-      : Math.max(0, Math.min(...notes) - PITCH_MARGIN);
+      ? Math.min(FULL_RANGE.low, ...notes, hint.low)
+      : hint.low;
     const high = fullRange
-      ? Math.max(FULL_RANGE.high, ...notes)
-      : Math.min(127, Math.max(...notes) + PITCH_MARGIN);
+      ? Math.max(FULL_RANGE.high, ...notes, hint.high)
+      : hint.high;
     rows = [];
     for (let note = high; note >= low; note--) {
       rows.push({ black: BLACK.has(note % 12), label: noteLabel(note), note });
     }
     rowOf = event => high - event.value.note!;
   } else {
-    const labels = [...new Set(events.map(({ event }) => soundLabel(event)))];
+    const labels =
+      events.length === 0 && empty.mode === 'sound'
+        ? [...empty.labels]
+        : [...new Set(events.map(({ event }) => soundLabel(event)))];
+    hint = { mode: 'sound', labels: [...labels] };
     rows = labels.map(label => ({ black: false, label }));
     rowOf = event => labels.indexOf(soundLabel(event));
   }
   return {
     cycles,
+    hint,
     mode,
     rows,
     steps,
