@@ -11,6 +11,7 @@ when:
         - 'package.json'
         - 'bun.lock'
         - 'tools/unicode/**'
+        - 'tools/zig/**'
         - 'tools/ci/Dockerfile'
         - 'tools/ci/Dockerfile.zig'
         - '.woodpecker/cross-core.yaml'
@@ -39,3 +40,19 @@ steps:
       - bun run unicode:check
       - bun run wasm:build
       - bun run corpus:cross --quiet
+
+  # The Zig Core's own checks. Actions' zig.yml runs them only weekly, and
+  # nightly.yaml only after the merge. tools/zig/api.ts (talk.h names) is left
+  # out until it passes on main, and zig build test until
+  # machine.load_memory_test passes on Linux (it peaks at 60x, limit under 60x).
+  - name: zig-core
+    image: odgn-talk-ci:2026-10-19-2-zig
+    depends_on: [cross-core]
+    environment:
+      ZIG_GLOBAL_CACHE_DIR: /woodpecker-go-cache/${CI_REPO}/zig-global
+    commands:
+      - git config --global --add safe.directory "$PWD"
+      # Generated Zig tables against the Data Files.
+      - bun run zig:check
+      - cd impl/zig
+      - zig fmt --check .

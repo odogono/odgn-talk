@@ -57,6 +57,16 @@ jobs:
           path: .cache/zig-reactor
           key: zig-reactor-${{ runner.os }}-${{ hashFiles('impl/go/internal/zigwasm/artifact.json', 'impl/go/go.sum') }}
       - uses: ./.github/actions/setup-ts
+      # Generated Go tables against the Data Files; no other pipeline runs it.
+      - run: bun run go:check
+      - name: Check Go formatting
+        working-directory: impl/go
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            printf "%s\n" "$unformatted"
+            exit 1
+          fi
       # Keep the large Corpus replay from overlapping other test packages.
       - run: go test -p 1 -count=1 ./...
         working-directory: impl/go
