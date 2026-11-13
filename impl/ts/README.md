@@ -299,6 +299,16 @@ identity. This Core has no Message Layer adapter; its release transport tests
 are deferred, while the [Go adapter](../go/README.md#message-layer) carries the
 exchange. The `store` factory forwards its implementation's release hook; see the router below.
 
+`peerCapability` forwards an optional `release` method on its `PeerImpl` the
+same way; an implementation without one needs no change. `PeerRouter`'s
+`impl.release` withdraws the exposures a released Grant made, named and
+unnamed, and frees each name still held by them: on `stop`, owner disposal
+included, and on `revoke` and `disable`. A successful Reload keeps them, as
+chapter 7's `peer` Lifetime says. An exposure's owner is its Group, Script and
+named Grant, so `expose`, `unexpose` and release compare all three. A Request
+already delivered runs on. The router has no restore path of its own yet, so a
+restored Group's exposures are the Host's to set up again.
+
 ## Musical time
 
 A Host that keeps musical time, such as Folio with its Transport, gives the

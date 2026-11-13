@@ -5,7 +5,8 @@
 // Web-standard APIs only, so it runs in a browser, a worker, Bun and Node.
 import { decodeValue } from './readers';
 import { encodeValue } from './encoding';
-import type { Call } from './capabilities';
+import type { Call, GrantContext } from './capabilities';
+import type { Group } from './embedding';
 import type { HostObject } from './objects';
 import { ScriptError } from './errors';
 import { peerKind, type PeerImpl } from './peer-capability';
@@ -185,7 +186,18 @@ class Wire {
   }
 }
 
-type Exposure = { name?: string; script: string };
+/** The owner chapter 7 names: the Group, Script and named Grant that exposed it. */
+type Owner = {
+  readonly grantName: string;
+  readonly group: Group;
+  readonly scriptName: string;
+};
+type Exposure = { name?: string; owner: Owner };
+
+const sameOwner = (a: Owner, b: Owner) =>
+  a.group === b.group &&
+  a.scriptName === b.scriptName &&
+  a.grantName === b.grantName;
 
 /** A Host's side of `peer`: its exposures and the links to other Hosts. */
 export class PeerRouter {
@@ -318,7 +330,7 @@ export class PeerRouter {
     waits: boolean,
   ): Promise<Value> | 'not exposed' | 'mailbox full' | undefined {
     const held = this.exposures.get(secret);
-    const script = held && this.group!.script(held.script);
+    const script = held && this.group!.script(held.owner.scriptName);
     if (!script) {
       return waits ? 'not exposed' : undefined;
     }
@@ -424,13 +436,14 @@ export class PeerRouter {
           ? this.names.get(exposure)
           : split(exposure.id)?.[1];
       const held = key === undefined ? undefined : this.exposures.get(key);
-      if (held && held.script === call.scriptName) {
-        this.exposures.delete(key!);
-        if (held.name !== undefined) {
-          this.names.delete(held.name);
-        }
+      if (held && sameOwner(held.owner, call)) {
+        this.withdraw(key!, held);
       }
     },
+    // An exposure ends with its owner (chapter 7, `peer` Lifetime): a Stop,
+    // owner disposal included, or the Grant's revocation or disabling. A
+    // Reload is the same Script going on, so it keeps them.
+    release: context => this.release(context),
     reach: (call, address) => this.reach(call, address),
     post: (call, peer, message, args) =>
       this.send(call, peer, message, args, false),
@@ -442,16 +455,35 @@ export class PeerRouter {
         : this.callers.get(call.delivery)) ?? nothing,
   };
 
+  private withdraw(key: string, held: Exposure) {
+    this.exposures.delete(key);
+    if (held.name !== undefined && this.names.get(held.name) === key) {
+      this.names.delete(held.name);
+    }
+  }
+
+  private release(context: GrantContext<unknown>) {
+    if (context.reason === 'reload') {
+      return;
+    }
+    for (const [key, held] of this.exposures) {
+      if (sameOwner(held.owner, context)) {
+        this.withdraw(key, held);
+      }
+    }
+  }
+
   private expose(call: Call<unknown>, name?: string) {
     if (name !== undefined && this.names.has(name)) {
       const key = this.names.get(name)!;
-      if (this.exposures.get(key)!.script !== call.scriptName) {
+      if (!sameOwner(this.exposures.get(key)!.owner, call)) {
         return call.fail(failure('name in use'));
       }
       return call.answer(this.peerFor(`${this.key}/${key}`));
     }
     const key = secret();
-    this.exposures.set(key, { name, script: call.scriptName });
+    const { grantName, group, scriptName } = call;
+    this.exposures.set(key, { name, owner: { grantName, group, scriptName } });
     if (name !== undefined) {
       this.names.set(name, key);
     }

@@ -6,6 +6,7 @@ import {
   parseInstant,
   peerCapability,
   peerKind,
+  type GrantContext,
   type HostObject,
   type PeerImpl,
   type Value,
@@ -107,4 +108,29 @@ test('GrantsAsUsed keeps post and call with reach, and caller with expose', () =
     'expose',
     'post',
   ]);
+});
+
+test('peer forwards an optional release hook and needs none', () => {
+  expect(peerCapability(noPeer, costs).release).toBeUndefined();
+  expect(() =>
+    peerCapability({ ...noPeer, release: 1 } as unknown as PeerImpl, costs),
+  ).toThrow(HostError);
+
+  const released: [string, string, string][] = [];
+  const impl = {
+    ...noPeer,
+    seen: released,
+    release(this: { seen: typeof released }, c: GrantContext<unknown>) {
+      this.seen.push([c.scriptName, c.grantName, c.reason]);
+    },
+  };
+  const g = newGroup({ name: 'g' });
+  const s = g.load({
+    name: 's',
+    source: 'on go\nend go',
+    grants: { net: peerCapability(impl, costs).grant('all', null) },
+  });
+  s.stop('done');
+  g.pump(now);
+  expect(released).toEqual([['s', 'net', 'stop']]);
 });

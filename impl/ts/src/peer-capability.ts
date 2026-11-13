@@ -8,6 +8,7 @@ import {
   shape,
   type Call,
   type CapabilityDef,
+  type GrantContext,
   type Shape,
   type ValueOperation,
 } from './capabilities';
@@ -32,7 +33,9 @@ export const peerKind = defineObjectKind<unknown>({
  * `expose` hears `null` for an unnamed exposure. `unexpose` hears a name or
  * a Peer. `post` and `call` hear the Peer, the Selector and the arguments,
  * which may hold Peers. `caller` gives the Caller Identity recorded for
- * `call.delivery`, or Nothing.
+ * `call.delivery`, or Nothing. The optional `release` is the Grant release
+ * hook, for withdrawing the exposures a Grant made when it stops being
+ * effective.
  */
 export type PeerImpl = {
   call(
@@ -51,6 +54,7 @@ export type PeerImpl = {
     args: Value[],
   ): void;
   reach(call: Call<unknown>, address: string): void;
+  release?(context: GrantContext<unknown>): void;
   unexpose(call: Call<unknown>, exposure: string | HostObject): void;
 };
 
@@ -168,6 +172,9 @@ export const peerCapability = (
       throw new HostError('invalid value', `Peer needs ${name}`);
     }
   }
+  if (impl.release !== undefined && typeof impl.release !== 'function') {
+    throw new HostError('invalid value', 'Peer release must be a function');
+  }
   const operations: Record<string, ValueOperation<unknown>> = {
     expose: {
       mode: 'suspending',
@@ -253,5 +260,9 @@ export const peerCapability = (
           : {}),
     });
   }
-  return fixed(defineValueCapability('peer', operations));
+  const release =
+    impl.release === undefined
+      ? undefined
+      : (context: GrantContext<unknown>) => impl.release!(context);
+  return fixed(defineValueCapability('peer', operations, undefined, release));
 };
