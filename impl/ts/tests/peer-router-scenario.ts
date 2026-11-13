@@ -221,4 +221,148 @@ export const verifyPeerRouter = async (): Promise<void> => {
   } finally {
     await Promise.all(drives.map(d => d.close()));
   }
+
+  await verifyRejectedDials();
+};
+
+const redialSource = [
+  'on find address',
+  '  try',
+  '    ask peer to reach address into found and wait',
+  '    return found',
+  '  catch e',
+  '    return the code of e',
+  '  end try',
+  'end find',
+  'on charge billing',
+  '  try',
+  '    send charge with 1 to billing and wait',
+  '  catch e',
+  '    return [the code of e, the reason of e]',
+  '  end try',
+  'end charge',
+  'on note billing',
+  '  send note with "lost" to billing',
+  '  return "sent"',
+  'end note',
+  '',
+].join('\n');
+
+/** Settles with `promise`, or rejects once `ms` pass, so a Script's MaxWait can't pass for success. */
+const within = async <T>(promise: Promise<T>, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} did not finish in 2s`)),
+          2000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/**
+ * A `dial` that rejects fails what waits on it as an absent link does: `reach`
+ * as `bad address`, a waiting send to a retained Peer as `send failed` with
+ * reason `unreachable`, and a `post` quietly, with no unhandled rejection and
+ * no frame sent.
+ */
+const verifyRejectedDials = async (): Promise<void> => {
+  const shopKey = 'c'.repeat(64);
+  const billingKey = 'd'.repeat(64);
+  const core = { newGroup };
+  const { group: billingGroup, drive: billingDrive } = newDrivenGroup(core, {
+    name: 'billing',
+  });
+  const { group: shopGroup, drive: shopDrive } = newDrivenGroup(core, {
+    name: 'shop',
+  });
+  const drives = [billingDrive, shopDrive];
+
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => void unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+
+  let link: [MemoryLink, MemoryLink] | undefined;
+  let refuse = false;
+  const dialled: string[] = [];
+  const billingRouter = await PeerRouter.create(billingGroup, {
+    key: billingKey,
+  });
+  const shopRouter = await PeerRouter.create(shopGroup, {
+    key: shopKey,
+    addressOf: key => (key === billingKey ? 'billing' : undefined),
+    dial: async address => {
+      dialled.push(address);
+      if (refuse || address !== 'billing') {
+        throw new Error(`refused ${address}`);
+      }
+      link = linkPair(shopKey, billingKey);
+      billingRouter.connect(link[1]);
+      return link[0];
+    },
+  });
+  const grant = (router: PeerRouter) => ({
+    peer: peerCapability(router.impl, costs).grant('all', null),
+  });
+  const billing = billingGroup.load({
+    name: 'billing',
+    source: billingSource,
+    grants: {
+      ...grant(billingRouter),
+      console: consoleCapability(
+        { write: () => {}, read: () => {} },
+        { write: { fuel: 0 }, read: { fuel: 0 } },
+      ).grant('all', null),
+    },
+  });
+  const shop = shopGroup.load({
+    name: 'shop',
+    source: redialSource,
+    grants: grant(shopRouter),
+  });
+  const ask = (name: string, arg: Value) =>
+    within(shop.request({ name, args: [arg] }).result, name);
+  try {
+    await billing.request({ name: 'go', args: [] }).result;
+
+    // A `reach` with no open link to its address dials, and the dial rejects.
+    assert.equal(
+      (await ask('find', text('elsewhere'))).asText(),
+      'bad address',
+    );
+    assert.deepEqual(dialled, ['elsewhere']);
+
+    // A Peer retained past its link's close redials by Host key, and that
+    // dial rejects: no frame goes anywhere.
+    const peer = await ask('find', text('billing'));
+    assert.equal(peer.kind, 'object');
+    const [shopEnd] = link!;
+    const sent = shopEnd.sent.length;
+    shopEnd.close();
+    refuse = true;
+    assert.equal(
+      encodeValue(await ask('charge', peer)),
+      '["send failed","unreachable"]',
+    );
+    assert.equal((await ask('note', peer)).asText(), 'sent');
+    // Unhandled rejections are reported after the turn they happen in.
+    for (let i = 0; i < 5; i++) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    assert.deepEqual(dialled, ['elsewhere', 'billing', 'billing', 'billing']);
+    assert.equal(shopEnd.sent.length, sent);
+    assert.equal(link![0], shopEnd);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    shopRouter.close();
+    billingRouter.close();
+    await Promise.all(drives.map(d => d.close()));
+  }
 };
