@@ -628,36 +628,30 @@ export const shapeDiagnostics = (
   // charged without walking it again (#890).
   const deepInfo = new Map<Value, { clean: boolean; nodes: number }>();
   const infoOf = (rootValue: Value): { clean: boolean; nodes: number } => {
-    const pending: Value[] = [rootValue];
-    const order: Value[] = [];
-    const seen = new Set<Value>();
+    // Postorder: a part is summarized on exit, after all its children.
+    // Values are acyclic, so a shared part met again is already summarized
+    // and each occurrence adds its node count (#2209).
+    const pending: { children?: Value[]; v: Value }[] = [{ v: rootValue }];
     while (pending.length) {
-      const next = pending.pop()!;
-      if (deepInfo.has(next) || seen.has(next)) {
+      const { children, v: value } = pending.pop()!;
+      if (deepInfo.has(value)) {
         continue;
       }
-      seen.add(next);
-      order.push(next);
-      if (next.kind === 'list') {
-        for (let i = 1; i <= next.length; i++) {
-          pending.push(next.index(i));
+      if (!children) {
+        const parts =
+          value.kind === 'list'
+            ? Array.from({ length: value.length }, (_, j) => value.index(j + 1))
+            : value.kind === 'map'
+              ? value.entries().map(([, item]) => item)
+              : [];
+        pending.push({ children: parts, v: value });
+        for (let i = parts.length - 1; i >= 0; i--) {
+          pending.push({ v: parts[i]! });
         }
-      } else if (next.kind === 'map') {
-        for (const [, value] of next.entries()) {
-          pending.push(value);
-        }
+        continue;
       }
-    }
-    for (let i = order.length - 1; i >= 0; i--) {
-      const value = order[i]!;
       let clean = value.kind !== 'function';
       let nodes = 1;
-      const children =
-        value.kind === 'list'
-          ? Array.from({ length: value.length }, (_, j) => value.index(j + 1))
-          : value.kind === 'map'
-            ? value.entries().map(([, item]) => item)
-            : [];
       for (const child of children) {
         const info = deepInfo.get(child)!;
         clean = clean && info.clean;

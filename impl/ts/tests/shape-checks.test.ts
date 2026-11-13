@@ -8,6 +8,7 @@ import {
   num,
   parseInstant,
   text,
+  type Value,
 } from '../src/index';
 
 // A Script's Trace for `go` putting `expr` into `out`, as in stdlib.test.ts.
@@ -33,6 +34,57 @@ const value = (expr: string): string => {
     return `error ${error[1]!.replace(/, at: {[^}]*}}$/, '}')}`;
   }
   return lines.at(-1)!.replace(/^vars s out=/, '');
+};
+
+// A Function Value made by a Script.
+const scriptFunction = (): Value => {
+  const g = newGroup({ name: 'g' });
+  g.load({
+    name: 's',
+    source: 'script variable f\non go\n  put given x: x into f\nend go',
+  }).deliver({ name: 'go' });
+  g.pump(parseInstant('2026-09-30T09:00:00Z'));
+  return g.inspect().scripts[0]!.vars[0]![1];
+};
+// `c` is in `a` and `b` as well as the root, and `a` is in `b`, so a
+// sibling holds a descendant of another sibling; `shared` reuses one
+// `a` and one `c`, otherwise each occurrence is a fresh copy.
+const sharingGraph = (leaf: () => Value, shared: boolean): Value => {
+  const c = (): Value => list(num(2), num(3));
+  const sharedC = c();
+  const cOf = (): Value => (shared ? sharedC : c());
+  const a = (): Value => list(cOf(), leaf());
+  const sharedA = a();
+  const aOf = (): Value => (shared ? sharedA : a());
+  const b = map([
+    ['a', aOf()],
+    ['c', cOf()],
+  ]);
+  return list(b, aOf(), cOf());
+};
+const mismatchPaths = (r: ReturnType<typeof shapeDiagnostics>): unknown[] =>
+  r.diags.map(d => d.path);
+// The Fuel and final Trace line of a Script that runs `build`, then
+// puts `expr` into `out`.
+const fuelAndOut = (
+  build: string,
+  expr: string,
+): { fuel: bigint; out: string } => {
+  const lines: string[] = [];
+  const g = newGroup({ name: 'g', trace: line => lines.push(line) });
+  g.load({
+    name: 's',
+    source: `script variable out\non go\n${build}  put ${expr} into out\nend go`,
+  }).deliver({ name: 'go' });
+  g.pump(parseInstant('2026-09-30T09:00:00Z'));
+  g.inspect();
+  const runLine = lines.find(line => line.startsWith('run '))!;
+  expect(runLine).not.toContain(' error=');
+  return {
+    fuel: BigInt(runLine.match(/ fuel=(\d+)/)![1]!),
+    // Function Values print their source position; drop it.
+    out: lines.at(-1)!.replaceAll(/<function [^>]*>/g, '<function>'),
+  };
 };
 
 describe('the Shape check Built-ins', () => {
@@ -251,6 +303,65 @@ describe('the Shape check Built-ins', () => {
     g.pump(parseInstant('2026-09-30T09:00:00Z'));
     expect(s.counters()).toMatchObject({ faults: 1 });
     expect(g.inspect().scripts[0]!.vars[0]![1].toString()).toBe('nothing');
+  });
+
+  // Shared parts (#2209): checking the graph matches checking its
+  // unshared copy in scanned count and in every mismatch path.
+  describe('a value with shared parts checks like its unshared copy', () => {
+    const any = decodeShape(text('any'));
+    test.each([
+      ['pure data', 'all', (): Value => num(1), false, 0],
+      ['pure data', 'first', (): Value => num(1), true, 0],
+      ['a shared Function Value', 'all', scriptFunction, false, 2],
+      ['a shared Function Value', 'first', scriptFunction, true, 1],
+    ])('%s, %s mismatches', (_, __, leaf, first, count) => {
+      const f = leaf();
+      const aliased = shapeDiagnostics(
+        sharingGraph(() => f, true),
+        any.shape!,
+        first,
+        any.scanned,
+      );
+      const expanded = shapeDiagnostics(
+        sharingGraph(() => f, false),
+        any.shape!,
+        first,
+        any.scanned,
+      );
+      expect(aliased.diags).toHaveLength(count);
+      expect(mismatchPaths(aliased)).toEqual(mismatchPaths(expanded));
+      expect(aliased.scanned).toBe(expanded.scanned);
+    });
+    test('the paths name each occurrence', () => {
+      const f = scriptFunction();
+      const r = shapeDiagnostics(
+        sharingGraph(() => f, true),
+        any.shape!,
+        false,
+        any.scanned,
+      );
+      expect(mismatchPaths(r)).toEqual([
+        [1, 'a', 2],
+        [2, 2],
+      ]);
+    });
+  });
+
+  // A Script's check of a shared value costs what the unshared copy's
+  // does: the Fuel each check adds over the same Script without it.
+  test.each([
+    ['conforms', 'conforms(v, "any")'],
+    ['explain', 'explain(v, "any")'],
+    ['check', 'check(v, "value")'],
+  ])('%s charges a shared value like its copy', (_, call) => {
+    const shared =
+      '  put [2, 3] into c\n  put [c, given x: x] into a\n  put [[a, c], a, c] into v\n';
+    const copied =
+      '  put [[[[2, 3], given x: x], [2, 3]], [[2, 3], given x: x], [2, 3]] into v\n';
+    const added = (build: string): bigint =>
+      fuelAndOut(build, call).fuel - fuelAndOut(build, 'nothing').fuel;
+    expect(added(shared)).toBe(added(copied));
+    expect(fuelAndOut(shared, call).out).toBe(fuelAndOut(copied, call).out);
   });
 
   test('deeply nested definitions and data do not overflow the stack', () => {

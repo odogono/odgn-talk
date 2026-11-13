@@ -110,6 +110,36 @@ describe('conforms and explain for Hosts', () => {
     );
   });
 
+  // Values may share a child (#2209): `outer` holds `shared`, and the
+  // root holds both, so `shared` is reached directly and through `outer`.
+  describe('a shared child is checked whichever sibling comes first', () => {
+    const sharedList = list(num(1));
+    const outerList = list(sharedList);
+    const sharedMap = map([['n', num(1)]]);
+    const outerMap = map([['inner', sharedMap]]);
+    test.each([
+      ['list, container first', list(outerList, sharedList)],
+      ['list, shared first', list(sharedList, outerList)],
+      [
+        'map, container first',
+        map([
+          ['a', outerMap],
+          ['b', sharedMap],
+        ]),
+      ],
+      [
+        'map, shared first',
+        map([
+          ['a', sharedMap],
+          ['b', outerMap],
+        ]),
+      ],
+    ])('%s', (_, v) => {
+      expect(conforms(v, shape.any)).toBe(true);
+      expect(encodeValue(explain(v, shape.any))).toBe('[]');
+    });
+  });
+
   test('the WASM entry point exports the same functions', () => {
     expect(wasmConforms).toBe(conforms);
     expect(wasmExplain).toBe(explain);
