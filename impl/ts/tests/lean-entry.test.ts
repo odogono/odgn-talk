@@ -16,8 +16,9 @@ afterAll(() => rmSync(directory, { recursive: true, force: true }));
 // A Host registering no Library may not grow past this, gzipped at level 9,
 // without a deliberate change here. It was 188,172 bytes when set, against
 // 206,643 for the same Host on the main entry (#1856). Named Shapes took it
-// from 194,052 to 196,080 (#2105).
-const leanBudget = 197_000;
+// from 194,052 to 196,080 (#2105). Reading Library exports from declaration
+// headers took it from 196,917 to 197,068 (#2221).
+const leanBudget = 198_000;
 
 // A line only that Library's source holds, which a minifier copies unchanged.
 const markers = Object.fromEntries(
