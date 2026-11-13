@@ -142,6 +142,9 @@ pub const Context = struct {
     /// Whether to give each body's `roots`, which only a Session Host
     /// needs.
     collect_roots: bool = false,
+    /// A Script loaded with `forbidSuspension`: every possible Suspension
+    /// Point is refused, as in a `finally` block (ADR 0178).
+    forbid_suspension: bool = false,
 };
 
 /// A name an extension inherits: a Script Variable, or a Constant, function
@@ -584,7 +587,8 @@ const Site = struct {
     /// For calls: the callee's selector.
     target: []const u8 = "",
     waits: bool = false,
-    /// Inside a `finally` block or a Recovery Catch.
+    /// Inside a `finally` block or a Recovery Catch, or anywhere in a Script
+    /// loaded with `forbidSuspension`.
     forbidden: bool = false,
 };
 
@@ -1312,7 +1316,16 @@ const Checker = struct {
     }
 
     fn site(c: *Checker, s: *Scope, kind: @FieldType(Site, "kind"), t: Tok, target: []const u8, waits: bool, w: Where) Allocator.Error!void {
-        try s.sites.append(c.scratch, .{ .kind = kind, .token = t, .target = target, .waits = waits, .forbidden = w.finally != null or w.recovery != null });
+        try s.sites.append(c.scratch, .{ .kind = kind, .token = t, .target = target, .waits = waits, .forbidden = c.forbids(w) });
+    }
+
+    /// Whether no Suspension Point may be here: in a `finally` block or a
+    /// Recovery Catch, or anywhere in a Script loaded with
+    /// `forbidSuspension`. A call there to a Handler that may suspend is
+    /// `can't suspend here`, not `missing and wait`, since adding `and wait`
+    /// wouldn't help.
+    fn forbids(c: *const Checker, w: Where) bool {
+        return c.context.forbid_suspension or w.finally != null or w.recovery != null;
     }
 
     /// `wait`, `wait for`, a Join, and every other written wait: refused in a
@@ -1600,7 +1613,7 @@ const Checker = struct {
         }
         if (c.importedHandler(c.text(cmd.name))) |ex| {
             try c.inheritedVetoes(ex);
-            if (ex.may_suspend and !waits) try c.report(.missing_and_wait, cmd.name);
+            if (ex.may_suspend and !waits and !c.forbids(w)) try c.report(.missing_and_wait, cmd.name);
             if (!ex.may_suspend and waits) try c.report(.needless_and_wait, cmd.name);
             if (ex.may_suspend) try c.intrinsic(s, first, w);
             return;
@@ -2608,7 +2621,7 @@ const Checker = struct {
                     .intrinsic => true,
                     .command => blk: {
                         const g = c.handlers.get(x.target).?;
-                        if (g.may_suspend and !x.waits) try c.report(.missing_and_wait, x.token);
+                        if (g.may_suspend and !x.waits and !x.forbidden) try c.report(.missing_and_wait, x.token);
                         if (!g.may_suspend and x.waits) try c.report(.needless_and_wait, x.token);
                         break :blk g.may_suspend;
                     },
@@ -2857,6 +2870,14 @@ test "extensions preserve inherited Handler and value lookup in either order" {
         try expectDiagnostics("on later\nfoo and wait\nend\n", context, "needless and wait at 2:1\n");
         try expectDiagnostics("function f\nbar and wait\nend\n", context, "can't suspend here at 2:1\n");
     }
+}
+
+test "forbidSuspension refuses every Suspension Point but a Join Member (ADR 0178)" {
+    const context: Context = .{ .forbid_suspension = true };
+    try expectDiagnostics("on t\n  wait 1 s\n  later\nend t\non later\n  wait 1 s\nend later\n", context, "can't suspend here at 2:3\ncan't suspend here at 3:3\ncan't suspend here at 6:3\n");
+    try expectDiagnostics("on t\n  wait for all\n    send ping to me and wait\n  end wait\nend t\n", context, "can't suspend here at 2:3\n");
+    try expectDiagnostics("on t\n  note\nend t\non note\nend note\n", context, "");
+    try expectDiagnostics("on t\n  wait 1 s\nend t\n", .{}, "");
 }
 
 test "inherited veto diagnostics retain all clauses and positions and deduplicate calls" {
@@ -3355,7 +3376,8 @@ test "every corpus unit gives the diagnostics its case expects" {
         const case = std.fs.path.dirname(entry.path) orelse continue;
         // Cases whose diagnostics need an Operation's Shapes, a Text Pattern
         // program, a run, a Library's calls held to its importer's Grants, or
-        // a Grant revoked before a Reload: the runner's. Object-kind
+        // a Grant revoked before a Reload, or a Reload or Extend refused:
+        // the runner's. Object-kind
         // declarations (`*-properties`, `implicit-property-targets`) are too.
         if (among(case, &.{
             "load-diagnostics/object-properties",       "load-diagnostics/pattern-too-large",         "load-diagnostics/initialiser-failed",
@@ -3364,7 +3386,7 @@ test "every corpus unit gives the diagnostics its case expects" {
             "libraries/needs-transitive",               "reload/replacement-transitive",              "tell-block/library",
             "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets", "capabilities/host-commands-library",
             "capabilities/host-commands-load-checks",   "capabilities/argument-labels-library",       "capabilities/argument-labels-load-checks",
-            "libraries/needs-diamond",
+            "libraries/needs-diamond",                  "reload/forbid-suspension",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";
@@ -3385,7 +3407,7 @@ test "every corpus unit gives the diagnostics its case expects" {
         for (all) |u| {
             if (u.source.len == 0) continue;
             const source = try dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/{s}", .{ case, u.source }), a, .unlimited);
-            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .grants = if (u.library) null else u.grants, .libraries = libraries.items }, null);
+            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .grants = if (u.library) null else u.grants, .libraries = libraries.items, .forbid_suspension = u.forbid_suspension }, null);
             const expected = try expectedDiagnostics(a, trace, u.name);
             units += 1;
             if (!std.mem.eql(u8, got, expected)) {

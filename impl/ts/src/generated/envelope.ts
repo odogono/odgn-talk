@@ -176,6 +176,7 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
       { name: 'limits', kind: 'limits', required: false },
       { name: 'newGroup', kind: 'record', required: false },
       { name: 'refuseWorker', kind: 'bool', required: false },
+      { name: 'forbidSuspension', kind: 'bool', required: false },
     ],
   },
   {

@@ -421,6 +421,7 @@ pub const LoadOptions = extern struct {
     objects_len: usize = 0,
     /// Null for the default limit profile.
     limits: ?*const Limits = null,
+    forbid_suspension: bool = false,
 };
 
 /// A Script's limits, MaxWait in whole milliseconds. A zero field takes its
@@ -1192,7 +1193,7 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
         g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "wrong group");
         return .wrong_group;
     };
-    const loaded = g.group.load(name, source, .{ .grants = named, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
+    const loaded = g.group.load(name, source, .{ .grants = named, .grants_as_used = o.grants_as_used, .forbid_suspension = o.forbid_suspension, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
         .loaded => {},
@@ -2051,6 +2052,7 @@ pub const ScriptView = extern struct {
     runs_len: usize,
     mailbox: [*]const MessageView,
     mailbox_len: usize,
+    forbid_suspension: bool = false,
 };
 pub const Inspection = extern struct { scripts: [*]const ScriptView, scripts_len: usize };
 
@@ -2131,6 +2133,7 @@ fn inspect(g: *machine.Group, x: *Inspecting) !void {
             .runs_len = runs.len,
             .mailbox = mailbox.items.ptr,
             .mailbox_len = mailbox.items.len,
+            .forbid_suspension = s.forbid_suspension,
         };
     }
     x.view = .{ .scripts = scripts.ptr, .scripts_len = scripts.len };

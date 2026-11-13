@@ -171,7 +171,8 @@ defmodule NorthTalk do
   reserved `musical-clock`, which is the Group's own, and
   `limits:` overrides the owner's `:limits` for this Script. `owner:` makes the
   Script the Owning Script of a Host Object of the Group, its `me`, and `objects:` maps names
-  the Script uses to Host Objects of the Group.
+  the Script uses to Host Objects of the Group. `forbid_suspension: true` refuses any possible
+  Suspension Point in the Script as `can't suspend here`, now and in its later code.
   """
   def load(%Group{owner: owner} = group, name, source, opts \\ []),
     do: GenServer.call(owner, {:load, group, name, source, opts})

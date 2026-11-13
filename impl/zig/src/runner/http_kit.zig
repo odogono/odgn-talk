@@ -376,7 +376,7 @@ fn runCase(gpa: Allocator, a: Allocator, case: Value) !?[]const u8 {
         try grants.append(a, .{ .name = n.string.ptr, .name_len = n.string.len, .grant = grant });
     }
     const source = case.str("script").?;
-    const load: c.talk_load_options = .{ .name = "main", .name_len = 4, .source = source.ptr, .source_len = source.len, .grants = grants.items.ptr, .grants_len = grants.items.len, .grants_as_used = false, .owner = null, .objects = null, .objects_len = 0, .limits = null };
+    const load: c.talk_load_options = .{ .name = "main", .name_len = 4, .source = source.ptr, .source_len = source.len, .grants = grants.items.ptr, .grants_len = grants.items.len, .grants_as_used = false, .forbid_suspension = false, .owner = null, .objects = null, .objects_len = 0, .limits = null };
     if (c.talk_load(k.group, &load, &k.script) != c.TALK_OK) return "the script didn't load";
 
     const started = (try k.request("start")) orelse return "start gave nothing";

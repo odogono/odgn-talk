@@ -71,6 +71,15 @@ defmodule NorthTalk.OwnerTest do
              NorthTalk.load(group, "bad", "on x\n  return (\nend x\n")
   end
 
+  test "forbid_suspension refuses a wait at load, and the same source loads without it", %{group: group} do
+    waits = "on t\n  wait 1 s\nend t\n"
+
+    assert {:error, %LoadError{diagnostics: [%{"code" => "can't suspend here", "line" => 2}]}} =
+             NorthTalk.load(group, "strict", waits, forbid_suspension: true)
+
+    assert {:ok, "loose"} = NorthTalk.load(group, "loose", waits)
+  end
+
   test "Host misuse is a HostError and the owner carries on", %{group: group} do
     assert {:error, %HostError{code: "invalid value"}} = NorthTalk.deliver(group, "missing", "plus", [1, 2])
     assert {:error, %HostError{code: "invalid value"}} = NorthTalk.request(group, "s", "plus", [1.5, 2])

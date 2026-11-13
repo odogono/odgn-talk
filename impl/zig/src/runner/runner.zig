@@ -597,7 +597,7 @@ pub const Runner = struct {
     }
 
     fn loadOptions(r: *Runner, source: []const u8, loaded: []const c.talk_load_grant) c.talk_load_options {
-        return .{ .name = r.name.ptr, .name_len = r.name.len, .source = source.ptr, .source_len = source.len, .grants = loaded.ptr, .grants_len = loaded.len, .grants_as_used = true, .owner = null, .objects = null, .objects_len = 0, .limits = null };
+        return .{ .name = r.name.ptr, .name_len = r.name.len, .source = source.ptr, .source_len = source.len, .grants = loaded.ptr, .grants_len = loaded.len, .grants_as_used = true, .forbid_suspension = false, .owner = null, .objects = null, .objects_len = 0, .limits = null };
     }
 
     const Diagnostics = struct { lines: std.ArrayList([]const u8) = .empty, a: Allocator };

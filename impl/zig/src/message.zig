@@ -2877,6 +2877,7 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         .grants = if (load_grants.len == 0) null else load_grants.ptr,
         .grants_len = load_grants.len,
         .grants_as_used = asBool(field(msg, "grantsAsUsed")) orelse false,
+        .forbid_suspension = asBool(field(msg, "forbidSuspension")) orelse false,
         .owner = owner,
         .objects = if (bound == 0) null else load_objects.ptr,
         .objects_len = bound,
@@ -3624,6 +3625,7 @@ fn writeInspection(o: *Out, gpa: Allocator, i: *const talk.Inspection) (Allocato
             }
             try o.raw("]");
         }
+        if (sv.forbid_suspension) try o.raw(",\"forbidSuspension\":true");
         try o.raw(",\"vars\":[");
         for (sv.vars[0..sv.vars_len], 0..) |pair, k| {
             if (k > 0) try o.raw(",");
@@ -5315,7 +5317,7 @@ fn handleBinaryLoad(s: *Session, payload: []const u8) []u8 {
     defer arena.deinit();
     const a = arena.allocator();
     const names = rp.fields(rp.Message.load);
-    var spans: [11]?[]const u8 = undefined;
+    var spans: [12]?[]const u8 = undefined;
     var r: rp.Reader = .{ .data = payload };
     r.record(names, true, &spans) catch return protocolError(s.gpa, 0, "malformed Load frame");
     if (!r.done()) return protocolError(s.gpa, 0, "bytes after the Load frame");

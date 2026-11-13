@@ -42,9 +42,14 @@ const magic = "NTSV";
 /// The save format this Core reads and writes; it reads no other.
 pub const format_version: u32 = 1;
 
-/// The sections, by tag; every one but `sources` is required.
-const Section = enum(u8) { texts = 1, group, libraries, objects, functions, calls, scripts, runs, work, waits, inputs, decisions, accounting, sources };
+/// The sections, by tag; every one but `sources` and `suspension` is
+/// required.
+const Section = enum(u8) { texts = 1, group, libraries, objects, functions, calls, scripts, runs, work, waits, inputs, decisions, accounting, sources, suspension };
 const last_required: u8 = @backingInt(Section.accounting);
+
+fn optional(tag: Section) bool {
+    return @backingInt(tag) > last_required;
+}
 
 pub const Error = error{
     InvalidSave,
@@ -1168,7 +1173,7 @@ const Header = struct {
     saves: u64,
     state: [32]u8,
     /// Each known section's body, by tag; null when it is absent.
-    bodies: [@backingInt(Section.sources) + 1]?[]const u8 = @splat(null),
+    bodies: [@backingInt(Section.suspension) + 1]?[]const u8 = @splat(null),
 };
 
 /// Reads a save's header and section frames, checking the body digest and
@@ -1204,7 +1209,7 @@ fn readFrame(bytes: []const u8, bodies: bool) error{ InvalidSave, Mismatch }!Hea
         // A known section's flag must say what it is; an unknown required
         // one can't be read.
         if (known) |k| {
-            if ((flags == 1) != (k == .sources)) return error.InvalidSave;
+            if ((flags == 1) != optional(k)) return error.InvalidSave;
         } else if (flags == 0) return error.InvalidSave;
         const content = i.bytes[i.pos..][0..len];
         i.pos += len;
@@ -1263,7 +1268,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     defer s.deinit();
     defer s.o.bytes.deinit(gpa);
     const o = &s.o;
-    var sections: [@backingInt(Section.sources)]Written = undefined;
+    var sections: [@backingInt(Section.suspension)]Written = undefined;
     var n: usize = 0;
     const Sections = struct {
         fn begin(list: []Written, at: *usize, out: *Out, tag: Section) void {
@@ -1509,6 +1514,16 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         for (x.extensions.items) |e| try o.str(e.source);
     }
     Sections.end(&sections, &n, o);
+    // 15: the Scripts loaded with `forbidSuspension`, by position, left out
+    // when there are none (ADR 0178).
+    var forbidden: usize = 0;
+    for (g.scripts.items) |x| forbidden += @intFromBool(x.forbid_suspension);
+    if (forbidden > 0) {
+        Sections.begin(&sections, &n, o, .suspension);
+        try o.int(forbidden);
+        for (g.scripts.items, 0..) |x, position| if (x.forbid_suspension) try o.int(position);
+        Sections.end(&sections, &n, o);
+    }
 
     // 5: Function Value code, only what the save reaches, numbered as the
     // other sections first met it; a stale value's keeps only what it still
@@ -1555,7 +1570,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try h.bytes.appendSlice(gpa, &print);
     try h.int(g.saves);
     var state: Sha256 = .init(.{});
-    for (sections[0..n]) |w| if (w.tag != .sources) {
+    for (sections[0..n]) |w| if (!optional(w.tag)) {
         state.update(&.{@backingInt(w.tag)});
         state.update(&w.digest);
     };
@@ -1563,14 +1578,14 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     var body: Sha256 = .init(.{});
     body.update(h.bytes.items);
     for (sections[0..n]) |w| {
-        body.update(&.{ @backingInt(w.tag), @intFromBool(w.tag == .sources) });
+        body.update(&.{ @backingInt(w.tag), @intFromBool(optional(w.tag)) });
         body.update(&w.digest);
     }
     try h.bytes.appendSlice(gpa, &body.finalResult());
     try h.int(n);
     for (sections[0..n]) |w| {
         try h.byte(@backingInt(w.tag));
-        try h.flag(w.tag == .sources);
+        try h.flag(optional(w.tag));
         try h.int(w.end - w.start);
         try h.bytes.appendSlice(gpa, &w.digest);
         try h.bytes.appendSlice(gpa, o.bytes.items[w.start..w.end]);
@@ -2590,6 +2605,8 @@ const Saved = struct {
     faults: u64,
     debt: u64,
     stopped: ?[]const u8,
+    /// From the optional `suspension` section.
+    forbid_suspension: bool = false,
 
     fn release(x: *Saved, gpa: Allocator) void {
         machine.releaseValues(x.variables, gpa);
@@ -2698,7 +2715,7 @@ fn newScript(r: *Restoring, saved: *const Saved) Error!*Script {
     for (r.g.scripts.items) |x| if (std.mem.eql(u8, x.name, saved.name)) return error.InvalidSave;
     const s = try a.create(Script);
     r.g.generations += 1;
-    s.* = .{ .name = saved.name, .identity = undefined, .arena = .init(a), .code = .init(a), .unit = undefined, .variables = &.{}, .definitions = &.{}, .generation = r.g.generations, .limits = saved.limits, .grants = saved.grants, .effects = saved.effects, .owner = saved.owner, .objects = saved.objects, .runs = saved.runs, .fuel_total = saved.fuel_total, .alloc_total = saved.alloc_total, .faults = saved.faults };
+    s.* = .{ .name = saved.name, .identity = undefined, .arena = .init(a), .code = .init(a), .unit = undefined, .variables = &.{}, .definitions = &.{}, .generation = r.g.generations, .limits = saved.limits, .grants = saved.grants, .effects = saved.effects, .owner = saved.owner, .objects = saved.objects, .runs = saved.runs, .fuel_total = saved.fuel_total, .alloc_total = saved.alloc_total, .faults = saved.faults, .forbid_suspension = saved.forbid_suspension };
     s.unit.values = &.{};
     r.g.scripts.append(a, s) catch |e| {
         r.g.destroyScript(s);
@@ -2969,6 +2986,21 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         if (extensions.len != x.extension_identities.len) return error.InvalidSave;
         for (extensions) |*e| e.* = try r.kept();
         x.extensions = extensions;
+    }
+    // The Scripts loaded with `forbidSuspension`: at least one, each a
+    // position, ascending. A save without the section has none.
+    if (header.bodies[@backingInt(Section.suspension)]) |forbidden| {
+        r.i = .{ .bytes = forbidden, .names = names };
+        const count = try i.count();
+        if (count == 0) return error.InvalidSave;
+        var next: u64 = 0;
+        for (0..count) |_| {
+            const at = try i.int();
+            if (at < next or at >= saved.len) return error.InvalidSave;
+            saved[@intCast(at)].forbid_suspension = true;
+            next = at + 1;
+        }
+        try i.end();
     }
     for (saved) |*x| if (!try buildSaved(&r, x)) {
         r.mismatch = true;
@@ -3736,6 +3768,40 @@ test "a save restores to the same save, and a restored Group goes on" {
     const y = try save(&restored, gpa, print);
     defer gpa.free(y);
     try testing.expectEqualSlices(u8, x, y);
+}
+
+test "a save lists the Scripts loaded with forbidSuspension, and a restore keeps it (ADR 0178)" {
+    const gpa = testing.allocator;
+    const source = "on go\n  return 1\nend go\n";
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    try testing.expect(try g.load("a", source, .{}) == .loaded);
+    const plain = try g.groupFingerprint();
+    try testing.expect(try g.load("b", source, .{ .forbid_suspension = true }) == .loaded);
+    const print = try g.groupFingerprint();
+    const bytes = try save(&g, gpa, print);
+    defer gpa.free(bytes);
+    const header = try readFrame(bytes, true);
+    // Its count, then b's position.
+    try testing.expectEqualSlices(u8, &.{ 1, 1 }, header.bodies[@backingInt(Section.suspension)].?);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    try testing.expectEqual(Outcome.full, try restore(&restored, bytes, .{}, &result));
+    defer result.deinit(gpa);
+    try testing.expect(!restored.scripts.items[0].forbid_suspension);
+    try testing.expect(restored.scripts.items[1].forbid_suspension);
+    try testing.expectEqualSlices(u8, &print, &(try restored.groupFingerprint()));
+    // A Group without the option writes no section, and its Fingerprint
+    // names no option.
+    var lone: Group = .init(gpa, null);
+    defer lone.deinit();
+    try testing.expect(try lone.load("a", source, .{}) == .loaded);
+    const without = try save(&lone, gpa, try lone.groupFingerprint());
+    defer gpa.free(without);
+    try testing.expect((try readFrame(without, true)).bodies[@backingInt(Section.suspension)] == null);
+    try testing.expectEqualSlices(u8, &plain, &(try lone.groupFingerprint()));
+    try testing.expect(!std.mem.eql(u8, &plain, &print));
 }
 
 test "Map updates retain insertion order and originals across restore and Segment rollback" {
