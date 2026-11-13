@@ -809,6 +809,10 @@ export class TsGroup implements Group {
   private accounting = emptyAccounting();
   private discardReason = 'stop';
   private inputs: QueuedInput[] = [];
+  // How many of `inputs` are urgent, and how many are ordinary charge
+  // requests, so a turn's checks need not scan the queue.
+  private urgentInputs = 0;
+  private chargeInputs = 0;
   private deliveries = 0;
   private broadcasts = 0;
   /**
@@ -1068,7 +1072,7 @@ export class TsGroup implements Group {
   ): DebugEvaluation {
     const pause = this.debugController!.current!;
     const s = this.scripts.find(x => x.name === pause.script)!;
-    const paused = this.runsOf(s).find(r => r.id === pause.run)!.run;
+    const paused = this.findRun(s, r => r.id === pause.run)!.run;
     const frames = paused.debugFrames();
     const view = frames[frameIndex ?? frames.length - 1];
     if (!view) {
@@ -1295,8 +1299,9 @@ export class TsGroup implements Group {
       this.waits
         .awaitedCalls(() => this.holders(), compareCallIds)
         .some(([id]) => this.issuedEligibility(id) === true) ||
-      this.scripts.some(s =>
-        this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
+      this.scripts.some(
+        s =>
+          !!this.findRun(s, r => r.run.hasOpenScopes || r.run.hasParticipant),
       )
     );
   }
@@ -2239,7 +2244,7 @@ export class TsGroup implements Group {
       }
     } else {
       this.importWaits(state, restored);
-      this.inputs = inputs;
+      this.setInputs(inputs);
       for (const x of restored) {
         if (partial && changed.has(x.s.name)) {
           continue;
@@ -2831,9 +2836,9 @@ export class TsGroup implements Group {
         true,
       );
       // Behind a queued charge request, it waits to be written after it.
-      if (this.inputs.some(i => !i.urgent && i.action.k === 'charge')) {
+      if (this.chargeInputs > 0) {
         this.combinedAdmission = false;
-        this.inputs.push({ line, action: { k: 'refusal', code } });
+        this.pushInput({ line, action: { k: 'refusal', code } });
       } else {
         this.recordRefusal(line, code);
       }
@@ -3101,7 +3106,7 @@ export class TsGroup implements Group {
         break;
       case 'cancel-run': {
         const s = this.scripts.find(s => s.name === action.name)!;
-        const running = this.runsOf(s).find(r => r.id === action.id);
+        const running = this.findRun(s, r => r.id === action.id);
         if (running) {
           this.cancelRunning(s, running);
         }
@@ -3109,7 +3114,7 @@ export class TsGroup implements Group {
       }
       case 'rewind-run': {
         const s = this.scripts.find(s => s.name === action.name)!;
-        const running = this.runsOf(s).find(r => r.id === action.id);
+        const running = this.findRun(s, r => r.id === action.id);
         if (running?.run.rewindable && !s.stopped) {
           this.rewindRunning(s, running);
         } else {
@@ -3202,12 +3207,41 @@ export class TsGroup implements Group {
     }
   }
 
+  // A Script's Runs in id order. Each id's Run number is read once.
   private runsOf(s: ScriptState): Running[] {
-    return [
-      ...s.queue.filter((item): item is Running => 'run' in item),
-      ...s.suspended,
-      ...s.parked,
-    ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
+    const runs: Running[] = [];
+    for (const item of s.queue) {
+      if ('run' in item) {
+        runs.push(item);
+      }
+    }
+    runs.push(...s.suspended, ...s.parked);
+    if (runs.length < 2) {
+      return runs;
+    }
+    return runs
+      .map(r => ({ n: Number(r.id.split('/r')[1]), r }))
+      .sort((a, b) => a.n - b.n)
+      .map(x => x.r);
+  }
+
+  // A Script's Run matching `match`, in no particular order: for a match that
+  // is unique, or a check that one exists.
+  private findRun(
+    s: ScriptState,
+    match: (r: Running) => boolean,
+  ): Running | undefined {
+    for (const item of s.queue) {
+      if ('run' in item && match(item)) {
+        return item;
+      }
+    }
+    for (const r of s.suspended) {
+      if (match(r)) {
+        return r;
+      }
+    }
+    return s.parked.find(match);
   }
 
   private forgetWait(s: ScriptState, running: Running) {
@@ -3514,17 +3548,36 @@ export class TsGroup implements Group {
   private recordRefusal(line: string, code: string) {
     this.combinedAdmission = false;
     if (this.pumping) {
-      this.inputs.push({ line, urgent: true, action: { k: 'refusal', code } });
+      this.pushInput({ line, urgent: true, action: { k: 'refusal', code } });
     } else {
       this.trace?.(line);
       this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));
     }
   }
 
+  private pushInput(input: QueuedInput) {
+    this.inputs.push(input);
+    if (input.urgent) {
+      this.urgentInputs++;
+    } else if (input.action.k === 'charge') {
+      this.chargeInputs++;
+    }
+  }
+
+  private setInputs(inputs: QueuedInput[]) {
+    this.inputs = [];
+    this.urgentInputs = 0;
+    this.chargeInputs = 0;
+    for (const input of inputs) {
+      this.pushInput(input);
+    }
+  }
+
   private landUrgentInputs() {
-    while (this.inputs.some(i => i.urgent)) {
+    while (this.urgentInputs > 0) {
       const urgent = this.inputs.filter(i => i.urgent);
       this.inputs = this.inputs.filter(i => !i.urgent);
+      this.urgentInputs = 0;
       for (const input of urgent) {
         if (this.trace) {
           this.trace(
@@ -3595,7 +3648,7 @@ export class TsGroup implements Group {
     ) {
       input.line += ` pc=${landing.pc}`;
     }
-    this.inputs.push(input);
+    this.pushInput(input);
     if (!notify) {
       return;
     }
@@ -4375,7 +4428,7 @@ export class TsGroup implements Group {
       group,
       disableGrant: name => {
         s.disabled.add(name);
-        const running = this.runsOf(s).find(r => r.run === run);
+        const running = this.findRun(s, r => r.run === run);
         if (running) {
           this.writeRecords(running, 0);
         }
@@ -5314,7 +5367,7 @@ export class TsGroup implements Group {
       // Inside a Pump it follows the crossing's record, as an input made
       // there does.
       if (this.pumping) {
-        this.inputs.push({ line, urgent: true, action: { k: 'record' } });
+        this.pushInput({ line, urgent: true, action: { k: 'record' } });
       } else {
         this.trace(line);
       }
@@ -5558,7 +5611,7 @@ export class TsGroup implements Group {
     const slice = o.fuelSlice ?? 0;
     const cap = o.fuelCap ?? 0;
     const drained = this.inputs;
-    this.inputs = [];
+    this.setInputs([]);
     const reports: Report[] = [];
     this.drainReports = reports;
     const inputLines: string[] = [];
@@ -6707,7 +6760,7 @@ export class TsGroup implements Group {
   private releaseParked(s: ScriptState, ended: Running) {
     const same = (r: Running) =>
       !r.delivery.fn && !ended.delivery.fn && sameClause(r, ended);
-    if (this.runsOf(s).some(r => !r.parked && same(r))) {
+    if (this.findRun(s, r => !r.parked && same(r))) {
       return;
     }
     const next = s.parked.find(same);
@@ -6798,7 +6851,8 @@ export class TsGroup implements Group {
       scripts: view.scripts.map((s, i) => ({
         ...s,
         runs: s.runs.map(view => {
-          const run = this.runsOf(this.scripts[i]!).find(
+          const run = this.findRun(
+            this.scripts[i]!,
             r => r.id === view.id,
           )!.run;
           return {
