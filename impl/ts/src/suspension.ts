@@ -1,7 +1,8 @@
 // Chapter 5's load-time rules for Suspension Points: which Handlers may
 // suspend, inferred over the call graph to a fixpoint; `and wait` written
 // exactly on a Command Call to a Handler that may; and no Suspension Point
-// in a `finally` block, a named function, or a Handler called function-style.
+// in a `finally` block, a named function, or a Handler called function-style,
+// or anywhere in a Script loaded with `forbidSuspension` (ADR 0178).
 import { hostCommands } from './semantic';
 import { recoveryBody } from './recovery';
 import type { Report } from './control';
@@ -62,6 +63,7 @@ const factsOf = (
   root: SemanticNode,
   report: Report,
   lambdas: SemanticNode[],
+  forbid: boolean,
 ): Facts => {
   const facts: Facts = { commands: [], calls: [], points: [] };
   const work: { cleanup: boolean; node: SemanticNode }[] =
@@ -76,7 +78,7 @@ const factsOf = (
     }
     const point = (leaf: Leaf) => {
       facts.points.push(leaf);
-      if (cleanup) {
+      if (cleanup || forbid) {
         report("can't suspend here", leaf);
       }
     };
@@ -116,7 +118,7 @@ const factsOf = (
               binding,
               name: head,
               wait: waits,
-              restricted: cleanup,
+              restricted: cleanup || forbid,
             });
             if (waits && cleanup) {
               report("can't suspend here", head);
@@ -147,7 +149,7 @@ const factsOf = (
           facts.calls.push({
             binding: name.binding,
             name,
-            restricted: cleanup,
+            restricted: cleanup || forbid,
           });
         }
         break;
@@ -170,12 +172,15 @@ const factsOf = (
 
 /**
  * Check a unit's Suspension Points, and give whether each of its Handlers
- * may suspend, by name, for the Libraries that export them.
+ * may suspend, by name, for the Libraries that export them. With `forbid`,
+ * every Suspension Point, and every call to a Handler that may reach one, is
+ * `can't suspend here`.
  */
 export const checkSuspension = (
   root: SemanticNode,
   imported: ImportedSuspension,
   reportTo: Report,
+  forbid = false,
 ): Map<string, boolean> => {
   // Each site is reported once, whichever rule finds it first.
   const seen = new Set<Leaf>();
@@ -209,7 +214,7 @@ export const checkSuspension = (
             : node.rule === 'Handler'
               ? 'any message'
               : '',
-          facts: factsOf(node, report, lambdas),
+          facts: factsOf(node, report, lambdas, forbid),
         });
       }
     }
@@ -218,7 +223,7 @@ export const checkSuspension = (
     bodies.push({
       kind: 'lambda',
       name: '',
-      facts: factsOf(lambdas.pop()!, report, lambdas),
+      facts: factsOf(lambdas.pop()!, report, lambdas, forbid),
     });
   }
   // Which local Handlers may suspend: a fixpoint over `and wait` calls.

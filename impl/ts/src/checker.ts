@@ -43,6 +43,8 @@ export type ExistingName = Pick<
 export type CheckOptions = {
   /** Names in older code units when checking a Script extension. */
   existing?: Readonly<Record<string, ExistingName>>;
+  /** Refuse every possible Suspension Point, for a Script loaded with `forbidSuspension` (ADR 0178). */
+  forbidSuspension?: boolean;
   /** A Script's Grants, to check its Capability calls against; none checks none. */
   grants?: GrantDecls;
   /** Exports supplied by the Library loader; kind-only entries defer call-count checks. */
@@ -1426,7 +1428,12 @@ const checkParsed = (
       (typeof exp === 'object' && exp.maySuspend === true)
     );
   };
-  const may = checkSuspension(root, importedSuspension, reportAt);
+  const may = checkSuspension(
+    root,
+    importedSuspension,
+    reportAt,
+    options.forbidSuspension === true,
+  );
   checkDecisions(
     root,
     binding =>

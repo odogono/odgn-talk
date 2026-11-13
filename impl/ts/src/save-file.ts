@@ -5,6 +5,7 @@
 import { operationsOf } from './manifest';
 import {
   invalidSave,
+  isOptionalKnown,
   readSave,
   saveSections,
   SaveReader,
@@ -33,7 +34,7 @@ type Sources = SaveRecords<unknown>['sources'];
 /** The records that hold values, read once a value reader can be built. */
 export type ValueRecords<V> = Omit<
   SaveRecords<V>,
-  'functions' | 'group' | 'libraries' | 'objects' | 'sources'
+  'functions' | 'group' | 'libraries' | 'objects' | 'sources' | 'suspension'
 >;
 
 /** A save whose value-free records are read and whose structure is checked. */
@@ -45,6 +46,8 @@ export type OpenSave = SaveHeader & {
   /** Each Script's record, its values skipped. */
   scripts: ScriptRecord<undefined>[];
   sources: Sources;
+  /** The Scripts loaded with `forbidSuspension`, by position; absent for none. */
+  suspension: number[] | undefined;
   /** The `texts` table, in order. */
   texts: string[];
   /** The records that hold values, read with `io`. */
@@ -150,6 +153,20 @@ export const openSave = (bytes: Uint8Array): OpenSave => {
   if (sources && sources.length !== skipped.scripts.length) {
     invalidSave();
   }
+  const suspension = save.body(saveSections.suspension)
+    ? section(saveSections.suspension, r => r.suspension())
+    : undefined;
+  // At least one, each a Script's position, ascending.
+  if (
+    suspension &&
+    (suspension.length === 0 ||
+      suspension.some(
+        (n, i) =>
+          n >= skipped.scripts.length || (i > 0 && n <= suspension[i - 1]!),
+      ))
+  ) {
+    invalidSave();
+  }
   return {
     language: save.language,
     costModel: save.costModel,
@@ -161,6 +178,7 @@ export const openSave = (bytes: Uint8Array): OpenSave => {
     functions,
     scripts: skipped.scripts,
     sources,
+    suspension,
     texts: textList,
     values: io => {
       const t = { ...tables, calls: 0, runs: 0 };
@@ -188,6 +206,7 @@ export const readRecords = <V>(
     objects: save.objects,
     functions: save.functions,
     sources: save.sources,
+    suspension: save.suspension,
     ...save.values(io),
   };
 };
@@ -204,9 +223,9 @@ export const writeSections = <V>(
   header: SaveHeader,
   io: ValueIO<V>,
   bodies: Record<
-    Exclude<keyof typeof saveSections, 'sources' | 'texts'>,
+    Exclude<keyof typeof saveSections, 'sources' | 'suspension' | 'texts'>,
     SectionWriter<V>
-  > & { sources?: SectionWriter<V> },
+  > & { sources?: SectionWriter<V>; suspension?: SectionWriter<V> },
   texts = new TextTable(),
 ): Uint8Array => {
   const written = new Map<number, Uint8Array>();
@@ -230,7 +249,7 @@ export const writeSections = <V>(
   for (const tag of Object.values(saveSections)) {
     const body = written.get(tag);
     if (body) {
-      sections.push({ tag, body, optional: tag === saveSections.sources });
+      sections.push({ tag, body, optional: isOptionalKnown(tag) });
     }
   }
   return writeSave(header, sections);
@@ -261,6 +280,7 @@ export const writeRecords = <V>(
       decisions: w => w.decisions(x.decisions),
       accounting: w => w.accounting(x.discards, x.changedRoots),
       ...(x.sources ? { sources: w => w.sources(x.sources!) } : {}),
+      ...(x.suspension ? { suspension: w => w.suspension(x.suspension!) } : {}),
     },
     texts,
   );

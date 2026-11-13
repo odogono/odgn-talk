@@ -374,6 +374,8 @@ export type SaveRecords<V> = {
   runs: RunRecord<V>[];
   scripts: ScriptRecord<V>[];
   sources: { extensions: string[]; source: string }[] | undefined;
+  /** The positions in `scripts` of the Scripts loaded with `forbidSuspension`, ascending. */
+  suspension: number[] | undefined;
   waits: { member: number | undefined; run: number }[];
   work: Work<V>[][];
 };
@@ -1024,6 +1026,10 @@ export class RecordWriter<V> {
     this.w.list(ss, (w, s) =>
       w.text(s.source).list(s.extensions, (w, e) => w.text(e)),
     );
+  }
+
+  suspension(forbidden: readonly number[]) {
+    this.w.list(forbidden, (w, n) => w.uint(n));
   }
 }
 
@@ -1726,5 +1732,9 @@ export class RecordReader<V> {
       source: r.text(),
       extensions: r.list(r => r.text()),
     }));
+  }
+
+  suspension(): number[] {
+    return this.r.list(r => r.uint());
   }
 }

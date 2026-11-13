@@ -1,0 +1,29 @@
+# Unblessed: `can't suspend here` under forbidSuspension (#2239); first blessing awaits human review.
+> add-library slow identity=026b273609ffeb8f7ebbb7ddabaca597b955dc3ebdbf8b4361df05a55f330e3e
+> load bad identity=a35c06dab536f156d68e794ea8f73994f7367b0e086fbb3a04a53b4eeb62b8ee
+diag bad code="can't suspend here" pos=9:3
+diag bad code="can't suspend here" pos=10:3
+diag bad code="can't suspend here" pos=11:3
+diag bad code="can't suspend here" pos=12:3
+diag bad code="can't suspend here" pos=13:3
+diag bad code="can't suspend here" pos=14:3
+diag bad code="can't suspend here" pos=15:3
+diag bad code="can't suspend here" pos=17:5
+diag bad code="can't suspend here" pos=19:3
+diag bad code="can't suspend here" pos=20:3
+diag bad code="can't suspend here" pos=21:5
+diag bad code="can't suspend here" pos=24:5
+diag bad code="can't suspend here" pos=30:3
+> load good identity=a490ed7e8bf1c84d20023d8b6299e50993e4f2ea372c0240bddde7af5c085019
+> load calm identity=e048d95acca2dabcf3a2e29d98448f6813c856945c419e4ffb6fe2e40864b617
+> deliver d1 to=calm message=check
+> pump clock=2026-11-13T10:00:00Z
+send calm/r1 to=calm message=ping
+seg calm/r1 start delivery=d1 handler=check clause=1 fuel=81 alloc=80 state=96 end=return
+run calm/r1 outcome=completed delivery=d1 handler=check fuel=81 alloc=80
+seg calm/r2 start from=calm/r1 handler=ping clause=1 fuel=16 alloc=28 state=92 end=return
+run calm/r2 outcome=completed handler=ping fuel=16 alloc=28
+pumped state=idle fuel=97
+> vars
+vars good ready=false seen=[]
+vars calm seen=[2, 3, "ping"]

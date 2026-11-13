@@ -206,7 +206,10 @@ export const prepare = (
   objects?: readonly string[],
   grants?: GrantDecls,
   existing?: Readonly<Record<string, ExistingName>>,
-  properties?: Pick<CheckOptions, 'objectProperties' | 'ownerProperties'>,
+  properties?: Pick<
+    CheckOptions,
+    'forbidSuspension' | 'objectProperties' | 'ownerProperties'
+  >,
 ) => {
   const checked = checkSourceForLoad(source, {
     unit,

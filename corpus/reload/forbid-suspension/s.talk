@@ -1,0 +1,9 @@
+-- s.talk: loaded with forbidSuspension. It calls fmt's `note`.
+use note from fmt
+
+script variable got = 0
+
+on go
+  note 1
+  put it into got
+end go

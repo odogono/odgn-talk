@@ -1,0 +1,9 @@
+-- u.talk: imports fmt too, without forbidSuspension.
+use note from fmt
+
+script variable got = 0
+
+on go
+  note 2
+  put it into got
+end go

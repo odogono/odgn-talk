@@ -1,0 +1,6 @@
+-- fmt.talk: forbid-suspension's Library. Its `note` can't suspend; the
+-- replacement the Trace tries makes it wait.
+
+on note x
+  return x + 100
+end note

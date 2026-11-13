@@ -1,0 +1,31 @@
+-- waits.talk: every form of possible Suspension Point. bad loads it with
+-- forbidSuspension and is refused at each; good loads it without.
+use pause, note from slow
+
+script variable ready = false
+script variable seen = []
+
+on t
+  wait 1 s
+  wait for ready
+  wait 0 bars
+  ask feed to fetch and wait
+  send ping to me and wait
+  later and wait
+  pause and wait
+  put given
+    wait 1 s
+  end given into f
+  f() and wait
+  wait for all
+    ask feed to fetch and wait
+  end wait
+  with timeout of 1 s
+    wait for ready
+  end timeout
+  note 1
+end t
+
+on later
+  wait 1 s
+end later
